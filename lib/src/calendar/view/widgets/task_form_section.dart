@@ -1205,7 +1205,7 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                     ),
                     subtitle: Text(
                       suggestion.isHistory ? 'From your tasks' : 'Suggested',
-                      style: context.textTheme.caption
+                      style: context.textTheme.label
                           .copyWith(color: calendarSubtitleColor),
                     ),
                   );

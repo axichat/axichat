@@ -684,7 +684,17 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
               return completer.future;
             },
           )
-        : null;
+        : AttachmentDownloadDelegate(
+            () =>
+                context.read<AttachmentGalleryBloc>().downloadInboundAttachment(
+                      metadataId: metadata.id,
+                      stanzaId: message.stanzaID,
+                    ),
+          );
+    final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
+      () =>
+          context.read<AttachmentGalleryBloc>().reloadFileMetadata(metadata.id),
+    );
     final metaText = _resolveMetaText(
       chat: chat,
       showChatLabel: widget.showChatLabel,
@@ -707,6 +717,7 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
             stanzaId: message.stanzaID,
             allowed: allowAttachment,
             downloadDelegate: downloadDelegate,
+            metadataReloadDelegate: metadataReloadDelegate,
             onAllowPressed: allowPressed,
             metaText: metaText,
           )
@@ -716,6 +727,7 @@ class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
             stanzaId: message.stanzaID,
             allowed: allowAttachment,
             downloadDelegate: downloadDelegate,
+            metadataReloadDelegate: metadataReloadDelegate,
             onAllowPressed: allowPressed,
             metaText: metaText,
           );
@@ -730,6 +742,7 @@ class AttachmentGalleryListItem extends StatelessWidget {
     required this.stanzaId,
     required this.allowed,
     required this.downloadDelegate,
+    required this.metadataReloadDelegate,
     required this.onAllowPressed,
     required this.metaText,
   });
@@ -739,6 +752,7 @@ class AttachmentGalleryListItem extends StatelessWidget {
   final String stanzaId;
   final bool allowed;
   final AttachmentDownloadDelegate? downloadDelegate;
+  final AttachmentMetadataReloadDelegate metadataReloadDelegate;
   final VoidCallback? onAllowPressed;
   final String? metaText;
 
@@ -765,6 +779,7 @@ class AttachmentGalleryListItem extends StatelessWidget {
           initialMetadata: metadata,
           allowed: allowed,
           downloadDelegate: downloadDelegate,
+          metadataReloadDelegate: metadataReloadDelegate,
           onAllowPressed: onAllowPressed,
           maxWidthFraction: previewMaxWidthFraction,
         ),
@@ -781,6 +796,7 @@ class AttachmentGalleryTile extends StatelessWidget {
     required this.stanzaId,
     required this.allowed,
     required this.downloadDelegate,
+    required this.metadataReloadDelegate,
     required this.onAllowPressed,
     required this.metaText,
   });
@@ -790,6 +806,7 @@ class AttachmentGalleryTile extends StatelessWidget {
   final String stanzaId;
   final bool allowed;
   final AttachmentDownloadDelegate? downloadDelegate;
+  final AttachmentMetadataReloadDelegate metadataReloadDelegate;
   final VoidCallback? onAllowPressed;
   final String? metaText;
 
@@ -806,6 +823,7 @@ class AttachmentGalleryTile extends StatelessWidget {
       initialMetadata: metadata,
       allowed: allowed,
       downloadDelegate: downloadDelegate,
+      metadataReloadDelegate: metadataReloadDelegate,
       onAllowPressed: onAllowPressed,
       maxWidthFraction: previewMaxWidthFraction,
     );

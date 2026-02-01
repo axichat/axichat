@@ -496,7 +496,7 @@ class _ResizableTaskBody extends StatelessWidget {
                   task.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: context.textTheme.caption.strong.copyWith(
+                  style: context.textTheme.label.strong.copyWith(
                     color: titleColor,
                     decoration:
                         task.isCompleted ? TextDecoration.lineThrough : null,
@@ -542,7 +542,7 @@ class _ResizableTaskBody extends StatelessWidget {
         task.title,
         maxLines: titleLines,
         overflow: TextOverflow.ellipsis,
-        style: context.textTheme.caption.strong.copyWith(
+        style: context.textTheme.label.strong.copyWith(
           color: titleColor,
           decoration: task.isCompleted ? TextDecoration.lineThrough : null,
         ),
@@ -561,7 +561,7 @@ class _ResizableTaskBody extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.right,
                 style:
-                    context.textTheme.caption.copyWith(color: secondaryColor),
+                    context.textTheme.label.copyWith(color: secondaryColor),
               ),
             ),
           ],
@@ -585,7 +585,7 @@ class _ResizableTaskBody extends StatelessWidget {
           timeLabel,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: context.textTheme.caption.copyWith(color: secondaryColor),
+          style: context.textTheme.label.copyWith(color: secondaryColor),
         ),
       );
     }
@@ -600,7 +600,7 @@ class _ResizableTaskBody extends StatelessWidget {
           maxLines: descriptionLines,
           overflow: descriptionOverflow,
           softWrap: true,
-          style: context.textTheme.micro.copyWith(
+          style: context.textTheme.labelSm.copyWith(
             color: secondaryColor,
             height: 1.2,
           ),
@@ -728,7 +728,7 @@ class _TaskDeadlineBadge extends StatelessWidget {
           const SizedBox(width: calendarInsetMd),
           Text(
             _deadlineLabel(l10n, deadline),
-            style: context.textTheme.caption.strong.copyWith(
+            style: context.textTheme.label.strong.copyWith(
               color: color,
               letterSpacing: 0.1,
             ),
@@ -750,14 +750,14 @@ class _TaskLocationRow extends StatelessWidget {
       children: [
         Text(
           '📍',
-          style: context.textTheme.caption.copyWith(height: 1),
+          style: context.textTheme.label.copyWith(height: 1),
         ),
         Expanded(
           child: Text(
             location,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: context.textTheme.caption.copyWith(
+            style: context.textTheme.label.copyWith(
               color: calendarSubtitleColor,
             ),
           ),

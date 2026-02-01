@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/localization/app_localizations.dart';

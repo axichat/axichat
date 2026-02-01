@@ -739,9 +739,18 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
       );
       if (!allowed || !mounted) return;
       final downloadDelegate = widget.downloadDelegate;
-      final downloaded = downloadDelegate == null
-          ? await _downloadViaXmpp()
-          : await downloadDelegate.download();
+      if (downloadDelegate == null) {
+        if (showFeedback) {
+          _showToast(
+            l10n,
+            toaster,
+            l10n.chatAttachmentUnavailable,
+            destructive: true,
+          );
+        }
+        return;
+      }
+      final downloaded = await downloadDelegate.download();
       if (!mounted) return;
       if (!downloaded && showFeedback) {
         _showToast(
@@ -778,13 +787,6 @@ class _ImageAttachmentState extends State<_ImageAttachment> {
         });
       }
     }
-  }
-
-  Future<bool> _downloadViaXmpp() async {
-    return context.read<ChatBloc>().downloadInboundAttachment(
-          metadataId: widget.metadata.id,
-          stanzaId: widget.stanzaId,
-        );
   }
 
   double _aspectRatio(FileMetadataData metadata) {
@@ -1004,9 +1006,18 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       );
       if (!allowed || !mounted) return;
       final downloadDelegate = widget.downloadDelegate;
-      final downloaded = downloadDelegate == null
-          ? await _downloadViaXmpp()
-          : await downloadDelegate.download();
+      if (downloadDelegate == null) {
+        if (showFeedback) {
+          _showToast(
+            l10n,
+            toaster,
+            l10n.chatAttachmentUnavailable,
+            destructive: true,
+          );
+        }
+        return;
+      }
+      final downloaded = await downloadDelegate.download();
       if (!mounted) return;
       if (!downloaded && showFeedback) {
         _showToast(
@@ -1043,13 +1054,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
         });
       }
     }
-  }
-
-  Future<bool> _downloadViaXmpp() async {
-    return context.read<ChatBloc>().downloadInboundAttachment(
-          metadataId: widget.metadata.id,
-          stanzaId: widget.stanzaId,
-        );
   }
 
   Future<void> _handleSaveAttachment(File file) async {
@@ -1876,13 +1880,13 @@ class _FileAttachmentState extends State<_FileAttachment> {
     }
   }
 
-  Future<String?> _downloadViaXmpp(ChatBloc chatBloc) async {
-    final downloaded = await chatBloc.downloadInboundAttachment(
-      metadataId: widget.metadata.id,
-      stanzaId: widget.stanzaId,
-    );
+  Future<String?> _downloadAndResolvePath() async {
+    final downloadDelegate = widget.downloadDelegate;
+    final reloadDelegate = widget.metadataReloadDelegate;
+    if (downloadDelegate == null || reloadDelegate == null) return null;
+    final downloaded = await downloadDelegate.download();
     if (!downloaded) return null;
-    final refreshed = await _reloadMetadata(chatBloc);
+    final refreshed = await reloadDelegate.reload();
     final refreshedPath = refreshed?.path?.trim();
     if (refreshedPath == null || refreshedPath.isEmpty) return null;
     final refreshedFile = File(refreshedPath);
@@ -1905,15 +1909,10 @@ class _FileAttachmentState extends State<_FileAttachment> {
     );
   }
 
-  Future<FileMetadataData?> _reloadMetadata(ChatBloc chatBloc) async {
-    return chatBloc.reloadFileMetadata(widget.metadata.id);
-  }
-
   Future<String?> _resolveLocalPathAfterConfirmation({
     required bool requireConfirmation,
     FileTypeReport? typeReport,
   }) async {
-    final chatBloc = context.read<ChatBloc>();
     final allowed = await _confirmDownloadAllowed(
       context,
       metadata: widget.metadata,
@@ -1923,17 +1922,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
     if (!allowed || !mounted) {
       throw const _AttachmentDownloadCancelledException();
     }
-    final downloadDelegate = widget.downloadDelegate;
-    if (downloadDelegate != null) {
-      final downloaded = await downloadDelegate.download();
-      if (!downloaded) return null;
-      final refreshed = await _reloadMetadata(chatBloc);
-      final refreshedPath = refreshed?.path?.trim();
-      if (refreshedPath == null || refreshedPath.isEmpty) return null;
-      final refreshedFile = File(refreshedPath);
-      return await refreshedFile.exists() ? refreshedFile.path : null;
-    }
-    return _downloadViaXmpp(chatBloc);
+    return _downloadAndResolvePath();
   }
 }
 

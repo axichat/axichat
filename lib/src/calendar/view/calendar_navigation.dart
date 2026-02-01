@@ -189,7 +189,7 @@ class CalendarNavigation extends StatelessWidget {
               boxShadow: navShadows,
             ),
             child: DefaultTextStyle.merge(
-              style: context.textTheme.caption
+              style: context.textTheme.label
                   .copyWith(color: colors.mutedForeground),
               child: stackNavigation
                   ? Column(
@@ -827,7 +827,7 @@ class _SegmentedToggleItem extends StatelessWidget {
         color: selected ? activeTextColor : inactiveTextColor,
       ),
       child: DefaultTextStyle.merge(
-        style: context.textTheme.caption.copyWith(
+        style: context.textTheme.label.copyWith(
           color: selected ? activeTextColor : inactiveTextColor,
         ),
         child: child,
@@ -1004,7 +1004,7 @@ class _DateLabelState extends State<_DateLabel> {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.caption.strong.copyWith(
+                    style: context.textTheme.label.strong.copyWith(
                       color: textColor,
                       letterSpacing: 0.1,
                     ),
@@ -1388,7 +1388,7 @@ class _DayHeaders extends StatelessWidget {
               child: Center(
                 child: Text(
                   label,
-                  style: context.textTheme.caption.strong.copyWith(
+                  style: context.textTheme.label.strong.copyWith(
                     color: calendarSubtitleColor,
                     letterSpacing: 0.5,
                   ),

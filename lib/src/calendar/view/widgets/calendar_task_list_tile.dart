@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_completion_checkbox.dart';
@@ -56,7 +57,7 @@ class CalendarTaskListTile extends StatelessWidget {
                       const SizedBox(height: calendarInsetSm),
                       Text(
                         scheduleLabel!,
-                        style: context.textTheme.caption.copyWith(
+                        style: context.textTheme.label.copyWith(
                           color: task.isCompleted
                               ? calendarPrimaryColor
                               : calendarSubtitleColor,
@@ -86,7 +87,7 @@ class CalendarTaskListTile extends StatelessWidget {
               task.description!.length > 50
                   ? '${task.description!.substring(0, 50)}...'
                   : task.description!,
-              style: context.textTheme.caption.copyWith(
+              style: context.textTheme.label.copyWith(
                 color: calendarSubtitleColor,
               ),
             ),
@@ -121,7 +122,7 @@ class CalendarTaskListTile extends StatelessWidget {
                   const SizedBox(width: calendarInsetMd),
                   Text(
                     _deadlineLabel(context.l10n, task.deadline!),
-                    style: context.textTheme.caption.strong.copyWith(
+                    style: context.textTheme.label.strong.copyWith(
                       color: _deadlineColor(task.deadline!),
                       letterSpacing: 0.1,
                     ),
@@ -136,12 +137,12 @@ class CalendarTaskListTile extends StatelessWidget {
               children: [
                 Text(
                   '📍',
-                  style: context.textTheme.caption.copyWith(height: 1),
+                  style: context.textTheme.label.copyWith(height: 1),
                 ),
                 Expanded(
                   child: Text(
                     task.location!,
-                    style: context.textTheme.caption.copyWith(
+                    style: context.textTheme.label.copyWith(
                       color: calendarSubtitleColor,
                     ),
                     overflow: TextOverflow.ellipsis,

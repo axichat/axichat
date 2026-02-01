@@ -608,7 +608,7 @@ class _CalendarEventContent extends StatelessWidget {
                 child: Text(
                   task.title,
                   style: (height < 40
-                          ? context.textTheme.caption
+                          ? context.textTheme.label
                           : context.textTheme.small)
                       .copyWith(
                     color: textColor,
@@ -626,7 +626,7 @@ class _CalendarEventContent extends StatelessWidget {
             const SizedBox(height: calendarInsetSm),
             Text(
               timeRange,
-              style: context.textTheme.micro.copyWith(color: mutedColor),
+              style: context.textTheme.labelSm.copyWith(color: mutedColor),
             ),
           ],
           if (showDescription && task.description != null) ...[
@@ -634,7 +634,7 @@ class _CalendarEventContent extends StatelessWidget {
             Expanded(
               child: Text(
                 task.description!,
-                style: context.textTheme.caption.copyWith(
+                style: context.textTheme.label.copyWith(
                   color: mutedColor,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -656,13 +656,13 @@ class _CalendarEventContent extends StatelessWidget {
               children: [
                 Text(
                   '📍',
-                  style: context.textTheme.micro.copyWith(height: 1),
+                  style: context.textTheme.labelSm.copyWith(height: 1),
                 ),
                 const SizedBox(width: calendarInsetSm),
                 Expanded(
                   child: Text(
                     task.location!,
-                    style: context.textTheme.micro.copyWith(
+                    style: context.textTheme.labelSm.copyWith(
                       color: mutedColor,
                     ),
                     overflow: TextOverflow.ellipsis,

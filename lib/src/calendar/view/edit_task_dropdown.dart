@@ -1616,7 +1616,7 @@ class _OccurrenceScopeChip extends StatelessWidget {
       size: AxiButtonSize.sm,
       selected: isSelected,
       onPressed: onPressed,
-      child: Text(label, style: context.textTheme.caption.strong),
+      child: Text(label, style: context.textTheme.label.strong),
     );
   }
 }

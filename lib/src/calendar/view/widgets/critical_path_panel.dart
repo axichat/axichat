@@ -158,7 +158,7 @@ class CriticalPathPanel extends StatelessWidget {
                 ),
                 child: Text(
                   l10n.calendarCriticalPathCompletedLabel,
-                  style: context.textTheme.caption.strong.copyWith(
+                  style: context.textTheme.label.strong.copyWith(
                     color:
                         hideCompleted ? colors.primary : colors.mutedForeground,
                   ),
@@ -383,12 +383,12 @@ class CriticalPathCard extends StatelessWidget {
                 progress.completed,
                 progress.total,
               ),
-              style: context.textTheme.caption,
+              style: context.textTheme.label,
             ),
             const SizedBox(height: calendarInsetSm),
             Text(
               l10n.calendarCriticalPathProgressHint,
-              style: context.textTheme.micro,
+              style: context.textTheme.labelSm,
             ),
             const SizedBox(height: calendarInsetSm),
             _CriticalPathProgressBar(
@@ -459,11 +459,11 @@ class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
               children: [
                 Text(
                   l10n.calendarCriticalPathProgressLabel,
-                  style: context.textTheme.caption,
+                  style: context.textTheme.label,
                 ),
                 Text(
                   l10n.calendarCriticalPathProgressPercent(percent),
-                  style: context.textTheme.caption.strong.copyWith(
+                  style: context.textTheme.label.strong.copyWith(
                     color: colors.primary,
                   ),
                 ),

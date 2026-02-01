@@ -189,6 +189,22 @@ class AttachmentGalleryBloc
   Stream<FileMetadataData?> fileMetadataStream(String id) =>
       _xmppService.fileMetadataStream(id);
 
+  Future<bool> downloadInboundAttachment({
+    required String metadataId,
+    required String stanzaId,
+  }) async {
+    final downloadedPath = await _xmppService.downloadInboundAttachment(
+      metadataId: metadataId,
+      stanzaId: stanzaId,
+    );
+    return downloadedPath?.trim().isNotEmpty == true;
+  }
+
+  Future<FileMetadataData?> reloadFileMetadata(String metadataId) async {
+    final db = await _xmppService.database;
+    return db.getFileMetadata(metadataId);
+  }
+
   bool _isSelfMessage(Message message) {
     if (sameNormalizedAddressValue(message.senderJid, _xmppService.myJid)) {
       return true;

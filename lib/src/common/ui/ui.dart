@@ -104,13 +104,13 @@ extension ModalTypography on BuildContext {
 }
 
 extension AxiTextThemeTokens on ShadTextTheme {
-  TextStyle get micro => muted.copyWith(
+  TextStyle get labelSm => muted.copyWith(
         fontSize: 10,
         fontWeight: FontWeight.w500,
         height: 1.2,
       );
 
-  TextStyle get caption => muted.copyWith(
+  TextStyle get label => muted.copyWith(
         fontSize: 12,
         fontWeight: FontWeight.w500,
         height: 1.2,

@@ -288,7 +288,7 @@ class _ReminderAdvancedActiveBadge extends StatelessWidget {
       ),
       child: Text(
         _reminderAdvancedActiveLabel,
-        style: context.textTheme.caption.strong
+        style: context.textTheme.label.strong
             .copyWith(color: colors.mutedForeground),
       ),
     );
@@ -340,7 +340,7 @@ class _ReminderSection extends StatelessWidget {
                 ),
                 child: Text(
                   'Mixed',
-                  style: context.textTheme.caption.strong
+                  style: context.textTheme.label.strong
                       .copyWith(color: colors.mutedForeground),
                 ),
               ),
@@ -403,7 +403,7 @@ class _ReminderChip extends StatelessWidget {
       onPressed: onTap,
       child: Text(
         label,
-        style: context.textTheme.caption.strong.copyWith(
+        style: context.textTheme.label.strong.copyWith(
           letterSpacing: 0.2,
         ),
       ),

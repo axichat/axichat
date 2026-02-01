@@ -6425,6 +6425,26 @@ class _ChatState extends State<Chat> {
                                                               final attachmentId =
                                                                   attachmentIds[
                                                                       index];
+                                                              final downloadDelegate =
+                                                                  isEmailChat
+                                                                      ? emailDownloadDelegate
+                                                                      : AttachmentDownloadDelegate(
+                                                                          () => context
+                                                                              .read<ChatBloc>()
+                                                                              .downloadInboundAttachment(
+                                                                                metadataId: attachmentId,
+                                                                                stanzaId: messageModel.stanzaID,
+                                                                              ),
+                                                                        );
+                                                              final metadataReloadDelegate =
+                                                                  AttachmentMetadataReloadDelegate(
+                                                                () => context
+                                                                    .read<
+                                                                        ChatBloc>()
+                                                                    .reloadFileMetadata(
+                                                                      attachmentId,
+                                                                    ),
+                                                              );
                                                               final bool
                                                                   hasAttachmentAbove =
                                                                   index > 0 ||
@@ -6460,7 +6480,9 @@ class _ChatState extends State<Chat> {
                                                                   allowed:
                                                                       allowAttachment,
                                                                   downloadDelegate:
-                                                                      emailDownloadDelegate,
+                                                                      downloadDelegate,
+                                                                  metadataReloadDelegate:
+                                                                      metadataReloadDelegate,
                                                                   onAllowPressed: allowAttachment
                                                                       ? null
                                                                       : attachmentsBlockedForChat
@@ -9153,6 +9175,17 @@ class _PinnedMessageTile extends StatelessWidget {
           : null;
       for (var index = 0; index < attachmentIds.length; index += 1) {
         final attachmentId = attachmentIds[index];
+        final downloadDelegate = isEmailBacked
+            ? emailDownloadDelegate
+            : AttachmentDownloadDelegate(
+                () => context.read<ChatBloc>().downloadInboundAttachment(
+                      metadataId: attachmentId,
+                      stanzaId: message.stanzaID,
+                    ),
+              );
+        final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
+          () => context.read<ChatBloc>().reloadFileMetadata(attachmentId),
+        );
         if (index > 0) {
           contentChildren.add(
             const SizedBox(height: _attachmentPreviewSpacing),
@@ -9164,7 +9197,8 @@ class _PinnedMessageTile extends StatelessWidget {
             metadataStream: metadataStreamFor(attachmentId),
             initialMetadata: metadataInitialFor(attachmentId),
             allowed: allowAttachment,
-            downloadDelegate: emailDownloadDelegate,
+            downloadDelegate: downloadDelegate,
+            metadataReloadDelegate: metadataReloadDelegate,
             onAllowPressed: allowAttachment
                 ? null
                 : attachmentsBlockedForPin
