@@ -3286,36 +3286,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<void> loadEarlier() {
     _loadEarlierQueue = _loadEarlierQueue.then((_) async {
-      final chat = state.chat;
-      if (chat == null) {
-        return;
-      }
-      final chatJid = chat.jid;
-      final nextLimit = state.items.length + messageBatchSize;
-      await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
-      if (state.chat?.jid != chatJid) {
-        return;
-      }
-      final canPageNetwork = chat.defaultTransport.isEmail
-          ? _canPageEmailHistory(chat)
-          : await _canPageMam(chat) && !_mamComplete;
-      if (!canPageNetwork) {
-        return;
-      }
-      if (chat.defaultTransport.isEmail) {
-        await _loadEarlierFromEmail(desiredWindow: nextLimit);
-        return;
-      }
-      await _loadEarlierFromMam(desiredWindow: nextLimit);
-    }).onError((error, stackTrace) {
-      if (error is Exception) {
+      try {
+        final chat = state.chat;
+        if (chat == null) {
+          return;
+        }
+        final chatJid = chat.jid;
+        final nextLimit = state.items.length + messageBatchSize;
+        await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
+        if (state.chat?.jid != chatJid) {
+          return;
+        }
+        final canPageNetwork = chat.defaultTransport.isEmail
+            ? _canPageEmailHistory(chat)
+            : await _canPageMam(chat) && !_mamComplete;
+        if (!canPageNetwork) {
+          return;
+        }
+        if (chat.defaultTransport.isEmail) {
+          await _loadEarlierFromEmail(desiredWindow: nextLimit);
+          return;
+        }
+        await _loadEarlierFromMam(desiredWindow: nextLimit);
+      } on Exception catch (error, stackTrace) {
         _log.safeFine('Failed to load earlier', error, stackTrace);
-        return;
       }
-      if (error == null) {
-        Error.throwWithStackTrace(StateError('Unknown error'), stackTrace);
-      }
-      Error.throwWithStackTrace(error, stackTrace);
     });
     return _loadEarlierQueue;
   }
@@ -3958,7 +3953,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final effectiveFilter =
         _forceAllWithContactViewFilter ? forcedFilter : event.filter;
     emit(state.copyWith(viewFilter: effectiveFilter));
-    _subscribeToMessages(limit: messageBatchSize, filter: effectiveFilter);
+    _subscribeToMessages(limit: _currentMessageLimit, filter: effectiveFilter);
     if (event.persist && !_forceAllWithContactViewFilter) {
       await _chatsService.saveChatViewFilter(
         jid: jid!,
@@ -4695,13 +4690,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Map<String, List<String>> attachmentsByMessageId,
     bool force = false,
   }) {
-    _autoDownloadQueue = _autoDownloadQueue.then(
-      (_) => _maybeAutoDownloadAttachments(
-        messages: messages,
-        attachmentsByMessageId: attachmentsByMessageId,
-        force: force,
-      ),
-    );
+    _autoDownloadQueue = _autoDownloadQueue.then((_) async {
+      try {
+        await _maybeAutoDownloadAttachments(
+          messages: messages,
+          attachmentsByMessageId: attachmentsByMessageId,
+          force: force,
+        );
+      } on Exception catch (error, stackTrace) {
+        _log.warning('Auto-download queue failed.', error, stackTrace);
+      }
+    });
   }
 
   Future<void> _maybeAutoDownloadAttachments({
@@ -4834,6 +4833,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final emailService = _emailService;
     if (emailService == null) return;
     await emailService.downloadFullMessage(message);
+    _invalidateAttachmentMaps();
   }
 
   Future<bool> downloadInboundAttachment({
@@ -4846,12 +4846,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       metadataId: metadataId,
       stanzaId: stanzaId,
     );
+    if (downloadedPath?.trim().isNotEmpty == true) {
+      _invalidateAttachmentMaps();
+    }
     return downloadedPath?.trim().isNotEmpty == true;
   }
 
   Future<FileMetadataData?> reloadFileMetadata(String metadataId) async {
     final db = await _messageService.database;
     return db.getFileMetadata(metadataId);
+  }
+
+  void _invalidateAttachmentMaps() {
+    _attachmentMapsSignature = null;
+    _cachedAttachmentIdsByMessageId = const <String, List<String>>{};
+    _cachedAttachmentGroupLeaderByMessageId = const <String, String>{};
   }
 
   Stream<List<String>> recipientAddressSuggestionsStream() =>

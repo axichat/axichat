@@ -3,6 +3,8 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
@@ -17,6 +19,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models/chat_models.dart' as chat_models;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -81,49 +84,57 @@ class ArchivedChatScreen extends StatelessWidget {
                 },
               );
 
-    return MultiRepositoryProvider(
+    return MultiBlocProvider(
       providers: [
-        if (chatCalendarCoordinator != null)
-          RepositoryProvider<ChatCalendarSyncCoordinator>.value(
-            value: chatCalendarCoordinator,
-          ),
-        if (availabilityCoordinator != null)
-          RepositoryProvider<CalendarAvailabilityShareCoordinator>.value(
-            value: availabilityCoordinator,
-          ),
+        BlocProvider.value(value: locate<ProfileCubit>()),
+        BlocProvider.value(value: locate<BlocklistCubit>()),
+        BlocProvider.value(value: locate<CalendarBloc>()),
       ],
-      child: MultiBlocProvider(
+      child: MultiRepositoryProvider(
         providers: [
-          BlocProvider(
-            create: (_) => ChatBloc(
-              jid: jid,
-              messageService: xmppService,
-              chatsService: xmppService,
-              mucService: xmppService,
-              notificationService: notificationService,
-              emailService: emailService,
-              omemoService: omemoService,
-              settings: ChatSettingsSnapshot(
-                language: settings.language,
-                chatReadReceipts: settings.chatReadReceipts,
-                emailReadReceipts: settings.emailReadReceipts,
-                shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
-                autoDownloadImages: settings.autoDownloadImages,
-                autoDownloadVideos: settings.autoDownloadVideos,
-                autoDownloadDocuments: settings.autoDownloadDocuments,
-                autoDownloadArchives: settings.autoDownloadArchives,
+          if (chatCalendarCoordinator != null)
+            RepositoryProvider<ChatCalendarSyncCoordinator>.value(
+              value: chatCalendarCoordinator,
+            ),
+          if (availabilityCoordinator != null)
+            RepositoryProvider<CalendarAvailabilityShareCoordinator>.value(
+              value: availabilityCoordinator,
+            ),
+        ],
+        child: MultiBlocProvider(
+          providers: [
+            BlocProvider(
+              create: (_) => ChatBloc(
+                jid: jid,
+                messageService: xmppService,
+                chatsService: xmppService,
+                mucService: xmppService,
+                notificationService: notificationService,
+                emailService: emailService,
+                omemoService: omemoService,
+                settings: ChatSettingsSnapshot(
+                  language: settings.language,
+                  chatReadReceipts: settings.chatReadReceipts,
+                  emailReadReceipts: settings.emailReadReceipts,
+                  shareTokenSignatureEnabled:
+                      settings.shareTokenSignatureEnabled,
+                  autoDownloadImages: settings.autoDownloadImages,
+                  autoDownloadVideos: settings.autoDownloadVideos,
+                  autoDownloadDocuments: settings.autoDownloadDocuments,
+                  autoDownloadArchives: settings.autoDownloadArchives,
+                ),
               ),
             ),
-          ),
-          BlocProvider(
-            create: (_) => ChatSearchCubit(
-              jid: jid,
-              messageService: xmppService,
-              emailService: emailService,
+            BlocProvider(
+              create: (_) => ChatSearchCubit(
+                jid: jid,
+                messageService: xmppService,
+                emailService: emailService,
+              ),
             ),
-          ),
-        ],
-        child: const _ArchivedChatBody(),
+          ],
+          child: const _ArchivedChatBody(),
+        ),
       ),
     );
   }

@@ -56,6 +56,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
@@ -181,14 +182,14 @@ class _AxichatState extends State<Axichat> {
           buildWhen: (previous, current) =>
               previous.endpointConfig != current.endpointConfig,
           builder: (context, settings) {
-        final endpointConfig = settings.endpointConfig;
-        final bool emailEnabled = endpointConfig.enableSmtp;
-        final storageManager = context.watch<CalendarStorageManager>();
-        final Storage? calendarStorage = storageManager.authStorage;
-        return MultiRepositoryProvider(
-          providers: [
-            if (emailEnabled)
-              RepositoryProvider<EmailService>(
+            final endpointConfig = settings.endpointConfig;
+            final bool emailEnabled = endpointConfig.enableSmtp;
+            final storageManager = context.watch<CalendarStorageManager>();
+            final Storage? calendarStorage = storageManager.authStorage;
+            return MultiRepositoryProvider(
+              providers: [
+                if (emailEnabled)
+                  RepositoryProvider<EmailService>(
                     create: (context) => EmailService(
                       credentialStore: context.read<CredentialStore>(),
                       databaseBuilder: () =>
@@ -230,8 +231,10 @@ class _AxichatState extends State<Axichat> {
                   BlocProvider(
                     create: (context) {
                       final xmppService = context.read<XmppService>();
-                      final omemoService =
-                          xmppService is OmemoService ? xmppService : null;
+                      final OmemoService? omemoService =
+                          xmppService is OmemoService
+                              ? xmppService as OmemoService
+                              : null;
                       return ProfileCubit(
                         xmppService: xmppService,
                         presenceService: xmppService as PresenceService,
@@ -277,9 +280,8 @@ class _AxichatState extends State<Axichat> {
                         final reminderController =
                             context.read<CalendarReminderController>();
                         final xmppService = context.read<XmppService>();
-                        final endpointConfig = context
-                            .read<AuthenticationCubit>()
-                            .endpointConfig;
+                        final endpointConfig =
+                            context.read<AuthenticationCubit>().endpointConfig;
                         final emailService = endpointConfig.enableSmtp
                             ? context.read<EmailService>()
                             : null;
@@ -313,7 +315,8 @@ class _AxichatState extends State<Axichat> {
                                   );
                                 }
                               },
-                              sendSnapshotFile: xmppService.uploadCalendarSnapshot,
+                              sendSnapshotFile:
+                                  xmppService.uploadCalendarSnapshot,
                             );
 
                             xmppService
@@ -752,22 +755,92 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                       child: Overlay(
                         initialEntries: [
                           OverlayEntry(
-                            builder: (_) => const ComposeWindowOverlay(),
+                            builder: (context) {
+                              final shadTheme = ShadTheme.of(context);
+                              final locate = context.read;
+                              return ShadTheme(
+                                data: shadTheme,
+                                child: MultiBlocProvider(
+                                  providers: [
+                                    BlocProvider.value(
+                                      value: locate<AuthenticationCubit>(),
+                                    ),
+                                    BlocProvider.value(
+                                      value: locate<ChatsCubit>(),
+                                    ),
+                                    BlocProvider.value(
+                                      value: locate<ComposeWindowCubit>(),
+                                    ),
+                                    BlocProvider.value(
+                                      value: locate<DraftCubit>(),
+                                    ),
+                                    BlocProvider.value(
+                                      value: locate<ProfileCubit>(),
+                                    ),
+                                    BlocProvider.value(
+                                      value: locate<RosterCubit>(),
+                                    ),
+                                    BlocProvider.value(
+                                      value: locate<SettingsCubit>(),
+                                    ),
+                                  ],
+                                  child: const ComposeWindowOverlay(),
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),
                     ),
                   ),
-                  const Positioned.fill(
+                  Positioned.fill(
                     child: Material(
                       type: MaterialType.transparency,
-                      child: OmemoOperationOverlay(),
+                      child: Builder(
+                        builder: (context) {
+                          final shadTheme = ShadTheme.of(context);
+                          final locate = context.read;
+                          return ShadTheme(
+                            data: shadTheme,
+                            child: MultiBlocProvider(
+                              providers: [
+                                BlocProvider.value(
+                                  value: locate<OmemoActivityCubit>(),
+                                ),
+                                BlocProvider.value(
+                                  value: locate<SettingsCubit>(),
+                                ),
+                              ],
+                              child: const OmemoOperationOverlay(),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
-                  const Positioned.fill(
+                  Positioned.fill(
                     child: Material(
                       type: MaterialType.transparency,
-                      child: XmppOperationOverlay(),
+                      child: Builder(
+                        builder: (context) {
+                          final shadTheme = ShadTheme.of(context);
+                          final locate = context.read;
+                          return ShadTheme(
+                            data: shadTheme,
+                            child: MultiBlocProvider(
+                              providers: [
+                                BlocProvider.value(
+                                  value: locate<SettingsCubit>(),
+                                ),
+                                BlocProvider.value(
+                                  value: locate<XmppActivityCubit>(),
+                                ),
+                              ],
+                              child: const XmppOperationOverlay(),
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 ],

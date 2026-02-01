@@ -283,7 +283,7 @@ class _PendingImageAttachment extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final borderRadius = BorderRadius.circular(sizing.containerRadius);
-    final previewExtent = sizing.listButtonHeight + spacing.m + spacing.s;
+    final previewExtent = sizing.attachmentPreviewExtent;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     final cacheExtent = (previewExtent * pixelRatio).round();
     final isFailed = pending.status == PendingAttachmentStatus.failed;
@@ -453,9 +453,8 @@ class _PendingImageSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
     final sizing = context.sizing;
-    final extent = sizing.listButtonHeight + spacing.m + spacing.s;
+    final extent = sizing.attachmentPreviewExtent;
     final radius =
         borderRadius ?? BorderRadius.circular(sizing.containerRadius);
     return SizedBox(

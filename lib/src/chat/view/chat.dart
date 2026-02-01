@@ -122,7 +122,10 @@ extension on MessageStatus {
       };
 }
 
-const _bubblePadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+EdgeInsets _bubblePadding(BuildContext context) => EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.s,
+    );
 const _bubbleRadius = 18.0;
 const double _senderLabelBottomSpacing = 6.0;
 const double _senderLabelSecondarySpacing = 2.0;
@@ -170,7 +173,6 @@ const _chatHeaderActionSpacing = 2.0;
 const double _chatAppBarLeadingInset = 12.0;
 const double _chatAppBarLeadingSpacing = 4.0;
 const double _chatAppBarActionsPadding = 8.0;
-const double _chatAppBarAvatarSize = 40.0;
 const double _chatAppBarAvatarSpacing = 8.0;
 const double _chatAppBarTitleMinWidth = 220.0;
 const double _chatAppBarTitleMaxWidth = 420.0;
@@ -183,7 +185,6 @@ const double _unknownSenderActionSpacing = 8.0;
 const _chatSettingsSelectMinWidth = 220.0;
 const _chatSettingsFieldSpacing = 8.0;
 const _chatSettingsLabelSpacing = 4.0;
-const _chatSettingsItemPadding = EdgeInsets.all(12.0);
 const _messageActionIconSize = 16.0;
 const int _pinnedBadgeHiddenCount = 0;
 const int _pinnedBadgeMaxDisplayCount = 99;
@@ -6638,7 +6639,9 @@ class _ChatState extends State<Chat> {
                                                                   !chainedPrev;
                                                           EdgeInsetsGeometry
                                                               bubblePadding =
-                                                              _bubblePadding;
+                                                              _bubblePadding(
+                                                                context,
+                                                              );
                                                           if (bubbleBottomInset >
                                                               0) {
                                                             bubblePadding =
@@ -7560,7 +7563,9 @@ class _ChatState extends State<Chat> {
                                                                 !self &&
                                                                         hasAvatarSlot
                                                                     ? _messageAvatarContentInset +
-                                                                        _bubblePadding
+                                                                        _bubblePadding(
+                                                                          context,
+                                                                        )
                                                                             .left
                                                                     : _senderLabelNoInset;
                                                             senderLabel =
@@ -13709,7 +13714,10 @@ class _GuestMessageBubble extends StatelessWidget {
       shadows: _selectedBubbleShadows(colors.primary),
       bubbleWidthFraction: _cutoutMaxWidthFraction,
       cornerClearance: bubbleCornerClearance,
-      body: Padding(padding: _bubblePadding, child: inlineText),
+      body: Padding(
+        padding: _bubblePadding(context),
+        child: inlineText,
+      ),
     );
     final showSenderLabel = !chainedPrev;
     Widget bubbleWithLabel = bubble;

@@ -726,7 +726,10 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
             child: state.visible
                 ? BlockSemantics(
                     blocking: true,
-                    child: _AccessibilityMenuScaffold(state: state),
+                    child: _AccessibilityMenuScaffold(
+                      state: state,
+                      chatLocate: widget.chatLocate,
+                    ),
                   )
                 : const SizedBox.shrink(),
           ),
@@ -737,9 +740,13 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
 }
 
 class _AccessibilityMenuScaffold extends StatefulWidget {
-  const _AccessibilityMenuScaffold({required this.state});
+  const _AccessibilityMenuScaffold({
+    required this.state,
+    required this.chatLocate,
+  });
 
   final AccessibilityActionState state;
+  final T Function<T>()? chatLocate;
 
   @override
   State<_AccessibilityMenuScaffold> createState() =>
@@ -1078,6 +1085,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                                                   nextGroupActivator,
                                               previousGroupActivator:
                                                   previousGroupActivator,
+                                              chatLocate: widget.chatLocate,
                                             ),
                                           ),
                                         ),
@@ -1567,6 +1575,7 @@ class _AccessibilityActionContent extends StatelessWidget {
     required this.activateItemActivator,
     required this.nextGroupActivator,
     required this.previousGroupActivator,
+    required this.chatLocate,
   });
 
   final AccessibilityActionState state;
@@ -1588,6 +1597,7 @@ class _AccessibilityActionContent extends StatelessWidget {
   final ShortcutActivator activateItemActivator;
   final ShortcutActivator nextGroupActivator;
   final ShortcutActivator previousGroupActivator;
+  final T Function<T>()? chatLocate;
 
   @override
   Widget build(BuildContext context) {
@@ -1743,6 +1753,7 @@ class _AccessibilityActionContent extends StatelessWidget {
                     currentRecipients,
                   ),
                 ),
+                chatLocate: chatLocate,
               ),
             ),
           ),
@@ -2788,11 +2799,13 @@ class _MessageCarousel extends StatefulWidget {
     required this.section,
     required this.focusNode,
     required this.initialIndex,
+    required this.chatLocate,
   });
 
   final AccessibilityMenuSection section;
   final FocusNode focusNode;
   final int initialIndex;
+  final T Function<T>()? chatLocate;
 
   @override
   State<_MessageCarousel> createState() => _MessageCarouselState();
@@ -3018,17 +3031,16 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                             : AttachmentDownloadDelegate(
                                 () => chatLocate<ChatBloc>()
                                     .downloadInboundAttachment(
-                                      metadataId: attachment.id,
-                                      stanzaId: currentMessage?.stanzaID ?? '',
-                                    ),
+                                  metadataId: attachment.id,
+                                  stanzaId: currentMessage?.stanzaID ?? '',
+                                ),
                               ),
                         metadataReloadDelegate: chatLocate == null
                             ? null
                             : AttachmentMetadataReloadDelegate(
-                                () => chatLocate<ChatBloc>()
-                                    .reloadFileMetadata(
-                                      attachment.id,
-                                    ),
+                                () => chatLocate<ChatBloc>().reloadFileMetadata(
+                                  attachment.id,
+                                ),
                               ),
                       ),
                     )

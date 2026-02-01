@@ -30,6 +30,62 @@ class CalendarMobileTabHostController extends ChangeNotifier {
   }
 }
 
+class CalendarMobileTabHostPublisher extends StatefulWidget {
+  const CalendarMobileTabHostPublisher({
+    super.key,
+    required this.data,
+    required this.child,
+  });
+
+  final CalendarMobileTabHostData data;
+  final Widget child;
+
+  @override
+  State<CalendarMobileTabHostPublisher> createState() =>
+      _CalendarMobileTabHostPublisherState();
+}
+
+class _CalendarMobileTabHostPublisherState
+    extends State<CalendarMobileTabHostPublisher> {
+  CalendarMobileTabHostController? _controller;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final controller = CalendarMobileTabHostScope.maybeController(context);
+    if (controller != _controller) {
+      _controller?.clear();
+      _controller = controller;
+    }
+    _publish();
+  }
+
+  @override
+  void didUpdateWidget(covariant CalendarMobileTabHostPublisher oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.data != oldWidget.data) {
+      _publish();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.clear();
+    super.dispose();
+  }
+
+  void _publish() {
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    controller.update(widget.data);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class CalendarMobileTabHostScope
     extends InheritedNotifier<CalendarMobileTabHostController> {
   const CalendarMobileTabHostScope({

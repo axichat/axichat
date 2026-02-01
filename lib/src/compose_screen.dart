@@ -6,8 +6,12 @@ import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/view/compose_draft_content.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -39,7 +43,14 @@ class ComposeScreen extends StatelessWidget {
           ),
       ],
       child: MultiBlocProvider(
-        providers: [BlocProvider.value(value: locate<DraftCubit>())],
+        providers: [
+          BlocProvider.value(value: locate<AuthenticationCubit>()),
+          BlocProvider.value(value: locate<ChatsCubit>()),
+          BlocProvider.value(value: locate<DraftCubit>()),
+          BlocProvider.value(value: locate<ProfileCubit>()),
+          BlocProvider.value(value: locate<RosterCubit>()),
+          BlocProvider.value(value: locate<SettingsCubit>()),
+        ],
         child: Scaffold(
           backgroundColor: colors.background,
           appBar: AppBar(

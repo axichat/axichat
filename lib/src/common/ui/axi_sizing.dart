@@ -17,6 +17,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.menuMaxWidth,
     required this.menuMaxHeight,
     required this.listButtonHeight,
+    required this.attachmentPreviewExtent,
     required this.appBarElevation,
     required this.appBarScrolledUnderElevation,
     required this.dialogMaxWidth,
@@ -54,6 +55,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double menuMaxWidth;
   final double menuMaxHeight;
   final double listButtonHeight;
+  final double attachmentPreviewExtent;
   final double appBarElevation;
   final double appBarScrolledUnderElevation;
   final double dialogMaxWidth;
@@ -92,6 +94,7 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? menuMaxWidth,
     double? menuMaxHeight,
     double? listButtonHeight,
+    double? attachmentPreviewExtent,
     double? appBarElevation,
     double? appBarScrolledUnderElevation,
     double? dialogMaxWidth,
@@ -129,6 +132,8 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
       menuMaxWidth: menuMaxWidth ?? this.menuMaxWidth,
       menuMaxHeight: menuMaxHeight ?? this.menuMaxHeight,
       listButtonHeight: listButtonHeight ?? this.listButtonHeight,
+      attachmentPreviewExtent:
+          attachmentPreviewExtent ?? this.attachmentPreviewExtent,
       appBarElevation: appBarElevation ?? this.appBarElevation,
       appBarScrolledUnderElevation:
           appBarScrolledUnderElevation ?? this.appBarScrolledUnderElevation,
@@ -187,6 +192,7 @@ const AxiSizing axiSizing = AxiSizing(
   menuMaxWidth: 320,
   menuMaxHeight: 320,
   listButtonHeight: 48,
+  attachmentPreviewExtent: 72,
   appBarElevation: 0,
   appBarScrolledUnderElevation: 0,
   dialogMaxWidth: 640,

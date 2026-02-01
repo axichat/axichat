@@ -76,8 +76,6 @@ bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
 class _CalendarWidgetState
     extends CalendarExperienceState<CalendarWidget, CalendarBloc> {
   bool _mobileInitialScrollSynced = false;
-  CalendarMobileTabHostController? _mobileTabHostController;
-  CalendarMobileTabHostData? _pendingTabHostData;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
   late final GlobalKey<NavigatorState> _calendarNavigatorKey =
@@ -96,17 +94,8 @@ class _CalendarWidgetState
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _mobileTabHostController = CalendarMobileTabHostScope.maybeController(
-      context,
-    );
-  }
-
-  @override
   void dispose() {
     _hoverTitleController.dispose();
-    _mobileTabHostController?.clear();
     super.dispose();
   }
 
@@ -176,18 +165,23 @@ class _CalendarWidgetState
   ) {
     final env = EnvScope.of(context);
     if (env.navPlacement == NavPlacement.bottom) {
-      _publishMobileTabHost(tabSwitcher, cancelBucket);
-      return CalendarMobileTabShell(
-        tabBar: const SizedBox.shrink(),
-        cancelBucket: const SizedBox.shrink(),
-        backgroundColor: context.colorScheme.background,
-        borderColor: context.colorScheme.border,
-        dividerColor: context.colorScheme.border,
-        showTopBorder: false,
-        showDivider: false,
+      final data = CalendarMobileTabHostData(
+        tabSwitcher: tabSwitcher,
+        cancelBucket: cancelBucket,
+      );
+      return CalendarMobileTabHostPublisher(
+        data: data,
+        child: CalendarMobileTabShell(
+          tabBar: const SizedBox.shrink(),
+          cancelBucket: const SizedBox.shrink(),
+          backgroundColor: context.colorScheme.background,
+          borderColor: context.colorScheme.border,
+          dividerColor: context.colorScheme.border,
+          showTopBorder: false,
+          showDivider: false,
+        ),
       );
     }
-    _mobileTabHostController?.clear();
     final colors = context.colorScheme;
     return CalendarMobileTabShell(
       tabBar: tabSwitcher,
@@ -198,23 +192,6 @@ class _CalendarWidgetState
       showTopBorder: false,
       showDivider: true,
     );
-  }
-
-  void _publishMobileTabHost(Widget tabSwitcher, Widget cancelBucket) {
-    final controller = _mobileTabHostController;
-    if (controller == null) {
-      return;
-    }
-    _pendingTabHostData = CalendarMobileTabHostData(
-      tabSwitcher: tabSwitcher,
-      cancelBucket: cancelBucket,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final pending = _pendingTabHostData;
-      if (pending == null) return;
-      controller.update(pending);
-    });
   }
 
   @override

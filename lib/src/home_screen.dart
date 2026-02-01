@@ -13,16 +13,13 @@ import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
-import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
-import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
@@ -45,7 +42,6 @@ import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
-import 'package:axichat/src/demo/demo_calendar.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
@@ -264,7 +260,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   ValueNotifier<int?>? _pendingCalendarTabIndex;
-  ValueNotifier<int>? _homeTabIndex;
   bool _railCollapsed = true;
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
@@ -272,7 +267,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _pendingCalendarTabIndex?.removeListener(_handlePendingCalendarTabChange);
-    _homeTabIndex?.removeListener(_handleHomeTabIndexChange);
     _shortcutFocusNode.dispose();
     _clearOpenChatHistoryEntry();
     _clearOpenCalendarHistoryEntry();
@@ -369,7 +363,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final chatsState = context.read<ChatsCubit>().state;
     _syncHomeHistoryEntries(chatsState);
     _updatePendingCalendarTabIndexListener();
-    _updateHomeTabIndexListener();
   }
 
   void _updatePendingCalendarTabIndexListener() {
@@ -395,32 +388,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _updateHomeTabIndexListener() {
-    final scope = HomeShellScope.maybeOf(context);
-    final notifier = scope?.homeTabIndex;
-    if (notifier == _homeTabIndex) {
-      return;
-    }
-    _homeTabIndex?.removeListener(_handleHomeTabIndexChange);
-    _homeTabIndex = notifier;
-    _homeTabIndex?.addListener(_handleHomeTabIndexChange);
-    _handleHomeTabIndexChange();
-  }
-
-  void _handleHomeTabIndexChange() {
-    final notifier = _homeTabIndex;
-    if (notifier == null) {
-      return;
-    }
-    final controller = DefaultTabController.maybeOf(context);
-    if (controller == null || controller.length == 0) {
-      return;
-    }
-    final index = notifier.value.clamp(0, controller.length - 1);
-    if (controller.index == index) {
-      return;
-    }
-    controller.animateTo(index);
+  KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
+    if (!_isFindActionEvent(event)) return KeyEventResult.ignored;
+    context.read<AccessibilityActionBloc>().add(
+          const AccessibilityMenuOpened(),
+        );
+    return KeyEventResult.handled;
   }
 
   @override
@@ -447,6 +420,7 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       },
       onSyncHomeHistoryEntries: _syncHomeHistoryEntries,
+      onHomeKeyEvent: _handleHomeKeyEvent,
     );
   }
 }
@@ -582,6 +556,56 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
   }
 }
 
+class _HomeTabIndexSync extends StatefulWidget {
+  const _HomeTabIndexSync({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_HomeTabIndexSync> createState() => _HomeTabIndexSyncState();
+}
+
+class _HomeTabIndexSyncState extends State<_HomeTabIndexSync> {
+  ValueNotifier<int>? _homeTabIndex;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final notifier = HomeShellScope.maybeOf(context)?.homeTabIndex;
+    if (notifier != _homeTabIndex) {
+      _homeTabIndex?.removeListener(_handleHomeTabIndexChange);
+      _homeTabIndex = notifier;
+      _homeTabIndex?.addListener(_handleHomeTabIndexChange);
+    }
+    _handleHomeTabIndexChange();
+  }
+
+  @override
+  void dispose() {
+    _homeTabIndex?.removeListener(_handleHomeTabIndexChange);
+    super.dispose();
+  }
+
+  void _handleHomeTabIndexChange() {
+    final notifier = _homeTabIndex;
+    if (notifier == null) {
+      return;
+    }
+    final controller = DefaultTabController.maybeOf(context);
+    if (controller == null || controller.length == 0) {
+      return;
+    }
+    final index = notifier.value.clamp(0, controller.length - 1);
+    if (controller.index == index) {
+      return;
+    }
+    controller.animateTo(index);
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class _HomeContent extends StatelessWidget {
   const _HomeContent({
     required this.storageManager,
@@ -592,6 +616,7 @@ class _HomeContent extends StatelessWidget {
     required this.onToggleNavRail,
     required this.onRailCollapsedChanged,
     required this.onSyncHomeHistoryEntries,
+    required this.onHomeKeyEvent,
   });
 
   final CalendarStorageManager storageManager;
@@ -602,10 +627,14 @@ class _HomeContent extends StatelessWidget {
   final VoidCallback onToggleNavRail;
   final ValueChanged<bool> onRailCollapsedChanged;
   final ValueChanged<ChatsState> onSyncHomeHistoryEntries;
+  final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final settings = context.watch<SettingsCubit>().state;
+    final endpointConfig = settings.endpointConfig;
+    final bool emailEnabled = endpointConfig.enableSmtp;
 
     final xmppService = context.watch<XmppService>();
     final isOmemo = xmppService is OmemoService;
@@ -643,9 +672,8 @@ class _HomeContent extends StatelessWidget {
                       final bool openCalendar =
                           hasCalendarBloc && chatsState.openCalendar;
                       final chatRoute = chatsState.openChatRoute;
-                      final Widget chatPaneContent = openJid == null
-                          ? const GuestChat()
-                          : const Chat();
+                      final Widget chatPaneContent =
+                          openJid == null ? const GuestChat() : const Chat();
                       final Widget chatPane = Align(
                         alignment: Alignment.topLeft,
                         child: chatPaneContent,
@@ -739,31 +767,28 @@ class _HomeContent extends StatelessWidget {
       body: DefaultTabController(
         length: tabs.length,
         animationDuration: context.watch<SettingsCubit>().animationDuration,
-        child: MultiBlocProvider(
-          providers: [
-            BlocProvider(
-              create: (context) => HomeSearchCubit(
-                tabs: tabs.map((tab) => tab.id).toList(),
-                initialFilters: initialTabFilters,
+        child: _HomeTabIndexSync(
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider(
+                create: (context) => HomeSearchCubit(
+                  tabs: tabs.map((tab) => tab.id).toList(),
+                  initialFilters: initialTabFilters,
+                ),
               ),
-            ),
-            BlocProvider(
-              create: (context) {
-                final endpointConfig =
-                    context.read<AuthenticationCubit>().endpointConfig;
-                return ConnectivityCubit(
+              BlocProvider(
+                create: (context) => ConnectivityCubit(
                   xmppBase: context.read<XmppService>(),
-                  emailEnabled: endpointConfig.enableSmtp,
-                  emailService: endpointConfig.enableSmtp
-                      ? context.read<EmailService>()
-                      : null,
-                );
-              },
+                  emailEnabled: emailEnabled,
+                  emailService:
+                      emailEnabled ? context.read<EmailService>() : null,
+                ),
+              ),
+            ],
+            child: _HomeCoordinatorBridge(
+              storage: calendarStorage,
+              child: EmailForwardingWelcomeGate(child: calendarAwareContent),
             ),
-          ],
-          child: _HomeCoordinatorBridge(
-            storage: calendarStorage,
-            child: EmailForwardingWelcomeGate(child: calendarAwareContent),
           ),
         ),
       ),
@@ -783,12 +808,8 @@ class _HomeContent extends StatelessWidget {
       providers: [
         BlocProvider(
           create: (context) {
-            final settings = context.read<SettingsCubit>().state;
-            final endpointConfig =
-                context.read<AuthenticationCubit>().endpointConfig;
-            final emailService = endpointConfig.enableSmtp
-                ? context.read<EmailService>()
-                : null;
+            final emailService =
+                emailEnabled ? context.read<EmailService>() : null;
             return ChatBloc(
               jid: resolvedJid,
               messageService: context.read<XmppService>(),
@@ -815,10 +836,7 @@ class _HomeContent extends StatelessWidget {
           create: (context) => ChatSearchCubit(
             jid: resolvedJid,
             messageService: context.read<XmppService>(),
-            emailService:
-                context.read<AuthenticationCubit>().endpointConfig.enableSmtp
-                    ? context.read<EmailService>()
-                    : null,
+            emailService: emailEnabled ? context.read<EmailService>() : null,
           ),
         ),
         /* Verification flow temporarily disabled
@@ -863,8 +881,8 @@ class _HomeActionLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final locate = context.read;
     final platform = EnvScope.of(context).platform;
-    final isApple = platform == TargetPlatform.macOS ||
-        platform == TargetPlatform.iOS;
+    final isApple =
+        platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
     final findActivators = findActionActivators(platform);
     final composeActivator = SingleActivator(
       LogicalKeyboardKey.keyN,
