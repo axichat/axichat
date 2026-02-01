@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
@@ -15,6 +14,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -93,7 +93,7 @@ class AttachmentGalleryPanel extends StatelessWidget {
     return BlocProvider(
       create: (context) {
         final endpointConfig =
-            context.read<AuthenticationCubit>().endpointConfig;
+            context.read<SettingsCubit>().state.endpointConfig;
         final emailService =
             endpointConfig.enableSmtp ? context.read<EmailService>() : null;
         return AttachmentGalleryBloc(

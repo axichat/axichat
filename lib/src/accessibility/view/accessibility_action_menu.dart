@@ -5,7 +5,6 @@ import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/bloc/accessibility_chat_bloc.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
@@ -14,6 +13,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
@@ -1428,7 +1428,7 @@ class _AccessibilityChatScope extends StatelessWidget {
       key: ValueKey(chatJid),
       create: (context) {
         final endpointConfig =
-            context.read<AuthenticationCubit>().endpointConfig;
+            context.read<SettingsCubit>().state.endpointConfig;
         final emailService =
             endpointConfig.enableSmtp ? context.read<EmailService>() : null;
         return AccessibilityChatBloc(
@@ -2600,7 +2600,7 @@ Future<void> _confirmNewContact(BuildContext context) async {
   final address =
       context.read<AccessibilityActionBloc>().state.newContactInput.trim();
   if (address.isEmpty) return;
-  final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+  final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
   final supportsEmail = endpointConfig.enableSmtp;
   final supportsXmpp = endpointConfig.enableXmpp;
   MessageTransport? resolved;

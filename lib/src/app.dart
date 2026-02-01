@@ -440,7 +440,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   void initState() {
     super.initState();
     _xmppService = context.read<XmppService>();
-    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final EmailService? emailService =
         endpointConfig.enableSmtp ? context.read<EmailService>() : null;
     _emailService = emailService;
@@ -477,8 +477,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     return BlocConsumer<SettingsCubit, SettingsState>(
       listener: (context, state) async {
         final notificationService = context.read<NotificationService>();
-        final endpointConfig =
-            context.read<AuthenticationCubit>().endpointConfig;
+        final endpointConfig = state.endpointConfig;
         final EmailService? emailService =
             endpointConfig.enableSmtp ? context.read<EmailService>() : null;
         if (_emailService != emailService) {
@@ -683,7 +682,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   AppLocalizations.of(context)!,
                 );
             final endpointConfig =
-                context.read<AuthenticationCubit>().endpointConfig;
+                context.read<SettingsCubit>().state.endpointConfig;
             if (endpointConfig.enableSmtp) {
               context.read<EmailService>().updateLocalizations(
                     AppLocalizations.of(context)!,

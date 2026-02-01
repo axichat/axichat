@@ -8,7 +8,6 @@ import 'dart:ui' as ui;
 
 import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
@@ -1186,7 +1185,7 @@ class _ChatState extends State<Chat> {
   }
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
-    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final supportsEmail = endpointConfig.enableSmtp;
     final supportsXmpp = endpointConfig.enableXmpp;
     if (supportsEmail && !supportsXmpp) {
@@ -1347,7 +1346,7 @@ class _ChatState extends State<Chat> {
     }
     final reminderController = context.read<CalendarReminderController>();
     final xmppService = context.read<XmppService>();
-    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final emailService =
         endpointConfig.enableSmtp ? context.read<EmailService>() : null;
     final availabilityCoordinator = _readAvailabilityShareCoordinator(
@@ -9460,7 +9459,7 @@ class _ChatGalleryOverlay extends StatelessWidget {
     return BlocProvider(
       create: (context) {
         final endpointConfig =
-            context.read<AuthenticationCubit>().endpointConfig;
+            context.read<SettingsCubit>().state.endpointConfig;
         final emailService =
             endpointConfig.enableSmtp ? context.read<EmailService>() : null;
         return AttachmentGalleryBloc(

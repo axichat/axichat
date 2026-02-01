@@ -84,7 +84,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     if (!endpointConfig.enableSmtp) {
       return const SizedBox.shrink();
     }

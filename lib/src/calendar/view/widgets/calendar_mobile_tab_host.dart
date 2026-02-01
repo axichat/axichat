@@ -99,13 +99,4 @@ class CalendarMobileTabHostScope
         .dependOnInheritedWidgetOfExactType<CalendarMobileTabHostScope>()
         ?.notifier;
   }
-
-  static CalendarMobileTabHostController? maybeController(
-    BuildContext context,
-  ) {
-    final element = context
-        .getElementForInheritedWidgetOfExactType<CalendarMobileTabHostScope>();
-    final scope = element?.widget as CalendarMobileTabHostScope?;
-    return scope?.notifier;
-  }
 }

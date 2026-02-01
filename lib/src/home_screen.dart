@@ -460,11 +460,12 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
   }
 
   void _ensureCoordinators() {
+    final locate = context.read;
     final storage = widget.storage;
     if (storage == null) {
-      final storageManager = context.read<CalendarStorageManager>();
+      final storageManager = locate<CalendarStorageManager>();
       if (storageManager.isAuthStorageReady) {
-        context.read<CalendarBloc>().clearChatCalendarSyncHandler();
+        locate<CalendarBloc>().clearChatCalendarSyncHandler();
       }
       _chatCalendarCoordinator = null;
       _availabilityCoordinator = null;
@@ -473,14 +474,12 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
     if (_storage == storage &&
         _chatCalendarCoordinator != null &&
         _availabilityCoordinator != null) {
-      final calendarBloc = context.read<CalendarBloc>();
-      calendarBloc
+      locate<CalendarBloc>()
         ..registerChatCalendarSyncHandler(_handleChatCalendarSync)
         ..attachAvailabilityCoordinator(_availabilityCoordinator!);
       return;
     }
     _storage = storage;
-    final calendarBloc = context.read<CalendarBloc>();
     final chatStorage = ChatCalendarStorage(storage: storage);
     _chatCalendarCoordinator = ChatCalendarSyncCoordinator(
       storage: chatStorage,
@@ -489,13 +488,14 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
         required CalendarSyncOutbound outbound,
         required m.ChatType chatType,
       }) {
-        return calendarBloc.sendCalendarSyncMessage(
+        return locate<CalendarBloc>().sendCalendarSyncMessage(
           jid: jid,
           outbound: outbound,
           chatType: chatType,
         );
       },
-      sendSnapshotFile: calendarBloc.uploadCalendarSnapshot,
+      sendSnapshotFile: (file) =>
+          locate<CalendarBloc>().uploadCalendarSnapshot(file),
     );
     _availabilityCoordinator = CalendarAvailabilityShareCoordinator(
       store: CalendarAvailabilityShareStore(),
@@ -504,14 +504,14 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
         required CalendarAvailabilityMessage message,
         required m.ChatType chatType,
       }) {
-        return calendarBloc.sendAvailabilityMessage(
+        return locate<CalendarBloc>().sendAvailabilityMessage(
           jid: jid,
           message: message,
           chatType: chatType,
         );
       },
     );
-    calendarBloc
+    locate<CalendarBloc>()
       ..registerChatCalendarSyncHandler(_handleChatCalendarSync)
       ..attachAvailabilityCoordinator(_availabilityCoordinator!);
   }
