@@ -31,6 +31,7 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
+import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -225,6 +226,12 @@ class _AxichatState extends State<Axichat> {
                           context.read<HomeRefreshSyncService>(),
                       emailService:
                           emailEnabled ? context.read<EmailService>() : null,
+                    ),
+                  ),
+                  BlocProvider(
+                    create: (context) => RosterCubit(
+                      rosterService:
+                          context.read<XmppService>() as RosterService,
                     ),
                   ),
                   BlocProvider(
@@ -559,9 +566,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             context.read<NotificationService>().updateLocalizations(
                   AppLocalizations.of(context)!,
                 );
-            context.read<EmailService>().updateLocalizations(
-                  AppLocalizations.of(context)!,
-                );
+            final endpointConfig =
+                context.read<AuthenticationCubit>().endpointConfig;
+            if (endpointConfig.enableSmtp) {
+              context.read<EmailService>().updateLocalizations(
+                    AppLocalizations.of(context)!,
+                  );
+            }
             final shadTheme = ShadTheme.of(context);
             final brightness = Theme.of(context).brightness;
             CalendarPalette.update(

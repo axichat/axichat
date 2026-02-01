@@ -24,7 +24,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
       calendarInsetSm;
   static const double _rightEdgeHotZoneWidth = _leftEdgeHotZoneWidth;
   static const Duration _switchDelay = baseAnimationDuration;
-  static const Duration _dayShiftDelay = axiMotion.statusBannerSuccessDuration;
+  static final Duration _dayShiftDelay = axiMotion.statusBannerSuccessDuration;
   static const double _edgeActivationSlop = calendarGutterMd;
   Timer? _switchTimer;
   int? _pendingSwitchIndex;

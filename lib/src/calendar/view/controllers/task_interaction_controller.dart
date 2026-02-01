@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 
 typedef ResizeAutoScrollHandler = void Function(double delta);
 

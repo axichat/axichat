@@ -765,6 +765,25 @@ class XmppPeerCapabilities {
   bool get supportsReceipts => features.contains(mox.deliveryXmlns);
 }
 
+enum CapabilityDecisionKind { allowed, unsupported, unknown, error }
+
+class CapabilityDecision {
+  const CapabilityDecision(
+    this.kind, {
+    this.error,
+    this.stackTrace,
+  });
+
+  final CapabilityDecisionKind kind;
+  final Object? error;
+  final StackTrace? stackTrace;
+
+  bool get isAllowed => kind == CapabilityDecisionKind.allowed;
+  bool get isUnsupported => kind == CapabilityDecisionKind.unsupported;
+  bool get isUnknown => kind == CapabilityDecisionKind.unknown;
+  bool get isError => kind == CapabilityDecisionKind.error;
+}
+
 class _PeerCapabilities {
   const _PeerCapabilities({
     required this.supportsMarkers,
@@ -864,24 +883,6 @@ mixin MessageService
       start: start,
       end: end,
       filter: filter,
-    ).map((messages) {
-      if (messages.isEmpty || !_internalEnvelopeChats.contains(jid)) {
-        return messages;
-      }
-      final filtered = messages
-          .where((message) => !_isInternalSyncEnvelope(message.body))
-          .toList(growable: false);
-      return List<Message>.unmodifiable(filtered);
-    });
-  }
-
-  Stream<List<Message>> messageStreamForChatMessageIds(
-    String jid, {
-    required List<String> messageIds,
-  }) {
-    return _localMessageStreamForChatByMessageIds(
-      jid: jid,
-      messageIds: messageIds,
     ).map((messages) {
       if (messages.isEmpty || !_internalEnvelopeChats.contains(jid)) {
         return messages;
@@ -1007,201 +1008,6 @@ mixin MessageService
         );
       },
     );
-  }
-
-  Stream<List<Message>> _localMessageStreamForChatByMessageIds({
-    required String jid,
-    required List<String> messageIds,
-  }) {
-    return createSingleItemStream<List<Message>, XmppDatabase>(
-      watchFunction: (db) async {
-        final normalized = _normalizeMessageIds(messageIds);
-        if (normalized.isEmpty) {
-          return Stream.value(const <Message>[]);
-        }
-        final messagesStream = _watchChatMessagesByMessageIds(
-          db: db,
-          jid: jid,
-          messageIds: normalized,
-        );
-        final initialMessages = await _loadChatMessagesByMessageIds(
-          db: db,
-          jid: jid,
-          messageIds: normalized,
-        );
-        if (!_internalEnvelopeChats.contains(jid) &&
-            initialMessages.any(
-              (message) => _isInternalSyncEnvelope(message.body),
-            )) {
-          _internalEnvelopeChats.add(jid);
-        }
-        final initialMessageIds = initialMessages
-            .map((message) => message.stanzaID)
-            .where((id) => id.isNotEmpty)
-            .toSet();
-        final initialReactions =
-            await db.getReactionsForMessages(initialMessageIds);
-        return _combineMessageAndReactionStreams(
-          messageStream: messagesStream,
-          initialMessages: initialMessages,
-          initialReactions: initialReactions,
-          reactionStreamFactory: db.watchReactionsForMessages,
-          reactionSnapshotLoader: db.getReactionsForMessages,
-        );
-      },
-    );
-  }
-
-  List<String> _normalizeMessageIds(Iterable<String> ids) {
-    final normalized = <String>[];
-    final seen = <String>{};
-    for (final id in ids) {
-      final trimmed = id.trim();
-      if (trimmed.isEmpty) continue;
-      if (seen.add(trimmed)) {
-        normalized.add(trimmed);
-      }
-    }
-    return normalized;
-  }
-
-  Future<List<Message>> _loadChatMessagesByMessageIds({
-    required XmppDatabase db,
-    required String jid,
-    required List<String> messageIds,
-  }) async {
-    if (messageIds.isEmpty) {
-      return const <Message>[];
-    }
-    final orderedIds = List<String>.from(messageIds);
-    final messages = <Message>[];
-    final chunks = _chunkStanzaIds(orderedIds);
-    for (final chunk in chunks) {
-      final batch = await db.getChatMessagesByIds(jid, chunk);
-      messages.addAll(batch);
-    }
-    return _orderMessagesByIds(
-      orderedIds: orderedIds,
-      messages: messages,
-    );
-  }
-
-  Stream<List<Message>> _watchChatMessagesByMessageIds({
-    required XmppDatabase db,
-    required String jid,
-    required List<String> messageIds,
-  }) {
-    if (messageIds.isEmpty) {
-      return Stream.value(const <Message>[]);
-    }
-    final orderedIds = List<String>.from(messageIds);
-    final chunks = _chunkStanzaIds(orderedIds);
-    if (chunks.length == 1) {
-      return db
-          .watchChatMessagesByIds(jid, chunks.first)
-          .map((messages) => _orderMessagesByIds(
-                orderedIds: orderedIds,
-                messages: messages,
-              ));
-    }
-    final controller = StreamController<List<Message>>.broadcast();
-    final current = <String, Message>{};
-    final subscriptions = <StreamSubscription<List<Message>>>[];
-    var listeners = 0;
-    var closed = false;
-
-    void emit() {
-      if (!controller.hasListener) return;
-      controller.add(
-        _orderMessagesByIds(
-          orderedIds: orderedIds,
-          messages: current.values.toList(growable: false),
-        ),
-      );
-    }
-
-    void start() {
-      for (final chunk in chunks) {
-        final chunkIds = chunk.toSet();
-        final subscription =
-            db.watchChatMessagesByIds(jid, chunk).listen((messages) {
-          if (closed) return;
-          for (final id in chunkIds) {
-            current.remove(id);
-          }
-          for (final message in messages) {
-            final id = message.id?.trim();
-            if (id == null || id.isEmpty) continue;
-            current[id] = message;
-          }
-          emit();
-        });
-        subscriptions.add(subscription);
-      }
-    }
-
-    Future<void> stop() async {
-      if (closed) return;
-      closed = true;
-      for (final subscription in subscriptions) {
-        await subscription.cancel();
-      }
-      await controller.close();
-    }
-
-    controller.onListen = () {
-      listeners++;
-      if (listeners == 1) {
-        start();
-      } else {
-        emit();
-      }
-    };
-
-    controller.onCancel = () async {
-      listeners--;
-      if (listeners <= 0) {
-        await stop();
-      }
-    };
-
-    return controller.stream;
-  }
-
-  List<List<String>> _chunkStanzaIds(List<String> ids) {
-    const chunkSize = 900;
-    if (ids.length <= chunkSize) {
-      return <List<String>>[ids];
-    }
-    final chunks = <List<String>>[];
-    for (var i = 0; i < ids.length; i += chunkSize) {
-      final end = (i + chunkSize) > ids.length ? ids.length : i + chunkSize;
-      chunks.add(ids.sublist(i, end));
-    }
-    return chunks;
-  }
-
-  List<Message> _orderMessagesByIds({
-    required List<String> orderedIds,
-    required List<Message> messages,
-  }) {
-    if (messages.isEmpty) {
-      return const <Message>[];
-    }
-    final byId = <String, Message>{};
-    for (final message in messages) {
-      final id = message.id?.trim();
-      if (id == null || id.isEmpty) continue;
-      byId[id] = message;
-    }
-    final ordered = <Message>[];
-    for (final id in orderedIds) {
-      final message = byId[id];
-      if (message != null) {
-        ordered.add(message);
-      }
-    }
-    return ordered;
   }
 
   Future<void> _storeMessage(
@@ -3998,8 +3804,16 @@ mixin MessageService
       (db) => db.getMessageByStanzaID(stanzaID),
     );
     if (message == null) return;
-    final capabilities = await _capabilitiesFor(message.chatJid);
-    if (!capabilities.features.contains(mox.messageReactionsXmlns)) {
+    final decision = await _featureDecision(
+      jid: message.chatJid,
+      feature: mox.messageReactionsXmlns,
+    );
+    if (!decision.isAllowed) {
+      _logCapabilityDecision(
+        featureLabel: 'reactions',
+        jid: message.chatJid,
+        decision: decision,
+      );
       return;
     }
     final existing = await _dbOpReturning<XmppDatabase, List<Reaction>>(
@@ -4094,8 +3908,19 @@ mixin MessageService
   Future<bool> _canSendChatMarkers({required String to}) async {
     if (_isMucChatJid(to)) return false;
     if (to == myJid) return false;
-    final capabilities = await _capabilitiesFor(to);
-    return capabilities.supportsMarkers;
+    final decision = await _featureDecision(
+      jid: to,
+      feature: mox.chatMarkersXmlns,
+    );
+    if (!decision.isAllowed) {
+      _logCapabilityDecision(
+        featureLabel: 'chat markers',
+        jid: to,
+        decision: decision,
+      );
+      return false;
+    }
+    return true;
   }
 
   Future<void> sendReadMarker(String to, String stanzaID) async {
@@ -4590,9 +4415,76 @@ mixin MessageService
     );
   }
 
+  Future<CapabilityDecision> _featureDecision({
+    required String jid,
+    required String feature,
+  }) async {
+    try {
+      final capabilities = await _capabilitiesFor(jid);
+      if (capabilities.features.contains(feature)) {
+        return const CapabilityDecision(CapabilityDecisionKind.allowed);
+      }
+      if (capabilities.resolvedAt == null) {
+        return const CapabilityDecision(CapabilityDecisionKind.unknown);
+      }
+      return const CapabilityDecision(CapabilityDecisionKind.unsupported);
+    } on Exception catch (error, stackTrace) {
+      return CapabilityDecision(
+        CapabilityDecisionKind.error,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  CapabilityDecision _decisionFromCapabilityFlag({
+    required bool supported,
+    required DateTime? resolvedAt,
+  }) {
+    if (supported) {
+      return const CapabilityDecision(CapabilityDecisionKind.allowed);
+    }
+    if (resolvedAt == null) {
+      return const CapabilityDecision(CapabilityDecisionKind.unknown);
+    }
+    return const CapabilityDecision(CapabilityDecisionKind.unsupported);
+  }
+
+  void _logCapabilityDecision({
+    required String featureLabel,
+    required String jid,
+    required CapabilityDecision decision,
+  }) {
+    if (decision.isAllowed) return;
+    if (decision.isError) {
+      _log.warning(
+        'Failed to resolve $featureLabel capability for $jid',
+        decision.error,
+        decision.stackTrace,
+      );
+      return;
+    }
+    if (decision.isUnknown) {
+      _log.fine('Skipping $featureLabel for $jid (capabilities unknown).');
+      return;
+    }
+    _log.fine('Skipping $featureLabel for $jid (unsupported).');
+  }
+
   Future<bool> _supportsMam(String jid) async {
-    final capabilities = await _capabilitiesFor(jid);
-    return capabilities.features.contains(mox.mamXmlns);
+    final decision = await _featureDecision(
+      jid: jid,
+      feature: mox.mamXmlns,
+    );
+    if (!decision.isAllowed) {
+      _logCapabilityDecision(
+        featureLabel: 'MAM',
+        jid: jid,
+        decision: decision,
+      );
+      return false;
+    }
+    return true;
   }
 
   Future<void> _resolveMamSupportForAccount() async {
@@ -4704,37 +4596,65 @@ mixin MessageService
     final capabilities =
         isMuc ? _PeerCapabilities.supportsAll : await _capabilitiesFor(peer);
 
-    if (markable && capabilities.supportsMarkers) {
-      await _connection.sendChatMarker(
-        to: target,
-        stanzaID: id,
-        marker: mox.ChatMarker.received,
-        messageType: messageType,
+    if (markable) {
+      final decision = _decisionFromCapabilityFlag(
+        supported: capabilities.supportsMarkers,
+        resolvedAt: capabilities.resolvedAt,
       );
+      if (!decision.isAllowed) {
+        if (!decision.isUnsupported) {
+          _logCapabilityDecision(
+            featureLabel: 'chat markers',
+            jid: peer,
+            decision: decision,
+          );
+        }
+      } else {
+        await _connection.sendChatMarker(
+          to: target,
+          stanzaID: id,
+          marker: mox.ChatMarker.received,
+          messageType: messageType,
+        );
 
-      await _dbOp<XmppDatabase>((db) async {
-        db.markMessageReceived(id);
-        db.markMessageAcked(id);
-      });
+        await _dbOp<XmppDatabase>((db) async {
+          db.markMessageReceived(id);
+          db.markMessageAcked(id);
+        });
+      }
     }
 
-    if (deliveryReceiptRequested && capabilities.supportsReceipts) {
-      await _connection.sendMessage(
-        mox.MessageEvent(
-          _myJid!,
-          mox.JID.fromString(target),
-          false,
-          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-            mox.MessageDeliveryReceivedData(id),
-          ]),
-          type: messageType,
-        ),
+    if (deliveryReceiptRequested) {
+      final decision = _decisionFromCapabilityFlag(
+        supported: capabilities.supportsReceipts,
+        resolvedAt: capabilities.resolvedAt,
       );
+      if (!decision.isAllowed) {
+        if (!decision.isUnsupported) {
+          _logCapabilityDecision(
+            featureLabel: 'delivery receipts',
+            jid: peer,
+            decision: decision,
+          );
+        }
+      } else {
+        await _connection.sendMessage(
+          mox.MessageEvent(
+            _myJid!,
+            mox.JID.fromString(target),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              mox.MessageDeliveryReceivedData(id),
+            ]),
+            type: messageType,
+          ),
+        );
 
-      await _dbOp<XmppDatabase>((db) async {
-        db.markMessageReceived(id);
-        db.markMessageAcked(id);
-      });
+        await _dbOp<XmppDatabase>((db) async {
+          db.markMessageReceived(id);
+          db.markMessageAcked(id);
+        });
+      }
     }
   }
 

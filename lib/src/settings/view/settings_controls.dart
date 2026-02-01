@@ -4,6 +4,7 @@
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -83,6 +84,8 @@ class SettingsControls extends StatelessWidget {
         final exportBusy = context.select<ProfileExportCubit, bool>(
           (cubit) => cubit.state.isBusy,
         );
+        final emailEnabled =
+            context.watch<AuthenticationCubit>().endpointConfig.enableSmtp;
         final double dividerIndent =
             fullWidthDividers ? 0.0 : sectionHeaderPadding.horizontal;
         return Column(
@@ -114,18 +117,20 @@ class SettingsControls extends StatelessWidget {
                 extra: locate,
               ),
             ),
-            _SettingsActionButton(
-              iconData: LucideIcons.mail,
-              label: context.l10n.emailForwardingGuideTitle,
-              onPressed: () async =>
-                  await showEmailForwardingGuideDialog(context),
-            ),
-            _SettingsActionButton(
-              iconData: LucideIcons.userRoundPlus,
-              label: context.l10n.emailContactsImportTitle,
-              onPressed: () async =>
-                  await _showEmailContactImportDialog(context),
-            ),
+            if (emailEnabled) ...[
+              _SettingsActionButton(
+                iconData: LucideIcons.mail,
+                label: context.l10n.emailForwardingGuideTitle,
+                onPressed: () async =>
+                    await showEmailForwardingGuideDialog(context),
+              ),
+              _SettingsActionButton(
+                iconData: LucideIcons.userRoundPlus,
+                label: context.l10n.emailContactsImportTitle,
+                onPressed: () async =>
+                    await _showEmailContactImportDialog(context),
+              ),
+            ],
             _SettingsActionButton(
               iconData: LucideIcons.image,
               label: context.l10n.draftAttachmentsLabel,
@@ -192,24 +197,26 @@ class SettingsControls extends StatelessWidget {
                   ? null
                   : () async => await _handleXmppContactsExport(context),
             ),
-            _SettingsActionButton(
-              iconData: LucideIcons.mail,
-              label: context.l10n.profileExportActionLabel(
-                ProfileExportKind.emailMessages.label(context.l10n),
+            if (emailEnabled) ...[
+              _SettingsActionButton(
+                iconData: LucideIcons.mail,
+                label: context.l10n.profileExportActionLabel(
+                  ProfileExportKind.emailMessages.label(context.l10n),
+                ),
+                onPressed: exportBusy
+                    ? null
+                    : () async => await _handleEmailMessageExport(context),
               ),
-              onPressed: exportBusy
-                  ? null
-                  : () async => await _handleEmailMessageExport(context),
-            ),
-            _SettingsActionButton(
-              iconData: LucideIcons.userRound,
-              label: context.l10n.profileExportActionLabel(
-                ProfileExportKind.emailContacts.label(context.l10n),
+              _SettingsActionButton(
+                iconData: LucideIcons.userRound,
+                label: context.l10n.profileExportActionLabel(
+                  ProfileExportKind.emailContacts.label(context.l10n),
+                ),
+                onPressed: exportBusy
+                    ? null
+                    : () async => await _handleEmailContactsExport(context),
               ),
-              onPressed: exportBusy
-                  ? null
-                  : () async => await _handleEmailContactsExport(context),
-            ),
+            ],
             anchors?.appearanceKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAppearance,
@@ -432,56 +439,58 @@ class SettingsControls extends StatelessWidget {
                     .toggleAutoDownloadArchives(enabled),
               ),
             ),
-            anchors?.emailPreferencesKey == null
-                ? _SettingsSectionHeader(
-                    label: context.l10n.settingsSectionEmail,
-                    dividerIndent: dividerIndent,
-                    padding: sectionHeaderPadding,
-                  )
-                : KeyedSubtree(
-                    key: anchors?.emailPreferencesKey,
-                    child: _SettingsSectionHeader(
+            if (emailEnabled) ...[
+              anchors?.emailPreferencesKey == null
+                  ? _SettingsSectionHeader(
                       label: context.l10n.settingsSectionEmail,
                       dividerIndent: dividerIndent,
                       padding: sectionHeaderPadding,
+                    )
+                  : KeyedSubtree(
+                      key: anchors?.emailPreferencesKey,
+                      child: _SettingsSectionHeader(
+                        label: context.l10n.settingsSectionEmail,
+                        dividerIndent: dividerIndent,
+                        padding: sectionHeaderPadding,
+                      ),
                     ),
-                  ),
-            Padding(
-              padding: EdgeInsets.all(spacing.m),
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsEmailReadReceipts),
-                sublabel:
-                    Text(context.l10n.settingsEmailReadReceiptsDescription),
-                value: state.emailReadReceipts,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .toggleEmailReadReceipts(enabled),
+              Padding(
+                padding: EdgeInsets.all(spacing.m),
+                child: ShadSwitch(
+                  label: Text(context.l10n.settingsEmailReadReceipts),
+                  sublabel:
+                      Text(context.l10n.settingsEmailReadReceiptsDescription),
+                  value: state.emailReadReceipts,
+                  onChanged: (enabled) => context
+                      .read<SettingsCubit>()
+                      .toggleEmailReadReceipts(enabled),
+                ),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.all(spacing.m),
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsShareTokenFooter),
-                sublabel:
-                    Text(context.l10n.settingsShareTokenFooterDescription),
-                value: state.shareTokenSignatureEnabled,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .toggleShareTokenSignature(enabled),
+              Padding(
+                padding: EdgeInsets.all(spacing.m),
+                child: ShadSwitch(
+                  label: Text(context.l10n.settingsShareTokenFooter),
+                  sublabel:
+                      Text(context.l10n.settingsShareTokenFooterDescription),
+                  value: state.shareTokenSignatureEnabled,
+                  onChanged: (enabled) => context
+                      .read<SettingsCubit>()
+                      .toggleShareTokenSignature(enabled),
+                ),
               ),
-            ),
-            Padding(
-              padding: EdgeInsets.all(spacing.m),
-              child: ShadSwitch(
-                label: Text(context.l10n.settingsAutoLoadEmailImages),
-                sublabel:
-                    Text(context.l10n.settingsAutoLoadEmailImagesDescription),
-                value: state.autoLoadEmailImages,
-                onChanged: (enabled) => context
-                    .read<SettingsCubit>()
-                    .toggleAutoLoadEmailImages(enabled),
+              Padding(
+                padding: EdgeInsets.all(spacing.m),
+                child: ShadSwitch(
+                  label: Text(context.l10n.settingsAutoLoadEmailImages),
+                  sublabel:
+                      Text(context.l10n.settingsAutoLoadEmailImagesDescription),
+                  value: state.autoLoadEmailImages,
+                  onChanged: (enabled) => context
+                      .read<SettingsCubit>()
+                      .toggleAutoLoadEmailImages(enabled),
+                ),
               ),
-            ),
+            ],
             anchors?.aboutKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAbout,

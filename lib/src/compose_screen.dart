@@ -5,6 +5,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/view/compose_draft_content.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -24,13 +25,18 @@ class ComposeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = ShadTheme.of(context).colorScheme;
     final l10n = context.l10n;
+    final endpointConfig = locate<AuthenticationCubit>().endpointConfig;
+    final emailEnabled = endpointConfig.enableSmtp;
     return MultiRepositoryProvider(
       providers: [
         RepositoryProvider<XmppService>.value(value: locate<XmppService>()),
         RepositoryProvider<MessageService>.value(
           value: locate<MessageService>(),
         ),
-        RepositoryProvider<EmailService>.value(value: locate<EmailService>()),
+        if (emailEnabled)
+          RepositoryProvider<EmailService>.value(
+            value: locate<EmailService>(),
+          ),
       ],
       child: MultiBlocProvider(
         providers: [BlocProvider.value(value: locate<DraftCubit>())],

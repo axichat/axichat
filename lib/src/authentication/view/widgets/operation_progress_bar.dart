@@ -3,9 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 
 class OperationProgressController {
   OperationProgressController({
@@ -109,11 +107,13 @@ class OperationProgressBar extends StatelessWidget {
     required this.animation,
     required this.visible,
     required this.label,
+    required this.animationDuration,
   });
 
   final Animation<double> animation;
   final bool visible;
   final String label;
+  final Duration animationDuration;
 
   @override
   Widget build(BuildContext context) {
@@ -122,7 +122,7 @@ class OperationProgressBar extends StatelessWidget {
     final motion = context.motion;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    final animationDuration = this.animationDuration;
     final barHeight = sizing.progressIndicatorBarHeight;
     final borderRadius = BorderRadius.circular(sizing.containerRadius);
     return AnimatedSwitcher(

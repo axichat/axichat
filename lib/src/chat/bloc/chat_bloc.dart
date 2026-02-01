@@ -416,22 +416,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   static const int _emptyMessageCount = 0;
   static const CalendarFragmentPolicy _calendarFragmentPolicy =
       CalendarFragmentPolicy();
-  bool _isEmailOnlyAddress(String? value) {
-    if (value == null) return false;
-    final hinted = hintTransportForAddress(value);
-    return hinted?.isEmail ?? false;
-  }
 
   bool get _forceAllWithContactViewFilter {
     return _isEmailChat;
   }
 
   final String? jid;
-  late final String? _chatLookupJid = jid == null
-      ? null
-      : _isEmailOnlyAddress(jid)
-          ? normalizedAddressValueOrEmpty(jid)
-          : jid;
+  late final String? _chatLookupJid = normalizeAddress(jid);
   final MessageService _messageService;
   XmppService? _xmppService;
   final ChatsService _chatsService;
@@ -454,7 +445,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   late final StreamSubscription<Chat?> _chatSubscription;
   StreamSubscription<List<Message>>? _messageSubscription;
-  StreamSubscription<List<Message>>? _latestMessageSubscription;
   StreamSubscription<List<PinnedMessageEntry>>? _pinnedSubscription;
   StreamSubscription<RoomState>? _roomSubscription;
   StreamSubscription<List<RosterItem>>? _roomRosterSubscription;
@@ -481,8 +471,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final Set<String> _shareContextAttemptedStanzaIds = <String>{};
   Future<void> _autoDownloadQueue = Future<void>.value();
   Completer<void>? _mamLoadingCompleter;
-  final List<String> _loadedMessageOrder = <String>[];
-  final Set<String> _loadedMessageIds = <String>{};
   int? _attachmentMapsSignature;
   Map<String, List<String>> _cachedAttachmentIdsByMessageId =
       const <String, List<String>>{};
@@ -758,92 +746,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<void> _pageEarlierFromEmailNetwork({
-    required Chat chat,
-    required int desiredWindow,
-  }) async {
-    if (!_canPageEmailHistory(chat)) {
-      return;
-    }
-    await _loadEarlierFromEmail(desiredWindow: desiredWindow);
-  }
-
-  Future<void> _pageEarlierFromMamNetwork({
-    required Chat chat,
-    required int desiredWindow,
-  }) async {
-    if (!await _canPageMam(chat)) {
-      return;
-    }
-    await _loadEarlierFromMam(desiredWindow: desiredWindow);
-  }
-
-  Future<void> _loadOlderMessagesFromDb({
-    required int desiredWindow,
-    required MessageTimelineFilter filter,
-  }) async {
-    final chat = state.chat;
-    if (chat == null) return;
-    var loadedCount = _loadedMessageOrder.length;
-    if (loadedCount >= desiredWindow) return;
-    if (state.items.isEmpty) return;
-    final emailService = _emailService;
-    final useEmailService =
-        chat.defaultTransport.isEmail && emailService != null;
-    final anchor = _oldestLoadedMessage(state.items);
-    if (anchor == null) {
-      return;
-    }
-    var oldestMessage = anchor;
-    var remaining = desiredWindow - loadedCount;
-    var added = false;
-    while (remaining > 0) {
-      final batchSize =
-          remaining > messageBatchSize ? messageBatchSize : remaining;
-      final beforeTimestamp = oldestMessage.timestamp;
-      if (beforeTimestamp == null) {
-        break;
-      }
-      final DateTime resolvedTimestamp = beforeTimestamp;
-      final messages = useEmailService
-          ? await emailService.loadChatMessagesBefore(
-              jid: chat.jid,
-              beforeTimestamp: resolvedTimestamp,
-              beforeStanzaId: oldestMessage.stanzaID,
-              beforeDeltaMsgId: oldestMessage.deltaMsgId,
-              limit: batchSize,
-              filter: filter,
-            )
-          : await _messageService.loadChatMessagesBefore(
-              jid: chat.jid,
-              beforeTimestamp: resolvedTimestamp,
-              beforeStanzaId: oldestMessage.stanzaID,
-              beforeDeltaMsgId: oldestMessage.deltaMsgId,
-              limit: batchSize,
-              filter: filter,
-            );
-      if (messages.isEmpty) {
-        break;
-      }
-      for (final message in messages) {
-        final id = message.id?.trim();
-        if (id == null || id.isEmpty) continue;
-        if (_loadedMessageIds.add(id)) {
-          _loadedMessageOrder.add(id);
-          added = true;
-        }
-      }
-      oldestMessage = messages.last;
-      loadedCount = _loadedMessageOrder.length;
-      remaining = desiredWindow - loadedCount;
-    }
-    if (!added) return;
-    await _resubscribeLoadedMessages(
-      jid: chat.jid,
-      useEmailService: useEmailService,
-    );
-  }
-
   Future<void> _ensureUnreadWindowLoaded({
     required Chat chat,
     required int desiredWindow,
@@ -852,14 +754,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     var localCount = await _archivedMessageCount(chat);
-    if (localCount >= desiredWindow) {
-      return;
-    }
     if (chat.defaultTransport.isEmail) {
       if (!_canPageEmailHistory(chat)) {
         return;
       }
-      while (localCount < desiredWindow) {
+      var shouldAttemptNetwork = true;
+      while (localCount < desiredWindow || shouldAttemptNetwork) {
+        shouldAttemptNetwork = false;
         await _loadEarlierFromEmail(desiredWindow: desiredWindow);
         final refreshed = await _archivedMessageCount(chat);
         if (refreshed <= localCount) {
@@ -876,7 +777,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _hydrateLatestFromMam(chat);
       localCount = await _archivedMessageCount(chat);
     }
-    while (localCount < desiredWindow && !_mamComplete) {
+    var shouldAttemptNetwork = true;
+    while (
+        (localCount < desiredWindow || shouldAttemptNetwork) && !_mamComplete) {
+      shouldAttemptNetwork = false;
       await _loadEarlierFromMam(desiredWindow: desiredWindow);
       final refreshed = await _archivedMessageCount(chat);
       if (refreshed <= localCount) {
@@ -1125,37 +1029,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final targetJid = state.chat?.jid ?? _chatLookupJid ?? jid;
     if (targetJid == null) return;
     await _messageSubscription?.cancel();
-    await _latestMessageSubscription?.cancel();
     if (isClosed) return;
     _currentMessageLimit = limit;
-    _loadedMessageIds.clear();
-    _loadedMessageOrder.clear();
     final chat = state.chat;
     final emailService = _emailService;
     final useEmailService =
         !forceXmppFallback && chat?.defaultTransport.isEmail == true;
-    final initialMessages = useEmailService && emailService != null
-        ? await emailService
-            .messageStreamForChat(targetJid, end: limit, filter: filter)
-            .first
-        : await _messageService
-            .messageStreamForChat(targetJid, end: limit, filter: filter)
-            .first;
-    _seedLoadedMessages(initialMessages);
-    await _resubscribeLoadedMessages(
-      jid: targetJid,
-      useEmailService: useEmailService,
-    );
-    if (isClosed) return;
     if (useEmailService && emailService != null) {
-      _latestMessageSubscription = emailService
+      _messageSubscription = emailService
           .messageStreamForChat(targetJid, end: limit, filter: filter)
           .listen(
-        (items) => _handleLatestMessagesUpdated(
-          items,
-          jid: targetJid,
-          useEmailService: useEmailService,
-        ),
+        (items) => _addIfOpen(_ChatMessagesUpdated(items)),
         onError: (Object error, StackTrace stackTrace) async {
           _log.fine('Email message stream failed', error, stackTrace);
           if (isClosed) {
@@ -1170,96 +1054,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    _latestMessageSubscription = _messageService
-        .messageStreamForChat(targetJid, end: limit, filter: filter)
-        .listen(
-          (items) => _handleLatestMessagesUpdated(
-            items,
-            jid: targetJid,
-            useEmailService: useEmailService,
-          ),
-        );
-  }
-
-  void _seedLoadedMessages(List<Message> messages) {
-    _loadedMessageIds.clear();
-    _loadedMessageOrder.clear();
-    for (final message in messages) {
-      final id = message.id?.trim();
-      if (id == null || id.isEmpty) continue;
-      if (_loadedMessageIds.add(id)) {
-        _loadedMessageOrder.add(id);
-      }
-    }
-  }
-
-  Map<String, Message> _messagesByLocalId(List<Message> messages) {
-    final map = <String, Message>{};
-    for (final message in messages) {
-      final id = message.id?.trim();
-      if (id == null || id.isEmpty) continue;
-      map[id] = message;
-    }
-    return map;
-  }
-
-  Message? _oldestLoadedMessage(List<Message> messages) {
-    if (_loadedMessageOrder.isEmpty) {
-      return null;
-    }
-    final byId = _messagesByLocalId(messages);
-    for (var i = _loadedMessageOrder.length - 1; i >= 0; i--) {
-      final message = byId[_loadedMessageOrder[i]];
-      if (message != null) {
-        return message;
-      }
-    }
-    return null;
-  }
-
-  Future<void> _resubscribeLoadedMessages({
-    required String jid,
-    required bool useEmailService,
-  }) async {
-    await _messageSubscription?.cancel();
-    if (isClosed) return;
-    if (_loadedMessageOrder.isEmpty) {
-      _messageSubscription = null;
-      _addIfOpen(const _ChatMessagesUpdated(<Message>[]));
-      return;
-    }
-    final orderedIds = List<String>.from(_loadedMessageOrder);
-    final emailService = _emailService;
-    if (useEmailService && emailService != null) {
-      _messageSubscription = emailService
-          .messageStreamForChatMessageIds(jid, messageIds: orderedIds)
-          .listen((items) => _addIfOpen(_ChatMessagesUpdated(items)));
-      return;
-    }
     _messageSubscription = _messageService
-        .messageStreamForChatMessageIds(jid, messageIds: orderedIds)
+        .messageStreamForChat(targetJid, end: limit, filter: filter)
         .listen((items) => _addIfOpen(_ChatMessagesUpdated(items)));
-  }
-
-  Future<void> _handleLatestMessagesUpdated(
-    List<Message> messages, {
-    required String jid,
-    required bool useEmailService,
-  }) async {
-    var changed = false;
-    for (final message in messages.reversed) {
-      final id = message.id?.trim();
-      if (id == null || id.isEmpty) continue;
-      if (_loadedMessageIds.add(id)) {
-        _loadedMessageOrder.insert(0, id);
-        changed = true;
-      }
-    }
-    if (!changed) return;
-    await _resubscribeLoadedMessages(
-      jid: jid,
-      useEmailService: useEmailService,
-    );
   }
 
   String? _resolvePinnedMessagesChatJid(Chat chat) {
@@ -1325,7 +1122,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> close() async {
     await _chatSubscription.cancel();
     await _messageSubscription?.cancel();
-    await _latestMessageSubscription?.cancel();
     await _pinnedSubscription?.cancel();
     await _roomSubscription?.cancel();
     await _roomRosterSubscription?.cancel();
@@ -1872,6 +1668,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ...referencedQuotes,
       for (final message in loadedQuotes) message.stanzaID: message,
     };
+    final unreadBoundary = _resolveUnreadBoundaryStanzaId(
+      chat: state.chat,
+      messages: filteredItems,
+    );
     emit(
       state.copyWith(
         items: filteredItems,
@@ -1879,6 +1679,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         attachmentMetadataIdsByMessageId: filtered.attachmentsByMessageId,
         attachmentGroupLeaderByMessageId: filtered.groupLeaderByMessageId,
         quotedMessagesById: updatedQuotedMessages,
+        unreadBoundaryStanzaId: unreadBoundary,
       ),
     );
     if (state.chat?.type == ChatType.groupChat) {
@@ -1937,12 +1738,79 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           chat: updatedChat,
           desiredWindow: desiredLimit,
         );
-        await _loadOlderMessagesFromDb(
-          desiredWindow: desiredLimit,
-          filter: state.viewFilter,
+        await _syncUnreadBoundaryIfNeeded(
+          chat: updatedChat,
+          messages: filteredItems,
+          filteredOutCount: filteredOutCount,
+          pseudoCount: pseudoCount,
         );
       }
     }
+  }
+
+  String? _resolveUnreadBoundaryStanzaId({
+    required Chat? chat,
+    required List<Message> messages,
+  }) {
+    if (chat == null) {
+      return null;
+    }
+    final unreadCount = chat.unreadCount;
+    if (unreadCount <= _emptyMessageCount) {
+      return null;
+    }
+    var remaining = unreadCount;
+    for (final message in messages) {
+      if (!_countsTowardUnread(message)) {
+        continue;
+      }
+      remaining -= 1;
+      if (remaining <= 0) {
+        return message.stanzaID;
+      }
+    }
+    return null;
+  }
+
+  bool _countsTowardUnread(Message message) {
+    final hasBody = message.body?.trim().isNotEmpty == true;
+    final hasAttachment = message.fileMetadataID?.trim().isNotEmpty == true;
+    return (hasBody || hasAttachment) && message.pseudoMessageType == null;
+  }
+
+  Future<void> _syncUnreadBoundaryIfNeeded({
+    required Chat chat,
+    required List<Message> messages,
+    required int filteredOutCount,
+    required int pseudoCount,
+  }) async {
+    var boundary = _resolveUnreadBoundaryStanzaId(
+      chat: chat,
+      messages: messages,
+    );
+    if (boundary != null) {
+      return;
+    }
+    final desiredWindow = chat.unreadCount + filteredOutCount + pseudoCount;
+    var nextLimit = _currentMessageLimit;
+    if (nextLimit < desiredWindow) {
+      nextLimit = desiredWindow;
+    } else {
+      nextLimit = _currentMessageLimit + messageBatchSize;
+    }
+    final beforeCount = await _archivedMessageCount(chat);
+    final canPageNetwork = chat.defaultTransport.isEmail
+        ? _canPageEmailHistory(chat)
+        : await _canPageMam(chat) && !_mamComplete;
+    if (beforeCount <= _currentMessageLimit && !canPageNetwork) {
+      return;
+    }
+    await _ensureUnreadWindowLoaded(chat: chat, desiredWindow: nextLimit);
+    final afterCount = await _archivedMessageCount(chat);
+    if (afterCount <= beforeCount && beforeCount <= _currentMessageLimit) {
+      return;
+    }
+    await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
   }
 
   Future<void> _onPinnedMessagesUpdated(
@@ -3339,30 +3207,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatLoadEarlier event,
     Emitter<ChatState> emit,
   ) async {
-    final items = state.items;
-    if (items.isEmpty) {
-      return;
-    }
-    final chat = state.chat;
-    if (chat == null) {
-      return;
-    }
-    final desiredWindow = items.length + messageBatchSize;
+    final nextLimit = state.items.length + messageBatchSize;
+    _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
     if (_isEmailChat) {
-      await _pageEarlierFromEmailNetwork(
-        chat: chat,
-        desiredWindow: desiredWindow,
-      );
-    } else {
-      await _pageEarlierFromMamNetwork(
-        chat: chat,
-        desiredWindow: desiredWindow,
-      );
+      await _loadEarlierFromEmail(desiredWindow: nextLimit);
+      return;
     }
-    await _loadOlderMessagesFromDb(
-      desiredWindow: desiredWindow,
-      filter: state.viewFilter,
-    );
+    await _loadEarlierFromMam(desiredWindow: nextLimit);
   }
 
   Future<void> _onChatAlertHidden(
@@ -5241,7 +5092,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         continue;
       }
       final transport = _transportForRecipient(recipient);
-      if (transport?.isEmail ?? _isEmailOnlyAddress(recipient.target.address)) {
+      if (transport?.isEmail ?? false) {
         emailRecipients.add(recipient);
       } else {
         xmppRecipients.add(recipient);
@@ -5259,7 +5110,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     for (final recipient in recipients) {
       final transport = _transportForRecipient(recipient);
-      if (transport?.isEmail ?? _isEmailOnlyAddress(recipient.target.address)) {
+      if (transport?.isEmail ?? false) {
         return true;
       }
     }
@@ -5275,7 +5126,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     for (final recipient in recipients) {
       final transport = _transportForRecipient(recipient);
-      if (transport?.isEmail ?? _isEmailOnlyAddress(recipient.target.address)) {
+      if (transport?.isEmail ?? false) {
         return true;
       }
     }

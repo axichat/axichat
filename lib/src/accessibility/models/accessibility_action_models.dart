@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/widgets.dart';
@@ -139,6 +140,7 @@ class AccessibilityCommandAction extends AccessibilityMenuAction {
     this.contact,
     this.highlightId,
     this.draft,
+    this.transport,
   });
 
   final AccessibilityCommand command;
@@ -147,6 +149,7 @@ class AccessibilityCommandAction extends AccessibilityMenuAction {
   final AccessibilityContact? contact;
   final String? highlightId;
   final Draft? draft;
+  final MessageTransport? transport;
 
   @override
   List<Object?> get props => [
@@ -156,6 +159,7 @@ class AccessibilityCommandAction extends AccessibilityMenuAction {
         contact,
         highlightId,
         draft,
+        transport,
       ];
 }
 
@@ -248,6 +252,7 @@ class AccessibilityContact extends Equatable {
     required this.encryptionProtocol,
     required this.chatType,
     required this.unreadCount,
+    required this.transport,
     this.isGroup = false,
   });
 
@@ -258,6 +263,7 @@ class AccessibilityContact extends Equatable {
   final EncryptionProtocol encryptionProtocol;
   final ChatType chatType;
   final int unreadCount;
+  final MessageTransport transport;
   final bool isGroup;
 
   bool get hasUnread => unreadCount > 0;
@@ -269,6 +275,7 @@ class AccessibilityContact extends Equatable {
     ChatType? chatType,
     int? unreadCount,
     bool? isGroup,
+    MessageTransport? transport,
   }) =>
       AccessibilityContact(
         jid: jid,
@@ -278,6 +285,7 @@ class AccessibilityContact extends Equatable {
         encryptionProtocol: encryptionProtocol,
         chatType: chatType ?? this.chatType,
         unreadCount: unreadCount ?? this.unreadCount,
+        transport: transport ?? this.transport,
         isGroup: isGroup ?? this.isGroup,
       );
 
@@ -290,6 +298,7 @@ class AccessibilityContact extends Equatable {
         encryptionProtocol,
         chatType,
         unreadCount,
+        transport,
         isGroup,
       ];
 }

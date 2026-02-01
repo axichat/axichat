@@ -209,13 +209,13 @@ class SkeletonLoader extends StatefulWidget {
   const SkeletonLoader({
     super.key,
     this.width,
-    this.height = axiSizing.menuItemIconSize,
-    this.borderRadius = axiSizing.containerRadius,
+    this.height,
+    this.borderRadius,
   });
 
   final double? width;
-  final double height;
-  final double borderRadius;
+  final double? height;
+  final double? borderRadius;
 
   @override
   State<SkeletonLoader> createState() => _SkeletonLoaderState();
@@ -247,14 +247,17 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
 
   @override
   Widget build(BuildContext context) {
+    final double height = widget.height ?? context.sizing.menuItemIconSize;
+    final double borderRadius =
+        widget.borderRadius ?? context.sizing.containerRadius;
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
         return Container(
           width: widget.width,
-          height: widget.height,
+          height: height,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(widget.borderRadius),
+            borderRadius: BorderRadius.circular(borderRadius),
             color: calendarSelectedDayColor,
           ),
         );
@@ -340,12 +343,12 @@ class PulsatingIcon extends StatefulWidget {
     super.key,
     required this.icon,
     this.color,
-    this.size = axiSizing.inputSuffixButtonSize,
+    this.size,
   });
 
   final IconData icon;
   final Color? color;
-  final double size;
+  final double? size;
 
   @override
   State<PulsatingIcon> createState() => _PulsatingIconState();
@@ -376,12 +379,13 @@ class _PulsatingIconState extends State<PulsatingIcon>
 
   @override
   Widget build(BuildContext context) {
+    final double size = widget.size ?? context.sizing.inputSuffixButtonSize;
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
         return Opacity(
           opacity: _animation.value,
-          child: Icon(widget.icon, color: widget.color, size: widget.size),
+          child: Icon(widget.icon, color: widget.color, size: size),
         );
       },
     );

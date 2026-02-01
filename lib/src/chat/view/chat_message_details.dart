@@ -82,6 +82,8 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
             final transport = state.chat?.transport;
             final deltaMessageId = message.deltaMsgId;
             final isEmailMessage = deltaMessageId != null;
+            final isEmailTransport =
+                isEmailMessage || transport?.isEmail == true;
             final protocolLabel = isEmailMessage
                 ? MessageTransport.email.label
                 : transport?.label ?? MessageTransport.xmpp.label;
@@ -115,6 +117,13 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                 state.emailRawHeadersLoading.contains(deltaMessageId);
             final bool isHeadersUnavailable = deltaMessageId != null &&
                 state.emailRawHeadersUnavailable.contains(deltaMessageId);
+            final xmppCapabilities = state.xmppCapabilities;
+            final supportsMarkers = isEmailTransport ||
+                xmppCapabilities?.resolvedAt == null ||
+                xmppCapabilities?.supportsMarkers == true;
+            final supportsReceipts = isEmailTransport ||
+                xmppCapabilities?.resolvedAt == null ||
+                xmppCapabilities?.supportsReceipts == true;
             final metadataItems = <Widget>[];
             final stanzaId = message.stanzaID.trim();
             if (stanzaId.isNotEmpty) {
@@ -315,34 +324,36 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                               ],
                             ),
                           ),
-                          ShadBadge.secondary(
-                            padding: EdgeInsets.all(spacing.s),
-                            child: Row(
-                              spacing: spacing.xs,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(l10n.chatMessageStatusReceived),
-                                Icon(
-                                  message.received.toIcon,
-                                  color: message.received.toColor,
-                                ),
-                              ],
+                          if (supportsMarkers || supportsReceipts)
+                            ShadBadge.secondary(
+                              padding: EdgeInsets.all(spacing.s),
+                              child: Row(
+                                spacing: spacing.xs,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(l10n.chatMessageStatusReceived),
+                                  Icon(
+                                    message.received.toIcon,
+                                    color: message.received.toColor,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                          ShadBadge.secondary(
-                            padding: EdgeInsets.all(spacing.s),
-                            child: Row(
-                              spacing: spacing.xs,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(l10n.chatMessageStatusDisplayed),
-                                Icon(
-                                  message.displayed.toIcon,
-                                  color: message.displayed.toColor,
-                                ),
-                              ],
+                          if (supportsMarkers)
+                            ShadBadge.secondary(
+                              padding: EdgeInsets.all(spacing.s),
+                              child: Row(
+                                spacing: spacing.xs,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(l10n.chatMessageStatusDisplayed),
+                                  Icon(
+                                    message.displayed.toIcon,
+                                    color: message.displayed.toColor,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     Column(

@@ -301,6 +301,7 @@ final _selectionSpacerTimestamp = DateTime.fromMillisecondsSinceEpoch(
 const _reactionQuickChoices = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
 const _selectionSpacerMessageId = '__selection_spacer__';
 const _emptyStateMessageId = '__empty_state__';
+const _unreadDividerMessageId = '__unread_divider__';
 const _chatScrollStoragePrefix = 'chat-scroll-offset-';
 const _composerHorizontalInset = _chatHorizontalPadding + 4.0;
 const _desktopComposerHorizontalInset = _composerHorizontalInset + 4.0;
@@ -1197,12 +1198,10 @@ class _ChatState extends State<Chat> {
       return null;
     }
     final hinted = hintTransportForAddress(address);
-    if (hinted != null) {
-      return hinted;
-    }
     return showTransportChoiceDialog(
       context,
       address: address,
+      defaultTransport: hinted,
     );
   }
 
@@ -2228,12 +2227,6 @@ class _ChatState extends State<Chat> {
     return _metadataEntryFor(id).latestOrNull;
   }
 
-  bool _isEmailOnlyAddress(String? value) {
-    if (value == null) return false;
-    final hinted = hintTransportForAddress(value);
-    return hinted?.isEmail ?? false;
-  }
-
   bool _hasEmailAttachmentTarget({
     required chat_models.Chat chat,
     required List<ComposerRecipient> recipients,
@@ -2244,7 +2237,7 @@ class _ChatState extends State<Chat> {
     for (final recipient in recipients) {
       final transport =
           recipient.target.chat?.defaultTransport ?? recipient.target.transport;
-      if (transport?.isEmail ?? _isEmailOnlyAddress(recipient.target.address)) {
+      if (transport?.isEmail ?? false) {
         return true;
       }
     }
@@ -4267,6 +4260,9 @@ class _ChatState extends State<Chat> {
                                       _selectionExtrasMaxWidth,
                                     );
                                     final dashMessages = <ChatMessage>[];
+                                    final unreadBoundaryId =
+                                        state.unreadBoundaryStanzaId;
+                                    var unreadDividerInserted = false;
                                     final shownSubjectShares = <String>{};
                                     final revokedInviteTokens = <String>{
                                       for (final invite in filteredItems.where(
@@ -4434,6 +4430,18 @@ class _ChatState extends State<Chat> {
                                           isSubjectOnlyBody ? '' : bodyText;
                                       final errorLabel =
                                           e.error.label(context.l10n);
+                                      final xmppCapabilities =
+                                          state.xmppCapabilities;
+                                      final supportsMarkers = isEmailChat ||
+                                          xmppCapabilities?.resolvedAt ==
+                                              null ||
+                                          xmppCapabilities?.supportsMarkers ==
+                                              true;
+                                      final supportsReceipts = isEmailChat ||
+                                          xmppCapabilities?.resolvedAt ==
+                                              null ||
+                                          xmppCapabilities?.supportsReceipts ==
+                                              true;
                                       MessageStatus statusFor(Message e) {
                                         if (e.error.isNotNone) {
                                           return MessageStatus.failed;
@@ -4447,10 +4455,12 @@ class _ChatState extends State<Chat> {
                                           }
                                           return MessageStatus.pending;
                                         }
-                                        if (e.displayed) {
+                                        if (e.displayed && supportsMarkers) {
                                           return MessageStatus.read;
                                         }
-                                        if (e.received) {
+                                        if (e.received &&
+                                            (supportsMarkers ||
+                                                supportsReceipts)) {
                                           return MessageStatus.received;
                                         }
                                         if (e.acked) {
@@ -4550,6 +4560,22 @@ class _ChatState extends State<Chat> {
                                           },
                                         ),
                                       );
+                                      if (!unreadDividerInserted &&
+                                          unreadBoundaryId != null &&
+                                          e.stanzaID == unreadBoundaryId) {
+                                        unreadDividerInserted = true;
+                                        dashMessages.add(
+                                          ChatMessage(
+                                            user: spacerUser,
+                                            createdAt: e.timestamp!.toLocal(),
+                                            text: ' ',
+                                            customProperties: const {
+                                              'id': _unreadDividerMessageId,
+                                              'unreadDivider': true,
+                                            },
+                                          ),
+                                        );
+                                      }
                                     }
                                     final emptyStateLabel = searchFiltering
                                         ? context.l10n.chatEmptySearch
@@ -4950,6 +4976,22 @@ class _ChatState extends State<Chat> {
                                                             return const _SelectionHeadroomSpacer(
                                                               height:
                                                                   spacerHeight,
+                                                            );
+                                                          }
+                                                          final isUnreadDivider =
+                                                              message.customProperties?[
+                                                                      'unreadDivider'] ==
+                                                                  true;
+                                                          if (isUnreadDivider) {
+                                                            final unreadCount =
+                                                                chatEntity
+                                                                        ?.unreadCount ??
+                                                                    0;
+                                                            return _UnreadDivider(
+                                                              label: l10n
+                                                                  .chatsUnreadLabel(
+                                                                unreadCount,
+                                                              ),
                                                             );
                                                           }
                                                           final bannerParticipants = (message
@@ -11520,6 +11562,44 @@ class _SelectionHeadroomSpacer extends StatelessWidget {
         alignment: Alignment.topCenter,
         clipBehavior: Clip.none,
         child: SizedBox(height: clampedHeight),
+      ),
+    );
+  }
+}
+
+class _UnreadDivider extends StatelessWidget {
+  const _UnreadDivider({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final colors = context.colorScheme;
+    final textTheme = context.textTheme;
+    final borderSide = context.borderSide;
+    final line = Expanded(
+      child: Container(
+        height: borderSide.width,
+        color: colors.primary,
+      ),
+    );
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.s,
+      ),
+      child: Row(
+        children: [
+          line,
+          SizedBox(width: spacing.s),
+          Text(
+            label,
+            style: textTheme.muted.copyWith(color: colors.primary),
+          ),
+          SizedBox(width: spacing.s),
+          line,
+        ],
       ),
     );
   }

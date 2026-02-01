@@ -72,7 +72,12 @@ class AccessibilityNewContactChanged extends AccessibilityActionEvent {
 }
 
 class AccessibilityConfirmNewContact extends AccessibilityActionEvent {
-  const AccessibilityConfirmNewContact();
+  const AccessibilityConfirmNewContact({required this.transport});
+
+  final MessageTransport transport;
+
+  @override
+  List<Object?> get props => [transport];
 }
 
 class AccessibilityDataUpdated extends AccessibilityActionEvent {

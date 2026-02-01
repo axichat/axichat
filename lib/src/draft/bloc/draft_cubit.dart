@@ -253,7 +253,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (!_shouldUseCoreDraftFallback) return;
     final emailService = _emailService;
     if (emailService == null) return;
-    final recipient = _singleEmailRecipient(jids);
+    final recipient = await _singleEmailRecipient(jids);
     if (recipient == null) return;
     final chat = await _resolveEmailChatForDraft(
       emailService: emailService,
@@ -272,7 +272,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (!_shouldUseCoreDraftFallback) return;
     final emailService = _emailService;
     if (emailService == null || draft == null) return;
-    final recipient = _singleEmailRecipient(draft.jids);
+    final recipient = await _singleEmailRecipient(draft.jids);
     if (recipient == null) return;
     final db = await _loadDatabase();
     final existing = await db.getChat(recipient);
@@ -304,7 +304,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     return emailService.isSmtpOnly;
   }
 
-  String? _singleEmailRecipient(List<String> jids) {
+  Future<String?> _singleEmailRecipient(List<String> jids) async {
     const int coreDraftRecipientLimit = 1;
     final normalizedRecipients = <String>{};
     for (final jid in jids) {
@@ -318,15 +318,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       return null;
     }
     final recipient = normalizedRecipients.first;
-    if (!_isEmailOnlyAddress(recipient)) {
+    final db = await _loadDatabase();
+    final existing = await db.getChat(recipient);
+    if (existing == null || !existing.defaultTransport.isEmail) {
       return null;
     }
     return recipient;
-  }
-
-  bool _isEmailOnlyAddress(String value) {
-    final hinted = hintTransportForAddress(value);
-    return hinted?.isEmail ?? false;
   }
 
   Future<void> _sendEmailDraft({

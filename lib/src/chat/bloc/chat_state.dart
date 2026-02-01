@@ -47,6 +47,7 @@ class ChatState with _$ChatState {
     @Default(EmailSyncState.ready()) EmailSyncState emailSyncState,
     @Default(mox.XmppConnectionState.notConnected)
     mox.XmppConnectionState xmppConnectionState,
+    String? unreadBoundaryStanzaId,
     XmppPeerCapabilities? xmppCapabilities,
     @Default(false) bool supportsHttpFileUpload,
     @Default(false) bool emailServiceAvailable,

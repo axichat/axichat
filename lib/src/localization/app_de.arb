@@ -2786,6 +2786,10 @@
       }
     }
   },
+  "chatUnreadDividerLabel": "Ungelesen",
+  "@chatUnreadDividerLabel": {
+    "description": "Label for the unread messages divider in chat history."
+  },
   "messageErrorServiceUnavailableTooltip":
       "Der Dienst meldete ein vorubergehendes Problem.",
   "messageErrorServiceUnavailable": "Dienst nicht verfugbar",

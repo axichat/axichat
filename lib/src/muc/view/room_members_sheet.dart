@@ -623,6 +623,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
     final titleStyle = context.modalHeaderTextStyle;
     final l10n = context.l10n;
     final spacing = context.spacing;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final headerPadding = EdgeInsets.fromLTRB(
       spacing.m,
@@ -700,6 +701,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                               SignupAvatarEditorPanel(
                                 mode: avatarState.editorMode,
                                 avatarBytes: avatarState.displayedBytes,
+                                animationDuration: animationDuration,
                                 cropBytes: avatarState.draftAvatar?.sourceBytes,
                                 cropRect: avatarState.draftAvatar?.cropRect,
                                 imageWidth: avatarState.draftAvatar?.sourceWidth

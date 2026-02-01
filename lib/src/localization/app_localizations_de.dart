@@ -456,17 +456,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'E-Mail-Fußzeile mit Freigabe-Token einfügen';
 
   @override
-  String get chatSettingsCapabilitiesTitle => 'Capabilities';
-
-  @override
-  String chatSettingsCapabilitiesUpdated(Object timestamp) {
-    return 'Last checked: $timestamp';
-  }
-
-  @override
-  String get chatSettingsCapabilitiesEmpty => 'No features reported';
-
-  @override
   String get chatSignatureHintEnabled =>
       'Hilft, E-Mail-Threads mit mehreren Empfängern beizubehalten.';
 
@@ -5652,6 +5641,9 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get chatUnreadDividerLabel => 'Ungelesen';
+
+  @override
   String get messageErrorServiceUnavailableTooltip =>
       'Der Dienst meldete ein vorubergehendes Problem.';
 
@@ -5969,4 +5961,15 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get xmppOperationMucJoinFailure => 'Room join failed';
+
+  @override
+  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String chatSettingsCapabilitiesUpdated(Object timestamp) {
+    return 'Last checked: $timestamp';
+  }
+
+  @override
+  String get chatSettingsCapabilitiesEmpty => 'No features reported';
 }

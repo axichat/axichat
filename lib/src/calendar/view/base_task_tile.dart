@@ -660,11 +660,11 @@ class _TaskCompletionToggle extends StatelessWidget {
     return ActionFeedback(
       onTap: isUpdating || !isEnabled ? null : () => onToggle!(!isCompleted),
       child: isUpdating
-          ? const SizedBox(
-              width: axiSizing.progressIndicatorSize,
-              height: axiSizing.progressIndicatorSize,
+          ? SizedBox(
+              width: context.sizing.progressIndicatorSize,
+              height: context.sizing.progressIndicatorSize,
               child: CircularProgressIndicator(
-                strokeWidth: axiSizing.progressIndicatorStrokeWidth,
+                strokeWidth: context.sizing.progressIndicatorStrokeWidth,
               ),
             )
           : CalendarCompletionCheckbox(

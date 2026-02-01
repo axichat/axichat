@@ -428,6 +428,9 @@ class _EmailForwardingWelcomeGateState
     if (_dialogShown || !mounted) {
       return;
     }
+    if (!context.read<AuthenticationCubit>().endpointConfig.enableSmtp) {
+      return;
+    }
     final authState = context.read<AuthenticationCubit>().state;
     if (!_forceShowEmailForwardingWelcome) {
       if (authState is! AuthenticationCompleteFromSignup) {

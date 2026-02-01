@@ -10,6 +10,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -568,6 +569,7 @@ AccessibilityContact _contactFor(
       encryptionProtocol: EncryptionProtocol.none,
       chatType: ChatType.chat,
       unreadCount: 0,
+      transport: MessageTransport.xmpp,
     ),
   );
 }
@@ -586,6 +588,7 @@ AccessibilityContact _contactForJid(
       encryptionProtocol: EncryptionProtocol.omemo,
       chatType: ChatType.chat,
       unreadCount: 0,
+      transport: MessageTransport.xmpp,
     ),
   );
 }
@@ -611,6 +614,7 @@ String _senderLabelFor(
       encryptionProtocol: message.encryptionProtocol,
       chatType: ChatType.chat,
       unreadCount: 0,
+      transport: MessageTransport.xmpp,
     ),
   );
   return matching.displayName;
@@ -2563,14 +2567,7 @@ class _NewContactSection extends StatelessWidget {
                       width: double.infinity,
                       child: ShadButton(
                         onPressed: canSubmit
-                            ? () => locate<AccessibilityActionBloc>().add(
-                                  const AccessibilityMenuActionTriggered(
-                                    AccessibilityCommandAction(
-                                      command: AccessibilityCommand
-                                          .confirmNewContact,
-                                    ),
-                                  ),
-                                )
+                            ? () => _confirmNewContact(context)
                             : null,
                         child: Text(context.l10n.accessibilityStartChat),
                       ),
@@ -2584,6 +2581,51 @@ class _NewContactSection extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _confirmNewContact(BuildContext context) async {
+  final address =
+      context.read<AccessibilityActionBloc>().state.newContactInput.trim();
+  if (address.isEmpty) return;
+  final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+  final supportsEmail = endpointConfig.enableSmtp;
+  final supportsXmpp = endpointConfig.enableXmpp;
+  MessageTransport? resolved;
+  if (supportsEmail && !supportsXmpp) {
+    resolved = MessageTransport.email;
+  } else if (!supportsEmail && supportsXmpp) {
+    resolved = MessageTransport.xmpp;
+  } else if (supportsEmail && supportsXmpp) {
+    final hinted = hintTransportForAddress(address);
+    resolved = await showTransportChoiceDialog(
+      context,
+      address: address,
+      defaultTransport: hinted,
+    );
+  }
+  if (!context.mounted || resolved == null) return;
+  context.read<AccessibilityActionBloc>().add(
+        AccessibilityMenuActionTriggered(
+          AccessibilityCommandAction(
+            command: AccessibilityCommand.confirmNewContact,
+            transport: resolved,
+          ),
+        ),
+      );
+}
+
+Future<void> _handleMenuAction(
+  BuildContext context,
+  AccessibilityMenuAction action,
+) async {
+  if (action is AccessibilityCommandAction &&
+      action.command == AccessibilityCommand.confirmNewContact) {
+    await _confirmNewContact(context);
+    return;
+  }
+  context
+      .read<AccessibilityActionBloc>()
+      .add(AccessibilityMenuActionTriggered(action));
 }
 
 class _AccessibilityTextField extends StatefulWidget {
@@ -3126,9 +3168,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
               onFocused: () => _lastFocusedIndex = nodeIndex,
               onFocusChanged: (hasFocus) =>
                   _handleFocusChanged(nodeIndex, hasFocus),
-              onTap: () => context.read<AccessibilityActionBloc>().add(
-                    AccessibilityMenuActionTriggered(item.action),
-                  ),
+              onTap: () => _handleMenuAction(context, item.action),
               onDismiss: item.dismissId == null
                   ? null
                   : () => context.read<AccessibilityActionBloc>().add(
@@ -3223,9 +3263,7 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
       return;
     }
     if (!mounted) return;
-    context.read<AccessibilityActionBloc>().add(
-          AccessibilityMenuActionTriggered(item.action),
-        );
+    _handleMenuAction(context, item.action);
   }
 
   int? _currentIndex() {

@@ -879,24 +879,6 @@ abstract class AppLocalizations {
   /// **'Include share token footer for email'**
   String get chatSignatureToggleLabel;
 
-  /// No description provided for @chatSettingsCapabilitiesTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Capabilities'**
-  String get chatSettingsCapabilitiesTitle;
-
-  /// No description provided for @chatSettingsCapabilitiesUpdated.
-  ///
-  /// In en, this message translates to:
-  /// **'Last checked: {timestamp}'**
-  String chatSettingsCapabilitiesUpdated(Object timestamp);
-
-  /// No description provided for @chatSettingsCapabilitiesEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No features reported'**
-  String get chatSettingsCapabilitiesEmpty;
-
   /// No description provided for @chatSignatureHintEnabled.
   ///
   /// In en, this message translates to:
@@ -9629,6 +9611,12 @@ abstract class AppLocalizations {
   /// **'{label}: \"{body}\"'**
   String chatMessageErrorWithBody(String label, String body);
 
+  /// Label for the unread messages divider in chat history.
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get chatUnreadDividerLabel;
+
   /// No description provided for @messageErrorServiceUnavailableTooltip.
   ///
   /// In en, this message translates to:
@@ -10198,6 +10186,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Room join failed'**
   String get xmppOperationMucJoinFailure;
+
+  /// No description provided for @chatSettingsCapabilitiesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Capabilities'**
+  String get chatSettingsCapabilitiesTitle;
+
+  /// No description provided for @chatSettingsCapabilitiesUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Last checked: {timestamp}'**
+  String chatSettingsCapabilitiesUpdated(Object timestamp);
+
+  /// No description provided for @chatSettingsCapabilitiesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No features reported'**
+  String get chatSettingsCapabilitiesEmpty;
 }
 
 class _AppLocalizationsDelegate

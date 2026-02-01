@@ -4496,8 +4496,8 @@ class _SidebarAccordionSection extends StatelessWidget {
                                   calendarRecurrenceEndGap,
                                   calendarInsetLg,
                                 ),
-                                constraints: const BoxConstraints(
-                                  minHeight: axiSizing.buttonHeightRegular,
+                                constraints: BoxConstraints(
+                                  minHeight: context.sizing.buttonHeightRegular,
                                 ),
                                 decoration: BoxDecoration(
                                   color: isHovering

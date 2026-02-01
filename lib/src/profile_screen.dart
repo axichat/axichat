@@ -84,22 +84,27 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final endpointConfig = locate<AuthenticationCubit>().endpointConfig;
+    final emailEnabled = endpointConfig.enableSmtp;
+    final EmailService? emailService =
+        emailEnabled ? locate<EmailService>() : null;
     return RepositoryProvider.value(
       value: locate<Capability>(),
       child: MultiBlocProvider(
         providers: [
           BlocProvider.value(value: locate<ProfileCubit>()),
           BlocProvider.value(value: locate<ConnectivityCubit>()),
-          BlocProvider(
-            create: (context) =>
-                EmailContactImportCubit(emailService: locate<EmailService>()),
-          ),
+          if (emailEnabled && emailService != null)
+            BlocProvider(
+              create: (context) =>
+                  EmailContactImportCubit(emailService: emailService),
+            ),
           BlocProvider.value(value: locate<SettingsCubit>()),
           BlocProvider.value(value: locate<AuthenticationCubit>()),
           BlocProvider(
             create: (context) => ProfileExportCubit(
               xmppService: locate<XmppService>(),
-              emailService: locate<EmailService>(),
+              emailService: emailService,
             ),
           ),
         ],
@@ -301,6 +306,8 @@ class _ProfileMainView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final emailEnabled =
+        context.watch<AuthenticationCubit>().endpointConfig.enableSmtp;
     final card = _ProfileCardSection(
       connectivityState: connectivityState,
       demoOffline: demoOffline,
@@ -383,6 +390,7 @@ class _ProfileMainView extends StatelessWidget {
                                     const BoxConstraints(maxWidth: 500.0),
                                 child: _SettingsJumpMenu(
                                   anchors: settingsAnchors,
+                                  emailEnabled: emailEnabled,
                                   scrollController: profileScrollController,
                                   scrollOffsetListenable: profileScrollOffset,
                                   baseOffsetResolver: baseOffsetResolver,
@@ -478,6 +486,7 @@ class _ProfileMainView extends StatelessWidget {
                   padding: sidebarPadding,
                   child: _SettingsJumpMenu(
                     anchors: settingsAnchors,
+                    emailEnabled: emailEnabled,
                     scrollController: settingsScrollController,
                     scrollOffsetListenable: settingsScrollOffset,
                     baseOffsetResolver: () => 0,
@@ -832,6 +841,7 @@ class _SettingsPanel extends StatelessWidget {
 class _SettingsJumpMenu extends StatefulWidget {
   const _SettingsJumpMenu({
     required this.anchors,
+    required this.emailEnabled,
     required this.scrollController,
     required this.scrollOffsetListenable,
     required this.baseOffsetResolver,
@@ -839,6 +849,7 @@ class _SettingsJumpMenu extends StatefulWidget {
   });
 
   final SettingsSectionAnchors anchors;
+  final bool emailEnabled;
   final ScrollController scrollController;
   final ValueListenable<double> scrollOffsetListenable;
   final double Function() baseOffsetResolver;
@@ -863,7 +874,8 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.scrollController != widget.scrollController ||
         oldWidget.anchors != widget.anchors ||
-        oldWidget.scrollOffsetListenable != widget.scrollOffsetListenable) {
+        oldWidget.scrollOffsetListenable != widget.scrollOffsetListenable ||
+        oldWidget.emailEnabled != widget.emailEnabled) {
       _refreshSectionOffsets();
     }
   }
@@ -877,20 +889,20 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
   Widget build(BuildContext context) {
     final Duration animationDuration =
         context.watch<SettingsCubit>().animationDuration;
-    final sectionKeys = [
+    final sectionKeys = <GlobalKey?>[
       widget.anchors.accountKey,
       widget.anchors.dataKey,
       widget.anchors.appearanceKey,
       widget.anchors.chatPreferencesKey,
-      widget.anchors.emailPreferencesKey,
+      if (widget.emailEnabled) widget.anchors.emailPreferencesKey,
       widget.anchors.aboutKey,
     ];
-    final sectionLabels = [
+    final sectionLabels = <String>[
       context.l10n.settingsSectionAccount,
       context.l10n.settingsSectionData,
       context.l10n.settingsSectionAppearance,
       context.l10n.settingsSectionChats,
-      context.l10n.settingsSectionEmail,
+      if (widget.emailEnabled) context.l10n.settingsSectionEmail,
       context.l10n.settingsSectionAbout,
     ];
     final Alignment menuAlignment = switch (widget.textAlign) {
@@ -947,12 +959,12 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
       if (!mounted) {
         return;
       }
-      final keys = [
+      final keys = <GlobalKey?>[
         widget.anchors.accountKey,
         widget.anchors.dataKey,
         widget.anchors.appearanceKey,
         widget.anchors.chatPreferencesKey,
-        widget.anchors.emailPreferencesKey,
+        if (widget.emailEnabled) widget.anchors.emailPreferencesKey,
         widget.anchors.aboutKey,
       ];
       _sectionOffsets

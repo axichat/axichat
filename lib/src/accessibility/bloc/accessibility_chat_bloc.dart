@@ -382,8 +382,7 @@ class AccessibilityChatBloc
     }
     final messageService = _messageService;
     if (messageService is! XmppService) return true;
-    final hinted = hintTransportForAddress(contact.jid);
-    return hinted?.isEmail ?? false;
+    return contact.transport.isEmail;
   }
 
   int _messageWindowForUnread(int unreadCount) {
@@ -407,6 +406,7 @@ class AccessibilityChatBloc
         encryptionProtocol: message.encryptionProtocol,
         chatType: ChatType.chat,
         unreadCount: 0,
+        transport: MessageTransport.xmpp,
       ),
     );
     return matching.displayName;

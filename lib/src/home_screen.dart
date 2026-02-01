@@ -842,11 +842,6 @@ class _HomeContent extends StatelessWidget {
               ),
             ),
             BlocProvider(
-              create: (context) => RosterCubit(
-                rosterService: context.read<XmppService>() as RosterService,
-              ),
-            ),
-            BlocProvider(
               create: (context) => ProfileCubit(
                 xmppService: context.read<XmppService>(),
                 presenceService: context.read<XmppService>() as PresenceService,

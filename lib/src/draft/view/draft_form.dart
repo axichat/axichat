@@ -578,11 +578,6 @@ class _DraftFormState extends State<DraftForm> {
     return recipients;
   }
 
-  bool _isXmppHint(String value) {
-    final hinted = hintTransportForAddress(value);
-    return hinted?.isXmpp ?? false;
-  }
-
   Future<void> _hydrateAttachments() async {
     if (widget.attachmentMetadataIds.isEmpty) {
       return;
@@ -657,6 +652,34 @@ class _DraftFormState extends State<DraftForm> {
     return true;
   }
 
+  Future<bool> _ensureRecipientTransports() async {
+    final nextRecipients = List<ComposerRecipient>.from(_recipients);
+    var updated = false;
+    for (var index = 0; index < nextRecipients.length; index++) {
+      final recipient = nextRecipients[index];
+      if (!recipient.included) continue;
+      if (recipient.target.chat != null) continue;
+      if (recipient.target.transport != null) continue;
+      final address = recipient.target.address?.trim();
+      if (address == null || address.isEmpty) continue;
+      final transport = await _resolveAddressTransport(address);
+      if (!mounted || transport == null) return false;
+      nextRecipients[index] = recipient.copyWith(
+        target: FanOutTarget.address(
+          address: address,
+          displayName: recipient.target.displayName,
+          shareSignatureEnabled: recipient.target.shareSignatureEnabled,
+          transport: transport,
+        ),
+      );
+      updated = true;
+    }
+    if (updated && mounted) {
+      setState(() => _recipients = nextRecipients);
+    }
+    return true;
+  }
+
   void _applyRecipient(FanOutTarget target) {
     setState(() {
       _sendErrorMessage = null;
@@ -690,12 +713,10 @@ class _DraftFormState extends State<DraftForm> {
       return null;
     }
     final hinted = hintTransportForAddress(address);
-    if (hinted != null) {
-      return hinted;
-    }
     return showTransportChoiceDialog(
       context,
       address: address,
+      defaultTransport: hinted,
     );
   }
 
@@ -1087,6 +1108,9 @@ class _DraftFormState extends State<DraftForm> {
         _pendingAttachments.any((pending) => pending.isPreparing)) {
       return;
     }
+    final transportsReady = await _ensureRecipientTransports();
+    if (!mounted) return;
+    if (!transportsReady) return;
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
     final xmppJids =
@@ -1219,8 +1243,10 @@ class _DraftFormState extends State<DraftForm> {
   }) _splitRecipients() {
     final emailTargets = <ComposerRecipient>[];
     final xmppTargets = <ComposerRecipient>[];
+    var hasActiveRecipients = false;
     for (final recipient in _recipients) {
       if (!recipient.included) continue;
+      hasActiveRecipients = true;
       final xmppJid = _resolveXmppJid(recipient);
       final isEmailRecipient = _isEmailRecipient(recipient);
       if (isEmailRecipient) {
@@ -1234,7 +1260,7 @@ class _DraftFormState extends State<DraftForm> {
     return (
       emailTargets: emailTargets,
       xmppTargets: xmppTargets,
-      hasActiveRecipients: emailTargets.isNotEmpty || xmppTargets.isNotEmpty,
+      hasActiveRecipients: hasActiveRecipients,
     );
   }
 
@@ -1261,7 +1287,7 @@ class _DraftFormState extends State<DraftForm> {
     if (transport?.isXmpp ?? false) {
       return candidate;
     }
-    return _isXmppHint(candidate) ? candidate : null;
+    return null;
   }
 
   bool _isEmailRecipient(ComposerRecipient recipient) {
@@ -1274,8 +1300,7 @@ class _DraftFormState extends State<DraftForm> {
       return false;
     }
     if (chat != null) {
-      final address = _recipientAddress(chat);
-      return address != null && !_isXmppHint(address);
+      return false;
     }
     final normalizedAddress = recipient.target.normalizedAddress;
     final rawAddress = recipient.target.address;
@@ -1283,8 +1308,7 @@ class _DraftFormState extends State<DraftForm> {
     if (candidate == null || candidate.isEmpty) {
       return false;
     }
-    final hinted = hintTransportForAddress(candidate);
-    return hinted?.isEmail ?? false;
+    return false;
   }
 
   String? _recipientAddress(Chat chat) {

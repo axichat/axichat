@@ -9,10 +9,8 @@ import 'package:axichat/src/avatar/avatar_editor_mode.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const String _fallbackSignupAvatarAssetPath =
@@ -26,6 +24,7 @@ class SignupAvatarEditorPanel extends StatefulWidget {
     required this.onShuffle,
     required this.onUpload,
     required this.canShuffleBackground,
+    required this.animationDuration,
     this.onUseCurrent,
     this.useActionEnabled = false,
     this.onShuffleBackground,
@@ -44,6 +43,7 @@ class SignupAvatarEditorPanel extends StatefulWidget {
   final Future<void> Function() onShuffle;
   final Future<void> Function() onUpload;
   final bool canShuffleBackground;
+  final Duration animationDuration;
   final Future<void> Function()? onShuffleBackground;
   final VoidCallback? onUseCurrent;
   final bool useActionEnabled;
@@ -145,7 +145,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    final animationDuration = widget.animationDuration;
     final avatarActionSpacing = spacing.s;
     final avatarActionIconSize = sizing.iconButtonIconSize;
     final showCrop = widget.mode == AvatarEditorMode.cropOnly;

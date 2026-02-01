@@ -459,17 +459,6 @@ class AppLocalizationsFr extends AppLocalizations {
       'Inclure le pied de page de signature pour l\'e-mail';
 
   @override
-  String get chatSettingsCapabilitiesTitle => 'Capabilities';
-
-  @override
-  String chatSettingsCapabilitiesUpdated(Object timestamp) {
-    return 'Last checked: $timestamp';
-  }
-
-  @override
-  String get chatSettingsCapabilitiesEmpty => 'No features reported';
-
-  @override
   String get chatSignatureHintEnabled =>
       'Aide à garder les fils e-mail multi-destinataires intacts.';
 
@@ -5669,6 +5658,9 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get chatUnreadDividerLabel => 'Non lus';
+
+  @override
   String get messageErrorServiceUnavailableTooltip =>
       'Le service a signale un probleme temporaire.';
 
@@ -5985,4 +5977,15 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get xmppOperationMucJoinFailure => 'Room join failed';
+
+  @override
+  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String chatSettingsCapabilitiesUpdated(Object timestamp) {
+    return 'Last checked: $timestamp';
+  }
+
+  @override
+  String get chatSettingsCapabilitiesEmpty => 'No features reported';
 }

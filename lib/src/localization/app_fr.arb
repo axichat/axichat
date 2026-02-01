@@ -2763,6 +2763,10 @@
       }
     }
   },
+  "chatUnreadDividerLabel": "Non lus",
+  "@chatUnreadDividerLabel": {
+    "description": "Label for the unread messages divider in chat history."
+  },
   "messageErrorServiceUnavailableTooltip":
       "Le service a signale un probleme temporaire.",
   "messageErrorServiceUnavailable": "Service indisponible",

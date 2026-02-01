@@ -2750,6 +2750,10 @@
       }
     }
   },
+  "chatUnreadDividerLabel": "未读",
+  "@chatUnreadDividerLabel": {
+    "description": "Label for the unread messages divider in chat history."
+  },
   "messageErrorServiceUnavailableTooltip": "服务出现暂时性问题。",
   "messageErrorServiceUnavailable": "服务不可用",
   "messageErrorServerNotFound": "未找到服务器",

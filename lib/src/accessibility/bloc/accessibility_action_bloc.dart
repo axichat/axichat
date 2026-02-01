@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -269,6 +270,7 @@ class AccessibilityActionBloc
       encryptionProtocol: EncryptionProtocol.omemo,
       chatType: ChatType.chat,
       unreadCount: 0,
+      transport: event.transport,
     );
     await _handleContactSelection(contact, emit);
   }
@@ -348,6 +350,7 @@ class AccessibilityActionBloc
         chatType: chat.type,
         unreadCount: chat.unreadCount,
         isGroup: chat.type == ChatType.groupChat,
+        transport: chat.defaultTransport,
       );
       orderedChats.add(contact);
       map[chat.jid] = contact;
@@ -364,6 +367,7 @@ class AccessibilityActionBloc
           encryptionProtocol: EncryptionProtocol.omemo,
           chatType: ChatType.chat,
           unreadCount: 0,
+          transport: MessageTransport.xmpp,
         ),
       );
     }
@@ -491,7 +495,9 @@ class AccessibilityActionBloc
         add(const AccessibilityMenuClosed());
         break;
       case AccessibilityCommand.confirmNewContact:
-        add(const AccessibilityConfirmNewContact());
+        final transport = action.transport;
+        if (transport == null) return;
+        add(AccessibilityConfirmNewContact(transport: transport));
         break;
       case AccessibilityCommand.resumeDraft:
         final draft = action.draft;
@@ -644,6 +650,7 @@ class AccessibilityActionBloc
         encryptionProtocol: EncryptionProtocol.omemo,
         chatType: ChatType.chat,
         unreadCount: 0,
+        transport: MessageTransport.xmpp,
       ),
     );
   }

@@ -13,6 +13,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -140,6 +141,8 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
         final loading = state.creationStatus.isLoading;
         return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
           builder: (context, avatarState) {
+            final animationDuration =
+                context.watch<SettingsCubit>().animationDuration;
             final avatarErrorText = avatarState.errorType?.resolve(l10n);
             final canSubmit =
                 _title.trim().isNotEmpty && !avatarState.isBusy && !loading;
@@ -174,6 +177,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                   bytes: avatarState.displayedBytes,
                                   username: _title,
                                   processing: avatarState.isBusy,
+                                  animationDuration: animationDuration,
                                   onTap: _openAvatarEditor,
                                 ),
                               ),
@@ -230,6 +234,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                       child: SignupAvatarEditorPanel(
                                         mode: avatarState.editorMode,
                                         avatarBytes: avatarState.displayedBytes,
+                                        animationDuration: animationDuration,
                                         cropBytes: avatarState
                                             .draftAvatar?.sourceBytes,
                                         cropRect:

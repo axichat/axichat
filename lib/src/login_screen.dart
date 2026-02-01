@@ -630,6 +630,9 @@ class _LoginScreenState extends State<LoginScreen>
                                                           .animation,
                                                   visible: showProgressBar,
                                                   label: _operationLabel,
+                                                  animationDuration: context
+                                                      .watch<SettingsCubit>()
+                                                      .animationDuration,
                                                 ),
                                               ),
                                             ),

@@ -6,10 +6,8 @@ import 'dart:typed_data';
 import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 const String _fallbackSignupAvatarAssetPath =
@@ -21,12 +19,14 @@ class SignupAvatarSelector extends StatefulWidget {
     required this.bytes,
     required this.username,
     required this.processing,
+    required this.animationDuration,
     required this.onTap,
   });
 
   final Uint8List? bytes;
   final String username;
   final bool processing;
+  final Duration animationDuration;
   final VoidCallback onTap;
 
   @override
@@ -64,7 +64,7 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
     final colors = context.colorScheme;
     final motion = context.motion;
     final sizing = context.sizing;
-    final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    final animationDuration = widget.animationDuration;
     final avatarSize = sizing.iconButtonTapTarget;
     final overlayShape = RoundedSuperellipseBorder(
       borderRadius: context.radius,

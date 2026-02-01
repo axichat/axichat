@@ -619,6 +619,8 @@ class _SignupFormState extends State<SignupForm>
                                                     _jidTextController.text,
                                                 processing:
                                                     avatarState.processing,
+                                                animationDuration:
+                                                    animationDuration,
                                                 onTap: _openAvatarEditor,
                                               )
                                             : Transform.translate(
@@ -633,6 +635,8 @@ class _SignupFormState extends State<SignupForm>
                                                       _jidTextController.text,
                                                   processing:
                                                       avatarState.processing,
+                                                  animationDuration:
+                                                      animationDuration,
                                                   onTap: _openAvatarEditor,
                                                 ),
                                               ),
@@ -704,6 +708,8 @@ class _SignupFormState extends State<SignupForm>
                                                   mode: avatarState.editorMode,
                                                   avatarBytes: avatarState
                                                       .displayedBytes,
+                                                  animationDuration:
+                                                      animationDuration,
                                                   cropBytes: avatarState
                                                       .avatar?.sourceBytes,
                                                   cropRect: avatarState

@@ -4,6 +4,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
+import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -23,10 +24,13 @@ class AttachmentGalleryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = context.spacing;
     final leadingWidth = AxiIconButton.kDefaultSize + (spacing.s * 2);
+    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final EmailService? emailService =
+        endpointConfig.enableSmtp ? locate<EmailService>() : null;
     return BlocProvider(
       create: (context) => AttachmentGalleryBloc(
         xmppService: locate<XmppService>(),
-        emailService: locate<EmailService>(),
+        emailService: emailService,
         chatJid: chat?.jid,
         chatOverride: chat,
         showChatLabel: chat == null,

@@ -430,17 +430,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatSignatureToggleLabel => '为邮件添加分享令牌页脚';
 
   @override
-  String get chatSettingsCapabilitiesTitle => 'Capabilities';
-
-  @override
-  String chatSettingsCapabilitiesUpdated(Object timestamp) {
-    return 'Last checked: $timestamp';
-  }
-
-  @override
-  String get chatSettingsCapabilitiesEmpty => 'No features reported';
-
-  @override
   String get chatSignatureHintEnabled => '帮助保持多收件人的邮件线程。';
 
   @override
@@ -5373,6 +5362,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get chatUnreadDividerLabel => '未读';
+
+  @override
   String get messageErrorServiceUnavailableTooltip => '服务出现暂时性问题。';
 
   @override
@@ -5680,6 +5672,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get xmppOperationMucJoinFailure => 'Room join failed';
+
+  @override
+  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String chatSettingsCapabilitiesUpdated(Object timestamp) {
+    return 'Last checked: $timestamp';
+  }
+
+  @override
+  String get chatSettingsCapabilitiesEmpty => 'No features reported';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -6106,17 +6109,6 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatSignatureToggleLabel => '為電郵加入分享權杖頁腳';
-
-  @override
-  String get chatSettingsCapabilitiesTitle => 'Capabilities';
-
-  @override
-  String chatSettingsCapabilitiesUpdated(Object timestamp) {
-    return 'Last checked: $timestamp';
-  }
-
-  @override
-  String get chatSettingsCapabilitiesEmpty => 'No features reported';
 
   @override
   String get chatSignatureHintEnabled => '有助保持多收件人的電郵串。';
@@ -11358,4 +11350,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get xmppOperationMucJoinFailure => 'Room join failed';
+
+  @override
+  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String chatSettingsCapabilitiesUpdated(Object timestamp) {
+    return 'Last checked: $timestamp';
+  }
+
+  @override
+  String get chatSettingsCapabilitiesEmpty => 'No features reported';
 }

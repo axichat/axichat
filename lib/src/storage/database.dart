@@ -54,22 +54,12 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
-  Stream<List<Message>> watchChatMessagesByIds(
-    String jid,
-    Iterable<String> messageIds,
-  );
-
   Future<List<Message>> getChatMessages(
     String jid, {
     required int start,
     required int end,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
-
-  Future<List<Message>> getChatMessagesByIds(
-    String jid,
-    Iterable<String> messageIds,
-  );
 
   Future<List<Message>> getChatMessagesBefore(
     String jid, {
@@ -1627,40 +1617,6 @@ WHERE delta_chat_id IS NOT NULL
   }
 
   @override
-  Stream<List<Message>> watchChatMessagesByIds(
-    String jid,
-    Iterable<String> messageIds,
-  ) {
-    final ids = messageIds
-        .map((id) => id.trim())
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
-    if (ids.isEmpty) {
-      return Stream.value(const <Message>[]);
-    }
-    final query = select(messages)
-      ..where(
-        (tbl) => tbl.chatJid.equals(jid) & tbl.id.isIn(ids),
-      )
-      ..orderBy([
-        (tbl) => OrderingTerm(
-              expression: tbl.timestamp,
-              mode: OrderingMode.desc,
-            ),
-        (tbl) => OrderingTerm(
-              expression: tbl.deltaMsgId,
-              mode: OrderingMode.desc,
-            ),
-        (tbl) => OrderingTerm(
-              expression: tbl.stanzaID,
-              mode: OrderingMode.desc,
-            ),
-      ]);
-    return query.watch();
-  }
-
-  @override
   Future<List<Message>> getChatMessages(
     String jid, {
     required int start,
@@ -1673,40 +1629,6 @@ WHERE delta_chat_id IS NOT NULL
       limit: end,
       offset: start,
     ).get();
-  }
-
-  @override
-  Future<List<Message>> getChatMessagesByIds(
-    String jid,
-    Iterable<String> messageIds,
-  ) async {
-    final ids = messageIds
-        .map((id) => id.trim())
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
-    if (ids.isEmpty) {
-      return const <Message>[];
-    }
-    final query = select(messages)
-      ..where(
-        (tbl) => tbl.chatJid.equals(jid) & tbl.id.isIn(ids),
-      )
-      ..orderBy([
-        (tbl) => OrderingTerm(
-              expression: tbl.timestamp,
-              mode: OrderingMode.desc,
-            ),
-        (tbl) => OrderingTerm(
-              expression: tbl.deltaMsgId,
-              mode: OrderingMode.desc,
-            ),
-        (tbl) => OrderingTerm(
-              expression: tbl.stanzaID,
-              mode: OrderingMode.desc,
-            ),
-      ]);
-    return query.get();
   }
 
   @override
