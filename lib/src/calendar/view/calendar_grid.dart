@@ -3994,14 +3994,14 @@ class _HeaderNavButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
-    final Widget button = ShadButton.ghost(
-      size: ShadButtonSize.sm,
+    final Widget button = AxiIconButton.ghost(
+      iconData: icon,
       onPressed: onPressed,
-      foregroundColor: colors.primary,
-      hoverForegroundColor: colors.primary,
-      hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
-      child: Icon(icon, size: 16),
-    ).withTapBounce();
+      iconSize: 16,
+      buttonSize: context.sizing.iconButtonSize,
+      tapTargetSize: context.sizing.iconButtonTapTarget,
+      color: colors.primary,
+    );
 
     return SizedBox(
       width: _headerNavButtonExtent,
@@ -4057,9 +4057,7 @@ class _CalendarDayHeader extends StatelessWidget {
                     gridState._getDayOfWeekShort(context, date),
                     date.day,
                   ),
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                  style: context.textTheme.caption.strong.copyWith(
                     color: isToday ? calendarPrimaryColor : calendarTitleColor,
                     letterSpacing: calendarDayHeaderLetterSpacing,
                   ),
@@ -4098,10 +4096,8 @@ class DayEventBadge extends StatelessWidget {
       ),
       child: Text(
         count.toString(),
-        style: TextStyle(
+        style: context.textTheme.micro.strong.copyWith(
           color: colors.primaryForeground,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
         ),
       ),
     );
@@ -4120,7 +4116,7 @@ class _CalendarZoomControls extends StatelessWidget {
     const double zoomControlsShadowAlpha = 0.12;
     final Color zoomControlsShadowColor =
         context.colorScheme.border.withValues(alpha: zoomControlsShadowAlpha);
-    final labelStyle = calendarZoomLabelTextStyle.copyWith(
+    final labelStyle = context.textTheme.caption.strong.copyWith(
       color: colors.foreground,
       fontFamily: theme.textTheme.small.fontFamily,
       letterSpacing: 0.2,

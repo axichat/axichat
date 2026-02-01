@@ -24,7 +24,6 @@ const double _availabilityEditorCardSpacing = 12.0;
 const double _availabilityEditorCardRadius = 12.0;
 const double _availabilityEditorCardBorderWidth = 1.0;
 const double _availabilityEditorHeaderIconSize = 18.0;
-const double _availabilityEditorProgressStrokeWidth = 2.0;
 const double _availabilityEditorRemoveIconSize = 16.0;
 const double _availabilityEditorRemoveButtonSize = 32.0;
 const double _availabilityEditorRemoveTapTargetSize = 36.0;
@@ -378,17 +377,12 @@ class _AvailabilityEditorAddButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ShadButton.ghost(
-      size: ShadButtonSize.sm,
+    return AxiButton.ghost(
+      size: AxiButtonSize.sm,
       onPressed: onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      leading:
           const Icon(LucideIcons.plus, size: _availabilityEditorHeaderIconSize),
-          const SizedBox(width: calendarInsetSm),
-          Text(context.l10n.calendarAvailabilityAddWindow),
-        ],
-      ),
+      child: Text(context.l10n.calendarAvailabilityAddWindow),
     );
   }
 }
@@ -404,38 +398,17 @@ class _AvailabilityEditorActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const spinner = SizedBox(
-      width: _availabilityEditorHeaderIconSize,
-      height: _availabilityEditorHeaderIconSize,
-      child: CircularProgressIndicator(
-        strokeWidth: _availabilityEditorProgressStrokeWidth,
-      ),
-    );
     return Align(
       alignment: Alignment.centerRight,
-      child: ShadButton(
-        size: ShadButtonSize.sm,
+      child: AxiButton.primary(
+        size: AxiButtonSize.sm,
         onPressed: isBusy ? null : onPressed,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ButtonSpinnerSlot(
-              isVisible: isBusy,
-              spinner: spinner,
-              slotSize: _availabilityEditorHeaderIconSize,
-              gap: _availabilityEditorGap,
-              duration: baseAnimationDuration,
-            ),
-            if (!isBusy) ...[
-              const Icon(
-                LucideIcons.check,
-                size: _availabilityEditorHeaderIconSize,
-              ),
-              const SizedBox(width: _availabilityEditorGap),
-            ],
-            Text(context.l10n.calendarAvailabilitySaveWindows),
-          ],
+        loading: isBusy,
+        leading: const Icon(
+          LucideIcons.check,
+          size: _availabilityEditorHeaderIconSize,
         ),
+        child: Text(context.l10n.calendarAvailabilitySaveWindows),
       ),
     );
   }

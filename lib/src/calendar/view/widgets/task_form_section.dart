@@ -2,8 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
-
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -12,8 +10,6 @@ import 'package:axichat/src/calendar/view/priority_checkbox_tile.dart';
 import 'recurrence_editor.dart';
 import 'schedule_range_fields.dart';
 import 'task_text_field.dart';
-
-const double _taskFormActionIconSize = 16.0;
 
 enum TaskSectionLabelSize { medium, large }
 
@@ -95,22 +91,14 @@ class TaskSectionExpander extends StatelessWidget {
         ),
       ],
     );
-    final Widget header = Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: enabled ? onToggle : null,
-        borderRadius: BorderRadius.circular(calendarBorderRadius),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
-          child: SizedBox(
-            width: double.infinity,
-            child: TaskSectionHeader(
-              title: title,
-              uppercase: uppercase,
-              trailing: trailing,
-            ),
-          ),
-        ),
+    final Widget header = AxiButton.ghost(
+      size: AxiButtonSize.sm,
+      widthBehavior: AxiButtonWidth.expand,
+      onPressed: enabled ? onToggle : null,
+      child: TaskSectionHeader(
+        title: title,
+        uppercase: uppercase,
+        trailing: trailing,
       ),
     );
     final Widget body = Column(
@@ -370,14 +358,14 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
           },
           onSubmitted: widget.onFieldSubmitted,
           style: widget.textStyle ??
-              TextStyle(color: calendarTitleColor, fontSize: 14),
+              context.textTheme.small.copyWith(color: calendarTitleColor),
           decoration: InputDecoration(
             labelText: widget.labelText,
             labelStyle: widget.labelStyle ??
-                TextStyle(color: calendarSubtitleColor, fontSize: 14),
+                context.textTheme.small.copyWith(color: calendarSubtitleColor),
             hintText: widget.hintText,
             hintStyle: widget.hintStyle ??
-                TextStyle(color: calendarTimeLabelColor, fontSize: 14),
+                context.textTheme.small.copyWith(color: calendarTimeLabelColor),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(radius),
               borderSide: BorderSide(color: calendarBorderColor),
@@ -486,23 +474,14 @@ class TaskToolbarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool allowPress = enabled && onPressed != null;
-    final sizing = context.sizing;
-    final textTheme = context.textTheme;
-    final button = ShadButton.outline(
-      size: ShadButtonSize.sm,
+    return AxiButton.outline(
+      size: AxiButtonSize.sm,
       onPressed: allowPress ? onPressed : null,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: sizing.menuItemIconSize),
-            const SizedBox(width: calendarInsetMd),
-          ],
-          Text(label, style: textTheme.small),
-        ],
-      ),
-    ).withTapBounce(enabled: allowPress);
-    return button;
+      leading: icon == null
+          ? null
+          : Icon(icon, size: context.sizing.menuItemIconSize),
+      child: Text(label),
+    );
   }
 }
 
@@ -521,14 +500,15 @@ class TaskGhostIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = ShadButton.ghost(
-      size: ShadButtonSize.sm,
+    final button = AxiIconButton.ghost(
+      iconData: icon,
+      iconSize: context.sizing.menuItemIconSize,
+      buttonSize: context.sizing.buttonHeightSm,
+      tapTargetSize: context.sizing.iconButtonTapTarget,
       onPressed: onPressed,
-      child: Icon(icon, size: 16),
-    ).withTapBounce();
-    return tooltip == null
-        ? button
-        : AxiTooltip(builder: (_) => Text(tooltip!), child: button);
+      tooltip: tooltip,
+    );
+    return button;
   }
 }
 
@@ -938,53 +918,27 @@ class TaskPrimaryButton extends StatelessWidget {
     required this.onPressed,
     this.isBusy = false,
     this.icon,
-    this.size = ShadButtonSize.sm,
+    this.size = AxiButtonSize.sm,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool isBusy;
   final IconData? icon;
-  final ShadButtonSize size;
+  final AxiButtonSize size;
 
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
-    final colors = context.colorScheme;
-    final foreground = colors.primaryForeground;
-    final spinner = SizedBox.square(
-      dimension: _taskFormActionIconSize,
-      child: CircularProgressIndicator(
-        strokeWidth: 2,
-        valueColor: AlwaysStoppedAnimation<Color>(foreground),
-      ),
-    );
-    return ShadButton(
+    return AxiButton.primary(
       size: size,
-      backgroundColor: calendarPrimaryColor,
-      hoverBackgroundColor: calendarPrimaryHoverColor,
-      foregroundColor: foreground,
-      hoverForegroundColor: foreground,
+      loading: isBusy,
       onPressed: disabled ? null : onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          ButtonSpinnerSlot(
-            isVisible: isBusy,
-            spinner: spinner,
-            slotSize: _taskFormActionIconSize,
-            gap: calendarInsetMd,
-            duration: baseAnimationDuration,
-          ),
-          if (!isBusy && icon != null) ...[
-            Icon(icon, size: _taskFormActionIconSize),
-            const SizedBox(width: calendarInsetMd),
-          ],
-          Text(label),
-        ],
-      ),
-    ).withTapBounce(enabled: !disabled);
+      leading: icon == null
+          ? null
+          : Icon(icon, size: context.sizing.menuItemIconSize),
+      child: Text(label, style: context.textTheme.small.strong),
+    );
   }
 }
 
@@ -997,54 +951,27 @@ class TaskSecondaryButton extends StatelessWidget {
     required this.onPressed,
     this.isBusy = false,
     this.icon,
-    this.size = ShadButtonSize.sm,
-    this.foregroundColor,
-    this.hoverForegroundColor,
-    this.hoverBackgroundColor,
+    this.size = AxiButtonSize.sm,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool isBusy;
   final IconData? icon;
-  final ShadButtonSize size;
-  final Color? foregroundColor;
-  final Color? hoverForegroundColor;
-  final Color? hoverBackgroundColor;
+  final AxiButtonSize size;
 
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
-    final Color resolvedForeground = foregroundColor ?? calendarSubtitleColor;
-    const spinner = SizedBox.square(
-      dimension: _taskFormActionIconSize,
-      child: CircularProgressIndicator(strokeWidth: 2),
-    );
-    return ShadButton.outline(
+    return AxiButton.outline(
       size: size,
+      loading: isBusy,
       onPressed: disabled ? null : onPressed,
-      foregroundColor: resolvedForeground,
-      hoverForegroundColor: hoverForegroundColor ?? calendarPrimaryColor,
-      hoverBackgroundColor:
-          hoverBackgroundColor ?? calendarPrimaryColor.withValues(alpha: 0.08),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ButtonSpinnerSlot(
-            isVisible: isBusy,
-            spinner: spinner,
-            slotSize: _taskFormActionIconSize,
-            gap: calendarInsetMd,
-            duration: baseAnimationDuration,
-          ),
-          if (!isBusy && icon != null) ...[
-            Icon(icon, size: _taskFormActionIconSize),
-            const SizedBox(width: calendarInsetMd),
-          ],
-          Text(label),
-        ],
-      ),
-    ).withTapBounce(enabled: !disabled);
+      leading: icon == null
+          ? null
+          : Icon(icon, size: context.sizing.menuItemIconSize),
+      child: Text(label),
+    );
   }
 }
 
@@ -1056,43 +983,27 @@ class TaskDestructiveButton extends StatelessWidget {
     required this.onPressed,
     this.isBusy = false,
     this.icon,
-    this.size = ShadButtonSize.sm,
+    this.size = AxiButtonSize.sm,
   });
 
   final String label;
   final VoidCallback? onPressed;
   final bool isBusy;
   final IconData? icon;
-  final ShadButtonSize size;
+  final AxiButtonSize size;
 
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
-    const spinner = SizedBox.square(
-      dimension: _taskFormActionIconSize,
-      child: CircularProgressIndicator(strokeWidth: 2),
-    );
-    return ShadButton.destructive(
+    return AxiButton.destructive(
       size: size,
+      loading: isBusy,
       onPressed: disabled ? null : onPressed,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ButtonSpinnerSlot(
-            isVisible: isBusy,
-            spinner: spinner,
-            slotSize: _taskFormActionIconSize,
-            gap: calendarInsetMd,
-            duration: baseAnimationDuration,
-          ),
-          if (!isBusy && icon != null) ...[
-            Icon(icon, size: _taskFormActionIconSize),
-            const SizedBox(width: calendarInsetMd),
-          ],
-          Text(label),
-        ],
-      ),
-    ).withTapBounce(enabled: !disabled);
+      leading: icon == null
+          ? null
+          : Icon(icon, size: context.sizing.menuItemIconSize),
+      child: Text(label, style: context.textTheme.small.strong),
+    );
   }
 }
 
@@ -1289,14 +1200,13 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                     },
                     title: Text(
                       suggestion.label,
-                      style: TextStyle(fontSize: 13, color: calendarTitleColor),
+                      style: context.textTheme.small
+                          .copyWith(color: calendarTitleColor),
                     ),
                     subtitle: Text(
                       suggestion.isHistory ? 'From your tasks' : 'Suggested',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: calendarSubtitleColor,
-                      ),
+                      style: context.textTheme.caption
+                          .copyWith(color: calendarSubtitleColor),
                     ),
                   );
                 },

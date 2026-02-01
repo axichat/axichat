@@ -13,11 +13,8 @@ import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/view/chat.dart';
-import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/profile/bloc/profile_cubit.dart';
-import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -39,103 +36,111 @@ class ArchivedChatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final xmppService = locate<XmppService>();
-    final notificationService = locate<NotificationService>();
-    final endpointConfig = locate<AuthenticationCubit>().endpointConfig;
-    final EmailService? emailService =
-        endpointConfig.enableSmtp ? locate<EmailService>() : null;
-    final chatsCubit = locate<ChatsCubit>();
-    final settingsCubit = locate<SettingsCubit>();
-    final profileCubit = locate<ProfileCubit>();
-    final rosterCubit = locate<RosterCubit>();
-    final OmemoService? omemoService =
-        xmppService is OmemoService ? xmppService as OmemoService : null;
-    final storageManager = locate<CalendarStorageManager>();
-    final storage = storageManager.authStorage;
-    final ChatCalendarSyncCoordinator? chatCalendarCoordinator = storage == null
-        ? null
-        : ChatCalendarSyncCoordinator(
-            storage: ChatCalendarStorage(storage: storage),
-            sendMessage: ({
-              required String jid,
-              required CalendarSyncOutbound outbound,
-              required chat_models.ChatType chatType,
-            }) async {
-              await xmppService.sendCalendarSyncMessage(
-                jid: jid,
-                outbound: outbound,
-                chatType: chatType,
-              );
-            },
-            sendSnapshotFile: xmppService.uploadCalendarSnapshot,
-          );
-    final CalendarAvailabilityShareCoordinator? availabilityCoordinator =
-        storage == null
-            ? null
-            : CalendarAvailabilityShareCoordinator(
-                store: CalendarAvailabilityShareStore(),
-                sendMessage: ({
-                  required String jid,
-                  required CalendarAvailabilityMessage message,
-                  required chat_models.ChatType chatType,
-                }) async {
-                  await xmppService.sendAvailabilityMessage(
-                    jid: jid,
-                    message: message,
-                    chatType: chatType,
+    return BlocBuilder<AuthenticationCubit, AuthenticationState>(
+      builder: (context, authState) {
+        final xmppService = locate<XmppService>();
+        final notificationService = locate<NotificationService>();
+        final EmailService? emailService =
+            authState.config.enableSmtp ? locate<EmailService>() : null;
+        final OmemoService? omemoService =
+            xmppService is OmemoService ? xmppService as OmemoService : null;
+        final storageManager = locate<CalendarStorageManager>();
+        final storage = storageManager.authStorage;
+        final ChatCalendarSyncCoordinator? chatCalendarCoordinator =
+            storage == null
+                ? null
+                : ChatCalendarSyncCoordinator(
+                    storage: ChatCalendarStorage(storage: storage),
+                    sendMessage: ({
+                      required String jid,
+                      required CalendarSyncOutbound outbound,
+                      required chat_models.ChatType chatType,
+                    }) async {
+                      await xmppService.sendCalendarSyncMessage(
+                        jid: jid,
+                        outbound: outbound,
+                        chatType: chatType,
+                      );
+                    },
+                    sendSnapshotFile: xmppService.uploadCalendarSnapshot,
                   );
-                },
-              );
+        final CalendarAvailabilityShareCoordinator? availabilityCoordinator =
+            storage == null
+                ? null
+                : CalendarAvailabilityShareCoordinator(
+                    store: CalendarAvailabilityShareStore(),
+                    sendMessage: ({
+                      required String jid,
+                      required CalendarAvailabilityMessage message,
+                      required chat_models.ChatType chatType,
+                    }) async {
+                      await xmppService.sendAvailabilityMessage(
+                        jid: jid,
+                        message: message,
+                        chatType: chatType,
+                      );
+                    },
+                  );
 
-    return MultiRepositoryProvider(
-      providers: [
-        if (chatCalendarCoordinator != null)
-          RepositoryProvider<ChatCalendarSyncCoordinator>.value(
-            value: chatCalendarCoordinator,
-          ),
-        if (availabilityCoordinator != null)
-          RepositoryProvider<CalendarAvailabilityShareCoordinator>.value(
-            value: availabilityCoordinator,
-          ),
-      ],
-      child: MultiBlocProvider(
-        providers: [
-          BlocProvider.value(value: chatsCubit),
-          BlocProvider.value(value: profileCubit),
-          BlocProvider.value(value: rosterCubit),
-          BlocProvider(
-            create: (_) => ChatBloc(
-              jid: jid,
-              messageService: xmppService,
-              chatsService: xmppService,
-              mucService: xmppService,
-              notificationService: notificationService,
-              emailService: emailService,
-              omemoService: omemoService,
-              settings: ChatSettingsSnapshot(
-                language: settingsCubit.state.language,
-                chatReadReceipts: settingsCubit.state.chatReadReceipts,
-                emailReadReceipts: settingsCubit.state.emailReadReceipts,
-                shareTokenSignatureEnabled:
-                    settingsCubit.state.shareTokenSignatureEnabled,
-                autoDownloadImages: settingsCubit.state.autoDownloadImages,
-                autoDownloadVideos: settingsCubit.state.autoDownloadVideos,
-                autoDownloadDocuments:
-                    settingsCubit.state.autoDownloadDocuments,
-                autoDownloadArchives: settingsCubit.state.autoDownloadArchives,
+        return MultiRepositoryProvider(
+          providers: [
+            if (chatCalendarCoordinator != null)
+              RepositoryProvider<ChatCalendarSyncCoordinator>.value(
+                value: chatCalendarCoordinator,
               ),
-            ),
+            if (availabilityCoordinator != null)
+              RepositoryProvider<CalendarAvailabilityShareCoordinator>.value(
+                value: availabilityCoordinator,
+              ),
+          ],
+          child: MultiBlocProvider(
+            providers: [
+              BlocProvider(
+                create: (_) => ChatBloc(
+                  jid: jid,
+                  messageService: xmppService,
+                  chatsService: xmppService,
+                  mucService: xmppService,
+                  notificationService: notificationService,
+                  emailService: emailService,
+                  omemoService: omemoService,
+                  settings: ChatSettingsSnapshot(
+                    language: context.watch<SettingsCubit>().state.language,
+                    chatReadReceipts:
+                        context.watch<SettingsCubit>().state.chatReadReceipts,
+                    emailReadReceipts:
+                        context.watch<SettingsCubit>().state.emailReadReceipts,
+                    shareTokenSignatureEnabled: context
+                        .watch<SettingsCubit>()
+                        .state
+                        .shareTokenSignatureEnabled,
+                    autoDownloadImages:
+                        context.watch<SettingsCubit>().state.autoDownloadImages,
+                    autoDownloadVideos:
+                        context.watch<SettingsCubit>().state.autoDownloadVideos,
+                    autoDownloadDocuments: context
+                        .watch<SettingsCubit>()
+                        .state
+                        .autoDownloadDocuments,
+                    autoDownloadArchives: context
+                        .watch<SettingsCubit>()
+                        .state
+                        .autoDownloadArchives,
+                  ),
+                ),
+              ),
+              BlocProvider(
+                create: (_) => ChatSearchCubit(
+                  jid: jid,
+                  messageService: xmppService,
+                  emailService: emailService,
+                ),
+              ),
+            ],
+            child: const _ArchivedChatBody(),
           ),
-          BlocProvider(
-            create: (_) => ChatSearchCubit(
-              jid: jid,
-              messageService: xmppService,
-              emailService: emailService,
-            ),
-          ),
-        ],
-        child: const _ArchivedChatBody(),
-      ),
+        );
+      },
     );
   }
 }

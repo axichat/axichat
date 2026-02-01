@@ -459,7 +459,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   /// customize text/style.
   Widget buildScheduleTabLabel(BuildContext context) => Text(
         context.l10n.calendarScheduleLabel,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        style: context.textTheme.small.strong,
       );
 
   /// Builds the tasks tab label so guests can tint it differently.

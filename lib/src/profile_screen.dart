@@ -51,6 +51,14 @@ ConnectionState _xmppStateFor(
   };
 }
 
+EmailSyncState _emailStateFor(
+  ConnectivityState state, {
+  required bool demoOffline,
+}) {
+  if (demoOffline) return const EmailSyncState.ready();
+  return state.emailState;
+}
+
 const double _profileHeaderSpacing = 12.0;
 const double _profileHeaderTextSpacing = 4.0;
 const double _profileHeaderWrapSpacing = 2.0;
@@ -671,9 +679,10 @@ class _ProfileCardSection extends StatelessWidget {
                   alignment: Alignment.center,
                   child: SessionCapabilityIndicators(
                     xmppState: connectionState,
-                    emailState: demoOffline
-                        ? const EmailSyncState.ready()
-                        : connectivityState.emailState,
+                    emailState: _emailStateFor(
+                      connectivityState,
+                      demoOffline: demoOffline,
+                    ),
                     emailEnabled:
                         demoOffline ? true : connectivityState.emailEnabled,
                     compact: !wideCard,

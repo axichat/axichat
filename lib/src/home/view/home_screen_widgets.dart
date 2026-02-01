@@ -72,6 +72,7 @@ class _NexusState extends State<Nexus> {
   void _notifyTabIndex(int index) {
     if (index < 0 || index >= widget.tabs.length) return;
     context.read<HomeSearchCubit>().setActiveTab(widget.tabs[index].id);
+    HomeShellScope.maybeOf(context)?.homeTabIndex.value = index;
   }
 
   @override
@@ -626,6 +627,104 @@ class _HomeShellDefaultBar extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _HomeShellRailLayout extends StatelessWidget {
+  const _HomeShellRailLayout({
+    required this.homeTabs,
+    required this.homeTabIndex,
+    required this.calendarAvailable,
+    required this.collapsed,
+    required this.onCollapsedChanged,
+    required this.child,
+  });
+
+  final ValueListenable<List<HomeTabEntry>> homeTabs;
+  final ValueListenable<int> homeTabIndex;
+  final bool calendarAvailable;
+  final bool collapsed;
+  final ValueChanged<bool> onCollapsedChanged;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<ChatsCubit, ChatsState, bool>(
+      selector: (state) => state.openCalendar,
+      builder: (context, calendarActive) {
+        return AnimatedBuilder(
+          animation: Listenable.merge([homeTabs, homeTabIndex]),
+          builder: (context, _) {
+            final tabs = homeTabs.value;
+            if (tabs.isEmpty) {
+              return child;
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _HomeShellNavigationRail(
+                  tabs: tabs,
+                  selectedIndex: homeTabIndex.value,
+                  collapsed: collapsed,
+                  calendarAvailable: calendarAvailable,
+                  calendarActive: calendarActive,
+                  onCollapsedChanged: onCollapsedChanged,
+                ),
+                Expanded(child: child),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class _HomeShellNavigationRail extends StatelessWidget {
+  const _HomeShellNavigationRail({
+    required this.tabs,
+    required this.selectedIndex,
+    required this.collapsed,
+    required this.calendarAvailable,
+    required this.calendarActive,
+    required this.onCollapsedChanged,
+  });
+
+  final List<HomeTabEntry> tabs;
+  final int selectedIndex;
+  final bool collapsed;
+  final bool calendarAvailable;
+  final bool calendarActive;
+  final ValueChanged<bool> onCollapsedChanged;
+
+  void _openCalendar(BuildContext context) {
+    const HomeRoute().go(context);
+    final chatsCubit = context.read<ChatsCubit>();
+    if (!chatsCubit.state.openCalendar) {
+      chatsCubit.toggleCalendar();
+    }
+  }
+
+  void _selectHomeTab(BuildContext context, int index) {
+    HomeShellScope.maybeOf(context)?.homeTabIndex.value = index;
+    const HomeRoute().go(context);
+    if (context.read<ChatsCubit>().state.openCalendar) {
+      context.read<ChatsCubit>().toggleCalendar();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _HomeNavigationRail(
+      tabs: tabs,
+      selectedIndex: selectedIndex,
+      collapsed: collapsed,
+      onDestinationSelected: (index) => _selectHomeTab(context, index),
+      calendarAvailable: calendarAvailable,
+      calendarActive: calendarActive,
+      onCalendarSelected: () => _openCalendar(context),
+      onCollapsedChanged: onCollapsedChanged,
     );
   }
 }

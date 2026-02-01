@@ -94,11 +94,15 @@ class HomeShellScope extends InheritedWidget {
     super.key,
     required this.pendingCalendarTabIndex,
     required this.calendarTabHost,
+    required this.homeTabIndex,
+    required this.homeTabs,
     required super.child,
   });
 
   final ValueNotifier<int?> pendingCalendarTabIndex;
   final CalendarMobileTabHostController calendarTabHost;
+  final ValueNotifier<int> homeTabIndex;
+  final ValueNotifier<List<HomeTabEntry>> homeTabs;
 
   static HomeShellScope? maybeOf(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<HomeShellScope>();
@@ -107,7 +111,9 @@ class HomeShellScope extends InheritedWidget {
   @override
   bool updateShouldNotify(HomeShellScope oldWidget) {
     return pendingCalendarTabIndex != oldWidget.pendingCalendarTabIndex ||
-        calendarTabHost != oldWidget.calendarTabHost;
+        calendarTabHost != oldWidget.calendarTabHost ||
+        homeTabIndex != oldWidget.homeTabIndex ||
+        homeTabs != oldWidget.homeTabs;
   }
 }
 
@@ -125,11 +131,17 @@ class _HomeShellState extends State<HomeShell> {
       ValueNotifier<int?>(null);
   final CalendarMobileTabHostController _calendarTabHost =
       CalendarMobileTabHostController();
+  final ValueNotifier<int> _homeTabIndex = ValueNotifier<int>(0);
+  final ValueNotifier<List<HomeTabEntry>> _homeTabs =
+      ValueNotifier<List<HomeTabEntry>>(<HomeTabEntry>[]);
+  bool _railCollapsed = true;
 
   @override
   void dispose() {
     _pendingCalendarTabIndex.dispose();
     _calendarTabHost.dispose();
+    _homeTabIndex.dispose();
+    _homeTabs.dispose();
     super.dispose();
   }
 
@@ -143,6 +155,8 @@ class _HomeShellState extends State<HomeShell> {
       return HomeShellScope(
         pendingCalendarTabIndex: _pendingCalendarTabIndex,
         calendarTabHost: _calendarTabHost,
+        homeTabIndex: _homeTabIndex,
+        homeTabs: _homeTabs,
         child: CalendarMobileTabHostScope(
           controller: _calendarTabHost,
           child: child,
@@ -151,7 +165,20 @@ class _HomeShellState extends State<HomeShell> {
     }
 
     if (navPlacement != NavPlacement.bottom) {
-      return buildShellChild(widget.child);
+      return buildShellChild(
+        _HomeShellRailLayout(
+          homeTabs: _homeTabs,
+          homeTabIndex: _homeTabIndex,
+          calendarAvailable: calendarAvailable,
+          collapsed: _railCollapsed,
+          onCollapsedChanged: (value) {
+            setState(() {
+              _railCollapsed = value;
+            });
+          },
+          child: widget.child,
+        ),
+      );
     }
 
     return buildShellChild(
@@ -179,6 +206,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   ValueNotifier<int?>? _pendingCalendarTabIndex;
+  ValueNotifier<int>? _homeTabIndex;
   bool _railCollapsed = true;
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
@@ -198,6 +226,7 @@ class _HomeScreenState extends State<HomeScreen> {
       HardwareKeyboard.instance.removeHandler(handler);
     }
     _pendingCalendarTabIndex?.removeListener(_handlePendingCalendarTabChange);
+    _homeTabIndex?.removeListener(_handleHomeTabIndexChange);
     _shortcutFocusNode.dispose();
     _clearOpenChatHistoryEntry();
     _clearOpenCalendarHistoryEntry();
@@ -300,6 +329,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final chatsState = context.read<ChatsCubit>().state;
     _syncHomeHistoryEntries(chatsState);
     _updatePendingCalendarTabIndexListener();
+    _updateHomeTabIndexListener();
   }
 
   void _updatePendingCalendarTabIndexListener() {
@@ -323,6 +353,34 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!chatsCubit.state.openCalendar) {
       chatsCubit.toggleCalendar();
     }
+  }
+
+  void _updateHomeTabIndexListener() {
+    final scope = HomeShellScope.maybeOf(context);
+    final notifier = scope?.homeTabIndex;
+    if (notifier == _homeTabIndex) {
+      return;
+    }
+    _homeTabIndex?.removeListener(_handleHomeTabIndexChange);
+    _homeTabIndex = notifier;
+    _homeTabIndex?.addListener(_handleHomeTabIndexChange);
+    _handleHomeTabIndexChange();
+  }
+
+  void _handleHomeTabIndexChange() {
+    final notifier = _homeTabIndex;
+    if (notifier == null) {
+      return;
+    }
+    final controller = DefaultTabController.maybeOf(context);
+    if (controller == null || controller.length == 0) {
+      return;
+    }
+    final index = notifier.value.clamp(0, controller.length - 1);
+    if (controller.index == index) {
+      return;
+    }
+    controller.animateTo(index);
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
@@ -361,10 +419,12 @@ class _HomeScreenState extends State<HomeScreen> {
     final storageManager = context.watch<CalendarStorageManager>();
     final pendingCalendarTabIndex =
         HomeShellScope.maybeOf(context)?.pendingCalendarTabIndex;
+    final homeTabsNotifier = HomeShellScope.maybeOf(context)?.homeTabs;
     return _HomeContent(
       storageManager: storageManager,
       shortcutFocusNode: _shortcutFocusNode,
       pendingCalendarTabIndex: pendingCalendarTabIndex,
+      homeTabs: homeTabsNotifier,
       railCollapsed: _railCollapsed,
       onToggleNavRail: () {
         setState(() {
@@ -518,6 +578,7 @@ class _HomeContent extends StatelessWidget {
     required this.storageManager,
     required this.shortcutFocusNode,
     required this.pendingCalendarTabIndex,
+    required this.homeTabs,
     required this.railCollapsed,
     required this.onToggleNavRail,
     required this.onRailCollapsedChanged,
@@ -528,6 +589,7 @@ class _HomeContent extends StatelessWidget {
   final CalendarStorageManager storageManager;
   final FocusNode shortcutFocusNode;
   final ValueNotifier<int?>? pendingCalendarTabIndex;
+  final ValueNotifier<List<HomeTabEntry>>? homeTabs;
   final bool railCollapsed;
   final VoidCallback onToggleNavRail;
   final ValueChanged<bool> onRailCollapsedChanged;
@@ -588,6 +650,7 @@ class _HomeContent extends StatelessWidget {
         searchFilters: blocklistFilters,
       ),
     ];
+    homeTabs?.value = tabs;
     if (tabs.isEmpty) {
       return Scaffold(body: Center(child: Text(l10n.homeNoModules)));
     }
@@ -616,29 +679,6 @@ class _HomeContent extends StatelessWidget {
                       final bool openCalendar =
                           hasCalendarBloc && chatsState.openCalendar;
                       final chatRoute = chatsState.openChatRoute;
-                      final navRail = navPlacement == NavPlacement.rail
-                          ? _HomeNavigationRail(
-                              tabs: tabs,
-                              selectedIndex:
-                                  DefaultTabController.maybeOf(context)
-                                          ?.index ??
-                                      0,
-                              collapsed: railCollapsed,
-                              onDestinationSelected: (index) {
-                                final controller =
-                                    DefaultTabController.maybeOf(context);
-                                if (controller == null) return;
-                                controller.animateTo(index);
-                              },
-                              calendarAvailable: hasCalendarBloc,
-                              calendarActive: openCalendar,
-                              onCalendarSelected: () {
-                                context.read<ChatsCubit>().toggleCalendar();
-                              },
-                              onCollapsedChanged: onRailCollapsedChanged,
-                            )
-                          : null;
-
                       final Widget chatPaneContent = openJid == null
                           ? const GuestChat()
                           : MultiBlocProvider(
@@ -723,7 +763,6 @@ class _HomeContent extends StatelessWidget {
                         final Widget content = Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (navRail != null) navRail,
                             Expanded(
                               child: AxiAdaptiveLayout(
                                 invertPriority: openJid != null,
@@ -753,7 +792,6 @@ class _HomeContent extends StatelessWidget {
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (navRail != null) navRail,
                             Expanded(
                               child: CalendarWidget(
                                 pendingMobileTabIndex: pendingCalendarTabIndex,

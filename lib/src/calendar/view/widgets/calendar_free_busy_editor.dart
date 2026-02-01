@@ -1775,8 +1775,8 @@ class _FreeBusySheetActions extends StatelessWidget {
           ),
         ),
         const SizedBox(width: _freeBusySheetActionSpacing),
-        ShadButton.outline(
-          size: ShadButtonSize.sm,
+        AxiButton.outline(
+          size: AxiButtonSize.sm,
           onPressed: onSplit,
           child: Text(context.l10n.calendarFreeBusySplitLabel),
         ),

@@ -288,11 +288,8 @@ class _ReminderAdvancedActiveBadge extends StatelessWidget {
       ),
       child: Text(
         _reminderAdvancedActiveLabel,
-        style: TextStyle(
-          color: colors.mutedForeground,
-          fontSize: _reminderAdvancedBadgeFontSize,
-          fontWeight: FontWeight.w600,
-        ),
+        style: context.textTheme.caption.strong
+            .copyWith(color: colors.mutedForeground),
       ),
     );
   }
@@ -343,11 +340,8 @@ class _ReminderSection extends StatelessWidget {
                 ),
                 child: Text(
                   'Mixed',
-                  style: TextStyle(
-                    color: colors.mutedForeground,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: context.textTheme.caption.strong
+                      .copyWith(color: colors.mutedForeground),
                 ),
               ),
           ],
@@ -361,11 +355,6 @@ class _ReminderSection extends StatelessWidget {
                 (Duration option) => _ReminderChip(
                   label: _labelFor(l10n, option),
                   selected: selected.contains(option),
-                  padding: chipPadding ??
-                      const EdgeInsets.symmetric(
-                        horizontal: calendarGutterMd,
-                        vertical: calendarGutterSm,
-                      ),
                   onTap: () => onOptionToggled(option),
                 ),
               )
@@ -398,44 +387,26 @@ class _ReminderChip extends StatelessWidget {
   const _ReminderChip({
     required this.label,
     required this.selected,
-    required this.padding,
     required this.onTap,
   });
 
   final String label;
   final bool selected;
-  final EdgeInsets padding;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final ShadColorScheme colors = context.colorScheme;
-    final Color unselectedBackground = colors.muted.withValues(
-      alpha: 0.12,
-    ); // light grey that adapts to theme
-    final Color unselectedHover = colors.muted.withValues(
-      alpha: 0.2,
-    ); // slightly darker on hover
-    final Color selectedForeground = colors.primaryForeground;
-    return ShadButton.raw(
-      variant: selected ? ShadButtonVariant.primary : ShadButtonVariant.outline,
-      size: ShadButtonSize.sm,
-      padding: padding,
-      backgroundColor: selected ? calendarPrimaryColor : unselectedBackground,
-      hoverBackgroundColor:
-          selected ? calendarPrimaryHoverColor : unselectedHover,
-      foregroundColor: selected ? selectedForeground : calendarPrimaryColor,
-      hoverForegroundColor:
-          selected ? selectedForeground : calendarPrimaryHoverColor,
+    return AxiButton(
+      variant: selected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
+      size: AxiButtonSize.sm,
+      selected: selected,
       onPressed: onTap,
       child: Text(
         label,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
+        style: context.textTheme.caption.strong.copyWith(
           letterSpacing: 0.2,
         ),
       ),
-    ).withTapBounce();
+    );
   }
 }
