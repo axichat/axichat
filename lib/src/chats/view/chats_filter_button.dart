@@ -11,8 +11,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ChatsFilterButton extends StatefulWidget {
-  const ChatsFilterButton({super.key, this.compact = false});
+  const ChatsFilterButton({
+    super.key,
+    required this.locate,
+    this.compact = false,
+  });
 
+  final T Function<T>() locate;
   final bool compact;
 
   @override
@@ -37,6 +42,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<HomeSearchCubit, HomeSearchState>(
+      bloc: widget.locate<HomeSearchCubit>(),
       builder: (context, searchState) {
         final l10n = context.l10n;
         final sizing = context.sizing;
@@ -81,7 +87,7 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                         : null,
                     label: option.label,
                     onPressed: () {
-                      context.read<HomeSearchCubit>().updateFilter(
+                      widget.locate<HomeSearchCubit>().updateFilter(
                             option.id,
                             tab: HomeTab.chats,
                           );

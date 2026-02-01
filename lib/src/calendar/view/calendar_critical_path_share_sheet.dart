@@ -34,6 +34,7 @@ Future<void> showCalendarCriticalPathShareSheet({
   required List<CalendarTask> tasks,
   Chat? initialChat,
 }) async {
+  final locate = context.read;
   final List<Chat> chats =
       context.read<ChatsCubit>().state.items ?? const <Chat>[];
   final List<Chat> available =
@@ -55,6 +56,7 @@ Future<void> showCalendarCriticalPathShareSheet({
       tasks: tasks,
       availableChats: available,
       initialChat: initialChat,
+      locate: locate,
     ),
   );
   if (result != true || !context.mounted) {
@@ -72,12 +74,14 @@ class CalendarCriticalPathShareSheet extends StatefulWidget {
     required this.path,
     required this.tasks,
     required this.availableChats,
+    required this.locate,
     this.initialChat,
   });
 
   final CalendarCriticalPath path;
   final List<CalendarTask> tasks;
   final List<Chat> availableChats;
+  final T Function<T>() locate;
   final Chat? initialChat;
 
   @override
@@ -111,7 +115,7 @@ class _CalendarCriticalPathShareSheetState
       return;
     }
     final bool shareSignatureEnabled = initialChat.shareSignatureEnabled ??
-        context.watch<SettingsCubit>().state.shareTokenSignatureEnabled;
+        widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled;
     _recipients = <ComposerRecipient>[
       ComposerRecipient(
         target: FanOutTarget.chat(
@@ -127,8 +131,8 @@ class _CalendarCriticalPathShareSheetState
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
     final recipientSuggestionsStream =
-        context.watch<ChatsCubit>().recipientAddressSuggestionsStream();
-    final chatsSelfJid = context.watch<ChatsCubit>().selfJid;
+        widget.locate<ChatsCubit>().recipientAddressSuggestionsStream();
+    final chatsSelfJid = widget.locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
     final String? selfJid =

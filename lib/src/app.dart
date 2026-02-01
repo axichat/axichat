@@ -7,10 +7,13 @@ import 'dart:io';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
+import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
@@ -19,6 +22,8 @@ import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/demo/demo_calendar.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
@@ -31,6 +36,7 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -175,12 +181,14 @@ class _AxichatState extends State<Axichat> {
           buildWhen: (previous, current) =>
               previous.endpointConfig != current.endpointConfig,
           builder: (context, settings) {
-            final endpointConfig = settings.endpointConfig;
-            final bool emailEnabled = endpointConfig.enableSmtp;
-            return MultiRepositoryProvider(
-              providers: [
-                if (emailEnabled)
-                  RepositoryProvider<EmailService>(
+        final endpointConfig = settings.endpointConfig;
+        final bool emailEnabled = endpointConfig.enableSmtp;
+        final storageManager = context.watch<CalendarStorageManager>();
+        final Storage? calendarStorage = storageManager.authStorage;
+        return MultiRepositoryProvider(
+          providers: [
+            if (emailEnabled)
+              RepositoryProvider<EmailService>(
                     create: (context) => EmailService(
                       credentialStore: context.read<CredentialStore>(),
                       databaseBuilder: () =>
@@ -220,6 +228,23 @@ class _AxichatState extends State<Axichat> {
                     create: (context) => ShareIntentCubit()..initialize(),
                   ),
                   BlocProvider(
+                    create: (context) {
+                      final xmppService = context.read<XmppService>();
+                      final omemoService =
+                          xmppService is OmemoService ? xmppService : null;
+                      return ProfileCubit(
+                        xmppService: xmppService,
+                        presenceService: xmppService as PresenceService,
+                        omemoService: omemoService,
+                      );
+                    },
+                  ),
+                  BlocProvider(
+                    create: (context) => BlocklistCubit(
+                      xmppService: context.read<XmppService>(),
+                    ),
+                  ),
+                  BlocProvider(
                     create: (context) => ChatsCubit(
                       xmppService: context.read<XmppService>(),
                       homeRefreshSyncService:
@@ -246,6 +271,83 @@ class _AxichatState extends State<Axichat> {
                     ),
                   ),
                   BlocProvider(create: (context) => ComposeWindowCubit()),
+                  if (calendarStorage != null)
+                    BlocProvider<CalendarBloc>(
+                      create: (context) {
+                        final reminderController =
+                            context.read<CalendarReminderController>();
+                        final xmppService = context.read<XmppService>();
+                        final endpointConfig = context
+                            .read<AuthenticationCubit>()
+                            .endpointConfig;
+                        final emailService = endpointConfig.enableSmtp
+                            ? context.read<EmailService>()
+                            : null;
+                        const bool seedDemoCalendar = kEnableDemoChats;
+                        final storage = calendarStorage;
+
+                        final CalendarBloc bloc = CalendarBloc(
+                          xmppService: xmppService,
+                          emailService: emailService,
+                          reminderController: reminderController,
+                          syncManagerBuilder: (bloc) {
+                            final manager = CalendarSyncManager(
+                              readModel: () => bloc.currentModel,
+                              applyModel: (model) async {
+                                if (bloc.isClosed) return;
+                                bloc.add(
+                                  CalendarEvent.remoteModelApplied(
+                                    model: model,
+                                  ),
+                                );
+                              },
+                              sendCalendarMessage: (outbound) async {
+                                if (bloc.isClosed) {
+                                  return;
+                                }
+                                final jid = xmppService.myJid;
+                                if (jid != null) {
+                                  await xmppService.sendCalendarSyncMessage(
+                                    jid: jid,
+                                    outbound: outbound,
+                                  );
+                                }
+                              },
+                              sendSnapshotFile: xmppService.uploadCalendarSnapshot,
+                            );
+
+                            xmppService
+                              ..setCalendarSyncCallback((inbound) async {
+                                if (bloc.isClosed) return false;
+                                return await manager.onCalendarMessage(inbound);
+                              })
+                              ..setCalendarSyncWarningCallback((warning) async {
+                                if (bloc.isClosed) return;
+                                bloc.add(
+                                  CalendarEvent.syncWarningRaised(
+                                    warning: warning,
+                                  ),
+                                );
+                              });
+                            return manager;
+                          },
+                          storage: storage,
+                          onDispose: () {
+                            xmppService
+                              ..clearCalendarSyncCallback()
+                              ..clearCalendarSyncWarningCallback();
+                          },
+                        )..add(const CalendarEvent.started());
+                        if (seedDemoCalendar) {
+                          bloc.add(
+                            CalendarEvent.remoteModelApplied(
+                              model: DemoCalendar.franklin(anchor: demoNow()),
+                            ),
+                          );
+                        }
+                        return bloc;
+                      },
+                    ),
                   if (widget._storageManager.guestStorage != null)
                     BlocProvider(
                       create: (context) => GuestCalendarBloc(

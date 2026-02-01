@@ -32,6 +32,7 @@ Future<void> showCalendarTaskShareSheet({
   required CalendarTask task,
 }) async {
   final l10n = context.l10n;
+  final locate = context.read;
   final List<Chat> chats =
       context.read<ChatsCubit>().state.items ?? const <Chat>[];
   final List<Chat> available =
@@ -48,6 +49,7 @@ Future<void> showCalendarTaskShareSheet({
     builder: (sheetContext) => CalendarTaskShareSheet(
       task: task,
       availableChats: available,
+      locate: locate,
     ),
   );
   if (result != true || !context.mounted) {
@@ -61,10 +63,12 @@ class CalendarTaskShareSheet extends StatefulWidget {
     super.key,
     required this.task,
     required this.availableChats,
+    required this.locate,
   });
 
   final CalendarTask task;
   final List<Chat> availableChats;
+  final T Function<T>() locate;
 
   @override
   State<CalendarTaskShareSheet> createState() => _CalendarTaskShareSheetState();
@@ -93,8 +97,8 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
     final recipientSuggestionsStream =
-        context.watch<ChatsCubit>().recipientAddressSuggestionsStream();
-    final chatsSelfJid = context.watch<ChatsCubit>().selfJid;
+        widget.locate<ChatsCubit>().recipientAddressSuggestionsStream();
+    final chatsSelfJid = widget.locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
     final String? selfJid =

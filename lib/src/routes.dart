@@ -27,6 +27,14 @@ mixin AuthenticationRouteData on GoRouteData {
   bool get authenticationRequired;
 }
 
+T Function<T>() _resolveLocate(BuildContext context, GoRouterState state) {
+  final extra = state.extra;
+  if (extra is T Function<T>()) {
+    return extra;
+  }
+  return context.read;
+}
+
 final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const HomeRoute().location: const HomeRoute(),
   const ProfileRoute().location: const ProfileRoute(),
@@ -102,7 +110,7 @@ class ProfileRoute extends TransitionGoRouteData with AuthenticationRouteData {
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      ProfileScreen(locate: state.extra! as T Function<T>());
+      ProfileScreen(locate: _resolveLocate(context, state));
 }
 
 @TypedGoRoute<AvatarEditorRoute>(path: AvatarEditorRoute.path)
@@ -117,7 +125,7 @@ class AvatarEditorRoute extends TransitionGoRouteData
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      AvatarEditorScreen(locate: state.extra! as T Function<T>());
+      AvatarEditorScreen(locate: _resolveLocate(context, state));
 }
 
 @TypedGoRoute<ArchivesRoute>(path: ArchivesRoute.path)
@@ -131,7 +139,7 @@ class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      ArchivesScreen(locate: state.extra! as T Function<T>());
+      ArchivesScreen(locate: _resolveLocate(context, state));
 }
 
 @TypedGoRoute<AttachmentGalleryRoute>(path: AttachmentGalleryRoute.path)
@@ -146,7 +154,7 @@ class AttachmentGalleryRoute extends TransitionGoRouteData
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      AttachmentGalleryScreen(locate: state.extra! as T Function<T>());
+      AttachmentGalleryScreen(locate: _resolveLocate(context, state));
 }
 
 @TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path)
@@ -163,7 +171,7 @@ class ArchivedChatRoute extends TransitionGoRouteData
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      ArchivedChatScreen(locate: state.extra! as T Function<T>(), jid: jid);
+      ArchivedChatScreen(locate: _resolveLocate(context, state), jid: jid);
 }
 
 @TypedGoRoute<GuestCalendarRoute>(path: '/guest-calendar')

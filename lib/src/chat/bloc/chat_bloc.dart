@@ -485,7 +485,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   int? _emailUnreadBoundaryUnreadCount;
   String? _lastOccupantTrackedStanzaId;
   bool _needsUnreadBootstrap = false;
-  bool _loadEarlierInFlight = false;
+  Future<void> _loadEarlierQueue = Future<void>.value();
 
   RestartableTimer? _typingTimer;
 
@@ -1239,7 +1239,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _lastNoticedEmailUnreadCount = null;
       _emailUnreadBoundaryDeltaId = null;
       _emailUnreadBoundaryUnreadCount = null;
-      _loadEarlierInFlight = false;
+      _loadEarlierQueue = Future<void>.value();
       _lastOccupantTrackedStanzaId = null;
       _attachmentMapsSignature = null;
       _cachedAttachmentIdsByMessageId = const <String, List<String>>{};
@@ -3284,36 +3284,40 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _omemoService?.recreateSessions(jid: jid!);
   }
 
-  Future<void> loadEarlier() async {
-    if (_loadEarlierInFlight) {
-      return;
-    }
-    final chat = state.chat;
-    if (chat == null) {
-      return;
-    }
-    final nextLimit = state.items.length + messageBatchSize;
-    await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
-    final canPageNetwork = _isEmailChat
-        ? _canPageEmailHistory(chat)
-        : await _canPageMam(chat) && !_mamComplete;
-    if (!canPageNetwork) {
-      return;
-    }
-    _loadEarlierInFlight = true;
-    try {
-      if (_isEmailChat) {
-        if (_canPageEmailHistory(chat)) {
-          await _loadEarlierFromEmail(desiredWindow: nextLimit);
-        }
+  Future<void> loadEarlier() {
+    _loadEarlierQueue = _loadEarlierQueue.then((_) async {
+      final chat = state.chat;
+      if (chat == null) {
         return;
       }
-      if (await _canPageMam(chat)) {
-        await _loadEarlierFromMam(desiredWindow: nextLimit);
+      final chatJid = chat.jid;
+      final nextLimit = state.items.length + messageBatchSize;
+      await _subscribeToMessages(limit: nextLimit, filter: state.viewFilter);
+      if (state.chat?.jid != chatJid) {
+        return;
       }
-    } finally {
-      _loadEarlierInFlight = false;
-    }
+      final canPageNetwork = chat.defaultTransport.isEmail
+          ? _canPageEmailHistory(chat)
+          : await _canPageMam(chat) && !_mamComplete;
+      if (!canPageNetwork) {
+        return;
+      }
+      if (chat.defaultTransport.isEmail) {
+        await _loadEarlierFromEmail(desiredWindow: nextLimit);
+        return;
+      }
+      await _loadEarlierFromMam(desiredWindow: nextLimit);
+    }).onError((error, stackTrace) {
+      if (error is Exception) {
+        _log.safeFine('Failed to load earlier', error, stackTrace);
+        return;
+      }
+      if (error == null) {
+        Error.throwWithStackTrace(StateError('Unknown error'), stackTrace);
+      }
+      Error.throwWithStackTrace(error, stackTrace);
+    });
+    return _loadEarlierQueue;
   }
 
   Future<void> _onChatAlertHidden(

@@ -653,7 +653,9 @@ String? _attachmentLabelFor(
 String _messageId(Message message) => message.id ?? message.stanzaID;
 
 class AccessibilityActionMenu extends StatefulWidget {
-  const AccessibilityActionMenu({super.key});
+  const AccessibilityActionMenu({super.key, this.chatLocate});
+
+  final T Function<T>()? chatLocate;
 
   @override
   State<AccessibilityActionMenu> createState() =>
@@ -2900,7 +2902,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
   Widget build(BuildContext context) {
     final items = _items;
     final spacing = context.spacing;
-    final locate = context.read;
+    final chatLocate = widget.chatLocate;
     final hasFocus = widget.focusNode.hasFocus;
     final hasItems = items.isNotEmpty;
     final clampedIndex = _currentIndex.clamp(
@@ -3011,18 +3013,23 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                           attachment,
                         ),
                         allowed: true,
-                        downloadDelegate: AttachmentDownloadDelegate(
-                          () => locate<ChatBloc>().downloadInboundAttachment(
-                            metadataId: attachment.id,
-                            stanzaId: currentMessage?.stanzaID ?? '',
-                          ),
-                        ),
-                        metadataReloadDelegate:
-                            AttachmentMetadataReloadDelegate(
-                          () => locate<ChatBloc>().reloadFileMetadata(
-                            attachment.id,
-                          ),
-                        ),
+                        downloadDelegate: chatLocate == null
+                            ? null
+                            : AttachmentDownloadDelegate(
+                                () => chatLocate<ChatBloc>()
+                                    .downloadInboundAttachment(
+                                      metadataId: attachment.id,
+                                      stanzaId: currentMessage?.stanzaID ?? '',
+                                    ),
+                              ),
+                        metadataReloadDelegate: chatLocate == null
+                            ? null
+                            : AttachmentMetadataReloadDelegate(
+                                () => chatLocate<ChatBloc>()
+                                    .reloadFileMetadata(
+                                      attachment.id,
+                                    ),
+                              ),
                       ),
                     )
                   else if (attachmentLabel != null && rawBody.isEmpty)

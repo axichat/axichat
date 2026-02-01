@@ -201,14 +201,22 @@ class _HomeShellState extends State<HomeShell> {
     ];
 
     Widget buildShellChild(Widget child) {
-      return HomeShellScope(
-        pendingCalendarTabIndex: _pendingCalendarTabIndex,
-        calendarTabHost: _calendarTabHost,
-        homeTabIndex: _homeTabIndex,
-        tabs: tabs,
-        child: CalendarMobileTabHostScope(
-          controller: _calendarTabHost,
-          child: child,
+      return BlocProvider(
+        create: (context) => AccessibilityActionBloc(
+          chatsService: context.read<XmppService>(),
+          messageService: context.read<XmppService>(),
+          rosterService: context.read<XmppService>() as RosterService,
+          initialLocalization: context.l10n,
+        ),
+        child: HomeShellScope(
+          pendingCalendarTabIndex: _pendingCalendarTabIndex,
+          calendarTabHost: _calendarTabHost,
+          homeTabIndex: _homeTabIndex,
+          tabs: tabs,
+          child: CalendarMobileTabHostScope(
+            controller: _calendarTabHost,
+            child: child,
+          ),
         ),
       );
     }
@@ -260,21 +268,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _railCollapsed = true;
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
-  bool Function(KeyEvent event)? _globalShortcutHandler;
-
-  @override
-  void initState() {
-    super.initState();
-    _globalShortcutHandler = _handleGlobalShortcut;
-    HardwareKeyboard.instance.addHandler(_globalShortcutHandler!);
-  }
 
   @override
   void dispose() {
-    final handler = _globalShortcutHandler;
-    if (handler != null) {
-      HardwareKeyboard.instance.removeHandler(handler);
-    }
     _pendingCalendarTabIndex?.removeListener(_handlePendingCalendarTabChange);
     _homeTabIndex?.removeListener(_handleHomeTabIndexChange);
     _shortcutFocusNode.dispose();
@@ -427,37 +423,6 @@ class _HomeScreenState extends State<HomeScreen> {
     controller.animateTo(index);
   }
 
-  KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
-    if (!_isFindActionEvent(event)) return KeyEventResult.ignored;
-    context.read<AccessibilityActionBloc>().add(
-          const AccessibilityMenuOpened(),
-        );
-    return KeyEventResult.handled;
-  }
-
-  bool _isFindActionEvent(KeyEvent event) {
-    if (event is! KeyDownEvent) return false;
-    final pressedKeys = HardwareKeyboard.instance.logicalKeysPressed;
-    final hasMeta = pressedKeys.contains(LogicalKeyboardKey.metaLeft) ||
-        pressedKeys.contains(LogicalKeyboardKey.metaRight) ||
-        pressedKeys.contains(LogicalKeyboardKey.meta);
-    final hasControl = pressedKeys.contains(LogicalKeyboardKey.controlLeft) ||
-        pressedKeys.contains(LogicalKeyboardKey.controlRight) ||
-        pressedKeys.contains(LogicalKeyboardKey.control);
-    final shouldOpen =
-        event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);
-    final locate = context.read;
-    return shouldOpen && !locate<AccessibilityActionBloc>().isClosed;
-  }
-
-  bool _handleGlobalShortcut(KeyEvent event) {
-    if (!mounted || !_isFindActionEvent(event)) return false;
-    context.read<AccessibilityActionBloc>().add(
-          const AccessibilityMenuOpened(),
-        );
-    return true;
-  }
-
   @override
   Widget build(BuildContext context) {
     final storageManager = context.watch<CalendarStorageManager>();
@@ -482,7 +447,6 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       },
       onSyncHomeHistoryEntries: _syncHomeHistoryEntries,
-      onHomeKeyEvent: _handleHomeKeyEvent,
     );
   }
 }
@@ -628,7 +592,6 @@ class _HomeContent extends StatelessWidget {
     required this.onToggleNavRail,
     required this.onRailCollapsedChanged,
     required this.onSyncHomeHistoryEntries,
-    required this.onHomeKeyEvent,
   });
 
   final CalendarStorageManager storageManager;
@@ -639,7 +602,6 @@ class _HomeContent extends StatelessWidget {
   final VoidCallback onToggleNavRail;
   final ValueChanged<bool> onRailCollapsedChanged;
   final ValueChanged<ChatsState> onSyncHomeHistoryEntries;
-  final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
 
   @override
   Widget build(BuildContext context) {
@@ -651,6 +613,9 @@ class _HomeContent extends StatelessWidget {
     final navPlacement = env.navPlacement;
     final Storage? calendarStorage = storageManager.authStorage;
     final bool hasCalendarBloc = storageManager.isAuthStorageReady;
+    final String? openJid = context.select<ChatsCubit, String?>(
+      (cubit) => cubit.state.openJid,
+    );
     if (tabs.isEmpty) {
       return Scaffold(body: Center(child: Text(l10n.homeNoModules)));
     }
@@ -675,85 +640,12 @@ class _HomeContent extends StatelessWidget {
                   child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
                     builder: (context, state) {
                       final chatsState = context.watch<ChatsCubit>().state;
-                      final String? openJid = chatsState.openJid;
                       final bool openCalendar =
                           hasCalendarBloc && chatsState.openCalendar;
                       final chatRoute = chatsState.openChatRoute;
                       final Widget chatPaneContent = openJid == null
                           ? const GuestChat()
-                          : MultiBlocProvider(
-                              providers: [
-                                BlocProvider(
-                                  key: Key(openJid),
-                                  create: (context) {
-                                    final settings =
-                                        context.read<SettingsCubit>().state;
-                                    final endpointConfig = context
-                                        .read<AuthenticationCubit>()
-                                        .endpointConfig;
-                                    final emailService =
-                                        endpointConfig.enableSmtp
-                                            ? context.read<EmailService>()
-                                            : null;
-                                    return ChatBloc(
-                                      jid: openJid,
-                                      messageService:
-                                          context.read<XmppService>(),
-                                      chatsService: context.read<XmppService>(),
-                                      mucService: context.read<XmppService>(),
-                                      notificationService:
-                                          context.read<NotificationService>(),
-                                      emailService: emailService,
-                                      omemoService: isOmemo
-                                          ? context.read<XmppService>()
-                                              as OmemoService
-                                          : null,
-                                      settings: ChatSettingsSnapshot(
-                                        language: settings.language,
-                                        chatReadReceipts:
-                                            settings.chatReadReceipts,
-                                        emailReadReceipts:
-                                            settings.emailReadReceipts,
-                                        shareTokenSignatureEnabled:
-                                            settings.shareTokenSignatureEnabled,
-                                        autoDownloadImages:
-                                            settings.autoDownloadImages,
-                                        autoDownloadVideos:
-                                            settings.autoDownloadVideos,
-                                        autoDownloadDocuments:
-                                            settings.autoDownloadDocuments,
-                                        autoDownloadArchives:
-                                            settings.autoDownloadArchives,
-                                      ),
-                                    );
-                                  },
-                                ),
-                                BlocProvider(
-                                  create: (context) => ChatSearchCubit(
-                                    jid: openJid,
-                                    messageService: context.read<XmppService>(),
-                                    emailService: context
-                                            .read<AuthenticationCubit>()
-                                            .endpointConfig
-                                            .enableSmtp
-                                        ? context.read<EmailService>()
-                                        : null,
-                                  ),
-                                ),
-                                /* Verification flow temporarily disabled
-                                if (isOmemo)
-                                  BlocProvider(
-                                    create: (context) => VerificationCubit(
-                                      jid: openJid,
-                                      omemoService:
-                                          context.read<XmppService>()
-                                              as OmemoService,
-                                    ),
-                                  ),
-                                */
-                              ],
-                              child: const Chat(),
-                            );
+                          : const Chat();
                       final Widget chatPane = Align(
                         alignment: Alignment.topLeft,
                         child: chatPaneContent,
@@ -856,92 +748,6 @@ class _HomeContent extends StatelessWidget {
               ),
             ),
             BlocProvider(
-              create: (context) => ProfileCubit(
-                xmppService: context.read<XmppService>(),
-                presenceService: context.read<XmppService>() as PresenceService,
-                omemoService: isOmemo
-                    ? context.read<XmppService>() as OmemoService
-                    : null,
-              ),
-            ),
-            BlocProvider(
-              create: (context) =>
-                  BlocklistCubit(xmppService: context.read<XmppService>()),
-            ),
-            // Always provide CalendarBloc for logged-in users
-            if (calendarStorage != null)
-              BlocProvider<CalendarBloc>(
-                create: (context) {
-                  final reminderController =
-                      context.read<CalendarReminderController>();
-                  final xmppService = context.read<XmppService>();
-                  final endpointConfig =
-                      context.read<AuthenticationCubit>().endpointConfig;
-                  final emailService = endpointConfig.enableSmtp
-                      ? context.read<EmailService>()
-                      : null;
-                  const bool seedDemoCalendar = kEnableDemoChats;
-                  final storage = calendarStorage;
-
-                  final CalendarBloc bloc = CalendarBloc(
-                    xmppService: xmppService,
-                    emailService: emailService,
-                    reminderController: reminderController,
-                    syncManagerBuilder: (bloc) {
-                      final manager = CalendarSyncManager(
-                        readModel: () => bloc.currentModel,
-                        applyModel: (model) async {
-                          if (bloc.isClosed) return;
-                          bloc.add(
-                            CalendarEvent.remoteModelApplied(model: model),
-                          );
-                        },
-                        sendCalendarMessage: (outbound) async {
-                          if (bloc.isClosed) {
-                            return;
-                          }
-                          final jid = xmppService.myJid;
-                          if (jid != null) {
-                            await xmppService.sendCalendarSyncMessage(
-                              jid: jid,
-                              outbound: outbound,
-                            );
-                          }
-                        },
-                        sendSnapshotFile: xmppService.uploadCalendarSnapshot,
-                      );
-
-                      xmppService
-                        ..setCalendarSyncCallback((inbound) async {
-                          if (bloc.isClosed) return false;
-                          return await manager.onCalendarMessage(inbound);
-                        })
-                        ..setCalendarSyncWarningCallback((warning) async {
-                          if (bloc.isClosed) return;
-                          bloc.add(
-                            CalendarEvent.syncWarningRaised(warning: warning),
-                          );
-                        });
-                      return manager;
-                    },
-                    storage: storage,
-                    onDispose: () {
-                      xmppService
-                        ..clearCalendarSyncCallback()
-                        ..clearCalendarSyncWarningCallback();
-                    },
-                  )..add(const CalendarEvent.started());
-                  if (seedDemoCalendar) {
-                    bloc.add(
-                      CalendarEvent.remoteModelApplied(
-                        model: DemoCalendar.franklin(anchor: demoNow()),
-                      ),
-                    );
-                  }
-                  return bloc;
-                },
-              ),
-            BlocProvider(
               create: (context) {
                 final endpointConfig =
                     context.read<AuthenticationCubit>().endpointConfig;
@@ -962,93 +768,225 @@ class _HomeContent extends StatelessWidget {
         ),
       ),
     );
-    final actionLayer = BlocProvider(
-      create: (context) {
-        final bloc = AccessibilityActionBloc(
-          chatsService: context.read<XmppService>(),
-          messageService: context.read<XmppService>(),
-          rosterService: context.read<XmppService>() as RosterService,
-          initialLocalization: l10n,
-        );
-        return bloc;
-      },
-      child: Builder(
-        builder: (context) {
-          final platform = EnvScope.of(context).platform;
-          final isApple = platform == TargetPlatform.macOS ||
-              platform == TargetPlatform.iOS;
-          final findActivators = findActionActivators(platform);
-          final composeActivator = SingleActivator(
-            LogicalKeyboardKey.keyN,
-            meta: isApple,
-            control: !isApple,
-          );
-          final searchActivator = SingleActivator(
-            LogicalKeyboardKey.keyF,
-            meta: isApple,
-            control: !isApple,
-          );
-          final calendarActivator = SingleActivator(
-            LogicalKeyboardKey.keyC,
-            meta: isApple,
-            control: !isApple,
-            shift: true,
-          );
-          return Focus(
-            focusNode: shortcutFocusNode,
-            autofocus: true,
-            onKeyEvent: onHomeKeyEvent,
-            child: Shortcuts(
-              shortcuts: {
-                composeActivator: const ComposeIntent(),
-                searchActivator: const ToggleSearchIntent(),
-                if (EnvScope.of(context).supportsDesktopShortcuts)
-                  calendarActivator: const ToggleCalendarIntent(),
-                for (final activator in findActivators)
-                  activator: const OpenFindActionIntent(),
-              },
-              child: Actions(
-                actions: {
-                  ComposeIntent: CallbackAction<ComposeIntent>(
-                    onInvoke: (_) {
-                      openComposeDraft(
-                        context,
-                        attachmentMetadataIds: const <String>[],
-                      );
-                      return null;
-                    },
-                  ),
-                  ToggleSearchIntent: CallbackAction<ToggleSearchIntent>(
-                    onInvoke: (_) {
-                      context.read<HomeSearchCubit>().toggleSearch();
-                      return null;
-                    },
-                  ),
-                  ToggleCalendarIntent: CallbackAction<ToggleCalendarIntent>(
-                    onInvoke: (_) {
-                      if (!hasCalendarBloc) return null;
-                      context.read<ChatsCubit>().toggleCalendar();
-                      return null;
-                    },
-                  ),
-                  OpenFindActionIntent: CallbackAction<OpenFindActionIntent>(
-                    onInvoke: (_) {
-                      context.read<AccessibilityActionBloc>().add(
-                            const AccessibilityMenuOpened(),
-                          );
-                      return null;
-                    },
-                  ),
-                },
-                child: Stack(
-                  children: [scaffold, const AccessibilityActionMenu()],
-                ),
+    final Widget baseLayer = _HomeActionLayer(
+      hasCalendarBloc: hasCalendarBloc,
+      shortcutFocusNode: shortcutFocusNode,
+      onHomeKeyEvent: onHomeKeyEvent,
+      child: scaffold,
+    );
+    if (openJid == null) {
+      return baseLayer;
+    }
+    final String resolvedJid = openJid;
+    return MultiBlocProvider(
+      key: ValueKey(resolvedJid),
+      providers: [
+        BlocProvider(
+          create: (context) {
+            final settings = context.read<SettingsCubit>().state;
+            final endpointConfig =
+                context.read<AuthenticationCubit>().endpointConfig;
+            final emailService = endpointConfig.enableSmtp
+                ? context.read<EmailService>()
+                : null;
+            return ChatBloc(
+              jid: resolvedJid,
+              messageService: context.read<XmppService>(),
+              chatsService: context.read<XmppService>(),
+              mucService: context.read<XmppService>(),
+              notificationService: context.read<NotificationService>(),
+              emailService: emailService,
+              omemoService:
+                  isOmemo ? context.read<XmppService>() as OmemoService : null,
+              settings: ChatSettingsSnapshot(
+                language: settings.language,
+                chatReadReceipts: settings.chatReadReceipts,
+                emailReadReceipts: settings.emailReadReceipts,
+                shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
+                autoDownloadImages: settings.autoDownloadImages,
+                autoDownloadVideos: settings.autoDownloadVideos,
+                autoDownloadDocuments: settings.autoDownloadDocuments,
+                autoDownloadArchives: settings.autoDownloadArchives,
               ),
+            );
+          },
+        ),
+        BlocProvider(
+          create: (context) => ChatSearchCubit(
+            jid: resolvedJid,
+            messageService: context.read<XmppService>(),
+            emailService:
+                context.read<AuthenticationCubit>().endpointConfig.enableSmtp
+                    ? context.read<EmailService>()
+                    : null,
+          ),
+        ),
+        /* Verification flow temporarily disabled
+        if (isOmemo)
+          BlocProvider(
+            create: (context) => VerificationCubit(
+              jid: openJid,
+              omemoService: context.read<XmppService>() as OmemoService,
             ),
-          );
-        },
+          ),
+        */
+      ],
+      child: Builder(
+        builder: (context) => _HomeActionLayer(
+          hasCalendarBloc: hasCalendarBloc,
+          shortcutFocusNode: shortcutFocusNode,
+          onHomeKeyEvent: onHomeKeyEvent,
+          chatLocate: context.read,
+          child: scaffold,
+        ),
       ),
     );
-    return actionLayer;
   }
+}
+
+class _HomeActionLayer extends StatelessWidget {
+  const _HomeActionLayer({
+    required this.hasCalendarBloc,
+    required this.shortcutFocusNode,
+    required this.onHomeKeyEvent,
+    required this.child,
+    this.chatLocate,
+  });
+
+  final bool hasCalendarBloc;
+  final FocusNode shortcutFocusNode;
+  final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
+  final Widget child;
+  final T Function<T>()? chatLocate;
+
+  @override
+  Widget build(BuildContext context) {
+    final locate = context.read;
+    final platform = EnvScope.of(context).platform;
+    final isApple = platform == TargetPlatform.macOS ||
+        platform == TargetPlatform.iOS;
+    final findActivators = findActionActivators(platform);
+    final composeActivator = SingleActivator(
+      LogicalKeyboardKey.keyN,
+      meta: isApple,
+      control: !isApple,
+    );
+    final searchActivator = SingleActivator(
+      LogicalKeyboardKey.keyF,
+      meta: isApple,
+      control: !isApple,
+    );
+    final calendarActivator = SingleActivator(
+      LogicalKeyboardKey.keyC,
+      meta: isApple,
+      control: !isApple,
+      shift: true,
+    );
+
+    return _HomeGlobalShortcutHandler(
+      child: Focus(
+        focusNode: shortcutFocusNode,
+        autofocus: true,
+        onKeyEvent: onHomeKeyEvent,
+        child: Shortcuts(
+          shortcuts: {
+            composeActivator: const ComposeIntent(),
+            searchActivator: const ToggleSearchIntent(),
+            if (EnvScope.of(context).supportsDesktopShortcuts)
+              calendarActivator: const ToggleCalendarIntent(),
+            for (final activator in findActivators)
+              activator: const OpenFindActionIntent(),
+          },
+          child: Actions(
+            actions: {
+              ComposeIntent: CallbackAction<ComposeIntent>(
+                onInvoke: (_) {
+                  openComposeDraft(
+                    context,
+                    attachmentMetadataIds: const <String>[],
+                  );
+                  return null;
+                },
+              ),
+              ToggleSearchIntent: CallbackAction<ToggleSearchIntent>(
+                onInvoke: (_) {
+                  locate<HomeSearchCubit>().toggleSearch();
+                  return null;
+                },
+              ),
+              ToggleCalendarIntent: CallbackAction<ToggleCalendarIntent>(
+                onInvoke: (_) {
+                  if (!hasCalendarBloc) return null;
+                  locate<ChatsCubit>().toggleCalendar();
+                  return null;
+                },
+              ),
+              OpenFindActionIntent: CallbackAction<OpenFindActionIntent>(
+                onInvoke: (_) {
+                  locate<AccessibilityActionBloc>().add(
+                    const AccessibilityMenuOpened(),
+                  );
+                  return null;
+                },
+              ),
+            },
+            child: Stack(
+              children: [
+                child,
+                AccessibilityActionMenu(chatLocate: chatLocate),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+bool _isFindActionEvent(KeyEvent event) {
+  if (event is! KeyDownEvent) return false;
+  final pressedKeys = HardwareKeyboard.instance.logicalKeysPressed;
+  final hasMeta = pressedKeys.contains(LogicalKeyboardKey.metaLeft) ||
+      pressedKeys.contains(LogicalKeyboardKey.metaRight) ||
+      pressedKeys.contains(LogicalKeyboardKey.meta);
+  final hasControl = pressedKeys.contains(LogicalKeyboardKey.controlLeft) ||
+      pressedKeys.contains(LogicalKeyboardKey.controlRight) ||
+      pressedKeys.contains(LogicalKeyboardKey.control);
+  return event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);
+}
+
+class _HomeGlobalShortcutHandler extends StatefulWidget {
+  const _HomeGlobalShortcutHandler({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_HomeGlobalShortcutHandler> createState() =>
+      _HomeGlobalShortcutHandlerState();
+}
+
+class _HomeGlobalShortcutHandlerState
+    extends State<_HomeGlobalShortcutHandler> {
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleGlobalShortcut);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleGlobalShortcut);
+    super.dispose();
+  }
+
+  bool _handleGlobalShortcut(KeyEvent event) {
+    if (!_isFindActionEvent(event)) return false;
+    final bloc = context.read<AccessibilityActionBloc>();
+    if (bloc.isClosed) return false;
+    bloc.add(const AccessibilityMenuOpened());
+    return true;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

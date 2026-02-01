@@ -24,7 +24,7 @@ class AttachmentGalleryScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = context.spacing;
     final leadingWidth = AxiIconButton.kDefaultSize + (spacing.s * 2);
-    final endpointConfig = context.read<AuthenticationCubit>().endpointConfig;
+    final endpointConfig = locate<AuthenticationCubit>().endpointConfig;
     final EmailService? emailService =
         endpointConfig.enableSmtp ? locate<EmailService>() : null;
     return BlocProvider(

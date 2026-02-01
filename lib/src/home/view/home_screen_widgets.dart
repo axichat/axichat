@@ -811,12 +811,13 @@ class _TabActionGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
+    final locate = context.read;
     final actions = <Widget>[];
     if (includePrimaryActions) {
-      actions.addAll(const [
-        ChatsFilterButton(),
-        DraftButton(),
-        ChatsAddButton(),
+      actions.addAll([
+        ChatsFilterButton(locate: locate),
+        const DraftButton(),
+        const ChatsAddButton(),
       ]);
     }
     actions.addAll(extraActions);

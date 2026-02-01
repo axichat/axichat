@@ -62,6 +62,7 @@ Future<void> showCalendarAvailabilityShareSheet({
   Chat? initialChat,
   bool lockToChat = false,
 }) async {
+  final locate = context.read;
   final l10n = context.l10n;
   final List<Chat> chats =
       context.read<ChatsCubit>().state.items ?? const <Chat>[];
@@ -97,6 +98,7 @@ Future<void> showCalendarAvailabilityShareSheet({
         availableChats: available,
         initialChat: initialChat,
         lockToChat: lockToChat,
+        locate: locate,
       ),
     ),
   );
@@ -122,6 +124,7 @@ class CalendarAvailabilityShareScreen extends StatefulWidget {
     required this.ownerJid,
     required this.availableChats,
     required this.lockToChat,
+    required this.locate,
     this.initialChat,
   });
 
@@ -130,6 +133,7 @@ class CalendarAvailabilityShareScreen extends StatefulWidget {
   final String ownerJid;
   final List<Chat> availableChats;
   final bool lockToChat;
+  final T Function<T>() locate;
   final Chat? initialChat;
 
   @override
@@ -183,7 +187,7 @@ class _CalendarAvailabilityShareScreenState
       return;
     }
     final bool shareSignatureEnabled = lockedChat.shareSignatureEnabled ??
-        context.watch<SettingsCubit>().state.shareTokenSignatureEnabled;
+        widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled;
     _recipients = <ComposerRecipient>[
       ComposerRecipient(
         target: FanOutTarget.chat(
@@ -240,6 +244,7 @@ class _CalendarAvailabilityShareScreenState
             recipients: _recipients,
             availableChats: widget.availableChats,
             isBusy: _isSending,
+            locate: widget.locate,
             onRecipientAdded: _handleRecipientAdded,
             onRecipientRemoved: _handleRecipientRemoved,
             onRecipientToggled: _handleRecipientToggled,
@@ -955,6 +960,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
     required this.recipients,
     required this.availableChats,
     required this.isBusy,
+    required this.locate,
     required this.onRecipientAdded,
     required this.onRecipientRemoved,
     required this.onRecipientToggled,
@@ -966,6 +972,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
   final List<ComposerRecipient> recipients;
   final List<Chat> availableChats;
   final bool isBusy;
+  final T Function<T>() locate;
   final ValueChanged<FanOutTarget> onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
   final ValueChanged<String> onRecipientToggled;
@@ -977,8 +984,8 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
     final recipientSuggestionsStream =
-        context.watch<ChatsCubit>().recipientAddressSuggestionsStream();
-    final chatsSelfJid = context.watch<ChatsCubit>().selfJid;
+        locate<ChatsCubit>().recipientAddressSuggestionsStream();
+    final chatsSelfJid = locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
     final String? selfJid =

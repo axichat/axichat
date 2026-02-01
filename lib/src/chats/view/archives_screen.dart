@@ -22,8 +22,11 @@ class ArchivesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: locate<ChatsCubit>(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: locate<ChatsCubit>()),
+        BlocProvider.value(value: locate<ProfileCubit>()),
+      ],
       child: _ArchivesView(locate: locate),
     );
   }

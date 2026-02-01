@@ -968,8 +968,7 @@ void main() {
     await _pumpBloc();
     await _pumpBloc();
 
-    bloc.add(const ChatLoadEarlier());
-    await _pumpBloc();
+    await bloc.loadEarlier();
     await _pumpBloc();
 
     verify(

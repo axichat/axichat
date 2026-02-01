@@ -13875,6 +13875,7 @@ class _ChatMessageList extends StatefulWidget {
 class _ChatMessageListState extends State<_ChatMessageList> {
   bool _scrollToBottomVisible = false;
   bool _isLoadingMore = false;
+  int? _loadEarlierStartingCount;
   late final ScrollController _scrollController;
 
   @override
@@ -13903,6 +13904,9 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     final scrollToBottomOptions = widget.scrollToBottomOptions;
     final typingUsers = widget.typingUsers;
     const double loadEarlierTopInset = 8.0;
+    final shouldShowLoadEarlierSpinner = _isLoadingMore &&
+        (_loadEarlierStartingCount == null ||
+            messages.length <= _loadEarlierStartingCount!);
     return Stack(
       children: [
         Column(
@@ -13991,7 +13995,7 @@ class _ChatMessageListState extends State<_ChatMessageList> {
               messageListOptions.chatFooterBuilder!,
           ],
         ),
-        if (_isLoadingMore)
+        if (shouldShowLoadEarlierSpinner)
           Positioned(
             top: loadEarlierTopInset,
             right: 0,
@@ -14065,11 +14069,16 @@ class _ChatMessageListState extends State<_ChatMessageList> {
         !_isLoadingMore) {
       setState(() {
         _isLoadingMore = true;
+        _loadEarlierStartingCount = widget.messages.length;
       });
       _showScrollToBottom();
       await widget.messageListOptions.onLoadEarlier!();
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _isLoadingMore = false;
+        _loadEarlierStartingCount = null;
       });
       return;
     }
