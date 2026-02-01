@@ -597,7 +597,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     if (!widget.allowAddressTargets) {
       return false;
     }
-    if (!_looksLikeEmail(value)) {
+    if (!isValidAddress(value)) {
       return false;
     }
     if (_isRoomNick(value)) {
@@ -728,11 +728,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void _handleRecipientAdded(FanOutTarget target) {
     _clearPendingRemoval();
     widget.onRecipientAdded(target);
-  }
-
-  bool _looksLikeEmail(String value) {
-    final pattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
-    return pattern.hasMatch(value);
   }
 
   List<ComposerRecipient> _visibleRecipientsForState() {
