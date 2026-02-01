@@ -240,6 +240,7 @@ class _NexusScaffold extends StatelessWidget {
             calendarAvailable: false,
             calendarActive: false,
             onCalendarSelected: () {},
+            badgeCounts: badgeCounts,
             onCollapsedChanged:
                 onToggleNavRail == null ? null : (_) => onToggleNavRail!(),
           ),
@@ -638,6 +639,7 @@ class _HomeShellRailLayout extends StatelessWidget {
     required this.calendarAvailable,
     required this.collapsed,
     required this.onCollapsedChanged,
+    required this.badgeCounts,
     required this.child,
   });
 
@@ -646,6 +648,7 @@ class _HomeShellRailLayout extends StatelessWidget {
   final bool calendarAvailable;
   final bool collapsed;
   final ValueChanged<bool> onCollapsedChanged;
+  final Map<HomeTab, int> badgeCounts;
   final Widget child;
 
   @override
@@ -669,6 +672,7 @@ class _HomeShellRailLayout extends StatelessWidget {
                   calendarAvailable: calendarAvailable,
                   calendarActive: calendarActive,
                   onCollapsedChanged: onCollapsedChanged,
+                  badgeCounts: badgeCounts,
                 ),
                 Expanded(child: child),
               ],
@@ -688,6 +692,7 @@ class _HomeShellNavigationRail extends StatelessWidget {
     required this.calendarAvailable,
     required this.calendarActive,
     required this.onCollapsedChanged,
+    required this.badgeCounts,
   });
 
   final List<HomeTabEntry> tabs;
@@ -696,6 +701,7 @@ class _HomeShellNavigationRail extends StatelessWidget {
   final bool calendarAvailable;
   final bool calendarActive;
   final ValueChanged<bool> onCollapsedChanged;
+  final Map<HomeTab, int> badgeCounts;
 
   void _openCalendar(BuildContext context) {
     const HomeRoute().go(context);
@@ -724,6 +730,7 @@ class _HomeShellNavigationRail extends StatelessWidget {
       calendarActive: calendarActive,
       onCalendarSelected: () => _openCalendar(context),
       onCollapsedChanged: onCollapsedChanged,
+      badgeCounts: badgeCounts,
     );
   }
 }
@@ -1051,6 +1058,7 @@ class _HomeNavigationRail extends StatefulWidget {
     required this.calendarAvailable,
     required this.calendarActive,
     required this.onCalendarSelected,
+    required this.badgeCounts,
     this.onCollapsedChanged,
   });
 
@@ -1061,6 +1069,7 @@ class _HomeNavigationRail extends StatefulWidget {
   final bool calendarAvailable;
   final bool calendarActive;
   final VoidCallback onCalendarSelected;
+  final Map<HomeTab, int> badgeCounts;
   final ValueChanged<bool>? onCollapsedChanged;
 
   @override
@@ -1086,77 +1095,67 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<ChatsCubit, ChatsState>(
-      builder: (context, chatsState) {
-        final l10n = context.l10n;
-        final selectedIndex = _controllerIndex;
-        if (widget.tabs.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        final badgeCounts = _computeBadgeCounts(
-          chatsState: chatsState,
-          inviteCount: context.watch<RosterCubit>().inviteCount,
-          draftCount: context.watch<DraftCubit>().state.items?.length ?? 0,
-        );
-        final calendarDestinationIndex = _calendarDestinationIndex();
-        final destinations = <AxiRailDestination>[];
-        for (final tab in widget.tabs) {
-          destinations.add(
-            AxiRailDestination(
-              icon: _tabIcon(tab.id),
-              label: tab.label,
-              badgeCount: badgeCounts[tab.id] ?? 0,
-            ),
-          );
-          if (calendarDestinationIndex != null &&
-              destinations.length == calendarDestinationIndex) {
-            destinations.add(
-              AxiRailDestination(
-                icon: LucideIcons.calendarClock,
-                label: l10n.homeRailCalendar,
-              ),
-            );
-          }
-        }
-        final safeTabIndex =
-            selectedIndex.clamp(0, widget.tabs.length - 1).toInt();
-        final selectedRailIndex = widget.calendarActive &&
-                calendarDestinationIndex != null
-            ? calendarDestinationIndex
-            : _destinationIndexForTab(safeTabIndex, calendarDestinationIndex);
-        final effectiveSelectedIndex =
-            selectedRailIndex.clamp(0, destinations.length - 1).toInt();
-        return SafeArea(
-          left: false,
-          right: false,
-          child: AxiNavigationRail(
-            destinations: destinations,
-            selectedIndex: effectiveSelectedIndex,
-            collapsed: widget.collapsed,
-            onToggleCollapse: widget.onCollapsedChanged == null
-                ? null
-                : () => widget.onCollapsedChanged!(!widget.collapsed),
-            toggleExpandedTooltip: l10n.homeRailHideMenu,
-            toggleCollapsedTooltip: l10n.homeRailShowMenu,
-            backgroundColor: context.colorScheme.background,
-            footer: _HomeNavigationRailFooter(collapsed: widget.collapsed),
-            onDestinationSelected: (index) {
-              final calendarIndex = _calendarDestinationIndex();
-              if (calendarIndex != null && index == calendarIndex) {
-                widget.onCalendarSelected();
-                return;
-              }
-              final tabIndex = _tabIndexForDestination(index, calendarIndex);
-              if (tabIndex == null) return;
-              if (widget.calendarActive) {
-                widget.onCalendarSelected();
-              }
-              setState(() => _controllerIndex = tabIndex);
-              widget.onDestinationSelected(tabIndex);
-            },
+    final l10n = context.l10n;
+    final selectedIndex = _controllerIndex;
+    if (widget.tabs.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final calendarDestinationIndex = _calendarDestinationIndex();
+    final destinations = <AxiRailDestination>[];
+    for (final tab in widget.tabs) {
+      destinations.add(
+        AxiRailDestination(
+          icon: _tabIcon(tab.id),
+          label: tab.label,
+          badgeCount: widget.badgeCounts[tab.id] ?? 0,
+        ),
+      );
+      if (calendarDestinationIndex != null &&
+          destinations.length == calendarDestinationIndex) {
+        destinations.add(
+          AxiRailDestination(
+            icon: LucideIcons.calendarClock,
+            label: l10n.homeRailCalendar,
           ),
         );
-      },
+      }
+    }
+    final safeTabIndex = selectedIndex.clamp(0, widget.tabs.length - 1).toInt();
+    final selectedRailIndex =
+        widget.calendarActive && calendarDestinationIndex != null
+            ? calendarDestinationIndex
+            : _destinationIndexForTab(safeTabIndex, calendarDestinationIndex);
+    final effectiveSelectedIndex =
+        selectedRailIndex.clamp(0, destinations.length - 1).toInt();
+    return SafeArea(
+      left: false,
+      right: false,
+      child: AxiNavigationRail(
+        destinations: destinations,
+        selectedIndex: effectiveSelectedIndex,
+        collapsed: widget.collapsed,
+        onToggleCollapse: widget.onCollapsedChanged == null
+            ? null
+            : () => widget.onCollapsedChanged!(!widget.collapsed),
+        toggleExpandedTooltip: l10n.homeRailHideMenu,
+        toggleCollapsedTooltip: l10n.homeRailShowMenu,
+        backgroundColor: context.colorScheme.background,
+        footer: _HomeNavigationRailFooter(collapsed: widget.collapsed),
+        onDestinationSelected: (index) {
+          final calendarIndex = _calendarDestinationIndex();
+          if (calendarIndex != null && index == calendarIndex) {
+            widget.onCalendarSelected();
+            return;
+          }
+          final tabIndex = _tabIndexForDestination(index, calendarIndex);
+          if (tabIndex == null) return;
+          if (widget.calendarActive) {
+            widget.onCalendarSelected();
+          }
+          setState(() => _controllerIndex = tabIndex);
+          widget.onDestinationSelected(tabIndex);
+        },
+      ),
     );
   }
 
@@ -1188,23 +1187,6 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
       return destinationIndex - 1;
     }
     return destinationIndex;
-  }
-
-  Map<HomeTab, int> _computeBadgeCounts({
-    required ChatsState chatsState,
-    required int inviteCount,
-    required int draftCount,
-  }) {
-    final chatItems = chatsState.items ?? const <m.Chat>[];
-    return <HomeTab, int>{
-      HomeTab.invites: inviteCount,
-      HomeTab.chats: chatItems
-          .where((chat) => !chat.archived && !chat.spam)
-          .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
-      HomeTab.drafts: draftCount,
-      HomeTab.spam:
-          chatItems.where((chat) => chat.spam && !chat.archived).length,
-    };
   }
 }
 

@@ -314,9 +314,12 @@ class _QuickAddModalState extends State<QuickAddModal>
     if (trimmed == _lastParserInput) {
       return;
     }
-    _parserDebounce = Timer(const Duration(milliseconds: 350), () {
+    _parserDebounce = Timer(
+      calendarScrollAnimationDuration + calendarTaskSplitPreviewAnimationDuration,
+      () {
       _runParser(trimmed);
-    });
+      },
+    );
   }
 
   Future<void> _runParser(String input) async {
@@ -1014,7 +1017,7 @@ class _QuickAddModalContent extends StatelessWidget {
                                       Icon(
                                         Icons.error_outline,
                                         color: calendarDangerColor,
-                                        size: 18,
+                                        size: context.sizing.menuItemIconSize,
                                       ),
                                       const SizedBox(width: calendarInsetSm),
                                       Expanded(
@@ -1199,7 +1202,10 @@ class _QuickAddHeader extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: calendarBorderColor, width: 1),
+          bottom: BorderSide(
+            color: calendarBorderColor,
+            width: context.borderSide.width,
+          ),
         ),
       ),
       child: Row(

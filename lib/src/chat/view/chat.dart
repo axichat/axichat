@@ -4697,7 +4697,13 @@ class _ChatState extends State<Chat> {
                                                 selectedMessages,
                                                 growable: false,
                                               );
-                                              final canReact = !isEmailChat;
+                                              final canReact = !isEmailChat &&
+                                                  (state.xmppCapabilities
+                                                          ?.features
+                                                          .contains(
+                                                        mox.messageReactionsXmlns,
+                                                      ) ??
+                                                      false);
                                               return _MessageSelectionToolbar(
                                                 count: targets.length,
                                                 onClear: _clearMultiSelection,
@@ -5345,7 +5351,13 @@ class _ChatState extends State<Chat> {
                                                                   replyParticipants
                                                                       .isNotEmpty;
                                                           final canReact =
-                                                              !isEmailChat;
+                                                              !isEmailChat &&
+                                                                  (state.xmppCapabilities
+                                                                          ?.features
+                                                                          .contains(
+                                                                        mox.messageReactionsXmlns,
+                                                                      ) ??
+                                                                      false);
                                                           final isSingleSelection =
                                                               !_multiSelectActive &&
                                                                   _selectedMessageId ==
@@ -8449,6 +8461,7 @@ class _ChatState extends State<Chat> {
   void _setChatRoute(ChatRouteIndex nextRoute) {
     if (!mounted) return;
     final bool leavingCalendar = _chatRoute.isCalendar && !nextRoute.isCalendar;
+    final bool wasSettings = _chatRoute.isSettings;
     setState(() {
       _previousChatRoute = _chatRoute;
       _chatRoute = nextRoute;
@@ -8457,6 +8470,9 @@ class _ChatState extends State<Chat> {
         _focusNode.unfocus();
       }
     });
+    if (!wasSettings && nextRoute.isSettings) {
+      context.read<ChatBloc>().add(const ChatCapabilitiesRequested());
+    }
     if (leavingCalendar) {
       FocusScope.of(context).unfocus();
     }
@@ -12008,6 +12024,7 @@ class _ChatSettingsButtons extends StatelessWidget {
     final bool hasBlockAddress =
         resolvedBlockAddress != null && resolvedBlockAddress.isNotEmpty;
     final bool hasBlockEntry = blocklistEntry != null;
+    final bool showXmppCapabilities = chat.defaultTransport.isXmpp;
     final bool blockActionInFlight = switch (blocklistState) {
       BlocklistLoading state => state.jid == null ||
           state.jid == resolvedBlockAddress ||
@@ -12017,6 +12034,13 @@ class _ChatSettingsButtons extends StatelessWidget {
     final bool blockSwitchEnabled = !blockActionInFlight &&
         (isChatBlocked ? hasBlockEntry : hasBlockAddress);
     final List<Widget> tiles = [
+      if (showXmppCapabilities)
+        Padding(
+          padding: _chatSettingsItemPadding,
+          child: _ChatCapabilitiesSection(
+            capabilities: state.xmppCapabilities,
+          ),
+        ),
       if (showAttachmentToggle)
         Padding(
           padding: _chatSettingsItemPadding,
@@ -12104,6 +12128,53 @@ class _ChatSettingsButtons extends StatelessWidget {
       ),
     ];
     return ListView(padding: EdgeInsets.zero, children: tiles);
+  }
+}
+
+class _ChatCapabilitiesSection extends StatelessWidget {
+  const _ChatCapabilitiesSection({required this.capabilities});
+
+  final XmppPeerCapabilities? capabilities;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final textTheme = context.textTheme;
+    final resolvedAt = capabilities?.resolvedAt;
+    final String subtitle = resolvedAt == null
+        ? l10n.commonUnknownLabel
+        : l10n.chatSettingsCapabilitiesUpdated(
+            TimeFormatter.formatFriendlyDateTime(l10n, resolvedAt),
+          );
+    final features = capabilities?.features ?? const <String>[];
+    final List<Widget> featureWidgets = features.isEmpty
+        ? [
+            Text(
+              l10n.chatSettingsCapabilitiesEmpty,
+              style: textTheme.muted,
+            ),
+          ]
+        : features
+            .map(
+              (feature) => Text(feature, style: textTheme.muted),
+            )
+            .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(l10n.chatSettingsCapabilitiesTitle),
+        SizedBox(height: spacing.xs),
+        Text(subtitle, style: textTheme.muted),
+        SizedBox(height: spacing.s),
+        for (final widget in featureWidgets)
+          Padding(
+            padding: EdgeInsets.only(bottom: spacing.xs),
+            child: widget,
+          ),
+      ],
+    );
   }
 }
 

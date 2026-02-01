@@ -736,7 +736,7 @@ class CalendarSegmentedToggle<T> extends StatelessWidget {
               for (int index = 0; index < options.length; index++) ...[
                 if (index > 0)
                   Container(
-                    width: 1,
+                    width: context.borderSide.width,
                     height: double.infinity,
                     color: dividerColor,
                   ),
@@ -1023,7 +1023,7 @@ class _DateLabelState extends State<_DateLabel> {
     return CompositedTransformTarget(
       link: _link,
       child: SizedBox(
-        height: 40,
+        height: context.sizing.buttonHeightRegular,
         child: AxiButton.outline(
           size: AxiButtonSize.sm,
           onPressed: _toggleOverlay,
@@ -1031,11 +1031,17 @@ class _DateLabelState extends State<_DateLabel> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.calendar_today_outlined, size: 16, color: iconColor),
+              Icon(
+                Icons.calendar_today_outlined,
+                size: context.sizing.menuItemIconSize,
+                color: iconColor,
+              ),
               if (!hideText) ...[
                 const SizedBox(width: calendarGutterSm),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 260),
+                  constraints: BoxConstraints(
+                    maxWidth: context.sizing.menuMaxWidth,
+                  ),
                   child: Text(
                     label,
                     maxLines: 1,
@@ -1050,7 +1056,7 @@ class _DateLabelState extends State<_DateLabel> {
               const SizedBox(width: calendarInsetLg),
               Icon(
                 isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                size: 18,
+                size: context.sizing.iconButtonIconSize,
                 color: iconColor,
               ),
             ],

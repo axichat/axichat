@@ -1103,7 +1103,7 @@ class _RecurrenceIntervalRow extends StatelessWidget {
               border: ShadBorder.all(
                 color: calendarBorderColor,
                 radius: BorderRadius.circular(_recurrenceCompactRadius),
-                width: 1,
+                width: context.borderSide.width,
               ),
             ),
             padding: const EdgeInsets.symmetric(
@@ -1246,7 +1246,10 @@ class _RecurrenceEndControls extends StatelessWidget {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(calendarBorderRadius),
-                borderSide: BorderSide(color: calendarPrimaryColor, width: 2),
+                borderSide: BorderSide(
+                  color: calendarPrimaryColor,
+                  width: context.borderSide.width * 2,
+                ),
               ),
               filled: true,
               fillColor: calendarContainerColor,
@@ -2283,7 +2286,7 @@ class _RecurrenceOrdinalWeekdayEditorState
                   border: ShadBorder.all(
                     color: calendarBorderColor,
                     radius: BorderRadius.circular(_recurrenceCompactRadius),
-                    width: 1,
+                    width: context.borderSide.width,
                   ),
                 ),
                 padding: const EdgeInsets.symmetric(
@@ -2325,7 +2328,7 @@ class _RecurrenceOrdinalWeekdayEditorState
                   border: ShadBorder.all(
                     color: calendarBorderColor,
                     radius: BorderRadius.circular(_recurrenceCompactRadius),
-                    width: 1,
+                    width: context.borderSide.width,
                   ),
                 ),
                 padding: const EdgeInsets.symmetric(

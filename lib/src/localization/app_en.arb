@@ -2970,5 +2970,13 @@
   "xmppOperationMamFetchFailure": "Archive fetch failed",
   "xmppOperationMucJoinStart": "Joining room...",
   "xmppOperationMucJoinSuccess": "Room joined",
-  "xmppOperationMucJoinFailure": "Room join failed"
+  "xmppOperationMucJoinFailure": "Room join failed",
+  "chatSettingsCapabilitiesTitle": "Capabilities",
+  "chatSettingsCapabilitiesUpdated": "Last checked: {timestamp}",
+  "@chatSettingsCapabilitiesUpdated": {
+    "placeholders": {
+      "timestamp": {}
+    }
+  },
+  "chatSettingsCapabilitiesEmpty": "No features reported"
 }

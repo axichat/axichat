@@ -751,20 +751,37 @@ const Set<String> _allowedHttpUploadPutHeaders = {
   'expires',
 };
 
+class XmppPeerCapabilities {
+  XmppPeerCapabilities({
+    required List<String> features,
+    this.resolvedAt,
+  }) : features = List<String>.unmodifiable(features);
+
+  final List<String> features;
+  final DateTime? resolvedAt;
+
+  bool get supportsMarkers => features.contains(mox.chatMarkersXmlns);
+
+  bool get supportsReceipts => features.contains(mox.deliveryXmlns);
+}
+
 class _PeerCapabilities {
   const _PeerCapabilities({
     required this.supportsMarkers,
     required this.supportsReceipts,
+    required this.features,
     this.resolvedAt,
   });
 
   final bool supportsMarkers;
   final bool supportsReceipts;
+  final List<String> features;
   final DateTime? resolvedAt;
 
   Map<String, Object> toJson() => {
         'markers': supportsMarkers,
         'receipts': supportsReceipts,
+        'features': features,
         if (resolvedAt != null)
           'resolvedAt': resolvedAt!.millisecondsSinceEpoch,
       };
@@ -773,6 +790,9 @@ class _PeerCapabilities {
       _PeerCapabilities(
         supportsMarkers: json['markers'] as bool? ?? false,
         supportsReceipts: json['receipts'] as bool? ?? false,
+        features: List<String>.from(
+          json['features'] as List<dynamic>? ?? const <String>[],
+        ),
         resolvedAt: switch (json['resolvedAt']) {
           final int timestamp => DateTime.fromMillisecondsSinceEpoch(timestamp),
           _ => null,
@@ -782,11 +802,13 @@ class _PeerCapabilities {
   static const empty = _PeerCapabilities(
     supportsMarkers: false,
     supportsReceipts: false,
+    features: <String>[],
   );
 
   static const supportsAll = _PeerCapabilities(
     supportsMarkers: true,
     supportsReceipts: true,
+    features: <String>[],
   );
 }
 
@@ -850,6 +872,54 @@ mixin MessageService
           .where((message) => !_isInternalSyncEnvelope(message.body))
           .toList(growable: false);
       return List<Message>.unmodifiable(filtered);
+    });
+  }
+
+  Stream<List<Message>> messageStreamForChatStanzaIds(
+    String jid, {
+    required List<String> stanzaIds,
+  }) {
+    return _localMessageStreamForChatByStanzaIds(
+      jid: jid,
+      stanzaIds: stanzaIds,
+    ).map((messages) {
+      if (messages.isEmpty || !_internalEnvelopeChats.contains(jid)) {
+        return messages;
+      }
+      final filtered = messages
+          .where((message) => !_isInternalSyncEnvelope(message.body))
+          .toList(growable: false);
+      return List<Message>.unmodifiable(filtered);
+    });
+  }
+
+  Future<List<Message>> loadChatMessagesBefore({
+    required String jid,
+    required DateTime beforeTimestamp,
+    required String beforeStanzaId,
+    int? beforeDeltaMsgId,
+    required int limit,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    return _dbOpReturning<XmppDatabase, List<Message>>((db) async {
+      final messages = await db.getChatMessagesBefore(
+        jid,
+        beforeTimestamp: beforeTimestamp,
+        beforeStanzaId: beforeStanzaId,
+        beforeDeltaMsgId: beforeDeltaMsgId,
+        limit: limit,
+        filter: filter,
+      );
+      if (!_internalEnvelopeChats.contains(jid) &&
+          messages.any((message) => _isInternalSyncEnvelope(message.body))) {
+        _internalEnvelopeChats.add(jid);
+      }
+      if (!_internalEnvelopeChats.contains(jid)) {
+        return messages;
+      }
+      return messages
+          .where((message) => !_isInternalSyncEnvelope(message.body))
+          .toList(growable: false);
     });
   }
 
@@ -937,6 +1007,186 @@ mixin MessageService
         );
       },
     );
+  }
+
+  Stream<List<Message>> _localMessageStreamForChatByStanzaIds({
+    required String jid,
+    required List<String> stanzaIds,
+  }) {
+    return createSingleItemStream<List<Message>, XmppDatabase>(
+      watchFunction: (db) async {
+        final normalized = _normalizeStanzaIds(stanzaIds);
+        if (normalized.isEmpty) {
+          return Stream.value(const <Message>[]);
+        }
+        final messagesStream = _watchChatMessagesByStanzaIds(
+          db: db,
+          jid: jid,
+          stanzaIds: normalized,
+        );
+        final initialMessages = await _loadChatMessagesByStanzaIds(
+          db: db,
+          jid: jid,
+          stanzaIds: normalized,
+        );
+        if (!_internalEnvelopeChats.contains(jid) &&
+            initialMessages.any(
+              (message) => _isInternalSyncEnvelope(message.body),
+            )) {
+          _internalEnvelopeChats.add(jid);
+        }
+        final initialMessageIds = initialMessages
+            .map((message) => message.stanzaID)
+            .where((id) => id.isNotEmpty)
+            .toSet();
+        final initialReactions =
+            await db.getReactionsForMessages(initialMessageIds);
+        return _combineMessageAndReactionStreams(
+          messageStream: messagesStream,
+          initialMessages: initialMessages,
+          initialReactions: initialReactions,
+          reactionStreamFactory: db.watchReactionsForMessages,
+          reactionSnapshotLoader: db.getReactionsForMessages,
+        );
+      },
+    );
+  }
+
+  List<String> _normalizeStanzaIds(Iterable<String> ids) {
+    return ids
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+  }
+
+  Future<List<Message>> _loadChatMessagesByStanzaIds({
+    required XmppDatabase db,
+    required String jid,
+    required List<String> stanzaIds,
+  }) async {
+    if (stanzaIds.isEmpty) {
+      return const <Message>[];
+    }
+    final orderedIds = List<String>.from(stanzaIds);
+    final messages = await db.getChatMessagesByStanzaIds(jid, stanzaIds);
+    return _orderMessagesByStanzaIds(
+      orderedIds: orderedIds,
+      messages: messages,
+    );
+  }
+
+  Stream<List<Message>> _watchChatMessagesByStanzaIds({
+    required XmppDatabase db,
+    required String jid,
+    required List<String> stanzaIds,
+  }) {
+    if (stanzaIds.isEmpty) {
+      return Stream.value(const <Message>[]);
+    }
+    final orderedIds = List<String>.from(stanzaIds);
+    final chunks = _chunkStanzaIds(orderedIds);
+    if (chunks.length == 1) {
+      return db
+          .watchChatMessagesByStanzaIds(jid, chunks.first)
+          .map((messages) => _orderMessagesByStanzaIds(
+                orderedIds: orderedIds,
+                messages: messages,
+              ));
+    }
+    final controller = StreamController<List<Message>>.broadcast();
+    final current = <String, Message>{};
+    final subscriptions = <StreamSubscription<List<Message>>>[];
+    var listeners = 0;
+    var closed = false;
+
+    void emit() {
+      if (!controller.hasListener) return;
+      controller.add(
+        _orderMessagesByStanzaIds(
+          orderedIds: orderedIds,
+          messages: current.values.toList(growable: false),
+        ),
+      );
+    }
+
+    void start() {
+      for (final chunk in chunks) {
+        final chunkIds = chunk.toSet();
+        final subscription =
+            db.watchChatMessagesByStanzaIds(jid, chunk).listen((messages) {
+          if (closed) return;
+          for (final id in chunkIds) {
+            current.remove(id);
+          }
+          for (final message in messages) {
+            current[message.stanzaID] = message;
+          }
+          emit();
+        });
+        subscriptions.add(subscription);
+      }
+    }
+
+    Future<void> stop() async {
+      if (closed) return;
+      closed = true;
+      for (final subscription in subscriptions) {
+        await subscription.cancel();
+      }
+      await controller.close();
+    }
+
+    controller.onListen = () {
+      listeners++;
+      if (listeners == 1) {
+        start();
+      } else {
+        emit();
+      }
+    };
+
+    controller.onCancel = () async {
+      listeners--;
+      if (listeners <= 0) {
+        await stop();
+      }
+    };
+
+    return controller.stream;
+  }
+
+  List<List<String>> _chunkStanzaIds(List<String> ids) {
+    const chunkSize = 900;
+    if (ids.length <= chunkSize) {
+      return <List<String>>[ids];
+    }
+    final chunks = <List<String>>[];
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final end = (i + chunkSize) > ids.length ? ids.length : i + chunkSize;
+      chunks.add(ids.sublist(i, end));
+    }
+    return chunks;
+  }
+
+  List<Message> _orderMessagesByStanzaIds({
+    required List<String> orderedIds,
+    required List<Message> messages,
+  }) {
+    if (messages.isEmpty) {
+      return const <Message>[];
+    }
+    final byId = <String, Message>{
+      for (final message in messages) message.stanzaID: message,
+    };
+    final ordered = <Message>[];
+    for (final id in orderedIds) {
+      final message = byId[id];
+      if (message != null) {
+        ordered.add(message);
+      }
+    }
+    return ordered;
   }
 
   Future<void> _storeMessage(
@@ -3733,6 +3983,10 @@ mixin MessageService
       (db) => db.getMessageByStanzaID(stanzaID),
     );
     if (message == null) return;
+    final capabilities = await _capabilitiesFor(message.chatJid);
+    if (!capabilities.features.contains(mox.messageReactionsXmlns)) {
+      return;
+    }
     final existing = await _dbOpReturning<XmppDatabase, List<Reaction>>(
       (db) => db.getReactionsForMessageSender(
         messageId: message.stanzaID,
@@ -4236,10 +4490,13 @@ mixin MessageService
     );
   }
 
-  Future<_PeerCapabilities> _capabilitiesFor(String jid) async {
+  Future<_PeerCapabilities> _capabilitiesFor(
+    String jid, {
+    bool forceRefresh = false,
+  }) async {
     await _ensureCapabilityCacheLoaded();
     final cached = _capabilityCache[jid];
-    if (cached != null && !_isCapabilityStale(cached)) {
+    if (!forceRefresh && cached != null && !_isCapabilityStale(cached)) {
       return cached;
     }
 
@@ -4248,16 +4505,19 @@ mixin MessageService
     }
 
     final Future<_PeerCapabilities> request = () async {
-      final parsed = parseJid(jid);
-      final capsManager =
-          _connection.getManager<mox.EntityCapabilitiesManager>();
-      if (parsed != null && capsManager != null) {
-        final cachedInfo = await capsManager.getCachedDiscoInfoFromJid(parsed);
-        if (cachedInfo != null) {
-          final capabilities = _peerCapabilitiesFromInfo(cachedInfo);
-          _capabilityCache[jid] = capabilities;
-          await _persistCapabilityCache();
-          return capabilities;
+      if (!forceRefresh) {
+        final parsed = parseJid(jid);
+        final capsManager =
+            _connection.getManager<mox.EntityCapabilitiesManager>();
+        if (parsed != null && capsManager != null) {
+          final cachedInfo =
+              await capsManager.getCachedDiscoInfoFromJid(parsed);
+          if (cachedInfo != null) {
+            final capabilities = _peerCapabilitiesFromInfo(cachedInfo);
+            _capabilityCache[jid] = capabilities;
+            await _persistCapabilityCache();
+            return capabilities;
+          }
         }
       }
 
@@ -4286,6 +4546,18 @@ mixin MessageService
     }
   }
 
+  Future<XmppPeerCapabilities> resolvePeerCapabilities({
+    required String jid,
+    bool forceRefresh = false,
+  }) async {
+    final capabilities =
+        await _capabilitiesFor(jid, forceRefresh: forceRefresh);
+    return XmppPeerCapabilities(
+      features: capabilities.features,
+      resolvedAt: capabilities.resolvedAt,
+    );
+  }
+
   bool _isCapabilityStale(_PeerCapabilities capabilities) {
     final resolvedAt = capabilities.resolvedAt;
     if (resolvedAt == null) return true;
@@ -4294,21 +4566,18 @@ mixin MessageService
   }
 
   _PeerCapabilities _peerCapabilitiesFromInfo(mox.DiscoInfo info) {
-    final features = info.features;
+    final featureList = List<String>.from(info.features)..sort();
     return _PeerCapabilities(
-      supportsMarkers: features.contains(mox.chatMarkersXmlns),
-      supportsReceipts: features.contains(mox.deliveryXmlns),
+      supportsMarkers: featureList.contains(mox.chatMarkersXmlns),
+      supportsReceipts: featureList.contains(mox.deliveryXmlns),
+      features: featureList,
       resolvedAt: DateTime.now(),
     );
   }
 
   Future<bool> _supportsMam(String jid) async {
-    final result = await _connection.discoInfoQuery(jid);
-    if (result == null || result.isType<mox.StanzaError>()) {
-      return false;
-    }
-    final info = result.get<mox.DiscoInfo>();
-    return info.features.contains(mox.mamXmlns);
+    final capabilities = await _capabilitiesFor(jid);
+    return capabilities.features.contains(mox.mamXmlns);
   }
 
   Future<void> _resolveMamSupportForAccount() async {

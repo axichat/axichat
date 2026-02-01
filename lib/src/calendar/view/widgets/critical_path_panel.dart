@@ -1138,7 +1138,7 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                           children: [
                             Icon(
                               Icons.check_circle,
-                              size: 18,
+                              size: context.sizing.menuItemIconSize,
                               color: colors.primary,
                             ),
                             const SizedBox(width: calendarInsetSm),

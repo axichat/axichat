@@ -80,7 +80,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   int? _trackedPointerId;
   bool _dragSessionActive = false;
   DateTime? _lastDragUpdateTime;
-  static const Duration _syntheticUpdateDelay = Duration(milliseconds: 24);
+  static const Duration _syntheticUpdateDelay = Duration.zero;
 
   TaskInteractionController get _controller => widget.interactionController;
   CalendarTaskGeometry get _geometry => widget.geometry;

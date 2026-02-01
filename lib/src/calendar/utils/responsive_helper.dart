@@ -81,7 +81,7 @@ class ResponsiveHelper {
   static const List<CalendarResponsiveSpec> _specs = [
     CalendarResponsiveSpec(
       sizeClass: CalendarSizeClass.compact,
-      minWidth: 0,
+      minWidth: calendarViewModeMinWidth - calendarViewModeMinWidth,
       maxWidth: smallScreen,
       contentPadding: EdgeInsets.symmetric(
         horizontal: calendarGutterMd,
@@ -104,7 +104,7 @@ class ResponsiveHelper {
         vertical: calendarGutterMd,
       ),
       modalMargin: calendarPaddingXl,
-      gridHorizontalPadding: 0,
+      gridHorizontalPadding: calendarTaskColumnGap,
       sidebarMinWidthFraction: calendarSidebarWidthMinFraction,
       sidebarWidthFraction: calendarSidebarWidthDefaultFraction,
       sidebarMaxWidthFraction: calendarSidebarWidthMaxFraction,

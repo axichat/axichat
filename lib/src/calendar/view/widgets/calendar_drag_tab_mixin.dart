@@ -18,11 +18,15 @@ enum _CalendarDragSwitchSource { edge, tabBar }
 
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
   static const double _tabBarHeight = kTextTabBarHeight;
-  static const double _leftEdgeHotZoneWidth = 66.0;
+  static const double _leftEdgeHotZoneWidth =
+      calendarWeekHeaderHeight +
+      calendarGutterLg +
+      calendarGutterSm +
+      calendarInsetSm;
   static const double _rightEdgeHotZoneWidth = _leftEdgeHotZoneWidth;
-  static const Duration _switchDelay = Duration(milliseconds: 320);
-  static const Duration _dayShiftDelay = Duration(milliseconds: 900);
-  static const double _edgeActivationSlop = 12.0;
+  static const Duration _switchDelay = baseAnimationDuration;
+  static const Duration _dayShiftDelay = axiMotion.statusBannerSuccessDuration;
+  static const double _edgeActivationSlop = calendarGutterMd;
   Timer? _switchTimer;
   int? _pendingSwitchIndex;
   _CalendarDragSwitchSource? _pendingSwitchSource;
@@ -258,7 +262,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         }
       });
     }
-    const duration = Duration(milliseconds: 200);
+    const duration = calendarSlotHoverAnimationDuration;
     const curve = Curves.easeInOutCubic;
     final double safeBottomPadding = math.max(bottomInset, 0.0);
     const double bucketHeight = 48.0;
@@ -836,10 +840,18 @@ class _DragTabLabel extends StatelessWidget {
     final Color cueColor =
         showCue ? scheme.primary.withValues(alpha: 0.55) : Colors.transparent;
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+      duration: calendarTaskSplitPreviewAnimationDuration,
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterSm,
+        vertical: calendarInsetLg + calendarInsetMd,
+      ),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: cueColor, width: 2)),
+        border: Border(
+          bottom: BorderSide(
+            color: cueColor,
+            width: context.borderSide.width * 2,
+          ),
+        ),
       ),
       child: DefaultTextStyle.merge(
         style: context.textTheme.label.strongIf(showCue),
@@ -890,7 +902,7 @@ class _DragEdgeTarget extends StatelessWidget {
             onAcceptWithDetails: (_) => onLeave(),
             builder: (context, _, __) {
               return AnimatedContainer(
-                duration: const Duration(milliseconds: 160),
+                duration: calendarSlotHoverAnimationDuration,
                 height: double.infinity,
                 decoration: showCue
                     ? BoxDecoration(gradient: gradient)

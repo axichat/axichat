@@ -456,6 +456,17 @@ class AppLocalizationsEs extends AppLocalizations {
       'Incluir pie de firma de token para correo';
 
   @override
+  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String chatSettingsCapabilitiesUpdated(Object timestamp) {
+    return 'Last checked: $timestamp';
+  }
+
+  @override
+  String get chatSettingsCapabilitiesEmpty => 'No features reported';
+
+  @override
   String get chatSignatureHintEnabled =>
       'Ayuda a mantener los hilos de correo con varios destinatarios.';
 

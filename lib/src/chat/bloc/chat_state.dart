@@ -45,8 +45,10 @@ class ChatState with _$ChatState {
     @Default(true) bool emailSubjectAutofillEligible,
     @Default(false) bool emailSubjectAutofilled,
     @Default(EmailSyncState.ready()) EmailSyncState emailSyncState,
-    @Default(ConnectionState.notConnected) ConnectionState xmppConnectionState,
+    @Default(mox.XmppConnectionState.notConnected)
+    mox.XmppConnectionState xmppConnectionState,
     @Default(false) bool supportsHttpFileUpload,
+    XmppPeerCapabilities? xmppCapabilities,
     @Default(false) bool emailServiceAvailable,
     String? emailSelfJid,
     String? openChatJid,

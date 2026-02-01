@@ -109,7 +109,10 @@ class TaskTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
-          borderSide: BorderSide(color: focusedColor, width: 2),
+          borderSide: BorderSide(
+            color: focusedColor,
+            width: context.borderSide.width * 2,
+          ),
         ),
         contentPadding: contentPadding ??
             const EdgeInsets.symmetric(

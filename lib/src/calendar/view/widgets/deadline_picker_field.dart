@@ -909,7 +909,7 @@ class _DeadlineDropdownSurface extends StatelessWidget {
             context.sizing.containerRadius,
           ),
           color: calendarContainerColor,
-          elevation: 12,
+          elevation: calendarZoomControlsElevation,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(
               context.sizing.containerRadius,
@@ -1137,7 +1137,10 @@ class _DeadlineMonthHeader extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: calendarBorderColor, width: 1),
+          bottom: BorderSide(
+            color: calendarBorderColor,
+            width: context.borderSide.width,
+          ),
         ),
       ),
       child: Row(
@@ -1347,7 +1350,12 @@ class _DeadlineTimeSelectors extends StatelessWidget {
         vertical: 10,
       ),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: calendarBorderColor, width: 1)),
+        border: Border(
+          top: BorderSide(
+            color: calendarBorderColor,
+            width: context.borderSide.width,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1488,7 +1496,12 @@ class _DeadlinePickerActions extends StatelessWidget {
         vertical: verticalPadding,
       ),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: calendarBorderColor, width: 1)),
+        border: Border(
+          top: BorderSide(
+            color: calendarBorderColor,
+            width: context.borderSide.width,
+          ),
+        ),
       ),
       child: Row(
         children: [

@@ -143,7 +143,7 @@ class CalendarTaskListTile extends StatelessWidget {
               children: [
                 Text(
                   '📍',
-                  style: context.textTheme.label.copyWith(height: 1),
+                  style: context.textTheme.label,
                 ),
                 Expanded(
                   child: Text(

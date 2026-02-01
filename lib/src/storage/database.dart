@@ -54,10 +54,29 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
+  Stream<List<Message>> watchChatMessagesByStanzaIds(
+    String jid,
+    Iterable<String> stanzaIds,
+  );
+
   Future<List<Message>> getChatMessages(
     String jid, {
     required int start,
     required int end,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  });
+
+  Future<List<Message>> getChatMessagesByStanzaIds(
+    String jid,
+    Iterable<String> stanzaIds,
+  );
+
+  Future<List<Message>> getChatMessagesBefore(
+    String jid, {
+    required DateTime beforeTimestamp,
+    required String beforeStanzaId,
+    int? beforeDeltaMsgId,
+    required int limit,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
@@ -1608,6 +1627,40 @@ WHERE delta_chat_id IS NOT NULL
   }
 
   @override
+  Stream<List<Message>> watchChatMessagesByStanzaIds(
+    String jid,
+    Iterable<String> stanzaIds,
+  ) {
+    final ids = stanzaIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) {
+      return Stream.value(const <Message>[]);
+    }
+    final query = select(messages)
+      ..where(
+        (tbl) => tbl.chatJid.equals(jid) & tbl.stanzaID.isIn(ids),
+      )
+      ..orderBy([
+        (tbl) => OrderingTerm(
+              expression: tbl.timestamp,
+              mode: OrderingMode.desc,
+            ),
+        (tbl) => OrderingTerm(
+              expression: tbl.deltaMsgId,
+              mode: OrderingMode.desc,
+            ),
+        (tbl) => OrderingTerm(
+              expression: tbl.stanzaID,
+              mode: OrderingMode.desc,
+            ),
+      ]);
+    return query.watch();
+  }
+
+  @override
   Future<List<Message>> getChatMessages(
     String jid, {
     required int start,
@@ -1619,6 +1672,59 @@ WHERE delta_chat_id IS NOT NULL
       filter: filter,
       limit: end,
       offset: start,
+    ).get();
+  }
+
+  @override
+  Future<List<Message>> getChatMessagesByStanzaIds(
+    String jid,
+    Iterable<String> stanzaIds,
+  ) async {
+    final ids = stanzaIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty) {
+      return const <Message>[];
+    }
+    final query = select(messages)
+      ..where(
+        (tbl) => tbl.chatJid.equals(jid) & tbl.stanzaID.isIn(ids),
+      )
+      ..orderBy([
+        (tbl) => OrderingTerm(
+              expression: tbl.timestamp,
+              mode: OrderingMode.desc,
+            ),
+        (tbl) => OrderingTerm(
+              expression: tbl.deltaMsgId,
+              mode: OrderingMode.desc,
+            ),
+        (tbl) => OrderingTerm(
+              expression: tbl.stanzaID,
+              mode: OrderingMode.desc,
+            ),
+      ]);
+    return query.get();
+  }
+
+  @override
+  Future<List<Message>> getChatMessagesBefore(
+    String jid, {
+    required DateTime beforeTimestamp,
+    required String beforeStanzaId,
+    int? beforeDeltaMsgId,
+    required int limit,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) {
+    return _chatMessagesBeforeSelectable(
+      jid: jid,
+      filter: filter,
+      limit: limit,
+      beforeTimestamp: beforeTimestamp,
+      beforeStanzaId: beforeStanzaId,
+      beforeDeltaMsgId: beforeDeltaMsgId,
     ).get();
   }
 
@@ -1696,6 +1802,111 @@ WHERE delta_chat_id IS NOT NULL
         Variable<int>(filterValue),
         Variable<int>(limit),
         Variable<int>(offset),
+      ],
+      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
+    );
+    return query.map((row) => messages.map(row.data));
+  }
+
+  Selectable<Message> _chatMessagesBeforeSelectable({
+    required String jid,
+    required MessageTimelineFilter filter,
+    required int limit,
+    required DateTime beforeTimestamp,
+    required String beforeStanzaId,
+    int? beforeDeltaMsgId,
+  }) {
+    final filterValue = filter.index;
+    if (beforeDeltaMsgId == null) {
+      final query = customSelect(
+        '''
+        SELECT m.*
+        FROM messages m
+        LEFT JOIN message_copies mc
+          ON mc.dc_msg_id = m.delta_msg_id
+         AND mc.dc_account_id = m.delta_account_id
+        LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
+        LEFT JOIN message_participants mp
+          ON mp.share_id = mc.share_id AND mp.contact_jid = ?
+        WHERE m.chat_jid = ?
+          AND (
+            CASE WHEN ? = 0 THEN
+              (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
+            ELSE
+              (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+            END
+          )
+          AND (
+            m.timestamp < ?
+            OR (
+              m.timestamp = ?
+              AND m.delta_msg_id IS NULL
+              AND m.stanza_i_d < ?
+            )
+          )
+        ORDER BY m.timestamp DESC, m.delta_msg_id DESC, m.stanza_i_d DESC
+        LIMIT ?
+        ''',
+        variables: [
+          Variable<String>(jid),
+          Variable<String>(jid),
+          Variable<int>(filterValue),
+          Variable<DateTime>(beforeTimestamp),
+          Variable<DateTime>(beforeTimestamp),
+          Variable<String>(beforeStanzaId),
+          Variable<int>(limit),
+        ],
+        readsFrom: {
+          messages,
+          messageCopies,
+          messageShares,
+          messageParticipants
+        },
+      );
+      return query.map((row) => messages.map(row.data));
+    }
+    final query = customSelect(
+      '''
+      SELECT m.*
+      FROM messages m
+      LEFT JOIN message_copies mc
+        ON mc.dc_msg_id = m.delta_msg_id
+       AND mc.dc_account_id = m.delta_account_id
+      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
+      LEFT JOIN message_participants mp
+        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
+      WHERE m.chat_jid = ?
+        AND (
+          CASE WHEN ? = 0 THEN
+            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
+          ELSE
+            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+          END
+        )
+        AND (
+          m.timestamp < ?
+          OR (
+            m.timestamp = ?
+            AND (
+              m.delta_msg_id < ?
+              OR m.delta_msg_id IS NULL
+              OR (m.delta_msg_id = ? AND m.stanza_i_d < ?)
+            )
+          )
+        )
+      ORDER BY m.timestamp DESC, m.delta_msg_id DESC, m.stanza_i_d DESC
+      LIMIT ?
+      ''',
+      variables: [
+        Variable<String>(jid),
+        Variable<String>(jid),
+        Variable<int>(filterValue),
+        Variable<DateTime>(beforeTimestamp),
+        Variable<DateTime>(beforeTimestamp),
+        Variable<int>(beforeDeltaMsgId),
+        Variable<int>(beforeDeltaMsgId),
+        Variable<String>(beforeStanzaId),
+        Variable<int>(limit),
       ],
       readsFrom: {messages, messageCopies, messageShares, messageParticipants},
     );

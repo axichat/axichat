@@ -301,7 +301,10 @@ class _GuestBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.04),
         border: Border(
-          bottom: BorderSide(color: calendarBorderColor, width: 1),
+          bottom: BorderSide(
+            color: calendarBorderColor,
+            width: context.borderSide.width,
+          ),
         ),
       ),
       padding: bannerPadding,
@@ -315,7 +318,11 @@ class _GuestBanner extends StatelessWidget {
             },
           ),
           const SizedBox(width: calendarGutterMd),
-          Icon(Icons.info_outline_rounded, size: 18, color: accent),
+          Icon(
+            Icons.info_outline_rounded,
+            size: context.sizing.menuItemIconSize,
+            color: accent,
+          ),
           const SizedBox(width: calendarGutterMd),
           Expanded(
             child: Text(

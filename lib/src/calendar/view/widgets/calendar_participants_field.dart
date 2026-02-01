@@ -559,7 +559,7 @@ class _ParticipantSelectField<T> extends StatelessWidget {
             border: ShadBorder.all(
               color: calendarBorderColor,
               radius: BorderRadius.circular(calendarBorderRadius),
-              width: 1,
+              width: context.borderSide.width,
             ),
           ),
           padding: const EdgeInsets.symmetric(

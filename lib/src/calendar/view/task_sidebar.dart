@@ -310,9 +310,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     if (trimmed == _lastParserInput) {
       return;
     }
-    _parserDebounce = Timer(const Duration(milliseconds: 350), () {
-      _runParser(trimmed);
-    });
+    _parserDebounce = Timer(
+      calendarScrollAnimationDuration + calendarTaskSplitPreviewAnimationDuration,
+      () {
+        _runParser(trimmed);
+      },
+    );
   }
 
   void _handleAdvancedToggle() {
@@ -4144,7 +4147,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AnimatedCrossFade(
-          duration: const Duration(milliseconds: 180),
+          duration: calendarSidebarToggleDuration,
           crossFadeState: showAddTaskSection
               ? CrossFadeState.showFirst
               : CrossFadeState.showSecond,
@@ -4484,15 +4487,15 @@ class _SidebarAccordionSection extends StatelessWidget {
                               onTap: () => onToggleSection(section),
                               child: AnimatedContainer(
                                 key: ValueKey('${section.name}-collapsed'),
-                                duration: const Duration(milliseconds: 120),
+                                duration: calendarTaskSplitPreviewAnimationDuration,
                                 padding: const EdgeInsets.fromLTRB(
-                                  14,
-                                  6,
-                                  14,
-                                  6,
+                                  calendarRecurrenceEndGap,
+                                  calendarInsetLg,
+                                  calendarRecurrenceEndGap,
+                                  calendarInsetLg,
                                 ),
                                 constraints: const BoxConstraints(
-                                  minHeight: 40,
+                                  minHeight: axiSizing.buttonHeightRegular,
                                 ),
                                 decoration: BoxDecoration(
                                   color: isHovering
@@ -4506,7 +4509,7 @@ class _SidebarAccordionSection extends StatelessWidget {
                                   border: isHovering
                                       ? Border.all(
                                           color: calendarPrimaryColor,
-                                          width: 1.5,
+                                          width: context.borderSide.width,
                                         )
                                       : null,
                                 ),
@@ -4645,13 +4648,16 @@ class _SidebarTaskList extends StatelessWidget {
       onDrop: onDrop,
       builder: (context, isHovering, _) {
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: calendarSlotHoverAnimationDuration,
           decoration: BoxDecoration(
             color: isHovering
                 ? calendarPrimaryColor.withValues(alpha: 0.08)
                 : sidebarBackgroundColor,
             border: isHovering
-                ? Border.all(color: calendarPrimaryColor, width: 2)
+                ? Border.all(
+                    color: calendarPrimaryColor,
+                    width: context.borderSide.width * 2,
+                  )
                 : null,
           ),
           child: tasks.isEmpty
@@ -4667,7 +4673,7 @@ class _SidebarTaskList extends StatelessWidget {
                       physics: const NeverScrollableScrollPhysics(),
                       padding: const EdgeInsets.symmetric(
                         horizontal: calendarInsetLg,
-                        vertical: 2,
+                        vertical: axiSpaceXxs,
                       ),
                       itemCount: tasks.length,
                       onReorder: onReorder!,
@@ -4737,7 +4743,7 @@ class _SidebarEmptyState extends StatelessWidget {
           children: [
             Icon(
               isHovering ? Icons.add_task : Icons.inbox_outlined,
-              size: 48,
+              size: context.sizing.iconButtonTapTarget,
               color: isHovering ? calendarPrimaryColor : calendarTimeLabelColor,
             ),
             const SizedBox(height: calendarGutterMd),
@@ -4828,7 +4834,9 @@ class _SectionCountBadge extends StatelessWidget {
     );
 
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 52),
+      constraints: BoxConstraints(
+        maxWidth: context.sizing.iconButtonTapTarget + context.spacing.xs,
+      ),
       child: FittedBox(fit: BoxFit.scaleDown, child: badge),
     );
   }
@@ -5346,16 +5354,20 @@ class _SidebarResizeHandle extends StatelessWidget {
           onPointerUp: onPointerUp,
           onPointerCancel: onPointerCancel,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: 12,
+            duration: calendarTaskSplitPreviewAnimationDuration,
+            width: calendarGutterMd,
             color: uiState.isResizing
                 ? calendarPrimaryColor.withValues(alpha: 0.2)
                 : Colors.transparent,
             child: Center(
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: uiState.isResizing ? 3 : 2,
-                height: uiState.isResizing ? 60 : 50,
+                duration: calendarTaskSplitPreviewAnimationDuration,
+                width: uiState.isResizing
+                    ? context.borderSide.width * 3
+                    : context.borderSide.width * 2,
+                height: uiState.isResizing
+                    ? calendarTimeSlotHeight
+                    : context.sizing.iconButtonTapTarget + context.spacing.xs,
                 decoration: BoxDecoration(
                   color: uiState.isResizing
                       ? calendarPrimaryColor
@@ -5718,14 +5730,14 @@ class _AdvancedRecurrenceSection extends StatelessWidget {
           showAdvancedToggle: false,
           forceAdvanced: true,
           spacingConfig: const RecurrenceEditorSpacing(
-            chipSpacing: 8,
-            chipRunSpacing: 8,
-            weekdaySpacing: 12,
-            advancedSectionSpacing: 12,
-            endSpacing: 14,
-            fieldGap: 12,
+            chipSpacing: calendarGutterSm,
+            chipRunSpacing: calendarGutterSm,
+            weekdaySpacing: calendarGutterMd,
+            advancedSectionSpacing: calendarGutterMd,
+            endSpacing: calendarRecurrenceEndGap,
+            fieldGap: calendarGutterMd,
           ),
-          intervalSelectWidth: 118,
+          intervalSelectWidth: calendarCompactDayColumnWidth,
           onChanged: onChanged,
         );
       },

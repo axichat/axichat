@@ -2143,11 +2143,169 @@ class EmailService {
     yield* db.watchChatMessages(jid, start: start, end: end, filter: filter);
   }
 
+  Stream<List<Message>> messageStreamForChatStanzaIds(
+    String jid, {
+    required List<String> stanzaIds,
+  }) async* {
+    await _ensureReady();
+    final normalized = _normalizeStanzaIds(stanzaIds);
+    if (normalized.isEmpty) {
+      yield const <Message>[];
+      return;
+    }
+    final db = await _databaseBuilder();
+    final initial = await db.getChatMessagesByStanzaIds(jid, normalized);
+    yield _orderMessagesByStanzaIds(
+      orderedIds: normalized,
+      messages: initial,
+    );
+    yield* _watchChatMessagesByStanzaIds(
+      db: db,
+      jid: jid,
+      stanzaIds: normalized,
+    ).map(
+      (messages) => _orderMessagesByStanzaIds(
+        orderedIds: normalized,
+        messages: messages,
+      ),
+    );
+  }
+
+  Future<List<Message>> loadChatMessagesBefore({
+    required String jid,
+    required DateTime beforeTimestamp,
+    required String beforeStanzaId,
+    int? beforeDeltaMsgId,
+    required int limit,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    await _ensureReady();
+    final db = await _databaseBuilder();
+    return db.getChatMessagesBefore(
+      jid,
+      beforeTimestamp: beforeTimestamp,
+      beforeStanzaId: beforeStanzaId,
+      beforeDeltaMsgId: beforeDeltaMsgId,
+      limit: limit,
+      filter: filter,
+    );
+  }
+
   Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String jid) async* {
     await _ensureReady();
     final db = await _databaseBuilder();
     yield await db.getPinnedMessages(jid);
     yield* db.watchPinnedMessages(jid);
+  }
+
+  List<String> _normalizeStanzaIds(Iterable<String> ids) {
+    return ids
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+  }
+
+  Stream<List<Message>> _watchChatMessagesByStanzaIds({
+    required XmppDatabase db,
+    required String jid,
+    required List<String> stanzaIds,
+  }) {
+    if (stanzaIds.isEmpty) {
+      return Stream.value(const <Message>[]);
+    }
+    final chunks = _chunkStanzaIds(stanzaIds);
+    if (chunks.length == 1) {
+      return db.watchChatMessagesByStanzaIds(jid, chunks.first);
+    }
+    final controller = StreamController<List<Message>>.broadcast();
+    final current = <String, Message>{};
+    final subscriptions = <StreamSubscription<List<Message>>>[];
+    var listeners = 0;
+    var closed = false;
+
+    void emit() {
+      if (!controller.hasListener) return;
+      controller.add(current.values.toList(growable: false));
+    }
+
+    void start() {
+      for (final chunk in chunks) {
+        final chunkIds = chunk.toSet();
+        final subscription =
+            db.watchChatMessagesByStanzaIds(jid, chunk).listen((messages) {
+          if (closed) return;
+          for (final id in chunkIds) {
+            current.remove(id);
+          }
+          for (final message in messages) {
+            current[message.stanzaID] = message;
+          }
+          emit();
+        });
+        subscriptions.add(subscription);
+      }
+    }
+
+    Future<void> stop() async {
+      if (closed) return;
+      closed = true;
+      for (final subscription in subscriptions) {
+        await subscription.cancel();
+      }
+      await controller.close();
+    }
+
+    controller.onListen = () {
+      listeners++;
+      if (listeners == 1) {
+        start();
+      } else {
+        emit();
+      }
+    };
+
+    controller.onCancel = () async {
+      listeners--;
+      if (listeners <= 0) {
+        await stop();
+      }
+    };
+
+    return controller.stream;
+  }
+
+  List<List<String>> _chunkStanzaIds(List<String> ids) {
+    const chunkSize = 900;
+    if (ids.length <= chunkSize) {
+      return <List<String>>[ids];
+    }
+    final chunks = <List<String>>[];
+    for (var i = 0; i < ids.length; i += chunkSize) {
+      final end = (i + chunkSize) > ids.length ? ids.length : i + chunkSize;
+      chunks.add(ids.sublist(i, end));
+    }
+    return chunks;
+  }
+
+  List<Message> _orderMessagesByStanzaIds({
+    required List<String> orderedIds,
+    required List<Message> messages,
+  }) {
+    if (messages.isEmpty) {
+      return const <Message>[];
+    }
+    final byId = <String, Message>{
+      for (final message in messages) message.stanzaID: message,
+    };
+    final ordered = <Message>[];
+    for (final id in orderedIds) {
+      final message = byId[id];
+      if (message != null) {
+        ordered.add(message);
+      }
+    }
+    return ordered;
   }
 
   Stream<List<Draft>> draftsStream({

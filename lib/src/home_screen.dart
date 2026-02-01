@@ -148,6 +148,17 @@ class _HomeShellState extends State<HomeShell> {
     final navPlacement = EnvScope.of(context).navPlacement;
     final storageManager = context.watch<CalendarStorageManager>();
     final calendarAvailable = storageManager.isAuthStorageReady;
+    final chatsState = context.watch<ChatsCubit>().state;
+    final chatItems = chatsState.items ?? const <m.Chat>[];
+    final badgeCounts = <HomeTab, int>{
+      HomeTab.invites: context.watch<RosterCubit>().inviteCount,
+      HomeTab.chats: chatItems
+          .where((chat) => !chat.archived && !chat.spam)
+          .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
+      HomeTab.drafts: context.watch<DraftCubit>().state.items?.length ?? 0,
+      HomeTab.spam:
+          chatItems.where((chat) => chat.spam && !chat.archived).length,
+    };
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
     final tabs = <HomeTabEntry>[
       HomeTabEntry(
@@ -208,6 +219,7 @@ class _HomeShellState extends State<HomeShell> {
           homeTabIndex: _homeTabIndex,
           calendarAvailable: calendarAvailable,
           collapsed: _railCollapsed,
+          badgeCounts: badgeCounts,
           onCollapsedChanged: (value) {
             setState(() {
               _railCollapsed = value;

@@ -459,6 +459,17 @@ class AppLocalizationsFr extends AppLocalizations {
       'Inclure le pied de page de signature pour l\'e-mail';
 
   @override
+  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String chatSettingsCapabilitiesUpdated(Object timestamp) {
+    return 'Last checked: $timestamp';
+  }
+
+  @override
+  String get chatSettingsCapabilitiesEmpty => 'No features reported';
+
+  @override
   String get chatSignatureHintEnabled =>
       'Aide à garder les fils e-mail multi-destinataires intacts.';
 

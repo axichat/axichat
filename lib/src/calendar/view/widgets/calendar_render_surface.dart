@@ -1465,7 +1465,10 @@ class RenderCalendarSurface extends RenderBox
 
       if (geometry == CalendarTaskGeometry.empty) {
         child.layout(
-          const BoxConstraints.tightFor(width: 0, height: 0),
+          const BoxConstraints.tightFor(
+            width: calendarTaskColumnGap,
+            height: calendarTaskColumnGap,
+          ),
           parentUsesSize: true,
         );
         parentData

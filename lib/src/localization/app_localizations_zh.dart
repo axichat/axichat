@@ -430,6 +430,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatSignatureToggleLabel => '为邮件添加分享令牌页脚';
 
   @override
+  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String chatSettingsCapabilitiesUpdated(Object timestamp) {
+    return 'Last checked: $timestamp';
+  }
+
+  @override
+  String get chatSettingsCapabilitiesEmpty => 'No features reported';
+
+  @override
   String get chatSignatureHintEnabled => '帮助保持多收件人的邮件线程。';
 
   @override
@@ -6095,6 +6106,17 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatSignatureToggleLabel => '為電郵加入分享權杖頁腳';
+
+  @override
+  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String chatSettingsCapabilitiesUpdated(Object timestamp) {
+    return 'Last checked: $timestamp';
+  }
+
+  @override
+  String get chatSettingsCapabilitiesEmpty => 'No features reported';
 
   @override
   String get chatSignatureHintEnabled => '有助保持多收件人的電郵串。';

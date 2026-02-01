@@ -122,7 +122,8 @@ class _CalendarSpinnerState extends State<_CalendarSpinner>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 1100),
+      duration:
+          authCompletionAnimationDuration + calendarTaskSplitPreviewAnimationDuration,
       vsync: this,
     )..repeat();
   }
@@ -208,8 +209,8 @@ class SkeletonLoader extends StatefulWidget {
   const SkeletonLoader({
     super.key,
     this.width,
-    this.height = 16,
-    this.borderRadius = 4,
+    this.height = axiSizing.menuItemIconSize,
+    this.borderRadius = axiSizing.containerRadius,
   });
 
   final double? width;
@@ -229,7 +230,8 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration:
+          authCompletionAnimationDuration + calendarScrollAnimationDuration,
       vsync: this,
     )..repeat();
     _animation = Tween<double>(begin: -1, end: 1).animate(
@@ -277,6 +279,12 @@ class TaskSkeletonTile extends StatelessWidget {
         final double primaryLineWidth = availableWidth * 0.6;
         final double secondaryLineWidth = availableWidth * 0.3;
 
+        final double iconSize = context.sizing.iconButtonIconSize;
+        final double menuIconSize = context.sizing.menuItemIconSize;
+        final double labelHeight =
+            context.textTheme.label.fontSize ?? menuIconSize;
+        final double labelSmHeight =
+            context.textTheme.labelSm.fontSize ?? menuIconSize;
         return Container(
           padding: calendarPaddingXl,
           margin: calendarMarginSmall,
@@ -290,22 +298,33 @@ class TaskSkeletonTile extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const SkeletonLoader(width: 20, height: 20, borderRadius: 10),
+              SkeletonLoader(
+                width: iconSize,
+                height: iconSize,
+                borderRadius: context.sizing.containerRadius,
+              ),
               const SizedBox(width: calendarGutterMd),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const SkeletonLoader(width: double.infinity, height: 16),
+                    SkeletonLoader(
+                      width: double.infinity,
+                      height: labelHeight,
+                    ),
                     const SizedBox(height: calendarGutterSm),
-                    SkeletonLoader(width: primaryLineWidth, height: 12),
+                    SkeletonLoader(width: primaryLineWidth, height: labelSmHeight),
                     const SizedBox(height: calendarInsetMd),
-                    SkeletonLoader(width: secondaryLineWidth, height: 12),
+                    SkeletonLoader(width: secondaryLineWidth, height: labelSmHeight),
                   ],
                 ),
               ),
               const SizedBox(width: calendarGutterMd),
-              const SkeletonLoader(width: 24, height: 24, borderRadius: 4),
+              SkeletonLoader(
+                width: context.sizing.inputSuffixButtonSize,
+                height: context.sizing.inputSuffixButtonSize,
+                borderRadius: context.sizing.containerRadius,
+              ),
             ],
           ),
         );
@@ -319,7 +338,7 @@ class PulsatingIcon extends StatefulWidget {
     super.key,
     required this.icon,
     this.color,
-    this.size = 24.0,
+    this.size = axiSizing.inputSuffixButtonSize,
   });
 
   final IconData icon;
@@ -339,7 +358,7 @@ class _PulsatingIconState extends State<PulsatingIcon>
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
+      duration: authCompletionAnimationDuration,
       vsync: this,
     )..repeat(reverse: true);
     _animation = Tween<double>(begin: 0.5, end: 1.0).animate(

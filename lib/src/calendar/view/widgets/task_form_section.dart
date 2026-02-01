@@ -131,7 +131,11 @@ class TaskSectionExpander extends StatelessWidget {
 /// Divider that matches the legacy calendar form styling (subtle grey line with
 /// pill radius). Used between logical sections in sidebars and modals.
 class TaskSectionDivider extends StatelessWidget {
-  const TaskSectionDivider({super.key, this.verticalPadding = 12, this.color});
+  const TaskSectionDivider({
+    super.key,
+    this.verticalPadding = calendarGutterMd,
+    this.color,
+  });
 
   final double verticalPadding;
   final Color? color;
@@ -141,7 +145,7 @@ class TaskSectionDivider extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(vertical: verticalPadding),
       child: Container(
-        height: 1,
+        height: context.borderSide.width,
         decoration: BoxDecoration(
           color: (color ?? calendarBorderColor).withValues(alpha: 0.45),
           borderRadius: BorderRadius.circular(context.sizing.containerRadius),
@@ -375,7 +379,10 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(radius),
-              borderSide: BorderSide(color: focusedColor, width: 2),
+              borderSide: BorderSide(
+                color: focusedColor,
+                width: context.borderSide.width * 2,
+              ),
             ),
             contentPadding: widget.contentPadding ??
                 const EdgeInsets.symmetric(
@@ -691,8 +698,12 @@ class TaskRecurrenceSection extends StatelessWidget {
                   vertical: calendarGutterSm,
                 ),
             weekdayChipPadding: weekdayChipPadding ??
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            intervalSelectWidth: intervalSelectWidth ?? 120,
+                const EdgeInsets.symmetric(
+                  horizontal: calendarGutterMd,
+                  vertical: calendarInsetLg,
+                ),
+            intervalSelectWidth:
+                intervalSelectWidth ?? calendarCompactDayColumnWidth,
           ),
         ],
       ),
@@ -1181,12 +1192,15 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
         return Align(
           alignment: Alignment.topLeft,
           child: Material(
-            elevation: 6,
+            elevation: calendarZoomControlsElevation,
             borderRadius: BorderRadius.circular(
               context.sizing.containerRadius,
             ),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 240, minWidth: 220),
+              constraints: const BoxConstraints(
+                maxHeight: calendarWeekHeaderHeight * 6,
+                minWidth: calendarSidebarMinWidth,
+              ),
               child: ListView.separated(
                 padding: EdgeInsets.zero,
                 shrinkWrap: true,
@@ -1194,7 +1208,7 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                   final suggestion = list[index];
                   return ListTile(
                     dense: true,
-                    horizontalTitleGap: 8,
+                    horizontalTitleGap: calendarGutterSm,
                     onTap: () {
                       onSelected(suggestion);
                       widget.onChanged?.call(suggestion.label);
@@ -1212,7 +1226,10 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                   );
                 },
                 separatorBuilder: (_, __) =>
-                    Divider(height: 1, color: calendarBorderColor),
+                    Divider(
+                      height: context.borderSide.width,
+                      color: calendarBorderColor,
+                    ),
                 itemCount: list.length,
               ),
             ),

@@ -191,7 +191,7 @@ class _WeekdayHeaderRow extends StatelessWidget {
     );
     final Color divider = colors.border.withValues(alpha: 0.35);
     return SizedBox(
-      height: 40,
+      height: calendarWeekHeaderHeight,
       child: Row(
         children: labels.asMap().entries.map((entry) {
           final bool showRightBorder = entry.key != labels.length - 1;
@@ -202,9 +202,12 @@ class _WeekdayHeaderRow extends StatelessWidget {
                 border: Border(
                   right: BorderSide(
                     color: showRightBorder ? divider : Colors.transparent,
-                    width: 1,
+                    width: context.borderSide.width,
                   ),
-                  bottom: BorderSide(color: divider, width: 1),
+                  bottom: BorderSide(
+                    color: divider,
+                    width: context.borderSide.width,
+                  ),
                 ),
               ),
               child: Center(child: Text(entry.value, style: labelStyle)),

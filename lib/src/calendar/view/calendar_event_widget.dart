@@ -66,7 +66,7 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
   void initState() {
     super.initState();
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: calendarSlotHoverAnimationDuration,
       vsync: this,
     );
     _scaleAnimation = Tween<double>(begin: 1.0, end: 1.02).animate(
@@ -104,15 +104,16 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
 
   double get _adjustedWidth {
     if (widget.overlapCount > 1) {
-      return (widget.width - 4.0) / widget.overlapCount - 2.0;
+      return (widget.width - calendarInsetMd) / widget.overlapCount -
+          calendarInsetSm;
     }
-    return widget.width - 8.0;
+    return widget.width - calendarGutterSm;
   }
 
   double get _adjustedLeftOffset {
-    final baseOffset = widget.leftOffset + 4.0;
+    final baseOffset = widget.leftOffset + calendarInsetMd;
     if (widget.overlapCount > 1) {
-      final slotWidth = (widget.width - 4.0) / widget.overlapCount;
+      final slotWidth = (widget.width - calendarInsetMd) / widget.overlapCount;
       return baseOffset + (widget.overlapIndex * slotWidth);
     }
     return baseOffset;
@@ -517,7 +518,7 @@ class _CalendarEventContainer extends StatelessWidget {
                     : calendarLightShadow,
             border: Border.all(
               color: stripeColor.withValues(alpha: 0.35),
-              width: 1,
+              width: context.borderSide.width,
             ),
           ),
           child: Stack(
@@ -526,7 +527,7 @@ class _CalendarEventContainer extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Container(
-                    width: 4,
+                    width: calendarInsetMd,
                     decoration: BoxDecoration(
                       color: stripeColor,
                       borderRadius: BorderRadius.only(
@@ -656,7 +657,7 @@ class _CalendarEventContent extends StatelessWidget {
               children: [
                 Text(
                   '📍',
-                  style: context.textTheme.labelSm.copyWith(height: 1),
+                  style: context.textTheme.labelSm,
                 ),
                 const SizedBox(width: calendarInsetSm),
                 Expanded(

@@ -65,7 +65,7 @@ class ErrorDisplay extends StatelessWidget {
                   child: Icon(
                     Icons.close,
                     color: scheme.mutedForeground,
-                    size: 16,
+                    size: context.sizing.menuItemIconSize,
                   ),
                 ),
             ],
@@ -139,7 +139,7 @@ class ErrorSnackBar {
             Icon(
               Icons.error_outline,
               color: scheme.destructiveForeground,
-              size: 18,
+              size: context.sizing.iconButtonIconSize,
             ),
             const SizedBox(width: calendarGutterSm),
             Expanded(

@@ -879,6 +879,24 @@ abstract class AppLocalizations {
   /// **'Include share token footer for email'**
   String get chatSignatureToggleLabel;
 
+  /// No description provided for @chatSettingsCapabilitiesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Capabilities'**
+  String get chatSettingsCapabilitiesTitle;
+
+  /// No description provided for @chatSettingsCapabilitiesUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Last checked: {timestamp}'**
+  String chatSettingsCapabilitiesUpdated(Object timestamp);
+
+  /// No description provided for @chatSettingsCapabilitiesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No features reported'**
+  String get chatSettingsCapabilitiesEmpty;
+
   /// No description provided for @chatSignatureHintEnabled.
   ///
   /// In en, this message translates to:

@@ -447,6 +447,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatSignatureToggleLabel => 'Include share token footer for email';
 
   @override
+  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+
+  @override
+  String chatSettingsCapabilitiesUpdated(Object timestamp) {
+    return 'Last checked: $timestamp';
+  }
+
+  @override
+  String get chatSettingsCapabilitiesEmpty => 'No features reported';
+
+  @override
   String get chatSignatureHintEnabled =>
       'Helps keep multi-recipient email threads intact.';
 

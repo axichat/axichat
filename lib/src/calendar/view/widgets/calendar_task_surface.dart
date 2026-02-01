@@ -559,7 +559,7 @@ class _CalendarTaskDragFeedback extends StatelessWidget {
       valueListenable: bindings.cancelBucketHoverNotifier,
       builder: (context, hovering, child) {
         return AnimatedOpacity(
-          duration: const Duration(milliseconds: 120),
+          duration: calendarTaskSplitPreviewAnimationDuration,
           opacity: hovering ? 0.45 : 1.0,
           child: child,
         );

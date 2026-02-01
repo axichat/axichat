@@ -599,10 +599,7 @@ class _ResizableTaskBody extends StatelessWidget {
           maxLines: descriptionLines,
           overflow: descriptionOverflow,
           softWrap: true,
-          style: context.textTheme.labelSm.copyWith(
-            color: secondaryColor,
-            height: 1.2,
-          ),
+          style: context.textTheme.labelSm.copyWith(color: secondaryColor),
         ),
       );
     }
@@ -657,8 +654,6 @@ class _ResizableTaskBody extends StatelessWidget {
 class _ResizableTaskOverlay extends StatelessWidget {
   const _ResizableTaskOverlay({required this.child, required this.overlay});
 
-  static const double _overlayInset = 4.0;
-
   final Widget child;
   final Widget? overlay;
 
@@ -667,10 +662,11 @@ class _ResizableTaskOverlay extends StatelessWidget {
     if (overlay == null) {
       return child;
     }
+    final double overlayInset = context.spacing.xs;
     return Stack(
       children: [
         child,
-        Positioned(top: _overlayInset, right: _overlayInset, child: overlay!),
+        Positioned(top: overlayInset, right: overlayInset, child: overlay!),
       ],
     );
   }
@@ -693,8 +689,8 @@ class _TaskAccentStripe extends StatelessWidget {
         decoration: BoxDecoration(
           color: color,
           borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(4),
-            bottomLeft: Radius.circular(4),
+            topLeft: Radius.circular(calendarEventRadius),
+            bottomLeft: Radius.circular(calendarEventRadius),
           ),
         ),
       ),
@@ -750,7 +746,7 @@ class _TaskLocationRow extends StatelessWidget {
       children: [
         Text(
           '📍',
-          style: context.textTheme.label.copyWith(height: 1),
+          style: context.textTheme.label,
         ),
         Expanded(
           child: Text(

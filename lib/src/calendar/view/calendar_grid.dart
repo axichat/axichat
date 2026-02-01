@@ -176,7 +176,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   );
   static const double _desktopHandleExtent = 8.0;
   static const double _touchHandleExtent = 28.0;
-  static const Duration _touchDragLongPressDelay = Duration(milliseconds: 260);
+  static const Duration _touchDragLongPressDelay =
+      calendarScrollAnimationDuration;
   static const ValueListenable<bool> _defaultCancelBucketHoverNotifier =
       AlwaysStoppedAnimation<bool>(false);
   Ticker? _edgeAutoScrollTicker;
@@ -712,7 +713,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       final double anchorY =
           _taskInteractionController.dragPointerOffsetFromTop ?? 0.0;
       return DragFeedbackHint(
-        width: 0.0,
+        width: calendarTaskColumnGap,
         pointerOffset: 0.0,
         anchorDx: anchorX,
         anchorDy: anchorY,
@@ -748,7 +749,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (width <= 0) {
       _setDragFeedbackHint(
         DragFeedbackHint(
-          width: 0.0,
+          width: calendarTaskColumnGap,
           pointerOffset: 0.0,
           anchorDx: _taskInteractionController.dragAnchorDx ?? 0.0,
           anchorDy: _taskInteractionController.dragPointerOffsetFromTop ?? 0.0,
@@ -1216,7 +1217,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _stopEdgeAutoScroll();
     _setDragFeedbackHint(
       const DragFeedbackHint(
-        width: 0.0,
+        width: calendarTaskColumnGap,
         pointerOffset: 0.0,
         anchorDx: 0.0,
         anchorDy: 0.0,
@@ -3465,7 +3466,7 @@ class DayEventsStrip extends StatelessWidget {
                 buttonSize: iconButtonSize,
                 tapTargetSize: iconTapTarget,
                 borderColor: Colors.transparent,
-                borderWidth: 0,
+                borderWidth: context.borderSide.width * 0,
                 backgroundColor: colors.primary.withValues(alpha: 0.08),
                 color: colors.primary,
                 tooltip: context.l10n.calendarAddDayEvent,
