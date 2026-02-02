@@ -31,15 +31,13 @@ class SessionCapabilityIndicators extends StatelessWidget {
     final spacing = context.spacing;
     final chatChip = _chatChipData(colors, l10n);
     final emailChip = _emailChipData(colors, l10n);
-    final chipAlignment = compact ? WrapAlignment.end : WrapAlignment.start;
-    return Wrap(
-      alignment: chipAlignment,
-      runAlignment: chipAlignment,
-      spacing: spacing.s,
-      runSpacing: spacing.xs,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    final crossAxisAlignment =
+        compact ? CrossAxisAlignment.end : CrossAxisAlignment.start;
+    return Column(
+      crossAxisAlignment: crossAxisAlignment,
       children: [
         _CapabilityChip(data: chatChip, compact: compact),
+        SizedBox(height: spacing.xs),
         _CapabilityChip(data: emailChip, compact: compact),
       ],
     );
@@ -152,11 +150,11 @@ class _CapabilityChip extends StatelessWidget {
     final radii = context.radii;
     final chipPadding = compact
         ? EdgeInsets.symmetric(
-            horizontal: spacing.m,
+            horizontal: spacing.s,
             vertical: spacing.xs,
           )
         : EdgeInsets.symmetric(
-            horizontal: spacing.l,
+            horizontal: spacing.m,
             vertical: spacing.s,
           );
     final labelStyle = context.textTheme.small.copyWith(

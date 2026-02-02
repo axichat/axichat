@@ -22,19 +22,17 @@ import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/demo/demo_calendar.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
-import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
-import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
-import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -189,13 +187,20 @@ class _AxichatState extends State<Axichat> {
                     credentialStore: context.read<CredentialStore>(),
                     databaseBuilder: () => context.read<XmppService>().database,
                     notificationService: context.read<NotificationService>(),
+                    xmppService: context.read<XmppService>(),
                     messageService: context.read<MessageService>(),
                   ),
                 ),
                 RepositoryProvider<HomeRefreshSyncService>(
                   create: (context) => HomeRefreshSyncService(
                     xmppService: context.read<XmppService>(),
-                    emailService: context.read<EmailService>(),
+                    emailService: context
+                            .read<SettingsCubit>()
+                            .state
+                            .endpointConfig
+                            .enableSmtp
+                        ? context.read<EmailService>()
+                        : null,
                   )..start(),
                 ),
               ],
@@ -205,7 +210,13 @@ class _AxichatState extends State<Axichat> {
                     create: (context) => AuthenticationCubit(
                       credentialStore: context.read<CredentialStore>(),
                       xmppService: context.read<XmppService>(),
-                      emailService: context.read<EmailService>(),
+                      emailService: context
+                              .read<SettingsCubit>()
+                              .state
+                              .endpointConfig
+                              .enableSmtp
+                          ? context.read<EmailService>()
+                          : null,
                       homeRefreshSyncService:
                           context.read<HomeRefreshSyncService>(),
                       notificationService: context.read<NotificationService>(),
@@ -245,7 +256,13 @@ class _AxichatState extends State<Axichat> {
                       xmppService: context.read<XmppService>(),
                       homeRefreshSyncService:
                           context.read<HomeRefreshSyncService>(),
-                      emailService: context.read<EmailService>(),
+                      emailService: context
+                              .read<SettingsCubit>()
+                              .state
+                              .endpointConfig
+                              .enableSmtp
+                          ? context.read<EmailService>()
+                          : null,
                     ),
                   ),
                   BlocProvider(
@@ -257,12 +274,31 @@ class _AxichatState extends State<Axichat> {
                   BlocProvider(
                     create: (context) => DraftCubit(
                       messageService: context.read<MessageService>(),
-                      emailService: context.read<EmailService>(),
+                      emailService: context
+                              .read<SettingsCubit>()
+                              .state
+                              .endpointConfig
+                              .enableSmtp
+                          ? context.read<EmailService>()
+                          : null,
                       shareTokenSignatureEnabled: context
                           .read<SettingsCubit>()
                           .state
                           .shareTokenSignatureEnabled,
                     ),
+                  ),
+                  BlocProvider(
+                    create: (context) {
+                      final endpointConfig =
+                          context.read<SettingsCubit>().state.endpointConfig;
+                      final emailEnabled = endpointConfig.enableSmtp;
+                      return ConnectivityCubit(
+                        xmppBase: context.read<XmppService>(),
+                        emailEnabled: emailEnabled,
+                        emailService:
+                            emailEnabled ? context.read<EmailService>() : null,
+                      );
+                    },
                   ),
                   BlocProvider(create: (context) => ComposeWindowCubit()),
                   if (calendarStorage != null)
@@ -276,7 +312,13 @@ class _AxichatState extends State<Axichat> {
 
                         final CalendarBloc bloc = CalendarBloc(
                           xmppService: xmppService,
-                          emailService: context.read<EmailService>(),
+                          emailService: context
+                                  .read<SettingsCubit>()
+                                  .state
+                                  .endpointConfig
+                                  .enableSmtp
+                              ? context.read<EmailService>()
+                              : null,
                           reminderController: reminderController,
                           syncManagerBuilder: (bloc) {
                             final manager = CalendarSyncManager(
@@ -304,28 +346,9 @@ class _AxichatState extends State<Axichat> {
                               sendSnapshotFile:
                                   xmppService.uploadCalendarSnapshot,
                             );
-
-                            xmppService
-                              ..setCalendarSyncCallback((inbound) async {
-                                if (bloc.isClosed) return false;
-                                return await manager.onCalendarMessage(inbound);
-                              })
-                              ..setCalendarSyncWarningCallback((warning) async {
-                                if (bloc.isClosed) return;
-                                bloc.add(
-                                  CalendarEvent.syncWarningRaised(
-                                    warning: warning,
-                                  ),
-                                );
-                              });
                             return manager;
                           },
                           storage: storage,
-                          onDispose: () {
-                            xmppService
-                              ..clearCalendarSyncCallback()
-                              ..clearCalendarSyncWarningCallback();
-                          },
                         )..add(const CalendarEvent.started());
                         if (seedDemoCalendar) {
                           bloc.add(
@@ -353,16 +376,21 @@ class _AxichatState extends State<Axichat> {
                           previous.endpointConfig != current.endpointConfig,
                       listener: (context, settings) async {
                         final config = settings.endpointConfig;
-                        context
-                            .read<AuthenticationCubit>()
-                            .updateEndpointConfig(config);
+                        final authCubit = context.read<AuthenticationCubit>();
                         final emailService = context.read<EmailService>();
+                        final homeRefreshSyncService =
+                            context.read<HomeRefreshSyncService>();
+                        final connectivityCubit =
+                            context.read<ConnectivityCubit>();
+                        authCubit.updateEndpointConfig(config);
                         emailService.updateEndpointConfig(config);
-                        await context
-                            .read<HomeRefreshSyncService>()
-                            .updateEmailService(
-                              config.enableSmtp ? emailService : null,
-                            );
+                        await homeRefreshSyncService.updateEmailService(
+                          config.enableSmtp ? emailService : null,
+                        );
+                        connectivityCubit.updateEmailContext(
+                          emailEnabled: config.enableSmtp,
+                          emailService: config.enableSmtp ? emailService : null,
+                        );
                         if (!config.enableSmtp) {
                           await emailService.shutdown(
                             clearCredentials: false,
@@ -405,8 +433,6 @@ class MaterialAxichat extends StatefulWidget {
 }
 
 class _MaterialAxichatState extends State<MaterialAxichat> {
-  late final XmppService _xmppService;
-  EmailService? _emailService;
   bool _shareIntentHandling = false;
   bool _shareIntentAwaitingRoute = false;
 
@@ -439,37 +465,14 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   @override
   void initState() {
     super.initState();
-    _xmppService = context.read<XmppService>();
-    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
-    final EmailService? emailService =
-        endpointConfig.enableSmtp ? context.read<EmailService>() : null;
-    _emailService = emailService;
-    if (emailService != null) {
-      _attachEmailCallbacks(emailService);
-    }
     _router.routerDelegate.addListener(_handleRouteChange);
   }
 
   @override
   void dispose() {
     _router.routerDelegate.removeListener(_handleRouteChange);
-    _detachEmailCallbacks();
     _router.dispose();
     super.dispose();
-  }
-
-  void _attachEmailCallbacks(EmailService emailService) {
-    _xmppService
-      ..setEmailSpamSyncCallback(emailService.applySpamSyncUpdate)
-      ..setEmailBlocklistSyncCallback(
-        emailService.applyEmailBlocklistSyncUpdate,
-      );
-  }
-
-  void _detachEmailCallbacks() {
-    _xmppService
-      ..clearEmailSpamSyncCallback()
-      ..clearEmailBlocklistSyncCallback();
   }
 
   @override
@@ -480,13 +483,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         final endpointConfig = state.endpointConfig;
         final EmailService? emailService =
             endpointConfig.enableSmtp ? context.read<EmailService>() : null;
-        if (_emailService != emailService) {
-          _detachEmailCallbacks();
-          if (emailService != null) {
-            _attachEmailCallbacks(emailService);
-          }
-          _emailService = emailService;
-        }
         notificationService
           ..mute = state.mute
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
@@ -756,29 +752,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   },
                 ),
               ],
-              child: Stack(
-                children: [
-                  child ?? const SizedBox.shrink(),
-                  const Positioned.fill(
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: ComposeWindowOverlay(),
-                    ),
-                  ),
-                  const Positioned.fill(
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: OmemoOperationOverlay(),
-                    ),
-                  ),
-                  const Positioned.fill(
-                    child: Material(
-                      type: MaterialType.transparency,
-                      child: XmppOperationOverlay(),
-                    ),
-                  ),
-                ],
-              ),
+              child: child ?? const SizedBox.shrink(),
             );
             Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
               value: overlayStyle,

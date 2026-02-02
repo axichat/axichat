@@ -445,18 +445,15 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
         await db.removeEmailBlock(normalized);
       }
     });
-    final callback = emailBlocklistSyncCallback;
-    if (callback != null) {
-      await callback(
-        anti_abuse.EmailBlocklistSyncUpdate(
-          address: normalized,
-          blocked: blocked,
-          updatedAt: updatedAt,
-          sourceId: sourceId,
-          origin: origin,
-        ),
-      );
-    }
+    emitEmailBlocklistSyncUpdate(
+      anti_abuse.EmailBlocklistSyncUpdate(
+        address: normalized,
+        blocked: blocked,
+        updatedAt: updatedAt,
+        sourceId: sourceId,
+        origin: origin,
+      ),
+    );
   }
 
   String _normalizeEmailBlocklistSourceId(String? sourceId) {

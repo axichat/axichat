@@ -45,6 +45,7 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
+import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -55,6 +56,8 @@ import 'package:axichat/src/home/home_search_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
+import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/session_capability_indicators.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -441,6 +444,8 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
   ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
   CalendarAvailabilityShareCoordinator? _availabilityCoordinator;
   Storage? _storage;
+  StreamSubscription<ChatCalendarSyncDispatch>? _chatCalendarSyncSubscription;
+  StreamSubscription<XmppStreamReady>? _streamReadySubscription;
 
   @override
   void didChangeDependencies() {
@@ -455,6 +460,7 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
       _storage = null;
       _chatCalendarCoordinator = null;
       _availabilityCoordinator = null;
+      _detachChatCalendarSyncSubscription();
     }
     _ensureCoordinators();
   }
@@ -463,20 +469,18 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
     final locate = context.read;
     final storage = widget.storage;
     if (storage == null) {
-      final storageManager = locate<CalendarStorageManager>();
-      if (storageManager.isAuthStorageReady) {
-        locate<CalendarBloc>().clearChatCalendarSyncHandler();
-      }
       _chatCalendarCoordinator = null;
       _availabilityCoordinator = null;
+      _detachChatCalendarSyncSubscription();
       return;
     }
     if (_storage == storage &&
         _chatCalendarCoordinator != null &&
         _availabilityCoordinator != null) {
-      locate<CalendarBloc>()
-        ..registerChatCalendarSyncHandler(_handleChatCalendarSync)
-        ..attachAvailabilityCoordinator(_availabilityCoordinator!);
+      locate<CalendarBloc>().attachAvailabilityCoordinator(
+        _availabilityCoordinator!,
+      );
+      _ensureChatCalendarSyncSubscription();
       return;
     }
     _storage = storage;
@@ -511,33 +515,55 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
         );
       },
     );
-    locate<CalendarBloc>()
-      ..registerChatCalendarSyncHandler(_handleChatCalendarSync)
-      ..attachAvailabilityCoordinator(_availabilityCoordinator!);
+    locate<CalendarBloc>().attachAvailabilityCoordinator(
+      _availabilityCoordinator!,
+    );
+    _ensureChatCalendarSyncSubscription();
   }
 
-  Future<void> _handleChatCalendarSync(
-    ChatCalendarSyncEnvelope envelope,
-  ) async {
+  void _ensureChatCalendarSyncSubscription() {
     final coordinator = _chatCalendarCoordinator;
     if (coordinator == null) {
+      _detachChatCalendarSyncSubscription();
       return;
     }
-    await coordinator.handleInbound(envelope);
+    if (_chatCalendarSyncSubscription != null) {
+      return;
+    }
+    final locate = context.read;
+    final xmppService = locate<XmppService>();
+    if (xmppService.lastStreamReady == null) {
+      _streamReadySubscription ??= xmppService.streamReadyStream.listen((_) {
+        _ensureChatCalendarSyncSubscription();
+      });
+      return;
+    }
+    _chatCalendarSyncSubscription =
+        xmppService.chatCalendarSyncDispatchStream.listen(
+      (dispatch) async {
+        try {
+          await coordinator.handleInbound(dispatch.envelope);
+          dispatch.complete();
+        } catch (error, stackTrace) {
+          dispatch.completeError(error, stackTrace);
+        }
+      },
+    );
+    _streamReadySubscription?.cancel();
+    _streamReadySubscription = null;
+  }
+
+  void _detachChatCalendarSyncSubscription() {
+    _chatCalendarSyncSubscription?.cancel();
+    _chatCalendarSyncSubscription = null;
+    _streamReadySubscription?.cancel();
+    _streamReadySubscription = null;
   }
 
   @override
   void dispose() {
+    _detachChatCalendarSyncSubscription();
     super.dispose();
-  }
-
-  @override
-  void deactivate() {
-    final storageManager = context.read<CalendarStorageManager>();
-    if (storageManager.isAuthStorageReady) {
-      context.read<CalendarBloc>().clearChatCalendarSyncHandler();
-    }
-    super.deactivate();
   }
 
   @override
@@ -780,31 +806,10 @@ class _HomeContent extends StatelessWidget {
                   initialFilters: initialTabFilters,
                 ),
               ),
-              BlocProvider(
-                create: (context) => ConnectivityCubit(
-                  xmppBase: context.read<XmppService>(),
-                  emailEnabled: emailEnabled,
-                  emailService:
-                      emailEnabled ? context.read<EmailService>() : null,
-                ),
-              ),
             ],
-            child: BlocListener<SettingsCubit, SettingsState>(
-              listenWhen: (previous, current) =>
-                  previous.endpointConfig != current.endpointConfig,
-              listener: (context, settings) {
-                final config = settings.endpointConfig;
-                context.read<ConnectivityCubit>().updateEmailContext(
-                      emailEnabled: config.enableSmtp,
-                      emailService: config.enableSmtp
-                          ? context.read<EmailService>()
-                          : null,
-                    );
-              },
-              child: _HomeCoordinatorBridge(
-                storage: calendarStorage,
-                child: EmailForwardingWelcomeGate(child: calendarAwareContent),
-              ),
+            child: _HomeCoordinatorBridge(
+              storage: calendarStorage,
+              child: EmailForwardingWelcomeGate(child: calendarAwareContent),
             ),
           ),
         ),
@@ -968,6 +973,24 @@ class _HomeActionLayer extends StatelessWidget {
             child: Stack(
               children: [
                 child,
+                const Positioned.fill(
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: ComposeWindowOverlay(),
+                  ),
+                ),
+                const Positioned.fill(
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: OmemoOperationOverlay(),
+                  ),
+                ),
+                const Positioned.fill(
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: XmppOperationOverlay(),
+                  ),
+                ),
                 AccessibilityActionMenu(chatLocate: chatLocate),
               ],
             ),

@@ -419,18 +419,15 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
         spamUpdatedAt: spam ? updatedAt : null,
       );
     });
-    final callback = emailSpamSyncCallback;
-    if (callback != null) {
-      await callback(
-        anti_abuse.SpamSyncUpdate(
-          address: normalized,
-          isSpam: spam,
-          updatedAt: updatedAt,
-          sourceId: sourceId,
-          origin: origin,
-        ),
-      );
-    }
+    emitSpamSyncUpdate(
+      anti_abuse.SpamSyncUpdate(
+        address: normalized,
+        isSpam: spam,
+        updatedAt: updatedAt,
+        sourceId: sourceId,
+        origin: origin,
+      ),
+    );
   }
 
   String _normalizeSpamSourceId(String? sourceId) {

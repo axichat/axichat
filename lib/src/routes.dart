@@ -76,6 +76,8 @@ class TransitionGoRouteData extends GoRouteData {
   routes: [
     TypedGoRoute<HomeRoute>(path: HomeRoute.path),
     TypedGoRoute<ProfileRoute>(path: ProfileRoute.path),
+    TypedGoRoute<ArchivesRoute>(path: ArchivesRoute.path),
+    TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path),
   ],
 )
 class HomeShellRoute extends ShellRouteData {
@@ -128,7 +130,6 @@ class AvatarEditorRoute extends TransitionGoRouteData
       AvatarEditorScreen(locate: _resolveLocate(context, state));
 }
 
-@TypedGoRoute<ArchivesRoute>(path: ArchivesRoute.path)
 class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
   const ArchivesRoute();
 
@@ -157,7 +158,6 @@ class AttachmentGalleryRoute extends TransitionGoRouteData
       AttachmentGalleryScreen(locate: _resolveLocate(context, state));
 }
 
-@TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path)
 class ArchivedChatRoute extends TransitionGoRouteData
     with AuthenticationRouteData {
   const ArchivedChatRoute({required this.jid});

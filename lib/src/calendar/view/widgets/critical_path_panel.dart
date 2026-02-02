@@ -113,27 +113,20 @@ class CriticalPathPanel extends StatelessWidget {
                 child: AxiButton.ghost(
                   widthBehavior: AxiButtonWidth.expand,
                   onPressed: _handleToggleExpanded,
-                  child: Row(
-                    children: [
-                      AnimatedRotation(
-                        turns: isExpanded ? 0.25 : 0,
-                        duration: animationDuration,
-                        child: Icon(
-                          Icons.chevron_right,
-                          size: context.sizing.menuItemIconSize,
-                          color: colors.mutedForeground,
-                        ),
-                      ),
-                      const SizedBox(width: calendarInsetSm),
-                      Flexible(
-                        child: Text(
-                          context.l10n.calendarCriticalPathsTitle.toUpperCase(),
-                          style: headerStyle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
+                  leading: AnimatedRotation(
+                    turns: isExpanded ? 0.25 : 0,
+                    duration: animationDuration,
+                    child: Icon(
+                      Icons.chevron_right,
+                      size: context.sizing.menuItemIconSize,
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                  child: Text(
+                    context.l10n.calendarCriticalPathsTitle.toUpperCase(),
+                    style: headerStyle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),

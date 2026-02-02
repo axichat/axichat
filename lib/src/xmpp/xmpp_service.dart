@@ -347,10 +347,16 @@ abstract interface class XmppBase {
 
   void _notifySelfAvatarUpdated(StoredAvatar? avatar);
 
-  Future<void> Function(anti_abuse.SpamSyncUpdate)? get emailSpamSyncCallback;
+  Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream;
 
-  Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate)?
-      get emailBlocklistSyncCallback;
+  Stream<anti_abuse.EmailBlocklistSyncUpdate>
+      get emailBlocklistSyncUpdateStream;
+
+  void emitSpamSyncUpdate(anti_abuse.SpamSyncUpdate update);
+
+  void emitEmailBlocklistSyncUpdate(
+    anti_abuse.EmailBlocklistSyncUpdate update,
+  );
 
   List<int> secureBytes(int length);
 
@@ -509,14 +515,11 @@ class XmppService extends XmppBase
   var _autoDownloadVideos = false;
   var _autoDownloadDocuments = false;
   var _autoDownloadArchives = false;
-
-  // Calendar sync message callback
-  Future<bool> Function(CalendarSyncInbound)? _calendarSyncCallback;
-  Future<void> Function(CalendarSyncWarning)? _calendarSyncWarningCallback;
-  ChatCalendarSyncHandler? _chatCalendarSyncCallback;
-  Future<void> Function(anti_abuse.SpamSyncUpdate)? _emailSpamSyncCallback;
-  Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate)?
-      _emailBlocklistSyncCallback;
+  StreamController<anti_abuse.SpamSyncUpdate> _spamSyncUpdateController =
+      StreamController<anti_abuse.SpamSyncUpdate>.broadcast();
+  StreamController<anti_abuse.EmailBlocklistSyncUpdate>
+      _emailBlocklistSyncUpdateController =
+      StreamController<anti_abuse.EmailBlocklistSyncUpdate>.broadcast();
 
   StreamController<HttpUploadSupport> _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();
@@ -611,12 +614,13 @@ class XmppService extends XmppBase
   Stream<void> get databaseReloadStream => _databaseReloadController.stream;
 
   @override
-  Future<void> Function(anti_abuse.SpamSyncUpdate)? get emailSpamSyncCallback =>
-      _emailSpamSyncCallback;
+  Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream =>
+      _spamSyncUpdateController.stream;
 
   @override
-  Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate)?
-      get emailBlocklistSyncCallback => _emailBlocklistSyncCallback;
+  Stream<anti_abuse.EmailBlocklistSyncUpdate>
+      get emailBlocklistSyncUpdateStream =>
+          _emailBlocklistSyncUpdateController.stream;
 
   void _notifyDatabaseReloaded() {
     if (_databaseReloadController.isClosed) return;
@@ -690,6 +694,20 @@ class XmppService extends XmppBase
   @override
   void emitOmemoActivity(mox.OmemoActivityEvent event) {
     _omemoActivityController.add(event);
+  }
+
+  @override
+  void emitSpamSyncUpdate(anti_abuse.SpamSyncUpdate update) {
+    if (_spamSyncUpdateController.isClosed) return;
+    _spamSyncUpdateController.add(update);
+  }
+
+  @override
+  void emitEmailBlocklistSyncUpdate(
+    anti_abuse.EmailBlocklistSyncUpdate update,
+  ) {
+    if (_emailBlocklistSyncUpdateController.isClosed) return;
+    _emailBlocklistSyncUpdateController.add(update);
   }
 
   @override
@@ -2567,6 +2585,10 @@ class XmppService extends XmppBase
     _xmppOperationController = StreamController<XmppOperationEvent>.broadcast();
     _omemoActivityController =
         StreamController<mox.OmemoActivityEvent>.broadcast();
+    _spamSyncUpdateController =
+        StreamController<anti_abuse.SpamSyncUpdate>.broadcast();
+    _emailBlocklistSyncUpdateController =
+        StreamController<anti_abuse.EmailBlocklistSyncUpdate>.broadcast();
     _connectivityStream = StreamController<ConnectionState>.broadcast();
   }
 
@@ -2591,6 +2613,12 @@ class XmppService extends XmppBase
     }
     if (!_omemoActivityController.isClosed) {
       await _omemoActivityController.close();
+    }
+    if (!_spamSyncUpdateController.isClosed) {
+      await _spamSyncUpdateController.close();
+    }
+    if (!_emailBlocklistSyncUpdateController.isClosed) {
+      await _emailBlocklistSyncUpdateController.close();
     }
     if (!_connectivityStream.isClosed) {
       await _connectivityStream.close();
@@ -2835,60 +2863,6 @@ class XmppService extends XmppBase
     } on Exception {
       return null;
     }
-  }
-
-  /// Register a callback to handle calendar sync messages
-  void setCalendarSyncCallback(
-    Future<bool> Function(CalendarSyncInbound) callback,
-  ) {
-    _calendarSyncCallback = callback;
-  }
-
-  /// Register a callback to surface calendar sync warnings.
-  void setCalendarSyncWarningCallback(
-    Future<void> Function(CalendarSyncWarning) callback,
-  ) {
-    _calendarSyncWarningCallback = callback;
-  }
-
-  /// Clear any calendar sync callback to avoid calling disposed handlers.
-  void clearCalendarSyncCallback() {
-    _calendarSyncCallback = null;
-  }
-
-  /// Register a callback to handle chat calendar sync messages.
-  void setChatCalendarSyncCallback(ChatCalendarSyncHandler callback) {
-    _chatCalendarSyncCallback = callback;
-  }
-
-  /// Clear any chat calendar sync callback to avoid calling disposed handlers.
-  void clearChatCalendarSyncCallback() {
-    _chatCalendarSyncCallback = null;
-  }
-
-  /// Clear any calendar sync warning callback.
-  void clearCalendarSyncWarningCallback() {
-    _calendarSyncWarningCallback = null;
-  }
-
-  void setEmailSpamSyncCallback(
-    Future<void> Function(anti_abuse.SpamSyncUpdate) callback,
-  ) {
-    _emailSpamSyncCallback = callback;
-  }
-
-  void clearEmailSpamSyncCallback() {
-    _emailSpamSyncCallback = null;
-  }
-
-  void setEmailBlocklistSyncCallback(
-    Future<void> Function(anti_abuse.EmailBlocklistSyncUpdate) callback,
-  ) {
-    _emailBlocklistSyncCallback = callback;
-  }
-
-  void clearEmailBlocklistSyncCallback() {
-    _emailBlocklistSyncCallback = null;
   }
 
   static String generateResource() =>

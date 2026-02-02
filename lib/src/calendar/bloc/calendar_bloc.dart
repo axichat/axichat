@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
@@ -48,6 +49,7 @@ class CalendarBloc extends BaseCalendarBloc {
         _onDispose = onDispose,
         super(storagePrefix: authStoragePrefix) {
     _syncManager = _syncManagerBuilder(this);
+    _attachCalendarSyncSubscriptions();
     on<CalendarSyncRequested>(_onCalendarSyncRequested);
     on<CalendarSyncPushed>(_onCalendarSyncPushed);
     on<CalendarRemoteModelApplied>(_onRemoteModelApplied);
@@ -66,6 +68,9 @@ class CalendarBloc extends BaseCalendarBloc {
   final XmppService _xmppService;
   final EmailService? _emailService;
   final VoidCallback? _onDispose;
+  StreamSubscription<CalendarSyncDispatch>? _calendarSyncSubscription;
+  StreamSubscription<CalendarSyncWarning>? _calendarSyncWarningSubscription;
+  StreamSubscription<XmppStreamReady>? _streamReadySubscription;
 
   @protected
   CalendarAvailabilityShareSource get availabilityShareSource =>
@@ -108,12 +113,42 @@ class CalendarBloc extends BaseCalendarBloc {
     return _xmppService.uploadCalendarSnapshot(file);
   }
 
-  void registerChatCalendarSyncHandler(ChatCalendarSyncHandler handler) {
-    _xmppService.setChatCalendarSyncCallback(handler);
+  void _attachCalendarSyncSubscriptions() {
+    final lastReady = _xmppService.lastStreamReady;
+    if (lastReady != null) {
+      _ensureCalendarSyncSubscriptions();
+      return;
+    }
+    _streamReadySubscription ??= _xmppService.streamReadyStream.listen((_) {
+      _ensureCalendarSyncSubscriptions();
+    });
   }
 
-  void clearChatCalendarSyncHandler() {
-    _xmppService.clearChatCalendarSyncCallback();
+  void _ensureCalendarSyncSubscriptions() {
+    if (_calendarSyncSubscription != null &&
+        _calendarSyncWarningSubscription != null) {
+      return;
+    }
+    _calendarSyncSubscription ??=
+        _xmppService.calendarSyncDispatchStream.listen(
+      (dispatch) async {
+        try {
+          final applied =
+              await _syncManager.onCalendarMessage(dispatch.inbound);
+          dispatch.complete(applied);
+        } catch (error, stackTrace) {
+          dispatch.completeError(error, stackTrace);
+        }
+      },
+    );
+    _calendarSyncWarningSubscription ??=
+        _xmppService.calendarSyncWarningStream.listen(
+      (warning) {
+        add(CalendarEvent.syncWarningRaised(warning: warning));
+      },
+    );
+    _streamReadySubscription?.cancel();
+    _streamReadySubscription = null;
   }
 
   @override
@@ -340,6 +375,9 @@ class CalendarBloc extends BaseCalendarBloc {
 
   @override
   Future<void> close() async {
+    await _calendarSyncSubscription?.cancel();
+    await _calendarSyncWarningSubscription?.cancel();
+    await _streamReadySubscription?.cancel();
     _onDispose?.call();
     return super.close();
   }

@@ -21,28 +21,43 @@ class AxiAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasLeading = leading != null;
     final hasTitle = showTitle;
-    final baseTitleStyle =
-        Theme.of(context).appBarTheme.titleTextStyle ?? context.textTheme.h3;
+    final baseTitleStyle = context.textTheme.h3;
     final titleStyle = baseTitleStyle.copyWith(
       fontFamily: gabaritoFontFamily,
       fontFamilyFallback: gabaritoFontFallback,
       fontWeight: appBarTitleFontWeight,
     );
+    final spacing = context.spacing;
     return Container(
-      height: 56.0,
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      padding: EdgeInsets.symmetric(vertical: spacing.s, horizontal: spacing.m),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: context.colorScheme.border)),
+        border: Border(bottom: context.borderSide),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (hasLeading) leading!,
-          if (hasLeading && hasTitle) const SizedBox(width: 12),
-          if (hasTitle) Text(appDisplayName, style: titleStyle),
-          if (hasTitle || hasLeading) const Spacer(),
-          if (!hasTitle && !hasLeading) const Spacer(),
-          trailing ?? const AxiVersion(),
+          if (hasLeading && hasTitle) SizedBox(width: spacing.s + spacing.xs),
+          if (hasTitle)
+            Expanded(
+              child: Text(
+                appDisplayName,
+                style: titleStyle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            )
+          else
+            const Spacer(),
+          Flexible(
+            fit: FlexFit.loose,
+            child: ClipRect(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: trailing ?? const AxiVersion(),
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -1758,7 +1758,8 @@ mixin MessageService
       StreamController<Message>.broadcast();
   StreamController<CalendarSyncDispatch> _calendarSyncDispatchController =
       StreamController<CalendarSyncDispatch>.broadcast();
-  StreamController<ChatCalendarSyncDispatch> _chatCalendarSyncDispatchController =
+  StreamController<ChatCalendarSyncDispatch>
+      _chatCalendarSyncDispatchController =
       StreamController<ChatCalendarSyncDispatch>.broadcast();
   StreamController<CalendarSyncWarning> _calendarSyncWarningController =
       StreamController<CalendarSyncWarning>.broadcast();
@@ -5880,8 +5881,8 @@ mixin MessageService
   /// Rehydrates calendar data from MAM (Message Archive Management).
   ///
   /// Queries MAM for recent self-messages containing calendar sync data.
-  /// Messages are processed through normal event handlers, which invoke
-  /// the calendar sync callback for each valid sync message found.
+  /// Messages are processed through normal event handlers, which dispatch
+  /// each valid sync message through the calendar sync stream.
   ///
   /// Returns true if MAM query was successful.
   Future<bool> rehydrateCalendarFromMam() async {

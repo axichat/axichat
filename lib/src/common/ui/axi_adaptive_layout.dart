@@ -2,17 +2,17 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:animations/animations.dart';
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
-
-const Curve _paneResizeCurve = Curves.easeInOutCubic;
-const Curve _compactSlideCurve = Curves.easeIn;
-const Offset _compactSlideBeginOffset = Offset(1.0, 0);
 
 class AxiAdaptiveLayout extends StatelessWidget {
+  static const Curve _paneResizeCurve = Curves.easeInOutCubic;
+  static const Curve _compactSlideCurve = Curves.easeIn;
+  static const Offset _compactSlideBeginOffset = Offset(1.0, 0);
+
   const AxiAdaptiveLayout({
     super.key,
     required this.primaryChild,
@@ -99,10 +99,9 @@ class AxiAdaptiveLayout extends StatelessWidget {
         }
 
         final bool showSecondaryDivider = showPrimary && showSecondary;
-        final colors = ShadTheme.of(context).colorScheme;
         final BoxDecoration secondaryDividerDecoration = BoxDecoration(
           border: Border(
-            left: BorderSide(color: colors.border),
+            left: context.borderSide,
           ),
         );
         final primaryAlign = primaryAlignment ??
@@ -154,7 +153,9 @@ class AxiAdaptiveLayout extends StatelessWidget {
         }
 
         final double primaryWidth = widthForFlex(resolvedPrimaryFlex);
-        final double secondaryWidth = widthForFlex(resolvedSecondaryFlex);
+        final double secondaryWidth = showSecondary
+            ? (availableWidth - primaryWidth).clamp(0.0, availableWidth)
+            : 0.0;
         return ConstrainedBox(
           constraints: constraints,
           child: Row(

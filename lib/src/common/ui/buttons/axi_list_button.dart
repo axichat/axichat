@@ -120,20 +120,24 @@ class _AxiListButtonState extends State<AxiListButton> {
     final Duration animationDuration = context.select<SettingsCubit, Duration>(
       (cubit) => cubit.animationDuration,
     );
-    final IconData collapsedIconData = widget.collapsedIconData!;
-    final collapsedButton = AxiIconButton.ghost(
-      iconData: collapsedIconData,
-      icon: widget.collapsedIcon,
-      tooltip: widget.collapsedTooltip ?? widget.semanticLabel,
-      semanticLabel: widget.collapsedSemanticLabel ?? widget.semanticLabel,
-      onPressed: widget.onPressed,
-      onLongPress: widget.onLongPress,
-      color: widget.collapsedForegroundColor,
-      backgroundColor: widget.collapsedBackgroundColor,
-      buttonSize: widget.collapsedButtonSize,
-      tapTargetSize: widget.collapsedTapTargetSize,
-      cornerRadius: widget.collapsedCornerRadius,
-    );
+    final IconData? collapsedIconData = widget.collapsedIconData;
+    final bool canCollapse = widget.collapsed && collapsedIconData != null;
+    final collapsedButton = canCollapse
+        ? AxiIconButton.ghost(
+            iconData: collapsedIconData,
+            icon: widget.collapsedIcon,
+            tooltip: widget.collapsedTooltip ?? widget.semanticLabel,
+            semanticLabel:
+                widget.collapsedSemanticLabel ?? widget.semanticLabel,
+            onPressed: widget.onPressed,
+            onLongPress: widget.onLongPress,
+            color: widget.collapsedForegroundColor,
+            backgroundColor: widget.collapsedBackgroundColor,
+            buttonSize: widget.collapsedButtonSize,
+            tapTargetSize: widget.collapsedTapTargetSize,
+            cornerRadius: widget.collapsedCornerRadius,
+          )
+        : const SizedBox.shrink();
     final expandedButton = ValueListenableBuilder<Set<WidgetState>>(
       valueListenable: _states,
       builder: (context, states, _) {
@@ -332,7 +336,7 @@ class _AxiListButtonState extends State<AxiListButton> {
         axisAlignment: axisAlignment,
         child: child,
       ),
-      child: widget.collapsed
+      child: canCollapse
           ? SizedBox(key: collapsedKey, child: collapsedButton)
           : SizedBox(key: expandedKey, child: expandedButton),
     );

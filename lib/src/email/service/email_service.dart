@@ -304,6 +304,7 @@ class EmailService {
   EmailService({
     required CredentialStore credentialStore,
     required Future<XmppDatabase> Function() databaseBuilder,
+    XmppService? xmppService,
     EmailDeltaTransport? transport,
     EmailConnectionConfigBuilder? connectionConfigBuilder,
     NotificationService? notificationService,
@@ -319,6 +320,7 @@ class EmailService {
         _log = logger ?? Logger('EmailService'),
         _notificationService = notificationService,
         _messageService = messageService,
+        _xmppService = xmppService,
         _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
     _transport = transport ??
         EmailDeltaTransport(
@@ -344,6 +346,7 @@ class EmailService {
     };
     _transport.addEventListener(_eventListener);
     _listenerAttached = true;
+    _attachXmppSyncSubscriptions();
   }
 
   final CredentialStore _credentialStore;
@@ -354,8 +357,62 @@ class EmailService {
   EndpointConfig _endpointConfig;
   final NotificationService? _notificationService;
   final MessageService? _messageService;
+  final XmppService? _xmppService;
   final ForegroundTaskBridge? _foregroundBridge;
   AppLocalizations? _localizations;
+  StreamSubscription<SpamSyncUpdate>? _spamSyncSubscription;
+  StreamSubscription<EmailBlocklistSyncUpdate>? _emailBlocklistSyncSubscription;
+  StreamSubscription<XmppStreamReady>? _xmppStreamReadySubscription;
+
+  void _attachXmppSyncSubscriptions() {
+    final xmppService = _xmppService;
+    if (xmppService == null) {
+      return;
+    }
+    if (xmppService.lastStreamReady != null) {
+      _subscribeXmppSyncStreams(xmppService);
+      return;
+    }
+    _xmppStreamReadySubscription ??= xmppService.streamReadyStream.listen((_) {
+      _subscribeXmppSyncStreams(xmppService);
+    });
+  }
+
+  void _subscribeXmppSyncStreams(XmppService xmppService) {
+    if (_spamSyncSubscription != null ||
+        _emailBlocklistSyncSubscription != null) {
+      return;
+    }
+    _spamSyncSubscription = xmppService.spamSyncUpdateStream.listen(
+      (update) async {
+        try {
+          await applySpamSyncUpdate(update);
+        } on Exception catch (error, stackTrace) {
+          _log.fine(
+            'Failed to apply spam sync update from XMPP stream.',
+            error,
+            stackTrace,
+          );
+        }
+      },
+    );
+    _emailBlocklistSyncSubscription =
+        xmppService.emailBlocklistSyncUpdateStream.listen(
+      (update) async {
+        try {
+          await applyEmailBlocklistSyncUpdate(update);
+        } on Exception catch (error, stackTrace) {
+          _log.fine(
+            'Failed to apply email blocklist sync update from XMPP stream.',
+            error,
+            stackTrace,
+          );
+        }
+      },
+    );
+    _xmppStreamReadySubscription?.cancel();
+    _xmppStreamReadySubscription = null;
+  }
 
   AppLocalizations get _l10n =>
       _localizations ??
