@@ -12720,15 +12720,16 @@ class _ReplyingToPreviewText extends StatelessWidget {
     final colors = context.colorScheme;
     final baseStyle = context.textTheme.small;
     final mutedStyle = baseStyle.copyWith(color: colors.mutedForeground);
-    final prefixStyle = context.textTheme.sectionLabelM.copyWith(
-      color: colors.mutedForeground,
-    );
+    final prefixStyle = context.textTheme.sectionLabelM;
     final replyPrefix = context.l10n.chatReplyingTo;
     final senderSpan = TextSpan(
       text: senderLabel,
       style: mutedStyle.copyWith(fontWeight: FontWeight.w600),
     );
-    final headerPrefixSpan = TextSpan(text: replyPrefix, style: prefixStyle);
+    final headerPrefixSpan = TextSpan(
+      text: replyPrefix.toUpperCase(),
+      style: prefixStyle,
+    );
     final headerWithNameSpan = TextSpan(
       children: [
         headerPrefixSpan,

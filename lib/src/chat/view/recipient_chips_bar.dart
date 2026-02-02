@@ -257,8 +257,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     const double autocompleteFieldOuterPadding = 8.0;
     const double autocompleteFieldInnerPadding = 12.0;
     final spacing = context.spacing;
-    final headerPadding = EdgeInsets.all(spacing.s);
-    final contentPadding = EdgeInsets.all(spacing.s);
+    final headerPadding = EdgeInsets.symmetric(
+      horizontal: spacing.m,
+      vertical: spacing.s,
+    );
+    final contentPadding = EdgeInsets.symmetric(
+      horizontal: spacing.m,
+      vertical: spacing.s,
+    );
     final headerStyle = chipsBarHeaderTextStyle(context);
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
     final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;
@@ -338,7 +344,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                         const SizedBox(width: calendarInsetSm),
                         Expanded(
                           child: Text(
-                            l10n.recipientsHeaderTitle,
+                            l10n.recipientsHeaderTitle.toUpperCase(),
                             style: headerStyle,
                           ),
                         ),

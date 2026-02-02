@@ -939,6 +939,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         },
                         onAddToCriticalPath: _queueCriticalPathForDraft,
                         onShowAddTaskSection: _showAddTaskSection,
+                        onHideAddTaskSection: _hideAddTaskSection,
                         showAddTaskSection: showAddTaskSection,
                         unscheduledTasks: orderedUnscheduled,
                         reminderTasks: orderedReminders,
@@ -2166,6 +2167,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   void _showAddTaskSection() {
     setState(() {
       _criticalPathsExpanded = false;
+      _activeCriticalPathId = null;
+    });
+  }
+
+  void _hideAddTaskSection() {
+    setState(() {
+      _criticalPathsExpanded = true;
       _activeCriticalPathId = null;
     });
   }
@@ -3821,6 +3829,7 @@ class _AddTaskSection extends StatelessWidget {
     required this.formActivityListenable,
     required this.hasSidebarFormValues,
     required this.onClearFieldsPressed,
+    required this.onCollapse,
     required this.titleController,
     required this.titleFocusNode,
     required this.addTaskFormKey,
@@ -3859,6 +3868,7 @@ class _AddTaskSection extends StatelessWidget {
   final Listenable formActivityListenable;
   final ValueGetter<bool> hasSidebarFormValues;
   final VoidCallback onClearFieldsPressed;
+  final VoidCallback onCollapse;
   final TextEditingController titleController;
   final FocusNode titleFocusNode;
   final GlobalKey<FormState> addTaskFormKey;
@@ -3894,6 +3904,11 @@ class _AddTaskSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final chevron = Icon(
+      Icons.keyboard_arrow_up,
+      size: context.sizing.menuItemIconSize,
+      color: calendarSubtitleColor,
+    );
     return Container(
       padding: calendarSidebarSectionPadding,
       decoration: BoxDecoration(
@@ -3910,24 +3925,39 @@ class _AddTaskSection extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TaskSectionHeader(
-              title: l10n.calendarAddTaskAction,
-              size: TaskSectionLabelSize.medium,
-              trailing: AnimatedBuilder(
-                animation: formActivityListenable,
-                builder: (context, _) {
-                  final bool enabled = hasSidebarFormValues();
-                  final button = AxiButton.outline(
-                    onPressed: enabled ? onClearFieldsPressed : null,
-                    child: Text(l10n.commonClear),
-                  );
-                  return AnimatedOpacity(
-                    duration: baseAnimationDuration,
-                    opacity: enabled ? 1 : 0.5,
-                    child: button,
-                  );
-                },
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: AxiPlainHeaderButton(
+                    onPressed: onCollapse,
+                    backgroundColor: Colors.transparent,
+                    hoverBackgroundColor: Colors.transparent,
+                    pressedBackgroundColor: Colors.transparent,
+                    padding: EdgeInsets.zero,
+                    child: TaskSectionHeader(
+                      title: l10n.calendarAddTaskAction,
+                      size: TaskSectionLabelSize.medium,
+                      leading: chevron,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: calendarInsetSm),
+                AnimatedBuilder(
+                  animation: formActivityListenable,
+                  builder: (context, _) {
+                    final bool enabled = hasSidebarFormValues();
+                    final button = AxiButton.outline(
+                      onPressed: enabled ? onClearFieldsPressed : null,
+                      child: Text(l10n.commonClear),
+                    );
+                    return AnimatedOpacity(
+                      duration: baseAnimationDuration,
+                      opacity: enabled ? 1 : 0.5,
+                      child: button,
+                    );
+                  },
+                ),
+              ],
             ),
             const SizedBox(height: calendarSidebarSectionSpacing),
             _QuickTaskInput(
@@ -4062,6 +4092,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.queuedCriticalPaths,
     required this.onRemoveQueuedCriticalPath,
     required this.onShowAddTaskSection,
+    required this.onHideAddTaskSection,
     required this.showAddTaskSection,
     required this.unscheduledTasks,
     required this.reminderTasks,
@@ -4119,6 +4150,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final List<CalendarCriticalPath> queuedCriticalPaths;
   final ValueChanged<String> onRemoveQueuedCriticalPath;
   final VoidCallback onShowAddTaskSection;
+  final VoidCallback onHideAddTaskSection;
   final bool showAddTaskSection;
   final List<CalendarTask> unscheduledTasks;
   final List<CalendarTask> reminderTasks;
@@ -4159,6 +4191,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
             formActivityListenable: formActivityListenable,
             hasSidebarFormValues: hasSidebarFormValues,
             onClearFieldsPressed: onClearFieldsPressed,
+            onCollapse: onHideAddTaskSection,
             titleController: titleController,
             titleFocusNode: titleFocusNode,
             addTaskFormKey: addTaskFormKey,
@@ -4242,14 +4275,10 @@ class _CollapsedAddTaskSection extends StatelessWidget {
         padding: calendarPaddingLg,
         child: Row(
           children: [
-            AnimatedRotation(
-              turns: 0,
-              duration: baseAnimationDuration,
-              child: Icon(
-                Icons.chevron_left,
-                size: context.sizing.menuItemIconSize,
-                color: colors.mutedForeground,
-              ),
+            Icon(
+              Icons.keyboard_arrow_down,
+              size: context.sizing.menuItemIconSize,
+              color: colors.mutedForeground,
             ),
             const SizedBox(width: calendarInsetSm),
             Text(
