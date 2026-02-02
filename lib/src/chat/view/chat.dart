@@ -204,13 +204,9 @@ const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 const _selectionExtrasMaxWidth = 500.0;
 const _messageAvatarSize = 36.0;
 const _messageRowAvatarReservation = 32.0;
-const _messageAvatarCutoutDepth = _messageAvatarSize / 2;
 const _messageAvatarCutoutPadding = EdgeInsets.zero;
-const _messageAvatarCutoutMinThickness = _messageAvatarSize;
 const _messageAvatarCutoutAlignment = -1.0;
 const _messageAvatarCornerClearance = 0.0;
-const _messageAvatarOuterInset = _messageAvatarCutoutDepth;
-const _messageAvatarContentInset = _messageAvatarCutoutDepth - 4.0;
 const _selectionBubbleInboundExtraGap = 4.0;
 const _selectionBubbleOutboundExtraGap = 8.0;
 const _selectionBubbleOutboundSpacingBoost = 6.0;
@@ -6642,6 +6638,21 @@ class _ChatState extends State<Chat> {
                                                           final hasAvatarSlot =
                                                               requiresAvatarHeadroom &&
                                                                   !chainedPrev;
+                                                          final spacing =
+                                                              context.spacing;
+                                                          const avatarCutoutDepth =
+                                                              _messageAvatarSize /
+                                                                  2;
+                                                          final avatarCutoutRadius =
+                                                              avatarCutoutDepth +
+                                                                  spacing.xs;
+                                                          const avatarOuterInset =
+                                                              avatarCutoutDepth;
+                                                          final avatarContentInset =
+                                                              avatarCutoutDepth -
+                                                                  spacing.xs;
+                                                          const avatarMinThickness =
+                                                              _messageAvatarSize;
                                                           EdgeInsetsGeometry
                                                               bubblePadding =
                                                               _bubblePadding(
@@ -6686,10 +6697,11 @@ class _ChatState extends State<Chat> {
                                                             bubblePadding =
                                                                 bubblePadding
                                                                     .add(
-                                                              const EdgeInsets
-                                                                  .only(
+                                                              EdgeInsets.only(
                                                                 left:
-                                                                    _messageAvatarContentInset,
+                                                                    avatarContentInset +
+                                                                        spacing
+                                                                            .xxs,
                                                               ),
                                                             );
                                                           }
@@ -6924,8 +6936,10 @@ class _ChatState extends State<Chat> {
                                                             avatarStyle =
                                                                 CutoutStyle(
                                                               depth:
-                                                                  _messageAvatarCutoutDepth,
+                                                                  avatarCutoutDepth,
                                                               cornerRadius:
+                                                                  avatarCutoutRadius,
+                                                              shapeCornerRadius:
                                                                   context.radii
                                                                       .squircle,
                                                               padding:
@@ -6933,7 +6947,7 @@ class _ChatState extends State<Chat> {
                                                               offset:
                                                                   Offset.zero,
                                                               minThickness:
-                                                                  _messageAvatarCutoutMinThickness,
+                                                                  avatarMinThickness,
                                                               cornerClearance:
                                                                   _messageAvatarCornerClearance,
                                                               alignment:
@@ -6945,7 +6959,7 @@ class _ChatState extends State<Chat> {
                                                           }
                                                           extraOuterLeft =
                                                               requiresAvatarHeadroom
-                                                                  ? _messageAvatarOuterInset
+                                                                  ? avatarOuterInset
                                                                   : 0;
                                                           final outerPadding =
                                                               EdgeInsets.only(
@@ -7568,10 +7582,12 @@ class _ChatState extends State<Chat> {
                                                                 senderLabelLeftInset =
                                                                 !self &&
                                                                         hasAvatarSlot
-                                                                    ? _messageAvatarContentInset +
+                                                                    ? avatarContentInset +
                                                                         _bubblePadding(
                                                                           context,
-                                                                        ).left
+                                                                        ).left +
+                                                                        spacing
+                                                                            .xxs
                                                                     : _senderLabelNoInset;
                                                             senderLabel =
                                                                 _MessageSenderLabel(

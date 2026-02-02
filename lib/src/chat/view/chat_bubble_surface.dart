@@ -41,12 +41,14 @@ class CutoutStyle {
     required this.padding,
     required this.offset,
     required this.minThickness,
+    this.shapeCornerRadius,
     this.cornerClearance,
     this.alignment,
   });
 
   final double depth;
   final double cornerRadius;
+  final double? shapeCornerRadius;
   final EdgeInsets padding;
   final Offset offset;
   final double minThickness;
@@ -369,10 +371,10 @@ class RenderChatBubbleSurface extends RenderBox
       recipientRect,
       avatarRect,
       selectionRect,
-      reactionStyle?.cornerRadius ?? 16,
-      recipientStyle?.cornerRadius ?? 16,
-      avatarStyle?.cornerRadius ?? 16,
-      selectionStyle?.cornerRadius ?? 16,
+      (reactionStyle?.shapeCornerRadius ?? reactionStyle?.cornerRadius ?? 16),
+      (recipientStyle?.shapeCornerRadius ?? recipientStyle?.cornerRadius ?? 16),
+      (avatarStyle?.shapeCornerRadius ?? avatarStyle?.cornerRadius ?? 16),
+      (selectionStyle?.shapeCornerRadius ?? selectionStyle?.cornerRadius ?? 16),
     );
     final cached = _cachedBubblePath;
     if (cached != null && _cachedBubbleSignature == signature) {
@@ -382,22 +384,29 @@ class RenderChatBubbleSurface extends RenderBox
       if (reactionRect != null)
         _CutoutDescriptor(
           rect: reactionRect,
-          cornerRadius: reactionStyle?.cornerRadius ?? 16,
+          cornerRadius: reactionStyle?.shapeCornerRadius ??
+              reactionStyle?.cornerRadius ??
+              16,
         ),
       if (recipientRect != null)
         _CutoutDescriptor(
           rect: recipientRect,
-          cornerRadius: recipientStyle?.cornerRadius ?? 16,
+          cornerRadius: recipientStyle?.shapeCornerRadius ??
+              recipientStyle?.cornerRadius ??
+              16,
         ),
       if (avatarRect != null)
         _CutoutDescriptor(
           rect: avatarRect,
-          cornerRadius: avatarStyle?.cornerRadius ?? 16,
+          cornerRadius:
+              avatarStyle?.shapeCornerRadius ?? avatarStyle?.cornerRadius ?? 16,
         ),
       if (selectionRect != null)
         _CutoutDescriptor(
           rect: selectionRect,
-          cornerRadius: selectionStyle?.cornerRadius ?? 16,
+          cornerRadius: selectionStyle?.shapeCornerRadius ??
+              selectionStyle?.cornerRadius ??
+              16,
         ),
     ]);
     _cachedBubbleSignature = signature;
@@ -494,7 +503,8 @@ class RenderChatBubbleSurface extends RenderBox
         BoxConstraints.tight(Size.square(avatarSize)),
         parentUsesSize: true,
       );
-      final cutoutExtent = math.max(style.depth, style.cornerRadius) * 2;
+      final cutoutRadius = math.max(style.depth, style.cornerRadius);
+      final cutoutExtent = cutoutRadius * 2;
       final rect = Rect.fromLTWH(
         -cutoutExtent / 2,
         -cutoutExtent / 2,

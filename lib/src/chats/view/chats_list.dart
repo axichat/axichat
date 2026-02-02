@@ -984,7 +984,10 @@ class _ChatListTileState extends State<ChatListTile> {
             ? l10n.chatsSemanticsUnselectHint
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
-    Widget tileContent = tileSurface.withTapBounce();
+    Widget tileContent = Padding(
+      padding: EdgeInsetsDirectional.only(end: scaled(iconCutoutDepth)),
+      child: tileSurface.withTapBounce(),
+    );
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,

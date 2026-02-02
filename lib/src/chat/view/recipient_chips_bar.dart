@@ -99,7 +99,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
-    _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
+    _tapRegionGroup = widget.tapRegionGroup ?? Object();
     _focusNode
       ..onKeyEvent = _handleKeyEvent
       ..addListener(_handleAutocompleteFocusChanged);
@@ -173,7 +173,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.tapRegionGroup, widget.tapRegionGroup)) {
-      _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
+      _tapRegionGroup = widget.tapRegionGroup ?? Object();
     }
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
@@ -1726,12 +1726,18 @@ final class _RecipientAutocompleteOverlayState
 
           return Stack(
             children: [
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: _dismissOverlay,
+                ),
+              ),
               CompositedTransformFollower(
                 link: _layerLink,
                 showWhenUnlinked: false,
                 offset: overlayOffset,
                 child: InBoundsFadeScale(
-                  child: TextFieldTapRegion(
+                  child: TapRegion(
                     groupId: widget.tapRegionGroup,
                     onTapOutside: (_) => _dismissOverlay(),
                     child: Align(
@@ -1814,7 +1820,7 @@ final class _RecipientAutocompleteOverlayState
             ],
           );
         },
-        child: TextFieldTapRegion(
+        child: TapRegion(
           groupId: widget.tapRegionGroup,
           onTapOutside: (_) => _handleTapOutside(),
           child: Listener(

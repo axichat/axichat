@@ -112,8 +112,8 @@ enum AxiButtonSize {
   EdgeInsets padding(AxiSpacing spacing) {
     return switch (this) {
       AxiButtonSize.sm => EdgeInsets.symmetric(
-          horizontal: spacing.s,
-          vertical: spacing.xs,
+          horizontal: spacing.xs,
+          vertical: spacing.xxs,
         ),
       AxiButtonSize.regular => EdgeInsets.symmetric(
           horizontal: spacing.m,
@@ -332,7 +332,12 @@ class _AxiButtonState extends State<AxiButton> {
                 : 0,
           ),
         );
-        final textStyle = context.textTheme.small.copyWith(
+        final TextStyle baseTextStyle = switch (widget.size) {
+          AxiButtonSize.sm => context.textTheme.labelSm,
+          AxiButtonSize.regular => context.textTheme.small,
+          AxiButtonSize.lg => context.textTheme.label,
+        };
+        final textStyle = baseTextStyle.copyWith(
           color: foreground,
           decoration: widget.variant.textDecoration(),
           decorationColor: foreground,

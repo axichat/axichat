@@ -522,7 +522,7 @@ class TaskGhostIconButton extends StatelessWidget {
     final button = AxiIconButton.ghost(
       iconData: icon,
       iconSize: context.sizing.menuItemIconSize,
-      buttonSize: context.sizing.buttonHeightSm,
+      buttonSize: context.sizing.buttonHeightRegular,
       tapTargetSize: context.sizing.iconButtonTapTarget,
       onPressed: onPressed,
       tooltip: tooltip,

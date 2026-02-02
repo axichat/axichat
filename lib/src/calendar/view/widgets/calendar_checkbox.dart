@@ -34,11 +34,7 @@ class CalendarCheckbox extends StatelessWidget {
     final double clampedVisualSize = visualSize.clamp(16, 22);
     final double visualScale = (clampedVisualSize / baseSize) - 1;
     final double borderWidth = isIndeterminate ? 2 : (value ? 2 : 1.5);
-    final Brightness activeBrightness =
-        ThemeData.estimateBrightnessForColor(activeColor);
-    final Color checkColor = activeBrightness == Brightness.dark
-        ? colors.background
-        : colors.foreground;
+    final Color checkColor = colors.primaryForeground;
     final fillColor = WidgetStateProperty.resolveWith<Color?>(
       (states) => states.contains(WidgetState.selected)
           ? activeColor

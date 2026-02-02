@@ -641,7 +641,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       borderRadius: context.radius,
       side: BorderSide(
         color: borderColor,
-        width: widget.value != null ? baseBorder.width * 2 : baseBorder.width,
+        width: baseBorder.width,
       ),
     );
     final double iconSize = context.sizing.iconButtonIconSize;
@@ -704,6 +704,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
     return OverlayPortal(
       controller: _portalController,
+      overlayLocation: OverlayChildLocation.rootOverlay,
       overlayChildBuilder: (overlayContext) {
         if (!_isOpen) return const SizedBox.shrink();
         final geometry = _computeGeometry(overlayContext);
@@ -903,7 +904,15 @@ class _DeadlineDropdownSurface extends StatelessWidget {
     return KeyedSubtree(
       key: dropdownKey,
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxHeight, minWidth: minWidth),
+        constraints: BoxConstraints(
+          maxHeight: maxHeight,
+          minWidth: math.max(
+            minWidth,
+            (context.sizing.buttonHeightRegular * 7) +
+                (context.spacing.xs * 6) +
+                calendarPaddingLg.horizontal,
+          ),
+        ),
         child: Material(
           borderRadius: BorderRadius.circular(
             context.sizing.containerRadius,
@@ -1185,18 +1194,13 @@ class _DeadlineNavigationButton extends StatelessWidget {
         : calendarSubtitleColor.withValues(alpha: 0.4);
     final double buttonSize = context.sizing.buttonHeightRegular;
 
-    return SizedBox(
-      width: buttonSize,
-      height: buttonSize,
-      child: AxiButton.outline(
-        widthBehavior: AxiButtonWidth.expand,
-        onPressed: onPressed,
-        child: Icon(
-          icon,
-          size: context.sizing.menuItemIconSize,
-          color: iconColor,
-        ),
-      ),
+    return AxiIconButton.outline(
+      iconData: icon,
+      onPressed: onPressed,
+      iconSize: context.sizing.iconButtonIconSize,
+      buttonSize: buttonSize,
+      tapTargetSize: context.sizing.iconButtonTapTarget,
+      color: iconColor,
     );
   }
 }
@@ -1233,69 +1237,61 @@ class _DeadlineCalendarGrid extends StatelessWidget {
       days.add(null);
     }
 
+    final double cellSize = context.sizing.buttonHeightRegular;
+    final double spacing = context.spacing.xs;
     return Padding(
       padding: calendarPaddingLg,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final double spacing = context.spacing.xs;
-          final double available = constraints.maxWidth;
-          final double targetSize = (available - spacing * 6) / 7;
-          final double cellSize = targetSize.clamp(
-            context.sizing.buttonHeightSm,
-            context.sizing.buttonHeightRegular,
-          );
-          return Column(
-            children: [
-              Row(
-                children: _weekdayLabels(context)
-                    .map(
-                      (label) => Expanded(
-                        child: Center(
-                          child: Text(
-                            label,
-                            style: context.textTheme.labelSm.strong.copyWith(
-                              color: calendarTimeLabelColor,
-                            ),
-                          ),
+      child: Column(
+        children: [
+          Row(
+            children: _weekdayLabels(context)
+                .map(
+                  (label) => Expanded(
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: context.textTheme.labelSm.strong.copyWith(
+                          color: calendarTimeLabelColor,
                         ),
                       ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: calendarGutterSm),
-              Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: days.map((date) {
-                  if (date == null) {
-                    return SizedBox(
-                      width: cellSize,
-                      height: cellSize,
-                    );
-                  }
-
-                  final isSelected =
-                      selectedDate != null && _isSameDay(date, selectedDate!);
-                  final isDisabled = !isDateWithinBounds(date);
-
-                  return SizedBox(
-                    width: cellSize,
-                    height: cellSize,
-                    child: AxiButton(
-                      variant: isSelected
-                          ? AxiButtonVariant.primary
-                          : AxiButtonVariant.outline,
-                      widthBehavior: AxiButtonWidth.expand,
-                      selected: isSelected,
-                      onPressed: isDisabled ? null : () => onDaySelected(date),
-                      child: Text('${date.day}'),
                     ),
-                  );
-                }).toList(),
-              ),
-            ],
-          );
-        },
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: calendarGutterSm),
+          Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: days.map((date) {
+              if (date == null) {
+                return SizedBox(
+                  width: cellSize,
+                  height: cellSize,
+                );
+              }
+
+              final isSelected =
+                  selectedDate != null && _isSameDay(date, selectedDate!);
+              final isDisabled = !isDateWithinBounds(date);
+
+              return SizedBox(
+                width: cellSize,
+                height: cellSize,
+                child: AxiButton(
+                  variant: isSelected
+                      ? AxiButtonVariant.primary
+                      : AxiButtonVariant.outline,
+                  size: AxiButtonSize.sm,
+                  widthBehavior: AxiButtonWidth.expand,
+                  selected: isSelected,
+                  onPressed: isDisabled ? null : () => onDaySelected(date),
+                  child: Text('${date.day}'),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }
@@ -1409,7 +1405,7 @@ class _DeadlineTimeDropdown extends StatelessWidget {
       border: ShadBorder.all(
         color: calendarBorderColor,
         radius: BorderRadius.circular(calendarBorderRadius),
-        width: calendarBorderStroke,
+        width: context.borderSide.width,
       ),
     );
     const EdgeInsets dropdownPadding = EdgeInsets.symmetric(
