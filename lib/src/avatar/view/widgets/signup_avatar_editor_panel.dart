@@ -25,6 +25,7 @@ class SignupAvatarEditorPanel extends StatefulWidget {
     required this.onUpload,
     required this.canShuffleBackground,
     required this.animationDuration,
+    required this.hasUserSelectedAvatar,
     this.onUseCurrent,
     this.useActionEnabled = false,
     this.onShuffleBackground,
@@ -44,6 +45,7 @@ class SignupAvatarEditorPanel extends StatefulWidget {
   final Future<void> Function() onUpload;
   final bool canShuffleBackground;
   final Duration animationDuration;
+  final bool hasUserSelectedAvatar;
   final Future<void> Function()? onShuffleBackground;
   final VoidCallback? onUseCurrent;
   final bool useActionEnabled;
@@ -227,8 +229,14 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     final allowBackgroundShuffle =
         widget.canShuffleBackground && widget.onShuffleBackground != null;
     final showBackgroundShuffle = allowBackgroundShuffle;
-    final allowUseAction =
-        widget.useActionEnabled && !busy && widget.onUseCurrent != null;
+    final hasUserSelectedAvatar = widget.hasUserSelectedAvatar;
+    final allowUseAction = widget.useActionEnabled &&
+        !busy &&
+        widget.onUseCurrent != null &&
+        !hasUserSelectedAvatar;
+    final useLabel =
+        hasUserSelectedAvatar ? l10n.commonDone : l10n.avatarUseThis;
+    const IconData useIcon = LucideIcons.check;
 
     final previewKey = ValueKey(_previewVersion);
     final resolvedPreviewBytes = widget.avatarBytes?.isNotEmpty == true
@@ -298,11 +306,8 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           children: [
             AxiButton.secondary(
               onPressed: allowUseAction ? widget.onUseCurrent : null,
-              leading: Icon(
-                LucideIcons.check,
-                size: avatarActionIconSize,
-              ),
-              child: Text(l10n.avatarUseThis),
+              leading: Icon(useIcon, size: avatarActionIconSize),
+              child: Text(useLabel),
             ),
             AxiButton.primary(
               loading: _shuffling,

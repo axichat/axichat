@@ -44,6 +44,8 @@ Future<MessageTransport?> showTransportChoiceDialog(
               child: Text(chatLabel),
             );
       return ShadDialog(
+        constraints:
+            BoxConstraints(maxWidth: dialogContext.sizing.dialogMaxWidth),
         title: Text(title, style: context.modalHeaderTextStyle),
         actions: [
           AxiButton.outline(

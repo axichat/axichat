@@ -61,6 +61,7 @@ class _ContactRenameDialogState extends State<ContactRenameDialog> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     return ShadDialog(
+      constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
       title: Text(
         l10n.chatContactRenameTitle,
         style: context.modalHeaderTextStyle,

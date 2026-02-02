@@ -2885,6 +2885,17 @@ mixin MessageService
       await _storeMessage(message, chatType: chatType);
       onLocalMessageStored?.call(message.stanzaID);
     }
+    if (encryptionProtocol == EncryptionProtocol.omemo &&
+        chatType == ChatType.chat &&
+        !_isMucChatJid(jid)) {
+      final decision = await _omemoDecision(jid: jid);
+      if (!decision.isAllowed) {
+        if (shouldStore) {
+          await _handleMessageSendFailure(message.stanzaID);
+        }
+        throw XmppMessageException();
+      }
+    }
 
     if (offlineDemo) {
       if (this is DemoScriptService) {
@@ -3119,6 +3130,15 @@ mixin MessageService
     const shouldStore = true;
     await _storeMessage(message, chatType: chatType);
     onLocalMessageStored?.call(message.stanzaID);
+    if (encryptionProtocol == EncryptionProtocol.omemo &&
+        chatType == ChatType.chat &&
+        !_isMucChatJid(jid)) {
+      final decision = await _omemoDecision(jid: jid);
+      if (!decision.isAllowed) {
+        await _handleMessageSendFailure(message.stanzaID);
+        throw XmppMessageException();
+      }
+    }
     if (transportGroupId != null || attachmentOrder != null) {
       await _dbOp<XmppDatabase>((db) async {
         final persisted = await db.getMessageByStanzaID(message.stanzaID);
@@ -3303,6 +3323,13 @@ mixin MessageService
     if (uploadManager == null) {
       _log.warning('HTTP upload manager unavailable; ensure it is registered.');
       throw XmppMessageException();
+    }
+    final decision = await _httpUploadDecision();
+    if (!decision.isAllowed) {
+      if (decision.isError) {
+        throw XmppMessageException();
+      }
+      throw XmppUploadNotSupportedException();
     }
     final uploadSupport = httpUploadSupport;
     _log.fine(
@@ -3511,6 +3538,13 @@ mixin MessageService
     if (uploadManager == null) {
       _log.warning('HTTP upload manager unavailable; ensure it is registered.');
       throw XmppMessageException();
+    }
+    final decision = await _httpUploadDecision();
+    if (!decision.isAllowed) {
+      if (decision.isError) {
+        throw XmppMessageException();
+      }
+      throw XmppUploadNotSupportedException();
     }
     if (!await uploadManager.isSupported()) {
       _log.warning('Server does not advertise HTTP file upload support.');
@@ -4499,6 +4533,32 @@ mixin MessageService
       return const CapabilityDecision(CapabilityDecisionKind.unknown);
     }
     return const CapabilityDecision(CapabilityDecisionKind.unsupported);
+  }
+
+  Future<CapabilityDecision> _httpUploadDecision({
+    String? uploadJid,
+  }) async {
+    final normalizedUploadJid = uploadJid?.trim();
+    final accountDomain = addressDomainPart(myJid);
+    final target = normalizedUploadJid?.isNotEmpty == true
+        ? normalizedUploadJid!
+        : (httpUploadSupport.entityJid ?? accountDomain);
+    if (target == null || target.trim().isEmpty) {
+      return const CapabilityDecision(CapabilityDecisionKind.unknown);
+    }
+    return decideFeatureSupport(
+      jid: target,
+      feature: mox.httpFileUploadXmlns,
+      featureLabel: 'HTTP upload',
+    );
+  }
+
+  Future<CapabilityDecision> _omemoDecision({required String jid}) async {
+    return decideFeatureSupport(
+      jid: jid,
+      feature: mox.omemoXmlns,
+      featureLabel: 'OMEMO',
+    );
   }
 
   void _logCapabilityDecision({

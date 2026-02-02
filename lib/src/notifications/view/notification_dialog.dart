@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +21,8 @@ Future<bool?> showNotificationDialog(
         bloc: locate<NotificationRequestCubit>(),
         builder: (context, state) {
           return ShadDialog(
+            constraints:
+                BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
             title: Text(
               context.l10n.notificationsDialogTitle,
               style: context.modalHeaderTextStyle,

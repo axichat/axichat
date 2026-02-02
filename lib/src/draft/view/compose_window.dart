@@ -375,12 +375,14 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     required double windowPadding,
     required double stackOffset,
   }) {
+    final spacing = context.spacing;
+    final horizontalInset = windowPadding + spacing.m;
     final defaultOffset = Offset(
       math.max(
         windowPadding + viewPadding.left,
         viewportSize.width -
             targetWidth -
-            windowPadding -
+            horizontalInset -
             viewPadding.right -
             (index * stackOffset),
       ),

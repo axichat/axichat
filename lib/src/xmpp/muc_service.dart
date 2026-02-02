@@ -225,6 +225,28 @@ mixin MucService on XmppBase, BaseStreamService {
   String? _mucServiceHost;
   bool _mucBookmarksSyncInFlight = false;
 
+  Future<CapabilityDecision> _decideMucSupport({String? jid}) async {
+    final candidate = jid?.trim();
+    final resolved =
+        candidate?.isNotEmpty == true ? candidate! : mucServiceHost;
+    if (resolved.trim().isEmpty) {
+      return const CapabilityDecision(CapabilityDecisionKind.unknown);
+    }
+    if (this is MessageService) {
+      return (this as MessageService).decideFeatureSupport(
+        jid: resolved,
+        feature: _mucDiscoFeature,
+        featureLabel: 'MUC',
+      );
+    }
+    return const CapabilityDecision(CapabilityDecisionKind.unknown);
+  }
+
+  Future<bool> _ensureMucSupported({String? jid}) async {
+    final decision = await _decideMucSupport(jid: jid);
+    return decision.isAllowed;
+  }
+
   @override
   Future<void> _reset() async {
     for (final controller in _roomStreams.values) {
@@ -927,6 +949,9 @@ mixin MucService on XmppBase, BaseStreamService {
     AvatarUploadPayload? avatar,
     int maxHistoryStanzas = 0,
   }) async {
+    if (!await _ensureMucSupported(jid: mucServiceHost)) {
+      throw XmppMessageException();
+    }
     final slug = _slugify(name);
     final roomJid = '$slug@$mucServiceHost';
     final nick = _nickForRoom(nickname);
@@ -1004,6 +1029,9 @@ mixin MucService on XmppBase, BaseStreamService {
     String? password,
     bool clearExplicitLeave = false,
   }) async {
+    if (!await _ensureMucSupported(jid: roomJid)) {
+      throw XmppMessageException();
+    }
     final normalizedRoom = _roomKey(roomJid);
     final joinCompleter = _mucJoinCompleters.putIfAbsent(
       normalizedRoom,
@@ -1186,6 +1214,9 @@ mixin MucService on XmppBase, BaseStreamService {
     String? reason,
     String? password,
   }) async {
+    if (!await _ensureMucSupported(jid: roomJid)) {
+      return;
+    }
     await _sendInviteNotice(
       roomJid: roomJid,
       inviteeJid: inviteeJid,
@@ -1303,6 +1334,9 @@ mixin MucService on XmppBase, BaseStreamService {
     required String roomJid,
     required OccupantAffiliation affiliation,
   }) async {
+    if (!await _ensureMucSupported(jid: roomJid)) {
+      return const [];
+    }
     final normalizedRoom = _roomKey(roomJid);
     final queryXmlns = affiliation.isOwner ? _mucOwnerXmlns : _mucAdminXmlns;
     final request = mox.Stanza.iq(
@@ -1532,6 +1566,9 @@ mixin MucService on XmppBase, BaseStreamService {
     final resolvedService = serviceJid?.trim().isNotEmpty == true
         ? serviceJid!.trim()
         : mucServiceHost;
+    if (!await _ensureMucSupported(jid: resolvedService)) {
+      return const [];
+    }
     try {
       final result = await discoManager.discoItemsQuery(
         mox.JID.fromString(resolvedService),
@@ -2002,6 +2039,9 @@ mixin MucService on XmppBase, BaseStreamService {
     required String roomJid,
     String? subject,
   }) async {
+    if (!await _ensureMucSupported(jid: roomJid)) {
+      return;
+    }
     final resolvedSubject = subject?.trim() ?? '';
     final stanza = mox.Stanza.message(
       to: roomJid,

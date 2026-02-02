@@ -74,7 +74,7 @@ class SettingsControls extends StatelessWidget {
         final sizing = context.sizing;
         final sectionHeaderPadding = EdgeInsets.symmetric(
           horizontal: spacing.m,
-          vertical: spacing.xs,
+          vertical: spacing.s,
         );
         final compactTilePadding = EdgeInsets.symmetric(
           horizontal: spacing.m,

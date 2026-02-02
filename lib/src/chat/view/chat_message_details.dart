@@ -481,6 +481,8 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
         return StatefulBuilder(
           builder: (context, setState) {
             return ShadDialog(
+              constraints:
+                  BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
               title: Text(
                 recipient.contactDisplayName ?? recipient.title,
                 style: context.modalHeaderTextStyle,
@@ -764,6 +766,7 @@ class _RawHeadersDialog extends StatelessWidget {
     final maxHeight = MediaQuery.sizeOf(context).height *
         context.sizing.dialogMaxHeightFraction;
     return ShadDialog(
+      constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
       title: Text(title, style: context.modalHeaderTextStyle),
       actions: [
         AxiButton(

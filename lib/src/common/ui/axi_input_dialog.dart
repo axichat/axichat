@@ -16,6 +16,7 @@ class AxiInputDialog extends StatelessWidget {
     this.callbackText,
     this.loading = false,
     this.actions = const [],
+    this.maxWidth,
   });
 
   final Widget title;
@@ -24,6 +25,7 @@ class AxiInputDialog extends StatelessWidget {
   final String? callbackText;
   final bool loading;
   final List<Widget> actions;
+  final double? maxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -60,11 +62,9 @@ class AxiInputDialog extends StatelessWidget {
         child: Text(resolvedCallbackText),
       ),
     ];
-    return Dialog(
-      insetPadding: dialogInsets,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      shadowColor: Colors.transparent,
+    final resolvedMaxWidth = maxWidth ?? context.sizing.dialogMaxWidth;
+    final dialogChild = ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: resolvedMaxWidth),
       child: AxiModalSurface(
         padding: EdgeInsets.zero,
         child: Column(
@@ -89,6 +89,13 @@ class AxiInputDialog extends StatelessWidget {
           ],
         ),
       ),
+    );
+    return Dialog(
+      insetPadding: dialogInsets,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      child: dialogChild,
     );
   }
 }

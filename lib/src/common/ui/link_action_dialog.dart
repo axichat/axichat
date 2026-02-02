@@ -21,6 +21,8 @@ Future<LinkAction?> showLinkActionDialog(
     builder: (dialogContext) {
       final pop = Navigator.of(dialogContext).pop;
       return ShadDialog(
+        constraints:
+            BoxConstraints(maxWidth: dialogContext.sizing.dialogMaxWidth),
         title: Text(title, style: context.modalHeaderTextStyle),
         actions: [
           AxiButton.outline(

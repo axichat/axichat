@@ -46,6 +46,8 @@ Future<bool?> confirm(
               child: Text(resolvedConfirmLabel),
             );
       return ShadDialog(
+        constraints:
+            BoxConstraints(maxWidth: dialogContext.sizing.dialogMaxWidth),
         title: Text(resolvedTitle, style: context.modalHeaderTextStyle),
         actions: [
           AxiButton.outline(

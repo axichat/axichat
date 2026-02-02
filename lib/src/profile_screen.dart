@@ -191,6 +191,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
             surfaceTintColor: Colors.transparent,
             elevation: 0,
             scrolledUnderElevation: 0,
+            shape: Border(bottom: context.borderSide),
             actions: [
               if (kEnableDemoChats && demoOffline)
                 Padding(
@@ -220,14 +221,6 @@ class _ProfileBodyState extends State<_ProfileBody> {
                         : _setRoute(_ProfileRoute.main),
                   ),
                 ),
-              ),
-            ),
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1),
-              child: Divider(
-                height: 1,
-                thickness: 1,
-                color: context.colorScheme.border,
               ),
             ),
           ),

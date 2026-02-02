@@ -8,6 +8,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
+import 'package:axichat/src/common/ui/axi_editable_text.dart' as axi;
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -99,7 +100,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
-    _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
+    _tapRegionGroup = widget.tapRegionGroup ?? axi.EditableText;
     _focusNode
       ..onKeyEvent = _handleKeyEvent
       ..addListener(_handleAutocompleteFocusChanged);
@@ -173,7 +174,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.tapRegionGroup, widget.tapRegionGroup)) {
-      _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
+      _tapRegionGroup = widget.tapRegionGroup ?? axi.EditableText;
     }
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
@@ -1433,7 +1434,6 @@ final class _RecipientAutocompleteOverlayState
   List<FanOutTarget> _options = const <FanOutTarget>[];
 
   void _handleTapOutside() {
-    debugPrint('RecipientChipsBar: handleTapOutside');
     if (!mounted) {
       return;
     }
@@ -1454,9 +1454,6 @@ final class _RecipientAutocompleteOverlayState
   }
 
   void _handleFocusChanged() {
-    debugPrint(
-      'RecipientChipsBar: focusChanged hasFocus=${widget.focusNode.hasFocus}',
-    );
     if (widget.focusNode.hasFocus) {
       _recomputeOptions();
     }
@@ -1744,7 +1741,6 @@ final class _RecipientAutocompleteOverlayState
                   child: TapRegion(
                     groupId: widget.tapRegionGroup,
                     onTapOutside: (_) {
-                      debugPrint('RecipientChipsBar: overlay tapOutside');
                       _dismissOverlay();
                     },
                     child: Align(
@@ -1793,9 +1789,6 @@ final class _RecipientAutocompleteOverlayState
                                       avatarPathsByJid: widget.avatarPathsByJid,
                                       selfIdentity: widget.selfIdentity,
                                       onSelected: (option) {
-                                        debugPrint(
-                                          'RecipientChipsBar: overlay option selected ${option.address ?? option.chat?.jid ?? option.displayName}',
-                                        );
                                         widget.onRecipientAdded(option);
                                         widget.controller.clear();
                                         _dismissOverlay();
@@ -1827,7 +1820,6 @@ final class _RecipientAutocompleteOverlayState
         child: TapRegion(
           groupId: widget.tapRegionGroup,
           onTapOutside: (_) {
-            debugPrint('RecipientChipsBar: field tapOutside');
             _handleTapOutside();
           },
           child: Listener(
@@ -1853,6 +1845,7 @@ final class _RecipientAutocompleteOverlayState
                         vertical: fieldVerticalPadding,
                       ),
                       child: AxiTextField(
+                        groupId: widget.tapRegionGroup,
                         controller: widget.controller,
                         focusNode: widget.focusNode,
                         maxLines: 1,
@@ -2036,6 +2029,7 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
             final highlighted = widget.highlightedIndex != null &&
                 widget.highlightedIndex == index;
             return InkWell(
+              canRequestFocus: false,
               onTap: () => widget.onSelected(option),
               hoverColor: widget.hoverColor,
               child: Container(

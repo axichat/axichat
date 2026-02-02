@@ -720,8 +720,10 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                     .pickImage(),
                                 onUseCurrent: () => context
                                     .read<AvatarEditorCubit>()
-                                    .pauseCarousel(),
+                                    .selectCarouselAvatar(),
                                 useActionEnabled: useActionEnabled,
+                                hasUserSelectedAvatar:
+                                    avatarState.hasUserSelectedAvatar,
                                 canShuffleBackground:
                                     avatarState.hasCarouselPreview &&
                                         avatarState.canShuffleBackground,

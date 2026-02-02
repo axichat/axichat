@@ -125,6 +125,21 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _stopAvatarCarousel();
   }
 
+  void selectCarouselAvatar() {
+    final selected = state.carouselAvatar;
+    if (selected == null) return;
+    pauseCarousel();
+    _pendingCropRect = null;
+    emit(
+      state.copyWith(
+        draftAvatar: selected,
+        carouselAvatar: null,
+        backgroundColor: selected.backgroundColor ?? state.backgroundColor,
+        errorType: null,
+      ),
+    );
+  }
+
   AvatarUploadPayload? selectedAvatarPayload() =>
       state.draftAvatar?.payload ?? state.carouselAvatar?.payload;
 

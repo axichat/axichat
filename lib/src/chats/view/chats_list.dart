@@ -1171,6 +1171,8 @@ class _ChatListTileState extends State<ChatListTile> {
         return StatefulBuilder(
           builder: (context, setState) {
             return ShadDialog(
+              constraints:
+                  BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
               title: Text(
                 l10n.commonConfirm,
                 style: context.modalHeaderTextStyle,

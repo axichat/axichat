@@ -741,9 +741,12 @@ class _SignupFormState extends State<SignupForm>
                                                       .pickAvatarFromFiles,
                                                   onUseCurrent: () => context
                                                       .read<SignupAvatarCubit>()
-                                                      .pauseCarousel(),
+                                                      .selectCarouselAvatar(),
                                                   useActionEnabled: avatarState
                                                       .canUseCarouselAvatar,
+                                                  hasUserSelectedAvatar:
+                                                      avatarState
+                                                          .hasUserSelectedAvatar,
                                                   canShuffleBackground:
                                                       avatarState
                                                           .canShuffleBackground,

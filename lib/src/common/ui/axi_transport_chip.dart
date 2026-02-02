@@ -31,7 +31,7 @@ class AxiTransportChip extends StatelessWidget {
 
     final padding = compact
         ? EdgeInsets.symmetric(
-            horizontal: spacing.s - spacing.xxs,
+            horizontal: spacing.xs,
             vertical: spacing.xxs,
           )
         : EdgeInsets.symmetric(
@@ -40,7 +40,6 @@ class AxiTransportChip extends StatelessWidget {
           );
     final borderRadius = compact ? radii.squircleSm : radii.squircle;
     final borderWidth = context.borderSide.width;
-
     return Container(
       padding: padding,
       decoration: ShapeDecoration(

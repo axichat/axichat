@@ -49,6 +49,7 @@ class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
     final pop = Navigator.of(context).pop;
     final spacing = context.spacing;
     return ShadDialog(
+      constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
       title: Text(widget.title, style: context.modalHeaderTextStyle),
       actions: [
         AxiButton(

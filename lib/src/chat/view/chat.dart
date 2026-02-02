@@ -286,7 +286,7 @@ const _selectionExtrasViewportGap = 50.0;
 double _reactionManagerQuickSpacing(BuildContext context) => context.spacing.s;
 
 EdgeInsets _reactionManagerPadding(BuildContext context) =>
-    EdgeInsets.all(context.spacing.s);
+    EdgeInsets.all(context.spacing.m);
 
 double _reactionManagerShadowGap(BuildContext context) => context.spacing.m;
 final _selectionSpacerTimestamp = DateTime.fromMillisecondsSinceEpoch(
@@ -2024,12 +2024,16 @@ class _ChatState extends State<Chat> {
     final Duration animationDuration =
         locate<SettingsCubit>().animationDuration;
     final colors = context.colorScheme;
+    final motion = context.motion;
+    final scrimColor = colors.foreground.withValues(
+      alpha: motion.tapFocusAlpha + motion.tapHoverAlpha,
+    );
     showGeneralDialog(
       context: context,
       useRootNavigator: false,
       barrierDismissible: true,
       barrierLabel: context.l10n.chatRoomMembers,
-      barrierColor: colors.muted,
+      barrierColor: scrimColor,
       transitionDuration: animationDuration,
       pageBuilder: (context, animation, secondaryAnimation) {
         return SafeArea(
@@ -3932,7 +3936,7 @@ class _ChatState extends State<Chat> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     avatar,
-                                    SizedBox(width: spacing.s),
+                                    SizedBox(width: spacing.m),
                                     Flexible(
                                       fit: FlexFit.loose,
                                       child: ConstrainedBox(
@@ -8067,6 +8071,8 @@ class _ChatState extends State<Chat> {
     return showFadeScaleDialog<EmailForwardingMode>(
       context: context,
       builder: (dialogContext) => ShadDialog(
+        constraints:
+            BoxConstraints(maxWidth: dialogContext.sizing.dialogMaxWidth),
         title: Text(
           l10n.chatForwardEmailWarningTitle,
           style: dialogContext.modalHeaderTextStyle,
@@ -11489,6 +11495,7 @@ class _ChatComposerIconButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final iconColor = colors.mutedForeground;
+    final sizing = context.sizing;
     return AxiIconButton(
       iconData: icon,
       tooltip: tooltip,
@@ -11500,6 +11507,9 @@ class _ChatComposerIconButton extends StatelessWidget {
       borderColor: colors.border,
       borderWidth: context.borderSide.width,
       cornerRadius: context.radii.squircle,
+      iconSize: sizing.iconButtonIconSize,
+      buttonSize: sizing.iconButtonSize,
+      tapTargetSize: sizing.iconButtonTapTarget,
     );
   }
 }

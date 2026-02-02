@@ -156,6 +156,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
             final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
             return AxiInputDialog(
               title: Text(l10n.chatsCreateChatRoomTitle),
+              maxWidth: sizing.dialogMaxWidth,
               content: Padding(
                 padding: EdgeInsets.only(bottom: keyboardInset),
                 child: ConstrainedBox(
@@ -264,8 +265,10 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                             .pickImage(),
                                         onUseCurrent: () => context
                                             .read<AvatarEditorCubit>()
-                                            .pauseCarousel(),
+                                            .selectCarouselAvatar(),
                                         useActionEnabled: useActionEnabled,
+                                        hasUserSelectedAvatar:
+                                            avatarState.hasUserSelectedAvatar,
                                         canShuffleBackground: avatarState
                                                 .hasCarouselPreview &&
                                             avatarState.canShuffleBackground,

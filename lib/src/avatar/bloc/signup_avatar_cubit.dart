@@ -132,6 +132,24 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _stopAvatarCarousel();
   }
 
+  void selectCarouselAvatar() {
+    if (state.processing) return;
+    final selected = state.carouselAvatar ?? _currentCarouselAvatar;
+    if (selected == null) return;
+    _stopAvatarCarousel();
+    _carouselBuffer.clear();
+    _currentCarouselAvatar = null;
+    _pendingCropRect = null;
+    emit(
+      state.copyWith(
+        avatar: selected,
+        carouselAvatar: null,
+        backgroundColor: selected.backgroundColor ?? state.backgroundColor,
+        clearError: true,
+      ),
+    );
+  }
+
   AvatarUploadPayload? selectedAvatarPayload() =>
       state.avatar?.payload ?? _currentCarouselAvatar?.payload;
 

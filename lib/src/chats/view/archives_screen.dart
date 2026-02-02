@@ -71,14 +71,7 @@ class _ArchivesView extends StatelessWidget {
                     ),
                   ),
                 ),
-                bottom: PreferredSize(
-                  preferredSize: Size.fromHeight(context.borderSide.width),
-                  child: Divider(
-                    height: context.borderSide.width,
-                    thickness: context.borderSide.width,
-                    color: context.borderSide.color,
-                  ),
-                ),
+                shape: Border(bottom: context.borderSide),
               ),
               body: chatsState.items == null
                   ? Center(
