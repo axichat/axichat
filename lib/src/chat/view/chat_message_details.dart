@@ -195,7 +195,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Align(
-                      alignment: Alignment.centerRight,
+                      alignment: Alignment.centerLeft,
                       child: AxiIconButton.ghost(
                         iconData: LucideIcons.arrowLeft,
                         tooltip: l10n.commonBack,

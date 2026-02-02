@@ -1777,36 +1777,30 @@ final class _RecipientAutocompleteOverlayState
                               borderRadius: overlayRadius,
                               child: Material(
                                 color: Colors.transparent,
-                                child: Listener(
-                                  behavior: HitTestBehavior.translucent,
-                                  onPointerDown: (_) =>
-                                      widget.focusNode.requestFocus(),
-                                  child: ValueListenableBuilder<int?>(
-                                    valueListenable:
-                                        widget.highlightedIndexListenable,
-                                    builder: (context, highlightedIndex, _) {
-                                      return _AutocompleteOptionsList(
-                                        options: _options,
-                                        avatarPathsByJid:
-                                            widget.avatarPathsByJid,
-                                        selfIdentity: widget.selfIdentity,
-                                        onSelected: (option) {
-                                          widget.onRecipientAdded(option);
-                                          widget.controller.clear();
-                                          _dismissOverlay();
-                                          widget.focusNode.requestFocus();
-                                        },
-                                        titleStyle: titleStyle,
-                                        subtitleStyle: subtitleStyle,
-                                        dividerColor: dividerColor,
-                                        trailingIconColor: trailingIconColor,
-                                        hoverColor: hoverColor,
-                                        highlightColor: highlightColor,
-                                        highlightedIndex: highlightedIndex,
-                                        maxHeight: limits.maxHeight,
-                                      );
-                                    },
-                                  ),
+                                child: ValueListenableBuilder<int?>(
+                                  valueListenable:
+                                      widget.highlightedIndexListenable,
+                                  builder: (context, highlightedIndex, _) {
+                                    return _AutocompleteOptionsList(
+                                      options: _options,
+                                      avatarPathsByJid: widget.avatarPathsByJid,
+                                      selfIdentity: widget.selfIdentity,
+                                      onSelected: (option) {
+                                        widget.onRecipientAdded(option);
+                                        widget.controller.clear();
+                                        _dismissOverlay();
+                                        widget.focusNode.requestFocus();
+                                      },
+                                      titleStyle: titleStyle,
+                                      subtitleStyle: subtitleStyle,
+                                      dividerColor: dividerColor,
+                                      trailingIconColor: trailingIconColor,
+                                      hoverColor: hoverColor,
+                                      highlightColor: highlightColor,
+                                      highlightedIndex: highlightedIndex,
+                                      maxHeight: limits.maxHeight,
+                                    );
+                                  },
                                 ),
                               ),
                             ),
@@ -1822,72 +1816,67 @@ final class _RecipientAutocompleteOverlayState
         },
         child: TapRegion(
           groupId: widget.tapRegionGroup,
-          onTapOutside: (_) => _handleTapOutside(),
-          child: Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerDown: (_) => widget.focusNode.requestFocus(),
-            child: SizedBox(
-              key: _triggerKey,
-              height: chipsBarHeight,
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: widget.fieldOuterPadding,
-                ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: widget.backgroundColor,
-                      borderRadius: BorderRadius.circular(chipsBarHeight / 2),
+          onTapOutside: (_) => widget.focusNode.unfocus(),
+          child: SizedBox(
+            key: _triggerKey,
+            height: chipsBarHeight,
+            child: Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.fieldOuterPadding,
+              ),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: widget.backgroundColor,
+                    borderRadius: BorderRadius.circular(chipsBarHeight / 2),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: widget.fieldInnerPadding,
+                      vertical: fieldVerticalPadding,
                     ),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: widget.fieldInnerPadding,
-                        vertical: fieldVerticalPadding,
+                    child: AxiTextField(
+                      controller: widget.controller,
+                      focusNode: widget.focusNode,
+                      maxLines: 1,
+                      keyboardType: TextInputType.emailAddress,
+                      textCapitalization: TextCapitalization.none,
+                      autocorrect: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
+                      autofillHints: const [AutofillHints.email],
+                      inputFormatters: [
+                        FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                      ],
+                      decoration: InputDecoration(
+                        hintText: context.l10n.recipientsAddHint,
+                        hintStyle: textStyle.copyWith(color: hintColor),
+                        isDense: true,
+                        filled: false,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        focusedErrorBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
                       ),
-                      child: AxiTextField(
-                        controller: widget.controller,
-                        focusNode: widget.focusNode,
-                        maxLines: 1,
-                        keyboardType: TextInputType.emailAddress,
-                        textCapitalization: TextCapitalization.none,
-                        autocorrect: false,
-                        smartDashesType: SmartDashesType.disabled,
-                        smartQuotesType: SmartQuotesType.disabled,
-                        autofillHints: const [AutofillHints.email],
-                        inputFormatters: [
-                          FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                        ],
-                        decoration: InputDecoration(
-                          hintText: context.l10n.recipientsAddHint,
-                          hintStyle: textStyle.copyWith(color: hintColor),
-                          isDense: true,
-                          filled: false,
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          errorBorder: InputBorder.none,
-                          focusedErrorBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                        strutStyle: StrutStyle.fromTextStyle(textStyle),
-                        textInputAction: TextInputAction.done,
-                        onEditingComplete: () =>
-                            widget.focusNode.requestFocus(),
-                        textAlignVertical: TextAlignVertical.center,
-                        onSubmitted: (_) {
-                          final handled = widget.onSubmitted();
-                          if (!handled) {
-                            final trimmed = widget.controller.text.trim();
-                            if (trimmed.isNotEmpty &&
-                                widget.onManualEntry(trimmed)) {
-                              widget.controller.clear();
-                              _dismissOverlay();
-                            }
+                      strutStyle: StrutStyle.fromTextStyle(textStyle),
+                      textInputAction: TextInputAction.done,
+                      onEditingComplete: () => widget.focusNode.requestFocus(),
+                      textAlignVertical: TextAlignVertical.center,
+                      onSubmitted: (_) {
+                        final handled = widget.onSubmitted();
+                        if (!handled) {
+                          final trimmed = widget.controller.text.trim();
+                          if (trimmed.isNotEmpty &&
+                              widget.onManualEntry(trimmed)) {
+                            widget.controller.clear();
+                            _dismissOverlay();
                           }
-                          widget.focusNode.requestFocus();
-                        },
-                      ),
+                        }
+                        widget.focusNode.requestFocus();
+                      },
                     ),
                   ),
                 ),
