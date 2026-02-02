@@ -254,13 +254,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final availableAutocompleteChats = _availableAutocompleteChats;
     final knownDomains = _knownDomains;
     final knownAddresses = _knownAddresses;
-    const headerPadding = chipsBarHeaderPadding;
     const double autocompleteFieldOuterPadding = 8.0;
     const double autocompleteFieldInnerPadding = 12.0;
     final bodyPadding = EdgeInsets.symmetric(
       horizontal: widget.horizontalPadding,
       vertical: 6,
     );
+    final headerPadding = chipsBarHeaderPadding.add(bodyPadding);
+    final contentPadding = chipsBarContentPadding.add(bodyPadding);
     final headerStyle = chipsBarHeaderTextStyle(context);
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
     final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;
@@ -271,7 +272,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     );
     return ChipsBarSurface(
       backgroundColor: barBackground,
-      padding: bodyPadding,
+      padding: EdgeInsets.zero,
       borderSide: BorderSide(color: context.colorScheme.border, width: 1),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -326,6 +327,18 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                     ),
                     child: Row(
                       children: [
+                        AnimatedSwitcher(
+                          duration: chipsBarAnimationDuration,
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          child: Icon(
+                            arrowIcon,
+                            key: ValueKey<bool>(_barCollapsed),
+                            size: 18,
+                            color: colors.mutedForeground,
+                          ),
+                        ),
+                        const SizedBox(width: calendarInsetSm),
                         Expanded(
                           child: Text(
                             l10n.recipientsHeaderTitle,
@@ -360,18 +373,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                           expanded: !_barCollapsed,
                           colors: colors,
                         ),
-                        const SizedBox(width: 4),
-                        AnimatedSwitcher(
-                          duration: chipsBarAnimationDuration,
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          child: Icon(
-                            arrowIcon,
-                            key: ValueKey<bool>(_barCollapsed),
-                            size: 18,
-                            color: colors.mutedForeground,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -388,7 +389,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                 curve: Curves.easeInOutCubic,
                 alignment: Alignment.topLeft,
                 child: Padding(
-                  padding: chipsBarContentPadding,
+                  padding: contentPadding,
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 8,

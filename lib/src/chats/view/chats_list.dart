@@ -869,7 +869,8 @@ class _ChatListTileState extends State<ChatListTile> {
     final cutoutGap = spacing.xxs;
     final iconButtonSize = sizing.iconButtonSize;
     final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
-    final iconCutoutDepth = iconCutoutThickness;
+    final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
+    final iconOverhang = iconButtonSize / 2;
     final iconCutoutRadius = context.radii.squircle;
     final unreadChildOffset = -spacing.xs;
     final timestampOffset = (spacing.xs + spacing.xxs) / 2;
@@ -927,7 +928,7 @@ class _ChatListTileState extends State<ChatListTile> {
       backgroundColor: tileBackgroundColor,
       borderColor: surfaceBorderColor,
       cutouts: cutouts,
-      hitTestPadding: EdgeInsets.only(right: iconCutoutDepth),
+      hitTestPadding: EdgeInsets.only(right: iconCutoutDepth + iconOverhang),
       shape: SquircleBorder(
         cornerRadius: context.radii.squircle,
         side: BorderSide(
@@ -976,7 +977,9 @@ class _ChatListTileState extends State<ChatListTile> {
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
     Widget tileContent = Padding(
-      padding: EdgeInsetsDirectional.only(end: scaled(iconCutoutDepth)),
+      padding: EdgeInsetsDirectional.only(
+        end: scaled(iconCutoutDepth + iconOverhang),
+      ),
       child: tileSurface.withTapBounce(),
     );
     if (isDesktop) {

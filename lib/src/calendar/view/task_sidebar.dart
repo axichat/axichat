@@ -4242,11 +4242,6 @@ class _CollapsedAddTaskSection extends StatelessWidget {
         padding: calendarPaddingLg,
         child: Row(
           children: [
-            Text(
-              l10n.calendarAddTaskAction.toUpperCase(),
-              style: context.textTheme.sectionLabelM,
-            ),
-            const Spacer(),
             AnimatedRotation(
               turns: 0,
               duration: baseAnimationDuration,
@@ -4256,6 +4251,12 @@ class _CollapsedAddTaskSection extends StatelessWidget {
                 color: colors.mutedForeground,
               ),
             ),
+            const SizedBox(width: calendarInsetSm),
+            Text(
+              l10n.calendarAddTaskAction.toUpperCase(),
+              style: context.textTheme.sectionLabelM,
+            ),
+            const Spacer(),
           ],
         ),
       ),
@@ -4440,6 +4441,14 @@ class _SidebarAccordionSection extends StatelessWidget {
                 padding: calendarFieldPadding,
                 child: Row(
                   children: [
+                    Icon(
+                      isExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: context.sizing.menuItemIconSize,
+                      color: calendarSubtitleColor,
+                    ),
+                    const SizedBox(width: calendarInsetSm),
                     Expanded(
                       child: Text(
                         title.toUpperCase(),
@@ -4453,14 +4462,6 @@ class _SidebarAccordionSection extends StatelessWidget {
                     _SectionCountBadge(
                       count: itemCount,
                       isExpanded: isExpanded,
-                    ),
-                    const SizedBox(width: calendarGutterSm),
-                    Icon(
-                      isExpanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      size: context.sizing.menuItemIconSize,
-                      color: calendarSubtitleColor,
                     ),
                   ],
                 ),

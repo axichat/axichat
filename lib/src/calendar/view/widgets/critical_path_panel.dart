@@ -119,15 +119,6 @@ class CriticalPathPanel extends StatelessWidget {
                   pressedBackgroundColor: Colors.transparent,
                   child: Row(
                     children: [
-                      Flexible(
-                        child: Text(
-                          context.l10n.calendarCriticalPathsTitle.toUpperCase(),
-                          style: headerStyle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: calendarInsetSm),
                       AnimatedRotation(
                         turns: isExpanded ? -0.25 : 0,
                         duration: animationDuration,
@@ -135,6 +126,15 @@ class CriticalPathPanel extends StatelessWidget {
                           Icons.chevron_left,
                           size: context.sizing.menuItemIconSize,
                           color: colors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(width: calendarInsetSm),
+                      Flexible(
+                        child: Text(
+                          context.l10n.calendarCriticalPathsTitle.toUpperCase(),
+                          style: headerStyle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],

@@ -22,6 +22,7 @@ class TaskSectionHeader extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.size = TaskSectionLabelSize.medium,
     this.trailing,
+    this.leading,
     this.uppercase = true,
   });
 
@@ -29,12 +30,13 @@ class TaskSectionHeader extends StatelessWidget {
   final EdgeInsetsGeometry padding;
   final TaskSectionLabelSize size;
   final Widget? trailing;
+  final Widget? leading;
   final bool uppercase;
 
   @override
   Widget build(BuildContext context) {
     final TextStyle style = switch (size) {
-      TaskSectionLabelSize.large => context.textTheme.sectionLabelLg,
+      TaskSectionLabelSize.large => context.textTheme.sectionLabelM,
       TaskSectionLabelSize.medium => context.textTheme.sectionLabelM,
     };
     final String displayTitle = uppercase ? title.toUpperCase() : title;
@@ -45,6 +47,10 @@ class TaskSectionHeader extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          if (leading != null) ...[
+            leading!,
+            const SizedBox(width: calendarInsetSm),
+          ],
           Flexible(
             fit: FlexFit.loose,
             child: Text(displayTitle, style: style),
@@ -88,12 +94,12 @@ class TaskSectionExpander extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (badge != null) ...[badge!, const SizedBox(width: calendarInsetSm)],
-        Icon(
-          isExpanded ? Icons.expand_less : Icons.expand_more,
-          size: calendarGutterLg,
-          color: calendarSubtitleColor,
-        ),
       ],
+    );
+    final Widget leading = Icon(
+      isExpanded ? Icons.expand_less : Icons.expand_more,
+      size: calendarGutterLg,
+      color: calendarSubtitleColor,
     );
     final Widget header = AxiPlainHeaderButton(
       onPressed: enabled ? onToggle : null,
@@ -103,6 +109,7 @@ class TaskSectionExpander extends StatelessWidget {
         child: TaskSectionHeader(
           title: title,
           uppercase: uppercase,
+          leading: leading,
           trailing: trailing,
         ),
       ),

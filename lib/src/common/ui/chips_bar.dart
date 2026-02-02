@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -38,13 +39,7 @@ const double chipsBarCountBadgeFontSize = 12.0;
 const double chipsBarCountBadgeLetterSpacing = 0.4;
 
 TextStyle chipsBarHeaderTextStyle(BuildContext context) {
-  final textTheme = context.textTheme;
-  final colors = context.colorScheme;
-  return textTheme.small.copyWith(
-    fontSize: chipsBarHeaderFontSize,
-    color: colors.mutedForeground.withValues(alpha: 0.9),
-    letterSpacing: chipsBarHeaderLetterSpacing,
-  );
+  return context.textTheme.sectionLabelM;
 }
 
 Color chipsBarBackground(BuildContext context, ShadColorScheme colors) {
