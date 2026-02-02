@@ -2211,6 +2211,7 @@ class _AttachmentSurface extends StatelessWidget {
     final spacing = context.spacing;
     final resolvedBackground = backgroundColor ?? colors.card;
     final resolvedBorder = borderSide ?? context.borderSide;
+    final borderWidth = resolvedBorder.width;
     final scope = _AttachmentSurfaceScope.maybeOf(context);
     final OutlinedBorder baseShape = scope?.shape ??
         ContinuousRectangleBorder(
@@ -2228,7 +2229,8 @@ class _AttachmentSurface extends StatelessWidget {
         clipper: ShapeBorderClipper(shape: baseShape),
         clipBehavior: Clip.antiAlias,
         child: Padding(
-          padding: padding ?? EdgeInsets.all(spacing.m),
+          padding: (padding ?? EdgeInsets.all(spacing.m))
+              .add(EdgeInsets.all(borderWidth)),
           child: child,
         ),
       ),

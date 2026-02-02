@@ -116,20 +116,20 @@ class SettingsControls extends StatelessWidget {
                 extra: locate,
               ),
             ),
-            if (emailEnabled) ...[
-              _SettingsActionButton(
-                iconData: LucideIcons.mail,
-                label: context.l10n.emailForwardingGuideTitle,
-                onPressed: () async =>
-                    await showEmailForwardingGuideDialog(context),
-              ),
-              _SettingsActionButton(
-                iconData: LucideIcons.userRoundPlus,
-                label: context.l10n.emailContactsImportTitle,
-                onPressed: () async =>
-                    await _showEmailContactImportDialog(context),
-              ),
-            ],
+            _SettingsActionButton(
+              iconData: LucideIcons.mail,
+              label: context.l10n.emailForwardingGuideTitle,
+              onPressed: emailEnabled
+                  ? () async => await showEmailForwardingGuideDialog(context)
+                  : null,
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.userRoundPlus,
+              label: context.l10n.emailContactsImportTitle,
+              onPressed: emailEnabled
+                  ? () async => await _showEmailContactImportDialog(context)
+                  : null,
+            ),
             _SettingsActionButton(
               iconData: LucideIcons.image,
               label: context.l10n.draftAttachmentsLabel,
@@ -196,26 +196,24 @@ class SettingsControls extends StatelessWidget {
                   ? null
                   : () async => await _handleXmppContactsExport(context),
             ),
-            if (emailEnabled) ...[
-              _SettingsActionButton(
-                iconData: LucideIcons.mail,
-                label: context.l10n.profileExportActionLabel(
-                  ProfileExportKind.emailMessages.label(context.l10n),
-                ),
-                onPressed: exportBusy
-                    ? null
-                    : () async => await _handleEmailMessageExport(context),
+            _SettingsActionButton(
+              iconData: LucideIcons.mail,
+              label: context.l10n.profileExportActionLabel(
+                ProfileExportKind.emailMessages.label(context.l10n),
               ),
-              _SettingsActionButton(
-                iconData: LucideIcons.userRound,
-                label: context.l10n.profileExportActionLabel(
-                  ProfileExportKind.emailContacts.label(context.l10n),
-                ),
-                onPressed: exportBusy
-                    ? null
-                    : () async => await _handleEmailContactsExport(context),
+              onPressed: exportBusy || !emailEnabled
+                  ? null
+                  : () async => await _handleEmailMessageExport(context),
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.userRound,
+              label: context.l10n.profileExportActionLabel(
+                ProfileExportKind.emailContacts.label(context.l10n),
               ),
-            ],
+              onPressed: exportBusy || !emailEnabled
+                  ? null
+                  : () async => await _handleEmailContactsExport(context),
+            ),
             anchors?.appearanceKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAppearance,
@@ -438,58 +436,62 @@ class SettingsControls extends StatelessWidget {
                     .toggleAutoDownloadArchives(enabled),
               ),
             ),
-            if (emailEnabled) ...[
-              anchors?.emailPreferencesKey == null
-                  ? _SettingsSectionHeader(
+            anchors?.emailPreferencesKey == null
+                ? _SettingsSectionHeader(
+                    label: context.l10n.settingsSectionEmail,
+                    dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
+                  )
+                : KeyedSubtree(
+                    key: anchors?.emailPreferencesKey,
+                    child: _SettingsSectionHeader(
                       label: context.l10n.settingsSectionEmail,
                       dividerIndent: dividerIndent,
                       padding: sectionHeaderPadding,
-                    )
-                  : KeyedSubtree(
-                      key: anchors?.emailPreferencesKey,
-                      child: _SettingsSectionHeader(
-                        label: context.l10n.settingsSectionEmail,
-                        dividerIndent: dividerIndent,
-                        padding: sectionHeaderPadding,
-                      ),
                     ),
-              Padding(
-                padding: EdgeInsets.all(spacing.m),
-                child: ShadSwitch(
-                  label: Text(context.l10n.settingsEmailReadReceipts),
-                  sublabel:
-                      Text(context.l10n.settingsEmailReadReceiptsDescription),
-                  value: state.emailReadReceipts,
-                  onChanged: (enabled) => context
-                      .read<SettingsCubit>()
-                      .toggleEmailReadReceipts(enabled),
-                ),
+                  ),
+            Padding(
+              padding: EdgeInsets.all(spacing.m),
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsEmailReadReceipts),
+                sublabel:
+                    Text(context.l10n.settingsEmailReadReceiptsDescription),
+                value: state.emailReadReceipts,
+                onChanged: emailEnabled
+                    ? (enabled) => context
+                        .read<SettingsCubit>()
+                        .toggleEmailReadReceipts(enabled)
+                    : null,
               ),
-              Padding(
-                padding: EdgeInsets.all(spacing.m),
-                child: ShadSwitch(
-                  label: Text(context.l10n.settingsShareTokenFooter),
-                  sublabel:
-                      Text(context.l10n.settingsShareTokenFooterDescription),
-                  value: state.shareTokenSignatureEnabled,
-                  onChanged: (enabled) => context
-                      .read<SettingsCubit>()
-                      .toggleShareTokenSignature(enabled),
-                ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(spacing.m),
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsShareTokenFooter),
+                sublabel:
+                    Text(context.l10n.settingsShareTokenFooterDescription),
+                value: state.shareTokenSignatureEnabled,
+                onChanged: emailEnabled
+                    ? (enabled) => context
+                        .read<SettingsCubit>()
+                        .toggleShareTokenSignature(enabled)
+                    : null,
               ),
-              Padding(
-                padding: EdgeInsets.all(spacing.m),
-                child: ShadSwitch(
-                  label: Text(context.l10n.settingsAutoLoadEmailImages),
-                  sublabel:
-                      Text(context.l10n.settingsAutoLoadEmailImagesDescription),
-                  value: state.autoLoadEmailImages,
-                  onChanged: (enabled) => context
-                      .read<SettingsCubit>()
-                      .toggleAutoLoadEmailImages(enabled),
-                ),
+            ),
+            Padding(
+              padding: EdgeInsets.all(spacing.m),
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsAutoLoadEmailImages),
+                sublabel:
+                    Text(context.l10n.settingsAutoLoadEmailImagesDescription),
+                value: state.autoLoadEmailImages,
+                onChanged: emailEnabled
+                    ? (enabled) => context
+                        .read<SettingsCubit>()
+                        .toggleAutoLoadEmailImages(enabled)
+                    : null,
               ),
-            ],
+            ),
             anchors?.aboutKey == null
                 ? _SettingsSectionHeader(
                     label: context.l10n.settingsSectionAbout,

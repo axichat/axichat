@@ -126,9 +126,6 @@ EdgeInsets _bubblePadding(BuildContext context) => EdgeInsets.symmetric(
       vertical: context.spacing.s,
     );
 const _bubbleRadius = 18.0;
-const double _senderLabelBottomSpacing = 6.0;
-const double _senderLabelSecondarySpacing = 2.0;
-const double _senderLabelNoInset = 0.0;
 const _reactionBubbleInset = 12.0;
 const _reactionCutoutDepth = 14.0;
 const List<BlocklistEntry> _emptyBlocklistEntries = <BlocklistEntry>[];
@@ -238,8 +235,6 @@ const _chatPinnedPanelMinHeight = 0.0;
 const int _pinnedSenderMaxLines = 1;
 const _selectionAttachmentBaseGap = 16.0;
 const _selectionAttachmentSelectedGap = 8.0;
-const _attachmentPreviewSpacing = 8.0;
-const double _messageExtraSpacing = 4.0;
 const double _attachmentSurfaceCornerRadius = _bubbleRadius;
 const double _calendarMessageCardCornerRadius = 18.0;
 const OutlinedBorder _attachmentSurfaceShadowShape = ContinuousRectangleBorder(
@@ -800,14 +795,18 @@ BorderRadius _bubbleBorderRadius({
 }
 
 OutlinedBorder _attachmentSurfaceShape({
+  required BuildContext context,
   required bool isSelf,
   required bool chainedPrevious,
   required bool chainedNext,
 }) {
+  final spacing = context.spacing;
+  final radius = Radius.circular(spacing.m + spacing.xxs);
   if (!chainedPrevious && !chainedNext) {
-    return _attachmentSurfaceShadowShape;
+    return ContinuousRectangleBorder(
+      borderRadius: BorderRadius.all(radius),
+    );
   }
-  const radius = Radius.circular(_attachmentSurfaceCornerRadius);
   var topLeading = radius;
   var topTrailing = radius;
   var bottomLeading = radius;
@@ -5513,13 +5512,18 @@ class _ChatState extends State<Chat> {
                                                               <Widget>[];
                                                           bool hasHtmlBubble =
                                                               false;
+                                                          final extraSpacing =
+                                                              context
+                                                                  .spacing.xs;
                                                           void addExtra(
                                                             Widget child, {
                                                             required ShapeBorder
                                                                 shape,
-                                                            double spacing =
-                                                                _messageExtraSpacing,
+                                                            double? spacing,
                                                           }) {
+                                                            final resolvedSpacing =
+                                                                spacing ??
+                                                                    extraSpacing;
                                                             final Widget
                                                                 extraChild =
                                                                 _MessageExtraItem(
@@ -5551,7 +5555,7 @@ class _ChatState extends State<Chat> {
                                                                 ..add(
                                                                   _MessageExtraGap(
                                                                     height:
-                                                                        spacing,
+                                                                        resolvedSpacing,
                                                                   ),
                                                                 )
                                                                 ..add(
@@ -5561,12 +5565,13 @@ class _ChatState extends State<Chat> {
                                                             }
                                                             if (bubbleTextChildren
                                                                     .isNotEmpty &&
-                                                                spacing > 0) {
+                                                                resolvedSpacing >
+                                                                    0) {
                                                               bubbleExtraChildren
                                                                   .add(
                                                                 _MessageExtraGap(
                                                                   height:
-                                                                      spacing,
+                                                                      resolvedSpacing,
                                                                 ),
                                                               );
                                                             }
@@ -5712,8 +5717,8 @@ class _ChatState extends State<Chat> {
                                                                   ),
                                                                 ),
                                                               ),
-                                                              spacing:
-                                                                  _attachmentPreviewSpacing,
+                                                              spacing: context
+                                                                  .spacing.s,
                                                             );
                                                           } else {
                                                             final subjectLabel =
@@ -6541,6 +6546,7 @@ class _ChatState extends State<Chat> {
                                                               final OutlinedBorder
                                                                   attachmentShape =
                                                                   _attachmentSurfaceShape(
+                                                                context: context,
                                                                 isSelf: self,
                                                                 chainedPrevious:
                                                                     hasAttachmentAbove,
@@ -6583,8 +6589,8 @@ class _ChatState extends State<Chat> {
                                                                 ),
                                                                 shape:
                                                                     attachmentShape,
-                                                                spacing:
-                                                                    _attachmentPreviewSpacing,
+                                                                spacing: context
+                                                                    .spacing.s,
                                                               );
                                                             }
                                                           }
@@ -6592,20 +6598,20 @@ class _ChatState extends State<Chat> {
                                                               0.0;
                                                           if (showCompactReactions) {
                                                             bubbleBottomInset =
-                                                                _reactionBubbleInset;
+                                                                reactionBubbleInset;
                                                           }
                                                           if (showReplyStrip) {
                                                             bubbleBottomInset =
                                                                 math.max(
                                                               bubbleBottomInset,
-                                                              _recipientBubbleInset,
+                                                              recipientBubbleInset,
                                                             );
                                                           }
                                                           if (showRecipientCutout) {
                                                             bubbleBottomInset =
                                                                 math.max(
                                                               bubbleBottomInset,
-                                                              _recipientBubbleInset,
+                                                              recipientBubbleInset,
                                                             );
                                                           }
                                                           final isRenderableBubble =
@@ -6620,19 +6626,138 @@ class _ChatState extends State<Chat> {
                                                                   !chainedPrev;
                                                           final spacing =
                                                               context.spacing;
-                                                          const avatarCutoutDepth =
-                                                              _messageAvatarSize /
+                                                          final messageAvatarSize =
+                                                              spacing.l +
+                                                                  spacing.xs;
+                                                          final avatarCutoutDepth =
+                                                              messageAvatarSize /
                                                                   2;
                                                           final avatarCutoutRadius =
                                                               avatarCutoutDepth +
                                                                   spacing.xs;
-                                                          const avatarOuterInset =
+                                                          final avatarOuterInset =
                                                               avatarCutoutDepth;
                                                           final avatarContentInset =
                                                               avatarCutoutDepth -
                                                                   spacing.xs;
-                                                          const avatarMinThickness =
-                                                              _messageAvatarSize;
+                                                          final avatarMinThickness =
+                                                              messageAvatarSize;
+                                                          final avatarCutoutAlignment =
+                                                              Alignment
+                                                                  .centerLeft
+                                                                  .x;
+                                                          final messageAvatarCornerClearance =
+                                                              spacing.xxs * 0;
+                                                          final messageAvatarCutoutPadding =
+                                                              EdgeInsets.zero;
+                                                          final reactionBubbleInset =
+                                                              spacing.s +
+                                                                  spacing.xs;
+                                                          final reactionCutoutDepth =
+                                                              spacing.s +
+                                                                  spacing.xs +
+                                                                  spacing.xxs;
+                                                          final reactionCutoutRadius =
+                                                              spacing.m;
+                                                          final reactionCutoutMinThickness =
+                                                              spacing.m +
+                                                                  spacing.s +
+                                                                  spacing.xs;
+                                                          final reactionStripOffset =
+                                                              Offset(
+                                                            0,
+                                                            -spacing.xxs,
+                                                          );
+                                                          final reactionCutoutPadding =
+                                                              EdgeInsets
+                                                                  .symmetric(
+                                                            horizontal:
+                                                                spacing.m,
+                                                            vertical:
+                                                                spacing.xxs,
+                                                          );
+                                                          final reactionCornerClearance =
+                                                              spacing.s +
+                                                                  spacing.xs;
+                                                          final recipientCutoutDepth =
+                                                              spacing.m;
+                                                          final recipientCutoutRadius =
+                                                              spacing.m +
+                                                                  spacing.xxs;
+                                                          final recipientCutoutPadding =
+                                                              EdgeInsets
+                                                                  .fromLTRB(
+                                                            spacing.s +
+                                                                spacing.xxs,
+                                                            spacing.xs,
+                                                            spacing.s +
+                                                                spacing.xxs,
+                                                            spacing.xs +
+                                                                spacing.xxs,
+                                                          );
+                                                          final recipientCutoutMinThickness =
+                                                              spacing.l +
+                                                                  spacing.m;
+                                                          final recipientBubbleInset =
+                                                              recipientCutoutDepth;
+                                                          final selectionCutoutDepth =
+                                                              spacing.m +
+                                                                  (spacing.xxs /
+                                                                      2);
+                                                          final selectionCutoutRadius =
+                                                              spacing.m;
+                                                          final selectionCutoutPadding =
+                                                              EdgeInsets
+                                                                  .fromLTRB(
+                                                            spacing.xs,
+                                                            spacing.xs +
+                                                                (spacing.xxs /
+                                                                    4),
+                                                            spacing.xs,
+                                                            spacing.xs +
+                                                                (spacing.xxs /
+                                                                    4),
+                                                          );
+                                                          final selectionCutoutOffset =
+                                                              Offset(
+                                                            -(spacing.xxs +
+                                                                (spacing.xxs /
+                                                                    2)),
+                                                            0,
+                                                          );
+                                                          final selectionCutoutThickness =
+                                                              SelectionIndicator
+                                                                      .size +
+                                                                  spacing.s +
+                                                                  (spacing.xxs /
+                                                                      2);
+                                                          final selectionBubbleInteriorInset =
+                                                              selectionCutoutDepth +
+                                                                  spacing.xs +
+                                                                  spacing.xxs;
+                                                          final selectionBubbleVerticalInset =
+                                                              spacing.xs;
+                                                          final selectionOuterInset =
+                                                              selectionCutoutDepth +
+                                                                  (SelectionIndicator
+                                                                          .size /
+                                                                      2);
+                                                          final selectionIndicatorInset =
+                                                              spacing.xxs;
+                                                          final selectionBubbleInboundExtraGap =
+                                                              spacing.xs;
+                                                          final selectionBubbleOutboundExtraGap =
+                                                              spacing.s;
+                                                          final selectionBubbleOutboundSpacingBoost =
+                                                              spacing.xs +
+                                                                  spacing.xxs;
+                                                          final selectionBubbleInboundSpacing =
+                                                              selectionBubbleInteriorInset +
+                                                                  selectionBubbleInboundExtraGap;
+                                                          final selectionBubbleOutboundSpacing =
+                                                              selectionBubbleInteriorInset +
+                                                                  selectionBubbleOutboundExtraGap +
+                                                                  selectionBubbleOutboundSpacingBoost;
                                                           EdgeInsetsGeometry
                                                               bubblePadding =
                                                               _bubblePadding(
@@ -6656,20 +6781,20 @@ class _ChatState extends State<Chat> {
                                                                     .add(
                                                               EdgeInsets.only(
                                                                 left: self
-                                                                    ? _selectionBubbleOutboundSpacing
+                                                                    ? selectionBubbleOutboundSpacing
                                                                     : 0,
                                                                 right: self
                                                                     ? 0
-                                                                    : _selectionBubbleInboundSpacing,
+                                                                    : selectionBubbleInboundSpacing,
                                                               ),
                                                             );
                                                             bubblePadding =
                                                                 bubblePadding
                                                                     .add(
-                                                              const EdgeInsets
+                                                              EdgeInsets
                                                                   .symmetric(
                                                                 vertical:
-                                                                    _selectionBubbleVerticalInset,
+                                                                    selectionBubbleVerticalInset,
                                                               ),
                                                             );
                                                           }
@@ -6706,7 +6831,7 @@ class _ChatState extends State<Chat> {
                                                           final selectionAllowance =
                                                               selectionOverlay !=
                                                                       null
-                                                                  ? _selectionOuterInset
+                                                                  ? selectionOuterInset
                                                                   : 0.0;
                                                           final cappedBubbleWidth =
                                                               math.min(
@@ -6737,11 +6862,11 @@ class _ChatState extends State<Chat> {
                                                                   ? 0.0
                                                                   : math.max(
                                                                       showCompactReactions
-                                                                          ? _reactionCutoutDepth
+                                                                          ? reactionCutoutDepth
                                                                           : 0.0,
                                                                       (showReplyStrip ||
                                                                               showRecipientCutout)
-                                                                          ? _recipientCutoutDepth
+                                                                          ? recipientCutoutDepth
                                                                           : 0.0,
                                                                     );
                                                           final bool
@@ -6769,8 +6894,9 @@ class _ChatState extends State<Chat> {
                                                                           Column(
                                                                         crossAxisAlignment:
                                                                             CrossAxisAlignment.start,
-                                                                        spacing:
-                                                                            _messageExtraSpacing,
+                                                                        spacing: context
+                                                                            .spacing
+                                                                            .xs,
                                                                         children:
                                                                             bubbleTextChildren,
                                                                       ),
@@ -6909,7 +7035,7 @@ class _ChatState extends State<Chat> {
                                                               jid: messageModel
                                                                   .senderJid,
                                                               size:
-                                                                  _messageAvatarSize,
+                                                                  messageAvatarSize,
                                                               avatarPath:
                                                                   messageAvatarPath,
                                                             );
@@ -6923,15 +7049,15 @@ class _ChatState extends State<Chat> {
                                                                   context.radii
                                                                       .squircle,
                                                               padding:
-                                                                  _messageAvatarCutoutPadding,
+                                                                  messageAvatarCutoutPadding,
                                                               offset:
                                                                   Offset.zero,
                                                               minThickness:
                                                                   avatarMinThickness,
                                                               cornerClearance:
-                                                                  _messageAvatarCornerClearance,
+                                                                  messageAvatarCornerClearance,
                                                               alignment:
-                                                                  _messageAvatarCutoutAlignment,
+                                                                  avatarCutoutAlignment,
                                                             );
                                                             avatarAnchor =
                                                                 ChatBubbleCutoutAnchor
@@ -6941,14 +7067,17 @@ class _ChatState extends State<Chat> {
                                                               requiresAvatarHeadroom
                                                                   ? avatarOuterInset
                                                                   : 0;
+                                                          final messageListHorizontalPadding =
+                                                              spacing.s +
+                                                                  spacing.xs;
                                                           final outerPadding =
                                                               EdgeInsets.only(
-                                                            top: 2,
+                                                            top: spacing.xxs,
                                                             bottom: baseOuterBottom +
                                                                 extraOuterBottom,
-                                                            left: _messageListHorizontalPadding +
+                                                            left: messageListHorizontalPadding +
                                                                 extraOuterLeft,
-                                                            right: _messageListHorizontalPadding +
+                                                            right: messageListHorizontalPadding +
                                                                 extraOuterRight,
                                                           );
                                                           final bubble =
@@ -6990,10 +7119,10 @@ class _ChatState extends State<Chat> {
                                                                   bubbleHighlightColor,
                                                                 ),
                                                                 bubbleWidthFraction:
-                                                                    _cutoutMaxWidthFraction,
+                                                                    1.0,
                                                                 cornerClearance:
                                                                     bubbleCornerClearance +
-                                                                        _reactionCornerClearance,
+                                                                        reactionCornerClearance,
                                                                 body: child!,
                                                                 reactionOverlay: showReplyStrip
                                                                     ? _ReplyStrip(
@@ -7026,32 +7155,30 @@ class _ChatState extends State<Chat> {
                                                                           )
                                                                         : null,
                                                                 reactionStyle: showReplyStrip
-                                                                    ? const CutoutStyle(
+                                                                    ? CutoutStyle(
                                                                         depth:
-                                                                            _recipientCutoutDepth,
+                                                                            recipientCutoutDepth,
                                                                         cornerRadius:
-                                                                            _recipientCutoutRadius,
+                                                                            recipientCutoutRadius,
                                                                         padding:
-                                                                            _recipientCutoutPadding,
+                                                                            recipientCutoutPadding,
                                                                         offset:
-                                                                            _recipientCutoutOffset,
+                                                                            Offset.zero,
                                                                         minThickness:
-                                                                            _recipientCutoutMinThickness,
+                                                                            recipientCutoutMinThickness,
                                                                       )
                                                                     : showCompactReactions
                                                                         ? CutoutStyle(
                                                                             depth:
-                                                                                _reactionCutoutDepth,
+                                                                                reactionCutoutDepth,
                                                                             cornerRadius:
-                                                                                _reactionCutoutRadius,
+                                                                                reactionCutoutRadius,
                                                                             padding:
-                                                                                _reactionCutoutPadding(
-                                                                              context,
-                                                                            ),
+                                                                                reactionCutoutPadding,
                                                                             offset:
-                                                                                _reactionStripOffset,
+                                                                                reactionStripOffset,
                                                                             minThickness:
-                                                                                _reactionCutoutMinThickness,
+                                                                                reactionCutoutMinThickness,
                                                                           )
                                                                         : null,
                                                                 recipientOverlay:
@@ -7570,7 +7697,7 @@ class _ChatState extends State<Chat> {
                                                                         ).left +
                                                                         spacing
                                                                             .xxs
-                                                                    : _senderLabelNoInset;
+                                                                    : 0.0;
                                                             senderLabel =
                                                                 _MessageSenderLabel(
                                                               user:
@@ -9205,6 +9332,7 @@ class _PinnedMessageTile extends StatelessWidget {
       message: message,
       isSelf: isSelf,
     );
+    final spacing = context.spacing;
     final senderLabelStyle = context.textTheme.small.copyWith(
       color: colors.mutedForeground,
       fontWeight: FontWeight.w600,
@@ -9224,14 +9352,14 @@ class _PinnedMessageTile extends StatelessWidget {
         ],
       ),
       if (messageWidget != null) ...[
-        const SizedBox(height: _senderLabelBottomSpacing),
+        SizedBox(height: spacing.xs + spacing.xxs),
         messageWidget,
       ],
     ];
     if (hasCalendarTask) {
       final bool taskReadOnly =
           message?.calendarTaskIcsReadOnly ?? _calendarTaskIcsReadOnlyFallback;
-      contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
+      contentChildren.add(SizedBox(height: spacing.s));
       contentChildren.add(
         canShowCalendarTasks
             ? ChatCalendarTaskCard(
@@ -9252,7 +9380,7 @@ class _PinnedMessageTile extends StatelessWidget {
     }
     final resolvedCriticalPath = criticalPathFragment;
     if (resolvedCriticalPath != null) {
-      contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
+      contentChildren.add(SizedBox(height: spacing.s));
       contentChildren.add(
         ChatCalendarCriticalPathCard(
           path: resolvedCriticalPath.path,
@@ -9264,7 +9392,7 @@ class _PinnedMessageTile extends StatelessWidget {
       );
     }
     if (hasAttachments) {
-      contentChildren.add(const SizedBox(height: _attachmentPreviewSpacing));
+      contentChildren.add(SizedBox(height: spacing.s));
       final isEmailBacked = chat.isEmailBacked;
       final bool attachmentsBlockedForPin = attachmentsBlocked;
       final allowAttachmentByTrust = shouldAllowAttachment(
@@ -9300,9 +9428,7 @@ class _PinnedMessageTile extends StatelessWidget {
           () => context.read<ChatBloc>().reloadFileMetadata(attachmentId),
         );
         if (index > 0) {
-          contentChildren.add(
-            const SizedBox(height: _attachmentPreviewSpacing),
-          );
+          contentChildren.add(SizedBox(height: spacing.s));
         }
         contentChildren.add(
           ChatAttachmentPreview(
@@ -9713,6 +9839,8 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
   required List<ReactionPreview> reactions,
   required double maxContentWidth,
 }) {
+  const reactionChipSpacing = 0.6;
+  const reactionOverflowGlyphWidth = 18.0;
   if (reactions.isEmpty || maxContentWidth <= 0) {
     return const _CutoutLayoutResult(
       items: <ReactionPreview>[],
@@ -9735,7 +9863,7 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
       : maxContentWidth;
 
   for (final reaction in reactions) {
-    final spacing = visible.isEmpty ? 0 : _reactionChipSpacing;
+    final spacing = visible.isEmpty ? 0 : reactionChipSpacing;
     final addition = spacing +
         measureReactionChipWidth(
           context: context,
@@ -9755,14 +9883,14 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
   double totalWidth = used;
 
   if (truncated) {
-    var spacing = visible.isEmpty ? 0 : _reactionChipSpacing;
-    const glyphWidth = _reactionOverflowGlyphWidth;
+    var spacing = visible.isEmpty ? 0 : reactionChipSpacing;
+    const glyphWidth = reactionOverflowGlyphWidth;
     while (visible.isNotEmpty &&
         limit.isFinite &&
         totalWidth + spacing + glyphWidth > limit) {
       totalWidth -= additions.removeLast();
       visible.removeLast();
-      spacing = visible.isEmpty ? 0 : _reactionChipSpacing;
+      spacing = visible.isEmpty ? 0 : reactionChipSpacing;
     }
     if (visible.isEmpty) {
       totalWidth = math.min(glyphWidth, maxContentWidth);
@@ -9786,6 +9914,9 @@ double measureReactionChipWidth({
   required TextDirection textDirection,
   required TextScaler textScaler,
 }) {
+  const reactionChipPadding =
+      EdgeInsets.symmetric(horizontal: 0.2, vertical: 2);
+  const reactionSubscriptPadding = 3.0;
   final emojiPainter = TextPainter(
     text: TextSpan(
       text: reaction.emoji,
@@ -9799,7 +9930,7 @@ double measureReactionChipWidth({
     textScaler: textScaler,
   )..layout();
 
-  var width = emojiPainter.width + _reactionChipPadding.horizontal;
+  var width = emojiPainter.width + reactionChipPadding.horizontal;
 
   if (reaction.count > 1) {
     final countPainter = TextPainter(
@@ -9818,8 +9949,8 @@ double measureReactionChipWidth({
       width,
       emojiPainter.width +
           countPainter.width * 0.8 +
-          _reactionSubscriptPadding +
-          _reactionChipPadding.horizontal,
+          reactionSubscriptPadding +
+          reactionChipPadding.horizontal,
     );
   }
 
@@ -13869,7 +14000,7 @@ class _GuestMessageBubble extends StatelessWidget {
             user: message.user,
             isSelf: isSelf,
             selfLabel: context.l10n.chatSenderYou,
-            leftInset: _senderLabelNoInset,
+            leftInset: 0.0,
           ),
           bubble,
         ],
@@ -13959,6 +14090,7 @@ class _SenderLabelBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final textAlign = isSelf ? TextAlign.right : TextAlign.left;
     final crossAxis =
         isSelf ? CrossAxisAlignment.end : CrossAxisAlignment.start;
@@ -13972,11 +14104,11 @@ class _SenderLabelBlock extends StatelessWidget {
     );
     return Padding(
       padding: EdgeInsets.only(
-        bottom: _senderLabelBottomSpacing,
+        bottom: spacing.xs + spacing.xxs,
         left: leftInset,
       ),
       child: Column(
-        spacing: _senderLabelSecondarySpacing,
+        spacing: spacing.xxs,
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: crossAxis,
         children: [

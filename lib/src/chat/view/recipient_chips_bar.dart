@@ -82,10 +82,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   late List<ComposerRecipient> _renderedRecipients;
   final Set<String> _enteringKeys = <String>{};
   final Set<String> _removingKeys = <String>{};
-  List<FanOutTarget> _suggestions = const <FanOutTarget>[];
-  final ValueNotifier<int?> _highlightedSuggestionIndex = ValueNotifier<int?>(
-    null,
-  );
   String? _pendingRemovalKey;
   late final AnimationController _collapseController;
   late final Animation<double> _collapseAnimation;
@@ -101,9 +97,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void initState() {
     super.initState();
     _tapRegionGroup = widget.tapRegionGroup ?? axi.EditableText;
-    _focusNode
-      ..onKeyEvent = _handleKeyEvent
-      ..addListener(_handleAutocompleteFocusChanged);
+    _focusNode.onKeyEvent = _handleKeyEvent;
     _renderedRecipients = _visibleRecipientsForState();
     _barCollapsed = widget.collapsedByDefault;
     _collapseController = AnimationController(
@@ -198,7 +192,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void dispose() {
     _controller.removeListener(_handleTextChanged);
-    _highlightedSuggestionIndex.dispose();
     _controller.dispose();
     _focusNode.dispose();
     _recipientSuggestionSubscription?.cancel();
@@ -420,11 +413,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                             shareTokenSignatureEnabled:
                                 shareTokenSignatureEnabled,
                           ),
-                          highlightedIndexListenable:
-                              _highlightedSuggestionIndex,
                           onManualEntry: _handleManualEntry,
-                          onOptionsChanged: _updateSuggestions,
-                          onSubmitted: _handleAutocompleteSubmit,
                           onRecipientAdded: _handleRecipientAdded,
                         ),
                       ),
@@ -569,19 +558,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
   KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
-    final key = event.logicalKey;
-    if (key == LogicalKeyboardKey.arrowDown) {
-      return _moveAutocompleteHighlight(1);
-    }
-    if (key == LogicalKeyboardKey.arrowUp) {
-      return _moveAutocompleteHighlight(-1);
-    }
-    if (key == LogicalKeyboardKey.enter ||
-        key == LogicalKeyboardKey.numpadEnter) {
-      _handleAutocompleteSubmit();
-      return KeyEventResult.handled;
-    }
-    if (key == LogicalKeyboardKey.backspace && _controller.text.isEmpty) {
+    if (event.logicalKey == LogicalKeyboardKey.backspace &&
+        _controller.text.isEmpty) {
       _handleBackspacePress();
       return KeyEventResult.handled;
     }
@@ -611,73 +589,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return true;
   }
 
-  void _updateSuggestions(List<FanOutTarget> suggestions) {
-    _suggestions = suggestions;
-    _highlightedSuggestionIndex.value = null;
-  }
-
   void _handleTextChanged() {
     if (_pendingRemovalKey != null && _controller.text.isNotEmpty) {
       _clearPendingRemoval();
     }
-  }
-
-  KeyEventResult _moveAutocompleteHighlight(int delta) {
-    if (_suggestions.isEmpty) {
-      return KeyEventResult.ignored;
-    }
-    int? next = _highlightedSuggestionIndex.value;
-    if (next == null) {
-      if (delta > 0) {
-        next = 0;
-      } else {
-        return KeyEventResult.handled;
-      }
-    } else {
-      final candidate = next + delta;
-      if (candidate < 0) {
-        next = null;
-      } else if (candidate >= _suggestions.length) {
-        next = _suggestions.length - 1;
-      } else {
-        next = candidate;
-      }
-    }
-    if (next == _highlightedSuggestionIndex.value) {
-      return KeyEventResult.handled;
-    }
-    _highlightedSuggestionIndex.value = next;
-    return KeyEventResult.handled;
-  }
-
-  bool _handleAutocompleteSubmit() {
-    final text = _controller.text.trim();
-    final highlighted = _highlightedSuggestionIndex.value;
-    if (highlighted != null &&
-        highlighted >= 0 &&
-        highlighted < _suggestions.length) {
-      _handleRecipientAdded(_suggestions[highlighted]);
-      _controller.clear();
-      _updateSuggestions(const <FanOutTarget>[]);
-      return true;
-    }
-    if (text.isEmpty) {
-      return false;
-    }
-    if (_handleManualEntry(text)) {
-      _controller.clear();
-      _updateSuggestions(const <FanOutTarget>[]);
-      return true;
-    }
-    return false;
-  }
-
-  void _handleAutocompleteFocusChanged() {
-    if (_focusNode.hasFocus) return;
-    final submitted = _handleAutocompleteSubmit();
-    if (!submitted) return;
-    _controller.clear();
-    _updateSuggestions(const <FanOutTarget>[]);
   }
 
   void _handleBackspacePress() {

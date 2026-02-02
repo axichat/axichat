@@ -176,25 +176,20 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
     }
     Widget interactive = preview;
     if (hasGesture) {
-      final shape = RoundedSuperellipseBorder(borderRadius: context.radius);
-      interactive = ClipPath(
-        clipper: ShapeBorderClipper(shape: shape),
-        child: ShadFocusable(
-          canRequestFocus: true,
-          builder: (context, focused, child) =>
-              child ?? const SizedBox.shrink(),
-          child: ShadGestureDetector(
-            cursor: SystemMouseCursors.click,
-            hoverStrategies: mobileHoverStrategies,
-            onTap: widget.onPressed,
-            onLongPress: widget.onLongPress ?? widget.onPressed,
-            onTapDown: _bounceController.handleTapDown,
-            onTapUp: _bounceController.handleTapUp,
-            onTapCancel: _bounceController.handleTapCancel,
-            child: AxiTapBounce(
-              controller: _bounceController,
-              child: preview,
-            ),
+      interactive = ShadFocusable(
+        canRequestFocus: true,
+        builder: (context, focused, child) => child ?? const SizedBox.shrink(),
+        child: ShadGestureDetector(
+          cursor: SystemMouseCursors.click,
+          hoverStrategies: mobileHoverStrategies,
+          onTap: widget.onPressed,
+          onLongPress: widget.onLongPress ?? widget.onPressed,
+          onTapDown: _bounceController.handleTapDown,
+          onTapUp: _bounceController.handleTapUp,
+          onTapCancel: _bounceController.handleTapCancel,
+          child: AxiTapBounce(
+            controller: _bounceController,
+            child: preview,
           ),
         ),
       );
@@ -282,7 +277,12 @@ class _PendingImageAttachment extends StatelessWidget {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final borderRadius = BorderRadius.circular(sizing.containerRadius);
+    final shape = RoundedSuperellipseBorder(
+      borderRadius: context.radius,
+      side: context.borderSide,
+    );
+    final clipShape = RoundedSuperellipseBorder(borderRadius: context.radius);
+    final borderWidth = context.borderSide.width;
     final previewExtent = sizing.attachmentPreviewExtent;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     final cacheExtent = (previewExtent * pixelRatio).round();
@@ -293,24 +293,37 @@ class _PendingImageAttachment extends StatelessWidget {
       child: Stack(
         children: [
           Positioned.fill(
-            child: ClipRRect(
-              borderRadius: borderRadius,
-              child: Image.file(
-                File(pending.attachment.path),
-                fit: BoxFit.cover,
-                cacheWidth: cacheExtent,
-                cacheHeight: cacheExtent,
-                frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
-                  if (wasSynchronouslyLoaded || frame != null) {
-                    return child;
-                  }
-                  return _PendingImageSkeleton(borderRadius: borderRadius);
-                },
-                errorBuilder: (_, __, ___) => ColoredBox(
-                  color: colors.card,
-                  child: Icon(
-                    attachmentIcon(pending.attachment, typeReport: typeReport),
-                    color: colors.mutedForeground,
+            child: DecoratedBox(
+              decoration: ShapeDecoration(
+                color: colors.card,
+                shape: shape,
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(borderWidth),
+                child: ClipPath(
+                  clipper: ShapeBorderClipper(shape: clipShape),
+                  child: Image.file(
+                    File(pending.attachment.path),
+                    fit: BoxFit.cover,
+                    cacheWidth: cacheExtent,
+                    cacheHeight: cacheExtent,
+                    frameBuilder:
+                        (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded || frame != null) {
+                        return child;
+                      }
+                      return _PendingImageSkeleton(shape: clipShape);
+                    },
+                    errorBuilder: (_, __, ___) => ColoredBox(
+                      color: colors.card,
+                      child: Icon(
+                        attachmentIcon(
+                          pending.attachment,
+                          typeReport: typeReport,
+                        ),
+                        color: colors.mutedForeground,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -318,7 +331,7 @@ class _PendingImageAttachment extends StatelessWidget {
           ),
           if (isFailed)
             _PendingAttachmentErrorOverlay(
-              borderRadius: borderRadius,
+              shape: clipShape,
               fileName: pending.attachment.fileName,
               message: pending.errorMessage,
               onRetry: onRetry,
@@ -447,20 +460,23 @@ class _PendingAttachmentSkeleton extends StatelessWidget {
 }
 
 class _PendingImageSkeleton extends StatelessWidget {
-  const _PendingImageSkeleton({this.borderRadius});
+  const _PendingImageSkeleton({this.shape});
 
-  final BorderRadius? borderRadius;
+  final OutlinedBorder? shape;
 
   @override
   Widget build(BuildContext context) {
     final sizing = context.sizing;
     final extent = sizing.attachmentPreviewExtent;
-    final radius =
-        borderRadius ?? BorderRadius.circular(sizing.containerRadius);
+    final resolvedShape =
+        shape ?? RoundedSuperellipseBorder(borderRadius: context.radius);
     return SizedBox(
       width: extent,
       height: extent,
-      child: ClipRRect(borderRadius: radius, child: const _ShimmerSurface()),
+      child: ClipPath(
+        clipper: ShapeBorderClipper(shape: resolvedShape),
+        child: const _ShimmerSurface(),
+      ),
     );
   }
 }
@@ -596,14 +612,14 @@ class _ShimmerSurface extends StatelessWidget {
 
 class _PendingAttachmentErrorOverlay extends StatelessWidget {
   const _PendingAttachmentErrorOverlay({
-    required this.borderRadius,
+    required this.shape,
     required this.fileName,
     required this.onRetry,
     required this.onRemove,
     this.message,
   });
 
-  final BorderRadius borderRadius;
+  final OutlinedBorder shape;
   final String fileName;
   final String? message;
   final VoidCallback onRetry;
@@ -618,8 +634,8 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
     final errorLabel =
         message?.isNotEmpty == true ? message! : l10n.chatAttachmentSendFailed;
     return Positioned.fill(
-      child: ClipRRect(
-        borderRadius: borderRadius,
+      child: ClipPath(
+        clipper: ShapeBorderClipper(shape: shape),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: colors.destructive,
