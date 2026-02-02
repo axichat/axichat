@@ -342,7 +342,7 @@ class _IconNavButton extends StatelessWidget {
       onPressed: onPressed,
       highlighted: false,
       enabled: onPressed != null,
-      dense: !compact,
+      dense: compact,
     );
   }
 }
@@ -373,7 +373,7 @@ class _IconControlButton extends StatelessWidget {
       onPressed: onPressed,
       highlighted: false,
       enabled: onPressed != null,
-      dense: !compact,
+      dense: compact,
     );
   }
 }
@@ -644,7 +644,7 @@ class CalendarViewModeToggle extends StatelessWidget {
     final EdgeInsets padding = EdgeInsets.symmetric(
       horizontal: compact ? calendarGutterSm : calendarGutterMd,
     );
-    final double minHeight = context.sizing.buttonHeightSm;
+    final double minHeight = context.sizing.buttonHeightRegular;
     final double minWidth =
         isExpandedSize ? _minWidthExpanded : _minWidthRegular;
     final double preferredWidth =
@@ -657,7 +657,7 @@ class CalendarViewModeToggle extends StatelessWidget {
       math.max(minWidth, mediaWidth * widthScale),
     );
     final bool useShortLabels = !isExpandedSize;
-    final TextStyle textStyle = context.textTheme.labelSm.strong.copyWith(
+    final TextStyle textStyle = context.textTheme.label.strong.copyWith(
       letterSpacing: 0.1,
     );
     final Color dividerColor = colors.border.withValues(alpha: 0.55);
@@ -723,42 +723,42 @@ class CalendarSegmentedToggle<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final double cornerRadius = context.radius.topLeft.x;
     final ShadColorScheme colors = context.colorScheme;
-    return ShadDecorator(
-      decoration: outerDecoration,
-      child: ClipRRect(
-        borderRadius: context.radius,
-        child: SizedBox(
-          height: minHeight,
-          width: controlWidth,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              for (int index = 0; index < options.length; index++) ...[
-                if (index > 0)
-                  Container(
-                    width: context.borderSide.width,
-                    height: double.infinity,
-                    color: dividerColor,
-                  ),
-                Expanded(
-                  child: _SegmentedToggleItem(
-                    isFirst: index == 0,
-                    isLast: index == options.length - 1,
-                    selected: options[index].value == selected,
-                    cornerRadius: cornerRadius,
-                    padding: padding,
-                    minHeight: minHeight,
-                    activeBackground: activeBackground,
-                    hoverBackground: hoverBackground,
-                    onSelected: () => onChanged(options[index].value),
-                    activeTextColor: colors.primary,
-                    inactiveTextColor: colors.mutedForeground,
-                    child: options[index].label,
-                  ),
+    final ShapeBorder outerShape = SquircleBorder(borderRadius: context.radius);
+    return Material(
+      color: outerDecoration.color ?? colors.secondary,
+      shape: outerShape,
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        height: minHeight,
+        width: controlWidth,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int index = 0; index < options.length; index++) ...[
+              if (index > 0)
+                Container(
+                  width: context.borderSide.width,
+                  height: double.infinity,
+                  color: dividerColor,
                 ),
-              ],
+              Expanded(
+                child: _SegmentedToggleItem(
+                  isFirst: index == 0,
+                  isLast: index == options.length - 1,
+                  selected: options[index].value == selected,
+                  cornerRadius: cornerRadius,
+                  padding: padding,
+                  minHeight: minHeight,
+                  activeBackground: activeBackground,
+                  hoverBackground: hoverBackground,
+                  onSelected: () => onChanged(options[index].value),
+                  activeTextColor: colors.primary,
+                  inactiveTextColor: colors.mutedForeground,
+                  child: options[index].label,
+                ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );

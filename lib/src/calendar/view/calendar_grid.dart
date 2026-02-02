@@ -4148,6 +4148,8 @@ class _CalendarZoomControls extends StatelessWidget {
       final button = AxiIconButton.ghost(
         iconData: icon,
         onPressed: onPressed,
+        backgroundColor: Colors.transparent,
+        borderColor: Colors.transparent,
       );
       return AxiTooltip(builder: (_) => Text(tooltip), child: button);
     }

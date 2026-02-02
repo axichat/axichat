@@ -256,12 +256,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final knownAddresses = _knownAddresses;
     const double autocompleteFieldOuterPadding = 8.0;
     const double autocompleteFieldInnerPadding = 12.0;
-    final bodyPadding = EdgeInsets.symmetric(
-      horizontal: widget.horizontalPadding,
-      vertical: 6,
-    );
-    final headerPadding = chipsBarHeaderPadding.add(bodyPadding);
-    final contentPadding = chipsBarContentPadding.add(bodyPadding);
+    final spacing = context.spacing;
+    final headerPadding = EdgeInsets.all(spacing.s);
+    final contentPadding = EdgeInsets.all(spacing.s);
     final headerStyle = chipsBarHeaderTextStyle(context);
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
     final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;

@@ -4439,6 +4439,9 @@ class _SidebarAccordionSection extends StatelessWidget {
               AxiPlainHeaderButton(
                 onPressed: () => onToggleSection(section),
                 padding: calendarFieldPadding,
+                backgroundColor: Colors.transparent,
+                hoverBackgroundColor: Colors.transparent,
+                pressedBackgroundColor: Colors.transparent,
                 child: Row(
                   children: [
                     Icon(

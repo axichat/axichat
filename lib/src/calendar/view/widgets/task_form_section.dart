@@ -953,6 +953,7 @@ class TaskPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
+    final colors = context.colorScheme;
     return AxiButton.primary(
       size: size,
       loading: isBusy,
@@ -960,7 +961,12 @@ class TaskPrimaryButton extends StatelessWidget {
       leading: icon == null
           ? null
           : Icon(icon, size: context.sizing.menuItemIconSize),
-      child: Text(label, style: context.textTheme.small.strong),
+      child: Text(
+        label,
+        style: context.textTheme.small.strong.copyWith(
+          color: colors.primaryForeground,
+        ),
+      ),
     );
   }
 }

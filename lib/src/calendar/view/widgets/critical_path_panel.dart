@@ -701,24 +701,25 @@ class _FocusedPathTasks extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SizedBox(height: calendarGutterSm),
-        Row(
-          children: [
-            Text(
-              context.l10n.calendarCriticalPathTaskOrderTitle,
-              style: context.textTheme.small.strong,
-            ),
-            const Spacer(),
-            if (onAddTask != null)
-              AxiButton.outline(
-                onPressed: onAddTask,
-                leading: Icon(
-                  Icons.add,
-                  size: context.sizing.menuItemIconSize,
-                ),
-                child: Text(context.l10n.calendarCriticalPathAddTask),
-              ),
-          ],
+        Text(
+          context.l10n.calendarCriticalPathTaskOrderTitle,
+          style: context.textTheme.small.strong,
         ),
+        if (onAddTask != null) ...[
+          const SizedBox(height: calendarInsetSm),
+          SizedBox(
+            width: double.infinity,
+            child: AxiButton.outline(
+              onPressed: onAddTask,
+              widthBehavior: AxiButtonWidth.expand,
+              leading: Icon(
+                Icons.add,
+                size: context.sizing.menuItemIconSize,
+              ),
+              child: Text(context.l10n.calendarCriticalPathAddTask),
+            ),
+          ),
+        ],
         const SizedBox(height: calendarInsetSm),
         Text(context.l10n.calendarCriticalPathDragHint, style: textTheme.muted),
         const SizedBox(height: calendarGutterSm),

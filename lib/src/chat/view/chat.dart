@@ -12718,15 +12718,17 @@ class _ReplyingToPreviewText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final sectionStyle = context.textTheme.sectionLabelM;
     final baseStyle = context.textTheme.small;
-    final mutedStyle = sectionStyle.copyWith(color: colors.mutedForeground);
+    final mutedStyle = baseStyle.copyWith(color: colors.mutedForeground);
+    final prefixStyle = context.textTheme.sectionLabelM.copyWith(
+      color: colors.mutedForeground,
+    );
     final replyPrefix = context.l10n.chatReplyingTo;
     final senderSpan = TextSpan(
       text: senderLabel,
       style: mutedStyle.copyWith(fontWeight: FontWeight.w600),
     );
-    final headerPrefixSpan = TextSpan(text: replyPrefix, style: mutedStyle);
+    final headerPrefixSpan = TextSpan(text: replyPrefix, style: prefixStyle);
     final headerWithNameSpan = TextSpan(
       children: [
         headerPrefixSpan,
