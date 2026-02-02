@@ -227,51 +227,36 @@ class _RenderCutoutSurface extends RenderBox
     }
 
     final bodyChild = firstChild!;
-    bodyChild.layout(constraints, parentUsesSize: true);
-    final bodySize = bodyChild.size;
-    final looseConstraints = BoxConstraints.loose(bodySize);
-
     final cutoutChildren = <RenderBox>[];
+    final cutoutConstraints = BoxConstraints.loose(
+      Size(constraints.maxWidth, constraints.maxHeight),
+    );
     var child = childAfter(bodyChild);
     while (child != null) {
-      child.layout(looseConstraints, parentUsesSize: true);
+      child.layout(cutoutConstraints, parentUsesSize: true);
       cutoutChildren.add(child);
       child = childAfter(child);
     }
 
     final cutoutCount = math.min(cutoutChildren.length, _cutouts.length);
-    var overflowRight = 0.0;
-    var overflowBottom = 0.0;
-    var overflowTop = 0.0;
     var maxRightHalfWidth = 0.0;
-
     for (var i = 0; i < cutoutCount; i++) {
       final childBox = cutoutChildren[i];
       final spec = _cutouts[i];
-      final rect = _cutoutRect(bodySize, spec);
-      final topLeft = _cutoutChildOffset(rect, spec, childBox.size);
-      final childRect = topLeft & childBox.size;
-      overflowRight = math.max(
-        overflowRight,
-        childRect.right - bodySize.width,
-      );
-      overflowTop = math.max(overflowTop, -childRect.top);
-      overflowBottom = math.max(
-        overflowBottom,
-        childRect.bottom - bodySize.height,
-      );
       if (spec.edge == CutoutEdge.right) {
         maxRightHalfWidth =
             math.max(maxRightHalfWidth, childBox.size.width / 2);
       }
     }
 
-    final extraRight = math.max(overflowRight, maxRightHalfWidth);
-    final desiredSize = Size(
-      bodySize.width + extraRight,
-      bodySize.height + overflowTop + overflowBottom,
+    final bodyConstraints = constraints.deflate(
+      EdgeInsetsDirectional.only(end: maxRightHalfWidth),
     );
-    size = constraints.constrain(desiredSize);
+    bodyChild.layout(bodyConstraints, parentUsesSize: true);
+    final bodySize = bodyChild.size;
+    size = constraints.constrain(
+      Size(bodySize.width + maxRightHalfWidth, bodySize.height),
+    );
     const bodyOffset = Offset.zero;
 
     bodyChildParentData(bodyChild).offset = bodyOffset;

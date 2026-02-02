@@ -335,6 +335,11 @@ abstract interface class XmppBase {
 
   Future<PubSubSupport> refreshPubSubSupport({bool force = false});
 
+  CapabilityDecision decidePubSubSupport({
+    required bool supported,
+    required String featureLabel,
+  });
+
   RegisteredStateKey get selfAvatarPathKey;
 
   RegisteredStateKey get selfAvatarHashKey;
@@ -2790,6 +2795,29 @@ class XmppService extends XmppBase
       return _pubSubSupport;
     }
     return _refreshPubSubSupport();
+  }
+
+  @override
+  CapabilityDecision decidePubSubSupport({
+    required bool supported,
+    required String featureLabel,
+  }) {
+    final decision = _pubSubSupportResolved
+        ? (supported
+            ? const CapabilityDecision(CapabilityDecisionKind.allowed)
+            : const CapabilityDecision(CapabilityDecisionKind.unsupported))
+        : const CapabilityDecision(CapabilityDecisionKind.unknown);
+    if (decision.isAllowed) return decision;
+    if (decision.isUnknown) {
+      _xmppLogger.fine(
+        'Skipping $featureLabel (pubsub support unknown).',
+      );
+    } else {
+      _xmppLogger.fine(
+        'Skipping $featureLabel (unsupported).',
+      );
+    }
+    return decision;
   }
 
   Future<PubSubSupport> _refreshPubSubSupport() async {

@@ -100,7 +100,11 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       }
 
       final support = await refreshPubSubSupport();
-      if (!support.canUsePepNodes) {
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'conversation index',
+      );
+      if (!decision.isAllowed) {
         return _emptyConversationIndexSnapshot;
       }
 

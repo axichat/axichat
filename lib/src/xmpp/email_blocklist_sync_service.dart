@@ -106,7 +106,11 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       }
       await _ensurePendingEmailBlocklistSyncLoaded();
       final support = await refreshPubSubSupport();
-      if (!support.canUsePepNodes) {
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'email blocklist sync',
+      );
+      if (!decision.isAllowed) {
         return;
       }
       final manager = _emailBlocklistManager;
@@ -283,8 +287,11 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       return;
     }
     final support = await refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
-      await _queueEmailBlocklistPublish(normalized);
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'email blocklist sync',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final manager = _emailBlocklistManager;
@@ -319,8 +326,11 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       return;
     }
     final support = await refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
-      await _queueEmailBlocklistRetraction(normalized);
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'email blocklist sync',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final manager = _emailBlocklistManager;
@@ -668,7 +678,11 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
       return;
     }
     final support = await refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'email blocklist sync',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final manager = _emailBlocklistManager;

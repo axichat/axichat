@@ -135,7 +135,10 @@ const List<BlocklistEntry> _emptyBlocklistEntries = <BlocklistEntry>[];
 const _reactionCutoutMinThickness = 28.0;
 const _reactionCutoutRadius = 16.0;
 const _reactionStripOffset = Offset(0, -2);
-const _reactionCutoutPadding = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
+EdgeInsets _reactionCutoutPadding(BuildContext context) => EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.xxs,
+    );
 const _reactionChipPadding = EdgeInsets.symmetric(horizontal: 0.2, vertical: 2);
 const _reactionChipSpacing = 0.6;
 const _reactionOverflowSpacing = 4.0;
@@ -283,10 +286,7 @@ const _selectionExtrasViewportGap = 50.0;
 double _reactionManagerQuickSpacing(BuildContext context) => context.spacing.s;
 
 EdgeInsets _reactionManagerPadding(BuildContext context) =>
-    EdgeInsets.symmetric(
-      horizontal: context.spacing.m,
-      vertical: context.spacing.s,
-    );
+    EdgeInsets.all(context.spacing.s);
 
 double _reactionManagerShadowGap(BuildContext context) => context.spacing.m;
 final _selectionSpacerTimestamp = DateTime.fromMillisecondsSinceEpoch(
@@ -7059,13 +7059,15 @@ class _ChatState extends State<Chat> {
                                                                             _recipientCutoutMinThickness,
                                                                       )
                                                                     : showCompactReactions
-                                                                        ? const CutoutStyle(
+                                                                        ? CutoutStyle(
                                                                             depth:
                                                                                 _reactionCutoutDepth,
                                                                             cornerRadius:
                                                                                 _reactionCutoutRadius,
                                                                             padding:
-                                                                                _reactionCutoutPadding,
+                                                                                _reactionCutoutPadding(
+                                                                              context,
+                                                                            ),
                                                                             offset:
                                                                                 _reactionStripOffset,
                                                                             minThickness:

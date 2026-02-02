@@ -99,7 +99,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void initState() {
     super.initState();
-    _tapRegionGroup = widget.tapRegionGroup ?? Object();
+    _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
     _focusNode
       ..onKeyEvent = _handleKeyEvent
       ..addListener(_handleAutocompleteFocusChanged);
@@ -173,7 +173,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   void didUpdateWidget(covariant RecipientChipsBar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.tapRegionGroup, widget.tapRegionGroup)) {
-      _tapRegionGroup = widget.tapRegionGroup ?? Object();
+      _tapRegionGroup = widget.tapRegionGroup ?? EditableText;
     }
     if (oldWidget.collapsedByDefault != widget.collapsedByDefault) {
       _barCollapsed = widget.collapsedByDefault;
@@ -1433,6 +1433,7 @@ final class _RecipientAutocompleteOverlayState
   List<FanOutTarget> _options = const <FanOutTarget>[];
 
   void _handleTapOutside() {
+    debugPrint('RecipientChipsBar: handleTapOutside');
     if (!mounted) {
       return;
     }
@@ -1453,6 +1454,9 @@ final class _RecipientAutocompleteOverlayState
   }
 
   void _handleFocusChanged() {
+    debugPrint(
+      'RecipientChipsBar: focusChanged hasFocus=${widget.focusNode.hasFocus}',
+    );
     if (widget.focusNode.hasFocus) {
       _recomputeOptions();
     }
@@ -1739,7 +1743,10 @@ final class _RecipientAutocompleteOverlayState
                 child: InBoundsFadeScale(
                   child: TapRegion(
                     groupId: widget.tapRegionGroup,
-                    onTapOutside: (_) => _dismissOverlay(),
+                    onTapOutside: (_) {
+                      debugPrint('RecipientChipsBar: overlay tapOutside');
+                      _dismissOverlay();
+                    },
                     child: Align(
                       alignment: Alignment.topLeft,
                       child: ConstrainedBox(
@@ -1786,6 +1793,9 @@ final class _RecipientAutocompleteOverlayState
                                       avatarPathsByJid: widget.avatarPathsByJid,
                                       selfIdentity: widget.selfIdentity,
                                       onSelected: (option) {
+                                        debugPrint(
+                                          'RecipientChipsBar: overlay option selected ${option.address ?? option.chat?.jid ?? option.displayName}',
+                                        );
                                         widget.onRecipientAdded(option);
                                         widget.controller.clear();
                                         _dismissOverlay();
@@ -1816,67 +1826,75 @@ final class _RecipientAutocompleteOverlayState
         },
         child: TapRegion(
           groupId: widget.tapRegionGroup,
-          onTapOutside: (_) => widget.focusNode.unfocus(),
-          child: SizedBox(
-            key: _triggerKey,
-            height: chipsBarHeight,
-            child: Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.fieldOuterPadding,
-              ),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: widget.backgroundColor,
-                    borderRadius: BorderRadius.circular(chipsBarHeight / 2),
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: widget.fieldInnerPadding,
-                      vertical: fieldVerticalPadding,
+          onTapOutside: (_) {
+            debugPrint('RecipientChipsBar: field tapOutside');
+            _handleTapOutside();
+          },
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (_) => widget.focusNode.requestFocus(),
+            child: SizedBox(
+              key: _triggerKey,
+              height: chipsBarHeight,
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.fieldOuterPadding,
+                ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: widget.backgroundColor,
+                      borderRadius: BorderRadius.circular(chipsBarHeight / 2),
                     ),
-                    child: AxiTextField(
-                      controller: widget.controller,
-                      focusNode: widget.focusNode,
-                      maxLines: 1,
-                      keyboardType: TextInputType.emailAddress,
-                      textCapitalization: TextCapitalization.none,
-                      autocorrect: false,
-                      smartDashesType: SmartDashesType.disabled,
-                      smartQuotesType: SmartQuotesType.disabled,
-                      autofillHints: const [AutofillHints.email],
-                      inputFormatters: [
-                        FilteringTextInputFormatter.deny(RegExp(r'\s')),
-                      ],
-                      decoration: InputDecoration(
-                        hintText: context.l10n.recipientsAddHint,
-                        hintStyle: textStyle.copyWith(color: hintColor),
-                        isDense: true,
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: widget.fieldInnerPadding,
+                        vertical: fieldVerticalPadding,
                       ),
-                      strutStyle: StrutStyle.fromTextStyle(textStyle),
-                      textInputAction: TextInputAction.done,
-                      onEditingComplete: () => widget.focusNode.requestFocus(),
-                      textAlignVertical: TextAlignVertical.center,
-                      onSubmitted: (_) {
-                        final handled = widget.onSubmitted();
-                        if (!handled) {
-                          final trimmed = widget.controller.text.trim();
-                          if (trimmed.isNotEmpty &&
-                              widget.onManualEntry(trimmed)) {
-                            widget.controller.clear();
-                            _dismissOverlay();
+                      child: AxiTextField(
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        maxLines: 1,
+                        keyboardType: TextInputType.emailAddress,
+                        textCapitalization: TextCapitalization.none,
+                        autocorrect: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        autofillHints: const [AutofillHints.email],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                        ],
+                        decoration: InputDecoration(
+                          hintText: context.l10n.recipientsAddHint,
+                          hintStyle: textStyle.copyWith(color: hintColor),
+                          isDense: true,
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        strutStyle: StrutStyle.fromTextStyle(textStyle),
+                        textInputAction: TextInputAction.done,
+                        onEditingComplete: () =>
+                            widget.focusNode.requestFocus(),
+                        textAlignVertical: TextAlignVertical.center,
+                        onSubmitted: (_) {
+                          final handled = widget.onSubmitted();
+                          if (!handled) {
+                            final trimmed = widget.controller.text.trim();
+                            if (trimmed.isNotEmpty &&
+                                widget.onManualEntry(trimmed)) {
+                              widget.controller.clear();
+                              _dismissOverlay();
+                            }
                           }
-                        }
-                        widget.focusNode.requestFocus();
-                      },
+                          widget.focusNode.requestFocus();
+                        },
+                      ),
                     ),
                   ),
                 ),

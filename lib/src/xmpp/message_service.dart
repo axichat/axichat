@@ -1714,7 +1714,11 @@ mixin MessageService
       }
       await _ensurePendingPinSyncLoaded();
       final support = await refreshPubSubSupport();
-      if (!support.pubSubSupported) {
+      final decision = decidePubSubSupport(
+        supported: support.pubSubSupported,
+        featureLabel: 'pinned messages',
+      );
+      if (!decision.isAllowed) {
         return;
       }
       final nodeConfig = await _ensurePinNodeForChat(
@@ -1765,7 +1769,11 @@ mixin MessageService
         return;
       }
       final support = await refreshPubSubSupport();
-      if (!support.pubSubSupported) {
+      final decision = decidePubSubSupport(
+        supported: support.pubSubSupported,
+        featureLabel: 'pinned messages',
+      );
+      if (!decision.isAllowed) {
         return;
       }
       final emailChats = await _dbOpReturning<XmppDatabase, List<Chat>>(
@@ -7502,7 +7510,11 @@ mixin MessageService
     }
     final context = await _resolvePinNodeContext(normalizedChat);
     final support = await refreshPubSubSupport();
-    if (!support.pubSubSupported) {
+    final decision = decidePubSubSupport(
+      supported: support.pubSubSupported,
+      featureLabel: 'pinned messages',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final pubsub = _pinPubSub();

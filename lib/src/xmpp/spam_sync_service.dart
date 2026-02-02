@@ -91,7 +91,11 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       }
       await _ensurePendingSpamSyncLoaded();
       final support = await refreshPubSubSupport();
-      if (!support.canUsePepNodes) {
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'spam sync',
+      );
+      if (!decision.isAllowed) {
         return;
       }
       final manager = _spamManager;
@@ -254,8 +258,11 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       return;
     }
     final support = await refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
-      await _queueSpamPublish(normalized);
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'spam sync',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final manager = _spamManager;
@@ -290,8 +297,11 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       return;
     }
     final support = await refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
-      await _queueSpamRetraction(normalized);
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'spam sync',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final manager = _spamManager;
@@ -639,7 +649,11 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
       return;
     }
     final support = await refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'spam sync',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final manager = _spamManager;

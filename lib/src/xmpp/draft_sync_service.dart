@@ -103,7 +103,11 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       }
       await _ensurePendingDraftSyncLoaded();
       final support = await refreshPubSubSupport();
-      if (!support.canUsePepNodes) {
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'draft sync',
+      );
+      if (!decision.isAllowed) {
         return;
       }
       final manager = _draftsManager;
@@ -231,8 +235,11 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       return;
     }
     final support = await refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
-      await _queueDraftPublish(syncId);
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'draft sync',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final manager = _draftsManager;
@@ -267,8 +274,11 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       return;
     }
     final support = await refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
-      await _queueDraftRetraction(normalized);
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'draft sync',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final manager = _draftsManager;
@@ -871,7 +881,11 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       return;
     }
     final support = await refreshPubSubSupport();
-    if (!support.canUsePepNodes) {
+    final decision = decidePubSubSupport(
+      supported: support.canUsePepNodes,
+      featureLabel: 'draft sync',
+    );
+    if (!decision.isAllowed) {
       return;
     }
     final manager = _draftsManager;

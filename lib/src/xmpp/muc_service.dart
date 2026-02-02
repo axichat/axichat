@@ -2105,7 +2105,11 @@ mixin MucService on XmppBase, BaseStreamService {
         return _emptyMucSnapshot;
       }
       final support = await refreshPubSubSupport();
-      if (!support.canUseBookmarks2) {
+      final decision = decidePubSubSupport(
+        supported: support.canUseBookmarks2,
+        featureLabel: 'bookmarks',
+      );
+      if (!decision.isAllowed) {
         return _emptyMucSnapshot;
       }
       final bookmarksManager = _connection.getManager<BookmarksManager>();
