@@ -247,11 +247,6 @@ const OutlinedBorder _attachmentSurfaceShadowShape = ContinuousRectangleBorder(
     Radius.circular(_attachmentSurfaceCornerRadius),
   ),
 );
-const ShapeBorder _inviteAttachmentShadowShape = ContinuousRectangleBorder(
-  borderRadius: BorderRadius.all(
-    Radius.circular(_inviteAttachmentCornerRadius),
-  ),
-);
 const ShapeBorder _calendarMessageCardShadowShape = ContinuousRectangleBorder(
   borderRadius: BorderRadius.all(
     Radius.circular(_calendarMessageCardCornerRadius),
@@ -260,35 +255,7 @@ const ShapeBorder _calendarMessageCardShadowShape = ContinuousRectangleBorder(
 const ShapeBorder _calendarTaskShadowShape = RoundedRectangleBorder(
   borderRadius: BorderRadius.all(Radius.circular(calendarEventRadius)),
 );
-const double _inviteAttachmentCornerRadius = 20.0;
-const double _inviteAttachmentPaddingValue = 12.0;
-const _inviteAttachmentPadding = EdgeInsets.all(_inviteAttachmentPaddingValue);
-const double _inviteAttachmentIconWidth = 42.0;
-const double _inviteAttachmentIconHeight = 46.0;
-const double _inviteAttachmentIconSize = 20.0;
-const double _inviteAttachmentIconCornerRadius = 12.0;
-const double _inviteAttachmentIconBackgroundAlpha = 0.15;
-const double _inviteAttachmentRowSpacing = 12.0;
-const double _inviteAttachmentDetailSpacing = 4.0;
-const int _inviteAttachmentLabelMaxLines = 1;
-const TextOverflow _inviteAttachmentLabelOverflow = TextOverflow.ellipsis;
-const double _inviteAttachmentActionSpacing = 8.0;
-const int _inviteAttachmentActionButtonCount = 1;
-const double _inviteAttachmentActionRowMinWidth =
-    (AxiIconButton.kTapTargetSize * _inviteAttachmentActionButtonCount) +
-        (_inviteAttachmentActionSpacing *
-            (_inviteAttachmentActionButtonCount - 1));
-const double _inviteAttachmentInlineActionsMinWidth =
-    _inviteAttachmentIconWidth +
-        (_inviteAttachmentRowSpacing * 2) +
-        _inviteAttachmentActionRowMinWidth;
 const _selectionExtrasViewportGap = 50.0;
-double _reactionManagerQuickSpacing(BuildContext context) => context.spacing.s;
-
-EdgeInsets _reactionManagerPadding(BuildContext context) =>
-    EdgeInsets.all(context.spacing.m);
-
-double _reactionManagerShadowGap(BuildContext context) => context.spacing.m;
 final _selectionSpacerTimestamp = DateTime.fromMillisecondsSinceEpoch(
   0,
   isUtc: true,
@@ -4432,13 +4399,9 @@ class _ChatState extends State<Chat> {
                                       final xmppCapabilities =
                                           state.xmppCapabilities;
                                       final supportsMarkers = isEmailChat ||
-                                          xmppCapabilities?.resolvedAt ==
-                                              null ||
                                           xmppCapabilities?.supportsMarkers ==
                                               true;
                                       final supportsReceipts = isEmailChat ||
-                                          xmppCapabilities?.resolvedAt ==
-                                              null ||
                                           xmppCapabilities?.supportsReceipts ==
                                               true;
                                       MessageStatus statusFor(Message e) {
@@ -5735,7 +5698,20 @@ class _ChatState extends State<Chat> {
                                                                 ),
                                                               ),
                                                               shape:
-                                                                  _inviteAttachmentShadowShape,
+                                                                  ContinuousRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .all(
+                                                                  Radius
+                                                                      .circular(
+                                                                    context.spacing
+                                                                            .m +
+                                                                        context
+                                                                            .spacing
+                                                                            .xs,
+                                                                  ),
+                                                                ),
+                                                              ),
                                                               spacing:
                                                                   _attachmentPreviewSpacing,
                                                             );
@@ -7266,9 +7242,9 @@ class _ChatState extends State<Chat> {
                                                           final attachmentBottomPadding =
                                                               _selectionExtrasViewportGap +
                                                                   (showReactionManager
-                                                                      ? _reactionManagerShadowGap(
-                                                                          context,
-                                                                        )
+                                                                      ? context
+                                                                          .spacing
+                                                                          .m
                                                                       : 0);
                                                           final reactionBottomInset =
                                                               showCompactReactions
@@ -10343,10 +10319,17 @@ class _TypingAvatar extends StatelessWidget {
 }
 
 class _InviteAttachmentText extends StatelessWidget {
-  const _InviteAttachmentText({required this.text, required this.style});
+  const _InviteAttachmentText({
+    required this.text,
+    required this.style,
+    required this.maxLines,
+    required this.overflow,
+  });
 
   final String text;
   final TextStyle style;
+  final int maxLines;
+  final TextOverflow overflow;
 
   @override
   Widget build(BuildContext context) {
@@ -10355,8 +10338,8 @@ class _InviteAttachmentText extends StatelessWidget {
     final String resolved = candidate.isNotEmpty ? candidate : text;
     return Text(
       resolved,
-      maxLines: _inviteAttachmentLabelMaxLines,
-      overflow: _inviteAttachmentLabelOverflow,
+      maxLines: maxLines,
+      overflow: overflow,
       style: style,
     );
   }
@@ -10380,6 +10363,25 @@ class _InviteAttachmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    const labelMaxLines = 1;
+    const labelOverflow = TextOverflow.ellipsis;
+    const iconBackgroundAlpha = 0.15;
+    const actionButtonCount = 1;
+    final iconCornerRadius = spacing.s + spacing.xs;
+    final cardCornerRadius = spacing.m + spacing.xs;
+    final padding = EdgeInsets.all(spacing.s + spacing.xs);
+    final rowSpacing = spacing.s + spacing.xs;
+    final detailSpacing = spacing.xs;
+    final actionSpacing = spacing.s;
+    final iconSize = spacing.m + spacing.xs;
+    final iconWidth = spacing.l + spacing.s + spacing.xxs;
+    final iconHeight = spacing.l + spacing.s + spacing.xs + spacing.xxs;
+    final actionRowMinWidth =
+        (AxiIconButton.kTapTargetSize * actionButtonCount) +
+            (actionSpacing * (actionButtonCount - 1));
+    final inlineActionsMinWidth =
+        iconWidth + (rowSpacing * 2) + actionRowMinWidth;
     final Color labelColor =
         enabled ? colors.foreground : colors.mutedForeground;
     final Color iconColor =
@@ -10388,21 +10390,19 @@ class _InviteAttachmentCard extends StatelessWidget {
     final bool showDetailLabel = trimmedDetailLabel.isNotEmpty;
     final Widget attachmentIcon = DecoratedBox(
       decoration: ShapeDecoration(
-        color: colors.muted.withValues(
-          alpha: _inviteAttachmentIconBackgroundAlpha,
-        ),
+        color: colors.muted.withValues(alpha: iconBackgroundAlpha),
         shape: SquircleBorder(
-          cornerRadius: _inviteAttachmentIconCornerRadius,
+          cornerRadius: iconCornerRadius,
           side: BorderSide(color: colors.border),
         ),
       ),
       child: SizedBox(
-        width: _inviteAttachmentIconWidth,
-        height: _inviteAttachmentIconHeight,
+        width: iconWidth,
+        height: iconHeight,
         child: Center(
           child: Icon(
             LucideIcons.userPlus,
-            size: _inviteAttachmentIconSize,
+            size: iconSize,
             color: iconColor,
           ),
         ),
@@ -10411,10 +10411,12 @@ class _InviteAttachmentCard extends StatelessWidget {
     final Widget attachmentDetails = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: _inviteAttachmentDetailSpacing,
+      spacing: detailSpacing,
       children: [
         _InviteAttachmentText(
           text: label,
+          maxLines: labelMaxLines,
+          overflow: labelOverflow,
           style: context.textTheme.small.copyWith(
             fontWeight: FontWeight.w600,
             color: labelColor,
@@ -10423,6 +10425,8 @@ class _InviteAttachmentCard extends StatelessWidget {
         if (showDetailLabel)
           _InviteAttachmentText(
             text: trimmedDetailLabel,
+            maxLines: labelMaxLines,
+            overflow: labelOverflow,
             style: context.textTheme.small.copyWith(
               color: colors.mutedForeground,
             ),
@@ -10439,16 +10443,16 @@ class _InviteAttachmentCard extends StatelessWidget {
       decoration: ShapeDecoration(
         color: colors.card,
         shape: ContinuousRectangleBorder(
-          borderRadius: BorderRadius.circular(_inviteAttachmentCornerRadius),
+          borderRadius: BorderRadius.circular(cardCornerRadius),
           side: BorderSide(color: colors.border),
         ),
       ),
       child: Padding(
-        padding: _inviteAttachmentPadding,
+        padding: padding,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final bool stackActions =
-                constraints.maxWidth < _inviteAttachmentInlineActionsMinWidth;
+                constraints.maxWidth < inlineActionsMinWidth;
             if (stackActions) {
               return Column(
                 mainAxisSize: MainAxisSize.min,
@@ -10456,11 +10460,11 @@ class _InviteAttachmentCard extends StatelessWidget {
                   Row(
                     children: [
                       attachmentIcon,
-                      const SizedBox(width: _inviteAttachmentRowSpacing),
+                      SizedBox(width: rowSpacing),
                       Expanded(child: attachmentDetails),
                     ],
                   ),
-                  const SizedBox(height: _inviteAttachmentActionSpacing),
+                  SizedBox(height: actionSpacing),
                   Align(alignment: Alignment.centerRight, child: actionButton),
                 ],
               );
@@ -10468,9 +10472,9 @@ class _InviteAttachmentCard extends StatelessWidget {
             return Row(
               children: [
                 attachmentIcon,
-                const SizedBox(width: _inviteAttachmentRowSpacing),
+                SizedBox(width: rowSpacing),
                 Expanded(child: attachmentDetails),
-                const SizedBox(width: _inviteAttachmentRowSpacing),
+                SizedBox(width: rowSpacing),
                 Flexible(
                   fit: FlexFit.loose,
                   child: Align(
@@ -11233,9 +11237,12 @@ class _AttachmentAccessoryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     return _ChatComposerIconButton(
       icon: LucideIcons.paperclip,
-      tooltip: context.l10n.chatAttachmentTooltip,
+      tooltip: enabled
+          ? l10n.chatAttachmentTooltip
+          : l10n.chatComposerFileUploadUnavailable,
       onPressed: enabled ? onPressed : null,
     );
   }
@@ -11921,8 +11928,8 @@ class _MultiSelectReactionPanel extends StatelessWidget {
         Text(context.l10n.chatActionReact, style: context.textTheme.muted),
         SizedBox(height: spacing.s),
         Wrap(
-          spacing: _reactionManagerQuickSpacing(context),
-          runSpacing: _reactionManagerQuickSpacing(context),
+          spacing: spacing.s,
+          runSpacing: spacing.s,
           alignment: WrapAlignment.start,
           children: [
             for (final emoji in _reactionQuickChoices)
@@ -12260,11 +12267,41 @@ class _ChatCapabilitiesSection extends StatelessWidget {
 
   final XmppPeerCapabilities? capabilities;
 
+  String _formatFeatureLabel(String feature) {
+    final trimmed = feature.trim();
+    if (trimmed.isEmpty) return trimmed;
+    final normalized = trimmed
+        .replaceAll('urn:xmpp:', '')
+        .replaceAll('http://jabber.org/protocol/', '')
+        .replaceAll('jabber:iq:', '')
+        .replaceAll('urn:ietf:params:xml:ns:', '')
+        .replaceAll('/', ' ')
+        .replaceAll('#', ' ')
+        .replaceAll(':', ' ')
+        .replaceAll('_', ' ')
+        .replaceAll('-', ' ');
+    final parts = normalized
+        .split(RegExp(r'\\s+'))
+        .where((part) => part.trim().isNotEmpty)
+        .toList();
+    return parts.map((part) {
+      final lower = part.toLowerCase();
+      if (lower.length <= 3) {
+        return lower.toUpperCase();
+      }
+      if (lower.length == 4 && lower == 'xep') {
+        return lower.toUpperCase();
+      }
+      return lower[0].toUpperCase() + lower.substring(1);
+    }).join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final textTheme = context.textTheme;
+    final sizing = context.sizing;
     final resolvedAt = capabilities?.resolvedAt;
     final String subtitle = resolvedAt == null
         ? l10n.commonUnknownLabel
@@ -12272,18 +12309,14 @@ class _ChatCapabilitiesSection extends StatelessWidget {
             TimeFormatter.formatFriendlyDateTime(l10n, resolvedAt),
           );
     final features = capabilities?.features ?? const <String>[];
-    final List<Widget> featureWidgets = features.isEmpty
-        ? [
-            Text(
-              l10n.chatSettingsCapabilitiesEmpty,
-              style: textTheme.muted,
-            ),
-          ]
-        : features
-            .map(
-              (feature) => Text(feature, style: textTheme.muted),
-            )
-            .toList();
+    final List<_CapabilityEntry> entries = features
+        .map(
+          (feature) => _CapabilityEntry(
+            label: _formatFeatureLabel(feature),
+            raw: feature,
+          ),
+        )
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -12292,12 +12325,79 @@ class _ChatCapabilitiesSection extends StatelessWidget {
         SizedBox(height: spacing.xs),
         Text(subtitle, style: textTheme.muted),
         SizedBox(height: spacing.s),
-        for (final widget in featureWidgets)
-          Padding(
-            padding: EdgeInsets.only(bottom: spacing.xs),
-            child: widget,
+        if (entries.isEmpty)
+          Text(
+            l10n.chatSettingsCapabilitiesEmpty,
+            style: textTheme.muted,
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final availableWidth = constraints.maxWidth;
+              final minTileWidth = sizing.menuMinWidth;
+              final double spacingWidth = spacing.s;
+              final int columns = math.max(
+                1,
+                (availableWidth / (minTileWidth + spacingWidth)).floor(),
+              );
+              final double totalSpacing = spacingWidth * (columns - 1);
+              final double tileWidth =
+                  (availableWidth - totalSpacing) / columns;
+              return Wrap(
+                spacing: spacingWidth,
+                runSpacing: spacingWidth,
+                children: entries
+                    .map(
+                      (entry) => SizedBox(
+                        width: tileWidth,
+                        child: _CapabilityTile(
+                          label: entry.label,
+                          raw: entry.raw,
+                        ),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
           ),
       ],
+    );
+  }
+}
+
+class _CapabilityEntry {
+  const _CapabilityEntry({
+    required this.label,
+    required this.raw,
+  });
+
+  final String label;
+  final String raw;
+}
+
+class _CapabilityTile extends StatelessWidget {
+  const _CapabilityTile({
+    required this.label,
+    required this.raw,
+  });
+
+  final String label;
+  final String raw;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final textTheme = context.textTheme;
+    return AxiModalSurface(
+      padding: EdgeInsets.all(spacing.s),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label),
+          SizedBox(height: spacing.xs),
+          Text(raw, style: textTheme.muted),
+        ],
+      ),
     );
   }
 }
@@ -12560,15 +12660,15 @@ class _ReactionManagerState extends State<_ReactionManager> {
     final sorted = _sorted;
     final hasReactions = sorted.isNotEmpty;
     return AxiModalSurface(
-      padding: _reactionManagerPadding(context),
+      padding: EdgeInsets.all(spacing.m),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: spacing.s,
         children: [
           if (hasReactions)
             Wrap(
-              spacing: _reactionManagerQuickSpacing(context),
-              runSpacing: _reactionManagerQuickSpacing(context),
+              spacing: spacing.s,
+              runSpacing: spacing.s,
               children: [
                 for (final reaction in sorted)
                   _ReactionManagerChip(
@@ -12590,8 +12690,8 @@ class _ReactionManagerState extends State<_ReactionManager> {
             style: textTheme.muted,
           ),
           Wrap(
-            spacing: _reactionManagerQuickSpacing(context),
-            runSpacing: _reactionManagerQuickSpacing(context),
+            spacing: spacing.s,
+            runSpacing: spacing.s,
             children: [
               for (final emoji in _reactionQuickChoices)
                 _ReactionQuickButton(

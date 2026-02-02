@@ -118,12 +118,10 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
             final bool isHeadersUnavailable = deltaMessageId != null &&
                 state.emailRawHeadersUnavailable.contains(deltaMessageId);
             final xmppCapabilities = state.xmppCapabilities;
-            final supportsMarkers = isEmailTransport ||
-                xmppCapabilities?.resolvedAt == null ||
-                xmppCapabilities?.supportsMarkers == true;
-            final supportsReceipts = isEmailTransport ||
-                xmppCapabilities?.resolvedAt == null ||
-                xmppCapabilities?.supportsReceipts == true;
+            final supportsMarkers =
+                isEmailTransport || xmppCapabilities?.supportsMarkers == true;
+            final supportsReceipts =
+                isEmailTransport || xmppCapabilities?.supportsReceipts == true;
             final metadataItems = <Widget>[];
             final stanzaId = message.stanzaID.trim();
             if (stanzaId.isNotEmpty) {

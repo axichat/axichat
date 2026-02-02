@@ -1791,7 +1791,6 @@ final class _RecipientAutocompleteOverlayState
                                       onSelected: (option) {
                                         widget.onRecipientAdded(option);
                                         widget.controller.clear();
-                                        _dismissOverlay();
                                         widget.focusNode.requestFocus();
                                       },
                                       titleStyle: titleStyle,
@@ -1870,6 +1869,7 @@ final class _RecipientAutocompleteOverlayState
                           focusedErrorBorder: InputBorder.none,
                           contentPadding: EdgeInsets.zero,
                         ),
+                        style: textStyle,
                         strutStyle: StrutStyle.fromTextStyle(textStyle),
                         textInputAction: TextInputAction.done,
                         onEditingComplete: () =>
@@ -1882,7 +1882,6 @@ final class _RecipientAutocompleteOverlayState
                             if (trimmed.isNotEmpty &&
                                 widget.onManualEntry(trimmed)) {
                               widget.controller.clear();
-                              _dismissOverlay();
                             }
                           }
                           widget.focusNode.requestFocus();
@@ -2031,6 +2030,8 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
             return InkWell(
               canRequestFocus: false,
               onTap: () => widget.onSelected(option),
+              onHover: (_) {},
+              mouseCursor: SystemMouseCursors.click,
               hoverColor: widget.hoverColor,
               child: Container(
                 decoration: BoxDecoration(

@@ -2891,7 +2891,10 @@ mixin MessageService
       final decision = await _omemoDecision(jid: jid);
       if (!decision.isAllowed) {
         if (shouldStore) {
-          await _handleMessageSendFailure(message.stanzaID);
+          await _handleMessageSendFailure(
+            message.stanzaID,
+            error: MessageError.omemoUnsupported,
+          );
         }
         throw XmppMessageException();
       }
@@ -3135,7 +3138,10 @@ mixin MessageService
         !_isMucChatJid(jid)) {
       final decision = await _omemoDecision(jid: jid);
       if (!decision.isAllowed) {
-        await _handleMessageSendFailure(message.stanzaID);
+        await _handleMessageSendFailure(
+          message.stanzaID,
+          error: MessageError.omemoUnsupported,
+        );
         throw XmppMessageException();
       }
     }
@@ -4290,10 +4296,12 @@ mixin MessageService
     await _dbOp<XmppDatabase>((db) => db.deleteFileMetadata(trimmed));
   }
 
-  Future<void> _handleMessageSendFailure(String stanzaID) async {
+  Future<void> _handleMessageSendFailure(
+    String stanzaID, {
+    MessageError error = MessageError.unknown,
+  }) async {
     await _dbOp<XmppDatabase>(
-      (db) =>
-          db.saveMessageError(error: MessageError.unknown, stanzaID: stanzaID),
+      (db) => db.saveMessageError(error: error, stanzaID: stanzaID),
     );
   }
 
