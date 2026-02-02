@@ -405,6 +405,7 @@ class _AxiButtonState extends State<AxiButton> {
               cursor: enabled
                   ? (buttonTheme.cursor ?? SystemMouseCursors.click)
                   : MouseCursor.defer,
+              behavior: HitTestBehavior.opaque,
               hoverStrategies: buttonTheme.hoverStrategies ??
                   ShadTheme.of(context).hoverStrategies,
               longPressDuration: buttonTheme.longPressDuration,

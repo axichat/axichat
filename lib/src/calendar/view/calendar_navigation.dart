@@ -1017,7 +1017,6 @@ class _DateLabelState extends State<_DateLabel> {
     final bool isOpen = _isPickerOpen;
     final Color iconColor =
         isOpen ? calendarPrimaryColor : calendarSubtitleColor;
-    final Color textColor = isOpen ? calendarPrimaryColor : calendarTitleColor;
 
     return CompositedTransformTarget(
       link: _link,
@@ -1044,10 +1043,6 @@ class _DateLabelState extends State<_DateLabel> {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: context.textTheme.label.strong.copyWith(
-                      color: textColor,
-                      letterSpacing: 0.1,
-                    ),
                   ),
                 ),
               ],

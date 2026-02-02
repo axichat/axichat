@@ -399,15 +399,7 @@ class _ReminderChip extends StatelessWidget {
       variant: selected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
       selected: selected,
       onPressed: onTap,
-      child: Text(
-        label,
-        style: context.textTheme.label
-            .copyWith(
-              color: null,
-              letterSpacing: 0.2,
-            )
-            .strong,
-      ),
+      child: Text(label),
     );
   }
 }

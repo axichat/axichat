@@ -120,10 +120,10 @@ class CriticalPathPanel extends StatelessWidget {
                   child: Row(
                     children: [
                       AnimatedRotation(
-                        turns: isExpanded ? -0.25 : 0,
+                        turns: isExpanded ? 0.5 : 0,
                         duration: animationDuration,
                         child: Icon(
-                          Icons.chevron_left,
+                          Icons.expand_more,
                           size: context.sizing.menuItemIconSize,
                           color: colors.mutedForeground,
                         ),

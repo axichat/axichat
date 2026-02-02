@@ -1288,21 +1288,7 @@ class _DeadlineCalendarGrid extends StatelessWidget {
                   widthBehavior: AxiButtonWidth.expand,
                   selected: isSelected,
                   onPressed: isDisabled ? null : () => onDaySelected(date),
-                  child: Text(
-                    '${date.day}',
-                    style:
-                        context.textTheme.label.strongIf(isSelected).copyWith(
-                              color: isSelected
-                                  ? context.colorScheme.primaryForeground
-                                  : isToday
-                                      ? calendarPrimaryColor
-                                      : isDisabled
-                                          ? calendarSubtitleColor.withValues(
-                                              alpha: 0.6,
-                                            )
-                                          : calendarTitleColor,
-                            ),
-                  ),
+                  child: Text('${date.day}'),
                 ),
               );
             }).toList(),

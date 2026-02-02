@@ -592,38 +592,21 @@ class _ParticipantActionsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color baseColor = calendarSubtitleColor;
-    final Color acceptColor =
-        status?.isAccepted == true ? calendarSuccessColor : baseColor;
-    final Color declineColor =
-        status?.isDeclined == true ? calendarDangerColor : baseColor;
-    final Color tentativeColor =
-        status?.isTentative == true ? calendarWarningColor : baseColor;
-
     return Wrap(
       spacing: calendarGutterSm,
       runSpacing: calendarInsetSm,
       children: [
         AxiButton.outline(
           onPressed: onAccept,
-          child: Text(
-            _attendeeActionAcceptLabel,
-            style: context.textTheme.label.copyWith(color: acceptColor),
-          ),
+          child: Text(_attendeeActionAcceptLabel),
         ),
         AxiButton.outline(
           onPressed: onDecline,
-          child: Text(
-            _attendeeActionDeclineLabel,
-            style: context.textTheme.label.copyWith(color: declineColor),
-          ),
+          child: Text(_attendeeActionDeclineLabel),
         ),
         AxiButton.outline(
           onPressed: onTentative,
-          child: Text(
-            _attendeeActionTentativeLabel,
-            style: context.textTheme.label.copyWith(color: tentativeColor),
-          ),
+          child: Text(_attendeeActionTentativeLabel),
         ),
       ],
     );
