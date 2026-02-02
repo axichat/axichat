@@ -397,7 +397,6 @@ class _ReminderChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return AxiButton(
       variant: selected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
-      size: AxiButtonSize.sm,
       selected: selected,
       onPressed: onTap,
       child: Text(

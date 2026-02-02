@@ -49,7 +49,7 @@ class CalendarTaskListTile extends StatelessWidget {
                   children: [
                     Text(
                       task.title,
-                      style: context.textTheme.small.copyWith(
+                      style: context.textTheme.label.strong.copyWith(
                         color: task.isCompleted
                             ? calendarPrimaryColor
                             : calendarTitleColor,
@@ -59,10 +59,10 @@ class CalendarTaskListTile extends StatelessWidget {
                       ),
                     ),
                     if (scheduleLabel != null) ...[
-                      const SizedBox(height: calendarInsetSm),
+                      SizedBox(height: context.borderSide.width),
                       Text(
                         scheduleLabel!,
-                        style: context.textTheme.label.copyWith(
+                        style: context.textTheme.labelSm.copyWith(
                           color: task.isCompleted
                               ? calendarPrimaryColor
                               : calendarSubtitleColor,

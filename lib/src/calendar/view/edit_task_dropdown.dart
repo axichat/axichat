@@ -1407,6 +1407,7 @@ class _EditTaskInlineActionChip extends StatelessWidget {
       ),
       child: AxiButton.ghost(
         widthBehavior: AxiButtonWidth.fit,
+        size: AxiButtonSize.sm,
         onPressed: action.onSelected,
         leading: Icon(
           action.icon,
@@ -1600,7 +1601,6 @@ class _OccurrenceScopeChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return AxiButton(
       variant: isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
-      size: AxiButtonSize.sm,
       selected: isSelected,
       onPressed: onPressed,
       child: Text(label, style: context.textTheme.label.strong),

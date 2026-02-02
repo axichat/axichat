@@ -1187,7 +1187,7 @@ class _DeadlineNavigationButton extends StatelessWidget {
       horizontal: calendarGutterSm,
       vertical: calendarInsetLg,
     );
-    final basePadding = AxiButtonSize.sm.padding(context.spacing);
+    final basePadding = AxiButtonSize.regular.padding(context.spacing);
     final extraPadding = EdgeInsets.only(
       left: math.max(0, desiredPadding.left - basePadding.left),
       right: math.max(0, desiredPadding.right - basePadding.right),
@@ -1196,7 +1196,6 @@ class _DeadlineNavigationButton extends StatelessWidget {
     );
 
     return AxiButton.outline(
-      size: AxiButtonSize.sm,
       onPressed: onPressed,
       child: Padding(
         padding: extraPadding,
@@ -1286,7 +1285,6 @@ class _DeadlineCalendarGrid extends StatelessWidget {
                   variant: isSelected
                       ? AxiButtonVariant.primary
                       : AxiButtonVariant.outline,
-                  size: AxiButtonSize.sm,
                   widthBehavior: AxiButtonWidth.expand,
                   selected: isSelected,
                   onPressed: isDisabled ? null : () => onDaySelected(date),
@@ -1506,21 +1504,18 @@ class _DeadlinePickerActions extends StatelessWidget {
       child: Row(
         children: [
           AxiButton.outline(
-            size: AxiButtonSize.sm,
             onPressed: onCancel,
             child: Text(context.l10n.commonCancel),
           ),
           if (hasValue && onClear != null) ...[
             const SizedBox(width: calendarGutterSm),
             AxiButton.outline(
-              size: AxiButtonSize.sm,
               onPressed: onClear,
               child: Text(context.l10n.commonClear),
             ),
           ],
           const Spacer(),
           AxiButton.primary(
-            size: AxiButtonSize.sm,
             onPressed: onDone,
             child: Text(context.l10n.commonDone),
           ),

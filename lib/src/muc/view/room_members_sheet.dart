@@ -116,7 +116,6 @@ class RoomMembersSheet extends StatelessWidget {
               children: [
                 if (onChangeNickname != null)
                   AxiButton.outline(
-                    size: AxiButtonSize.sm,
                     onPressed: () async {
                       final next = await _promptNickname(context);
                       if (next?.isNotEmpty == true) {
@@ -131,7 +130,6 @@ class RoomMembersSheet extends StatelessWidget {
                   ),
                 if (onLeaveRoom != null)
                   AxiButton.destructive(
-                    size: AxiButtonSize.sm,
                     onPressed: onLeaveRoom,
                     child: Text(l10n.mucLeaveRoom),
                   ),
@@ -277,7 +275,6 @@ class _RoomAvatarSection extends StatelessWidget {
     );
     final editButton = canEdit
         ? AxiButton.outline(
-            size: AxiButtonSize.sm,
             onPressed: onEdit,
             child: Text(l10n.mucEditAvatar),
           )
@@ -482,7 +479,6 @@ class _MemberActionPanel extends StatelessWidget {
         final builder =
             descriptor.destructive ? AxiButton.destructive : AxiButton.outline;
         return builder(
-          size: AxiButtonSize.sm,
           onPressed: () {
             onClose();
             onAction(occupantId, action);
@@ -649,13 +645,11 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             AxiButton.outline(
-              size: AxiButtonSize.sm,
               onPressed: widget.onCancel,
               child: Text(l10n.commonCancel),
             ),
             SizedBox(width: spacing.s),
             AxiButton.primary(
-              size: AxiButtonSize.sm,
               onPressed: saveEnabled ? _handleSave : null,
               child: Text(l10n.avatarSaveAvatar),
             ),
@@ -829,13 +823,11 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final Widget actions = Row(
       children: [
         AxiButton.outline(
-          size: AxiButtonSize.sm,
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.commonCancel),
         ),
         SizedBox(width: spacing.s),
         AxiButton.primary(
-          size: AxiButtonSize.sm,
           onPressed: _recipients.isEmpty
               ? null
               : () {
@@ -945,13 +937,11 @@ class _NicknameSheet extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         AxiButton.outline(
-          size: AxiButtonSize.sm,
           onPressed: onCancel,
           child: Text(l10n.commonCancel),
         ),
         SizedBox(width: spacing.s),
         AxiButton.primary(
-          size: AxiButtonSize.sm,
           onPressed: () => onSubmit(controller.text.trim()),
           child: Text(l10n.mucUpdateNickname),
         ),
@@ -1003,7 +993,6 @@ class _HeaderRow extends StatelessWidget {
         const Spacer(),
         if (canInvite)
           AxiButton.outline(
-            size: AxiButtonSize.sm,
             onPressed: onInviteTap,
             leading: Icon(LucideIcons.userPlus, size: sizing.menuItemIconSize),
             child: Text(l10n.mucInviteUser),

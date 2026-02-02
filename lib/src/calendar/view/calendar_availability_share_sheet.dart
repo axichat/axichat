@@ -1174,7 +1174,6 @@ class _AvailabilityPresetChip extends StatelessWidget {
     final String label =
         preset.name?.trim() ?? _presetRangeLabel(context, preset);
     return AxiButton.ghost(
-      size: AxiButtonSize.sm,
       onPressed: onPressed,
       child: Text(label),
     );
@@ -1212,13 +1211,11 @@ class _AvailabilityDualActionRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         AxiButton.ghost(
-          size: AxiButtonSize.sm,
           onPressed: onPrimaryPressed,
           child: Text(primaryLabel),
         ),
         const SizedBox(width: _availabilityRecipientChipSpacing),
         AxiButton.primary(
-          size: AxiButtonSize.sm,
           onPressed: onSecondaryPressed,
           child: Text(secondaryLabel),
         ),
@@ -1246,13 +1243,11 @@ class _AvailabilityActionRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         AxiButton.ghost(
-          size: AxiButtonSize.sm,
           onPressed: onBack,
           child: Text(context.l10n.commonBack),
         ),
         const SizedBox(width: _availabilityRecipientChipSpacing),
         AxiButton.primary(
-          size: AxiButtonSize.sm,
           onPressed: isBusy ? null : onPressed,
           loading: isBusy,
           widthBehavior: AxiButtonWidth.fit,

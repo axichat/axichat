@@ -48,7 +48,6 @@ class ChatAlert extends StatelessWidget {
                       ),
                       SizedBox.square(dimension: spacing.xs),
                       AxiButton(
-                        size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.secondary,
                         onPressed: () => context.read<ChatBloc>().add(
                               const ChatAlertHidden(),
@@ -57,7 +56,6 @@ class ChatAlert extends StatelessWidget {
                       ),
                       SizedBox.square(dimension: spacing.xs),
                       AxiButton(
-                        size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.ghost,
                         onPressed: () => context.read<ChatBloc>().add(
                               const ChatAlertHidden(forever: true),

@@ -979,7 +979,8 @@ class _RecurrenceFrequencyChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final EdgeInsets basePadding = AxiButtonSize.sm.padding(context.spacing);
+    final EdgeInsets basePadding =
+        AxiButtonSize.regular.padding(context.spacing);
     final EdgeInsets extraPadding = EdgeInsets.only(
       left: math.max(0, padding.left - basePadding.left),
       right: math.max(0, padding.right - basePadding.right),
@@ -988,7 +989,6 @@ class _RecurrenceFrequencyChip extends StatelessWidget {
     );
     return AxiButton(
       variant: isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
-      size: AxiButtonSize.sm,
       selected: isSelected,
       onPressed: enabled ? onPressed : null,
       child: Padding(
@@ -1025,7 +1025,8 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final EdgeInsets basePadding = AxiButtonSize.sm.padding(context.spacing);
+    final EdgeInsets basePadding =
+        AxiButtonSize.regular.padding(context.spacing);
     final EdgeInsets extraPadding = EdgeInsets.only(
       left: math.max(0, padding.left - basePadding.left),
       right: math.max(0, padding.right - basePadding.right),
@@ -1041,7 +1042,6 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
         return AxiButton(
           variant:
               isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
-          size: AxiButtonSize.sm,
           selected: isSelected,
           onPressed: enabled ? () => onWeekdayToggled(weekday) : null,
           child: Padding(
@@ -1291,7 +1291,8 @@ class _RecurrenceEndModeChip extends StatelessWidget {
       horizontal: calendarGutterMd,
       vertical: calendarGutterSm,
     );
-    final EdgeInsets basePadding = AxiButtonSize.sm.padding(context.spacing);
+    final EdgeInsets basePadding =
+        AxiButtonSize.regular.padding(context.spacing);
     final EdgeInsets extraPadding = EdgeInsets.only(
       left: math.max(0, padding.left - basePadding.left),
       right: math.max(0, padding.right - basePadding.right),
@@ -1300,7 +1301,6 @@ class _RecurrenceEndModeChip extends StatelessWidget {
     );
     return AxiButton(
       variant: isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
-      size: AxiButtonSize.sm,
       selected: isSelected,
       onPressed: enabled ? onPressed : null,
       child: Padding(

@@ -52,7 +52,6 @@ class FilterToggle extends StatelessWidget {
             children: [
               for (final entry in labels)
                 AxiButton(
-                  size: AxiButtonSize.sm,
                   variant: entry.$1 == selected
                       ? AxiButtonVariant.secondary
                       : AxiButtonVariant.outline,

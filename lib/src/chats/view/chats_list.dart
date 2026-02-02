@@ -927,6 +927,7 @@ class _ChatListTileState extends State<ChatListTile> {
       backgroundColor: tileBackgroundColor,
       borderColor: surfaceBorderColor,
       cutouts: cutouts,
+      hitTestPadding: EdgeInsets.only(right: iconCutoutDepth),
       shape: SquircleBorder(
         cornerRadius: context.radii.squircle,
         side: BorderSide(
@@ -974,38 +975,9 @@ class _ChatListTileState extends State<ChatListTile> {
             ? l10n.chatsSemanticsUnselectHint
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
-    Widget tileContent = LayoutBuilder(
-      builder: (context, constraints) {
-        final overhang = scaled(iconCutoutDepth);
-        return OverflowBox(
-          alignment: Alignment.centerLeft,
-          maxWidth: constraints.maxWidth + overhang,
-          child: SizedBox(
-            width: constraints.maxWidth + overhang,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: SizedBox(
-                    width: constraints.maxWidth,
-                    child: tileSurface.withTapBounce(),
-                  ),
-                ),
-                _CutoutOverhangHitTarget(
-                  visible: true,
-                  size: scaled(iconCutoutThickness),
-                  onPressed: selectionActive
-                      ? () => context
-                          .read<ChatsCubit>()
-                          .toggleChatSelection(item.jid)
-                      : _toggleActions,
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    Widget tileContent = Padding(
+      padding: EdgeInsetsDirectional.only(end: scaled(iconCutoutDepth)),
+      child: tileSurface.withTapBounce(),
     );
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
@@ -1721,40 +1693,6 @@ class _ChatSelectionCutoutButton extends StatelessWidget {
           visible: true,
           selected: selected,
           onPressed: onPressed,
-        ),
-      ),
-    );
-  }
-}
-
-class _CutoutOverhangHitTarget extends StatelessWidget {
-  const _CutoutOverhangHitTarget({
-    required this.visible,
-    required this.size,
-    required this.onPressed,
-  });
-
-  final bool visible;
-  final double size;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!visible || onPressed == null) {
-      return const SizedBox.shrink();
-    }
-    return Align(
-      alignment: Alignment.centerRight,
-      child: AxiTapBounce(
-        child: ShadGestureDetector(
-          cursor: SystemMouseCursors.click,
-          hoverStrategies: ShadTheme.of(context).hoverStrategies,
-          onTap: onPressed,
-          child: SizedBox(
-            width: size,
-            height: size,
-            child: const ColoredBox(color: Colors.transparent),
-          ),
         ),
       ),
     );

@@ -461,7 +461,6 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                   ),
                   SizedBox(width: spacing.s),
                   AxiButton(
-                    size: AxiButtonSize.sm,
                     variant: AxiButtonVariant.ghost,
                     onPressed: () =>
                         context.read<ChatSearchCubit>().setActive(false),
@@ -10738,7 +10737,6 @@ class _ComposerNotice extends StatelessWidget {
           ),
           if (actionLabel != null && onAction != null)
             AxiButton(
-              size: AxiButtonSize.sm,
               variant: AxiButtonVariant.ghost,
               onPressed: onAction,
               child: Text(
@@ -12642,7 +12640,6 @@ class _ReactionQuickButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AxiButton.secondary(
-      size: AxiButtonSize.sm,
       onPressed: onPressed,
       child: Text(emoji),
     );

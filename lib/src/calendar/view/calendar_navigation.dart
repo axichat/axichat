@@ -933,7 +933,6 @@ class _SearchButton extends StatelessWidget {
       );
     }
     return AxiButton.secondary(
-      size: AxiButtonSize.sm,
       onPressed: onPressed,
       leading: Icon(Icons.search, size: iconSize, color: colors.primary),
       child: Text(context.l10n.commonSearch),
@@ -1025,7 +1024,6 @@ class _DateLabelState extends State<_DateLabel> {
       child: SizedBox(
         height: context.sizing.buttonHeightRegular,
         child: AxiButton.outline(
-          size: AxiButtonSize.sm,
           onPressed: _toggleOverlay,
           child: Row(
             mainAxisSize: MainAxisSize.min,

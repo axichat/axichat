@@ -378,7 +378,6 @@ class _AvailabilityEditorAddButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AxiButton.ghost(
-      size: AxiButtonSize.sm,
       onPressed: onPressed,
       leading:
           const Icon(LucideIcons.plus, size: _availabilityEditorHeaderIconSize),
@@ -401,7 +400,6 @@ class _AvailabilityEditorActionRow extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: AxiButton.primary(
-        size: AxiButtonSize.sm,
         onPressed: isBusy ? null : onPressed,
         loading: isBusy,
         leading: const Icon(

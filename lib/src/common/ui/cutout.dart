@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/common/ui/squircle_border.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 class CutoutSurface extends StatelessWidget {
@@ -14,6 +15,7 @@ class CutoutSurface extends StatelessWidget {
     required this.backgroundColor,
     required this.borderColor,
     required this.shape,
+    this.hitTestPadding = EdgeInsets.zero,
     this.shadows = const [],
     this.shadowOpacity = 0,
   });
@@ -23,6 +25,7 @@ class CutoutSurface extends StatelessWidget {
   final Color backgroundColor;
   final Color borderColor;
   final OutlinedBorder shape;
+  final EdgeInsets hitTestPadding;
   final List<BoxShadow> shadows;
   final double shadowOpacity;
 
@@ -40,25 +43,75 @@ class CutoutSurface extends StatelessWidget {
     final clipper = _CutoutClipper(shape: shape, cutouts: resolvedCutouts);
     final borderWidth = shape.side.width;
 
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        CustomPaint(
-          painter: _CutoutPainter(
-            shape: shape,
-            backgroundColor: backgroundColor,
-            borderColor: borderColor,
-            borderWidth: borderWidth,
-            cutouts: resolvedCutouts,
-            shadows: shadows,
-            shadowOpacity: resolvedShadowOpacity,
+    return _HitTestOverflow(
+      padding: hitTestPadding,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CustomPaint(
+            painter: _CutoutPainter(
+              shape: shape,
+              backgroundColor: backgroundColor,
+              borderColor: borderColor,
+              borderWidth: borderWidth,
+              cutouts: resolvedCutouts,
+              shadows: shadows,
+              shadowOpacity: resolvedShadowOpacity,
+            ),
+            child: ClipPath(clipper: clipper, child: child),
           ),
-          child: ClipPath(clipper: clipper, child: child),
-        ),
-        if (resolvedCutouts.isNotEmpty)
-          for (final spec in resolvedCutouts) _CutoutAttachment(spec: spec),
-      ],
+          if (resolvedCutouts.isNotEmpty)
+            for (final spec in resolvedCutouts) _CutoutAttachment(spec: spec),
+        ],
+      ),
     );
+  }
+}
+
+class _HitTestOverflow extends SingleChildRenderObjectWidget {
+  const _HitTestOverflow({
+    required this.padding,
+    required super.child,
+  });
+
+  final EdgeInsets padding;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) {
+    return _HitTestOverflowRenderBox(padding: padding);
+  }
+
+  @override
+  void updateRenderObject(BuildContext context, RenderObject renderObject) {
+    (renderObject as _HitTestOverflowRenderBox).padding = padding;
+  }
+}
+
+class _HitTestOverflowRenderBox extends RenderProxyBox {
+  _HitTestOverflowRenderBox({required EdgeInsets padding}) : _padding = padding;
+
+  EdgeInsets get padding => _padding;
+  EdgeInsets _padding;
+
+  set padding(EdgeInsets value) {
+    if (value == _padding) return;
+    _padding = value;
+    markNeedsLayout();
+  }
+
+  @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    final rect = Offset.zero & size;
+    final expanded = Rect.fromLTRB(
+      rect.left - padding.left,
+      rect.top - padding.top,
+      rect.right + padding.right,
+      rect.bottom + padding.bottom,
+    );
+    if (!expanded.contains(position)) return false;
+    final hitChild = hitTestChildren(result, position: position);
+    if (hitChild) return true;
+    return hitTestSelf(position);
   }
 }
 

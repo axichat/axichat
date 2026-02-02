@@ -434,18 +434,22 @@ class _ResizableTaskBody extends StatelessWidget {
     final stripeColor = highlightSelection
         ? accentColor
         : accentColor.withValues(alpha: isCompleted ? 0.5 : 0.9);
-    final decoration = BoxDecoration(
-      color: backgroundColor,
+    final BorderSide borderSide = BorderSide(
+      color: borderColor,
+      width: highlightSelection
+          ? 2.4
+          : isResizing
+              ? 1.8
+              : 1,
+    );
+    final ShapeBorder shape = SquircleBorder(
       borderRadius: context.radius,
-      border: Border.all(
-        color: borderColor,
-        width: highlightSelection
-            ? 2.4
-            : isResizing
-                ? 1.8
-                : 1,
-      ),
-      boxShadow: boxShadows,
+      side: borderSide,
+    );
+    final decoration = ShapeDecoration(
+      color: backgroundColor,
+      shape: shape,
+      shadows: boxShadows,
     );
     final availableHeight = (height - 4).clamp(0.0, double.infinity);
     if (availableHeight <= 6) {
@@ -680,17 +684,16 @@ class _TaskAccentStripe extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      left: 0,
-      top: 0,
-      bottom: 0,
-      child: Container(
-        width: accentWidth,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(calendarEventRadius),
-            bottomLeft: Radius.circular(calendarEventRadius),
+    return Positioned.fill(
+      child: ClipPath(
+        clipper: ShapeBorderClipper(
+          shape: SquircleBorder(borderRadius: context.radius),
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            width: accentWidth,
+            color: color,
           ),
         ),
       ),

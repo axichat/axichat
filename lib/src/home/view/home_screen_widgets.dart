@@ -761,7 +761,6 @@ class _BottomNavItem extends StatelessWidget {
     final spacing = context.spacing;
     final textStyle = context.textTheme.small;
     return AxiButton.ghost(
-      size: AxiButtonSize.sm,
       widthBehavior: AxiButtonWidth.expand,
       onPressed: onPressed,
       child: Column(
@@ -1380,7 +1379,6 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                     ),
                     SizedBox(width: spacing.s),
                     AxiButton.ghost(
-                      size: AxiButtonSize.sm,
                       onPressed: () => context
                           .read<HomeSearchCubit>()
                           .setSearchActive(false),

@@ -487,7 +487,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
               ),
               actions: [
                 AxiButton(
-                  size: AxiButtonSize.sm,
                   variant: AxiButtonVariant.outline,
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   child: Text(context.l10n.commonClose),
@@ -499,7 +498,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                 children: [
                   if (onAddRecipient != null)
                     AxiButton(
-                      size: AxiButtonSize.sm,
                       variant: AxiButtonVariant.secondary,
                       onPressed: () {
                         final recipientName =
@@ -518,7 +516,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                       child: Text(context.l10n.chatMessageAddRecipients),
                     ),
                   AxiButton(
-                    size: AxiButtonSize.sm,
                     variant: AxiButtonVariant.secondary,
                     onPressed: () {
                       Navigator.of(dialogContext).pop();
@@ -528,7 +525,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   ),
                   if (canCreateEmailChat)
                     AxiButton(
-                      size: AxiButtonSize.sm,
                       variant: AxiButtonVariant.secondary,
                       loading: creating,
                       onPressed: creating
@@ -716,7 +712,6 @@ class _MessageHeadersSection extends StatelessWidget {
       children: [
         Text(title, style: context.textTheme.muted),
         AxiButton(
-          size: AxiButtonSize.sm,
           variant: AxiButtonVariant.secondary,
           onPressed: _canOpen ? () => _showHeadersDialog(context) : null,
           child: Text(buttonLabel),
@@ -772,7 +767,6 @@ class _RawHeadersDialog extends StatelessWidget {
       title: Text(title, style: context.modalHeaderTextStyle),
       actions: [
         AxiButton(
-          size: AxiButtonSize.sm,
           variant: AxiButtonVariant.secondary,
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: headers));
@@ -780,7 +774,6 @@ class _RawHeadersDialog extends StatelessWidget {
           child: Text(copyLabel),
         ),
         AxiButton(
-          size: AxiButtonSize.sm,
           variant: AxiButtonVariant.outline,
           onPressed: () => Navigator.of(context).pop(),
           child: Text(closeLabel),
@@ -881,7 +874,6 @@ class _RecipientChip extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     return AxiButton(
-      size: AxiButtonSize.sm,
       variant: AxiButtonVariant.secondary,
       onPressed: onPressed,
       child: Row(

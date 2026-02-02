@@ -349,7 +349,6 @@ class _CriticalPathShareActionRow extends StatelessWidget {
     return Align(
       alignment: Alignment.centerRight,
       child: AxiButton.primary(
-        size: AxiButtonSize.sm,
         onPressed: isBusy ? null : onPressed,
         loading: isBusy,
         widthBehavior: AxiButtonWidth.fit,

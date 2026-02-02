@@ -605,7 +605,6 @@ class _ParticipantActionsRow extends StatelessWidget {
       runSpacing: calendarInsetSm,
       children: [
         AxiButton.outline(
-          size: AxiButtonSize.sm,
           onPressed: onAccept,
           child: Text(
             _attendeeActionAcceptLabel,
@@ -613,7 +612,6 @@ class _ParticipantActionsRow extends StatelessWidget {
           ),
         ),
         AxiButton.outline(
-          size: AxiButtonSize.sm,
           onPressed: onDecline,
           child: Text(
             _attendeeActionDeclineLabel,
@@ -621,7 +619,6 @@ class _ParticipantActionsRow extends StatelessWidget {
           ),
         ),
         AxiButton.outline(
-          size: AxiButtonSize.sm,
           onPressed: onTentative,
           child: Text(
             _attendeeActionTentativeLabel,

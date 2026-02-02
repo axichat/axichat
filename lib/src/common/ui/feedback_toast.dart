@@ -159,7 +159,6 @@ class FeedbackToast extends ShadToast {
     }
     return Builder(
       builder: (context) => AxiButton.link(
-        size: AxiButtonSize.sm,
         child: Text(label),
         onPressed: () {
           ShadToaster.of(context).hide();

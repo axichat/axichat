@@ -488,7 +488,6 @@ class TaskToolbarButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool allowPress = enabled && onPressed != null;
     return AxiButton.outline(
-      size: AxiButtonSize.sm,
       onPressed: allowPress ? onPressed : null,
       leading: icon == null
           ? null
@@ -935,7 +934,7 @@ class TaskPrimaryButton extends StatelessWidget {
     required this.onPressed,
     this.isBusy = false,
     this.icon,
-    this.size = AxiButtonSize.sm,
+    this.size = AxiButtonSize.regular,
   });
 
   final String label;
@@ -968,7 +967,7 @@ class TaskSecondaryButton extends StatelessWidget {
     required this.onPressed,
     this.isBusy = false,
     this.icon,
-    this.size = AxiButtonSize.sm,
+    this.size = AxiButtonSize.regular,
   });
 
   final String label;
@@ -1000,7 +999,7 @@ class TaskDestructiveButton extends StatelessWidget {
     required this.onPressed,
     this.isBusy = false,
     this.icon,
-    this.size = AxiButtonSize.sm,
+    this.size = AxiButtonSize.regular,
   });
 
   final String label;

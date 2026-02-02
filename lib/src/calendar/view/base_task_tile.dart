@@ -295,7 +295,7 @@ class _CompactTaskTile extends StatelessWidget {
     final Color indicatorColor =
         task.isCompleted ? taskCompletedColor : taskColor;
     final bool showActions = onEdit != null || onDelete != null;
-    final double stripWidth = context.sizing.progressIndicatorBarHeight;
+    final double stripWidth = context.spacing.xs;
     final l10n = context.l10n;
     final String? scheduleLabel = _compactTaskScheduleLabel(
       l10n,
@@ -316,7 +316,9 @@ class _CompactTaskTile extends StatelessWidget {
       onTap: onTap,
       child: IntrinsicHeight(
         child: Padding(
-          padding: EdgeInsets.only(left: context.spacing.s),
+          padding: EdgeInsets.only(
+            left: context.spacing.s + context.spacing.xs,
+          ),
           child: CalendarTaskListTile(
             task: task,
             scheduleLabel: scheduleLabel,

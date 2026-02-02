@@ -556,7 +556,6 @@ class _BlockedAttachment extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: AxiButton(
-              size: AxiButtonSize.sm,
               variant: AxiButtonVariant.secondary,
               onPressed: onAllowPressed,
               child: Text(l10n.chatAttachmentLoad),
@@ -1997,7 +1996,6 @@ class _EncryptedAttachment extends StatelessWidget {
                     child: AxiTooltip(
                       builder: (_) => Text(openTooltip),
                       child: AxiButton(
-                        size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.secondary,
                         loading: downloading,
                         onPressed: onPressed,
@@ -2077,7 +2075,6 @@ class _RemoteImageAttachment extends StatelessWidget {
                     child: AxiTooltip(
                       builder: (_) => Text(openTooltip),
                       child: AxiButton(
-                        size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.secondary,
                         loading: downloading,
                         onPressed: onPressed,
@@ -2157,7 +2154,6 @@ class _RemoteVideoAttachment extends StatelessWidget {
                     child: AxiTooltip(
                       builder: (_) => Text(openTooltip),
                       child: AxiButton(
-                        size: AxiButtonSize.sm,
                         variant: AxiButtonVariant.secondary,
                         loading: downloading,
                         onPressed: onPressed,

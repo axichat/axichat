@@ -598,7 +598,6 @@ class _PathActionsState extends State<_PathActions> {
         Padding(
           padding: const EdgeInsets.only(right: calendarGutterSm),
           child: AxiButton.secondary(
-            size: AxiButtonSize.sm,
             onPressed: widget.onFocus,
             leading: Icon(
               widget.isFocused ? Icons.visibility_off : Icons.visibility,
@@ -711,7 +710,6 @@ class _FocusedPathTasks extends StatelessWidget {
             const Spacer(),
             if (onAddTask != null)
               AxiButton.outline(
-                size: AxiButtonSize.sm,
                 onPressed: onAddTask,
                 leading: Icon(
                   Icons.add,

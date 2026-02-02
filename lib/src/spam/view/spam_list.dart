@@ -154,7 +154,6 @@ class _SpamListBody extends StatelessWidget {
                       Align(
                         alignment: Alignment.centerRight,
                         child: AxiButton.secondary(
-                          size: AxiButtonSize.sm,
                           loading: isUpdating,
                           onPressed: isUpdating
                               ? null

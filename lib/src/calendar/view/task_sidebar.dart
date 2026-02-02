@@ -3123,7 +3123,6 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                 title: l10n.calendarSelectionMode,
                 padding: const EdgeInsets.only(bottom: calendarGutterSm),
                 trailing: AxiButton.outline(
-                  size: AxiButtonSize.sm,
                   onPressed: onExitSelection,
                   child: Text(l10n.calendarExit),
                 ),
@@ -3333,7 +3332,6 @@ class _SelectionBatchEditSection extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: TaskPrimaryButton(
             label: l10n.calendarApplyChanges,
-            size: AxiButtonSize.sm,
             onPressed:
                 hasTasks && hasPendingSelectionEdits ? onApplyChanges : null,
           ),
@@ -3788,19 +3786,22 @@ class _SelectionTaskTile extends StatelessWidget {
           border: Border.all(color: calendarBorderColor),
         ),
         leadingStripeColor: borderColor,
-        leadingStripeWidth: context.sizing.progressIndicatorBarHeight,
+        leadingStripeWidth: context.spacing.xs,
         onTap: () => onFocusTask(task),
-        child: CalendarTaskListTile(
-          task: task,
-          scheduleLabel: scheduleLabel,
-          onToggleCompletion: (completed) =>
-              onToggleCompletion(task, completed),
-          trailing: AxiTooltip(
-            builder: (_) => Text(context.l10n.calendarSelectionRemove),
-            child: AxiIconButton.ghost(
-              iconData: Icons.close,
-              onPressed: () => onRemoveTask(task),
-              color: calendarSubtitleColor,
+        child: Padding(
+          padding: EdgeInsets.only(left: context.spacing.xs),
+          child: CalendarTaskListTile(
+            task: task,
+            scheduleLabel: scheduleLabel,
+            onToggleCompletion: (completed) =>
+                onToggleCompletion(task, completed),
+            trailing: AxiTooltip(
+              builder: (_) => Text(context.l10n.calendarSelectionRemove),
+              child: AxiIconButton.ghost(
+                iconData: Icons.close,
+                onPressed: () => onRemoveTask(task),
+                color: calendarSubtitleColor,
+              ),
             ),
           ),
         ),
@@ -3917,7 +3918,6 @@ class _AddTaskSection extends StatelessWidget {
                 builder: (context, _) {
                   final bool enabled = hasSidebarFormValues();
                   final button = AxiButton.outline(
-                    size: AxiButtonSize.sm,
                     onPressed: enabled ? onClearFieldsPressed : null,
                     child: Text(l10n.commonClear),
                   );
@@ -5027,7 +5027,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
     final VoidCallback? onTapOverride = widget.onTapOverride;
     final bool allowContextMenu = widget.allowContextMenu;
     final BorderSide borderSide = context.borderSide;
-    final double stripWidth = context.sizing.progressIndicatorBarHeight;
+    final double stripWidth = context.spacing.xs;
 
     final borderColor = task.priorityColor;
     final bool isActive = uiState.activePopoverAnchorToken == _anchorToken;
@@ -5048,10 +5048,13 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
         leadingStripeWidth: stripWidth,
         onTap: onTap,
         hoverColor: hoverColor,
-        child: CalendarTaskListTile(
-          task: task,
-          trailing: trailing,
-          onToggleCompletion: onToggleCompletion,
+        child: Padding(
+          padding: EdgeInsets.only(left: context.spacing.xs),
+          child: CalendarTaskListTile(
+            task: task,
+            trailing: trailing,
+            onToggleCompletion: onToggleCompletion,
+          ),
         ),
       );
     }
@@ -5104,6 +5107,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
           const double zeroClamp = 0.0;
           const double heightDifferenceThreshold = 4.0;
           const double minimumHeight = calendarTaskPopoverMinHeight;
+          final double popoverChromeInset = context.spacing.m * 2;
 
           final double usableLeft = viewPadding.left + margin;
           final double usableRight =
@@ -5141,6 +5145,11 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                 effectiveMaxHeight = usableHeight;
               }
             }
+
+            effectiveMaxHeight = math.max(
+              minimumHeight,
+              effectiveMaxHeight - popoverChromeInset,
+            );
 
             final double triggerCenterY =
                 tileOrigin.dy + tileSize.height / centerDivider;
@@ -5202,6 +5211,11 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                 availableSpace > zeroClamp) {
               effectiveMaxHeight = availableSpace;
             }
+
+            effectiveMaxHeight = math.max(
+              minimumHeight,
+              effectiveMaxHeight - popoverChromeInset,
+            );
 
             final double extraAbove = math.max(
               zeroClamp,
