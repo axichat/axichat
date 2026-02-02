@@ -866,17 +866,18 @@ class _ChatListTileState extends State<ChatListTile> {
       subtitlePlaceholder: l10n.chatEmptyMessages,
     );
 
-    final cutoutGap = spacing.xs;
+    final cutoutGap = spacing.xxs;
     final iconButtonSize = sizing.iconButtonSize;
     final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
-    final iconCutoutDepth = iconButtonSize + cutoutGap;
+    final iconCutoutDepth = iconCutoutThickness;
     final iconCutoutRadius = context.radii.squircle;
     final unreadChildOffset = -spacing.xs;
+    final timestampOffset = (spacing.xs + spacing.xxs) / 2;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
         CutoutSpec(
           edge: CutoutEdge.top,
-          alignment: Alignment.topRight,
+          alignment: const Alignment(0.84, -1),
           depth: unreadDepth,
           thickness: unreadThickness,
           cornerRadius: sizing.containerRadius,
@@ -887,7 +888,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ),
       CutoutSpec(
         edge: CutoutEdge.right,
-        alignment: Alignment.centerRight,
+        alignment: const Alignment(1, 0),
         depth: iconCutoutDepth,
         thickness: iconCutoutThickness,
         cornerRadius: iconCutoutRadius,
@@ -907,12 +908,12 @@ class _ChatListTileState extends State<ChatListTile> {
       if (timestampLabel != null)
         CutoutSpec(
           edge: CutoutEdge.bottom,
-          alignment: Alignment.bottomCenter,
+          alignment: const Alignment(0.52, 1),
           depth: spacing.m,
           thickness: timestampThickness,
           cornerRadius: sizing.containerRadius,
           child: Transform.translate(
-            offset: Offset(0, -scaled(spacing.xs)),
+            offset: Offset(0, -scaled(timestampOffset)),
             child: Text(
               timestampLabel,
               style: context.textTheme.muted,
@@ -973,9 +974,38 @@ class _ChatListTileState extends State<ChatListTile> {
             ? l10n.chatsSemanticsUnselectHint
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
-    Widget tileContent = Padding(
-      padding: EdgeInsetsDirectional.only(end: scaled(iconCutoutDepth)),
-      child: tileSurface.withTapBounce(),
+    Widget tileContent = LayoutBuilder(
+      builder: (context, constraints) {
+        final overhang = scaled(iconCutoutDepth);
+        return OverflowBox(
+          alignment: Alignment.centerLeft,
+          maxWidth: constraints.maxWidth + overhang,
+          child: SizedBox(
+            width: constraints.maxWidth + overhang,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: constraints.maxWidth,
+                    child: tileSurface.withTapBounce(),
+                  ),
+                ),
+                _CutoutOverhangHitTarget(
+                  visible: true,
+                  size: scaled(iconCutoutThickness),
+                  onPressed: selectionActive
+                      ? () => context
+                          .read<ChatsCubit>()
+                          .toggleChatSelection(item.jid)
+                      : _toggleActions,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
@@ -1624,6 +1654,7 @@ class _ChatActionsToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final sizing = context.sizing;
     final icon = expanded ? LucideIcons.x : LucideIcons.ellipsisVertical;
     final tooltip = expanded
         ? context.l10n.chatsHideActions
@@ -1633,6 +1664,9 @@ class _ChatActionsToggle extends StatelessWidget {
       tooltip: tooltip,
       semanticLabel: tooltip,
       onPressed: onPressed,
+      iconSize: sizing.iconButtonIconSize,
+      buttonSize: sizing.iconButtonSize,
+      tapTargetSize: sizing.iconButtonSize,
       color: colors.mutedForeground,
       backgroundColor: backgroundColor,
       borderColor: colors.border,
@@ -1687,6 +1721,40 @@ class _ChatSelectionCutoutButton extends StatelessWidget {
           visible: true,
           selected: selected,
           onPressed: onPressed,
+        ),
+      ),
+    );
+  }
+}
+
+class _CutoutOverhangHitTarget extends StatelessWidget {
+  const _CutoutOverhangHitTarget({
+    required this.visible,
+    required this.size,
+    required this.onPressed,
+  });
+
+  final bool visible;
+  final double size;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!visible || onPressed == null) {
+      return const SizedBox.shrink();
+    }
+    return Align(
+      alignment: Alignment.centerRight,
+      child: AxiTapBounce(
+        child: ShadGestureDetector(
+          cursor: SystemMouseCursors.click,
+          hoverStrategies: ShadTheme.of(context).hoverStrategies,
+          onTap: onPressed,
+          child: SizedBox(
+            width: size,
+            height: size,
+            child: const ColoredBox(color: Colors.transparent),
+          ),
         ),
       ),
     );

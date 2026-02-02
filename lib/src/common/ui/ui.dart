@@ -52,6 +52,7 @@ export 'status_colors.dart';
 export 'buttons/axi_button.dart';
 export 'buttons/axi_icon_button.dart';
 export 'buttons/axi_list_button.dart';
+export 'buttons/axi_plain_header_button.dart';
 export 'chips_bar.dart';
 export 'cutout.dart';
 export 'display_fingerprint.dart';

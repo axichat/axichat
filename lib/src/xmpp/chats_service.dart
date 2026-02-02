@@ -805,6 +805,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
                   : mox.JID.fromString(peerJid).local,
               type: ChatType.chat,
               lastChangeTimestamp: lastChangeCandidate,
+              transport: MessageTransport.xmpp,
               muted: muted,
               favorited: pinned,
               archived: archived,

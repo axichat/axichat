@@ -1470,41 +1470,29 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
       letterSpacing: _recurrenceLabelLetterSpacing,
     );
     final Color iconColor = calendarSubtitleColor;
-    final BorderRadius radius = BorderRadius.circular(calendarBorderRadius);
-    return MouseRegion(
-      cursor: onPressed != null
-          ? SystemMouseCursors.click
-          : SystemMouseCursors.basic,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: radius,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterSm,
-              vertical: calendarGutterSm,
-            ),
-            child: Row(
-              children: [
-                Text(
-                  _recurrenceAdvancedLabel.toUpperCase(),
-                  style: labelStyle,
-                ),
-                if (hasAdvancedData) ...[
-                  const SizedBox(width: calendarInsetSm),
-                  _RecurrenceAdvancedActiveBadge(enabled: onPressed != null),
-                ],
-                const Spacer(),
-                Icon(
-                  isExpanded ? Icons.expand_less : Icons.expand_more,
-                  size: _recurrenceIconMediumSize,
-                  color: iconColor,
-                ),
-              ],
-            ),
+    return AxiPlainHeaderButton(
+      onPressed: onPressed,
+      padding: const EdgeInsets.symmetric(
+        horizontal: calendarGutterSm,
+        vertical: calendarGutterSm,
+      ),
+      child: Row(
+        children: [
+          Text(
+            _recurrenceAdvancedLabel.toUpperCase(),
+            style: labelStyle,
           ),
-        ),
+          if (hasAdvancedData) ...[
+            const SizedBox(width: calendarInsetSm),
+            _RecurrenceAdvancedActiveBadge(enabled: onPressed != null),
+          ],
+          const Spacer(),
+          Icon(
+            isExpanded ? Icons.expand_less : Icons.expand_more,
+            size: _recurrenceIconMediumSize,
+            color: iconColor,
+          ),
+        ],
       ),
     );
   }

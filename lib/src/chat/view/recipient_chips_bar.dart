@@ -250,7 +250,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         ),
     ];
 
-    final barBackground = colors.card;
+    final barBackground = chipsBarBackground(context, colors);
     final availableAutocompleteChats = _availableAutocompleteChats;
     final knownDomains = _knownDomains;
     final knownAddresses = _knownAddresses;
@@ -308,80 +308,80 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                   ? l10n.recipientsHintExpand
                   : l10n.recipientsHintCollapse,
               onTap: _toggleBarCollapsed,
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _toggleBarCollapsed,
-                  child: AnimatedContainer(
-                    duration: chipsBarAnimationDuration,
-                    curve: Curves.easeInOutCubic,
-                    padding: headerPadding,
-                    decoration: BoxDecoration(
-                      color: context.colorScheme.card,
-                      borderRadius: BorderRadius.circular(
-                        chipsBarHeaderBorderRadius,
+              child: AxiPlainHeaderButton(
+                onPressed: _toggleBarCollapsed,
+                onFocusChange: (focused) {
+                  if (_headerFocused == focused) return;
+                  setState(() => _headerFocused = focused);
+                },
+                padding: headerPadding,
+                backgroundColor: context.colorScheme.card,
+                hoverBackgroundColor: context.colorScheme.card,
+                pressedBackgroundColor: context.colorScheme.card,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(
+                      chipsBarHeaderBorderRadius,
+                    ),
+                    border: _headerFocused
+                        ? Border.all(
+                            color: context.colorScheme.primary,
+                            width: context.borderSide.width,
+                          )
+                        : Border.all(color: context.borderSide.color),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.recipientsHeaderTitle,
+                          style: headerStyle,
+                        ),
                       ),
-                      border: _headerFocused
-                          ? Border.all(
-                              color: context.colorScheme.primary,
+                      if (showVisibilityBadge) ...[
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: context.spacing.s,
+                            vertical: context.spacing.xxs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: context.colorScheme.card,
+                            borderRadius: BorderRadius.circular(
+                              chipsBarHeaderBadgeRadius,
+                            ),
+                            border: Border.all(
+                              color: context.borderSide.color,
                               width: context.borderSide.width,
-                            )
-                          : Border.all(color: context.borderSide.color),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
+                            ),
+                          ),
                           child: Text(
-                            l10n.recipientsHeaderTitle,
-                            style: headerStyle,
-                          ),
-                        ),
-                        if (showVisibilityBadge) ...[
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                              horizontal: context.spacing.s,
-                              vertical: context.spacing.xxs,
-                            ),
-                            decoration: BoxDecoration(
-                              color: context.colorScheme.card,
-                              borderRadius: BorderRadius.circular(
-                                chipsBarHeaderBadgeRadius,
-                              ),
-                              border: Border.all(
-                                color: context.borderSide.color,
-                                width: context.borderSide.width,
-                              ),
-                            ),
-                            child: Text(
-                              normalizedVisibilityLabel,
-                              style: headerStyle.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
+                            normalizedVisibilityLabel,
+                            style: headerStyle.copyWith(
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
-                          SizedBox(width: context.spacing.m),
-                        ],
-                        SizedBox(width: context.spacing.s),
-                        ChipsBarCountBadge(
-                          count: recipients.length,
-                          expanded: !_barCollapsed,
-                          colors: context.colorScheme,
                         ),
-                        SizedBox(width: context.spacing.xs),
-                        AnimatedSwitcher(
-                          duration: chipsBarAnimationDuration,
-                          switchInCurve: Curves.easeOutCubic,
-                          switchOutCurve: Curves.easeInCubic,
-                          child: Icon(
-                            arrowIcon,
-                            key: ValueKey<bool>(_barCollapsed),
-                            size: context.sizing.menuItemIconSize,
-                            color: context.colorScheme.mutedForeground,
-                          ),
-                        ),
+                        SizedBox(width: context.spacing.m),
                       ],
-                    ),
+                      SizedBox(width: context.spacing.s),
+                      ChipsBarCountBadge(
+                        count: recipients.length,
+                        expanded: !_barCollapsed,
+                        colors: context.colorScheme,
+                      ),
+                      SizedBox(width: context.spacing.xs),
+                      AnimatedSwitcher(
+                        duration: chipsBarAnimationDuration,
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeInCubic,
+                        child: Icon(
+                          arrowIcon,
+                          key: ValueKey<bool>(_barCollapsed),
+                          size: context.sizing.menuItemIconSize,
+                          color: context.colorScheme.mutedForeground,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1303,14 +1303,16 @@ class _RecipientAutocompleteField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const double fieldMinWidth = 90.0;
+    const double fieldMaxWidth = 120.0;
     final double fieldHorizontalPadding =
         (fieldOuterPadding + fieldInnerPadding) * 2;
     final TextStyle textStyle = context.textTheme.p;
     return AutofillGroup(
       child: _RecipientAutocompleteFieldSizer(
         controller: controller,
-        minWidth: context.sizing.iconButtonTapTarget,
-        maxWidth: context.sizing.menuMaxWidth,
+        minWidth: fieldMinWidth,
+        maxWidth: fieldMaxWidth,
         horizontalPadding: fieldHorizontalPadding,
         textStyle: textStyle,
         child: _RecipientAutocompleteOverlay(

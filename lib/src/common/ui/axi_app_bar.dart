@@ -36,12 +36,33 @@ class AxiAppBar extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          if (hasLeading) leading!,
-          if (hasLeading && hasTitle) const SizedBox(width: 12),
-          if (hasTitle) Text(appDisplayName, style: titleStyle),
-          if (hasTitle || hasLeading) const Spacer(),
-          if (!hasTitle && !hasLeading) const Spacer(),
-          trailing ?? const AxiVersion(),
+          Expanded(
+            child: ClipRect(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (hasLeading) leading!,
+                    if (hasLeading && hasTitle) const SizedBox(width: 12),
+                    if (hasTitle)
+                      Text(
+                        appDisplayName,
+                        style: titleStyle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          ClipRect(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: trailing ?? const AxiVersion(),
+            ),
+          ),
         ],
       ),
     );
