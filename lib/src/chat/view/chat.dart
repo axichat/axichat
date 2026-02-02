@@ -7347,7 +7347,16 @@ class _ChatState extends State<Chat> {
                                                                     Alignment
                                                                         .topCenter,
                                                                 children: [
-                                                                  ...previousChildren,
+                                                                  for (final child
+                                                                      in previousChildren)
+                                                                    Positioned
+                                                                        .fill(
+                                                                      child:
+                                                                          IgnorePointer(
+                                                                        child:
+                                                                            child,
+                                                                      ),
+                                                                    ),
                                                                   if (currentChild !=
                                                                       null)
                                                                     currentChild,
@@ -7384,18 +7393,11 @@ class _ChatState extends State<Chat> {
                                                                   opacity:
                                                                       curvedAnimation,
                                                                   child:
-                                                                      SizeTransition(
-                                                                    sizeFactor:
-                                                                        curvedAnimation,
-                                                                    axisAlignment:
-                                                                        -1,
+                                                                      SlideTransition(
+                                                                    position:
+                                                                        slideAnimation,
                                                                     child:
-                                                                        SlideTransition(
-                                                                      position:
-                                                                          slideAnimation,
-                                                                      child:
-                                                                          child,
-                                                                    ),
+                                                                        child,
                                                                   ),
                                                                 ),
                                                               );

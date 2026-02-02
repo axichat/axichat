@@ -774,7 +774,7 @@ class _SettingsActionButton extends StatelessWidget {
             size: sizing.menuItemIconSize,
           );
     final button = destructive
-        ? AxiListButton.destructive(
+        ? AxiListButton.destructiveGhost(
             leading: leading,
             onPressed: onPressed,
             child: Text(label),

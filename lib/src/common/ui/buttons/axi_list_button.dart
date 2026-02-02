@@ -13,6 +13,7 @@ class AxiListButton extends StatefulWidget {
     super.key,
     required this.child,
     this.variant = AxiButtonVariant.ghost,
+    this.destructiveGhost = false,
     this.leading,
     this.trailing,
     this.collapsed = false,
@@ -41,6 +42,7 @@ class AxiListButton extends StatefulWidget {
   const AxiListButton.destructive({
     super.key,
     required this.child,
+    this.destructiveGhost = false,
     this.leading,
     this.trailing,
     this.collapsed = false,
@@ -67,8 +69,39 @@ class AxiListButton extends StatefulWidget {
           'Collapsed list buttons require an icon.',
         );
 
+  const AxiListButton.destructiveGhost({
+    super.key,
+    required this.child,
+    this.leading,
+    this.trailing,
+    this.collapsed = false,
+    this.collapsedIconData,
+    this.collapsedIcon,
+    this.collapsedTooltip,
+    this.collapsedSemanticLabel,
+    this.collapsedForegroundColor,
+    this.collapsedBackgroundColor,
+    this.collapsedButtonSize,
+    this.collapsedTapTargetSize,
+    this.collapsedCornerRadius,
+    this.onPressed,
+    this.onLongPress,
+    this.loading = false,
+    this.selected = false,
+    this.semanticLabel,
+    this.focusNode,
+    this.foregroundColor,
+    this.backgroundColor,
+  })  : variant = AxiButtonVariant.ghost,
+        destructiveGhost = true,
+        assert(
+          !collapsed || collapsedIconData != null || collapsedIcon != null,
+          'Collapsed list buttons require an icon.',
+        );
+
   final Widget child;
   final AxiButtonVariant variant;
+  final bool destructiveGhost;
   final Widget? leading;
   final Widget? trailing;
   final bool collapsed;
@@ -149,20 +182,40 @@ class _AxiListButtonState extends State<AxiListButton> {
         final bool hoverOrFocus = hovered || focused || widget.selected;
         final ShadButtonTheme buttonTheme =
             widget.variant.themeFor(ShadTheme.of(context));
-        final Color background = widget.backgroundColor ??
+        final colors = context.colorScheme;
+        final Color baseBackground = widget.backgroundColor ??
             widget.variant.backgroundColor(
               theme: buttonTheme,
-              colors: context.colorScheme,
+              colors: colors,
               hovered: hoverOrFocus,
               pressed: pressed,
             );
-        final Color foreground = widget.foregroundColor ??
+        final Color baseForeground = widget.foregroundColor ??
             widget.variant.foregroundColor(
               theme: buttonTheme,
-              colors: context.colorScheme,
+              colors: colors,
               hovered: hoverOrFocus,
               pressed: pressed,
             );
+        final Color background;
+        final Color foreground;
+        if (widget.destructiveGhost) {
+          final hoverBackground = Color.alphaBlend(
+            colors.destructive.withValues(alpha: context.motion.tapHoverAlpha),
+            baseBackground,
+          );
+          final pressedBackground = Color.alphaBlend(
+            colors.destructive.withValues(alpha: context.motion.tapSplashAlpha),
+            baseBackground,
+          );
+          background = pressed
+              ? pressedBackground
+              : (hoverOrFocus ? hoverBackground : baseBackground);
+          foreground = widget.foregroundColor ?? colors.destructive;
+        } else {
+          background = baseBackground;
+          foreground = baseForeground;
+        }
         final shape = RoundedSuperellipseBorder(
           borderRadius: context.radius,
           side: BorderSide(

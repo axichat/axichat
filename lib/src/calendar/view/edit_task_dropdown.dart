@@ -1603,7 +1603,8 @@ class _OccurrenceScopeChip extends StatelessWidget {
       variant: isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
       selected: isSelected,
       onPressed: onPressed,
-      child: Text(label, style: context.textTheme.label.strong),
+      child: Text(label,
+          style: context.textTheme.label.copyWith(color: null).strong),
     );
   }
 }

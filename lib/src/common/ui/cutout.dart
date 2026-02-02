@@ -15,7 +15,6 @@ class CutoutSurface extends StatelessWidget {
     required this.backgroundColor,
     required this.borderColor,
     required this.shape,
-    this.hitTestPadding = EdgeInsets.zero,
     this.shadows = const [],
     this.shadowOpacity = 0,
   });
@@ -25,7 +24,6 @@ class CutoutSurface extends StatelessWidget {
   final Color backgroundColor;
   final Color borderColor;
   final OutlinedBorder shape;
-  final EdgeInsets hitTestPadding;
   final List<BoxShadow> shadows;
   final double shadowOpacity;
 
@@ -40,78 +38,18 @@ class CutoutSurface extends StatelessWidget {
             .map((spec) => spec.scaled(scaleFactor))
             .toList(growable: false);
     final resolvedShadowOpacity = shadowOpacity.clamp(0.0, 1.0);
-    final clipper = _CutoutClipper(shape: shape, cutouts: resolvedCutouts);
     final borderWidth = shape.side.width;
 
-    return _HitTestOverflow(
-      padding: hitTestPadding,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          CustomPaint(
-            painter: _CutoutPainter(
-              shape: shape,
-              backgroundColor: backgroundColor,
-              borderColor: borderColor,
-              borderWidth: borderWidth,
-              cutouts: resolvedCutouts,
-              shadows: shadows,
-              shadowOpacity: resolvedShadowOpacity,
-            ),
-            child: ClipPath(clipper: clipper, child: child),
-          ),
-          if (resolvedCutouts.isNotEmpty)
-            for (final spec in resolvedCutouts) _CutoutAttachment(spec: spec),
-        ],
-      ),
+    return _CutoutRender(
+      cutouts: resolvedCutouts,
+      backgroundColor: backgroundColor,
+      borderColor: borderColor,
+      borderWidth: borderWidth,
+      shape: shape,
+      shadows: shadows,
+      shadowOpacity: resolvedShadowOpacity,
+      child: child,
     );
-  }
-}
-
-class _HitTestOverflow extends SingleChildRenderObjectWidget {
-  const _HitTestOverflow({
-    required this.padding,
-    required super.child,
-  });
-
-  final EdgeInsets padding;
-
-  @override
-  RenderObject createRenderObject(BuildContext context) {
-    return _HitTestOverflowRenderBox(padding: padding);
-  }
-
-  @override
-  void updateRenderObject(BuildContext context, RenderObject renderObject) {
-    (renderObject as _HitTestOverflowRenderBox).padding = padding;
-  }
-}
-
-class _HitTestOverflowRenderBox extends RenderProxyBox {
-  _HitTestOverflowRenderBox({required EdgeInsets padding}) : _padding = padding;
-
-  EdgeInsets get padding => _padding;
-  EdgeInsets _padding;
-
-  set padding(EdgeInsets value) {
-    if (value == _padding) return;
-    _padding = value;
-    markNeedsLayout();
-  }
-
-  @override
-  bool hitTest(BoxHitTestResult result, {required Offset position}) {
-    final rect = Offset.zero & size;
-    final expanded = Rect.fromLTRB(
-      rect.left - padding.left,
-      rect.top - padding.top,
-      rect.right + padding.right,
-      rect.bottom + padding.bottom,
-    );
-    if (!expanded.contains(position)) return false;
-    final hitChild = hitTestChildren(result, position: position);
-    if (hitChild) return true;
-    return hitTestSelf(position);
   }
 }
 
@@ -147,28 +85,223 @@ class CutoutSpec {
 
 enum CutoutEdge { top, right, bottom, left }
 
-class _CutoutPainter extends CustomPainter {
-  const _CutoutPainter({
-    required this.shape,
+class _CutoutRender extends MultiChildRenderObjectWidget {
+  _CutoutRender({
+    required this.cutouts,
     required this.backgroundColor,
     required this.borderColor,
     required this.borderWidth,
-    required this.cutouts,
+    required this.shape,
     required this.shadows,
     required this.shadowOpacity,
-  });
+    required Widget child,
+  }) : super(
+          children: [
+            child,
+            for (final spec in cutouts) spec.child,
+          ],
+        );
 
-  final OutlinedBorder shape;
+  final List<CutoutSpec> cutouts;
   final Color backgroundColor;
   final Color borderColor;
   final double borderWidth;
-  final List<CutoutSpec> cutouts;
+  final OutlinedBorder shape;
   final List<BoxShadow> shadows;
   final double shadowOpacity;
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final fillPath = _cutoutPath(size, shape, cutouts);
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderCutoutSurface(
+      cutouts: cutouts,
+      backgroundColor: backgroundColor,
+      borderColor: borderColor,
+      borderWidth: borderWidth,
+      shape: shape,
+      shadows: shadows,
+      shadowOpacity: shadowOpacity,
+    );
+  }
+
+  @override
+  void updateRenderObject(BuildContext context, RenderObject renderObject) {
+    (renderObject as _RenderCutoutSurface)
+      ..cutouts = cutouts
+      ..backgroundColor = backgroundColor
+      ..borderColor = borderColor
+      ..borderWidth = borderWidth
+      ..shape = shape
+      ..shadows = shadows
+      ..shadowOpacity = shadowOpacity;
+  }
+}
+
+class _RenderCutoutSurface extends RenderBox
+    with
+        ContainerRenderObjectMixin<RenderBox, _CutoutParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _CutoutParentData> {
+  _RenderCutoutSurface({
+    required List<CutoutSpec> cutouts,
+    required Color backgroundColor,
+    required Color borderColor,
+    required double borderWidth,
+    required OutlinedBorder shape,
+    required List<BoxShadow> shadows,
+    required double shadowOpacity,
+  })  : _cutouts = cutouts,
+        _backgroundColor = backgroundColor,
+        _borderColor = borderColor,
+        _borderWidth = borderWidth,
+        _shape = shape,
+        _shadows = shadows,
+        _shadowOpacity = shadowOpacity;
+
+  List<CutoutSpec> get cutouts => _cutouts;
+  List<CutoutSpec> _cutouts;
+  set cutouts(List<CutoutSpec> value) {
+    if (value == _cutouts) return;
+    _cutouts = value;
+    markNeedsLayout();
+  }
+
+  Color get backgroundColor => _backgroundColor;
+  Color _backgroundColor;
+  set backgroundColor(Color value) {
+    if (value == _backgroundColor) return;
+    _backgroundColor = value;
+    markNeedsPaint();
+  }
+
+  Color get borderColor => _borderColor;
+  Color _borderColor;
+  set borderColor(Color value) {
+    if (value == _borderColor) return;
+    _borderColor = value;
+    markNeedsPaint();
+  }
+
+  double get borderWidth => _borderWidth;
+  double _borderWidth;
+  set borderWidth(double value) {
+    if (value == _borderWidth) return;
+    _borderWidth = value;
+    markNeedsPaint();
+  }
+
+  OutlinedBorder get shape => _shape;
+  OutlinedBorder _shape;
+  set shape(OutlinedBorder value) {
+    if (value == _shape) return;
+    _shape = value;
+    markNeedsLayout();
+  }
+
+  List<BoxShadow> get shadows => _shadows;
+  List<BoxShadow> _shadows;
+  set shadows(List<BoxShadow> value) {
+    if (value == _shadows) return;
+    _shadows = value;
+    markNeedsPaint();
+  }
+
+  double get shadowOpacity => _shadowOpacity;
+  double _shadowOpacity;
+  set shadowOpacity(double value) {
+    if (value == _shadowOpacity) return;
+    _shadowOpacity = value;
+    markNeedsPaint();
+  }
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _CutoutParentData) {
+      child.parentData = _CutoutParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    if (firstChild == null) {
+      size = constraints.smallest;
+      return;
+    }
+
+    final bodyChild = firstChild!;
+    bodyChild.layout(constraints, parentUsesSize: true);
+    final bodySize = bodyChild.size;
+    final looseConstraints = BoxConstraints.loose(bodySize);
+
+    final cutoutChildren = <RenderBox>[];
+    var child = childAfter(bodyChild);
+    while (child != null) {
+      child.layout(looseConstraints, parentUsesSize: true);
+      cutoutChildren.add(child);
+      child = childAfter(child);
+    }
+
+    final cutoutCount = math.min(cutoutChildren.length, _cutouts.length);
+    var overflowLeft = 0.0;
+    var overflowRight = 0.0;
+    var overflowTop = 0.0;
+    var overflowBottom = 0.0;
+
+    for (var i = 0; i < cutoutCount; i++) {
+      final childBox = cutoutChildren[i];
+      final spec = _cutouts[i];
+      final rect = _cutoutRect(bodySize, spec);
+      final topLeft = _cutoutChildOffset(rect, spec, childBox.size);
+      final childRect = topLeft & childBox.size;
+      overflowLeft = math.max(overflowLeft, -childRect.left);
+      overflowRight = math.max(
+        overflowRight,
+        childRect.right - bodySize.width,
+      );
+      overflowTop = math.max(overflowTop, -childRect.top);
+      overflowBottom = math.max(
+        overflowBottom,
+        childRect.bottom - bodySize.height,
+      );
+    }
+
+    final desiredSize = Size(
+      bodySize.width + overflowLeft + overflowRight,
+      bodySize.height + overflowTop + overflowBottom,
+    );
+    size = constraints.constrain(desiredSize);
+
+    final availableExtraWidth = size.width - bodySize.width;
+    final availableExtraHeight = size.height - bodySize.height;
+    final widthScale = (overflowLeft + overflowRight) <= 0
+        ? 0.0
+        : availableExtraWidth / (overflowLeft + overflowRight);
+    final heightScale = (overflowTop + overflowBottom) <= 0
+        ? 0.0
+        : availableExtraHeight / (overflowTop + overflowBottom);
+    final leftShift = overflowLeft * widthScale;
+    final topShift = overflowTop * heightScale;
+    final bodyOffset = Offset(leftShift, topShift);
+
+    bodyChildParentData(bodyChild).offset = bodyOffset;
+
+    for (var i = 0; i < cutoutCount; i++) {
+      final childBox = cutoutChildren[i];
+      final spec = _cutouts[i];
+      final rect = _cutoutRect(bodySize, spec);
+      final topLeft = _cutoutChildOffset(rect, spec, childBox.size);
+      bodyChildParentData(childBox).offset = bodyOffset + topLeft;
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (firstChild == null) return;
+
+    final bodyChild = firstChild!;
+    final bodyParentData = bodyChildParentData(bodyChild);
+    final bodyOffset = bodyParentData.offset;
+    final bodySize = bodyChild.size;
+    final fillPath = _cutoutPath(bodySize, shape, cutouts);
+    final paintOffset = offset + bodyOffset;
 
     if (shadowOpacity > 0 && shadows.isNotEmpty) {
       for (final shadow in shadows) {
@@ -187,48 +320,68 @@ class _CutoutPainter extends CustomPainter {
                   BlurStyle.normal,
                   _blurSigma(shadow.blurRadius),
                 );
-        canvas.save();
-        canvas.translate(shadow.offset.dx, shadow.offset.dy);
-        canvas.drawPath(fillPath, paint);
-        canvas.restore();
+        context.canvas.save();
+        context.canvas.translate(
+          paintOffset.dx + shadow.offset.dx,
+          paintOffset.dy + shadow.offset.dy,
+        );
+        context.canvas.drawPath(fillPath, paint);
+        context.canvas.restore();
       }
     }
 
     final fillPaint = Paint()
       ..color = backgroundColor
       ..style = PaintingStyle.fill;
-    canvas.drawPath(fillPath, fillPaint);
+    context.canvas.save();
+    context.canvas.translate(paintOffset.dx, paintOffset.dy);
+    context.canvas.drawPath(fillPath, fillPaint);
     if (borderColor.a > 0 && borderWidth > 0) {
       final borderPaint = Paint()
         ..color = borderColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = borderWidth * 2
         ..strokeJoin = StrokeJoin.round;
-      canvas.save();
-      canvas.clipPath(fillPath);
-      canvas.drawPath(fillPath, borderPaint);
-      canvas.restore();
+      context.canvas.save();
+      context.canvas.clipPath(fillPath);
+      context.canvas.drawPath(fillPath, borderPaint);
+      context.canvas.restore();
+    }
+    context.canvas.restore();
+
+    final clipRect = paintOffset & bodySize;
+    context.pushClipPath(
+      needsCompositing,
+      paintOffset,
+      clipRect,
+      fillPath,
+      (context, offset) {
+        context.paintChild(bodyChild, offset);
+      },
+    );
+
+    var child = childAfter(bodyChild);
+    while (child != null) {
+      final childParentData = bodyChildParentData(child);
+      context.paintChild(child, offset + childParentData.offset);
+      child = childAfter(child);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _CutoutPainter oldDelegate) => true;
-}
-
-class _CutoutClipper extends CustomClipper<Path> {
-  const _CutoutClipper({required this.shape, required this.cutouts});
-
-  final OutlinedBorder shape;
-  final List<CutoutSpec> cutouts;
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return defaultHitTestChildren(result, position: position);
+  }
 
   @override
-  Path getClip(Size size) => _cutoutPath(size, shape, cutouts);
+  bool hitTestSelf(Offset position) => false;
 
-  @override
-  bool shouldReclip(covariant _CutoutClipper oldClipper) {
-    return oldClipper.shape != shape || oldClipper.cutouts != cutouts;
+  _CutoutParentData bodyChildParentData(RenderBox child) {
+    return child.parentData! as _CutoutParentData;
   }
 }
+
+class _CutoutParentData extends ContainerBoxParentData<RenderBox> {}
 
 Path _cutoutPath(Size size, OutlinedBorder shape, List<CutoutSpec> cutouts) {
   final rect = Offset.zero & size;
@@ -242,90 +395,6 @@ Path _cutoutPath(Size size, OutlinedBorder shape, List<CutoutSpec> cutouts) {
     fillPath = Path.combine(PathOperation.difference, fillPath, cutoutPath);
   }
   return fillPath;
-}
-
-class _CutoutAttachment extends StatelessWidget {
-  const _CutoutAttachment({required this.spec});
-
-  final CutoutSpec spec;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: CustomSingleChildLayout(
-        delegate: _CutoutAttachmentDelegate(spec),
-        child: spec.child,
-      ),
-    );
-  }
-}
-
-class _CutoutAttachmentDelegate extends SingleChildLayoutDelegate {
-  const _CutoutAttachmentDelegate(this.spec);
-
-  final CutoutSpec spec;
-
-  @override
-  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    return BoxConstraints.loose(
-      Size(constraints.maxWidth, constraints.maxHeight),
-    );
-  }
-
-  @override
-  Offset getPositionForChild(Size size, Size childSize) {
-    final rect = _cutoutRect(size, spec);
-    final direction = _insideNormal(spec.edge);
-    final inset = _resolvedInset(childSize);
-    final target = rect.center + direction * inset;
-    final topLeft = target - Offset(childSize.width / 2, childSize.height / 2);
-    return topLeft;
-  }
-
-  double _resolvedInset(Size childSize) {
-    final inset = _autoInset(childSize);
-    return inset.clamp(-spec.depth, spec.depth);
-  }
-
-  double _autoInset(Size childSize) {
-    final normalExtent = _extentAlongNormal(childSize);
-    final perpendicularExtent = _extentPerpendicular(childSize);
-    final targetClearance = math.max(
-      0.0,
-      (spec.thickness - perpendicularExtent) / 2,
-    );
-    final inset = spec.depth - normalExtent / 2 - targetClearance;
-    if (inset <= 0) {
-      return 0;
-    }
-    return math.min(inset, spec.depth);
-  }
-
-  double _extentAlongNormal(Size childSize) {
-    switch (spec.edge) {
-      case CutoutEdge.right:
-      case CutoutEdge.left:
-        return childSize.width;
-      case CutoutEdge.top:
-      case CutoutEdge.bottom:
-        return childSize.height;
-    }
-  }
-
-  double _extentPerpendicular(Size childSize) {
-    switch (spec.edge) {
-      case CutoutEdge.right:
-      case CutoutEdge.left:
-        return childSize.height;
-      case CutoutEdge.top:
-      case CutoutEdge.bottom:
-        return childSize.width;
-    }
-  }
-
-  @override
-  bool shouldRelayout(covariant _CutoutAttachmentDelegate oldDelegate) =>
-      oldDelegate.spec != spec;
 }
 
 Rect _cutoutRect(Size size, CutoutSpec spec) {
@@ -375,6 +444,54 @@ Offset _edgeAnchor(Size size, CutoutSpec spec) {
       return Offset(fx, 0);
     case CutoutEdge.bottom:
       return Offset(fx, size.height);
+  }
+}
+
+Offset _cutoutChildOffset(Rect rect, CutoutSpec spec, Size childSize) {
+  final direction = _insideNormal(spec.edge);
+  final inset = _resolvedInset(spec, childSize);
+  final target = rect.center + direction * inset;
+  return target - Offset(childSize.width / 2, childSize.height / 2);
+}
+
+double _resolvedInset(CutoutSpec spec, Size childSize) {
+  final inset = _autoInset(spec, childSize);
+  return inset.clamp(-spec.depth, spec.depth);
+}
+
+double _autoInset(CutoutSpec spec, Size childSize) {
+  final normalExtent = _extentAlongNormal(spec, childSize);
+  final perpendicularExtent = _extentPerpendicular(spec, childSize);
+  final targetClearance = math.max(
+    0.0,
+    (spec.thickness - perpendicularExtent) / 2,
+  );
+  final inset = spec.depth - normalExtent / 2 - targetClearance;
+  if (inset <= 0) {
+    return 0;
+  }
+  return math.min(inset, spec.depth);
+}
+
+double _extentAlongNormal(CutoutSpec spec, Size childSize) {
+  switch (spec.edge) {
+    case CutoutEdge.right:
+    case CutoutEdge.left:
+      return childSize.width;
+    case CutoutEdge.top:
+    case CutoutEdge.bottom:
+      return childSize.height;
+  }
+}
+
+double _extentPerpendicular(CutoutSpec spec, Size childSize) {
+  switch (spec.edge) {
+    case CutoutEdge.right:
+    case CutoutEdge.left:
+      return childSize.height;
+    case CutoutEdge.top:
+    case CutoutEdge.bottom:
+      return childSize.width;
   }
 }
 

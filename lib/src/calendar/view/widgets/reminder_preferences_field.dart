@@ -401,9 +401,12 @@ class _ReminderChip extends StatelessWidget {
       onPressed: onTap,
       child: Text(
         label,
-        style: context.textTheme.label.strong.copyWith(
-          letterSpacing: 0.2,
-        ),
+        style: context.textTheme.label
+            .copyWith(
+              color: null,
+              letterSpacing: 0.2,
+            )
+            .strong,
       ),
     );
   }

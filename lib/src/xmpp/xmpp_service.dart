@@ -2731,6 +2731,16 @@ class XmppService extends XmppBase
   }
 
   Future<void> _refreshHttpUploadSupport() async {
+    if (demoOfflineMode) {
+      const demoMaxUploadSize = 1024 * 1024 * 1024;
+      _updateHttpUploadSupport(
+        const HttpUploadSupport(
+          supported: true,
+          maxFileSizeBytes: demoMaxUploadSize,
+        ),
+      );
+      return;
+    }
     final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
     final discoManager = _connection.getManager<mox.DiscoManager>();
     if (uploadManager == null || discoManager == null) {
@@ -2783,6 +2793,15 @@ class XmppService extends XmppBase
   }
 
   Future<PubSubSupport> _refreshPubSubSupport() async {
+    if (demoOfflineMode) {
+      const support = PubSubSupport(
+        pubSubSupported: true,
+        pepSupported: true,
+        bookmarks2Supported: true,
+      );
+      _updatePubSubSupport(support);
+      return support;
+    }
     if (connectionState != ConnectionState.connected) {
       return _pubSubSupport;
     }
@@ -2833,6 +2852,9 @@ class XmppService extends XmppBase
     required mox.DiscoManager discoManager,
     required mox.JID? jid,
   }) async {
+    if (demoOfflineMode) {
+      return _demoXmppFeatureSet();
+    }
     if (jid == null) return const {};
     try {
       final result = await discoManager.discoInfoQuery(jid);

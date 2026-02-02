@@ -993,7 +993,12 @@ class _RecurrenceFrequencyChip extends StatelessWidget {
       onPressed: enabled ? onPressed : null,
       child: Padding(
         padding: extraPadding,
-        child: Text(label, style: context.textTheme.label.strongIf(isSelected)),
+        child: Text(
+          label,
+          style: context.textTheme.label
+              .copyWith(color: null)
+              .strongIf(isSelected),
+        ),
       ),
     );
   }
@@ -1048,7 +1053,9 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
             padding: extraPadding,
             child: Text(
               _labels[index],
-              style: context.textTheme.label.strongIf(isSelected),
+              style: context.textTheme.label
+                  .copyWith(color: null)
+                  .strongIf(isSelected),
             ),
           ),
         );
@@ -1305,7 +1312,12 @@ class _RecurrenceEndModeChip extends StatelessWidget {
       onPressed: enabled ? onPressed : null,
       child: Padding(
         padding: extraPadding,
-        child: Text(label, style: context.textTheme.label.strongIf(isSelected)),
+        child: Text(
+          label,
+          style: context.textTheme.label
+              .copyWith(color: null)
+              .strongIf(isSelected),
+        ),
       ),
     );
   }

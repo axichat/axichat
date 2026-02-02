@@ -942,6 +942,7 @@ class TaskPrimaryButton extends StatelessWidget {
     this.isBusy = false,
     this.icon,
     this.size = AxiButtonSize.regular,
+    this.widthBehavior = AxiButtonWidth.fit,
   });
 
   final String label;
@@ -949,18 +950,20 @@ class TaskPrimaryButton extends StatelessWidget {
   final bool isBusy;
   final IconData? icon;
   final AxiButtonSize size;
+  final AxiButtonWidth widthBehavior;
 
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
     return AxiButton.primary(
       size: size,
+      widthBehavior: widthBehavior,
       loading: isBusy,
       onPressed: disabled ? null : onPressed,
       leading: icon == null
           ? null
           : Icon(icon, size: context.sizing.menuItemIconSize),
-      child: Text(label, style: context.textTheme.small.strong),
+      child: Text(label),
     );
   }
 }
@@ -975,6 +978,7 @@ class TaskSecondaryButton extends StatelessWidget {
     this.isBusy = false,
     this.icon,
     this.size = AxiButtonSize.regular,
+    this.widthBehavior = AxiButtonWidth.fit,
   });
 
   final String label;
@@ -982,12 +986,14 @@ class TaskSecondaryButton extends StatelessWidget {
   final bool isBusy;
   final IconData? icon;
   final AxiButtonSize size;
+  final AxiButtonWidth widthBehavior;
 
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
     return AxiButton.outline(
       size: size,
+      widthBehavior: widthBehavior,
       loading: isBusy,
       onPressed: disabled ? null : onPressed,
       leading: icon == null
@@ -1007,6 +1013,7 @@ class TaskDestructiveButton extends StatelessWidget {
     this.isBusy = false,
     this.icon,
     this.size = AxiButtonSize.regular,
+    this.widthBehavior = AxiButtonWidth.fit,
   });
 
   final String label;
@@ -1014,18 +1021,20 @@ class TaskDestructiveButton extends StatelessWidget {
   final bool isBusy;
   final IconData? icon;
   final AxiButtonSize size;
+  final AxiButtonWidth widthBehavior;
 
   @override
   Widget build(BuildContext context) {
     final bool disabled = isBusy || onPressed == null;
     return AxiButton.destructive(
       size: size,
+      widthBehavior: widthBehavior,
       loading: isBusy,
       onPressed: disabled ? null : onPressed,
       leading: icon == null
           ? null
           : Icon(icon, size: context.sizing.menuItemIconSize),
-      child: Text(label, style: context.textTheme.small.strong),
+      child: Text(label),
     );
   }
 }

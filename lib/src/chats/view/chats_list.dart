@@ -870,7 +870,6 @@ class _ChatListTileState extends State<ChatListTile> {
     final iconButtonSize = sizing.iconButtonSize;
     final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
     final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
-    final iconOverhang = iconButtonSize / 2;
     final iconCutoutRadius = context.radii.squircle;
     final unreadChildOffset = -spacing.xs;
     final timestampOffset = (spacing.xs + spacing.xxs) / 2;
@@ -928,7 +927,6 @@ class _ChatListTileState extends State<ChatListTile> {
       backgroundColor: tileBackgroundColor,
       borderColor: surfaceBorderColor,
       cutouts: cutouts,
-      hitTestPadding: EdgeInsets.only(right: iconCutoutDepth + iconOverhang),
       shape: SquircleBorder(
         cornerRadius: context.radii.squircle,
         side: BorderSide(
@@ -936,37 +934,47 @@ class _ChatListTileState extends State<ChatListTile> {
           width: context.borderSide.width,
         ),
       ),
-      child: Column(
-        children: [
-          tile,
-          AnimatedCrossFade(
-            duration: baseAnimationDuration,
-            sizeCurve: Curves.easeInOutCubic,
-            crossFadeState: _showActions
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            firstChild: const SizedBox.shrink(),
-            secondChild: Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(
-                scaled(spacing.m),
-                0,
-                scaled(spacing.m),
-                scaled(spacing.m + spacing.xs),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: scaled(spacing.m + spacing.xs),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth;
+          final inset = scaled(iconCutoutDepth);
+          final bodyWidth = (maxWidth - inset).clamp(0.0, maxWidth);
+          return SizedBox(
+            width: bodyWidth,
+            child: Column(
+              children: [
+                tile,
+                AnimatedCrossFade(
+                  duration: baseAnimationDuration,
+                  sizeCurve: Curves.easeInOutCubic,
+                  crossFadeState: _showActions
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  firstChild: const SizedBox.shrink(),
+                  secondChild: Padding(
+                    padding: EdgeInsetsDirectional.fromSTEB(
+                      scaled(spacing.m),
+                      0,
+                      scaled(spacing.m),
+                      scaled(spacing.m + spacing.xs),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: scaled(spacing.m + spacing.xs),
+                      ),
+                      child: _ChatActionPanel(
+                        chat: item,
+                        archivedContext: widget.archivedContext,
+                        onClose: _hideActions,
+                        onDelete: () => _confirmDelete(item),
+                      ),
+                    ),
+                  ),
                 ),
-                child: _ChatActionPanel(
-                  chat: item,
-                  archivedContext: widget.archivedContext,
-                  onClose: _hideActions,
-                  onDelete: () => _confirmDelete(item),
-                ),
-              ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
 
@@ -976,12 +984,7 @@ class _ChatListTileState extends State<ChatListTile> {
             ? l10n.chatsSemanticsUnselectHint
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
-    Widget tileContent = Padding(
-      padding: EdgeInsetsDirectional.only(
-        end: scaled(iconCutoutDepth + iconOverhang),
-      ),
-      child: tileSurface.withTapBounce(),
-    );
+    Widget tileContent = tileSurface.withTapBounce();
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,

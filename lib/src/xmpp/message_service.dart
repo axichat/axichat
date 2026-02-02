@@ -812,6 +812,44 @@ class _PeerCapabilities {
   );
 }
 
+List<String> _demoXmppFeatures() {
+  const chatStateFeature = 'http://jabber.org/protocol/chatstates';
+  final features = <String>{
+    mox.chatMarkersXmlns,
+    mox.deliveryXmlns,
+    mox.messageReactionsXmlns,
+    mox.mamXmlns,
+    mox.httpFileUploadXmlns,
+    mox.sfsXmlns,
+    mox.fileUploadNotificationXmlns,
+    mox.omemoXmlns,
+    mox.pubsubXmlns,
+    mox.pubsubOwnerXmlns,
+    mox.pubsubEventXmlns,
+    mox.userAvatarMetadataXmlns,
+    mox.userAvatarDataXmlns,
+    mox.vCardTempXmlns,
+    mox.vCardTempUpdate,
+    BookmarksManager.bookmarksNotifyFeature,
+    _bookmarks2NodeXmlns,
+    _reportingFeature,
+    chatStateFeature,
+  };
+  return features.toList()..sort();
+}
+
+Set<String> _demoXmppFeatureSet() => _demoXmppFeatures().toSet();
+
+_PeerCapabilities _demoPeerCapabilities() {
+  final features = _demoXmppFeatures();
+  return _PeerCapabilities(
+    supportsMarkers: true,
+    supportsReceipts: true,
+    features: features,
+    resolvedAt: DateTime.now(),
+  );
+}
+
 class XmppAttachmentUpload {
   const XmppAttachmentUpload._({
     required this.metadata,
@@ -4332,6 +4370,11 @@ mixin MessageService
     bool forceRefresh = false,
   }) async {
     await _ensureCapabilityCacheLoaded();
+    if (demoOfflineMode) {
+      final capabilities = _demoPeerCapabilities();
+      _capabilityCache[jid] = capabilities;
+      return capabilities;
+    }
     final cached = _capabilityCache[jid];
     if (!forceRefresh && cached != null && !_isCapabilityStale(cached)) {
       return cached;
@@ -4416,6 +4459,9 @@ mixin MessageService
     required String jid,
     required String feature,
   }) async {
+    if (demoOfflineMode) {
+      return const CapabilityDecision(CapabilityDecisionKind.allowed);
+    }
     try {
       final capabilities = await _capabilitiesFor(jid);
       if (capabilities.features.contains(feature)) {

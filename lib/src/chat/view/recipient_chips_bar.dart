@@ -1415,10 +1415,10 @@ final class _RecipientAutocompleteOverlayState
   static const double _overlayGap = 6;
   static const double _overlayMargin = 8;
   static const double _overlayHorizontalMargin = 16;
-  static const double _overlayPreferredMaxWidth = 420;
-  static const double _overlayPreferredMinWidth = 180;
-  static const double _suggestionTileHeight = 56;
-  static const double _suggestionMaxHeight = 320;
+  static const double _overlayPreferredMaxWidth = 520;
+  static const double _overlayPreferredMinWidth = 240;
+  static const double _suggestionTileHeight = 64;
+  static const double _suggestionMaxHeight = 360;
 
   final GlobalKey _triggerKey = GlobalKey();
   final LayerLink _layerLink = LayerLink();
@@ -1981,7 +1981,7 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
     if (options.isEmpty) {
       return const SizedBox.shrink();
     }
-    const double suggestionTileHeight = 56.0;
+    const double suggestionTileHeight = 64.0;
     final height =
         math.min(options.length * suggestionTileHeight, widget.maxHeight);
     final scrollable = options.length * suggestionTileHeight > height;

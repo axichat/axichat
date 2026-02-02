@@ -3904,10 +3904,11 @@ class _AddTaskSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final colors = context.colorScheme;
     final chevron = Icon(
-      Icons.keyboard_arrow_up,
+      Icons.keyboard_arrow_down,
       size: context.sizing.menuItemIconSize,
-      color: calendarSubtitleColor,
+      color: colors.mutedForeground,
     );
     return Container(
       padding: calendarSidebarSectionPadding,
@@ -3937,7 +3938,11 @@ class _AddTaskSection extends StatelessWidget {
                     child: TaskSectionHeader(
                       title: l10n.calendarAddTaskAction,
                       size: TaskSectionLabelSize.medium,
-                      leading: chevron,
+                      leading: AnimatedRotation(
+                        turns: -0.5,
+                        duration: baseAnimationDuration,
+                        child: chevron,
+                      ),
                     ),
                   ),
                 ),
@@ -4275,10 +4280,14 @@ class _CollapsedAddTaskSection extends StatelessWidget {
         padding: calendarPaddingLg,
         child: Row(
           children: [
-            Icon(
-              Icons.keyboard_arrow_down,
-              size: context.sizing.menuItemIconSize,
-              color: colors.mutedForeground,
+            AnimatedRotation(
+              turns: 0,
+              duration: baseAnimationDuration,
+              child: Icon(
+                Icons.keyboard_arrow_down,
+                size: context.sizing.menuItemIconSize,
+                color: colors.mutedForeground,
+              ),
             ),
             const SizedBox(width: calendarInsetSm),
             Text(
@@ -4473,12 +4482,14 @@ class _SidebarAccordionSection extends StatelessWidget {
                 pressedBackgroundColor: Colors.transparent,
                 child: Row(
                   children: [
-                    Icon(
-                      isExpanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      size: context.sizing.menuItemIconSize,
-                      color: calendarSubtitleColor,
+                    AnimatedRotation(
+                      turns: isExpanded ? -0.5 : 0,
+                      duration: baseAnimationDuration,
+                      child: Icon(
+                        Icons.keyboard_arrow_down,
+                        size: context.sizing.menuItemIconSize,
+                        color: context.colorScheme.mutedForeground,
+                      ),
                     ),
                     const SizedBox(width: calendarInsetSm),
                     Expanded(
@@ -5734,6 +5745,7 @@ class _AdvancedOptions extends StatelessWidget {
             child: TaskSecondaryButton(
               label: context.l10n.calendarAddToCriticalPath,
               icon: Icons.route,
+              widthBehavior: AxiButtonWidth.expand,
               onPressed: onAddToCriticalPath,
             ).withTapBounce(),
           ),
@@ -5832,6 +5844,7 @@ class _AddTaskButton extends StatelessWidget {
       width: double.infinity,
       child: TaskPrimaryButton(
         label: context.l10n.calendarAddTaskAction,
+        widthBehavior: AxiButtonWidth.expand,
         onPressed: enabled ? onPressed : null,
       ),
     );

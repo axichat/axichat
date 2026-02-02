@@ -240,6 +240,10 @@ mixin BlockingService on XmppBase, BaseStreamService {
       return _spamReportingSupported;
     }
     _spamReportingSupportResolved = true;
+    if (demoOfflineMode) {
+      _spamReportingSupported = true;
+      return true;
+    }
     final discoManager = _connection.getManager<mox.DiscoManager>();
     final target = _reportingDiscoTarget();
     if (discoManager == null || target == null) {
