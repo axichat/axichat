@@ -66,11 +66,15 @@ class CalendarBloc extends BaseCalendarBloc {
   CalendarAvailabilityShareCoordinator? _availabilityCoordinator;
   Future<void> _pendingAvailabilitySync = Future.value();
   final XmppService _xmppService;
-  final EmailService? _emailService;
+  EmailService? _emailService;
   final VoidCallback? _onDispose;
   StreamSubscription<CalendarSyncDispatch>? _calendarSyncSubscription;
   StreamSubscription<CalendarSyncWarning>? _calendarSyncWarningSubscription;
   StreamSubscription<XmppStreamReady>? _streamReadySubscription;
+
+  void updateEmailService(EmailService? emailService) {
+    _emailService = emailService;
+  }
 
   @protected
   CalendarAvailabilityShareSource get availabilityShareSource =>

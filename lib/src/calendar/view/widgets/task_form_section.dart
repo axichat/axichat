@@ -42,9 +42,13 @@ class TaskSectionHeader extends StatelessWidget {
     return Padding(
       padding: padding,
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(child: Text(displayTitle, style: style)),
+          Flexible(
+            fit: FlexFit.loose,
+            child: Text(displayTitle, style: style),
+          ),
           if (trailing != null) ...[
             const SizedBox(width: calendarGutterSm),
             trailing!,

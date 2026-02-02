@@ -67,7 +67,6 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
           trigger = AxiTooltip(
             builder: (_) => Text(tooltip),
             child: AxiButton.secondary(
-              size: AxiButtonSize.sm,
               onPressed: popoverController.toggle,
               leading: Icon(LucideIcons.listFilter, size: iconSize),
               child: Text(selectedFilter.label),

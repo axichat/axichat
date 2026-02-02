@@ -121,12 +121,16 @@ class ChatsCubit extends Cubit<ChatsState> {
   final ChatsService _chatsService;
   final XmppService _xmppService;
   final HomeRefreshSyncService _homeRefreshSyncService;
-  final EmailService? _emailService;
+  EmailService? _emailService;
 
   late final StreamSubscription<List<Chat>> _chatsSubscription;
   late final StreamSubscription<HomeRefreshSyncUpdate>
       _homeRefreshSyncSubscription;
   final List<Timer> _exportCleanupTimers = [];
+
+  void updateEmailService(EmailService? emailService) {
+    _emailService = emailService;
+  }
 
   @override
   Future<void> close() async {

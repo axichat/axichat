@@ -305,7 +305,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   final CredentialStore _credentialStore;
   final XmppService _xmppService;
-  final EmailService? _emailService;
+  EmailService? _emailService;
   final HomeRefreshSyncService _homeRefreshSyncService;
   final EndpointResolver _endpointResolver;
   late final http.Client _httpClient;
@@ -344,6 +344,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   Future<void> updateEndpointConfig(EndpointConfig config) async {
     _handleEndpointConfigUpdated(config);
+  }
+
+  Future<void> updateEmailService(EmailService? emailService) async {
+    if (identical(_emailService, emailService)) return;
+    await _emailAuthFailureSubscription?.cancel();
+    _emailAuthFailureSubscription = null;
+    _emailService = emailService;
+    if (emailService != null) {
+      _emailAuthFailureSubscription = emailService.authFailureStream.listen(
+        _handleEmailAuthFailure,
+      );
+    }
   }
 
   Future<void> resetEndpointConfig() async {

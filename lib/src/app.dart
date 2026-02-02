@@ -378,18 +378,28 @@ class _AxichatState extends State<Axichat> {
                         final config = settings.endpointConfig;
                         final authCubit = context.read<AuthenticationCubit>();
                         final emailService = context.read<EmailService>();
+                        final EmailService? activeEmailService =
+                            config.enableSmtp ? emailService : null;
+                        final chatsCubit = context.read<ChatsCubit>();
+                        final draftCubit = context.read<DraftCubit>();
+                        final calendarBloc =
+                            BlocProvider.maybeOf<CalendarBloc>(context);
                         final homeRefreshSyncService =
                             context.read<HomeRefreshSyncService>();
                         final connectivityCubit =
                             context.read<ConnectivityCubit>();
                         authCubit.updateEndpointConfig(config);
+                        await authCubit.updateEmailService(activeEmailService);
+                        chatsCubit.updateEmailService(activeEmailService);
+                        draftCubit.updateEmailService(activeEmailService);
+                        calendarBloc?.updateEmailService(activeEmailService);
                         emailService.updateEndpointConfig(config);
                         await homeRefreshSyncService.updateEmailService(
-                          config.enableSmtp ? emailService : null,
+                          activeEmailService,
                         );
                         connectivityCubit.updateEmailContext(
                           emailEnabled: config.enableSmtp,
-                          emailService: config.enableSmtp ? emailService : null,
+                          emailService: activeEmailService,
                         );
                         if (!config.enableSmtp) {
                           await emailService.shutdown(

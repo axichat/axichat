@@ -186,6 +186,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.profileTitle),
+            centerTitle: false,
             backgroundColor: profileSidebarColor,
             surfaceTintColor: Colors.transparent,
             elevation: 0,

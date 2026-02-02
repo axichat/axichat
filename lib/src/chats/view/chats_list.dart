@@ -869,7 +869,7 @@ class _ChatListTileState extends State<ChatListTile> {
     final cutoutGap = spacing.xs;
     final iconButtonSize = sizing.iconButtonSize;
     final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
-    final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
+    final iconCutoutDepth = iconButtonSize + cutoutGap;
     final iconCutoutRadius = context.radii.squircle;
     final unreadChildOffset = -spacing.xs;
     final cutouts = <CutoutSpec>[
@@ -907,7 +907,7 @@ class _ChatListTileState extends State<ChatListTile> {
       if (timestampLabel != null)
         CutoutSpec(
           edge: CutoutEdge.bottom,
-          alignment: Alignment.bottomCenter,
+          alignment: Alignment.bottomRight,
           depth: spacing.m,
           thickness: timestampThickness,
           cornerRadius: sizing.containerRadius,
@@ -974,7 +974,7 @@ class _ChatListTileState extends State<ChatListTile> {
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
     Widget tileContent = Padding(
-      padding: EdgeInsetsDirectional.only(end: scaled(iconCutoutDepth)),
+      padding: EdgeInsetsDirectional.only(end: scaled(spacing.s)),
       child: tileSurface.withTapBounce(),
     );
     if (isDesktop) {

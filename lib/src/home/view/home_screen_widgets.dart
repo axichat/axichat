@@ -203,6 +203,7 @@ class _NexusScaffold extends StatelessWidget {
     final header = _NexusHeader(
       tabs: tabs,
       headerActions: headerActions,
+      navRailVisible: navPlacement == NavPlacement.rail && showNavigationRail,
     );
     final tabViews = _NexusTabViews(
       tabs: tabs,
@@ -257,10 +258,12 @@ class _NexusHeader extends StatelessWidget {
   const _NexusHeader({
     required this.tabs,
     required this.headerActions,
+    required this.navRailVisible,
   });
 
   final List<HomeTabEntry> tabs;
   final List<AppBarActionItem> headerActions;
+  final bool navRailVisible;
 
   @override
   Widget build(BuildContext context) {
@@ -270,11 +273,15 @@ class _NexusHeader extends StatelessWidget {
       children: [
         AxiAppBar(
           showTitle: false,
-          leading: const _TransportStatusChips(),
+          leading: _TransportStatusChips(
+            maxWidth: navRailVisible ? null : context.sizing.menuMaxWidth,
+          ),
           trailing: AppBarActions(
             actions: headerActions,
             spacing: spacing.s,
             overflowBreakpoint: 0,
+            forceCollapsed: false,
+            availableWidth: double.infinity,
           ),
         ),
         _HomeSearchPanel(tabs: tabs),
@@ -284,11 +291,12 @@ class _NexusHeader extends StatelessWidget {
 }
 
 class _TransportStatusChips extends StatelessWidget {
-  const _TransportStatusChips();
+  const _TransportStatusChips({this.maxWidth});
+
+  final double? maxWidth;
 
   @override
   Widget build(BuildContext context) {
-    final sizing = context.sizing;
     final demoOffline = context.watch<XmppService>().demoOfflineMode;
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, connectivityState) {
@@ -301,17 +309,19 @@ class _TransportStatusChips extends StatelessWidget {
             : connectivityState.emailState;
         final emailEnabled =
             demoOffline ? true : connectivityState.emailEnabled;
-        return ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: SessionCapabilityIndicators(
-              xmppState: connectionState,
-              emailState: sessionEmailState,
-              emailEnabled: emailEnabled,
-              compact: true,
-            ),
+        final indicator = Align(
+          alignment: Alignment.centerLeft,
+          child: SessionCapabilityIndicators(
+            xmppState: connectionState,
+            emailState: sessionEmailState,
+            emailEnabled: emailEnabled,
+            compact: true,
           ),
+        );
+        if (maxWidth == null) return indicator;
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth!),
+          child: indicator,
         );
       },
     );

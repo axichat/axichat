@@ -114,7 +114,7 @@ class AxiNavigationRail extends StatelessWidget {
             iconData: LucideIcons.menu,
             tooltip: collapsed ? toggleCollapsedTooltip : toggleExpandedTooltip,
             onPressed: onToggleCollapse,
-            selected: true,
+            selected: false,
           );
     return AnimatedContainer(
       duration: context.watch<SettingsCubit>().animationDuration,

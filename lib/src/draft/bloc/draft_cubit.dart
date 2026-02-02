@@ -69,7 +69,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   final MessageService _messageService;
-  final EmailService? _emailService;
+  EmailService? _emailService;
   bool _shareTokenSignatureEnabled;
   List<Draft>? _items;
   DraftSearchSnapshot _searchSnapshot = const DraftSearchSnapshot(
@@ -79,6 +79,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   );
 
   late final StreamSubscription<List<Draft>> _draftsSubscription;
+
+  void updateEmailService(EmailService? emailService) {
+    _emailService = emailService;
+  }
 
   @override
   void onChange(Change<DraftState> change) {
