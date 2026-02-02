@@ -34,9 +34,9 @@ Future<void> showCalendarCriticalPathShareSheet({
   required List<CalendarTask> tasks,
   Chat? initialChat,
 }) async {
-  final locate = context.read;
-  final List<Chat> chats =
-      context.read<ChatsCubit>().state.items ?? const <Chat>[];
+  final BuildContext modalContext = context.calendarModalContext;
+  final locate = modalContext.read;
+  final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
   final List<Chat> available =
       chats.where((chat) => chat.supportsChatCalendar).toList(growable: false);
   if (available.isEmpty) {
@@ -46,7 +46,6 @@ Future<void> showCalendarCriticalPathShareSheet({
     );
     return;
   }
-  final BuildContext modalContext = context.calendarModalContext;
   final result = await showAdaptiveBottomSheet<bool>(
     context: modalContext,
     isScrollControlled: true,

@@ -48,6 +48,7 @@ class DraftForm extends StatefulWidget {
     this.attachmentMetadataIds = const [],
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
+    required this.locate,
     this.onClosed,
     this.onDiscarded,
     this.onDraftSaved,
@@ -60,6 +61,7 @@ class DraftForm extends StatefulWidget {
   final List<String> attachmentMetadataIds;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
+  final T Function<T>() locate;
   final VoidCallback? onClosed;
   final VoidCallback? onDiscarded;
   final ValueChanged<int>? onDraftSaved;
@@ -122,7 +124,7 @@ class _DraftFormState extends State<DraftForm> {
   void dispose() {
     if (_shouldCleanupSeedAttachments) {
       unawaited(
-        _cleanupSeedAttachmentMetadata(context.read<DraftCubit>()),
+        _cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>()),
       );
     }
     _autosaveTimer?.cancel();
@@ -193,8 +195,7 @@ class _DraftFormState extends State<DraftForm> {
     final sizing = context.sizing;
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
-    final rosterItems =
-        context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
+    final locate = widget.locate;
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final sectionSpacing = spacing.s + spacing.xs;
     final smallGap = spacing.xs + spacing.xxs;
@@ -203,324 +204,362 @@ class _DraftFormState extends State<DraftForm> {
       vertical: spacing.xs,
     );
     final subjectHeight = sizing.buttonHeightRegular;
-    final profileJid = context.watch<ProfileCubit>().state.jid;
-    final resolvedProfileJid = profileJid.trim();
-    final String? selfJid =
-        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
-    final selfIdentity = SelfIdentitySnapshot(
-      selfJid: selfJid,
-      avatarPath: context.watch<ProfileCubit>().state.avatarPath,
-    );
 
-    return BlocBuilder<ChatsCubit, ChatsState>(
-      builder: (context, chatsState) {
-        final chats = chatsState.items ?? const <Chat>[];
-        final locate = context.read;
-        _scheduleRecipientsInitialization(chats);
-        final autovalidateMode = _showValidationMessages
-            ? AutovalidateMode.always
-            : AutovalidateMode.disabled;
-        return SingleChildScrollView(
-          padding: EdgeInsets.zero,
-          child: Form(
-            key: _formKey,
-            autovalidateMode: autovalidateMode,
-            child: BlocConsumer<DraftCubit, DraftState>(
-              listener: (context, state) async {
-                if (state is DraftSaveComplete) {
-                  if (!state.autoSaved) {
-                    ShadToaster.maybeOf(
-                      context,
-                    )?.show(FeedbackToast.success(title: l10n.draftSaved));
-                  }
-                }
-                if (state is DraftSending) {
-                  if (_sendingDraft && mounted) {
-                    setState(() {
-                      _sendErrorMessage = null;
-                      _pendingAttachments = _pendingAttachments
-                          .map(
-                            (pending) => pending.copyWith(
-                              status: PendingAttachmentStatus.uploading,
-                              clearErrorMessage: true,
-                            ),
-                          )
-                          .toList();
-                    });
-                  }
-                } else if (state is DraftFailure) {
-                  if (!_sendingDraft) return;
-                  if (mounted) {
-                    setState(() {
-                      _sendCompletionHandled = true;
-                      _sendingDraft = false;
-                      _sendErrorMessage =
-                          _draftFailureMessage(state.type, l10n);
-                      _pendingAttachments = _pendingAttachments
-                          .map(
-                            (pending) => pending.copyWith(
-                              status: PendingAttachmentStatus.queued,
-                              clearErrorMessage: true,
-                            ),
-                          )
-                          .toList();
-                    });
-                  }
-                } else if (state is DraftSendComplete) {
-                  await _handleSendComplete();
-                }
-              },
-              builder: (context, state) {
-                final isSending = state is DraftSending && _sendingDraft;
-                final enabled =
-                    !isSending && !_savingDraft && !_discardingDraft;
-                final bodyText = _bodyTextController.text.trim();
-                final subjectText = _subjectTextController.text.trim();
-                final pendingAttachments = _pendingAttachments;
-                final hasAttachments = pendingAttachments.isNotEmpty;
-                final hasPreparingAttachments = pendingAttachments.any(
-                  (pending) => pending.isPreparing,
-                );
-                final split = _splitRecipients();
-                final hasActiveRecipients = split.hasActiveRecipients;
-                final hasContent = _hasContent(hasAttachments: hasAttachments);
-                final canSave = enabled &&
-                    (hasActiveRecipients ||
-                        bodyText.isNotEmpty ||
-                        subjectText.isNotEmpty ||
-                        hasAttachments);
-                final canDiscard = enabled &&
-                    (id != null ||
-                        bodyText.isNotEmpty ||
-                        subjectText.isNotEmpty ||
-                        hasAttachments);
-                final sendBlocker = _sendValidationMessage(
-                  hasActiveRecipients: hasActiveRecipients,
-                  hasContent: hasContent,
-                );
-                final bool showSendBlockerMessage = _showValidationMessages &&
-                    sendBlocker != null &&
-                    sendBlocker != l10n.draftNoRecipients;
-                final String? sendErrorMessage = _sendErrorMessage;
-                final readyToSend = sendBlocker == null &&
-                    !_addingAttachment &&
-                    !hasPreparingAttachments;
-                final bool showAutosaveHint = _lastAutosaveAt != null &&
-                    _lastSavedSignature == _currentDraftSignature();
-                return _DraftTaskDropRegion(
-                  onTaskDropped: enabled ? _handleTaskDrop : null,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      FormField<void>(
-                        validator: (_) =>
-                            hasActiveRecipients ? null : l10n.draftNoRecipients,
-                        builder: (field) {
-                          return Column(
+    return BlocBuilder<ProfileCubit, ProfileState>(
+      bloc: locate<ProfileCubit>(),
+      builder: (context, profileState) {
+        final profileJid = profileState.jid;
+        final resolvedProfileJid = profileJid.trim();
+        final String? selfJid =
+            resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+        final selfIdentity = SelfIdentitySnapshot(
+          selfJid: selfJid,
+          avatarPath: profileState.avatarPath,
+        );
+        return BlocBuilder<RosterCubit, RosterState>(
+          bloc: locate<RosterCubit>(),
+          builder: (context, rosterState) {
+            final rosterItems = rosterState.items ?? const <RosterItem>[];
+            return BlocBuilder<ChatsCubit, ChatsState>(
+              bloc: locate<ChatsCubit>(),
+              builder: (context, chatsState) {
+                final chats = chatsState.items ?? const <Chat>[];
+                _scheduleRecipientsInitialization(chats);
+                final autovalidateMode = _showValidationMessages
+                    ? AutovalidateMode.always
+                    : AutovalidateMode.disabled;
+                return SingleChildScrollView(
+                  padding: EdgeInsets.zero,
+                  child: Form(
+                    key: _formKey,
+                    autovalidateMode: autovalidateMode,
+                    child: BlocConsumer<DraftCubit, DraftState>(
+                      bloc: locate<DraftCubit>(),
+                      listener: (context, state) async {
+                        if (state is DraftSaveComplete) {
+                          if (!state.autoSaved) {
+                            ShadToaster.maybeOf(
+                              context,
+                            )?.show(
+                                FeedbackToast.success(title: l10n.draftSaved));
+                          }
+                        }
+                        if (state is DraftSending) {
+                          if (_sendingDraft && mounted) {
+                            setState(() {
+                              _sendErrorMessage = null;
+                              _pendingAttachments = _pendingAttachments
+                                  .map(
+                                    (pending) => pending.copyWith(
+                                      status: PendingAttachmentStatus.uploading,
+                                      clearErrorMessage: true,
+                                    ),
+                                  )
+                                  .toList();
+                            });
+                          }
+                        } else if (state is DraftFailure) {
+                          if (!_sendingDraft) return;
+                          if (mounted) {
+                            setState(() {
+                              _sendCompletionHandled = true;
+                              _sendingDraft = false;
+                              _sendErrorMessage =
+                                  _draftFailureMessage(state.type, l10n);
+                              _pendingAttachments = _pendingAttachments
+                                  .map(
+                                    (pending) => pending.copyWith(
+                                      status: PendingAttachmentStatus.queued,
+                                      clearErrorMessage: true,
+                                    ),
+                                  )
+                                  .toList();
+                            });
+                          }
+                        } else if (state is DraftSendComplete) {
+                          await _handleSendComplete();
+                        }
+                      },
+                      builder: (context, state) {
+                        final isSending =
+                            state is DraftSending && _sendingDraft;
+                        final enabled =
+                            !isSending && !_savingDraft && !_discardingDraft;
+                        final bodyText = _bodyTextController.text.trim();
+                        final subjectText = _subjectTextController.text.trim();
+                        final pendingAttachments = _pendingAttachments;
+                        final hasAttachments = pendingAttachments.isNotEmpty;
+                        final hasPreparingAttachments = pendingAttachments.any(
+                          (pending) => pending.isPreparing,
+                        );
+                        final split = _splitRecipients();
+                        final hasActiveRecipients = split.hasActiveRecipients;
+                        final hasContent =
+                            _hasContent(hasAttachments: hasAttachments);
+                        final canSave = enabled &&
+                            (hasActiveRecipients ||
+                                bodyText.isNotEmpty ||
+                                subjectText.isNotEmpty ||
+                                hasAttachments);
+                        final canDiscard = enabled &&
+                            (id != null ||
+                                bodyText.isNotEmpty ||
+                                subjectText.isNotEmpty ||
+                                hasAttachments);
+                        final sendBlocker = _sendValidationMessage(
+                          hasActiveRecipients: hasActiveRecipients,
+                          hasContent: hasContent,
+                        );
+                        final bool showSendBlockerMessage =
+                            _showValidationMessages &&
+                                sendBlocker != null &&
+                                sendBlocker != l10n.draftNoRecipients;
+                        final String? sendErrorMessage = _sendErrorMessage;
+                        final readyToSend = sendBlocker == null &&
+                            !_addingAttachment &&
+                            !hasPreparingAttachments;
+                        final bool showAutosaveHint = _lastAutosaveAt != null &&
+                            _lastSavedSignature == _currentDraftSignature();
+                        return _DraftTaskDropRegion(
+                          onTaskDropped: enabled ? _handleTaskDrop : null,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              RecipientChipsBar(
-                                recipients: _recipients,
-                                availableChats: chats,
-                                rosterItems: rosterItems,
-                                recipientSuggestionsStream: locate<ChatsCubit>()
-                                    .recipientAddressSuggestionsStream(),
-                                selfJid: locate<ChatsCubit>().selfJid,
-                                selfIdentity: selfIdentity,
-                                onRecipientAdded: (target) {
-                                  _handleRecipientAdded(target).then(
-                                    (added) {
-                                      if (!mounted || !added) return;
-                                      field.didChange(null);
-                                    },
+                              FormField<void>(
+                                validator: (_) => hasActiveRecipients
+                                    ? null
+                                    : l10n.draftNoRecipients,
+                                builder: (field) {
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      RecipientChipsBar(
+                                        recipients: _recipients,
+                                        availableChats: chats,
+                                        rosterItems: rosterItems,
+                                        recipientSuggestionsStream: locate<
+                                                ChatsCubit>()
+                                            .recipientAddressSuggestionsStream(),
+                                        selfJid: locate<ChatsCubit>().selfJid,
+                                        selfIdentity: selfIdentity,
+                                        onRecipientAdded: (target) {
+                                          _handleRecipientAdded(target).then(
+                                            (added) {
+                                              if (!mounted || !added) return;
+                                              field.didChange(null);
+                                            },
+                                          );
+                                        },
+                                        onRecipientRemoved: (key) {
+                                          _handleRecipientRemoved(key);
+                                          field.didChange(null);
+                                        },
+                                        onRecipientToggled: (key) {
+                                          _handleRecipientToggled(key);
+                                          field.didChange(null);
+                                        },
+                                        latestStatuses: const {},
+                                        collapsedByDefault: false,
+                                        suggestionAddresses:
+                                            widget.suggestionAddresses,
+                                        suggestionDomains:
+                                            widget.suggestionDomains,
+                                      ),
+                                      if (_showValidationMessages &&
+                                          field.hasError)
+                                        Padding(
+                                          padding:
+                                              EdgeInsets.only(top: spacing.s),
+                                          child: Text(
+                                            field.errorText ?? '',
+                                            style: textTheme.small.copyWith(
+                                              color: colors.destructive,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   );
                                 },
-                                onRecipientRemoved: (key) {
-                                  _handleRecipientRemoved(key);
-                                  field.didChange(null);
-                                },
-                                onRecipientToggled: (key) {
-                                  _handleRecipientToggled(key);
-                                  field.didChange(null);
-                                },
-                                latestStatuses: const {},
-                                collapsedByDefault: false,
-                                suggestionAddresses: widget.suggestionAddresses,
-                                suggestionDomains: widget.suggestionDomains,
                               ),
-                              if (_showValidationMessages && field.hasError)
-                                Padding(
-                                  padding: EdgeInsets.only(top: spacing.s),
-                                  child: Text(
-                                    field.errorText ?? '',
-                                    style: textTheme.small.copyWith(
-                                      color: colors.destructive,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
-                      ),
-                      SizedBox(height: sectionSpacing),
-                      Padding(
-                        padding: horizontalPadding,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Expanded(
-                                  child: Semantics(
-                                    label: l10n.draftSubjectSemantics,
-                                    textField: true,
-                                    child: AxiTextFormField(
-                                      controller: _subjectTextController,
-                                      focusNode: _subjectFocusNode,
-                                      enabled: enabled,
-                                      minLines: 1,
-                                      maxLines: 1,
-                                      textInputAction: TextInputAction.next,
-                                      onSubmitted: (_) =>
-                                          _bodyFocusNode.requestFocus(),
-                                      placeholder: Text(
-                                        l10n.draftSubjectHintOptional,
-                                      ),
-                                      constraints: BoxConstraints.tightFor(
-                                        height: subjectHeight,
-                                      ),
+                              SizedBox(height: sectionSpacing),
+                              Padding(
+                                padding: horizontalPadding,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Row(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.center,
-                                      placeholderAlignment:
-                                          Alignment.centerLeft,
-                                      inputPadding: inputPadding,
+                                      children: [
+                                        Expanded(
+                                          child: Semantics(
+                                            label: l10n.draftSubjectSemantics,
+                                            textField: true,
+                                            child: AxiTextFormField(
+                                              controller:
+                                                  _subjectTextController,
+                                              focusNode: _subjectFocusNode,
+                                              enabled: enabled,
+                                              minLines: 1,
+                                              maxLines: 1,
+                                              textInputAction:
+                                                  TextInputAction.next,
+                                              onSubmitted: (_) =>
+                                                  _bodyFocusNode.requestFocus(),
+                                              placeholder: Text(
+                                                l10n.draftSubjectHintOptional,
+                                              ),
+                                              constraints:
+                                                  BoxConstraints.tightFor(
+                                                height: subjectHeight,
+                                              ),
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
+                                              placeholderAlignment:
+                                                  Alignment.centerLeft,
+                                              inputPadding: inputPadding,
+                                            ),
+                                          ),
+                                        ),
+                                        SizedBox(width: sectionSpacing),
+                                        _DraftSendIconButton(
+                                          readyToSend: readyToSend,
+                                          sending: isSending,
+                                          disabledReason: sendBlocker,
+                                          onPressed: isSending ||
+                                                  _addingAttachment ||
+                                                  hasPreparingAttachments
+                                              ? null
+                                              : _handleSendDraft,
+                                        ),
+                                      ],
                                     ),
-                                  ),
-                                ),
-                                SizedBox(width: sectionSpacing),
-                                _DraftSendIconButton(
-                                  readyToSend: readyToSend,
-                                  sending: isSending,
-                                  disabledReason: sendBlocker,
-                                  onPressed: isSending ||
-                                          _addingAttachment ||
-                                          hasPreparingAttachments
-                                      ? null
-                                      : _handleSendDraft,
-                                ),
-                              ],
-                            ),
-                            if (showSendBlockerMessage)
-                              Padding(
-                                padding: EdgeInsets.only(top: spacing.s),
-                                child: Text(
-                                  sendBlocker,
-                                  style: textTheme.small.copyWith(
-                                    color: colors.destructive,
-                                  ),
-                                ),
-                              ),
-                            if (sendErrorMessage != null && sendBlocker == null)
-                              Padding(
-                                padding: EdgeInsets.only(top: spacing.s),
-                                child: Text(
-                                  sendErrorMessage,
-                                  style: textTheme.small.copyWith(
-                                    color: colors.destructive,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: sectionSpacing),
-                      Padding(
-                        padding: horizontalPadding,
-                        child: _DraftAttachmentsSection(
-                          enabled: enabled,
-                          loading: _loadingAttachments,
-                          attachments: _pendingAttachments,
-                          addingAttachment: _addingAttachment,
-                          onAddAttachment: _handleAttachmentAdded,
-                          onRetry: _handlePendingAttachmentRetry,
-                          onRemove: _handlePendingAttachmentRemoved,
-                          onAttachmentPressed: _handlePendingAttachmentPressed,
-                          onAttachmentLongPressed:
-                              _handlePendingAttachmentLongPressed,
-                          onPreview: _showAttachmentPreview,
-                        ),
-                      ),
-                      SizedBox(height: sectionSpacing),
-                      Padding(
-                        padding: horizontalPadding,
-                        child: Semantics(
-                          label: l10n.draftMessageSemantics,
-                          textField: true,
-                          child: AxiTextFormField(
-                            controller: _bodyTextController,
-                            focusNode: _bodyFocusNode,
-                            enabled: enabled,
-                            minLines: 7,
-                            maxLines: null,
-                            placeholder: Text(l10n.draftMessageHint),
-                          ),
-                        ),
-                      ),
-                      SizedBox(height: sectionSpacing),
-                      Padding(
-                        padding: horizontalPadding,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (isSending)
-                              Padding(
-                                padding: EdgeInsets.only(bottom: spacing.s),
-                                child: Row(
-                                  children: [
-                                    AxiProgressIndicator(
-                                      color: colors.primary,
-                                    ),
-                                    SizedBox(width: smallGap),
-                                    Text(
-                                      l10n.draftSendingStatus,
-                                      style: textTheme.muted,
-                                    ),
+                                    if (showSendBlockerMessage)
+                                      Padding(
+                                        padding:
+                                            EdgeInsets.only(top: spacing.s),
+                                        child: Text(
+                                          sendBlocker,
+                                          style: textTheme.small.copyWith(
+                                            color: colors.destructive,
+                                          ),
+                                        ),
+                                      ),
+                                    if (sendErrorMessage != null &&
+                                        sendBlocker == null)
+                                      Padding(
+                                        padding:
+                                            EdgeInsets.only(top: spacing.s),
+                                        child: Text(
+                                          sendErrorMessage,
+                                          style: textTheme.small.copyWith(
+                                            color: colors.destructive,
+                                          ),
+                                        ),
+                                      ),
                                   ],
                                 ),
                               ),
-                            if (showAutosaveHint)
+                              SizedBox(height: sectionSpacing),
                               Padding(
-                                padding: EdgeInsets.only(bottom: spacing.s),
-                                child: Text(
-                                  l10n.draftAutosaved,
-                                  style: textTheme.muted,
+                                padding: horizontalPadding,
+                                child: _DraftAttachmentsSection(
+                                  enabled: enabled,
+                                  loading: _loadingAttachments,
+                                  attachments: _pendingAttachments,
+                                  addingAttachment: _addingAttachment,
+                                  onAddAttachment: _handleAttachmentAdded,
+                                  onRetry: _handlePendingAttachmentRetry,
+                                  onRemove: _handlePendingAttachmentRemoved,
+                                  onAttachmentPressed:
+                                      _handlePendingAttachmentPressed,
+                                  onAttachmentLongPressed:
+                                      _handlePendingAttachmentLongPressed,
+                                  onPreview: _showAttachmentPreview,
                                 ),
                               ),
-                            Row(
-                              children: [
-                                AxiButton.destructive(
-                                  onPressed: canDiscard ? _handleDiscard : null,
-                                  child: Text(l10n.draftDiscard),
+                              SizedBox(height: sectionSpacing),
+                              Padding(
+                                padding: horizontalPadding,
+                                child: Semantics(
+                                  label: l10n.draftMessageSemantics,
+                                  textField: true,
+                                  child: AxiTextFormField(
+                                    controller: _bodyTextController,
+                                    focusNode: _bodyFocusNode,
+                                    enabled: enabled,
+                                    minLines: 7,
+                                    maxLines: null,
+                                    placeholder: Text(l10n.draftMessageHint),
+                                  ),
                                 ),
-                                const Spacer(),
-                                AxiButton.outline(
-                                  onPressed: canSave ? _handleSaveDraft : null,
-                                  child: Text(l10n.draftSave),
+                              ),
+                              SizedBox(height: sectionSpacing),
+                              Padding(
+                                padding: horizontalPadding,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (isSending)
+                                      Padding(
+                                        padding:
+                                            EdgeInsets.only(bottom: spacing.s),
+                                        child: Row(
+                                          children: [
+                                            AxiProgressIndicator(
+                                              color: colors.primary,
+                                            ),
+                                            SizedBox(width: smallGap),
+                                            Text(
+                                              l10n.draftSendingStatus,
+                                              style: textTheme.muted,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    if (showAutosaveHint)
+                                      Padding(
+                                        padding:
+                                            EdgeInsets.only(bottom: spacing.s),
+                                        child: Text(
+                                          l10n.draftAutosaved,
+                                          style: textTheme.muted,
+                                        ),
+                                      ),
+                                    Row(
+                                      children: [
+                                        AxiButton.destructive(
+                                          onPressed: canDiscard
+                                              ? _handleDiscard
+                                              : null,
+                                          child: Text(l10n.draftDiscard),
+                                        ),
+                                        const Spacer(),
+                                        AxiButton.outline(
+                                          onPressed:
+                                              canSave ? _handleSaveDraft : null,
+                                          child: Text(l10n.draftSave),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: sectionSpacing),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            SizedBox(height: sectionSpacing),
-                          ],
-                        ),
-                      ),
-                    ],
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
                   ),
                 );
               },
-            ),
-          ),
+            );
+          },
         );
       },
     );
@@ -553,8 +592,8 @@ class _DraftFormState extends State<DraftForm> {
             target: FanOutTarget.chat(
               chat: match,
               shareSignatureEnabled: match.shareSignatureEnabled ??
-                  context
-                      .read<SettingsCubit>()
+                  widget
+                      .locate<SettingsCubit>()
                       .state
                       .shareTokenSignatureEnabled,
             ),
@@ -565,8 +604,8 @@ class _DraftFormState extends State<DraftForm> {
           ComposerRecipient(
             target: FanOutTarget.address(
               address: trimmed,
-              shareSignatureEnabled: context
-                  .read<SettingsCubit>()
+              shareSignatureEnabled: widget
+                  .locate<SettingsCubit>()
                   .state
                   .shareTokenSignatureEnabled,
             ),
@@ -599,8 +638,8 @@ class _DraftFormState extends State<DraftForm> {
     Iterable<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    final hydrated = await context
-        .read<DraftCubit>()
+    final hydrated = await widget
+        .locate<DraftCubit>()
         .loadDraftAttachments(metadataIds.toList());
     final List<PendingAttachment> pending = <PendingAttachment>[];
     for (final attachment in hydrated) {
@@ -699,7 +738,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
-    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
+    final endpointConfig = widget.locate<SettingsCubit>().state.endpointConfig;
     final supportsEmail = endpointConfig.enableSmtp;
     final supportsXmpp = endpointConfig.enableXmpp;
     if (supportsEmail && !supportsXmpp) {
@@ -796,7 +835,7 @@ class _DraftFormState extends State<DraftForm> {
       }
       if (!mounted) return;
       attachment =
-          await context.read<DraftCubit>().optimizeAttachment(attachment);
+          await widget.locate<DraftCubit>().optimizeAttachment(attachment);
       if (!mounted) return;
       setState(() {
         _pendingAttachments = _pendingAttachments
@@ -857,7 +896,7 @@ class _DraftFormState extends State<DraftForm> {
     final List<String> attachmentIds =
         _pendingAttachments.map((pending) => pending.id).toList();
     final List<String> recipients = _recipientStrings();
-    final DraftSaveResult result = await context.read<DraftCubit>().saveDraft(
+    final DraftSaveResult result = await widget.locate<DraftCubit>().saveDraft(
           id: id,
           jids: recipients,
           body: _bodyTextController.text,
@@ -1049,11 +1088,11 @@ class _DraftFormState extends State<DraftForm> {
     _invalidatePendingSaves();
     try {
       if (id != null) {
-        await context.read<DraftCubit>().deleteDraft(id: id!);
+        await widget.locate<DraftCubit>().deleteDraft(id: id!);
       }
       if (!mounted) return;
       if (shouldCleanupSeedAttachments) {
-        await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
+        await _cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>());
       }
       if (!mounted) return;
       setState(() {
@@ -1123,7 +1162,7 @@ class _DraftFormState extends State<DraftForm> {
             address: address,
             displayName: chat.contactDisplayName ?? chat.title,
             shareSignatureEnabled: chat.shareSignatureEnabled ??
-                context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+                widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled,
           );
         }
       }
@@ -1151,7 +1190,7 @@ class _DraftFormState extends State<DraftForm> {
     }
     var succeeded = false;
     try {
-      succeeded = await context.read<DraftCubit>().sendDraft(
+      succeeded = await widget.locate<DraftCubit>().sendDraft(
             id: id,
             xmppJids: xmppJids,
             emailTargets: emailTargets,
@@ -1202,7 +1241,7 @@ class _DraftFormState extends State<DraftForm> {
       context,
     )?.show(FeedbackToast.success(title: context.l10n.draftSent));
     if (shouldCleanupSeedAttachments) {
-      await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
+      await _cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>());
     }
     if (!mounted) {
       return;

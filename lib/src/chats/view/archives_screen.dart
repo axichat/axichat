@@ -22,13 +22,7 @@ class ArchivesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider.value(value: locate<ChatsCubit>()),
-        BlocProvider.value(value: locate<ProfileCubit>()),
-      ],
-      child: _ArchivesView(locate: locate),
-    );
+    return _ArchivesView(locate: locate);
   }
 }
 
@@ -40,93 +34,100 @@ class _ArchivesView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ChatsCubit, ChatsState>(
+      bloc: locate<ChatsCubit>(),
       builder: (context, chatsState) {
-        final l10n = context.l10n;
-        final spacing = context.spacing;
-        final sizing = context.sizing;
-        final profileJid = context.watch<ProfileCubit>().state.jid;
-        final resolvedProfileJid = profileJid.trim();
-        final String? selfJid =
-            resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
-        final selfIdentity = SelfIdentitySnapshot(
-          selfJid: selfJid,
-          avatarPath: context.watch<ProfileCubit>().state.avatarPath,
-        );
-        final selectedChats = chatsState.selectedChats;
-        final selectionActive = selectedChats.isNotEmpty;
-        final archivedItems = chatsState.archivedItems;
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(l10n.chatsArchiveTitle),
-            leadingWidth: sizing.iconButtonTapTarget + spacing.m,
-            leading: Padding(
-              padding: EdgeInsets.only(left: spacing.s),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: SizedBox.square(
-                  dimension: sizing.iconButtonTapTarget,
-                  child: AxiIconButton.ghost(
-                    iconData: LucideIcons.arrowLeft,
-                    tooltip: l10n.commonBack,
-                    onPressed: () => Navigator.of(context).maybePop(),
+        return BlocBuilder<ProfileCubit, ProfileState>(
+          bloc: locate<ProfileCubit>(),
+          builder: (context, profileState) {
+            final l10n = context.l10n;
+            final spacing = context.spacing;
+            final sizing = context.sizing;
+            final profileJid = profileState.jid;
+            final resolvedProfileJid = profileJid.trim();
+            final String? selfJid =
+                resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+            final selfIdentity = SelfIdentitySnapshot(
+              selfJid: selfJid,
+              avatarPath: profileState.avatarPath,
+            );
+            final selectedChats = chatsState.selectedChats;
+            final selectionActive = selectedChats.isNotEmpty;
+            final archivedItems = chatsState.archivedItems;
+            return Scaffold(
+              appBar: AppBar(
+                title: Text(l10n.chatsArchiveTitle),
+                leadingWidth: sizing.iconButtonTapTarget + spacing.m,
+                leading: Padding(
+                  padding: EdgeInsets.only(left: spacing.s),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: SizedBox.square(
+                      dimension: sizing.iconButtonTapTarget,
+                      child: AxiIconButton.ghost(
+                        iconData: LucideIcons.arrowLeft,
+                        tooltip: l10n.commonBack,
+                        onPressed: () => Navigator.of(context).maybePop(),
+                      ),
+                    ),
+                  ),
+                ),
+                bottom: PreferredSize(
+                  preferredSize: Size.fromHeight(context.borderSide.width),
+                  child: Divider(
+                    height: context.borderSide.width,
+                    thickness: context.borderSide.width,
+                    color: context.borderSide.color,
                   ),
                 ),
               ),
-            ),
-            bottom: PreferredSize(
-              preferredSize: Size.fromHeight(context.borderSide.width),
-              child: Divider(
-                height: context.borderSide.width,
-                thickness: context.borderSide.width,
-                color: context.borderSide.color,
-              ),
-            ),
-          ),
-          body: chatsState.items == null
-              ? Center(
-                  child: AxiProgressIndicator(
-                    color: context.colorScheme.foreground,
-                  ),
-                )
-              : archivedItems.isEmpty
+              body: chatsState.items == null
                   ? Center(
-                      child: Text(
-                        l10n.chatsArchiveEmpty,
-                        style: context.textTheme.muted,
+                      child: AxiProgressIndicator(
+                        color: context.colorScheme.foreground,
                       ),
                     )
-                  : AxiNowTicker(
-                      builder: (context, nowListenable) =>
-                          ValueListenableBuilder<DateTime>(
-                        valueListenable: nowListenable,
-                        builder: (context, timestampNow, _) {
-                          return ListView.builder(
-                            itemCount: archivedItems.length,
-                            itemBuilder: (context, index) => ListItemPadding(
-                              child: ChatListTile(
-                                item: archivedItems[index],
-                                selectionActive: selectionActive,
-                                isSelected: chatsState.selectedJids
-                                    .contains(archivedItems[index].jid),
-                                isOpen: chatsState.openJid ==
-                                    archivedItems[index].jid,
-                                timestampNow: timestampNow,
-                                selfIdentity: selfIdentity,
-                                archivedContext: true,
-                                onArchivedTap: (chat) =>
-                                    GoRouter.of(context).push(
-                                  ArchivedChatRoute(jid: chat.jid).location,
-                                  extra: locate,
+                  : archivedItems.isEmpty
+                      ? Center(
+                          child: Text(
+                            l10n.chatsArchiveEmpty,
+                            style: context.textTheme.muted,
+                          ),
+                        )
+                      : AxiNowTicker(
+                          builder: (context, nowListenable) =>
+                              ValueListenableBuilder<DateTime>(
+                            valueListenable: nowListenable,
+                            builder: (context, timestampNow, _) {
+                              return ListView.builder(
+                                itemCount: archivedItems.length,
+                                itemBuilder: (context, index) =>
+                                    ListItemPadding(
+                                  child: ChatListTile(
+                                    item: archivedItems[index],
+                                    selectionActive: selectionActive,
+                                    isSelected: chatsState.selectedJids
+                                        .contains(archivedItems[index].jid),
+                                    isOpen: chatsState.openJid ==
+                                        archivedItems[index].jid,
+                                    timestampNow: timestampNow,
+                                    selfIdentity: selfIdentity,
+                                    archivedContext: true,
+                                    onArchivedTap: (chat) =>
+                                        GoRouter.of(context).push(
+                                      ArchivedChatRoute(jid: chat.jid).location,
+                                      extra: locate,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-          bottomNavigationBar: selectionActive
-              ? ChatSelectionActionBar(selectedChats: selectedChats)
-              : null,
+                              );
+                            },
+                          ),
+                        ),
+              bottomNavigationBar: selectionActive
+                  ? ChatSelectionActionBar(selectedChats: selectedChats)
+                  : null,
+            );
+          },
         );
       },
     );

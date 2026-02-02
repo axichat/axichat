@@ -62,10 +62,10 @@ Future<void> showCalendarAvailabilityShareSheet({
   Chat? initialChat,
   bool lockToChat = false,
 }) async {
-  final locate = context.read;
+  final BuildContext modalContext = context.calendarModalContext;
+  final locate = modalContext.read;
   final l10n = context.l10n;
-  final List<Chat> chats =
-      context.read<ChatsCubit>().state.items ?? const <Chat>[];
+  final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
   final Chat? lockedChat = lockToChat ? initialChat : null;
   final bool canLockToChat =
       lockedChat != null && lockedChat.supportsChatCalendar;
@@ -85,7 +85,6 @@ Future<void> showCalendarAvailabilityShareSheet({
     );
     return;
   }
-  final BuildContext modalContext = context.calendarModalContext;
   final record =
       await Navigator.of(modalContext).push<CalendarAvailabilityShareRecord>(
     AxiFadePageRoute(

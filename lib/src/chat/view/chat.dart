@@ -122,7 +122,7 @@ extension on MessageStatus {
 }
 
 EdgeInsets _bubblePadding(BuildContext context) => EdgeInsets.symmetric(
-      horizontal: context.spacing.m,
+      horizontal: context.spacing.s,
       vertical: context.spacing.s,
     );
 const _bubbleRadius = 18.0;
@@ -1290,12 +1290,12 @@ class _ChatState extends State<Chat> {
 
   ChatCalendarSyncCoordinator? _resolveChatCalendarCoordinator({
     required CalendarStorageManager storageManager,
-    required ChatBloc chatBloc,
   }) {
     final storage = storageManager.authStorage;
     if (storage == null) {
       return null;
     }
+    final locate = context.read;
     final coordinator = _readChatCalendarCoordinator(
       context,
       calendarAvailable: storageManager.isAuthStorageReady,
@@ -1314,13 +1314,14 @@ class _ChatState extends State<Chat> {
         required CalendarSyncOutbound outbound,
         required ChatType chatType,
       }) async {
-        await chatBloc.sendCalendarSyncMessage(
+        await locate<ChatBloc>().sendCalendarSyncMessage(
           jid: jid,
           outbound: outbound,
           chatType: chatType,
         );
       },
-      sendSnapshotFile: chatBloc.uploadCalendarSnapshot,
+      sendSnapshotFile: (file) =>
+          locate<ChatBloc>().uploadCalendarSnapshot(file),
     );
   }
 
@@ -3665,7 +3666,6 @@ class _ChatState extends State<Chat> {
               final storageManager = context.watch<CalendarStorageManager>();
               final chatCalendarCoordinator = _resolveChatCalendarCoordinator(
                 storageManager: storageManager,
-                chatBloc: context.read<ChatBloc>(),
               );
               final bool demoEmailCalendarEnabled = kEnableDemoChats &&
                   (chatEntity?.defaultTransport.isEmail ?? false);

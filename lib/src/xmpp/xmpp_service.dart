@@ -97,6 +97,8 @@ part 'spam_sync_service.dart';
 
 part 'email_blocklist_sync_service.dart';
 
+part 'capability_decision.dart';
+
 part 'chats_service.dart';
 
 part 'avatar_service.dart';

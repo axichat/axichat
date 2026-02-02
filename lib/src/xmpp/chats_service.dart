@@ -492,8 +492,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     required String jid,
     required mox.ChatState state,
   }) async {
-    if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
-      _chatLog.fine('Skipping chat state for foreign domain: $jid');
+    final decision = await _chatStateDecision(jid);
+    if (!decision.isAllowed) {
+      _logChatStateDecision(jid, decision);
       return;
     }
     final messageType = _chatStateMessageType(jid);
@@ -522,6 +523,65 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       jid: jid,
       messageType: messageType,
     );
+  }
+
+  Future<CapabilityDecision> _chatStateDecision(String jid) async {
+    const chatStateFeature = 'http://jabber.org/protocol/chatstates';
+    try {
+      final capsManager =
+          _connection.getManager<mox.EntityCapabilitiesManager>();
+      final parsed = parseJid(jid);
+      if (capsManager != null && parsed != null) {
+        final cachedInfo = await capsManager.getCachedDiscoInfoFromJid(parsed);
+        if (cachedInfo != null) {
+          return _decisionFromDiscoInfo(
+            chatStateFeature: chatStateFeature,
+            info: cachedInfo,
+          );
+        }
+      }
+      final result = await _connection.discoInfoQuery(jid);
+      if (result == null || result.isType<mox.StanzaError>()) {
+        return const CapabilityDecision(CapabilityDecisionKind.unknown);
+      }
+      return _decisionFromDiscoInfo(
+        chatStateFeature: chatStateFeature,
+        info: result.get<mox.DiscoInfo>(),
+      );
+    } on Exception catch (error, stackTrace) {
+      return CapabilityDecision(
+        CapabilityDecisionKind.error,
+        error: error,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
+  CapabilityDecision _decisionFromDiscoInfo({
+    required String chatStateFeature,
+    required mox.DiscoInfo info,
+  }) {
+    if (info.features.contains(chatStateFeature)) {
+      return const CapabilityDecision(CapabilityDecisionKind.allowed);
+    }
+    return const CapabilityDecision(CapabilityDecisionKind.unsupported);
+  }
+
+  void _logChatStateDecision(String jid, CapabilityDecision decision) {
+    if (decision.isAllowed) return;
+    if (decision.isError) {
+      _chatLog.warning(
+        'Failed to resolve chat state capability for $jid',
+        decision.error,
+        decision.stackTrace,
+      );
+      return;
+    }
+    if (decision.isUnknown) {
+      _chatLog.fine('Skipping chat state for $jid (capabilities unknown).');
+      return;
+    }
+    _chatLog.fine('Skipping chat state for $jid (unsupported).');
   }
 
   Future<void> sendTyping({required String jid, required bool typing}) async {

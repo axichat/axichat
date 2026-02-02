@@ -1610,6 +1610,7 @@ class EmailService {
       title: resolvedTitle,
       contactDisplayName: resolvedDisplayName,
       emailAddress: resolvedAddress,
+      transport: MessageTransport.email,
       lastChangeTimestamp: demoNow(),
     );
   }

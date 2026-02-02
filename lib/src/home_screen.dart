@@ -201,7 +201,7 @@ class _HomeShellState extends State<HomeShell> {
           chatsService: context.read<XmppService>(),
           messageService: context.read<XmppService>(),
           rosterService: context.read<XmppService>() as RosterService,
-          initialLocalization: context.l10n,
+          initialLocalization: l10n,
         ),
         child: HomeShellScope(
           pendingCalendarTabIndex: _pendingCalendarTabIndex,
@@ -528,11 +528,16 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
 
   @override
   void dispose() {
+    super.dispose();
+  }
+
+  @override
+  void deactivate() {
     final storageManager = context.read<CalendarStorageManager>();
     if (storageManager.isAuthStorageReady) {
       context.read<CalendarBloc>().clearChatCalendarSyncHandler();
     }
-    super.dispose();
+    super.deactivate();
   }
 
   @override

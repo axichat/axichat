@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
@@ -1371,7 +1372,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 29;
+  int get schemaVersion => 30;
 
   @override
   MigrationStrategy get migration {
@@ -1590,6 +1591,22 @@ WHERE delta_chat_id IS NOT NULL
           await _createRecipientAddressTriggers();
           await _backfillRecipientAddresses();
           await _backfillDraftAttachmentRefs();
+        }
+        if (from < 30) {
+          await m.addColumn(chats, chats.transport);
+          await customStatement('''
+UPDATE chats
+SET transport = ${MessageTransport.email.index}
+WHERE transport IS NULL
+  AND (delta_chat_id IS NOT NULL
+    OR email_address IS NOT NULL
+    OR email_from_address IS NOT NULL)
+''');
+          await customStatement('''
+UPDATE chats
+SET transport = ${MessageTransport.xmpp.index}
+WHERE transport IS NULL
+''');
         }
         if (from < 28) {
           await m.createTable(pinnedMessages);

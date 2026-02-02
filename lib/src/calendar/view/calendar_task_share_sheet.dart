@@ -32,16 +32,15 @@ Future<void> showCalendarTaskShareSheet({
   required CalendarTask task,
 }) async {
   final l10n = context.l10n;
-  final locate = context.read;
-  final List<Chat> chats =
-      context.read<ChatsCubit>().state.items ?? const <Chat>[];
+  final BuildContext modalContext = context.calendarModalContext;
+  final locate = modalContext.read;
+  final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
   final List<Chat> available =
       chats.where((chat) => chat.type != ChatType.note).toList(growable: false);
   if (available.isEmpty) {
     FeedbackSystem.showInfo(context, l10n.calendarTaskShareMissingChats);
     return;
   }
-  final BuildContext modalContext = context.calendarModalContext;
   final result = await showAdaptiveBottomSheet<bool>(
     context: modalContext,
     isScrollControlled: true,

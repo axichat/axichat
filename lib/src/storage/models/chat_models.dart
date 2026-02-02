@@ -282,6 +282,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required String title,
     required ChatType type,
     required DateTime lastChangeTimestamp,
+    @Default(MessageTransport.xmpp) MessageTransport transport,
     String? myNickname,
     String? avatarPath,
     String? avatarHash,
@@ -321,6 +322,7 @@ class Chat with _$Chat implements Insertable<Chat> {
     required String? lastMessage,
     required String? alert,
     required DateTime lastChangeTimestamp,
+    required MessageTransport transport,
     required int unreadCount,
     required bool open,
     required bool muted,
@@ -350,6 +352,7 @@ class Chat with _$Chat implements Insertable<Chat> {
         title: mox.JID.fromString(jid).local,
         type: ChatType.chat,
         lastChangeTimestamp: DateTime.now(),
+        transport: MessageTransport.xmpp,
         contactJid: jid,
       );
 
@@ -363,6 +366,7 @@ class Chat with _$Chat implements Insertable<Chat> {
       'type': Variable<int>(type.index),
       'alert': Variable<String>(alert),
       'last_change_timestamp': Variable<DateTime>(lastChangeTimestamp),
+      'transport': Variable<int>(transport.index),
       'unread_count': Variable<int>(unreadCount),
       'open': Variable<bool>(open),
       'muted': Variable<bool>(muted),
@@ -435,6 +439,10 @@ class Chats extends Table {
   TextColumn get title => text()();
 
   IntColumn get type => intEnum<ChatType>()();
+
+  IntColumn get transport => intEnum<MessageTransport>().withDefault(
+        Constant(MessageTransport.xmpp.index),
+      )();
 
   TextColumn get myNickname => text().nullable()();
 
@@ -580,13 +588,8 @@ extension ChatTransportExtension on Chat {
   }
 
   MessageTransport get defaultTransport {
-    if (type != ChatType.chat) {
-      return MessageTransport.xmpp;
-    }
-    return isEmailBacked ? MessageTransport.email : MessageTransport.xmpp;
+    return transport;
   }
-
-  MessageTransport get transport => defaultTransport;
 }
 
 extension ChatAvatarExtension on Chat {

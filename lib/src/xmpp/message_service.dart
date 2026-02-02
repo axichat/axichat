@@ -765,25 +765,6 @@ class XmppPeerCapabilities {
   bool get supportsReceipts => features.contains(mox.deliveryXmlns);
 }
 
-enum CapabilityDecisionKind { allowed, unsupported, unknown, error }
-
-class CapabilityDecision {
-  const CapabilityDecision(
-    this.kind, {
-    this.error,
-    this.stackTrace,
-  });
-
-  final CapabilityDecisionKind kind;
-  final Object? error;
-  final StackTrace? stackTrace;
-
-  bool get isAllowed => kind == CapabilityDecisionKind.allowed;
-  bool get isUnsupported => kind == CapabilityDecisionKind.unsupported;
-  bool get isUnknown => kind == CapabilityDecisionKind.unknown;
-  bool get isError => kind == CapabilityDecisionKind.error;
-}
-
 class _PeerCapabilities {
   const _PeerCapabilities({
     required this.supportsMarkers,
@@ -871,6 +852,15 @@ mixin MessageService
         DraftSyncService,
         BlockingService {
   String? get _databasePrefix;
+
+  Stream<CalendarSyncDispatch> get calendarSyncDispatchStream =>
+      _calendarSyncDispatchController.stream;
+
+  Stream<ChatCalendarSyncDispatch> get chatCalendarSyncDispatchStream =>
+      _chatCalendarSyncDispatchController.stream;
+
+  Stream<CalendarSyncWarning> get calendarSyncWarningStream =>
+      _calendarSyncWarningController.stream;
 
   Stream<List<Message>> messageStreamForChat(
     String jid, {
@@ -1766,6 +1756,12 @@ mixin MessageService
   final _log = Logger('MessageService');
   StreamController<Message> _messageStream =
       StreamController<Message>.broadcast();
+  StreamController<CalendarSyncDispatch> _calendarSyncDispatchController =
+      StreamController<CalendarSyncDispatch>.broadcast();
+  StreamController<ChatCalendarSyncDispatch> _chatCalendarSyncDispatchController =
+      StreamController<ChatCalendarSyncDispatch>.broadcast();
+  StreamController<CalendarSyncWarning> _calendarSyncWarningController =
+      StreamController<CalendarSyncWarning>.broadcast();
 
   final Map<String, _OutboundMessageSummary> _outboundMessageSummaries =
       <String, _OutboundMessageSummary>{};
@@ -4471,6 +4467,20 @@ mixin MessageService
     _log.fine('Skipping $featureLabel for $jid (unsupported).');
   }
 
+  Future<CapabilityDecision> decideFeatureSupport({
+    required String jid,
+    required String feature,
+    required String featureLabel,
+  }) async {
+    final decision = await _featureDecision(jid: jid, feature: feature);
+    _logCapabilityDecision(
+      featureLabel: featureLabel,
+      jid: jid,
+      decision: decision,
+    );
+    return decision;
+  }
+
   Future<bool> _supportsMam(String jid) async {
     final decision = await _featureDecision(
       jid: jid,
@@ -4781,10 +4791,25 @@ mixin MessageService
     if (!_messageStream.isClosed) {
       await _messageStream.close();
     }
+    if (!_calendarSyncDispatchController.isClosed) {
+      await _calendarSyncDispatchController.close();
+    }
+    if (!_chatCalendarSyncDispatchController.isClosed) {
+      await _chatCalendarSyncDispatchController.close();
+    }
+    if (!_calendarSyncWarningController.isClosed) {
+      await _calendarSyncWarningController.close();
+    }
     if (!_mamSupportController.isClosed) {
       await _mamSupportController.close();
     }
     _messageStream = StreamController<Message>.broadcast();
+    _calendarSyncDispatchController =
+        StreamController<CalendarSyncDispatch>.broadcast();
+    _chatCalendarSyncDispatchController =
+        StreamController<ChatCalendarSyncDispatch>.broadcast();
+    _calendarSyncWarningController =
+        StreamController<CalendarSyncWarning>.broadcast();
     _mamSupportController = StreamController<bool>.broadcast();
   }
 
@@ -5717,30 +5742,30 @@ mixin MessageService
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event,
   ) async {
-    if (owner is XmppService &&
-        (owner as XmppService)._calendarSyncCallback != null) {
-      try {
-        final callback = (owner as XmppService)._calendarSyncCallback!;
-        final inbound = CalendarSyncInbound(
-          message: syncMessage,
-          stanzaId: _calendarSyncStanzaId(event),
-          receivedAt: _calendarSyncTimestamp(event),
-          isFromMam: event.isFromMAM,
-        );
-        final applied = await callback(inbound);
-        try {
-          await _acknowledgeMessage(event);
-        } catch (error, stackTrace) {
-          _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
-        }
-        return applied;
-      } catch (e) {
-        _log.warning('Calendar sync callback failed: $e');
-        return false;
-      }
+    if (!_calendarSyncDispatchController.hasListener) {
+      _log.info('No calendar sync listeners registered - message ignored');
+      return false;
     }
-    _log.info('No calendar sync callback registered - message ignored');
-    return false;
+    final inbound = CalendarSyncInbound(
+      message: syncMessage,
+      stanzaId: _calendarSyncStanzaId(event),
+      receivedAt: _calendarSyncTimestamp(event),
+      isFromMam: event.isFromMAM,
+    );
+    final dispatch = CalendarSyncDispatch(inbound: inbound);
+    _calendarSyncDispatchController.add(dispatch);
+    try {
+      final applied = await dispatch.result;
+      try {
+        await _acknowledgeMessage(event);
+      } catch (error, stackTrace) {
+        _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
+      }
+      return applied;
+    } catch (e) {
+      _log.warning('Calendar sync handler failed: $e');
+      return false;
+    }
   }
 
   Future<void> _maybeNotifySnapshotUnavailable(mox.MessageEvent event) async {
@@ -5755,16 +5780,17 @@ mixin MessageService
       return;
     }
     _calendarMamSnapshotUnavailableNotified = true;
-    if (owner is XmppService &&
-        (owner as XmppService)._calendarSyncWarningCallback != null) {
-      const warning = CalendarSyncWarning(
-        type: CalendarSyncWarningType.snapshotUnavailable,
-      );
-      try {
-        await (owner as XmppService)._calendarSyncWarningCallback!(warning);
-      } catch (e) {
-        _log.warning('Calendar sync warning callback failed: $e');
-      }
+    if (!_calendarSyncWarningController.hasListener) {
+      _log.info('No calendar sync warning listeners registered');
+      return;
+    }
+    const warning = CalendarSyncWarning(
+      type: CalendarSyncWarningType.snapshotUnavailable,
+    );
+    try {
+      _calendarSyncWarningController.add(warning);
+    } catch (e) {
+      _log.warning('Calendar sync warning dispatch failed: $e');
     }
   }
 
@@ -5789,32 +5815,33 @@ mixin MessageService
     required ChatType chatType,
     required String senderJid,
   }) async {
-    if (owner is XmppService &&
-        (owner as XmppService)._chatCalendarSyncCallback != null) {
+    if (!_chatCalendarSyncDispatchController.hasListener) {
+      _log.info('No chat calendar sync listeners registered - message ignored');
+      return;
+    }
+    final inbound = CalendarSyncInbound(
+      message: syncMessage,
+      stanzaId: _calendarSyncStanzaId(event),
+      receivedAt: _calendarSyncTimestamp(event),
+      isFromMam: event.isFromMAM,
+    );
+    final envelope = ChatCalendarSyncEnvelope(
+      chatJid: chatJid,
+      chatType: chatType,
+      senderJid: senderJid,
+      inbound: inbound,
+    );
+    final dispatch = ChatCalendarSyncDispatch(envelope: envelope);
+    _chatCalendarSyncDispatchController.add(dispatch);
+    try {
+      await dispatch.result;
       try {
-        final inbound = CalendarSyncInbound(
-          message: syncMessage,
-          stanzaId: _calendarSyncStanzaId(event),
-          receivedAt: _calendarSyncTimestamp(event),
-          isFromMam: event.isFromMAM,
-        );
-        final envelope = ChatCalendarSyncEnvelope(
-          chatJid: chatJid,
-          chatType: chatType,
-          senderJid: senderJid,
-          inbound: inbound,
-        );
-        await (owner as XmppService)._chatCalendarSyncCallback!(envelope);
-        try {
-          await _acknowledgeMessage(event);
-        } catch (error, stackTrace) {
-          _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
-        }
-      } catch (e) {
-        _log.warning('Chat calendar sync callback failed: $e');
+        await _acknowledgeMessage(event);
+      } catch (error, stackTrace) {
+        _log.fine(_calendarSyncAckFailedLog, error, stackTrace);
       }
-    } else {
-      _log.info('No chat calendar sync callback registered - message ignored');
+    } catch (e) {
+      _log.warning('Chat calendar sync handler failed: $e');
     }
   }
 

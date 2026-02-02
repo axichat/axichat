@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
@@ -1662,6 +1663,7 @@ class EmailDeltaTransport implements ChatTransport {
         contactDisplayName: chat.contactDisplayName,
         contactID: chat.contactID,
         contactJid: chat.contactJid,
+        transport: MessageTransport.email,
       );
       await db.updateChat(merged);
       await db.upsertEmailChatAccount(
@@ -1893,6 +1895,7 @@ class EmailDeltaTransport implements ChatTransport {
       emailAddress: emailAddress,
       emailFromAddress: emailFromAddress,
       deltaChatId: chatId,
+      transport: MessageTransport.email,
     );
   }
 

@@ -10,6 +10,7 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/sync/pending_outgoing_email.dart';
@@ -1465,6 +1466,7 @@ class DeltaEventConsumer {
             existingByAddress.emailFromAddress ?? chat.emailFromAddress,
         contactDisplayName: chat.contactDisplayName,
         contactID: chat.contactID,
+        transport: MessageTransport.email,
       );
       await db.updateChat(merged);
       await db.upsertEmailChatAccount(
@@ -1495,6 +1497,7 @@ class DeltaEventConsumer {
       title: title,
       type: _mapChatType(remote?.type),
       lastChangeTimestamp: DateTime.fromMillisecondsSinceEpoch(0),
+      transport: MessageTransport.email,
       encryptionProtocol: EncryptionProtocol.none,
       contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
       contactID: emailAddress,
