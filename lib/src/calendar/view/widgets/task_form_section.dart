@@ -95,13 +95,25 @@ class TaskSectionExpander extends StatelessWidget {
         ),
       ],
     );
-    final Widget header = AxiButton.ghost(
-      widthBehavior: AxiButtonWidth.expand,
-      onPressed: enabled ? onToggle : null,
-      child: TaskSectionHeader(
-        title: title,
-        uppercase: uppercase,
-        trailing: trailing,
+    final Widget header = MouseRegion(
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled ? onToggle : null,
+          borderRadius: BorderRadius.circular(calendarBorderRadius),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
+            child: SizedBox(
+              width: double.infinity,
+              child: TaskSectionHeader(
+                title: title,
+                uppercase: uppercase,
+                trailing: trailing,
+              ),
+            ),
+          ),
+        ),
       ),
     );
     final Widget body = Column(

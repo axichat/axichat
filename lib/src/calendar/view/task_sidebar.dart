@@ -4228,25 +4228,39 @@ class _CollapsedAddTaskSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: colors.border)),
-      ),
-      child: AxiListButton(
-        onPressed: onExpand,
-        backgroundColor: colors.card,
-        leading: AnimatedRotation(
-          turns: 0,
-          duration: baseAnimationDuration,
-          child: Icon(
-            Icons.chevron_right,
-            size: context.sizing.menuItemIconSize,
-            color: colors.mutedForeground,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onExpand,
+          child: Container(
+            padding: calendarPaddingLg,
+            decoration: BoxDecoration(
+              color: colors.card,
+              borderRadius: BorderRadius.zero,
+              border: Border(bottom: BorderSide(color: colors.border)),
+            ),
+            child: Row(
+              children: [
+                AnimatedRotation(
+                  turns: 0,
+                  duration: baseAnimationDuration,
+                  child: Icon(
+                    Icons.chevron_right,
+                    size: context.sizing.menuItemIconSize,
+                    color: colors.mutedForeground,
+                  ),
+                ),
+                const SizedBox(width: calendarInsetSm),
+                Text(
+                  l10n.calendarAddTaskAction.toUpperCase(),
+                  style: context.textTheme.sectionLabelM,
+                ),
+                const Spacer(),
+              ],
+            ),
           ),
-        ),
-        child: Text(
-          l10n.calendarAddTaskAction.toUpperCase(),
-          style: context.textTheme.sectionLabelM,
         ),
       ),
     );
@@ -4425,32 +4439,39 @@ class _SidebarAccordionSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              AxiListButton(
-                onPressed: () => onToggleSection(section),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (trailing != null) ...[
-                      trailing!,
-                      const SizedBox(width: calendarInsetSm),
-                    ],
-                    _SectionCountBadge(
-                      count: itemCount,
-                      isExpanded: isExpanded,
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: InkWell(
+                  onTap: () => onToggleSection(section),
+                  child: Padding(
+                    padding: calendarFieldPadding,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title.toUpperCase(),
+                            style: context.textTheme.sectionLabelM,
+                          ),
+                        ),
+                        if (trailing != null) ...[
+                          const SizedBox(width: calendarInsetSm),
+                          trailing!,
+                        ],
+                        _SectionCountBadge(
+                          count: itemCount,
+                          isExpanded: isExpanded,
+                        ),
+                        const SizedBox(width: calendarGutterSm),
+                        Icon(
+                          isExpanded
+                              ? Icons.keyboard_arrow_up
+                              : Icons.keyboard_arrow_down,
+                          size: context.sizing.menuItemIconSize,
+                          color: calendarSubtitleColor,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: calendarGutterSm),
-                    Icon(
-                      isExpanded
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      size: context.sizing.menuItemIconSize,
-                      color: calendarSubtitleColor,
-                    ),
-                  ],
-                ),
-                child: Text(
-                  title.toUpperCase(),
-                  style: context.textTheme.sectionLabelM,
+                  ),
                 ),
               ),
               ClipRect(
@@ -4559,17 +4580,23 @@ class _HideCompletedToggle extends StatelessWidget {
     final Color foreground = hiding ? colors.primary : colors.mutedForeground;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
-      child: AxiButton.ghost(
-        size: AxiButtonSize.sm,
+      child: ShadButton.ghost(
+        size: ShadButtonSize.sm,
         onPressed: () => onChanged(!value),
-        leading: Icon(
-          hiding ? Icons.visibility_off : Icons.visibility,
-          size: context.sizing.menuItemIconSize,
-          color: foreground,
-        ),
-        child: Text(
-          context.l10n.calendarCompletedLabel,
-          style: context.textTheme.label.strong.copyWith(color: foreground),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hiding ? Icons.visibility_off : Icons.visibility,
+              size: context.sizing.menuItemIconSize,
+              color: foreground,
+            ),
+            const SizedBox(width: calendarInsetMd),
+            Text(
+              context.l10n.calendarCompletedLabel,
+              style: context.textTheme.label.strong.copyWith(color: foreground),
+            ),
+          ],
         ),
       ),
     );
@@ -5480,21 +5507,29 @@ class _AdvancedToggle extends StatelessWidget {
     final l10n = context.l10n;
     return Align(
       alignment: Alignment.centerLeft,
-      child: AxiButton.ghost(
-        size: AxiButtonSize.sm,
+      child: ShadButton.ghost(
+        size: ShadButtonSize.sm,
         onPressed: onPressed,
-        leading: Icon(
-          uiState.showAdvancedOptions ? Icons.expand_less : Icons.expand_more,
-          size: context.sizing.menuItemIconSize,
-          color: calendarPrimaryColor,
-        ),
-        child: Text(
-          uiState.showAdvancedOptions
-              ? l10n.calendarAdvancedHide
-              : l10n.calendarAdvancedShow,
-          style: context.textTheme.label.copyWith(
-            color: calendarPrimaryColor,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              uiState.showAdvancedOptions
+                  ? Icons.expand_less
+                  : Icons.expand_more,
+              size: context.sizing.menuItemIconSize,
+              color: calendarPrimaryColor,
+            ),
+            const SizedBox(width: calendarInsetSm),
+            Text(
+              uiState.showAdvancedOptions
+                  ? l10n.calendarAdvancedHide
+                  : l10n.calendarAdvancedShow,
+              style: context.textTheme.label.copyWith(
+                color: calendarPrimaryColor,
+              ),
+            ),
+          ],
         ),
       ),
     );

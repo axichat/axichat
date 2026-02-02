@@ -3995,13 +3995,13 @@ class _HeaderNavButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
-    final Widget button = AxiIconButton.ghost(
-      iconData: icon,
+    final Widget button = ShadButton.ghost(
+      size: ShadButtonSize.sm,
       onPressed: onPressed,
-      iconSize: context.sizing.menuItemIconSize,
-      buttonSize: context.sizing.iconButtonSize,
-      tapTargetSize: context.sizing.iconButtonTapTarget,
-      color: colors.primary,
+      foregroundColor: colors.primary,
+      hoverForegroundColor: colors.primary,
+      hoverBackgroundColor: colors.primary.withValues(alpha: 0.08),
+      child: Icon(icon, size: context.sizing.menuItemIconSize),
     );
 
     return SizedBox(
@@ -4032,15 +4032,6 @@ class _CalendarDayHeader extends StatefulWidget {
 }
 
 class _CalendarDayHeaderState extends State<_CalendarDayHeader> {
-  bool _hovered = false;
-
-  void _setHovered(bool value) {
-    if (_hovered == value) return;
-    setState(() {
-      _hovered = value;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final bool isToday = widget.gridState._isToday(widget.date);
@@ -4048,72 +4039,57 @@ class _CalendarDayHeaderState extends State<_CalendarDayHeader> {
         widget.gridState.widget.state.dayEventCountForDate(widget.date);
     final bool enabled =
         widget.gridState.widget.state.viewMode == CalendarView.week;
-    final Color baseBackground = isToday
+    final Color background = isToday
         ? calendarPrimaryColor.withValues(
             alpha: calendarDayHeaderHighlightOpacity,
           )
         : calendarBackgroundColor;
-    final Color background =
-        _hovered && enabled ? calendarSidebarBackgroundColor : baseBackground;
-    final RoundedSuperellipseBorder shape =
-        RoundedSuperellipseBorder(borderRadius: context.radius);
 
-    return AxiTapBounce(
-      enabled: enabled,
-      child: ShadFocusable(
-        canRequestFocus: enabled,
-        builder: (context, _, __) {
-          return Material(
-            type: MaterialType.transparency,
-            shape: shape,
-            clipBehavior: Clip.antiAlias,
-            child: ShadGestureDetector(
-              cursor:
-                  enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-              onHoverChange: enabled ? _setHovered : null,
-              onTap: enabled
-                  ? () =>
-                      widget.gridState._selectDateAndSwitchToDay(widget.date)
-                  : null,
-              child: CustomPaint(
-                painter: _DayHeaderDividerPainter(
-                  devicePixelRatio: widget.devicePixelRatio,
-                  strokeWidth: calendarBorderStroke,
-                  color: calendarBorderDarkColor,
-                  drawRightBorder: widget.showRightDivider,
-                ),
-                child: Stack(
-                  children: [
-                    Container(
-                      color: background,
-                      child: Center(
-                        child: Text(
-                          context.l10n.commonWeekdayDayLabel(
-                            widget.gridState
-                                ._getDayOfWeekShort(context, widget.date),
-                            widget.date.day,
-                          ),
-                          style: context.textTheme.label.strong.copyWith(
-                            color: isToday
-                                ? calendarPrimaryColor
-                                : calendarTitleColor,
-                            letterSpacing: calendarDayHeaderLetterSpacing,
-                          ),
-                        ),
+    return MouseRegion(
+      cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: enabled
+              ? () => widget.gridState._selectDateAndSwitchToDay(widget.date)
+              : null,
+          hoverColor: calendarSidebarBackgroundColor,
+          child: CustomPaint(
+            painter: _DayHeaderDividerPainter(
+              devicePixelRatio: widget.devicePixelRatio,
+              strokeWidth: calendarBorderStroke,
+              color: calendarBorderDarkColor,
+              drawRightBorder: widget.showRightDivider,
+            ),
+            child: Stack(
+              children: [
+                Container(
+                  color: background,
+                  child: Center(
+                    child: Text(
+                      context.l10n.commonWeekdayDayLabel(
+                        widget.gridState
+                            ._getDayOfWeekShort(context, widget.date),
+                        widget.date.day,
+                      ),
+                      style: context.textTheme.label.strong.copyWith(
+                        color:
+                            isToday ? calendarPrimaryColor : calendarTitleColor,
+                        letterSpacing: calendarDayHeaderLetterSpacing,
                       ),
                     ),
-                    if (dayEventCount > 0)
-                      Positioned(
-                        top: calendarInsetLg,
-                        right: calendarGutterSm,
-                        child: DayEventBadge(count: dayEventCount),
-                      ),
-                  ],
+                  ),
                 ),
-              ),
+                if (dayEventCount > 0)
+                  Positioned(
+                    top: calendarInsetLg,
+                    right: calendarGutterSm,
+                    child: DayEventBadge(count: dayEventCount),
+                  ),
+              ],
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }

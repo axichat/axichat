@@ -27,9 +27,9 @@ class AxiAppBar extends StatelessWidget {
       fontFamilyFallback: gabaritoFontFallback,
       fontWeight: appBarTitleFontWeight,
     );
-    final spacing = context.spacing;
     return Container(
-      padding: EdgeInsets.symmetric(vertical: spacing.s, horizontal: spacing.m),
+      height: 56.0,
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
       decoration: BoxDecoration(
         border: Border(bottom: context.borderSide),
       ),
@@ -37,27 +37,11 @@ class AxiAppBar extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (hasLeading) leading!,
-          if (hasLeading && hasTitle) SizedBox(width: spacing.s + spacing.xs),
-          if (hasTitle)
-            Expanded(
-              child: Text(
-                appDisplayName,
-                style: titleStyle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            )
-          else
-            const Spacer(),
-          Flexible(
-            fit: FlexFit.loose,
-            child: ClipRect(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: trailing ?? const AxiVersion(),
-              ),
-            ),
-          ),
+          if (hasLeading && hasTitle) const SizedBox(width: 12),
+          if (hasTitle) Text(appDisplayName, style: titleStyle),
+          if (hasTitle || hasLeading) const Spacer(),
+          if (!hasTitle && !hasLeading) const Spacer(),
+          trailing ?? const AxiVersion(),
         ],
       ),
     );

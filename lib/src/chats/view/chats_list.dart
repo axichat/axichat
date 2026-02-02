@@ -907,7 +907,7 @@ class _ChatListTileState extends State<ChatListTile> {
       if (timestampLabel != null)
         CutoutSpec(
           edge: CutoutEdge.bottom,
-          alignment: Alignment.bottomRight,
+          alignment: Alignment.bottomCenter,
           depth: spacing.m,
           thickness: timestampThickness,
           cornerRadius: sizing.containerRadius,
@@ -974,7 +974,7 @@ class _ChatListTileState extends State<ChatListTile> {
             : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
     Widget tileContent = Padding(
-      padding: EdgeInsetsDirectional.only(end: scaled(spacing.s)),
+      padding: EdgeInsetsDirectional.only(end: scaled(iconCutoutDepth)),
       child: tileSurface.withTapBounce(),
     );
     if (isDesktop) {

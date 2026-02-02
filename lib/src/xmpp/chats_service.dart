@@ -527,44 +527,14 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
   Future<CapabilityDecision> _chatStateDecision(String jid) async {
     const chatStateFeature = 'http://jabber.org/protocol/chatstates';
-    try {
-      final capsManager =
-          _connection.getManager<mox.EntityCapabilitiesManager>();
-      final parsed = parseJid(jid);
-      if (capsManager != null && parsed != null) {
-        final cachedInfo = await capsManager.getCachedDiscoInfoFromJid(parsed);
-        if (cachedInfo != null) {
-          return _decisionFromDiscoInfo(
-            chatStateFeature: chatStateFeature,
-            info: cachedInfo,
-          );
-        }
-      }
-      final result = await _connection.discoInfoQuery(jid);
-      if (result == null || result.isType<mox.StanzaError>()) {
-        return const CapabilityDecision(CapabilityDecisionKind.unknown);
-      }
-      return _decisionFromDiscoInfo(
-        chatStateFeature: chatStateFeature,
-        info: result.get<mox.DiscoInfo>(),
-      );
-    } on Exception catch (error, stackTrace) {
-      return CapabilityDecision(
-        CapabilityDecisionKind.error,
-        error: error,
-        stackTrace: stackTrace,
+    if (this is MessageService) {
+      return (this as MessageService).decideFeatureSupport(
+        jid: jid,
+        feature: chatStateFeature,
+        featureLabel: 'chat states',
       );
     }
-  }
-
-  CapabilityDecision _decisionFromDiscoInfo({
-    required String chatStateFeature,
-    required mox.DiscoInfo info,
-  }) {
-    if (info.features.contains(chatStateFeature)) {
-      return const CapabilityDecision(CapabilityDecisionKind.allowed);
-    }
-    return const CapabilityDecision(CapabilityDecisionKind.unsupported);
+    return const CapabilityDecision(CapabilityDecisionKind.unknown);
   }
 
   void _logChatStateDecision(String jid, CapabilityDecision decision) {

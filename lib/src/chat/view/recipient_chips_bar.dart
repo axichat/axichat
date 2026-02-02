@@ -308,72 +308,79 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                   ? l10n.recipientsHintExpand
                   : l10n.recipientsHintCollapse,
               onTap: _toggleBarCollapsed,
-              child: ShadFocusable(
-                canRequestFocus: true,
-                builder: (context, focused, child) =>
-                    child ?? const SizedBox.shrink(),
-                child: ShadGestureDetector(
-                  cursor: SystemMouseCursors.click,
-                  hoverStrategies: mobileHoverStrategies,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
                   onTap: _toggleBarCollapsed,
-                  child: AxiTapBounce(
-                    child: AnimatedContainer(
-                      duration: chipsBarAnimationDuration,
-                      curve: Curves.easeInOutCubic,
-                      padding: headerPadding,
-                      decoration: ShapeDecoration(
-                        color: context.colorScheme.card,
-                        shape: RoundedSuperellipseBorder(
-                          borderRadius: context.radius,
-                          side: _headerFocused
-                              ? context.borderSide
-                                  .copyWith(color: context.colorScheme.primary)
-                              : context.borderSide,
+                  child: AnimatedContainer(
+                    duration: chipsBarAnimationDuration,
+                    curve: Curves.easeInOutCubic,
+                    padding: headerPadding,
+                    decoration: BoxDecoration(
+                      color: context.colorScheme.card,
+                      borderRadius: BorderRadius.circular(
+                        chipsBarHeaderBorderRadius,
+                      ),
+                      border: _headerFocused
+                          ? Border.all(
+                              color: context.colorScheme.primary,
+                              width: context.borderSide.width,
+                            )
+                          : Border.all(color: context.borderSide.color),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            l10n.recipientsHeaderTitle,
+                            style: headerStyle,
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
+                        if (showVisibilityBadge) ...[
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: context.spacing.s,
+                              vertical: context.spacing.xxs,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.colorScheme.card,
+                              borderRadius: BorderRadius.circular(
+                                chipsBarHeaderBadgeRadius,
+                              ),
+                              border: Border.all(
+                                color: context.borderSide.color,
+                                width: context.borderSide.width,
+                              ),
+                            ),
                             child: Text(
-                              l10n.recipientsHeaderTitle,
-                              style: headerStyle,
-                            ),
-                          ),
-                          if (showVisibilityBadge) ...[
-                            AxiModalSurface(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: context.spacing.s,
-                                vertical: context.spacing.xxs,
-                              ),
-                              child: Text(
-                                normalizedVisibilityLabel,
-                                style: headerStyle.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              normalizedVisibilityLabel,
+                              style: headerStyle.copyWith(
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
-                            SizedBox(width: context.spacing.m),
-                          ],
-                          SizedBox(width: context.spacing.s),
-                          ChipsBarCountBadge(
-                            count: recipients.length,
-                            expanded: !_barCollapsed,
-                            colors: context.colorScheme,
                           ),
-                          SizedBox(width: context.spacing.xs),
-                          AnimatedSwitcher(
-                            duration: chipsBarAnimationDuration,
-                            switchInCurve: Curves.easeOutCubic,
-                            switchOutCurve: Curves.easeInCubic,
-                            child: Icon(
-                              arrowIcon,
-                              key: ValueKey<bool>(_barCollapsed),
-                              size: context.sizing.menuItemIconSize,
-                              color: context.colorScheme.mutedForeground,
-                            ),
-                          ),
+                          SizedBox(width: context.spacing.m),
                         ],
-                      ),
+                        SizedBox(width: context.spacing.s),
+                        ChipsBarCountBadge(
+                          count: recipients.length,
+                          expanded: !_barCollapsed,
+                          colors: context.colorScheme,
+                        ),
+                        SizedBox(width: context.spacing.xs),
+                        AnimatedSwitcher(
+                          duration: chipsBarAnimationDuration,
+                          switchInCurve: Curves.easeOutCubic,
+                          switchOutCurve: Curves.easeInCubic,
+                          child: Icon(
+                            arrowIcon,
+                            key: ValueKey<bool>(_barCollapsed),
+                            size: context.sizing.menuItemIconSize,
+                            color: context.colorScheme.mutedForeground,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

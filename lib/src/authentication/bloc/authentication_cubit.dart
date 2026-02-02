@@ -253,8 +253,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
     _foregroundListener = _handleForegroundServiceActiveChanged;
     foregroundServiceActive.addListener(_foregroundListener!);
-    if (_emailService != null) {
-      _emailAuthFailureSubscription = _emailService.authFailureStream.listen(
+    final emailService = _emailService;
+    if (emailService != null) {
+      _emailAuthFailureSubscription = emailService.authFailureStream.listen(
         _handleEmailAuthFailure,
       );
     }

@@ -1470,50 +1470,41 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
       letterSpacing: _recurrenceLabelLetterSpacing,
     );
     final Color iconColor = calendarSubtitleColor;
-    final RoundedSuperellipseBorder shape =
-        RoundedSuperellipseBorder(borderRadius: context.radius);
-    return AxiTapBounce(
-      enabled: onPressed != null,
-      child: ShadFocusable(
-        canRequestFocus: onPressed != null,
-        builder: (context, _, __) {
-          return Material(
-            type: MaterialType.transparency,
-            shape: shape,
-            clipBehavior: Clip.antiAlias,
-            child: ShadGestureDetector(
-              cursor: onPressed != null
-                  ? SystemMouseCursors.click
-                  : SystemMouseCursors.basic,
-              onTap: onPressed,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: calendarGutterSm,
-                  vertical: calendarGutterSm,
-                ),
-                child: Row(
-                  children: [
-                    Text(
-                      _recurrenceAdvancedLabel.toUpperCase(),
-                      style: labelStyle,
-                    ),
-                    if (hasAdvancedData) ...[
-                      const SizedBox(width: calendarInsetSm),
-                      _RecurrenceAdvancedActiveBadge(
-                          enabled: onPressed != null),
-                    ],
-                    const Spacer(),
-                    Icon(
-                      isExpanded ? Icons.expand_less : Icons.expand_more,
-                      size: _recurrenceIconMediumSize,
-                      color: iconColor,
-                    ),
-                  ],
-                ),
-              ),
+    final BorderRadius radius = BorderRadius.circular(calendarBorderRadius);
+    return MouseRegion(
+      cursor: onPressed != null
+          ? SystemMouseCursors.click
+          : SystemMouseCursors.basic,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: radius,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: calendarGutterSm,
+              vertical: calendarGutterSm,
             ),
-          );
-        },
+            child: Row(
+              children: [
+                Text(
+                  _recurrenceAdvancedLabel.toUpperCase(),
+                  style: labelStyle,
+                ),
+                if (hasAdvancedData) ...[
+                  const SizedBox(width: calendarInsetSm),
+                  _RecurrenceAdvancedActiveBadge(enabled: onPressed != null),
+                ],
+                const Spacer(),
+                Icon(
+                  isExpanded ? Icons.expand_less : Icons.expand_more,
+                  size: _recurrenceIconMediumSize,
+                  color: iconColor,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

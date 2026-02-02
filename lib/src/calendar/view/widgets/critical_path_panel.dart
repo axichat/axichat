@@ -107,68 +107,96 @@ class CriticalPathPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: AxiButton.ghost(
-                  widthBehavior: AxiButtonWidth.expand,
-                  onPressed: _handleToggleExpanded,
-                  leading: AnimatedRotation(
-                    turns: isExpanded ? 0.25 : 0,
-                    duration: animationDuration,
-                    child: Icon(
-                      Icons.chevron_right,
-                      size: context.sizing.menuItemIconSize,
-                      color: colors.mutedForeground,
-                    ),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _handleToggleExpanded,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: calendarInsetSm,
                   ),
-                  child: Text(
-                    context.l10n.calendarCriticalPathsTitle.toUpperCase(),
-                    style: headerStyle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Row(
+                    children: [
+                      AnimatedRotation(
+                        turns: isExpanded ? 0.25 : 0,
+                        duration: animationDuration,
+                        child: Icon(
+                          Icons.chevron_right,
+                          size: context.sizing.menuItemIconSize,
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                      const SizedBox(width: calendarInsetSm),
+                      Flexible(
+                        child: Text(
+                          context.l10n.calendarCriticalPathsTitle.toUpperCase(),
+                          style: headerStyle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (showingSinglePath && onCloseOrdering != null) ...[
+                        const SizedBox(width: calendarInsetSm),
+                        ShadButton.ghost(
+                          size: ShadButtonSize.sm,
+                          onPressed: onCloseOrdering,
+                          child: Text(context.l10n.calendarCriticalPathsAll),
+                        ),
+                      ],
+                      const SizedBox(width: calendarInsetSm),
+                      ShadButton.ghost(
+                        size: ShadButtonSize.sm,
+                        onPressed: () => onToggleHideCompleted(!hideCompleted),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              hideCompleted
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              size: context.sizing.menuItemIconSize,
+                              color: hideCompleted
+                                  ? colors.primary
+                                  : colors.mutedForeground,
+                            ),
+                            const SizedBox(width: calendarInsetSm),
+                            Text(
+                              l10n.calendarCriticalPathCompletedLabel,
+                              style: context.textTheme.label.strong.copyWith(
+                                color: hideCompleted
+                                    ? colors.primary
+                                    : colors.mutedForeground,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: calendarInsetSm),
+                      AxiTooltip(
+                        builder: (context) => Text(
+                          context.l10n.calendarCriticalPathsNew,
+                          style: context.textTheme.muted,
+                        ),
+                        child: ShadButton.ghost(
+                          size: ShadButtonSize.sm,
+                          onPressed: () {
+                            _handleExpand();
+                            onCreatePath();
+                          },
+                          child: Icon(
+                            Icons.add,
+                            size: context.sizing.menuItemIconSize,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              if (showingSinglePath && onCloseOrdering != null) ...[
-                const SizedBox(width: calendarInsetSm),
-                AxiButton.ghost(
-                  size: AxiButtonSize.sm,
-                  onPressed: onCloseOrdering,
-                  child: Text(context.l10n.calendarCriticalPathsAll),
-                ),
-              ],
-              const SizedBox(width: calendarInsetSm),
-              AxiButton.ghost(
-                size: AxiButtonSize.sm,
-                onPressed: () => onToggleHideCompleted(!hideCompleted),
-                leading: Icon(
-                  hideCompleted ? Icons.visibility_off : Icons.visibility,
-                  size: context.sizing.menuItemIconSize,
-                  color:
-                      hideCompleted ? colors.primary : colors.mutedForeground,
-                ),
-                child: Text(
-                  l10n.calendarCriticalPathCompletedLabel,
-                  style: context.textTheme.label.strong.copyWith(
-                    color:
-                        hideCompleted ? colors.primary : colors.mutedForeground,
-                  ),
-                ),
-              ),
-              const SizedBox(width: calendarInsetSm),
-              AxiIconButton.ghost(
-                iconData: Icons.add,
-                iconSize: context.sizing.menuItemIconSize,
-                buttonSize: context.sizing.buttonHeightSm,
-                tapTargetSize: context.sizing.iconButtonTapTarget,
-                tooltip: context.l10n.calendarCriticalPathsNew,
-                onPressed: () {
-                  _handleExpand();
-                  onCreatePath();
-                },
-              ),
-            ],
+            ),
           ),
           ClipRect(
             child: AnimatedCrossFade(

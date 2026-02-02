@@ -310,7 +310,55 @@ class _AxichatState extends State<Axichat> {
                         const bool seedDemoCalendar = kEnableDemoChats;
                         final storage = calendarStorage;
 
-                        final CalendarBloc bloc = CalendarBloc(
+                        if (seedDemoCalendar) {
+                          return CalendarBloc(
+                            xmppService: xmppService,
+                            emailService: context
+                                    .read<SettingsCubit>()
+                                    .state
+                                    .endpointConfig
+                                    .enableSmtp
+                                ? context.read<EmailService>()
+                                : null,
+                            reminderController: reminderController,
+                            syncManagerBuilder: (bloc) {
+                              final manager = CalendarSyncManager(
+                                readModel: () => bloc.currentModel,
+                                applyModel: (model) async {
+                                  if (bloc.isClosed) return;
+                                  bloc.add(
+                                    CalendarEvent.remoteModelApplied(
+                                      model: model,
+                                    ),
+                                  );
+                                },
+                                sendCalendarMessage: (outbound) async {
+                                  if (bloc.isClosed) {
+                                    return;
+                                  }
+                                  final jid = xmppService.myJid;
+                                  if (jid != null) {
+                                    await xmppService.sendCalendarSyncMessage(
+                                      jid: jid,
+                                      outbound: outbound,
+                                    );
+                                  }
+                                },
+                                sendSnapshotFile:
+                                    xmppService.uploadCalendarSnapshot,
+                              );
+                              return manager;
+                            },
+                            storage: storage,
+                          )
+                            ..add(const CalendarEvent.started())
+                            ..add(
+                              CalendarEvent.remoteModelApplied(
+                                model: DemoCalendar.franklin(anchor: demoNow()),
+                              ),
+                            );
+                        }
+                        return CalendarBloc(
                           xmppService: xmppService,
                           emailService: context
                                   .read<SettingsCubit>()
@@ -350,14 +398,6 @@ class _AxichatState extends State<Axichat> {
                           },
                           storage: storage,
                         )..add(const CalendarEvent.started());
-                        if (seedDemoCalendar) {
-                          bloc.add(
-                            CalendarEvent.remoteModelApplied(
-                              model: DemoCalendar.franklin(anchor: demoNow()),
-                            ),
-                          );
-                        }
-                        return bloc;
                       },
                     ),
                   if (widget._storageManager.guestStorage != null)
@@ -376,31 +416,31 @@ class _AxichatState extends State<Axichat> {
                           previous.endpointConfig != current.endpointConfig,
                       listener: (context, settings) async {
                         final config = settings.endpointConfig;
-                        final authCubit = context.read<AuthenticationCubit>();
                         final emailService = context.read<EmailService>();
                         final EmailService? activeEmailService =
                             config.enableSmtp ? emailService : null;
-                        final chatsCubit = context.read<ChatsCubit>();
-                        final draftCubit = context.read<DraftCubit>();
-                        final calendarBloc =
-                            BlocProvider.maybeOf<CalendarBloc>(context);
-                        final homeRefreshSyncService =
-                            context.read<HomeRefreshSyncService>();
-                        final connectivityCubit =
-                            context.read<ConnectivityCubit>();
-                        authCubit.updateEndpointConfig(config);
-                        await authCubit.updateEmailService(activeEmailService);
-                        chatsCubit.updateEmailService(activeEmailService);
-                        draftCubit.updateEmailService(activeEmailService);
-                        calendarBloc?.updateEmailService(activeEmailService);
+                        context
+                            .read<AuthenticationCubit>()
+                            .updateEndpointConfig(config);
+                        await context
+                            .read<AuthenticationCubit>()
+                            .updateEmailService(activeEmailService);
+                        if (!context.mounted) return;
+                        context
+                            .read<ChatsCubit>()
+                            .updateEmailService(activeEmailService);
+                        context
+                            .read<DraftCubit>()
+                            .updateEmailService(activeEmailService);
                         emailService.updateEndpointConfig(config);
-                        await homeRefreshSyncService.updateEmailService(
-                          activeEmailService,
-                        );
-                        connectivityCubit.updateEmailContext(
-                          emailEnabled: config.enableSmtp,
-                          emailService: activeEmailService,
-                        );
+                        await context
+                            .read<HomeRefreshSyncService>()
+                            .updateEmailService(activeEmailService);
+                        if (!context.mounted) return;
+                        context.read<ConnectivityCubit>().updateEmailContext(
+                              emailEnabled: config.enableSmtp,
+                              emailService: activeEmailService,
+                            );
                         if (!config.enableSmtp) {
                           await emailService.shutdown(
                             clearCredentials: false,
@@ -411,6 +451,20 @@ class _AxichatState extends State<Axichat> {
                         }
                       },
                     ),
+                    if (calendarStorage != null)
+                      BlocListener<SettingsCubit, SettingsState>(
+                        listenWhen: (previous, current) =>
+                            previous.endpointConfig != current.endpointConfig,
+                        listener: (context, settings) {
+                          final config = settings.endpointConfig;
+                          final emailService = context.read<EmailService>();
+                          final EmailService? activeEmailService =
+                              config.enableSmtp ? emailService : null;
+                          context
+                              .read<CalendarBloc>()
+                              .updateEmailService(activeEmailService);
+                        },
+                      ),
                     BlocListener<SettingsCubit, SettingsState>(
                       listenWhen: (previous, current) =>
                           previous.shareTokenSignatureEnabled !=
