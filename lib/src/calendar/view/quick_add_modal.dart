@@ -1539,6 +1539,7 @@ class _QuickAddActions extends StatelessWidget {
               child: TaskSecondaryButton(
                 label: l10n.calendarCancel,
                 onPressed: isSubmitting ? null : onCancel,
+                widthBehavior: AxiButtonWidth.expand,
               ),
             ),
             Expanded(
@@ -1546,6 +1547,7 @@ class _QuickAddActions extends StatelessWidget {
                 label: l10n.calendarAddTaskAction,
                 onPressed: disabled ? null : onSubmit,
                 isBusy: isSubmitting,
+                widthBehavior: AxiButtonWidth.expand,
               ),
             ),
           ],

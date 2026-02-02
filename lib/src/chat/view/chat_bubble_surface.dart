@@ -393,7 +393,6 @@ class RenderChatBubbleSurface extends RenderBox
         _CutoutDescriptor(
           rect: avatarRect,
           cornerRadius: avatarStyle?.cornerRadius ?? 16,
-          shape: _CutoutShape.oval,
         ),
       if (selectionRect != null)
         _CutoutDescriptor(
@@ -495,8 +494,13 @@ class RenderChatBubbleSurface extends RenderBox
         BoxConstraints.tight(Size.square(avatarSize)),
         parentUsesSize: true,
       );
-      final cutoutRadius = math.max(style.depth, style.cornerRadius);
-      final rect = Rect.fromCircle(center: Offset.zero, radius: cutoutRadius);
+      final cutoutExtent = math.max(style.depth, style.cornerRadius) * 2;
+      final rect = Rect.fromLTWH(
+        -cutoutExtent / 2,
+        -cutoutExtent / 2,
+        cutoutExtent,
+        cutoutExtent,
+      );
       final childParentData = child.parentData as _ChatBubbleParentData;
       childParentData.offset = Offset(
         -child.size.width / 2 + style.offset.dx,
@@ -711,15 +715,11 @@ class _CutoutDescriptor {
   const _CutoutDescriptor({
     required this.rect,
     required this.cornerRadius,
-    this.shape = _CutoutShape.squircle,
   });
 
   final Rect rect;
   final double cornerRadius;
-  final _CutoutShape shape;
 }
-
-enum _CutoutShape { squircle, oval }
 
 Path _bubblePath(
   Size size,
@@ -730,12 +730,9 @@ Path _bubblePath(
   final shape = SquircleBorder(borderRadius: borderRadius);
   var path = Path()..addPath(shape.getOuterPath(rect), Offset.zero);
   for (final cutout in cutouts) {
-    final cutoutPath = switch (cutout.shape) {
-      _CutoutShape.squircle => SquircleBorder(
-          cornerRadius: cutout.cornerRadius,
-        ).getOuterPath(cutout.rect),
-      _CutoutShape.oval => Path()..addOval(cutout.rect),
-    };
+    final cutoutPath = SquircleBorder(
+      cornerRadius: cutout.cornerRadius,
+    ).getOuterPath(cutout.rect);
     path = Path.combine(PathOperation.difference, path, cutoutPath);
   }
   return path;

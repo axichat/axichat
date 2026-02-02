@@ -1183,22 +1183,14 @@ class _DeadlineNavigationButton extends StatelessWidget {
     final iconColor = enabled
         ? calendarTitleColor
         : calendarSubtitleColor.withValues(alpha: 0.4);
-    const desiredPadding = EdgeInsets.symmetric(
-      horizontal: calendarGutterSm,
-      vertical: calendarInsetLg,
-    );
-    final basePadding = AxiButtonSize.regular.padding(context.spacing);
-    final extraPadding = EdgeInsets.only(
-      left: math.max(0, desiredPadding.left - basePadding.left),
-      right: math.max(0, desiredPadding.right - basePadding.right),
-      top: math.max(0, desiredPadding.top - basePadding.top),
-      bottom: math.max(0, desiredPadding.bottom - basePadding.bottom),
-    );
+    final double buttonSize = context.sizing.buttonHeightRegular;
 
-    return AxiButton.outline(
-      onPressed: onPressed,
-      child: Padding(
-        padding: extraPadding,
+    return SizedBox(
+      width: buttonSize,
+      height: buttonSize,
+      child: AxiButton.outline(
+        widthBehavior: AxiButtonWidth.expand,
+        onPressed: onPressed,
         child: Icon(
           icon,
           size: context.sizing.menuItemIconSize,
@@ -1243,57 +1235,67 @@ class _DeadlineCalendarGrid extends StatelessWidget {
 
     return Padding(
       padding: calendarPaddingLg,
-      child: Column(
-        children: [
-          Row(
-            children: _weekdayLabels(context)
-                .map(
-                  (label) => Expanded(
-                    child: Center(
-                      child: Text(
-                        label,
-                        style: context.textTheme.labelSm.strong.copyWith(
-                          color: calendarTimeLabelColor,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double spacing = context.spacing.xs;
+          final double available = constraints.maxWidth;
+          final double targetSize = (available - spacing * 6) / 7;
+          final double cellSize = targetSize.clamp(
+            context.sizing.buttonHeightSm,
+            context.sizing.buttonHeightRegular,
+          );
+          return Column(
+            children: [
+              Row(
+                children: _weekdayLabels(context)
+                    .map(
+                      (label) => Expanded(
+                        child: Center(
+                          child: Text(
+                            label,
+                            style: context.textTheme.labelSm.strong.copyWith(
+                              color: calendarTimeLabelColor,
+                            ),
+                          ),
                         ),
                       ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: calendarGutterSm),
+              Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: days.map((date) {
+                  if (date == null) {
+                    return SizedBox(
+                      width: cellSize,
+                      height: cellSize,
+                    );
+                  }
+
+                  final isSelected =
+                      selectedDate != null && _isSameDay(date, selectedDate!);
+                  final isDisabled = !isDateWithinBounds(date);
+
+                  return SizedBox(
+                    width: cellSize,
+                    height: cellSize,
+                    child: AxiButton(
+                      variant: isSelected
+                          ? AxiButtonVariant.primary
+                          : AxiButtonVariant.outline,
+                      widthBehavior: AxiButtonWidth.expand,
+                      selected: isSelected,
+                      onPressed: isDisabled ? null : () => onDaySelected(date),
+                      child: Text('${date.day}'),
                     ),
-                  ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: calendarGutterSm),
-          Wrap(
-            spacing: context.spacing.xs,
-            runSpacing: context.spacing.xs,
-            children: days.map((date) {
-              if (date == null) {
-                return SizedBox(
-                  width: context.sizing.iconButtonSize,
-                  height: context.sizing.iconButtonSize,
-                );
-              }
-
-              final isToday = _isSameDay(date, DateTime.now());
-              final isSelected =
-                  selectedDate != null && _isSameDay(date, selectedDate!);
-              final isDisabled = !isDateWithinBounds(date);
-
-              return SizedBox(
-                width: context.sizing.iconButtonSize,
-                height: context.sizing.iconButtonSize,
-                child: AxiButton(
-                  variant: isSelected
-                      ? AxiButtonVariant.primary
-                      : AxiButtonVariant.outline,
-                  widthBehavior: AxiButtonWidth.expand,
-                  selected: isSelected,
-                  onPressed: isDisabled ? null : () => onDaySelected(date),
-                  child: Text('${date.day}'),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
+                  );
+                }).toList(),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

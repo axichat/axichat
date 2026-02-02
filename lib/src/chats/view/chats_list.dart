@@ -830,14 +830,9 @@ class _ChatListTileState extends State<ChatListTile> {
         await _handleTap(item);
       };
     }
-    final iconCutoutDepth = sizing.iconButtonSize - spacing.s;
-    final iconCutoutThickness =
-        sizing.iconButtonSize + spacing.xs + spacing.xxs;
     final tilePadding = EdgeInsetsDirectional.only(
       start: scaled(spacing.m),
-      end: scaled(
-        showUnreadBadge ? sizing.iconButtonSize : iconCutoutDepth,
-      ),
+      end: scaled(showUnreadBadge ? spacing.l : spacing.m),
       top: scaled(spacing.xs),
       bottom: scaled(spacing.xs),
     );
@@ -871,6 +866,10 @@ class _ChatListTileState extends State<ChatListTile> {
       subtitlePlaceholder: l10n.chatEmptyMessages,
     );
 
+    final cutoutGap = spacing.xxs;
+    final iconButtonSize = sizing.iconButtonSize;
+    final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
+    final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final iconCutoutRadius = context.radii.squircle;
     final unreadChildOffset = -spacing.xs;
     final timestampOffset = (spacing.xs + spacing.xxs) / 2;
@@ -889,7 +888,7 @@ class _ChatListTileState extends State<ChatListTile> {
         ),
       CutoutSpec(
         edge: CutoutEdge.right,
-        alignment: const Alignment(1.02, 0),
+        alignment: const Alignment(1, 0),
         depth: iconCutoutDepth,
         thickness: iconCutoutThickness,
         cornerRadius: iconCutoutRadius,
@@ -935,37 +934,47 @@ class _ChatListTileState extends State<ChatListTile> {
           width: context.borderSide.width,
         ),
       ),
-      child: Column(
-        children: [
-          tile,
-          AnimatedCrossFade(
-            duration: baseAnimationDuration,
-            sizeCurve: Curves.easeInOutCubic,
-            crossFadeState: _showActions
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            firstChild: const SizedBox.shrink(),
-            secondChild: Padding(
-              padding: EdgeInsetsDirectional.fromSTEB(
-                scaled(spacing.m),
-                0,
-                scaled(spacing.m),
-                scaled(spacing.m + spacing.xs),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: scaled(spacing.m + spacing.xs),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth;
+          final inset = scaled(iconCutoutDepth);
+          final bodyWidth = (maxWidth - inset).clamp(0.0, maxWidth);
+          return SizedBox(
+            width: bodyWidth,
+            child: Column(
+              children: [
+                tile,
+                AnimatedCrossFade(
+                  duration: baseAnimationDuration,
+                  sizeCurve: Curves.easeInOutCubic,
+                  crossFadeState: _showActions
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  firstChild: const SizedBox.shrink(),
+                  secondChild: Padding(
+                    padding: EdgeInsetsDirectional.fromSTEB(
+                      scaled(spacing.m),
+                      0,
+                      scaled(spacing.m),
+                      scaled(spacing.m + spacing.xs),
+                    ),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: scaled(spacing.m + spacing.xs),
+                      ),
+                      child: _ChatActionPanel(
+                        chat: item,
+                        archivedContext: widget.archivedContext,
+                        onClose: _hideActions,
+                        onDelete: () => _confirmDelete(item),
+                      ),
+                    ),
+                  ),
                 ),
-                child: _ChatActionPanel(
-                  chat: item,
-                  archivedContext: widget.archivedContext,
-                  onClose: _hideActions,
-                  onDelete: () => _confirmDelete(item),
-                ),
-              ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
 

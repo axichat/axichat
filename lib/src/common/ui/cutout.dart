@@ -239,6 +239,8 @@ class _RenderCutoutSurface extends RenderBox
       child = childAfter(child);
     }
 
+    size = constraints.constrain(bodySize);
+
     final cutoutCount = math.min(cutoutChildren.length, _cutouts.length);
     var overflowLeft = 0.0;
     var overflowRight = 0.0;
@@ -263,32 +265,21 @@ class _RenderCutoutSurface extends RenderBox
       );
     }
 
-    final desiredSize = Size(
-      bodySize.width + overflowLeft + overflowRight,
-      bodySize.height + overflowTop + overflowBottom,
+    _hitTestBounds = Rect.fromLTRB(
+      -overflowLeft,
+      -overflowTop,
+      bodySize.width + overflowRight,
+      bodySize.height + overflowBottom,
     );
-    size = constraints.constrain(desiredSize);
 
-    final availableExtraWidth = size.width - bodySize.width;
-    final availableExtraHeight = size.height - bodySize.height;
-    final widthScale = (overflowLeft + overflowRight) <= 0
-        ? 0.0
-        : availableExtraWidth / (overflowLeft + overflowRight);
-    final heightScale = (overflowTop + overflowBottom) <= 0
-        ? 0.0
-        : availableExtraHeight / (overflowTop + overflowBottom);
-    final leftShift = overflowLeft * widthScale;
-    final topShift = overflowTop * heightScale;
-    final bodyOffset = Offset(leftShift, topShift);
-
-    bodyChildParentData(bodyChild).offset = bodyOffset;
+    bodyChildParentData(bodyChild).offset = Offset.zero;
 
     for (var i = 0; i < cutoutCount; i++) {
       final childBox = cutoutChildren[i];
       final spec = _cutouts[i];
       final rect = _cutoutRect(bodySize, spec);
       final topLeft = _cutoutChildOffset(rect, spec, childBox.size);
-      bodyChildParentData(childBox).offset = bodyOffset + topLeft;
+      bodyChildParentData(childBox).offset = topLeft;
     }
   }
 
@@ -369,6 +360,16 @@ class _RenderCutoutSurface extends RenderBox
   }
 
   @override
+  bool hitTest(BoxHitTestResult result, {required Offset position}) {
+    if (_hitTestBounds != null && !_hitTestBounds!.contains(position)) {
+      return false;
+    }
+    final hitChild = hitTestChildren(result, position: position);
+    if (hitChild) return true;
+    return hitTestSelf(position);
+  }
+
+  @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     return defaultHitTestChildren(result, position: position);
   }
@@ -379,6 +380,8 @@ class _RenderCutoutSurface extends RenderBox
   _CutoutParentData bodyChildParentData(RenderBox child) {
     return child.parentData! as _CutoutParentData;
   }
+
+  Rect? _hitTestBounds;
 }
 
 class _CutoutParentData extends ContainerBoxParentData<RenderBox> {}

@@ -205,7 +205,6 @@ const _selectionExtrasMaxWidth = 500.0;
 const _messageAvatarSize = 36.0;
 const _messageRowAvatarReservation = 32.0;
 const _messageAvatarCutoutDepth = _messageAvatarSize / 2;
-const _messageAvatarCutoutRadius = _messageAvatarCutoutDepth + 4.0;
 const _messageAvatarCutoutPadding = EdgeInsets.zero;
 const _messageAvatarCutoutMinThickness = _messageAvatarSize;
 const _messageAvatarCutoutAlignment = -1.0;
@@ -6923,11 +6922,12 @@ class _ChatState extends State<Chat> {
                                                                   messageAvatarPath,
                                                             );
                                                             avatarStyle =
-                                                                const CutoutStyle(
+                                                                CutoutStyle(
                                                               depth:
                                                                   _messageAvatarCutoutDepth,
                                                               cornerRadius:
-                                                                  _messageAvatarCutoutRadius,
+                                                                  context.radii
+                                                                      .squircle,
                                                               padding:
                                                                   _messageAvatarCutoutPadding,
                                                               offset:
@@ -7250,6 +7250,20 @@ class _ChatState extends State<Chat> {
                                                                           context,
                                                                         )
                                                                       : 0);
+                                                          final reactionBottomInset =
+                                                              showCompactReactions
+                                                                  ? _reactionCutoutDepth
+                                                                  : 0.0;
+                                                          final recipientBottomInset =
+                                                              (showReplyStrip ||
+                                                                      showRecipientCutout)
+                                                                  ? _recipientCutoutDepth
+                                                                  : 0.0;
+                                                          final bubbleBottomCutoutPadding =
+                                                              math.max(
+                                                            reactionBottomInset,
+                                                            recipientBottomInset,
+                                                          );
                                                           final attachmentPadding =
                                                               EdgeInsets.only(
                                                             top:
@@ -7280,128 +7294,103 @@ class _ChatState extends State<Chat> {
                                                                       ),
                                                                     )
                                                                   : null;
-                                                          final selectionExtrasKey =
-                                                              ValueKey(
-                                                            'selection-extras-${messageModel.stanzaID}-${isSingleSelection ? 'open' : 'closed'}',
+                                                          final selectionExtrasChild =
+                                                              Align(
+                                                            alignment: self
+                                                                ? Alignment
+                                                                    .centerRight
+                                                                : Alignment
+                                                                    .centerLeft,
+                                                            child: SizedBox(
+                                                              width:
+                                                                  selectionExtrasMaxWidth,
+                                                              child: Padding(
+                                                                padding:
+                                                                    attachmentPadding
+                                                                        .copyWith(
+                                                                  top: attachmentTopPadding +
+                                                                      bubbleBottomCutoutPadding,
+                                                                ),
+                                                                child: Column(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  crossAxisAlignment:
+                                                                      CrossAxisAlignment
+                                                                          .center,
+                                                                  children: [
+                                                                    actionBar,
+                                                                    if (reactionManager !=
+                                                                        null)
+                                                                      const SizedBox(
+                                                                        height:
+                                                                            20,
+                                                                      ),
+                                                                    if (reactionManager !=
+                                                                        null)
+                                                                      reactionManager,
+                                                                  ],
+                                                                ),
+                                                              ),
+                                                            ),
                                                           );
                                                           final selectionExtras =
-                                                              isSingleSelection
-                                                                  ? KeyedSubtree(
-                                                                      key:
-                                                                          selectionExtrasKey,
+                                                              IgnorePointer(
+                                                            ignoring:
+                                                                !isSingleSelection,
+                                                            child:
+                                                                TweenAnimationBuilder<
+                                                                    double>(
+                                                              tween:
+                                                                  Tween<double>(
+                                                                begin: 0,
+                                                                end:
+                                                                    isSingleSelection
+                                                                        ? 1.0
+                                                                        : 0.0,
+                                                              ),
+                                                              duration:
+                                                                  _bubbleFocusDuration,
+                                                              curve:
+                                                                  _bubbleFocusCurve,
+                                                              builder: (
+                                                                context,
+                                                                value,
+                                                                child,
+                                                              ) {
+                                                                return ClipRect(
+                                                                  child: Align(
+                                                                    alignment:
+                                                                        Alignment
+                                                                            .topCenter,
+                                                                    heightFactor:
+                                                                        value,
+                                                                    child:
+                                                                        Opacity(
+                                                                      opacity:
+                                                                          value,
                                                                       child:
-                                                                          Align(
-                                                                        alignment: self
-                                                                            ? Alignment.centerRight
-                                                                            : Alignment.centerLeft,
-                                                                        child:
-                                                                            SizedBox(
-                                                                          width:
-                                                                              selectionExtrasMaxWidth,
-                                                                          child:
-                                                                              Padding(
-                                                                            padding:
-                                                                                attachmentPadding,
-                                                                            child:
-                                                                                Column(
-                                                                              mainAxisSize: MainAxisSize.min,
-                                                                              crossAxisAlignment: CrossAxisAlignment.center,
-                                                                              children: [
-                                                                                actionBar,
-                                                                                if (reactionManager != null)
-                                                                                  const SizedBox(
-                                                                                    height: 20,
-                                                                                  ),
-                                                                                if (reactionManager != null) reactionManager,
-                                                                              ],
-                                                                            ),
-                                                                          ),
-                                                                        ),
-                                                                      ),
-                                                                    )
-                                                                  : KeyedSubtree(
-                                                                      key:
-                                                                          selectionExtrasKey,
-                                                                      child: const SizedBox
-                                                                          .shrink(),
-                                                                    );
+                                                                          child,
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              },
+                                                              child:
+                                                                  selectionExtrasChild,
+                                                            ),
+                                                          );
                                                           final attachments =
-                                                              AnimatedSwitcher(
+                                                              AxiAnimatedSize(
                                                             duration:
                                                                 _bubbleFocusDuration,
                                                             reverseDuration:
                                                                 _bubbleFocusDuration,
-                                                            switchInCurve:
+                                                            curve:
                                                                 _bubbleFocusCurve,
-                                                            switchOutCurve:
-                                                                Curves
-                                                                    .easeInCubic,
-                                                            layoutBuilder: (
-                                                              currentChild,
-                                                              previousChildren,
-                                                            ) {
-                                                              return Stack(
-                                                                clipBehavior:
-                                                                    Clip.none,
-                                                                alignment:
-                                                                    Alignment
-                                                                        .topCenter,
-                                                                children: [
-                                                                  for (final child
-                                                                      in previousChildren)
-                                                                    Positioned
-                                                                        .fill(
-                                                                      child:
-                                                                          IgnorePointer(
-                                                                        child:
-                                                                            child,
-                                                                      ),
-                                                                    ),
-                                                                  if (currentChild !=
-                                                                      null)
-                                                                    currentChild,
-                                                                ],
-                                                              );
-                                                            },
-                                                            transitionBuilder:
-                                                                (child,
-                                                                    animation) {
-                                                              final curvedAnimation =
-                                                                  CurvedAnimation(
-                                                                parent:
-                                                                    animation,
-                                                                curve:
-                                                                    _bubbleFocusCurve,
-                                                                reverseCurve: Curves
-                                                                    .easeInCubic,
-                                                              );
-                                                              final slideAnimation =
-                                                                  Tween<Offset>(
-                                                                begin:
-                                                                    const Offset(
-                                                                  0,
-                                                                  -0.18,
-                                                                ),
-                                                                end:
-                                                                    Offset.zero,
-                                                              ).animate(
-                                                                curvedAnimation,
-                                                              );
-                                                              return ClipRect(
-                                                                child:
-                                                                    FadeTransition(
-                                                                  opacity:
-                                                                      curvedAnimation,
-                                                                  child:
-                                                                      SlideTransition(
-                                                                    position:
-                                                                        slideAnimation,
-                                                                    child:
-                                                                        child,
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            },
+                                                            alignment: Alignment
+                                                                .topCenter,
+                                                            clipBehavior:
+                                                                Clip.none,
                                                             child:
                                                                 selectionExtras,
                                                           );
@@ -7487,6 +7476,15 @@ class _ChatState extends State<Chat> {
                                                                         shadowValue,
                                                                         child,
                                                                       ) {
+                                                                        final extras = bubbleBottomCutoutPadding >
+                                                                                0
+                                                                            ? <Widget>[
+                                                                                _MessageExtraGap(
+                                                                                  height: bubbleBottomCutoutPadding,
+                                                                                ),
+                                                                                ...bubbleExtraChildren,
+                                                                              ]
+                                                                            : bubbleExtraChildren;
                                                                         return ConstrainedBox(
                                                                           constraints:
                                                                               bubbleConstraints,
@@ -7500,7 +7498,7 @@ class _ChatState extends State<Chat> {
                                                                                 ? CrossAxisAlignment.end
                                                                                 : CrossAxisAlignment.start,
                                                                             children:
-                                                                                bubbleExtraChildren,
+                                                                                extras,
                                                                           ),
                                                                         );
                                                                       },

@@ -1771,30 +1771,36 @@ final class _RecipientAutocompleteOverlayState
                               borderRadius: overlayRadius,
                               child: Material(
                                 color: Colors.transparent,
-                                child: ValueListenableBuilder<int?>(
-                                  valueListenable:
-                                      widget.highlightedIndexListenable,
-                                  builder: (context, highlightedIndex, _) {
-                                    return _AutocompleteOptionsList(
-                                      options: _options,
-                                      avatarPathsByJid: widget.avatarPathsByJid,
-                                      selfIdentity: widget.selfIdentity,
-                                      onSelected: (option) {
-                                        widget.onRecipientAdded(option);
-                                        widget.controller.clear();
-                                        _dismissOverlay();
-                                        widget.focusNode.requestFocus();
-                                      },
-                                      titleStyle: titleStyle,
-                                      subtitleStyle: subtitleStyle,
-                                      dividerColor: dividerColor,
-                                      trailingIconColor: trailingIconColor,
-                                      hoverColor: hoverColor,
-                                      highlightColor: highlightColor,
-                                      highlightedIndex: highlightedIndex,
-                                      maxHeight: limits.maxHeight,
-                                    );
-                                  },
+                                child: Listener(
+                                  behavior: HitTestBehavior.translucent,
+                                  onPointerDown: (_) =>
+                                      widget.focusNode.requestFocus(),
+                                  child: ValueListenableBuilder<int?>(
+                                    valueListenable:
+                                        widget.highlightedIndexListenable,
+                                    builder: (context, highlightedIndex, _) {
+                                      return _AutocompleteOptionsList(
+                                        options: _options,
+                                        avatarPathsByJid:
+                                            widget.avatarPathsByJid,
+                                        selfIdentity: widget.selfIdentity,
+                                        onSelected: (option) {
+                                          widget.onRecipientAdded(option);
+                                          widget.controller.clear();
+                                          _dismissOverlay();
+                                          widget.focusNode.requestFocus();
+                                        },
+                                        titleStyle: titleStyle,
+                                        subtitleStyle: subtitleStyle,
+                                        dividerColor: dividerColor,
+                                        trailingIconColor: trailingIconColor,
+                                        hoverColor: hoverColor,
+                                        highlightColor: highlightColor,
+                                        highlightedIndex: highlightedIndex,
+                                        maxHeight: limits.maxHeight,
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                             ),

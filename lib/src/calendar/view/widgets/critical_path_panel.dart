@@ -85,9 +85,7 @@ class CriticalPathPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final l10n = context.l10n;
-    final TextStyle headerStyle = context.textTheme.sectionLabelM.copyWith(
-      color: calendarSubtitleColor,
-    );
+    final TextStyle headerStyle = context.textTheme.sectionLabelM;
     final bool hasPaths = paths.isNotEmpty;
     final CalendarCriticalPath? orderingPath = _pathById(orderingPathId);
     final CalendarCriticalPath? reorderTarget = orderingPath;

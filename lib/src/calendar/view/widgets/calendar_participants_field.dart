@@ -598,15 +598,15 @@ class _ParticipantActionsRow extends StatelessWidget {
       children: [
         AxiButton.outline(
           onPressed: onAccept,
-          child: Text(_attendeeActionAcceptLabel),
+          child: const Text(_attendeeActionAcceptLabel),
         ),
         AxiButton.outline(
           onPressed: onDecline,
-          child: Text(_attendeeActionDeclineLabel),
+          child: const Text(_attendeeActionDeclineLabel),
         ),
         AxiButton.outline(
           onPressed: onTentative,
-          child: Text(_attendeeActionTentativeLabel),
+          child: const Text(_attendeeActionTentativeLabel),
         ),
       ],
     );

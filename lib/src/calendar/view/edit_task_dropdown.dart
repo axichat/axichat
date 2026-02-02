@@ -1253,10 +1253,13 @@ class _TaskPopoverTransformBody extends StatelessWidget {
     return OpenContainer(
       key: containerKey,
       tappable: false,
-      closedColor: Colors.transparent,
-      openColor: Colors.transparent,
+      closedColor: background,
+      openColor: background,
+      middleColor: background,
       closedElevation: 0,
       openElevation: 0,
+      closedShape: RoundedSuperellipseBorder(borderRadius: radius),
+      openShape: RoundedSuperellipseBorder(borderRadius: radius),
       transitionDuration: baseAnimationDuration,
       transitionType: ContainerTransitionType.fadeThrough,
       closedBuilder: (context, action) {
@@ -1414,10 +1417,7 @@ class _EditTaskInlineActionChip extends StatelessWidget {
           size: context.sizing.iconButtonIconSize,
           color: baseColor,
         ),
-        child: Text(
-          action.label,
-          style: context.textTheme.small.copyWith(color: baseColor),
-        ),
+        child: Text(action.label),
       ),
     );
   }
