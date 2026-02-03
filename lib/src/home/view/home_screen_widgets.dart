@@ -162,7 +162,10 @@ class _NexusScaffold extends StatelessWidget {
       HomeTab.invites: context.watch<RosterCubit>().inviteCount,
       HomeTab.chats: chatItems
           .where((chat) => !chat.archived && !chat.spam)
-          .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
+          .fold<int>(
+            0,
+            (sum, chat) => sum + (chat.unreadCount > 0 ? chat.unreadCount : 0),
+          ),
       HomeTab.drafts: context.watch<DraftCubit>().state.items?.length ?? 0,
       HomeTab.spam:
           chatItems.where((chat) => chat.spam && !chat.archived).length,

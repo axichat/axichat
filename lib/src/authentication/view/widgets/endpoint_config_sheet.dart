@@ -437,17 +437,18 @@ class _ToggleTile extends StatelessWidget {
   const _ToggleTile({
     required this.label,
     required this.value,
-    required this.onChangedabel;
+    required this.onChanged,
+  });
+
+  final String label;
   final bool value;
-  final bool enabled;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
     return AxiCheckboxFormField(
-      key: ValueKey('$label-$value-$enabled'),
+      key: ValueKey('$label-$value'),
       initialValue: value,
-      enabled: enabled,
       inputLabel: Text(label),
       onChanged: onChanged,
     );

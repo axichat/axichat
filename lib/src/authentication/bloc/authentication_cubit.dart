@@ -1286,8 +1286,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? emailPassword = emailCredentials?.password ?? fallbackEmailPassword;
     final String displayName = addressLocalPart(resolvedJid) ?? resolvedJid;
 
-    final bool canPreserveSession = wasAuthenticated && usingStoredCredentials;
-
     final String ensuredDatabasePrefix =
         storedSecrets.prefix ?? generateRandomString(length: 8);
     final RegisteredCredentialKey databasePrefixStorageKey =

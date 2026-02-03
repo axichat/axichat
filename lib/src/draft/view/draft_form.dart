@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -1463,38 +1462,6 @@ class _DraftFormState extends State<DraftForm> {
       removeTooltip: l10n.draftRemoveAttachment,
       closeTooltip: l10n.commonClose,
     );
-  }
-
-  Size? _intrinsicSizeFrom(EmailAttachment attachment) {
-    final width = attachment.width;
-    final height = attachment.height;
-    if (width == null || height == null) return null;
-    if (width <= 0 || height <= 0) return null;
-    return Size(width.toDouble(), height.toDouble());
-  }
-
-  Size _fitWithinBounds({
-    required Size? intrinsicSize,
-    required double maxWidth,
-    required double maxHeight,
-  }) {
-    final cappedWidth = math.max(0.0, maxWidth);
-    final cappedHeight = math.max(0.0, maxHeight);
-    if (intrinsicSize == null ||
-        intrinsicSize.width <= 0 ||
-        intrinsicSize.height <= 0) {
-      final width = math.min(cappedWidth, 360.0);
-      final height = math.min(cappedHeight, width * 0.75);
-      return Size(width, height);
-    }
-    final aspectRatio = intrinsicSize.width / intrinsicSize.height;
-    var width = math.min(intrinsicSize.width, cappedWidth);
-    var height = width / aspectRatio;
-    if (height > cappedHeight && cappedHeight > 0) {
-      height = cappedHeight;
-      width = height * aspectRatio;
-    }
-    return Size(width, height);
   }
 
   Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {

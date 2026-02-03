@@ -222,12 +222,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
           migrated['chat_read_receipts'] = migrated['readReceipts'];
         }
       }
-      final state = SettingsState.fromJson(migrated);
-      final normalizedConfig = normalizeEndpointConfig(state.endpointConfig);
-      if (normalizedConfig == state.endpointConfig) {
-        return state;
-      }
-      return state.copyWith(endpointConfig: normalizedConfig);
+      return SettingsState.fromJson(migrated);
     } catch (_) {
       return const SettingsState(shadColor: ShadColor.blue);
     }
