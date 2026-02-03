@@ -50,6 +50,10 @@ class AuthProgressController {
 
   AuthProgressSnapshot get snapshot => _snapshot.value;
 
+  bool get isActive =>
+      _controller.isAnimating ||
+      (_controller.value > 0 && _controller.value < 1);
+
   void start({
     required String label,
     required Duration rampDuration,

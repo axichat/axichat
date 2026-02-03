@@ -103,6 +103,8 @@ dependencies:
   crop_your_image: ^2.0.0
   carousel_slider: ^5.1.1
   custom_refresh_indicator: ^4.0.1
+  pdfrx: ^1.0.94
+  charset_converter: ^2.3.0
 
 dependency_overrides:
   pinenacl: ^0.6.0

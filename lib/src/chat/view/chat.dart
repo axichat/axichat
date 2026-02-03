@@ -9514,13 +9514,13 @@ class _PinnedMessageTile extends StatelessWidget {
             builder: (context) => Text(l10n.chatUnpinMessage),
             child: AxiIconButton.ghost(
               onPressed: () => context.read<ChatBloc>().add(
-                  ChatMessagePinRequested(
-                    message: messageForPin,
-                    pin: false,
-                    chat: chat,
-                    roomState: roomState,
+                    ChatMessagePinRequested(
+                      message: messageForPin,
+                      pin: false,
+                      chat: chat,
+                      roomState: roomState,
+                    ),
                   ),
-                ),
               iconData: LucideIcons.pinOff,
               iconSize: context.sizing.menuItemIconSize,
             ),

@@ -35,6 +35,29 @@ ChatSettingsSnapshot _defaultChatSettings() => const ChatSettingsSnapshot(
       autoDownloadArchives: false,
     );
 
+ChatMessageSent _messageSent({
+  required Chat chat,
+  required String text,
+  required List<ComposerRecipient> recipients,
+  required ChatSettingsSnapshot settings,
+  List<PendingAttachment>? pendingAttachments,
+  bool supportsHttpFileUpload = false,
+  String? subject,
+  Message? quotedDraft,
+  RoomState? roomState,
+}) =>
+    ChatMessageSent(
+      chat: chat,
+      text: text,
+      recipients: recipients,
+      pendingAttachments: pendingAttachments ?? const <PendingAttachment>[],
+      settings: settings,
+      supportsHttpFileUpload: supportsHttpFileUpload,
+      subject: subject,
+      quotedDraft: quotedDraft,
+      roomState: roomState,
+    );
+
 void _mockEmailSync(MockEmailService service) {
   when(() => service.syncState).thenReturn(const EmailSyncState.ready());
   when(
@@ -285,7 +308,12 @@ void main() {
       ),
     ];
     bloc.add(
-      ChatMessageSent(text: 'Team status update', recipients: recipients),
+      _messageSent(
+        chat: emailChat,
+        text: 'Team status update',
+        recipients: recipients,
+        settings: _defaultChatSettings(),
+      ),
     );
     await _pumpBloc();
 
@@ -378,7 +406,14 @@ void main() {
         ),
       ),
     ];
-    bloc.add(ChatMessageSent(text: 'Hello world', recipients: recipients));
+    bloc.add(
+      _messageSent(
+        chat: emailChat,
+        text: 'Hello world',
+        recipients: recipients,
+        settings: _defaultChatSettings(),
+      ),
+    );
     await _pumpBloc();
 
     final capturedTargets = verify(
@@ -420,7 +455,14 @@ void main() {
     chatStreamController.add(emailChat);
     await _pumpBloc();
 
-    bloc.add(const ChatMessageSent(text: 'Hello world', recipients: []));
+    bloc.add(
+      _messageSent(
+        chat: emailChat,
+        text: 'Hello world',
+        recipients: const <ComposerRecipient>[],
+        settings: _defaultChatSettings(),
+      ),
+    );
     await _pumpBloc();
 
     expect(bloc.state.composerError, 'Select at least one recipient.');
@@ -496,7 +538,14 @@ void main() {
         ),
       ),
     ];
-    bloc.add(ChatMessageSent(text: 'Weekly sync', recipients: recipients));
+    bloc.add(
+      _messageSent(
+        chat: emailChat,
+        text: 'Weekly sync',
+        recipients: recipients,
+        settings: _defaultChatSettings(),
+      ),
+    );
     await _pumpBloc();
 
     expect(
@@ -597,10 +646,34 @@ void main() {
         ),
       ),
     ];
-    bloc.add(ChatMessageSent(text: 'Initial send', recipients: recipients));
+    bloc.add(
+      _messageSent(
+        chat: emailChat,
+        text: 'Initial send',
+        recipients: recipients,
+        settings: _defaultChatSettings(),
+      ),
+    );
     await _pumpBloc();
 
-    bloc.add(ChatFanOutRetryRequested(failureReport.shareId));
+    final retryDraft = bloc.state.fanOutDrafts[failureReport.shareId]!;
+    final retryRecipients = <ComposerRecipient>[
+      ComposerRecipient(
+        target: FanOutTarget.chat(
+          chat: extraChat,
+          shareSignatureEnabled: true,
+        ),
+        included: true,
+      ),
+    ];
+    bloc.add(
+      ChatFanOutRetryRequested(
+        draft: retryDraft,
+        recipients: retryRecipients,
+        chat: emailChat,
+        settings: _defaultChatSettings(),
+      ),
+    );
     await _pumpBloc();
 
     expect(capturedTargets.length, 2);
@@ -654,7 +727,13 @@ void main() {
       ),
     ];
     bloc.add(
-        ChatAttachmentPicked(attachment: attachment, recipients: recipients));
+      ChatAttachmentPicked(
+        attachment: attachment,
+        recipients: recipients,
+        chat: emailChat,
+        quotedDraft: null,
+      ),
+    );
     await _pumpBloc();
     expect(bloc.state.pendingAttachments, hasLength(1));
     var pending = bloc.state.pendingAttachments.single;
@@ -667,7 +746,15 @@ void main() {
       ),
     );
 
-    bloc.add(ChatMessageSent(text: 'Hello', recipients: recipients));
+    bloc.add(
+      _messageSent(
+        chat: emailChat,
+        text: 'Hello',
+        recipients: recipients,
+        pendingAttachments: bloc.state.pendingAttachments,
+        settings: _defaultChatSettings(),
+      ),
+    );
     await _pumpBloc();
     pending = bloc.state.pendingAttachments.single;
     expect(pending.status, PendingAttachmentStatus.uploading);
@@ -732,14 +819,28 @@ void main() {
       ),
     ];
     bloc.add(
-        ChatAttachmentPicked(attachment: attachment, recipients: recipients));
+      ChatAttachmentPicked(
+        attachment: attachment,
+        recipients: recipients,
+        chat: emailChat,
+        quotedDraft: null,
+      ),
+    );
     await _pumpBloc();
     expect(
       bloc.state.pendingAttachments.single.status,
       PendingAttachmentStatus.queued,
     );
 
-    bloc.add(ChatMessageSent(text: '', recipients: recipients));
+    bloc.add(
+      _messageSent(
+        chat: emailChat,
+        text: '',
+        recipients: recipients,
+        pendingAttachments: bloc.state.pendingAttachments,
+        settings: _defaultChatSettings(),
+      ),
+    );
     await _pumpBloc();
     final failed = bloc.state.pendingAttachments.single;
     expect(failed.status, PendingAttachmentStatus.failed);
@@ -750,6 +851,11 @@ void main() {
       ChatAttachmentRetryRequested(
         attachmentId: failed.id,
         recipients: recipients,
+        chat: emailChat,
+        quotedDraft: null,
+        subject: null,
+        settings: _defaultChatSettings(),
+        supportsHttpFileUpload: false,
       ),
     );
     await _pumpBloc();
@@ -845,7 +951,14 @@ void main() {
         ),
       ),
     ];
-    bloc.add(ChatMessageSent(text: 'Offline draft', recipients: recipients));
+    bloc.add(
+      _messageSent(
+        chat: emailChat,
+        text: 'Offline draft',
+        recipients: recipients,
+        settings: _defaultChatSettings(),
+      ),
+    );
     await _pumpBloc();
 
     verify(

@@ -251,12 +251,12 @@ class RoomMembersSheet extends StatelessWidget {
       return;
     }
     locate<ChatBloc>().add(
-          ChatRoomAvatarChangeRequested(
-            avatar: avatar,
-            chat: chat,
-            roomState: roomState,
-          ),
-        );
+      ChatRoomAvatarChangeRequested(
+        avatar: avatar,
+        chat: chat,
+        roomState: roomState,
+      ),
+    );
   }
 }
 
