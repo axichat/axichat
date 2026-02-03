@@ -206,7 +206,7 @@ Future<bool> _confirmDownloadAllowed(
   );
 }
 
-Future<bool> _confirmExportAllowed(
+Future<bool> confirmExportAllowed(
   BuildContext context, {
   required FileMetadataData metadata,
   required FileTypeReport report,
@@ -1070,14 +1070,14 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     final l10n = context.l10n;
     final FileTypeReport report =
         widget.typeReport ?? widget.metadata.declaredTypeReport;
-    final bool allowed = await _confirmExportAllowed(
+    final bool allowed = await confirmExportAllowed(
       context,
       metadata: widget.metadata,
       report: report,
       confirmLabel: l10n.chatAttachmentExportConfirm,
     );
     if (!mounted || !allowed) return;
-    await _saveAttachmentToDevice(
+    await saveAttachmentToDevice(
       context,
       file: file,
       filename: widget.metadata.filename,
@@ -1088,14 +1088,14 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
     final l10n = context.l10n;
     final FileTypeReport report =
         widget.typeReport ?? widget.metadata.declaredTypeReport;
-    final bool allowed = await _confirmExportAllowed(
+    final bool allowed = await confirmExportAllowed(
       context,
       metadata: widget.metadata,
       report: report,
       confirmLabel: l10n.chatActionShare,
     );
     if (!mounted || !allowed) return;
-    await _shareAttachmentFromFile(
+    await shareAttachmentFromFile(
       context,
       file: file,
       filename: widget.metadata.filename,
@@ -1331,14 +1331,14 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
                 onPressed: () async {
                   final FileTypeReport report =
                       typeReport ?? metadata.declaredTypeReport;
-                  final bool allowed = await _confirmExportAllowed(
+                  final bool allowed = await confirmExportAllowed(
                     context,
                     metadata: metadata,
                     report: report,
                     confirmLabel: l10n.chatAttachmentExportConfirm,
                   );
                   if (!context.mounted || !allowed) return;
-                  await _saveAttachmentToDevice(
+                  await saveAttachmentToDevice(
                     context,
                     file: file,
                     filename: metadata.filename,
@@ -1351,14 +1351,14 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
                 onPressed: () async {
                   final FileTypeReport report =
                       typeReport ?? metadata.declaredTypeReport;
-                  final bool allowed = await _confirmExportAllowed(
+                  final bool allowed = await confirmExportAllowed(
                     context,
                     metadata: metadata,
                     report: report,
                     confirmLabel: l10n.chatActionShare,
                   );
                   if (!context.mounted || !allowed) return;
-                  await _shareAttachmentFromFile(
+                  await shareAttachmentFromFile(
                     context,
                     file: file,
                     filename: metadata.filename,
@@ -1703,7 +1703,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final l10n = context.l10n;
     final FileTypeReport report =
         widget.typeReport ?? widget.metadata.declaredTypeReport;
-    final bool allowed = await _confirmExportAllowed(
+    final bool allowed = await confirmExportAllowed(
       context,
       metadata: widget.metadata,
       report: report,
@@ -1731,7 +1731,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
         return;
       }
       final file = File(path);
-      await _saveAttachmentToDevice(
+      await saveAttachmentToDevice(
         context,
         file: file,
         filename: widget.metadata.filename,
@@ -1768,7 +1768,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
     final l10n = context.l10n;
     final FileTypeReport report =
         widget.typeReport ?? widget.metadata.declaredTypeReport;
-    final bool allowed = await _confirmExportAllowed(
+    final bool allowed = await confirmExportAllowed(
       context,
       metadata: widget.metadata,
       report: report,
@@ -1800,7 +1800,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
         return;
       }
       final file = File(trimmedPath);
-      await _shareAttachmentFromFile(
+      await shareAttachmentFromFile(
         context,
         file: file,
         filename: widget.metadata.filename,
@@ -2445,7 +2445,7 @@ Future<bool> _confirmAttachmentShare(BuildContext context) async {
   return approved == true;
 }
 
-Future<void> _shareAttachmentFromFile(
+Future<void> shareAttachmentFromFile(
   BuildContext context, {
   required File file,
   required String filename,
@@ -2470,7 +2470,7 @@ Future<void> _shareAttachmentFromFile(
     return;
   }
   if (defaultTargetPlatform == TargetPlatform.linux) {
-    await _saveAttachmentToDevice(
+    await saveAttachmentToDevice(
       context,
       file: file,
       filename: filename,
@@ -2517,7 +2517,7 @@ Future<void> _shareAttachmentFromFile(
   }
 }
 
-Future<void> _saveAttachmentToDevice(
+Future<void> saveAttachmentToDevice(
   BuildContext context, {
   required File file,
   required String filename,

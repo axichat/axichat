@@ -2724,10 +2724,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatMessageSent event,
     Emitter<ChatState> emit,
   ) async {
-    _stopTyping();
+    _stopTyping(chat: event.chat);
     emit(state.copyWith(typing: false));
-    final chat = state.chat;
-    if (chat == null) return;
+    final chat = event.chat;
+    final subject = event.subject;
+    final quotedDraft = event.quotedDraft;
+    final settings = event.settings;
     final recipients = event.recipients
         .where((recipient) => recipient.included)
         .toList(growable: false);

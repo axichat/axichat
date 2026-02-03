@@ -24,12 +24,12 @@ class SignupForm extends StatefulWidget {
   const SignupForm({
     super.key,
     this.onSubmitStart,
-    this.onLoadingChanged,
+    this.busy = false,
     this.visible = true,
   });
 
   final VoidCallback? onSubmitStart;
-  final ValueChanged<bool>? onLoadingChanged;
+  final bool busy;
   final bool visible;
 
   @override
@@ -119,7 +119,6 @@ class _SignupFormState extends State<SignupForm>
     _captchaTextController
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
-    widget.onLoadingChanged?.call(false);
     super.dispose();
   }
 
@@ -482,9 +481,6 @@ class _SignupFormState extends State<SignupForm>
     return BlocConsumer<AuthenticationCubit, AuthenticationState>(
       // listenWhen: (previous, current) => current is AuthenticationSignupFailure && previous is!AuthenticationSignupFailure,
       listener: (context, state) {
-        if (widget.visible) {
-          widget.onLoadingChanged?.call(_isLoadingForState(state));
-        }
         if (_lastCaptchaServer != state.server) {
           _lastCaptchaServer = state.server;
           _reloadCaptcha();
@@ -504,6 +500,7 @@ class _SignupFormState extends State<SignupForm>
               context.l10n,
             );
             final loading = _isLoadingForState(state);
+            final isBusy = widget.busy || loading;
             final cleanupBlocked =
                 state is AuthenticationSignupFailure && state.isCleanupBlocked;
             final spacing = context.spacing;
@@ -664,7 +661,7 @@ class _SignupFormState extends State<SignupForm>
                                             placeholder: Text(
                                               context.l10n.authUsername,
                                             ),
-                                            enabled: !loading,
+                                            enabled: !isBusy,
                                             controller: _jidTextController,
                                             trailing: EndpointSuffix(
                                               server: state.server,
@@ -796,7 +793,7 @@ class _SignupFormState extends State<SignupForm>
                                     padding: fieldSpacing,
                                     child: PasswordInput(
                                       enabled:
-                                          !loading && !_pwnedCheckInProgress,
+                                          !isBusy && !_pwnedCheckInProgress,
                                       controller: _passwordTextController,
                                     ),
                                   ),
@@ -804,7 +801,7 @@ class _SignupFormState extends State<SignupForm>
                                     padding: fieldSpacing,
                                     child: PasswordInput(
                                       enabled:
-                                          !loading && !_pwnedCheckInProgress,
+                                          !isBusy && !_pwnedCheckInProgress,
                                       controller: _password2TextController,
                                       confirmValidator: (text) => text !=
                                               _passwordTextController.text
@@ -829,7 +826,7 @@ class _SignupFormState extends State<SignupForm>
                                       reason: _visibleInsecurePasswordReason,
                                       allowInsecurePassword:
                                           allowInsecurePassword,
-                                      loading: loading,
+                                      loading: isBusy,
                                       pwnedCheckInProgress:
                                           _pwnedCheckInProgress,
                                       showAllowInsecureError:
@@ -905,7 +902,7 @@ class _SignupFormState extends State<SignupForm>
                                               SizedBox(width: spacing.s),
                                               Semantics(
                                                 button: true,
-                                                enabled: !loading,
+                                                enabled: !isBusy,
                                                 label: context
                                                     .l10n.signupCaptchaReload,
                                                 hint: context.l10n
@@ -915,7 +912,7 @@ class _SignupFormState extends State<SignupForm>
                                                       LucideIcons.refreshCw,
                                                   tooltip: context
                                                       .l10n.signupCaptchaReload,
-                                                  onPressed: loading
+                                                  onPressed: isBusy
                                                       ? null
                                                       : () => _reloadCaptcha(),
                                                 ),
@@ -936,7 +933,7 @@ class _SignupFormState extends State<SignupForm>
                                         placeholder: Text(
                                           context.l10n.signupCaptchaPlaceholder,
                                         ),
-                                        enabled: !loading,
+                                        enabled: !isBusy,
                                         controller: _captchaTextController,
                                         validator: (text) {
                                           final value = text;
@@ -951,13 +948,13 @@ class _SignupFormState extends State<SignupForm>
                                   ),
                                   Padding(
                                     padding: fieldSpacing,
-                                    child: TermsCheckbox(enabled: !loading),
+                                    child: TermsCheckbox(enabled: !isBusy),
                                   ),
                                   Padding(
                                     padding: fieldSpacing,
                                     child: AxiCheckboxFormField(
                                       key: _rememberMeFieldKey,
-                                      enabled: !loading,
+                                      enabled: !isBusy,
                                       initialValue: rememberMe,
                                       inputLabel: Text(
                                         context.l10n.authRememberMeLabel,
@@ -1002,7 +999,7 @@ class _SignupFormState extends State<SignupForm>
                                 ? Padding(
                                     padding: EdgeInsets.only(right: spacing.s),
                                     child: AxiButton.secondary(
-                                      onPressed: loading || isCheckingPwned
+                                      onPressed: isBusy || isCheckingPwned
                                           ? null
                                           : () {
                                               setState(() {
@@ -1018,7 +1015,7 @@ class _SignupFormState extends State<SignupForm>
                           final continueButton = showNextButton
                               ? AxiButton.primary(
                                   loading: isCheckingPwned,
-                                  onPressed: loading ||
+                                  onPressed: isBusy ||
                                           isCheckingPwned ||
                                           avatarState.processing
                                       ? null
@@ -1033,8 +1030,8 @@ class _SignupFormState extends State<SignupForm>
 
                           final submitButton = showSubmitButton
                               ? AxiButton.primary(
-                                  loading: loading,
-                                  onPressed: loading ||
+                                  loading: isBusy,
+                                  onPressed: isBusy ||
                                           cleanupBlocked ||
                                           avatarState.processing
                                       ? null

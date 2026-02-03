@@ -2279,8 +2279,8 @@ class _ChatState extends State<Chat> {
     final seedText = _pendingCalendarSeedText;
     final String resolvedText =
         rawText.isNotEmpty ? rawText : (seedText ?? _emptyText);
-    final pendingAttachments =
-        context.read<ChatBloc>().state.pendingAttachments;
+    final chatState = context.read<ChatBloc>().state;
+    final pendingAttachments = chatState.pendingAttachments;
     final hasPreparingAttachments = pendingAttachments.any(
       (attachment) => attachment.isPreparing,
     );
@@ -2302,10 +2302,23 @@ class _ChatState extends State<Chat> {
     if (!canSend) return;
     final confirmed = await _confirmMediaMetadataIfNeeded(queuedAttachments);
     if (!confirmed || !mounted) return;
+    final chat = chatState.chat;
+    if (chat == null) {
+      return;
+    }
+    final settingsSnapshot =
+        _settingsSnapshotFromState(context.read<SettingsCubit>().state);
     context.read<ChatBloc>().add(
           ChatMessageSent(
+            chat: chat,
             text: resolvedText,
             recipients: _recipients,
+            pendingAttachments: pendingAttachments,
+            settings: settingsSnapshot,
+            supportsHttpFileUpload: chatState.supportsHttpFileUpload,
+            subject: _subjectController.text,
+            quotedDraft: chatState.quoting,
+            roomState: chatState.roomState,
             calendarTaskIcs: _pendingCalendarTaskIcs,
             calendarTaskIcsReadOnly: _calendarTaskIcsReadOnlyFallback,
           ),
@@ -11530,65 +11543,60 @@ class _AttachmentPreviewDialog extends StatelessWidget {
     final mediaSize = MediaQuery.sizeOf(context);
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final widthInset = spacing.xl + spacing.l;
-    final heightInset = spacing.xxl + spacing.l;
-    final minPreviewExtent = spacing.xxl + spacing.xl + spacing.l;
-    final maxWidth =
-        (mediaSize.width - widthInset).clamp(minPreviewExtent, mediaSize.width);
-    final maxHeight = (mediaSize.height - heightInset)
-        .clamp(minPreviewExtent, mediaSize.height);
+    final double maxWidth = math.max(0.0, mediaSize.width - spacing.xl);
+    final double maxHeight = math.max(0.0, mediaSize.height - spacing.xl);
     final targetSize = fitWithinBounds(
       intrinsicSize: intrinsicSize,
       maxWidth: maxWidth,
       maxHeight: maxHeight,
     );
-    final colors = context.colorScheme;
-    final radius = context.radius;
-    final borderSide = context.borderSide;
-    final chromeInset = spacing.m + spacing.s;
+    final file = File(attachment.path);
 
-    return ShadDialog(
-      padding: EdgeInsets.all(spacing.s),
-      gap: spacing.s,
-      closeIcon: const SizedBox.shrink(),
-      constraints: BoxConstraints(
-        maxWidth: targetSize.width + chromeInset,
-        maxHeight: targetSize.height + chromeInset,
-      ),
-      child: Stack(
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Center(
-            child: DecoratedBox(
-              decoration: ShapeDecoration(
-                color: colors.card,
-                shape: ContinuousRectangleBorder(
-                  borderRadius: radius,
-                  side: borderSide,
-                ),
-              ),
-              child: ClipRRect(
-                borderRadius: radius,
-                child: SizedBox(
-                  width: targetSize.width,
-                  height: targetSize.height,
-                  child: InteractiveViewer(
-                    maxScale: sizing.mediaPreviewMaxScale,
-                    child: Image.file(
-                      File(attachment.path),
-                      fit: BoxFit.contain,
-                    ),
-                  ),
-                ),
+          SizedBox(
+            width: targetSize.width,
+            height: targetSize.height,
+            child: InteractiveViewer(
+              maxScale: sizing.mediaPreviewMaxScale,
+              child: Image.file(
+                file,
+                fit: BoxFit.contain,
               ),
             ),
           ),
-          Positioned(
-            top: spacing.xs,
-            right: spacing.xs,
-            child: AxiIconButton.ghost(
-              onPressed: () => Navigator.of(context).pop(),
-              iconData: LucideIcons.x,
-            ),
+          SizedBox(height: spacing.s),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AxiIconButton.ghost(
+                iconData: LucideIcons.save,
+                tooltip: l10n.chatAttachmentExportTitle,
+                onPressed: () => saveAttachmentToDevice(
+                  context,
+                  file: file,
+                  filename: attachment.fileName,
+                ),
+              ),
+              SizedBox(width: spacing.xs),
+              AxiIconButton.ghost(
+                iconData: LucideIcons.share2,
+                tooltip: l10n.chatActionShare,
+                onPressed: () => shareAttachmentFromFile(
+                  context,
+                  file: file,
+                  filename: attachment.fileName,
+                ),
+              ),
+              SizedBox(width: spacing.xs),
+              AxiIconButton.ghost(
+                iconData: LucideIcons.x,
+                tooltip: l10n.commonClose,
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
           ),
         ],
       ),

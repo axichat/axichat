@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -1435,7 +1436,6 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {
-    final spacing = context.spacing;
     if (!mounted) return;
     final attachment = pending.attachment;
     final file = File(attachment.path);
@@ -1448,28 +1448,90 @@ class _DraftFormState extends State<DraftForm> {
     if (!mounted) return;
     await showFadeScaleDialog<void>(
       context: context,
+      barrierDismissible: true,
       builder: (dialogContext) {
-        return Dialog(
-          child: AxiModalSurface(
-            padding: EdgeInsets.zero,
-            child: Stack(
-              children: [
-                Positioned.fill(child: Image.file(file, fit: BoxFit.contain)),
-                Positioned(
-                  top: spacing.s,
-                  right: spacing.s,
-                  child: AxiIconButton(
+        final dialogSpacing = dialogContext.spacing;
+        final mediaSize = MediaQuery.sizeOf(dialogContext);
+        final double maxWidth =
+            math.max(0.0, mediaSize.width - dialogSpacing.xl);
+        final double maxHeight =
+            math.max(0.0, mediaSize.height - dialogSpacing.xl);
+        final intrinsic = _intrinsicSizeFrom(attachment);
+        final targetSize = _fitWithinBounds(
+          intrinsicSize: intrinsic,
+          maxWidth: maxWidth,
+          maxHeight: maxHeight,
+        );
+        final sizing = dialogContext.sizing;
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: targetSize.width,
+                height: targetSize.height,
+                child: InteractiveViewer(
+                  maxScale: sizing.mediaPreviewMaxScale,
+                  child: Image.file(file, fit: BoxFit.contain),
+                ),
+              ),
+              SizedBox(height: dialogSpacing.s),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AxiIconButton.ghost(
                     iconData: LucideIcons.x,
                     tooltip: dialogContext.l10n.commonClose,
                     onPressed: () => Navigator.of(dialogContext).pop(),
                   ),
-                ),
-              ],
-            ),
+                  SizedBox(width: dialogSpacing.xs),
+                  AxiIconButton.destructive(
+                    iconData: LucideIcons.trash2,
+                    tooltip: dialogContext.l10n.draftRemoveAttachment,
+                    onPressed: () {
+                      Navigator.of(dialogContext).pop();
+                      _handlePendingAttachmentRemoved(pending.id);
+                    },
+                  ),
+                ],
+              ),
+            ],
           ),
         );
       },
     );
+  }
+
+  Size? _intrinsicSizeFrom(EmailAttachment attachment) {
+    final width = attachment.width;
+    final height = attachment.height;
+    if (width == null || height == null) return null;
+    if (width <= 0 || height <= 0) return null;
+    return Size(width.toDouble(), height.toDouble());
+  }
+
+  Size _fitWithinBounds({
+    required Size? intrinsicSize,
+    required double maxWidth,
+    required double maxHeight,
+  }) {
+    final cappedWidth = math.max(0.0, maxWidth);
+    final cappedHeight = math.max(0.0, maxHeight);
+    if (intrinsicSize == null ||
+        intrinsicSize.width <= 0 ||
+        intrinsicSize.height <= 0) {
+      final width = math.min(cappedWidth, 360.0);
+      final height = math.min(cappedHeight, width * 0.75);
+      return Size(width, height);
+    }
+    final aspectRatio = intrinsicSize.width / intrinsicSize.height;
+    var width = math.min(intrinsicSize.width, cappedWidth);
+    var height = width / aspectRatio;
+    if (height > cappedHeight && cappedHeight > 0) {
+      height = cappedHeight;
+      width = height * aspectRatio;
+    }
+    return Size(width, height);
   }
 
   Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {

@@ -144,6 +144,7 @@ const FontWeight appBarTitleFontWeight = FontWeight.w500;
 
 const baseAnimationDuration = Duration(milliseconds: 300);
 const authCompletionAnimationDuration = Duration(milliseconds: 1000);
+const authProgressRampDuration = Duration(seconds: 5);
 
 /// Duration for cross-fading calendar view transitions.
 const calendarViewTransitionDuration = Duration(milliseconds: 400);

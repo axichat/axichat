@@ -29,6 +29,7 @@ class TransportAwareAvatar extends StatelessWidget {
     this.presence,
     this.status,
     this.subscription,
+    this.avatarPathOverride,
   });
 
   final Chat chat;
@@ -39,6 +40,7 @@ class TransportAwareAvatar extends StatelessWidget {
   final Presence? presence;
   final String? status;
   final Subscription? subscription;
+  final String? avatarPathOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -90,9 +92,11 @@ class TransportAwareAvatar extends StatelessWidget {
               presence: presence,
               status: status,
               subscription: effectiveSubscription,
-              avatarPath: isSelfChat && hasSelfAvatarPath
-                  ? selfAvatarPath
-                  : chat.avatarPath ?? chat.contactAvatarPath,
+              avatarPath: avatarPathOverride?.trim().isNotEmpty == true
+                  ? avatarPathOverride!.trim()
+                  : isSelfChat && hasSelfAvatarPath
+                      ? selfAvatarPath
+                      : chat.avatarPath ?? chat.contactAvatarPath,
             ),
           ),
           if (badge != null)

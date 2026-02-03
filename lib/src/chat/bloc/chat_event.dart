@@ -180,21 +180,42 @@ final class _TypingParticipantsUpdated extends ChatEvent {
 
 final class ChatMessageSent extends ChatEvent {
   const ChatMessageSent({
+    required this.chat,
     required this.text,
     required this.recipients,
+    required this.pendingAttachments,
+    required this.settings,
+    required this.supportsHttpFileUpload,
+    this.subject,
+    this.quotedDraft,
+    this.roomState,
     this.calendarTaskIcs,
     this.calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
   });
 
+  final Chat chat;
   final String text;
   final List<ComposerRecipient> recipients;
+  final List<PendingAttachment> pendingAttachments;
+  final ChatSettingsSnapshot settings;
+  final bool supportsHttpFileUpload;
+  final String? subject;
+  final Message? quotedDraft;
+  final RoomState? roomState;
   final CalendarTask? calendarTaskIcs;
   final bool calendarTaskIcsReadOnly;
 
   @override
   List<Object?> get props => [
+        chat,
         text,
         recipients,
+        pendingAttachments,
+        settings,
+        supportsHttpFileUpload,
+        subject,
+        quotedDraft,
+        roomState,
         calendarTaskIcs,
         calendarTaskIcsReadOnly,
       ];

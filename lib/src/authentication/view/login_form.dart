@@ -15,9 +15,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class LoginForm extends StatefulWidget {
-  const LoginForm({super.key, this.onSubmitStart});
+  const LoginForm({super.key, this.onSubmitStart, this.busy = false});
 
   final VoidCallback? onSubmitStart;
+  final bool busy;
 
   @override
   State<LoginForm> createState() => _LoginFormState();
@@ -72,6 +73,7 @@ class _LoginFormState extends State<LoginForm> {
       builder: (context, state) {
         final loading = state is AuthenticationInProgress ||
             state is AuthenticationComplete;
+        final isBusy = widget.busy || loading;
         final animationDuration =
             context.watch<SettingsCubit>().animationDuration;
         final spacing = context.spacing;
@@ -142,7 +144,7 @@ class _LoginFormState extends State<LoginForm> {
                         ],
                         keyboardType: TextInputType.emailAddress,
                         placeholder: Text(context.l10n.authUsername),
-                        enabled: !loading,
+                        enabled: !isBusy,
                         controller: _jidTextController,
                         trailing: EndpointSuffix(server: state.server),
                         validator: (text) {
@@ -160,7 +162,7 @@ class _LoginFormState extends State<LoginForm> {
                     padding: horizontalPadding,
                     child: PasswordInput(
                       key: loginPasswordKey,
-                      enabled: !loading,
+                      enabled: !isBusy,
                       controller: _passwordTextController,
                     ),
                   ),
@@ -169,7 +171,7 @@ class _LoginFormState extends State<LoginForm> {
                     padding: horizontalPadding,
                     child: AxiCheckboxFormField(
                       key: _rememberMeFieldKey,
-                      enabled: !loading,
+                      enabled: !isBusy,
                       initialValue: rememberMe,
                       inputLabel: Text(context.l10n.authRememberMeLabel),
                       onChanged: (value) async {
@@ -194,8 +196,8 @@ class _LoginFormState extends State<LoginForm> {
                         widthFactor: 1,
                         child: AxiButton.primary(
                           key: loginSubmitKey,
-                          loading: loading,
-                          onPressed: loading ? null : () => _onPressed(context),
+                          loading: isBusy,
+                          onPressed: isBusy ? null : () => _onPressed(context),
                           child: Text(context.l10n.authLogin),
                         ),
                       ),

@@ -3,101 +3,121 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-class OperationProgressController {
-  OperationProgressController({
-    required TickerProvider vsync,
-    required Duration rampDuration,
-    required Duration reachDuration,
-    required Duration completeDuration,
-    required Duration failDuration,
-  })  : _rampDuration = rampDuration,
-        _reachDuration = reachDuration,
-        _completeDuration = completeDuration,
-        _failDuration = failDuration,
-        _controller = AnimationController(
+enum AuthProgressPhase { idle, running, completing, failing }
+
+@immutable
+class AuthProgressSnapshot {
+  const AuthProgressSnapshot._(this.phase, this.label);
+
+  const AuthProgressSnapshot.idle() : this._(AuthProgressPhase.idle, '');
+
+  const AuthProgressSnapshot.running(String label)
+      : this._(AuthProgressPhase.running, label);
+
+  const AuthProgressSnapshot.completing(String label)
+      : this._(AuthProgressPhase.completing, label);
+
+  const AuthProgressSnapshot.failing(String label)
+      : this._(AuthProgressPhase.failing, label);
+
+  final AuthProgressPhase phase;
+  final String label;
+
+  bool get isVisible => phase != AuthProgressPhase.idle;
+}
+
+class AuthProgressController {
+  AuthProgressController({required TickerProvider vsync})
+      : _controller = AnimationController(
           vsync: vsync,
           lowerBound: 0,
           upperBound: 1,
+        ),
+        _snapshot = ValueNotifier<AuthProgressSnapshot>(
+          const AuthProgressSnapshot.idle(),
         );
 
   static const double _maxDuringOperation = 0.8;
   final AnimationController _controller;
-  final Duration _rampDuration;
-  final Duration _reachDuration;
-  final Duration _completeDuration;
-  final Duration _failDuration;
+  final ValueNotifier<AuthProgressSnapshot> _snapshot;
 
   Animation<double> get animation => _controller.view;
 
-  bool get isActive =>
-      _controller.isAnimating ||
-      (_controller.value > 0 && _controller.value < 1);
+  ValueListenable<AuthProgressSnapshot> get listenable => _snapshot;
 
-  void start() {
+  AuthProgressSnapshot get snapshot => _snapshot.value;
+
+  void start({
+    required String label,
+    required Duration rampDuration,
+  }) {
+    _snapshot.value = AuthProgressSnapshot.running(label);
     _controller
       ..stop()
       ..value = 0;
     _controller.animateTo(
       _maxDuringOperation,
-      duration: _rampDuration,
+      duration: rampDuration,
       curve: Curves.easeOutCubic,
     );
   }
 
-  Future<void> reach(
-    double target, {
-    Duration? duration,
+  void continueWithLabel({
+    required String label,
+    required Duration rampDuration,
   }) {
-    if (!isActive) return Future.value();
-    final clamped = target.clamp(0.0, _maxDuringOperation);
-    if (clamped <= _controller.value) return Future.value();
-    return _controller.animateTo(
-      clamped,
-      duration: duration ?? _reachDuration,
-      curve: Curves.easeOutCubic,
-    );
+    if (_snapshot.value.phase == AuthProgressPhase.idle) {
+      start(label: label, rampDuration: rampDuration);
+      return;
+    }
+    _snapshot.value = AuthProgressSnapshot.running(label);
   }
 
-  Future<void> complete({
-    Duration? duration,
-  }) async {
-    if (!isActive) {
-      final seededValue = _controller.value < _maxDuringOperation
-          ? _maxDuringOperation
-          : _controller.value;
-      _controller
-        ..stop()
-        ..value = seededValue;
+  Future<void> complete({required Duration duration}) async {
+    if (_snapshot.value.phase == AuthProgressPhase.idle) {
+      _snapshot.value = const AuthProgressSnapshot.completing('');
+    } else {
+      _snapshot.value = AuthProgressSnapshot.completing(
+        _snapshot.value.label,
+      );
     }
+    _controller.stop();
     await _controller.animateTo(
       1.0,
-      duration: duration ?? _completeDuration,
+      duration: duration,
       curve: Curves.easeInOutCubic,
     );
   }
 
-  Future<void> fail() async {
-    if (!isActive) {
-      reset();
+  Future<void> fail({required Duration duration}) async {
+    if (_snapshot.value.phase == AuthProgressPhase.idle) {
       return;
     }
+    _snapshot.value = AuthProgressSnapshot.failing(
+      _snapshot.value.label,
+    );
+    _controller.stop();
     await _controller.animateTo(
       0,
-      duration: _failDuration,
+      duration: duration,
       curve: Curves.easeIn,
     );
+    reset();
   }
 
   void reset() {
     _controller
       ..stop()
       ..value = 0;
+    _snapshot.value = const AuthProgressSnapshot.idle();
   }
 
   void dispose() {
     _controller.dispose();
+    _snapshot.dispose();
   }
 }
 

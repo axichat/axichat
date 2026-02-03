@@ -187,9 +187,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _homeRefreshSyncService.start();
     }
     _lifecycleListener = AppLifecycleListener(
-      onResume: _loginIfStoredCredentials,
-      onShow: _loginIfStoredCredentials,
-      onRestart: _loginIfStoredCredentials,
+      onResume: _handleLifecycleResume,
+      onShow: _handleLifecycleResume,
+      onRestart: _handleLifecycleResume,
       onDetach: logout,
       onExitRequested: () async {
         await logout();
@@ -367,6 +367,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final normalized = normalizeEndpointConfig(config);
     _rebuildEmailProvisioningClient(normalized);
     _emailService?.updateEndpointConfig(normalized);
+    _log.fine(
+      'Auth config update -> ${state.runtimeType} '
+      '(endpoint changed: ${normalized != state.config})',
+    );
     emit(state.copyWithConfig(normalized));
     _updateEmailForegroundKeepalive();
   }
@@ -513,6 +517,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   void _emit(AuthenticationState state) {
     // Always allow transitions away from an authenticated session (e.g. logout).
+    _log.fine(
+      'Auth state -> ${state.runtimeType} '
+      '(from ${this.state.runtimeType})',
+    );
     _updateLoginBackoff(state);
     if (state is AuthenticationComplete) {
       _homeRefreshSyncService.start();
@@ -570,6 +578,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return false;
     }
     final seconds = remaining.inSeconds < 1 ? 1 : remaining.inSeconds;
+    _log.fine(
+      'Auth backoff -> AuthenticationFailure '
+      '(remainingSeconds: $seconds, from ${state.runtimeType})',
+    );
     emit(
       AuthenticationFailure(
         AuthBackoffMessage(seconds),
@@ -719,39 +731,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  Future<bool> _loginWithStoredCredentials() async {
-    final remember = await loadRememberMeChoice();
-    if (!remember) return false;
-
-    final storedLogin = await _readStoredLoginCredentials();
-    if (!storedLogin.hasUsableCredentials) {
-      _log.fine('Skipping auto login: no stored credentials.');
-      return false;
-    }
-
-    await login(rememberMe: remember);
-    return true;
-  }
-
-  Future<void> _loginIfStoredCredentials() async {
-    if (state is AuthenticationLogInInProgress) {
+  Future<void> _handleLifecycleResume() async {
+    if (state is! AuthenticationComplete) {
       return;
     }
-
-    if (_stickyAuthActive) {
-      await _resumeStickySession();
-      return;
-    }
-
-    await _loginWithStoredCredentials();
+    await _resumeStickySession();
   }
 
   Future<void> _resumeStickySession() async {
     if (!_canReconnectWithInMemoryCredentials()) {
-      final didLogin = await _loginWithStoredCredentials();
-      if (!didLogin) {
-        await logout();
-      }
+      await logout();
       return;
     }
 

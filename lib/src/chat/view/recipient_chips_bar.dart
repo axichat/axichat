@@ -90,6 +90,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   late final Animation<double> _collapseAnimation;
   String? _ownNormalizedJid;
   List<RosterItem> _lastRosterItems = const <RosterItem>[];
+  List<Chat> _lastAvailableChats = const <Chat>[];
   Map<String, String> _avatarPathsByJid = const <String, String>{};
   List<Chat> _availableAutocompleteChats = const <Chat>[];
   Set<String> _knownDomains = const <String>{};
@@ -114,7 +115,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     );
     _controller.addListener(_handleTextChanged);
     _lastRosterItems = List<RosterItem>.from(widget.rosterItems);
-    _avatarPathsByJid = _computeAvatarPaths(widget.rosterItems);
+    _lastAvailableChats = List<Chat>.from(widget.availableChats);
+    _avatarPathsByJid = _computeAvatarPaths();
     final pools = _computeSuggestionPools();
     _availableAutocompleteChats = pools.availableChats;
     _knownDomains = pools.domains;
@@ -455,23 +457,41 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     );
   }
 
-  Map<String, String> _computeAvatarPaths(List<RosterItem> rosterItems) {
+  Map<String, String> _computeAvatarPaths() {
     final next = <String, String>{};
-    for (final item in rosterItems) {
-      final path = item.avatarPath?.trim();
-      if (path == null || path.isEmpty) continue;
-      next[item.jid.toLowerCase()] = path;
+    void addAvatar(String? key, String? source) {
+      final normalizedKey = key?.trim().toLowerCase();
+      final normalizedPath = source?.trim();
+      if (normalizedKey == null ||
+          normalizedKey.isEmpty ||
+          normalizedPath == null ||
+          normalizedPath.isEmpty) {
+        return;
+      }
+      next[normalizedKey] = normalizedPath;
+    }
+
+    for (final item in widget.rosterItems) {
+      addAvatar(item.jid, item.avatarPath ?? item.contactAvatarPath);
+    }
+    for (final chat in widget.availableChats) {
+      final path = chat.avatarPath ?? chat.contactAvatarPath;
+      addAvatar(chat.jid, path);
+      addAvatar(chat.emailAddress, path);
     }
     return next;
   }
 
   void _refreshAvatarPaths() {
     final rosterItems = widget.rosterItems;
-    if (listEquals(rosterItems, _lastRosterItems)) {
+    final availableChats = widget.availableChats;
+    if (listEquals(rosterItems, _lastRosterItems) &&
+        listEquals(availableChats, _lastAvailableChats)) {
       return;
     }
     _lastRosterItems = List<RosterItem>.from(rosterItems);
-    final next = _computeAvatarPaths(rosterItems);
+    _lastAvailableChats = List<Chat>.from(availableChats);
+    final next = _computeAvatarPaths();
     if (mapEquals(next, _avatarPathsByJid)) {
       return;
     }
@@ -1120,13 +1140,15 @@ class _RecipientChipAvatar extends StatelessWidget {
             selfIdentity: selfIdentity,
             size: avatarSize,
             showBadge: false,
+            avatarPathOverride: _avatarPathForChat(chat),
           )
         : AxiAvatar(
             jid: target.address ?? target.displayName ?? '',
             size: avatarSize,
             shape: AxiAvatarShape.circle,
-            avatarPath: avatarPathsByJid[
-                (target.address ?? target.displayName ?? '').toLowerCase()],
+            avatarPath: _avatarPathForKey(
+              target.address ?? target.displayName,
+            ),
           );
     final badgeIcon = _statusIcon(status, colors);
     if (badgeIcon == null) {
@@ -1187,6 +1209,18 @@ class _RecipientChipAvatar extends StatelessWidget {
         ),
       null => null,
     };
+  }
+
+  String? _avatarPathForKey(String? key) {
+    final normalized = key?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) return null;
+    return avatarPathsByJid[normalized];
+  }
+
+  String? _avatarPathForChat(Chat chat) {
+    final entry = _avatarPathForKey(chat.jid);
+    if (entry != null) return entry;
+    return _avatarPathForKey(chat.emailAddress);
   }
 }
 
