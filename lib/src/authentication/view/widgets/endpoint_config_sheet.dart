@@ -137,9 +137,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
       domain: domain,
       enableXmpp: current.enableXmpp,
       enableSmtp: current.enableSmtp,
-      useDns: current.useDns,
-      useSrv: current.useSrv,
-      requireDnssec: current.requireDnssec,
       xmppHost: xmppHost.isEmpty ? null : xmppHost,
       imapHost: imapHost.isEmpty ? null : imapHost,
       smtpHost: smtpHost.isEmpty ? null : smtpHost,
@@ -227,45 +224,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
               ),
             ),
           ],
-        ),
-        SizedBox(height: spacing.s),
-        Row(
-          children: [
-            Expanded(
-              child: _ToggleTile(
-                label: context.l10n.authCustomServerUseDns,
-                value: config.useDns,
-                onChanged: (value) => setState(() {
-                  final enabled = value;
-                  _draftConfig = config.copyWith(
-                    useDns: enabled,
-                    useSrv: enabled ? config.useSrv : false,
-                    requireDnssec: enabled ? config.requireDnssec : false,
-                  );
-                }),
-              ),
-            ),
-            SizedBox(width: spacing.s),
-            Expanded(
-              child: _ToggleTile(
-                label: context.l10n.authCustomServerUseSrv,
-                value: config.useSrv,
-                enabled: config.useDns,
-                onChanged: (value) => setState(
-                  () => _draftConfig = config.copyWith(useSrv: value),
-                ),
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: spacing.s),
-        _ToggleTile(
-          label: context.l10n.authCustomServerRequireDnssec,
-          value: config.requireDnssec,
-          enabled: config.useDns,
-          onChanged: (value) => setState(
-            () => _draftConfig = config.copyWith(requireDnssec: value),
-          ),
         ),
         SizedBox(height: spacing.s),
         Row(

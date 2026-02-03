@@ -10,6 +10,7 @@ import 'package:animations/animations.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
+import 'package:axichat/src/attachments/view/pending_attachment_preview.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/models/blocklist_entry.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
@@ -2631,18 +2632,7 @@ class _ChatState extends State<Chat> {
 
   void _handlePendingAttachmentPressed(PendingAttachment pending) {
     if (!mounted) return;
-    final commandSurface = resolveCommandSurface(context);
-    if (commandSurface == CommandSurface.menu) {
-      if (pending.attachment.isImage) {
-        _showAttachmentPreview(pending);
-      }
-      return;
-    }
-    if (pending.attachment.isImage) {
-      _showAttachmentPreview(pending);
-    } else {
-      _showPendingAttachmentActions(pending);
-    }
+    _showAttachmentPreview(pending);
   }
 
   void _handlePendingAttachmentLongPressed(PendingAttachment pending) {
@@ -2706,37 +2696,14 @@ class _ChatState extends State<Chat> {
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {
     if (!mounted) return;
     final l10n = context.l10n;
-    final attachment = pending.attachment;
-    final file = File(attachment.path);
-    if (!await file.exists()) {
-      _showSnackbar(l10n.chatAttachmentInaccessible);
-      return;
-    }
-    final FileTypeReport report = await inspectFileType(
-      file: file,
-      declaredMimeType: attachment.mimeType,
-      fileName: attachment.fileName,
-    );
-    if (!mounted) return;
-    final bool useDeclaredFallback = !report.hasReliableDetection;
-    final bool isImage = report.isDetectedImage ||
-        (useDeclaredFallback && report.isDeclaredImage);
-    if (!isImage) {
-      _showSnackbar(l10n.chatAttachmentUnavailable);
-      return;
-    }
-    final intrinsicSize = await _resolveAttachmentSize(attachment);
-    if (!mounted) return;
-    await showFadeScaleDialog<void>(
+    await showPendingAttachmentPreview(
       context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return _AttachmentPreviewDialog(
-          attachment: attachment,
-          intrinsicSize: intrinsicSize,
-          l10n: l10n,
-        );
-      },
+      pending: pending,
+      onRemove: () => context.read<ChatBloc>().add(
+            ChatPendingAttachmentRemoved(pending.id),
+          ),
+      removeTooltip: l10n.chatAttachmentRemove,
+      closeTooltip: l10n.commonClose,
     );
   }
 
@@ -2758,38 +2725,6 @@ class _ChatState extends State<Chat> {
         );
       },
     );
-  }
-
-  Future<Size?> _resolveAttachmentSize(EmailAttachment attachment) async {
-    final width = attachment.width;
-    final height = attachment.height;
-    if (width != null && height != null && width > 0 && height > 0) {
-      return Size(width.toDouble(), height.toDouble());
-    }
-    const maxDecodeBytes = 16 * 1024 * 1024;
-    final sizeBytes = attachment.sizeBytes;
-    if (sizeBytes > maxDecodeBytes) {
-      return null;
-    }
-    final file = File(attachment.path);
-    if (!await file.exists()) return null;
-    try {
-      final bytes = await file.readAsBytes();
-      if (bytes.length > maxDecodeBytes) {
-        return null;
-      }
-      final codec = await ui.instantiateImageCodec(bytes);
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
-      codec.dispose();
-      try {
-        return Size(image.width.toDouble(), image.height.toDouble());
-      } finally {
-        image.dispose();
-      }
-    } on Exception {
-      return null;
-    }
   }
 
   Future<void> _showPendingAttachmentActions(PendingAttachment pending) async {
@@ -11739,107 +11674,6 @@ class _HtmlPreviewDialogState extends State<_HtmlPreviewDialog> {
         ],
       ),
     );
-  }
-}
-
-class _AttachmentPreviewDialog extends StatelessWidget {
-  const _AttachmentPreviewDialog({
-    required this.attachment,
-    required this.intrinsicSize,
-    required this.l10n,
-  });
-
-  final EmailAttachment attachment;
-  final Size? intrinsicSize;
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final mediaSize = MediaQuery.sizeOf(context);
-    final spacing = context.spacing;
-    final sizing = context.sizing;
-    final double maxWidth = math.max(0.0, mediaSize.width - spacing.xl);
-    final double maxHeight = math.max(0.0, mediaSize.height - spacing.xl);
-    final targetSize = fitWithinBounds(
-      intrinsicSize: intrinsicSize,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-    );
-    final file = File(attachment.path);
-
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: targetSize.width,
-            height: targetSize.height,
-            child: InteractiveViewer(
-              maxScale: sizing.mediaPreviewMaxScale,
-              child: Image.file(
-                file,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ),
-          SizedBox(height: spacing.s),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AxiIconButton.ghost(
-                iconData: LucideIcons.save,
-                tooltip: l10n.chatAttachmentExportTitle,
-                onPressed: () => saveAttachmentToDevice(
-                  context,
-                  file: file,
-                  filename: attachment.fileName,
-                ),
-              ),
-              SizedBox(width: spacing.xs),
-              AxiIconButton.ghost(
-                iconData: LucideIcons.share2,
-                tooltip: l10n.chatActionShare,
-                onPressed: () => shareAttachmentFromFile(
-                  context,
-                  file: file,
-                  filename: attachment.fileName,
-                ),
-              ),
-              SizedBox(width: spacing.xs),
-              AxiIconButton.ghost(
-                iconData: LucideIcons.x,
-                tooltip: l10n.commonClose,
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Size fitWithinBounds({
-    required Size? intrinsicSize,
-    required double maxWidth,
-    required double maxHeight,
-  }) {
-    final cappedWidth = math.max(0.0, maxWidth);
-    final cappedHeight = math.max(0.0, maxHeight);
-    if (intrinsicSize == null ||
-        intrinsicSize.width <= 0 ||
-        intrinsicSize.height <= 0) {
-      final width = math.min(cappedWidth, 360.0);
-      final height = math.min(cappedHeight, width * 0.75);
-      return Size(width, height);
-    }
-    final aspectRatio = intrinsicSize.width / intrinsicSize.height;
-    var width = math.min(intrinsicSize.width, cappedWidth);
-    var height = width / aspectRatio;
-    if (height > cappedHeight && cappedHeight > 0) {
-      height = cappedHeight;
-      width = height * aspectRatio;
-    }
-    return Size(width, height);
   }
 }
 

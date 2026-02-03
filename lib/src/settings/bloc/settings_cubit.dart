@@ -49,8 +49,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   }
 
   void updateEndpointConfig(EndpointConfig config) {
-    final normalized = normalizeEndpointConfig(config);
-    emit(state.copyWith(endpointConfig: normalized));
+    emit(state.copyWith(endpointConfig: config));
   }
 
   void resetEndpointConfig() {

@@ -364,14 +364,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   void _handleEndpointConfigUpdated(EndpointConfig config) {
-    final normalized = normalizeEndpointConfig(config);
-    _rebuildEmailProvisioningClient(normalized);
-    _emailService?.updateEndpointConfig(normalized);
+    _rebuildEmailProvisioningClient(config);
+    _emailService?.updateEndpointConfig(config);
     _log.fine(
       'Auth config update -> ${state.runtimeType} '
-      '(endpoint changed: ${normalized != state.config})',
+      '(endpoint changed: ${config != state.config})',
     );
-    emit(state.copyWithConfig(normalized));
+    emit(state.copyWithConfig(config));
     _updateEmailForegroundKeepalive();
   }
 
@@ -1339,26 +1338,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
       EndpointOverride? xmppEndpoint;
       if (xmppEnabled) {
-        try {
-          xmppEndpoint = await _endpointResolver.resolveXmpp(
-            config,
-            fallback: _overrideFrom(serverLookup[config.domain]),
-          );
-        } on EndpointResolutionException catch (error) {
-          if (!canPreserveSession) {
-            _emit(
-              AuthenticationFailure(
-                AuthRawMessage(error.message),
-                config: config,
-              ),
-            );
-            return;
-          }
-          _log.warning('Endpoint resolution failed: ${error.message}');
-          await _clearAuthTransaction();
-          authenticationCommitted = true;
-          return;
-        }
+        xmppEndpoint = await _endpointResolver.resolveXmpp(
+          config,
+          fallback: _overrideFrom(serverLookup[config.domain]),
+        );
       }
 
       if (xmppEnabled) {
