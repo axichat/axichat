@@ -31,7 +31,7 @@ class CalendarHydratedStorage implements Storage {
   static Future<CalendarHydratedStorage> open({
     required String boxName,
     required String prefix,
-    HydratedCipher? encryptionCipher,
+    HiveCipher? encryptionCipher,
     HiveInterface? hive,
   }) async {
     final Logger logger = Logger('CalendarHydratedStorage');

@@ -8405,11 +8405,13 @@ class _ChatState extends State<Chat> {
         _showSnackbar(l10n.chatShareNoText);
         return;
       }
-      await Share.share(
-        content,
-        subject: l10n.chatShareSubjectPrefix(
-          context.read<ChatBloc>().state.chat?.title ??
-              l10n.chatShareFallbackSubject,
+      await SharePlus.instance.share(
+        ShareParams(
+          text: content,
+          subject: l10n.chatShareSubjectPrefix(
+            context.read<ChatBloc>().state.chat?.title ??
+                l10n.chatShareFallbackSubject,
+          ),
         ),
       );
     });
@@ -8619,11 +8621,13 @@ class _ChatState extends State<Chat> {
         _showSnackbar(l10n.chatShareSelectedNoText);
         return;
       }
-      await Share.share(
-        joined,
-        subject: l10n.chatShareSubjectPrefix(
-          context.read<ChatBloc>().state.chat?.title ??
-              l10n.chatShareFallbackSubject,
+      await SharePlus.instance.share(
+        ShareParams(
+          text: joined,
+          subject: l10n.chatShareSubjectPrefix(
+            context.read<ChatBloc>().state.chat?.title ??
+                l10n.chatShareFallbackSubject,
+          ),
         ),
       );
       _clearMultiSelection();

@@ -258,7 +258,12 @@ class _FeedbackToastState extends State<FeedbackToast> {
         const EdgeInsets.only(left: 16);
     final effectiveBorder = widget.border ??
         effectiveToastTheme.border ??
-        Border.all(color: theme.colorScheme.border);
+        ShadBorder.fromBorderSide(
+          ShadBorderSide(
+            color: theme.colorScheme.border,
+            width: axiBorders.width,
+          ),
+        );
     final effectiveBorderRadius =
         widget.radius ?? effectiveToastTheme.radius ?? theme.radius;
     final effectiveShadows =
@@ -296,7 +301,7 @@ class _FeedbackToastState extends State<FeedbackToast> {
               ),
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  border: effectiveBorder,
+                  border: effectiveBorder.toBorder(),
                   borderRadius: effectiveBorderRadius,
                   boxShadow: effectiveShadows,
                   color: effectiveBackgroundColor,

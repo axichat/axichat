@@ -60,10 +60,11 @@ class _GridHarness extends StatelessWidget {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
+    final storageDir = Directory.systemTemp.createTempSync(
+      'calendar_grid_render_tests',
+    );
     HydratedBloc.storage = await HydratedStorage.build(
-      storageDirectory: Directory.systemTemp.createTempSync(
-        'calendar_grid_render_tests',
-      ),
+      storageDirectory: HydratedStorageDirectory(storageDir.path),
     );
     registerCalendarFallbackValues();
   });

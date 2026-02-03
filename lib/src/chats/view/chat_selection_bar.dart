@@ -161,10 +161,12 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
         );
         return;
       }
-      await Share.shareXFiles(
-        [XFile(exportFile.path)],
-        text: l10n.chatSelectionExportShareText,
-        subject: l10n.chatSelectionExportShareSubject,
+      await SharePlus.instance.share(
+        ShareParams(
+          files: <XFile>[XFile(exportFile.path)],
+          text: l10n.chatSelectionExportShareText,
+          subject: l10n.chatSelectionExportShareSubject,
+        ),
       );
       showToast?.call(
         FeedbackToast.success(

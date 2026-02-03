@@ -4,6 +4,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:hive/hive.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 import 'calendar_hydrated_storage.dart';
@@ -27,7 +28,7 @@ Future<Storage> buildAuthCalendarStorage({required List<int> encryptionKey}) {
   return CalendarHydratedStorage.open(
     boxName: _authBoxName,
     prefix: _authPrefix,
-    encryptionCipher: HydratedAesCipher(encryptionKey),
+    encryptionCipher: HiveAesCipher(encryptionKey),
   );
 }
 

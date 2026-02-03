@@ -108,10 +108,11 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
+    final storageDir = Directory.systemTemp.createTempSync(
+      'calendar_widget_tests',
+    );
     HydratedBloc.storage = await HydratedStorage.build(
-      storageDirectory: Directory.systemTemp.createTempSync(
-        'calendar_widget_tests',
-      ),
+      storageDirectory: HydratedStorageDirectory(storageDir.path),
     );
     registerCalendarFallbackValues();
   });

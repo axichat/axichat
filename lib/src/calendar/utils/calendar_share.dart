@@ -27,10 +27,12 @@ Future<CalendarShareOutcome> shareCalendarExport({
     return CalendarShareOutcome.copiedPath;
   }
 
-  await Share.shareXFiles(
-    <XFile>[XFile(file.path)],
-    subject: subject,
-    text: text,
+  await SharePlus.instance.share(
+    ShareParams(
+      files: <XFile>[XFile(file.path)],
+      subject: subject,
+      text: text,
+    ),
   );
   _scheduleExportCleanup(file);
   return CalendarShareOutcome.shared;

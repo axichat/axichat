@@ -63,7 +63,9 @@ Future<void> main() async {
 
   final Directory storageDirectory = await storageDirectoryFuture;
   final HydratedStorage baseStorage = await HydratedStorage.build(
-    storageDirectory: storageDirectory,
+    storageDirectory: isWeb
+        ? HydratedStorageDirectory.web
+        : HydratedStorageDirectory(storageDirectory.path),
   );
   final Future<void> hiveInitFuture = () async {
     final String storagePath = storageDirectory.path;

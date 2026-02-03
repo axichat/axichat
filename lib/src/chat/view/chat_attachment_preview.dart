@@ -2495,7 +2495,11 @@ Future<void> shareAttachmentFromFile(
       );
       return;
     }
-    await Share.shareXFiles([XFile(sharedFile.path)]);
+    await SharePlus.instance.share(
+      ShareParams(
+        files: <XFile>[XFile(sharedFile.path)],
+      ),
+    );
   } on PlatformException {
     _showToast(
       l10n,

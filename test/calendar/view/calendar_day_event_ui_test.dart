@@ -71,10 +71,11 @@ class CalendarMonthViewHarness extends StatelessWidget {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() async {
+    final storageDir = Directory.systemTemp.createTempSync(
+      'calendar_day_event_tests',
+    );
     HydratedBloc.storage = await HydratedStorage.build(
-      storageDirectory: Directory.systemTemp.createTempSync(
-        'calendar_day_event_tests',
-      ),
+      storageDirectory: HydratedStorageDirectory(storageDir.path),
     );
     registerCalendarFallbackValues();
   });

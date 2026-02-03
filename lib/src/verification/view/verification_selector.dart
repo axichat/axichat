@@ -31,9 +31,12 @@ class VerificationSelector extends StatelessWidget {
           rowMainAxisSize: MainAxisSize.min,
           border: self
               ? null
-              : Border.fromBorderSide(
-                  context.borderSide.copyWith(
+              : ShadBorder.fromBorderSide(
+                  ShadBorderSide(
                     color: fingerprint.trust.color(colors),
+                    width: context.borderSide.width,
+                    style: context.borderSide.style,
+                    strokeAlign: context.borderSide.strokeAlign,
                   ),
                 ),
           child: Column(

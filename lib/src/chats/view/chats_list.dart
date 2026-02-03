@@ -1247,10 +1247,12 @@ class _ChatListTileState extends State<ChatListTile> {
         _showMessage(l10n.chatsExportNoContent);
         return;
       }
-      await Share.shareXFiles(
-        [XFile(exportFile.path)],
-        text: l10n.chatsExportShareText,
-        subject: l10n.chatsExportShareSubject(chat.displayName),
+      await SharePlus.instance.share(
+        ShareParams(
+          files: <XFile>[XFile(exportFile.path)],
+          text: l10n.chatsExportShareText,
+          subject: l10n.chatsExportShareSubject(chat.displayName),
+        ),
       );
       if (!mounted) return;
       _showMessage(l10n.chatsExportSuccess);
@@ -1513,10 +1515,12 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
         _showSnack(l10n.chatsExportNoContent);
         return;
       }
-      await Share.shareXFiles(
-        [XFile(exportFile.path)],
-        text: l10n.chatsExportShareText,
-        subject: l10n.chatsExportShareSubject(widget.chat.displayName),
+      await SharePlus.instance.share(
+        ShareParams(
+          files: <XFile>[XFile(exportFile.path)],
+          text: l10n.chatsExportShareText,
+          subject: l10n.chatsExportShareSubject(widget.chat.displayName),
+        ),
       );
       if (!mounted) return;
       _showSnack(l10n.chatsExportSuccess);

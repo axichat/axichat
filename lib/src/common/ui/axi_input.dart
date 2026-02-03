@@ -486,7 +486,7 @@ class AxiInputState extends State<AxiInput>
         .merge(widget.style);
 
     final effectiveDecoration =
-        (theme.inputTheme.decoration ?? const ShadDecoration()).mergeWith(
+        (theme.inputTheme.decoration ?? const ShadDecoration()).merge(
       widget.decoration,
     );
 

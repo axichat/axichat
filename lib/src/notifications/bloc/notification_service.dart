@@ -140,7 +140,7 @@ class NotificationService {
       );
 
       await _plugin.initialize(
-        initializationSettings,
+        settings: initializationSettings,
         onDidReceiveNotificationResponse: notificationTapBackground,
       );
 
@@ -252,10 +252,10 @@ class NotificationService {
     final String? sanitizedBody = sanitizeNotificationPreview(body);
 
     await _plugin.show(
-      Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
-      title,
-      sanitizedBody,
-      notificationDetails,
+      id: Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
+      title: title,
+      body: sanitizedBody,
+      notificationDetails: notificationDetails,
       payload: payload,
     );
   }
@@ -295,10 +295,10 @@ class NotificationService {
     final String? sanitizedBody = sanitizeNotificationPreview(body);
 
     await _plugin.show(
-      notificationId,
-      _sanitizeMessageNotificationTitle(title),
-      showPreview ? sanitizedBody : null,
-      notificationDetails,
+      id: notificationId,
+      title: _sanitizeMessageNotificationTitle(title),
+      body: showPreview ? sanitizedBody : null,
+      notificationDetails: notificationDetails,
       payload: payload,
     );
   }
@@ -371,12 +371,12 @@ class NotificationService {
 
     try {
       await _plugin.zonedSchedule(
-        id,
-        title,
-        body,
-        scheduled,
-        notificationDetails,
+        id: id,
+        scheduledDate: scheduled,
+        notificationDetails: notificationDetails,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        title: title,
+        body: body,
         payload: payload,
         matchDateTimeComponents: null,
       );
@@ -395,7 +395,7 @@ class NotificationService {
   Future<void> cancelNotification(int id) async {
     _cancelInAppTimer(id);
     await _ensureInitialized();
-    await _plugin.cancel(id);
+    await _plugin.cancel(id: id);
   }
 
   Future<void> refreshTimeZone() => _ensureTimeZones(force: true);
@@ -443,7 +443,13 @@ class NotificationService {
     String? payload,
   }) async {
     final notificationDetails = await _notificationDetails();
-    await _plugin.show(id, title, body, notificationDetails, payload: payload);
+    await _plugin.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: notificationDetails,
+      payload: payload,
+    );
   }
 
   void _cancelInAppTimer(int id) {
