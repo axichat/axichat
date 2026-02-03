@@ -437,6 +437,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                             knownAddresses,
                             shareTokenSignatureEnabled:
                                 shareTokenSignatureEnabled,
+                            excludedKeys: _recipientNormalizedKeys(),
                           ),
                           highlightedIndexListenable:
                               _highlightedSuggestionIndex,
@@ -899,6 +900,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     Set<String> knownDomains,
     Set<String> knownAddresses, {
     required bool shareTokenSignatureEnabled,
+    required Set<String> excludedKeys,
   }) {
     const maxSuggestions = 8;
     final knownAddressesLower = _knownAddressesLower;
@@ -917,10 +919,16 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final seen = <String>{};
 
     bool addTarget(FanOutTarget target) {
-      final key = (target.chat?.jid ?? target.address ?? '').toLowerCase();
-      if (key.isEmpty || seen.contains(key)) return false;
+      final rawKey = target.chat?.jid ?? target.address;
+      final normalizedKey = _normalizeAddress(rawKey);
+      if (normalizedKey == null ||
+          normalizedKey.isEmpty ||
+          seen.contains(normalizedKey) ||
+          excludedKeys.contains(normalizedKey)) {
+        return false;
+      }
       results.add(target);
-      seen.add(key);
+      seen.add(normalizedKey);
       return results.length >= maxSuggestions;
     }
 
@@ -990,6 +998,25 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     }
 
     return results;
+  }
+
+  Set<String> _recipientNormalizedKeys() {
+    final keys = <String>{};
+    void addKey(String? raw) {
+      final normalized = _normalizeAddress(raw);
+      if (normalized != null && normalized.isNotEmpty) {
+        keys.add(normalized);
+      }
+    }
+
+    for (final recipient in widget.recipients) {
+      final target = recipient.target;
+      addKey(target.address);
+      addKey(target.chat?.jid);
+      addKey(target.chat?.emailAddress);
+      addKey(target.chat?.remoteJid);
+    }
+    return keys;
   }
 
   bool _chatMatchesQuery(Chat chat, String query) {

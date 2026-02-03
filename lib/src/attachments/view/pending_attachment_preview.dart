@@ -5,16 +5,18 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/ui/feedback_toast.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/common/file_type_detector.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:charset_converter/charset_converter.dart';
 import 'package:flutter/material.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -32,7 +34,9 @@ Future<void> showPendingAttachmentPreview({
   final l10n = context.l10n;
   final closeLabel = closeTooltip ?? l10n.commonClose;
   final file = File(pending.attachment.path);
-  if (!await file.exists()) {
+  final exists = await file.exists();
+  if (!context.mounted) return;
+  if (!exists) {
     _showPreviewToast(
       context,
       l10n.chatAttachmentUnavailable,
@@ -45,6 +49,7 @@ Future<void> showPendingAttachmentPreview({
     file: file,
     attachment: pending.attachment,
   );
+  if (!context.mounted) return;
   if (previewData == null) {
     _showPreviewToast(
       context,
@@ -53,6 +58,7 @@ Future<void> showPendingAttachmentPreview({
     );
     return;
   }
+  if (!context.mounted) return;
 
   await showFadeScaleDialog<void>(
     context: context,
@@ -136,7 +142,7 @@ Future<_TextPreviewResult> _readTextPreview(File file) async {
   final truncated = totalBytes > bytes.length;
   final decoded = await _decodeWithFallback(Uint8List.fromList(bytes));
   return _TextPreviewResult(
-    content: truncated ? '$decoded${_truncationSuffix}' : decoded,
+    content: truncated ? '$decoded$_truncationSuffix' : decoded,
     truncated: truncated,
   );
 }
@@ -235,7 +241,7 @@ Future<Size?> resolveEmailAttachmentSize({
     return null;
   }
   try {
-    final codec = await instantiateImageCodec(await file.readAsBytes());
+    final codec = await ui.instantiateImageCodec(await file.readAsBytes());
     final frame = await codec.getNextFrame();
     final image = frame.image;
     final result = Size(image.width.toDouble(), image.height.toDouble());
@@ -516,7 +522,7 @@ class _PendingAttachmentPreviewContent extends StatelessWidget {
           ),
           SizedBox(height: spacing.s),
           Text(
-            l10n.chatAttachmentPreviewUnsupported,
+            l10n.chatAttachmentUnavailable,
             style: context.textTheme.small.copyWith(
               color: colors.mutedForeground,
             ),

@@ -2,11 +2,9 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:io';
-import 'dart:math' as math;
-import 'dart:ui' as ui;
+ as math;
 
-import 'package:animations/animations.dart';
+import 'package:at';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
 import 'package:axichat/src/attachments/view/attachment_gallery_view.dart';
@@ -62,9 +60,7 @@ import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/env.dart';
-import 'package:axichat/src/common/file_type_detector.dart';
-import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/common/message_error_l10n.dart';
+import 'package:axichat/src/common/html_co_l10n.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
@@ -11177,8 +11173,8 @@ class _ChatComposerSection extends StatelessWidget {
       if (myJid != null && myJid.isNotEmpty) mox.JID.fromString(myJid).domain,
     };
     final width = MediaQuery.sizeOf(context).width;
-    final composerHorizontalInset = spacing.s + spacing.xs;
-    final desktopComposerHorizontalInset = spacing.s + spacing.xs + spacing.xs;
+    final composerHorizontalInset = spacing.m + spacing.xs;
+    final desktopComposerHorizontalInset = spacing.m + spacing.xs + spacing.xs;
     final horizontalPadding = width >= smallScreen
         ? desktopComposerHorizontalInset
         : composerHorizontalInset;

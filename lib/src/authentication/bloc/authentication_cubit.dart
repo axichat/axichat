@@ -323,7 +323,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   VoidCallback? _foregroundListener;
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
-  AvatarUploadPayload? _signupAvatarDraft;
   _AuthTransaction? _authTransaction;
 
   bool get _stickyAuthActive => state is AuthenticationComplete;
@@ -1154,6 +1153,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     bool rememberMe = true,
     bool requireEmailProvisioned = false,
     provisioning.EmailProvisioningCredentials? emailCredentials,
+    AvatarUploadPayload? pendingAvatar,
   }) async {
     if (kEnableDemoChats) {
       await _loginToDemoMode();
@@ -1385,6 +1385,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               enforceEmailProvisioning: enforceEmailProvisioning,
               databasePrefixStorageKey: databasePrefixStorageKey,
               databasePassphraseStorageKey: databasePassphraseStorageKey,
+              pendingAvatar: pendingAvatar,
             );
             if (resumeResult.isResumed) {
               authenticationCommitted = true;
@@ -1444,6 +1445,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               enforceEmailProvisioning: enforceEmailProvisioning,
               databasePrefixStorageKey: databasePrefixStorageKey,
               databasePassphraseStorageKey: databasePassphraseStorageKey,
+              pendingAvatar: pendingAvatar,
             );
             if (resumeResult.isResumed) {
               authenticationCommitted = true;
@@ -1486,6 +1488,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           databasePrefix: ensuredDatabasePrefix,
           databasePassphraseStorageKey: databasePassphraseStorageKey,
           databasePassphrase: ensuredDatabasePassphrase,
+          pendingAvatar: pendingAvatar,
         );
         authenticationCommitted = true;
         Future<void>(() async {
@@ -1565,6 +1568,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePrefix: ensuredDatabasePrefix,
         databasePassphraseStorageKey: databasePassphraseStorageKey,
         databasePassphrase: ensuredDatabasePassphrase,
+        pendingAvatar: pendingAvatar,
       );
       authenticationCommitted = true;
     } finally {
@@ -1667,6 +1671,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required RegisteredCredentialKey databasePrefixStorageKey,
     required RegisteredCredentialKey databasePassphraseStorageKey,
     required bool passwordPreHashed,
+    required AvatarUploadPayload? pendingAvatar,
     String? password,
     String? emailPassword,
     provisioning.EmailProvisioningCredentials? emailCredentials,
@@ -1715,6 +1720,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       databasePrefix: databasePrefix,
       databasePassphraseStorageKey: databasePassphraseStorageKey,
       databasePassphrase: databasePassphrase,
+      pendingAvatar: pendingAvatar,
     );
     return _ResumeResult.resumed;
   }
@@ -1954,6 +1960,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String databasePrefix,
     required RegisteredCredentialKey databasePassphraseStorageKey,
     required String databasePassphrase,
+    required AvatarUploadPayload? pendingAvatar,
   }) async {
     await _persistLoginSecrets(
       jid: jid,
@@ -1966,10 +1973,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       databasePassphrase: databasePassphrase,
     );
     _authenticatedJid = jid;
-    final pendingAvatar = _signupAvatarDraft;
     if (_activeSignupCredentialKey != null && pendingAvatar != null) {
       await _xmppService.cacheSelfAvatarDraft(pendingAvatar);
-      _signupAvatarDraft = null;
     }
     final bool fromSignup = _activeSignupCredentialKey != null;
     final AuthenticationState completedState = fromSignup
@@ -2142,7 +2147,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
     _emit(const AuthenticationSignUpInProgress());
     final host = config.domain;
-    _signupAvatarDraft = avatar;
     final cleanupComplete = await _ensureAccountDeletionCleanupComplete(
       username: username,
       host: host,
@@ -2203,6 +2207,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         rememberMe: rememberMe,
         requireEmailProvisioned: true,
         emailCredentials: emailProvisioningCredentials,
+        pendingAvatar: avatar,
       );
       signupComplete = state is AuthenticationComplete;
     } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {
@@ -2229,9 +2234,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     } finally {
       _activeSignupCredentialKey = null;
-      if (!signupComplete) {
-        _signupAvatarDraft = null;
-      }
       if (signupComplete) {
         await _removePendingAccountDeletion(username: username, host: host);
       }

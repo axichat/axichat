@@ -437,11 +437,7 @@ class _ToggleTile extends StatelessWidget {
   const _ToggleTile({
     required this.label,
     required this.value,
-    required this.onChanged,
-    this.enabled = true,
-  });
-
-  final String label;
+    required this.onChangedabel;
   final bool value;
   final bool enabled;
   final ValueChanged<bool> onChanged;
