@@ -765,9 +765,15 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     _lastAuthState = state;
                     final currentLocation =
                         _router.routeInformationProvider.value.uri.path;
-                    final matchedLocation = _router.state.matchedLocation;
+                    final matchList =
+                        _router.routerDelegate.currentConfiguration;
+                    final matchedLocation = matchList.matches.isEmpty
+                        ? null
+                        : matchList.uri.path;
                     final currentRoute = routeLocations[currentLocation];
-                    final matchedRoute = routeLocations[matchedLocation];
+                    final matchedRoute = matchedLocation == null
+                        ? null
+                        : routeLocations[matchedLocation];
                     final effectiveRoute = currentRoute ?? matchedRoute;
                     final onLoginRoute =
                         currentLocation == const LoginRoute().location ||
@@ -792,7 +798,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                       void navigateHome() {
                         final latestAuthState = _lastAuthState;
                         if (latestAuthState is! AuthenticationComplete) return;
-                        if (_router.state.matchedLocation ==
+                        final currentMatchList =
+                            _router.routerDelegate.currentConfiguration;
+                        final currentMatchedLocation =
+                            currentMatchList.matches.isEmpty
+                                ? null
+                                : currentMatchList.uri.path;
+                        if (currentMatchedLocation ==
                             const HomeRoute().location) {
                           return;
                         }
