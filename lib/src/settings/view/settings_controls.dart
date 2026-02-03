@@ -397,7 +397,12 @@ class SettingsControls extends StatelessWidget {
                 value: state.autoDownloadImages,
                 onChanged: (enabled) => context
                     .read<SettingsCubit>()
-                    .toggleAutoDownloadImages(enabled),
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: enabled,
+                      videosEnabled: state.autoDownloadVideos,
+                      documentsEnabled: state.autoDownloadDocuments,
+                      archivesEnabled: state.autoDownloadArchives,
+                    ),
               ),
             ),
             Padding(
@@ -409,7 +414,12 @@ class SettingsControls extends StatelessWidget {
                 value: state.autoDownloadVideos,
                 onChanged: (enabled) => context
                     .read<SettingsCubit>()
-                    .toggleAutoDownloadVideos(enabled),
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: state.autoDownloadImages,
+                      videosEnabled: enabled,
+                      documentsEnabled: state.autoDownloadDocuments,
+                      archivesEnabled: state.autoDownloadArchives,
+                    ),
               ),
             ),
             Padding(
@@ -421,7 +431,12 @@ class SettingsControls extends StatelessWidget {
                 value: state.autoDownloadDocuments,
                 onChanged: (enabled) => context
                     .read<SettingsCubit>()
-                    .toggleAutoDownloadDocuments(enabled),
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: state.autoDownloadImages,
+                      videosEnabled: state.autoDownloadVideos,
+                      documentsEnabled: enabled,
+                      archivesEnabled: state.autoDownloadArchives,
+                    ),
               ),
             ),
             Padding(
@@ -433,7 +448,12 @@ class SettingsControls extends StatelessWidget {
                 value: state.autoDownloadArchives,
                 onChanged: (enabled) => context
                     .read<SettingsCubit>()
-                    .toggleAutoDownloadArchives(enabled),
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: state.autoDownloadImages,
+                      videosEnabled: state.autoDownloadVideos,
+                      documentsEnabled: state.autoDownloadDocuments,
+                      archivesEnabled: enabled,
+                    ),
               ),
             ),
             anchors?.emailPreferencesKey == null

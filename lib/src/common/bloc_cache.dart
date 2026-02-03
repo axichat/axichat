@@ -12,5 +12,5 @@ mixin BlocCache<S> on BlocBase<S> {
     return super.close();
   }
 
-  operator [](String key) => cache[key];
+  dynamic operator [](String key) => cache[key];
 }

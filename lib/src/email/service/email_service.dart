@@ -436,6 +436,7 @@ class EmailService {
   String? _databasePrefix;
   String? _databasePassphrase;
   EmailAccount? _activeAccount;
+  EmailAccount? _sessionCredentials;
   String? _activeCredentialScope;
   bool _running = false;
   final Map<String, RegisteredCredentialKey> _addressKeys = {};
@@ -492,6 +493,28 @@ class EmailService {
     AttachmentAutoDownload value,
   ) {
     _transport.updateDefaultChatAttachmentAutoDownload(value);
+  }
+
+  void cacheSessionCredentials({
+    required String address,
+    required String? password,
+  }) {
+    final normalizedAddress = address.trim();
+    final normalizedPassword = password?.trim();
+    if (normalizedAddress.isEmpty ||
+        normalizedPassword == null ||
+        normalizedPassword.isEmpty) {
+      _sessionCredentials = null;
+      return;
+    }
+    _sessionCredentials = EmailAccount(
+      address: normalizedAddress,
+      password: normalizedPassword,
+    );
+  }
+
+  void clearSessionCredentials() {
+    _sessionCredentials = null;
   }
 
   Map<String, String> _buildConnectionConfig(String address) =>
@@ -623,6 +646,8 @@ class EmailService {
       key == _mailPortConfigKey || key == _sendPortConfigKey;
 
   EmailAccount? get activeAccount => _activeAccount;
+
+  EmailAccount? get sessionCredentials => _sessionCredentials;
 
   bool get isSmtpOnly =>
       _endpointConfig.enableSmtp && !_endpointConfig.enableXmpp;

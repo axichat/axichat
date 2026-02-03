@@ -39,7 +39,7 @@ class RosterMatcher extends Matcher {
       });
 }
 
-main() {
+void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   withForeground = false;

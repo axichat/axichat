@@ -3,8 +3,10 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/demo/bloc/email_demo_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -170,12 +172,21 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                             child: Text(context.l10n.emailDemoProvisionButton),
                           ),
                           AxiButton.secondary(
-                            onPressed: isBusy || state.account == null
+                            onPressed: isBusy
                                 ? null
                                 : () => context
                                     .read<EmailDemoCubit>()
                                     .sendDemoMessage(
-                                      account: state.account!,
+                                      account: state.account,
+                                      demoTarget: kEnableDemoChats
+                                          ? FanOutTarget.address(
+                                              address: state.account?.address ??
+                                                  kDemoSelfJid,
+                                              displayName: context.l10n
+                                                  .emailDemoDisplayNameSelf,
+                                              shareSignatureEnabled: false,
+                                            )
+                                          : null,
                                       body: _messageController.text,
                                       displayName:
                                           context.l10n.emailDemoDisplayNameSelf,

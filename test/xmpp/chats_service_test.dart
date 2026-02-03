@@ -38,7 +38,7 @@ class ChatMatcher extends Matcher {
       compareChats(chat, otherChat);
 }
 
-main() {
+void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   withForeground = false;

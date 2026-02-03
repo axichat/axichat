@@ -28,7 +28,7 @@ bool compareMessages(Message a, Message b) =>
     a.received == b.received &&
     a.displayed == b.displayed;
 
-main() {
+void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   withForeground = false;

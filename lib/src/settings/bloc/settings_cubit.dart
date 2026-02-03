@@ -19,9 +19,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
   SettingsCubit({XmppService? xmppService, Capability? capability})
       : _xmppService = xmppService,
         _capability = capability,
-        super(const SettingsState()) {
-    _syncAttachmentAutoDownloadSettings(state);
-  }
+        super(const SettingsState());
 
   final XmppService? _xmppService;
   final Capability? _capability;
@@ -119,48 +117,33 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(autoLoadEmailImages: enabled));
   }
 
-  void toggleAutoDownloadImages(bool enabled) {
-    emit(state.copyWith(autoDownloadImages: enabled));
-  }
-
-  void toggleAutoDownloadVideos(bool enabled) {
-    emit(state.copyWith(autoDownloadVideos: enabled));
-  }
-
-  void toggleAutoDownloadDocuments(bool enabled) {
-    emit(state.copyWith(autoDownloadDocuments: enabled));
-  }
-
-  void toggleAutoDownloadArchives(bool enabled) {
-    emit(state.copyWith(autoDownloadArchives: enabled));
-  }
-
-  @override
-  void onChange(Change<SettingsState> change) {
-    super.onChange(change);
-    _syncAttachmentAutoDownloadSettings(
-      change.nextState,
-      previous: change.currentState,
-    );
-  }
-
-  void _syncAttachmentAutoDownloadSettings(
-    SettingsState next, {
-    SettingsState? previous,
+  void setAttachmentAutoDownloadSettings({
+    required bool imagesEnabled,
+    required bool videosEnabled,
+    required bool documentsEnabled,
+    required bool archivesEnabled,
+    bool force = false,
   }) {
-    final previousState = previous;
-    if (previousState != null &&
-        previousState.autoDownloadImages == next.autoDownloadImages &&
-        previousState.autoDownloadVideos == next.autoDownloadVideos &&
-        previousState.autoDownloadDocuments == next.autoDownloadDocuments &&
-        previousState.autoDownloadArchives == next.autoDownloadArchives) {
+    if (!force &&
+        state.autoDownloadImages == imagesEnabled &&
+        state.autoDownloadVideos == videosEnabled &&
+        state.autoDownloadDocuments == documentsEnabled &&
+        state.autoDownloadArchives == archivesEnabled) {
       return;
     }
+    emit(
+      state.copyWith(
+        autoDownloadImages: imagesEnabled,
+        autoDownloadVideos: videosEnabled,
+        autoDownloadDocuments: documentsEnabled,
+        autoDownloadArchives: archivesEnabled,
+      ),
+    );
     _xmppService?.updateAttachmentAutoDownloadSettings(
-      imagesEnabled: next.autoDownloadImages,
-      videosEnabled: next.autoDownloadVideos,
-      documentsEnabled: next.autoDownloadDocuments,
-      archivesEnabled: next.autoDownloadArchives,
+      imagesEnabled: imagesEnabled,
+      videosEnabled: videosEnabled,
+      documentsEnabled: documentsEnabled,
+      archivesEnabled: archivesEnabled,
     );
   }
 

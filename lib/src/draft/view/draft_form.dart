@@ -1159,13 +1159,19 @@ class _DraftFormState extends State<DraftForm> {
     final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final shareTokenSignatureEnabled =
         widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled;
+    final chats = widget.locate<ChatsCubit>().state.items ?? const <Chat>[];
+    final chatByJid = <String, Chat>{
+      for (final chat in chats)
+        normalizedAddressKey(chat.jid) ?? chat.jid: chat,
+    };
     final xmppTargets = split.xmppTargets
         .map((recipient) {
           final jid = _resolveXmppJid(recipient);
           if (jid == null || jid.isEmpty) {
             return null;
           }
-          final chat = recipient.target.chat;
+          final jidKey = normalizedAddressKey(jid) ?? jid;
+          final chat = recipient.target.chat ?? chatByJid[jidKey];
           return DraftXmppTarget(
             jid: jid,
             encryptionProtocol:
@@ -1440,9 +1446,7 @@ class _DraftFormState extends State<DraftForm> {
     final commandSurface =
         EnvScope.maybeOf(context)?.commandSurface ?? CommandSurface.sheet;
     if (commandSurface == CommandSurface.menu) {
-      if (pending.attachment.isImage) {
-        _showAttachmentPreview(pending);
-      }
+      _showAttachmentPreview(pending);
       return;
     }
     _showPendingAttachmentActions(pending);

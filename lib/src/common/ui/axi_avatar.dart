@@ -328,6 +328,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
                         onTap: () {
                           context.read<ProfileCubit>().updatePresence(
                                 presence: value,
+                                status: widget.status,
                               );
                           popoverController.toggle();
                         },

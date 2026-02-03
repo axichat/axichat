@@ -503,10 +503,7 @@ class CalendarBloc extends BaseCalendarBloc {
       }
       if (xmppChats.isNotEmpty) {
         for (final chat in xmppChats) {
-          final decision = const CalendarFragmentPolicy().decisionForChat(
-            chat: chat,
-            roomState: _xmppService.roomStateFor(chat.jid),
-          );
+          final decision = _xmppService.calendarFragmentDecisionForChat(chat);
           if (!decision.canWrite) {
             completer.complete(
               const CalendarShareResult.failure(
@@ -570,10 +567,7 @@ class CalendarBloc extends BaseCalendarBloc {
     }
     try {
       final recipient = event.recipient;
-      final decision = const CalendarFragmentPolicy().decisionForChat(
-        chat: recipient,
-        roomState: _xmppService.roomStateFor(recipient.jid),
-      );
+      final decision = _xmppService.calendarFragmentDecisionForChat(recipient);
       if (!decision.canWrite) {
         completer.complete(
           const CalendarShareResult.failure(
@@ -720,12 +714,11 @@ class CalendarBloc extends BaseCalendarBloc {
     if (chat.type != ChatType.groupChat) {
       return trimmedOwner;
     }
-    final String? occupantId =
-        _xmppService.roomStateFor(chat.jid)?.myOccupantId?.trim();
-    if (occupantId == null || occupantId.isEmpty) {
-      return null;
+    final nickname = chat.myNickname?.trim();
+    if (nickname == null || nickname.isEmpty) {
+      return trimmedOwner;
     }
-    return occupantId;
+    return '${chat.jid}/$nickname';
   }
 
   CalendarModel get currentModel => state.model;

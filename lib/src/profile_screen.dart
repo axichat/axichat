@@ -671,9 +671,11 @@ class _ProfileCardSection extends StatelessWidget {
                       child: AxiTextFormField(
                         placeholder: Text(l10n.profileStatusPlaceholder),
                         initialValue: profileState.status,
-                        onSubmitted: (value) => context
-                            .read<ProfileCubit>()
-                            .updatePresence(status: value),
+                        onSubmitted: (value) =>
+                            context.read<ProfileCubit>().updatePresence(
+                                  presence: profileState.presence,
+                                  status: value,
+                                ),
                       ),
                     ),
                   ),

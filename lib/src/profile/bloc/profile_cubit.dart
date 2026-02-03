@@ -77,11 +77,14 @@ class ProfileCubit extends Cubit<ProfileState> {
     return super.close();
   }
 
-  Future<void> updatePresence({Presence? presence, String? status}) async {
+  Future<void> updatePresence({
+    required Presence? presence,
+    required String? status,
+  }) async {
     try {
       await _presenceService?.sendPresence(
-        presence: presence ?? state.presence,
-        status: status ?? state.status,
+        presence: presence,
+        status: status,
       );
     } on XmppPresenceException catch (_) {}
   }

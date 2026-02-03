@@ -3534,6 +3534,13 @@ mixin MessageService
     );
   }
 
+  CalendarFragmentShareDecision calendarFragmentDecisionForChat(Chat chat) {
+    return const CalendarFragmentPolicy().decisionForChat(
+      chat: chat,
+      roomState: roomStateFor(chat.jid),
+    );
+  }
+
   Future<CalendarSnapshotUploadResult> uploadCalendarSnapshot(File file) async {
     final accountJid = myJid;
     if (accountJid == null) {

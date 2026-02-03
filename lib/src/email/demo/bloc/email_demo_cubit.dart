@@ -6,6 +6,8 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:logging/logging.dart';
 
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
@@ -136,10 +138,21 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
   }
 
   Future<void> sendDemoMessage({
-    required EmailAccount account,
+    required EmailAccount? account,
+    required FanOutTarget? demoTarget,
     required String body,
     required String displayName,
   }) async {
+    if (!kEnableDemoChats && account == null) {
+      emit(
+        state.copyWith(
+          status: EmailDemoStatus.provisionFirst,
+          failure: null,
+          detail: null,
+        ),
+      );
+      return;
+    }
     emit(
       state.copyWith(
         status: EmailDemoStatus.sending,
@@ -148,8 +161,46 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
       ),
     );
     try {
+      if (kEnableDemoChats) {
+        final resolvedTarget = demoTarget;
+        if (resolvedTarget == null) {
+          emit(
+            state.copyWith(
+              status: EmailDemoStatus.sendFailed,
+              failure: EmailDemoFailure.unexpected,
+              detail: null,
+            ),
+          );
+          return;
+        }
+        final report = await _emailService.fanOutSend(
+          targets: [resolvedTarget],
+          body: body,
+        );
+        if (report.hasFailures) {
+          emit(
+            state.copyWith(
+              status: EmailDemoStatus.sendFailed,
+              failure: EmailDemoFailure.unexpected,
+              detail: null,
+            ),
+          );
+          return;
+        }
+        final detail = report.statuses.isNotEmpty
+            ? report.statuses.first.deltaMsgId?.toString() ?? report.shareId
+            : report.shareId;
+        emit(
+          state.copyWith(
+            status: EmailDemoStatus.sent,
+            detail: detail,
+            failure: null,
+          ),
+        );
+        return;
+      }
       final msgId = await _emailService.sendToAddress(
-        address: account.address,
+        address: account!.address,
         displayName: displayName,
         body: body,
       );

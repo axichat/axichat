@@ -9,7 +9,7 @@ import 'package:mocktail/mocktail.dart';
 
 import '../mocks.dart';
 
-main() {
+void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   withForeground = false;

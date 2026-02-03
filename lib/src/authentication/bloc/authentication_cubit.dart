@@ -234,7 +234,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (connectionState == ConnectionState.connected) {
         await _triggerEmailReconnect();
         await _flushPendingAccountDeletions();
-        if (_authenticatedJid != null) {
+        if (_xmppService.myJid != null) {
           unawaited(_homeRefreshSyncService.syncOnLogin());
         }
       } else if (connectionState == ConnectionState.notConnected ||
@@ -314,9 +314,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   late final provisioning.EmailProvisioningClient?
       _injectedEmailProvisioningClient;
   late provisioning.EmailProvisioningClient _emailProvisioningClient;
-  String? _authenticatedJid;
   EmailProvisioningException? _lastEmailProvisioningError;
-  _SessionEmailCredentials? _sessionEmailCredentials;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<XmppStreamReady>? _xmppStreamReadySubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
@@ -796,7 +794,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (isReady && emailService.hasActiveSession) {
       return;
     }
-    final jid = _authenticatedJid;
+    final jid = _xmppService.myJid;
     if (state is! AuthenticationLogInInProgress && jid != null) {
       final hasCredentials = await _hasEmailReconnectCredentials(jid);
       if (!hasCredentials) {
@@ -840,7 +838,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         emailService.hasActiveSession) {
       return;
     }
-    final jid = _authenticatedJid;
+    final jid = _xmppService.myJid;
     if (jid == null || jid.trim().isEmpty) {
       return;
     }
@@ -866,14 +864,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final activeAccount = emailService.activeAccount;
     final activePassword = normalizeCredential(activeAccount?.password);
     final activeAddress = normalizeCredential(activeAccount?.address);
-    final sessionCredentials = _sessionEmailCredentials;
-    final sessionMatches = sessionCredentials?.matches(jid) ?? false;
-    final sessionPassword = sessionMatches
-        ? normalizeCredential(sessionCredentials?.password)
-        : null;
-    final sessionAddress = sessionMatches
-        ? normalizeCredential(sessionCredentials?.address)
-        : null;
+    final sessionCredentials = emailService.sessionCredentials;
+    String? sessionPassword;
+    String? sessionAddress;
+    if (sessionCredentials != null &&
+        sameNormalizedAddressValue(sessionCredentials.address, jid)) {
+      sessionPassword = normalizeCredential(sessionCredentials.password);
+      sessionAddress = normalizeCredential(sessionCredentials.address);
+    }
     final resolvedPassword =
         storedPassword ?? sessionPassword ?? activePassword;
     final resolvedAddress = storedAddress ?? sessionAddress ?? activeAddress;
@@ -902,28 +900,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         ),
       );
     }
-  }
-
-  void _cacheSessionEmailCredentials({
-    required String address,
-    required String? password,
-  }) {
-    final normalizedAddress = address.trim();
-    final normalizedPassword = password?.trim();
-    if (normalizedAddress.isEmpty ||
-        normalizedPassword == null ||
-        normalizedPassword.isEmpty) {
-      _sessionEmailCredentials = null;
-      return;
-    }
-    _sessionEmailCredentials = _SessionEmailCredentials(
-      address: normalizedAddress,
-      password: normalizedPassword,
-    );
-  }
-
-  void _clearSessionEmailCredentials() {
-    _sessionEmailCredentials = null;
   }
 
   Future<void> _handleForegroundServiceActiveChanged() async {
@@ -999,14 +975,14 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     final storedPassword = normalizeCredential(storedAccount?.password);
     final storedAddress = normalizeCredential(storedAccount?.address);
-    final sessionCredentials = _sessionEmailCredentials;
-    final sessionMatches = sessionCredentials?.matches(jid) ?? false;
-    final sessionPassword = sessionMatches
-        ? normalizeCredential(sessionCredentials?.password)
-        : null;
-    final sessionAddress = sessionMatches
-        ? normalizeCredential(sessionCredentials?.address)
-        : null;
+    final sessionCredentials = emailService.sessionCredentials;
+    String? sessionPassword;
+    String? sessionAddress;
+    if (sessionCredentials != null &&
+        sameNormalizedAddressValue(sessionCredentials.address, jid)) {
+      sessionPassword = normalizeCredential(sessionCredentials.password);
+      sessionAddress = normalizeCredential(sessionCredentials.address);
+    }
     final hasStoredCredentials =
         storedPassword != null && storedAddress != null;
     final hasSessionCredentials =
@@ -1113,7 +1089,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (shouldClearCredentials) {
       await _clearLoginSecrets(jid: txn.jid);
     }
-    _authenticatedJid = null;
     await _clearAuthTransaction();
   }
 
@@ -1137,7 +1112,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _homeRefreshSyncService.close();
     await _emailService?.setForegroundKeepalive(false);
     await _credentialStore.close();
-    await _emailService?.shutdown(jid: _authenticatedJid);
+    await _emailService?.shutdown();
     if (_injectedEmailProvisioningClient == null) {
       _emailProvisioningClient.close();
     }
@@ -1169,7 +1144,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       storedLogin = await _readStoredLoginCredentials();
       if (!storedLogin.hasUsableCredentials) {
         _log.info('Login aborted due to missing stored credentials.');
-        _authenticatedJid = null;
         await _xmppService.disconnect();
         _emit(const AuthenticationNone());
         return;
@@ -1246,7 +1220,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               AuthKeyMessage(AuthMessageKey.storedCredentialsOutdated),
             ),
           );
-          _authenticatedJid = null;
           await _xmppService.disconnect();
         } else {
           _log.warning(
@@ -1270,7 +1243,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       if (usingStoredCredentials) {
         await persistRememberMeChoice(false);
-        _authenticatedJid = null;
         await _xmppService.disconnect();
         _emit(
           const AuthenticationFailure(
@@ -1317,12 +1289,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       if (smtpEnabled) {
         final sessionEmailAddress = emailCredentials?.email ?? resolvedJid;
-        _cacheSessionEmailCredentials(
+        emailService?.cacheSessionCredentials(
           address: sessionEmailAddress,
           password: emailPassword,
         );
       } else {
-        _clearSessionEmailCredentials();
+        emailService?.clearSessionCredentials();
       }
 
       final enforceEmailProvisioning =
@@ -1364,7 +1336,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             ),
           );
           await _xmppService.disconnect();
-          _authenticatedJid = null;
           return;
         } on XmppNetworkException catch (error) {
           final canResumeOffline =
@@ -1397,7 +1368,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           }
           _log.warning('Network/XMPP error during login', error);
           await _xmppService.disconnect();
-          _authenticatedJid = null;
           _emit(
             const AuthenticationFailure(
               AuthKeyMessage(AuthMessageKey.genericError),
@@ -1418,7 +1388,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           if (_looksLikeStorageLock(error)) {
             _log.warning('Storage lock detected during login.', error);
             await _xmppService.disconnect();
-            _authenticatedJid = null;
             _emit(
               const AuthenticationFailure(
                 AuthKeyMessage(AuthMessageKey.storageLocked),
@@ -1457,7 +1426,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           }
           _log.severe(error);
           await _xmppService.disconnect();
-          _authenticatedJid = null;
           _emit(
             const AuthenticationFailure(
               AuthKeyMessage(AuthMessageKey.genericError),
@@ -1535,7 +1503,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
         _log.warning('Email provisioning failed; aborting authentication.');
         await _xmppService.disconnect();
-        _authenticatedJid = null;
         if (state is! AuthenticationFailure &&
             state is! AuthenticationSignupFailure) {
           _emit(
@@ -1584,7 +1551,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         state is AuthenticationSignUpInProgress) {
       return;
     }
-    if (state is AuthenticationComplete && _authenticatedJid == kDemoSelfJid) {
+    if (state is AuthenticationComplete && _xmppService.myJid == kDemoSelfJid) {
       return;
     }
     try {
@@ -1609,11 +1576,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePassphrase: kDemoDatabasePassphrase,
       );
       await _markXmppConnected();
-      _authenticatedJid = kDemoSelfJid;
       _emit(const AuthenticationComplete());
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to start demo session', error, stackTrace);
-      _authenticatedJid = null;
       _emit(
         const AuthenticationFailure(
           AuthKeyMessage(AuthMessageKey.demoModeFailed),
@@ -1970,7 +1935,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       databasePassphraseStorageKey: databasePassphraseStorageKey,
       databasePassphrase: databasePassphrase,
     );
-    _authenticatedJid = jid;
     if (_activeSignupCredentialKey != null && pendingAvatar != null) {
       await _xmppService.cacheSelfAvatarDraft(pendingAvatar);
     }
@@ -2382,8 +2346,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   Future<void> logout({LogoutSeverity severity = LogoutSeverity.auto}) async {
     if (state is! AuthenticationComplete) return;
-    final currentJid = _authenticatedJid;
-
     await _homeRefreshSyncService.close();
     if (severity == LogoutSeverity.normal) {
       await _xmppService.clearSessionTokens();
@@ -2394,10 +2356,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     if (endpointConfig.enableSmtp) {
       if (severity == LogoutSeverity.burn) {
-        await _emailService?.burn(jid: currentJid);
+        await _emailService?.burn();
       } else {
         await _emailService?.shutdown(
-          jid: currentJid,
           clearCredentials: severity == LogoutSeverity.normal,
         );
       }
@@ -2419,8 +2380,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _xmppService.disconnect();
     }
 
-    _clearSessionEmailCredentials();
-    _authenticatedJid = null;
+    _emailService?.clearSessionCredentials();
     _emit(const AuthenticationNone());
     _updateEmailForegroundKeepalive();
   }
@@ -2834,7 +2794,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (emailService == null) return;
     final shouldRun = endpointConfig.enableSmtp &&
         foregroundServiceActive.value &&
-        _authenticatedJid != null &&
+        _xmppService.myJid != null &&
         state is AuthenticationComplete;
     await _setEmailForegroundKeepalive(emailService, shouldRun);
   }
@@ -3268,18 +3228,6 @@ class _StoredLoginCredentials {
 
   bool matches(String candidateJid) =>
       hasUsableCredentials && jid == candidateJid;
-}
-
-class _SessionEmailCredentials {
-  const _SessionEmailCredentials({
-    required this.address,
-    required this.password,
-  });
-
-  final String address;
-  final String password;
-
-  bool matches(String jid) => sameNormalizedAddressValue(address, jid);
 }
 
 class _DatabaseSecrets {

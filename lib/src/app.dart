@@ -171,10 +171,20 @@ class _AxichatState extends State<Axichat> {
         ),
       ],
       child: BlocProvider(
-        create: (context) => SettingsCubit(
-          xmppService: context.read<XmppService>(),
-          capability: context.read<Capability>(),
-        ),
+        create: (context) {
+          final cubit = SettingsCubit(
+            xmppService: context.read<XmppService>(),
+            capability: context.read<Capability>(),
+          );
+          cubit.setAttachmentAutoDownloadSettings(
+            imagesEnabled: cubit.state.autoDownloadImages,
+            videosEnabled: cubit.state.autoDownloadVideos,
+            documentsEnabled: cubit.state.autoDownloadDocuments,
+            archivesEnabled: cubit.state.autoDownloadArchives,
+            force: true,
+          );
+          return cubit;
+        },
         child: Builder(
           builder: (context) {
             final storageManager = context.read<CalendarStorageManager>();

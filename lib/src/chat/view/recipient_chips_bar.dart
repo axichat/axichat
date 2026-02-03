@@ -321,9 +321,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                     curve: Curves.easeInOutCubic,
                     padding: headerPadding,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(
-                        chipsBarHeaderBorderRadius,
-                      ),
                       border: _headerFocused
                           ? Border.all(color: colors.primary, width: 1.5)
                           : null,
