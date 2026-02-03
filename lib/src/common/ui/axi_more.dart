@@ -135,6 +135,8 @@ class _AxiMoreState extends State<AxiMore> {
       controller: popoverController,
       closeOnTapOutside: true,
       padding: EdgeInsets.zero,
+      decoration: const ShadDecoration.none,
+      shadows: const <BoxShadow>[],
       popover: (context) {
         return AxiMenu(actions: actions);
       },
