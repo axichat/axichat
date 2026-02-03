@@ -4,7 +4,7 @@
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 import 'calendar_hydrated_storage.dart';

@@ -23,7 +23,7 @@ import 'package:flutter/material.dart' hide Column, Table;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter/services.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart' hide BlocObserver;
 import 'package:logging/logging.dart';
 import 'package:path_provider/path_provider.dart';

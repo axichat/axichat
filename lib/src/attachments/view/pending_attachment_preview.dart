@@ -371,6 +371,8 @@ class _PendingAttachmentPreviewDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
     final spacing = context.spacing;
+    final colors = context.colorScheme;
+    final ghostColors = _previewGhostColors(context);
     final maxWidth = math.max(0.0, mediaSize.width - spacing.xl);
     final maxHeight = math.max(0.0, mediaSize.height - spacing.xl);
     return Center(
@@ -395,12 +397,16 @@ class _PendingAttachmentPreviewDialog extends StatelessWidget {
               AxiIconButton.ghost(
                 iconData: LucideIcons.x,
                 tooltip: closeTooltip,
+                color: ghostColors.foreground,
+                backgroundColor: ghostColors.background,
                 onPressed: () => Navigator.of(context).pop(),
               ),
               SizedBox(width: spacing.xs),
               AxiIconButton.ghost(
                 iconData: LucideIcons.trash2,
                 tooltip: removeTooltip,
+                color: colors.destructive,
+                backgroundColor: ghostColors.background,
                 onPressed: () {
                   Navigator.of(context).pop();
                   onRemove();
@@ -473,12 +479,14 @@ class _PendingAttachmentPreviewContent extends StatelessWidget {
 
   Widget _buildTextPreview(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final textContent = data.textContent ?? '';
-    return Material(
-      color: Colors.transparent,
+    return AxiModalSurface(
+      backgroundColor: colors.background,
+      borderColor: colors.border,
+      padding: EdgeInsets.all(spacing.m),
       child: Scrollbar(
         child: SingleChildScrollView(
-          padding: EdgeInsets.all(context.spacing.m),
           child: SelectableText(
             textContent,
             style: context.textTheme.p.copyWith(color: colors.foreground),
@@ -586,4 +594,23 @@ class _PendingAttachmentPreviewContent extends StatelessWidget {
         : size.toStringAsFixed(size >= 10 ? 0 : 1);
     return '$formatted ${units[unit]}';
   }
+}
+
+class _PreviewGhostColors {
+  const _PreviewGhostColors({
+    required this.background,
+    required this.foreground,
+  });
+
+  final Color background;
+  final Color foreground;
+}
+
+_PreviewGhostColors _previewGhostColors(BuildContext context) {
+  final colors = context.colorScheme;
+  final isDark = context.brightness == Brightness.dark;
+  return _PreviewGhostColors(
+    background: isDark ? colors.background : colors.foreground,
+    foreground: isDark ? colors.foreground : colors.background,
+  );
 }

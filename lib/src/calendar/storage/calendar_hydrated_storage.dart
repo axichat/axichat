@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:hydrated_bloc/hydrated_bloc.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:logging/logging.dart';
 
 import 'package:axichat/src/storage/hive_extensions.dart';

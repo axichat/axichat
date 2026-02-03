@@ -1291,11 +1291,21 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
   final FileMetadataData metadata;
   final FileTypeReport? typeReport;
 
+  _PreviewGhostColors _previewGhostColors(BuildContext context) {
+    final colors = context.colorScheme;
+    final isDark = context.brightness == Brightness.dark;
+    return _PreviewGhostColors(
+      background: isDark ? colors.background : colors.foreground,
+      foreground: isDark ? colors.foreground : colors.background,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
     final spacing = context.spacing;
     final sizing = context.sizing;
+    final ghostColors = _previewGhostColors(context);
     final double maxWidth = math.max(0.0, mediaSize.width - spacing.xl);
     final double maxHeight = math.max(0.0, mediaSize.height - spacing.xl);
     final fallbackWidth = math.min(maxWidth, sizing.dialogMaxWidth);
@@ -1328,6 +1338,8 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
             children: [
               AxiIconButton.ghost(
                 iconData: LucideIcons.save,
+                color: ghostColors.foreground,
+                backgroundColor: ghostColors.background,
                 onPressed: () async {
                   final FileTypeReport report =
                       typeReport ?? metadata.declaredTypeReport;
@@ -1348,6 +1360,8 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
               SizedBox(width: spacing.xs),
               AxiIconButton.ghost(
                 iconData: LucideIcons.share2,
+                color: ghostColors.foreground,
+                backgroundColor: ghostColors.background,
                 onPressed: () async {
                   final FileTypeReport report =
                       typeReport ?? metadata.declaredTypeReport;
@@ -1368,6 +1382,8 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
               SizedBox(width: spacing.xs),
               AxiIconButton.ghost(
                 iconData: LucideIcons.x,
+                color: ghostColors.foreground,
+                backgroundColor: ghostColors.background,
                 onPressed: () => Navigator.of(context).pop(),
               ),
             ],
@@ -1410,6 +1426,16 @@ Size _fitWithinBounds({
     width = height * aspectRatio;
   }
   return Size(width, height);
+}
+
+class _PreviewGhostColors {
+  const _PreviewGhostColors({
+    required this.background,
+    required this.foreground,
+  });
+
+  final Color background;
+  final Color foreground;
 }
 
 String _mediaDecodeGuardKey(String metadataId) =>
@@ -1604,6 +1630,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
                       controller: _actionsController,
                       closeOnTapOutside: true,
                       padding: EdgeInsets.zero,
+                      decoration: const ShadDecoration.none,
+                      shadows: const <BoxShadow>[],
                       popover: (context) {
                         return AxiMenu(
                           actions: [

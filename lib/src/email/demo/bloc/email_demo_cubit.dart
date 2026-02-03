@@ -71,6 +71,20 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
         detail: null,
       ),
     );
+    if (kEnableDemoChats) {
+      emit(
+        state.copyWith(
+          status: EmailDemoStatus.provisioned,
+          account: const EmailAccount(
+            address: kDemoSelfJid,
+            password: 'demo',
+          ),
+          failure: null,
+          detail: null,
+        ),
+      );
+      return;
+    }
     try {
       final jidKey = CredentialStore.registerKey('jid');
       final jid = await _credentialStore.read(key: jidKey);

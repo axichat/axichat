@@ -5,7 +5,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:axichat/src/storage/database.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:logging/logging.dart';
 
 abstract class KeyValueDatabase<K, V> implements Database {

@@ -6,7 +6,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:hive/hive.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
 part 'chat_models.freezed.dart';

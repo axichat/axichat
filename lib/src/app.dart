@@ -54,7 +54,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hive_ce_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
@@ -101,6 +101,7 @@ class _AxichatState extends State<Axichat> {
   );
   late final XmppService _xmppService;
   late final XmppActivityCubit _xmppActivityCubit;
+  late final SettingsCubit _settingsCubit;
 
   @override
   void initState() {
@@ -136,12 +137,24 @@ class _AxichatState extends State<Axichat> {
           capability: widget._capability,
         );
     _xmppActivityCubit = XmppActivityCubit(xmppBase: _xmppService);
+    _settingsCubit = SettingsCubit(
+      xmppService: _xmppService,
+      capability: widget._capability,
+    );
+    _settingsCubit.setAttachmentAutoDownloadSettings(
+      imagesEnabled: _settingsCubit.state.autoDownloadImages,
+      videosEnabled: _settingsCubit.state.autoDownloadVideos,
+      documentsEnabled: _settingsCubit.state.autoDownloadDocuments,
+      archivesEnabled: _settingsCubit.state.autoDownloadArchives,
+      force: true,
+    );
   }
 
   @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
     _xmppActivityCubit.close();
+    _settingsCubit.close();
     Future<void>(() async {
       await _reminderController.clearAll();
     });
@@ -170,21 +183,8 @@ class _AxichatState extends State<Axichat> {
           ),
         ),
       ],
-      child: BlocProvider(
-        create: (context) {
-          final cubit = SettingsCubit(
-            xmppService: context.read<XmppService>(),
-            capability: context.read<Capability>(),
-          );
-          cubit.setAttachmentAutoDownloadSettings(
-            imagesEnabled: cubit.state.autoDownloadImages,
-            videosEnabled: cubit.state.autoDownloadVideos,
-            documentsEnabled: cubit.state.autoDownloadDocuments,
-            archivesEnabled: cubit.state.autoDownloadArchives,
-            force: true,
-          );
-          return cubit;
-        },
+      child: BlocProvider.value(
+        value: _settingsCubit,
         child: Builder(
           builder: (context) {
             final storageManager = context.read<CalendarStorageManager>();
@@ -733,8 +733,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                   (extension) => extension is! ChatThemeTokens,
                 ),
                 chatTokens,
+                axiBorders,
+                axiRadii,
                 axiSpacing,
                 axiSizing,
+                axiMotion,
               ],
             );
           },
@@ -767,9 +770,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         _router.routeInformationProvider.value.uri.path;
                     final matchList =
                         _router.routerDelegate.currentConfiguration;
-                    final matchedLocation = matchList.matches.isEmpty
-                        ? null
-                        : matchList.uri.path;
+                    final matchedLocation =
+                        matchList.matches.isEmpty ? null : matchList.uri.path;
                     final currentRoute = routeLocations[currentLocation];
                     final matchedRoute = matchedLocation == null
                         ? null

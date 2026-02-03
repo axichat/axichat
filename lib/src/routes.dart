@@ -99,6 +99,22 @@ class HomeRoute extends TransitionGoRouteData with AuthenticationRouteData {
   bool get authenticationRequired => true;
 
   @override
+  String get location => GoRouteData.$location(path);
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+
+  @override
   Widget build(BuildContext context, GoRouterState state) => const HomeScreen();
 }
 
@@ -109,6 +125,22 @@ class ProfileRoute extends TransitionGoRouteData with AuthenticationRouteData {
 
   @override
   bool get authenticationRequired => true;
+
+  @override
+  String get location => GoRouteData.$location(path);
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
@@ -126,6 +158,22 @@ class AvatarEditorRoute extends TransitionGoRouteData
   bool get authenticationRequired => true;
 
   @override
+  String get location => GoRouteData.$location(path);
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+
+  @override
   Widget build(BuildContext context, GoRouterState state) =>
       AvatarEditorScreen(locate: _resolveLocate(context, state));
 }
@@ -137,6 +185,22 @@ class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
 
   @override
   bool get authenticationRequired => true;
+
+  @override
+  String get location => GoRouteData.$location(path);
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
@@ -152,6 +216,22 @@ class AttachmentGalleryRoute extends TransitionGoRouteData
 
   @override
   bool get authenticationRequired => true;
+
+  @override
+  String get location => GoRouteData.$location(path);
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
@@ -170,6 +250,23 @@ class ArchivedChatRoute extends TransitionGoRouteData
   bool get authenticationRequired => true;
 
   @override
+  String get location => GoRouteData.$location(
+      '/profile/archives/chat/${Uri.encodeComponent(jid)}');
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+
+  @override
   Widget build(BuildContext context, GoRouterState state) =>
       ArchivedChatScreen(locate: _resolveLocate(context, state), jid: jid);
 }
@@ -181,6 +278,22 @@ class GuestCalendarRoute extends TransitionGoRouteData
 
   @override
   bool get authenticationRequired => false;
+
+  @override
+  String get location => GoRouteData.$location('/guest-calendar');
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
@@ -196,6 +309,22 @@ class EmailDemoRoute extends TransitionGoRouteData
   bool get authenticationRequired => true;
 
   @override
+  String get location => GoRouteData.$location('/email-demo');
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+
+  @override
   Widget build(BuildContext context, GoRouterState state) =>
       const EmailDemoScreen();
 }
@@ -206,6 +335,22 @@ class LoginRoute extends TransitionGoRouteData with AuthenticationRouteData {
 
   @override
   bool get authenticationRequired => false;
+
+  @override
+  String get location => GoRouteData.$location('/login');
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>

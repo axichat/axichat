@@ -56,8 +56,8 @@ dependencies:
       url: https://gitlab.com/axichat/moxlib.git
       ref: v0.2.0
   crypto: ^3.0.3
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
+  hive_ce: ^2.19.3
+  hive_ce_flutter: ^2.3.4
   uuid: ^3.0.7
   freezed_annotation: ^2.4.1
   dash_chat_2: ^0.0.21
@@ -124,7 +124,7 @@ dev_dependencies:
   flutter_launcher_icons: ^0.14.1
   json_serializable: ^6.8.0
   build_runner: ^2.4.13
-  go_router_builder: ^4.1.3
+  go_router_builder: ^2.7.1
   build_verify: ^3.1.0
   drift_dev: ^2.19.1
   lint: ^2.3.0
@@ -138,7 +138,7 @@ dev_dependencies:
     sdk: flutter
   test: ^1.26.3
   fake_async: ^1.3.1
-  hive_generator: ^2.0.1
+  hive_ce_generator: ^1.4.0
 
 
 
