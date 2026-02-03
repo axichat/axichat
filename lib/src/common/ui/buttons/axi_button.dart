@@ -454,15 +454,6 @@ class _AxiButtonState extends State<AxiButton> {
           ),
         );
 
-        if (widget.widthBehavior == AxiButtonWidth.fit &&
-            widget.width == null) {
-          button = UnconstrainedBox(
-            constrainedAxis: Axis.vertical,
-            alignment: Alignment.centerLeft,
-            child: button,
-          );
-        }
-
         if (enabled) {
           final Duration pressDuration = Duration(
             milliseconds: (animationDuration.inMilliseconds *

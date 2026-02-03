@@ -53,7 +53,7 @@ class AccessibilityChatBloc
 
   final String _jid;
   final MessageService _messageService;
-  final EmailService? _emailService;
+  EmailService? _emailService;
   final Logger _log;
 
   late AppLocalizations _l10n;
@@ -62,6 +62,13 @@ class AccessibilityChatBloc
 
   StreamSubscription<List<Message>>? _messageSubscription;
   int _messageStreamLimit = 0;
+
+  void updateEmailService(EmailService? emailService) {
+    if (identical(_emailService, emailService)) {
+      return;
+    }
+    _emailService = emailService;
+  }
 
   @override
   Future<void> close() async {

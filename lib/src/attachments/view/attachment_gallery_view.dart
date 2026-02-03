@@ -214,180 +214,195 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     const gridMaxColumns = 4;
     const gridMinAvailableWidth = 0.0;
     final gridHorizontalPadding = context.spacing.m * 2;
-    return BlocBuilder<AttachmentGalleryBloc, AttachmentGalleryState>(
-      builder: (context, state) {
-        if (state.items.isEmpty) {
-          if (state.status.isLoading) {
-            return Center(
-              child: AxiProgressIndicator(
-                color: context.colorScheme.foreground,
+    return BlocListener<SettingsCubit, SettingsState>(
+      listenWhen: (previous, current) =>
+          previous.endpointConfig != current.endpointConfig,
+      listener: (context, settings) {
+        final emailService = settings.endpointConfig.enableSmtp
+            ? context.read<EmailService>()
+            : null;
+        context.read<AttachmentGalleryBloc>().add(
+              AttachmentGalleryEmailServiceUpdated(
+                emailService: emailService,
               ),
             );
-          }
-          if (state.status.isFailure) {
+      },
+      child: BlocBuilder<AttachmentGalleryBloc, AttachmentGalleryState>(
+        builder: (context, state) {
+          if (state.items.isEmpty) {
+            if (state.status.isLoading) {
+              return Center(
+                child: AxiProgressIndicator(
+                  color: context.colorScheme.foreground,
+                ),
+              );
+            }
+            if (state.status.isFailure) {
+              return Center(
+                child: Text(
+                  context.l10n.attachmentGalleryErrorMessage,
+                  style: context.textTheme.muted,
+                  textAlign: TextAlign.center,
+                ),
+              );
+            }
             return Center(
               child: Text(
-                context.l10n.attachmentGalleryErrorMessage,
+                context.l10n.draftNoAttachments,
                 style: context.textTheme.muted,
-                textAlign: TextAlign.center,
               ),
             );
           }
-          return Center(
-            child: Text(
-              context.l10n.draftNoAttachments,
-              style: context.textTheme.muted,
-            ),
-          );
-        }
 
-        final layout = _resolveLayout(
-          hasVisualMedia: state.entries.any(
-            (entry) =>
-                entry.item.metadata.mediaKind != FileMetadataMediaKind.file,
-          ),
-          overrideLayout: state.layoutOverride,
-        );
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                context.spacing.m,
-                context.spacing.s,
-                context.spacing.m,
-                0,
-              ),
-              child: AttachmentGalleryControls(
-                searchController: _searchController,
-                sortOption: state.sortOption,
-                onSortChanged: (value) {
-                  context.read<AttachmentGalleryBloc>().add(
-                        AttachmentGallerySortChanged(sortOption: value),
-                      );
-                },
-                typeFilter: state.typeFilter,
-                onTypeFilterChanged: (value) {
-                  context.read<AttachmentGalleryBloc>().add(
-                        AttachmentGalleryTypeFilterChanged(typeFilter: value),
-                      );
-                },
-                sourceFilter: state.sourceFilter,
-                onSourceFilterChanged: (value) {
-                  context.read<AttachmentGalleryBloc>().add(
-                        AttachmentGallerySourceFilterChanged(
-                          sourceFilter: value,
-                        ),
-                      );
-                },
-                layout: layout,
-                onLayoutChanged: _handleLayoutChanged,
-                onClearSearch: _searchController.clear,
-              ),
+          final layout = _resolveLayout(
+            hasVisualMedia: state.entries.any(
+              (entry) =>
+                  entry.item.metadata.mediaKind != FileMetadataMediaKind.file,
             ),
-            SizedBox(height: context.spacing.m),
-            Expanded(
-              child: state.entries.isEmpty
-                  ? Center(
-                      child: Text(
-                        state.query.trim().isNotEmpty ||
-                                state.typeFilter !=
-                                    AttachmentGalleryTypeFilter.all ||
-                                state.sourceFilter !=
-                                    AttachmentGallerySourceFilter.all
-                            ? context.l10n.chatEmptySearch
-                            : context.l10n.draftNoAttachments,
-                        style: context.textTheme.muted,
-                        textAlign: TextAlign.center,
-                      ),
-                    )
-                  : layout == AttachmentGalleryLayout.list
-                      ? ListView.separated(
-                          padding: EdgeInsets.fromLTRB(
-                            context.spacing.m,
-                            0,
-                            context.spacing.m,
-                            context.spacing.m,
+            overrideLayout: state.layoutOverride,
+          );
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  context.spacing.m,
+                  context.spacing.s,
+                  context.spacing.m,
+                  0,
+                ),
+                child: AttachmentGalleryControls(
+                  searchController: _searchController,
+                  sortOption: state.sortOption,
+                  onSortChanged: (value) {
+                    context.read<AttachmentGalleryBloc>().add(
+                          AttachmentGallerySortChanged(sortOption: value),
+                        );
+                  },
+                  typeFilter: state.typeFilter,
+                  onTypeFilterChanged: (value) {
+                    context.read<AttachmentGalleryBloc>().add(
+                          AttachmentGalleryTypeFilterChanged(typeFilter: value),
+                        );
+                  },
+                  sourceFilter: state.sourceFilter,
+                  onSourceFilterChanged: (value) {
+                    context.read<AttachmentGalleryBloc>().add(
+                          AttachmentGallerySourceFilterChanged(
+                            sourceFilter: value,
                           ),
-                          itemCount: state.entries.length,
-                          separatorBuilder: (_, __) =>
-                              SizedBox(height: context.spacing.m),
-                          itemBuilder: (context, index) =>
-                              AttachmentGalleryEntry(
-                            entry: state.entries[index],
-                            showChatLabel: widget.showChatLabel,
-                            layout: layout,
-                            onApproveAttachment: _approveAttachment,
-                            metaSeparator:
-                                context.l10n.attachmentGalleryMetaSeparator,
-                          ),
-                        )
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final gridMetrics = _resolveGridMetrics(
-                              maxWidth: constraints.maxWidth,
-                              horizontalPadding: gridHorizontalPadding,
-                              minTileWidth: context.sizing.menuItemHeight * 3,
-                              gridSpacing: context.spacing.s,
-                              minColumns: gridMinColumns,
-                              maxColumns: gridMaxColumns,
-                              minAvailableWidth: gridMinAvailableWidth,
-                            );
-                            final rowCount = (state.entries.length /
-                                    gridMetrics.crossAxisCount)
-                                .ceil();
-                            return ListView.separated(
-                              padding: EdgeInsets.fromLTRB(
-                                context.spacing.m,
-                                0,
-                                context.spacing.m,
-                                context.spacing.m,
-                              ),
-                              itemCount: rowCount,
-                              separatorBuilder: (_, __) =>
-                                  SizedBox(height: context.spacing.s),
-                              itemBuilder: (context, rowIndex) {
-                                final rowStart =
-                                    rowIndex * gridMetrics.crossAxisCount;
-                                final rowEnd = math.min(
-                                  rowStart + gridMetrics.crossAxisCount,
-                                  state.entries.length,
-                                );
-                                final rowItems = state.entries.sublist(
-                                  rowStart,
-                                  rowEnd,
-                                );
-                                return Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    for (var index = 0;
-                                        index < rowItems.length;
-                                        index += 1) ...[
-                                      SizedBox(
-                                        width: gridMetrics.tileWidth,
-                                        child: AttachmentGalleryEntry(
-                                          entry: rowItems[index],
-                                          showChatLabel: widget.showChatLabel,
-                                          layout: layout,
-                                          onApproveAttachment:
-                                              _approveAttachment,
-                                          metaSeparator: context.l10n
-                                              .attachmentGalleryMetaSeparator,
+                        );
+                  },
+                  layout: layout,
+                  onLayoutChanged: _handleLayoutChanged,
+                  onClearSearch: _searchController.clear,
+                ),
+              ),
+              SizedBox(height: context.spacing.m),
+              Expanded(
+                child: state.entries.isEmpty
+                    ? Center(
+                        child: Text(
+                          state.query.trim().isNotEmpty ||
+                                  state.typeFilter !=
+                                      AttachmentGalleryTypeFilter.all ||
+                                  state.sourceFilter !=
+                                      AttachmentGallerySourceFilter.all
+                              ? context.l10n.chatEmptySearch
+                              : context.l10n.draftNoAttachments,
+                          style: context.textTheme.muted,
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    : layout == AttachmentGalleryLayout.list
+                        ? ListView.separated(
+                            padding: EdgeInsets.fromLTRB(
+                              context.spacing.m,
+                              0,
+                              context.spacing.m,
+                              context.spacing.m,
+                            ),
+                            itemCount: state.entries.length,
+                            separatorBuilder: (_, __) =>
+                                SizedBox(height: context.spacing.m),
+                            itemBuilder: (context, index) =>
+                                AttachmentGalleryEntry(
+                              entry: state.entries[index],
+                              showChatLabel: widget.showChatLabel,
+                              layout: layout,
+                              onApproveAttachment: _approveAttachment,
+                              metaSeparator:
+                                  context.l10n.attachmentGalleryMetaSeparator,
+                            ),
+                          )
+                        : LayoutBuilder(
+                            builder: (context, constraints) {
+                              final gridMetrics = _resolveGridMetrics(
+                                maxWidth: constraints.maxWidth,
+                                horizontalPadding: gridHorizontalPadding,
+                                minTileWidth: context.sizing.menuItemHeight * 3,
+                                gridSpacing: context.spacing.s,
+                                minColumns: gridMinColumns,
+                                maxColumns: gridMaxColumns,
+                                minAvailableWidth: gridMinAvailableWidth,
+                              );
+                              final rowCount = (state.entries.length /
+                                      gridMetrics.crossAxisCount)
+                                  .ceil();
+                              return ListView.separated(
+                                padding: EdgeInsets.fromLTRB(
+                                  context.spacing.m,
+                                  0,
+                                  context.spacing.m,
+                                  context.spacing.m,
+                                ),
+                                itemCount: rowCount,
+                                separatorBuilder: (_, __) =>
+                                    SizedBox(height: context.spacing.s),
+                                itemBuilder: (context, rowIndex) {
+                                  final rowStart =
+                                      rowIndex * gridMetrics.crossAxisCount;
+                                  final rowEnd = math.min(
+                                    rowStart + gridMetrics.crossAxisCount,
+                                    state.entries.length,
+                                  );
+                                  final rowItems = state.entries.sublist(
+                                    rowStart,
+                                    rowEnd,
+                                  );
+                                  return Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      for (var index = 0;
+                                          index < rowItems.length;
+                                          index += 1) ...[
+                                        SizedBox(
+                                          width: gridMetrics.tileWidth,
+                                          child: AttachmentGalleryEntry(
+                                            entry: rowItems[index],
+                                            showChatLabel: widget.showChatLabel,
+                                            layout: layout,
+                                            onApproveAttachment:
+                                                _approveAttachment,
+                                            metaSeparator: context.l10n
+                                                .attachmentGalleryMetaSeparator,
+                                          ),
                                         ),
-                                      ),
-                                      if (index < rowItems.length - 1)
-                                        SizedBox(width: context.spacing.s),
+                                        if (index < rowItems.length - 1)
+                                          SizedBox(width: context.spacing.s),
+                                      ],
                                     ],
-                                  ],
-                                );
-                              },
-                            );
-                          },
-                        ),
-            ),
-          ],
-        );
-      },
+                                  );
+                                },
+                              );
+                            },
+                          ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

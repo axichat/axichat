@@ -169,6 +169,7 @@ class AttachmentGalleryBloc
     on<AttachmentGalleryLayoutChanged>(_onLayoutChanged);
     on<AttachmentGalleryApprovalGranted>(_onApprovalGranted);
     on<AttachmentGalleryEmailDownloadRequested>(_onEmailDownloadRequested);
+    on<AttachmentGalleryEmailServiceUpdated>(_onEmailServiceUpdated);
     _itemsSubscription =
         _xmppService.attachmentGalleryStream(chatJid: chatJid).listen(
               (items) => add(AttachmentGalleryItemsUpdated(items: items)),
@@ -181,7 +182,7 @@ class AttachmentGalleryBloc
   }
 
   final XmppService _xmppService;
-  final EmailService? _emailService;
+  EmailService? _emailService;
   final Chat? _chatOverride;
   final bool _showChatLabel;
   StreamSubscription<List<AttachmentGalleryItem>>? _itemsSubscription;
@@ -384,6 +385,29 @@ class AttachmentGalleryBloc
       if (event.completer.isCompleted) return;
       event.completer.completeError(error, stackTrace);
     }
+  }
+
+  void _onEmailServiceUpdated(
+    AttachmentGalleryEmailServiceUpdated event,
+    Emitter<AttachmentGalleryState> emit,
+  ) {
+    final emailService = event.emailService;
+    if (identical(_emailService, emailService)) {
+      return;
+    }
+    _emailService = emailService;
+    emit(
+      state.copyWith(
+        entries: _resolveEntries(
+          items: state.items,
+          query: state.query,
+          sortOption: state.sortOption,
+          typeFilter: state.typeFilter,
+          sourceFilter: state.sourceFilter,
+          allowedOnceStanzaIds: state.allowedOnceStanzaIds,
+        ),
+      ),
+    );
   }
 
   List<AttachmentGalleryEntryData> _resolveEntries({

@@ -5,42 +5,45 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart'
-    show SchedulerBinding, SchedulerPhase, Ticker;
-import 'package:flutter/services.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
-import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/localization/localization_extensions.dart';
-
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_collection.dart';
-import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/utils/calendar_share.dart';
+import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
-import 'package:axichat/src/calendar/utils/calendar_share.dart';
-import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/calendar_task_share_sheet.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
+import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderBox, RendererBinding;
+import 'package:flutter/scheduler.dart'
+    show SchedulerBinding, SchedulerPhase, Ticker;
+import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
+
+import 'calendar_navigation.dart' show calendarUnitLabel, shiftedCalendarDate;
+import 'controllers/task_interaction_controller.dart';
+import 'controllers/task_popover_controller.dart';
+import 'controllers/zoom_controls_controller.dart';
 import 'edit_task_dropdown.dart';
-import 'models/task_context_action.dart';
+import 'feedback_system.dart';
 import 'layout/calendar_layout.dart'
     show
         CalendarLayoutCalculator,
@@ -48,22 +51,18 @@ import 'layout/calendar_layout.dart'
         CalendarLayoutTheme,
         CalendarZoomLevel,
         kCalendarZoomLevels;
-import 'controllers/zoom_controls_controller.dart';
-import 'controllers/task_interaction_controller.dart';
-import 'controllers/task_popover_controller.dart';
+import 'models/task_context_action.dart';
 import 'resizable_task_widget.dart';
 import 'task_edit_session_tracker.dart';
-import 'widgets/calendar_render_surface.dart';
 import 'widgets/calendar_hover_title_bubble.dart';
+import 'widgets/calendar_render_surface.dart';
 import 'widgets/calendar_surface_drag_target.dart';
-import 'widgets/calendar_task_surface.dart';
-import 'widgets/day_event_editor.dart';
 import 'widgets/calendar_task_geometry.dart';
+import 'widgets/calendar_task_surface.dart';
+import 'widgets/critical_path_panel.dart';
+import 'widgets/day_event_editor.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/task_form_section.dart';
-import 'feedback_system.dart';
-import 'widgets/critical_path_panel.dart';
-import 'calendar_navigation.dart' show calendarUnitLabel, shiftedCalendarDate;
 
 export 'layout/calendar_layout.dart' show OverlapInfo, calculateOverlapColumns;
 
@@ -132,12 +131,17 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       const CalendarTransferService();
 
   double get _edgeScrollFastBandHeight => _layoutTheme.edgeScrollFastBandHeight;
+
   double get _edgeScrollSlowBandHeight => _layoutTheme.edgeScrollSlowBandHeight;
+
   double get _edgeScrollFastOffsetPerFrame =>
       _layoutTheme.edgeScrollFastOffsetPerFrame;
+
   double get _edgeScrollSlowOffsetPerFrame =>
       _layoutTheme.edgeScrollSlowOffsetPerFrame;
+
   double get _taskPopoverHorizontalGap => _layoutTheme.popoverGap;
+
   ValueListenable<bool> get _cancelBucketHoverNotifier =>
       widget.cancelBucketHoverNotifier ?? _defaultCancelBucketHoverNotifier;
 
@@ -188,6 +192,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   late final ShadPopoverController _gridContextMenuController;
   DateTime? _contextMenuSlot;
   double _edgeAutoScrollOffsetPerFrame = 0;
+
   bool get _isWidthDebounceActive =>
       _taskInteractionController.isWidthDebounceActive;
   int? _lastHandledFocusToken;
@@ -257,16 +262,25 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   CalendarZoomLevel get _currentZoom => _zoomLevels[_zoomIndex];
+
   int get _slotSubdivisions => _currentLayoutMetrics.slotsPerHour;
+
   int get _minutesPerSlot => _currentLayoutMetrics.minutesPerSlot;
+
   int get _minutesPerStep => _resizeStepMinutes;
+
   bool get _canZoomIn => _zoomIndex < _zoomLevels.length - 1;
+
   bool get _canZoomOut => _zoomIndex > 0;
+
   bool get _shouldUseCompactZoom =>
       _isCompactActive || widget.state.viewMode == CalendarView.day;
+
   bool get _isZoomEnabled =>
       widget.state.viewMode != CalendarView.day || _shouldUseCompactZoom;
+
   bool get _isSelectionMode => widget.state.isSelectionMode;
+
   Set<String> get _selectedTaskIds => widget.state.selectedTaskIds;
 
   bool _isTaskSelected(CalendarTask task) {
@@ -1293,6 +1307,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   }
 
   double get _timeColumnWidth => _layoutTheme.timeColumnWidth;
+
   double _getHourHeight(BuildContext context, bool compact) {
     return _resolvedHourHeight;
   }

@@ -3214,6 +3214,7 @@ class _ChatState extends State<Chat> {
                 await context
                     .read<ChatSearchCubit>()
                     .updateEmailService(emailService);
+                _chatCalendarBloc?.updateEmailService(emailService);
               },
             ),
             BlocListener<ChatSearchCubit, ChatSearchState>(

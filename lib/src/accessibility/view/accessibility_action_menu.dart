@@ -1442,10 +1442,22 @@ class _AccessibilityChatScope extends StatelessWidget {
           draftId: entry.draftId,
         );
       },
-      child: _AccessibilityChatSync(
-        state: state,
-        unreadCount: unreadCount,
-        builder: builder,
+      child: BlocListener<SettingsCubit, SettingsState>(
+        listenWhen: (previous, current) =>
+            previous.endpointConfig != current.endpointConfig,
+        listener: (context, settings) {
+          final emailService = settings.endpointConfig.enableSmtp
+              ? context.read<EmailService>()
+              : null;
+          context
+              .read<AccessibilityChatBloc>()
+              .updateEmailService(emailService);
+        },
+        child: _AccessibilityChatSync(
+          state: state,
+          unreadCount: unreadCount,
+          builder: builder,
+        ),
       ),
     );
   }

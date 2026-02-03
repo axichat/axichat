@@ -45,4 +45,8 @@ class AttachmentGalleryEvent with _$AttachmentGalleryEvent {
     required Message message,
     required Completer<bool> completer,
   }) = AttachmentGalleryEmailDownloadRequested;
+
+  const factory AttachmentGalleryEvent.emailServiceUpdated({
+    required EmailService? emailService,
+  }) = AttachmentGalleryEmailServiceUpdated;
 }
