@@ -1876,7 +1876,13 @@ class _ChatState extends State<Chat> {
   }
 
   void _toggleNotifications(bool enable) {
-    context.read<ChatBloc>().add(ChatMuted(!enable));
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) {
+      return;
+    }
+    context.read<ChatBloc>().add(
+          ChatMuted(chatJid: chat.jid, muted: !enable),
+        );
   }
 
   void _showMembers({bool refreshMembership = true}) {
@@ -2284,9 +2290,12 @@ class _ChatState extends State<Chat> {
     if (decision == null || !decision.approved) return;
 
     if (decision.alwaysAllow && canTrustChat) {
-      context.read<ChatBloc>().add(
-            const ChatAttachmentAutoDownloadToggled(true),
-          );
+      final chat = context.read<ChatBloc>().state.chat;
+      if (chat != null) {
+        context.read<ChatBloc>().add(
+              ChatAttachmentAutoDownloadToggled(chat: chat, enabled: true),
+            );
+      }
     }
 
     if (mounted) {
@@ -2591,11 +2600,18 @@ class _ChatState extends State<Chat> {
         return;
       }
       if (!mounted) return;
+      final chatState = context.read<ChatBloc>().state;
+      final chat = chatState.chat;
+      if (chat == null) {
+        return;
+      }
       for (final attachment in attachments) {
         context.read<ChatBloc>().add(
               ChatAttachmentPicked(
                 attachment: attachment,
                 recipients: _recipients,
+                chat: chat,
+                quotedDraft: chatState.quoting,
               ),
             );
       }
@@ -2650,12 +2666,27 @@ class _ChatState extends State<Chat> {
       items.add(
         ShadContextMenuItem(
           leading: const Icon(LucideIcons.refreshCw),
-          onPressed: () => context.read<ChatBloc>().add(
-                ChatAttachmentRetryRequested(
-                  attachmentId: pending.id,
-                  recipients: _recipients,
-                ),
-              ),
+          onPressed: () {
+            final chatState = context.read<ChatBloc>().state;
+            final chat = chatState.chat;
+            if (chat == null) {
+              return;
+            }
+            final settingsSnapshot = _settingsSnapshotFromState(
+              context.read<SettingsCubit>().state,
+            );
+            context.read<ChatBloc>().add(
+                  ChatAttachmentRetryRequested(
+                    attachmentId: pending.id,
+                    recipients: _recipients,
+                    chat: chat,
+                    quotedDraft: chatState.quoting,
+                    subject: _subjectController.text,
+                    settings: settingsSnapshot,
+                    supportsHttpFileUpload: chatState.supportsHttpFileUpload,
+                  ),
+                );
+          },
           child: Text(l10n.chatAttachmentRetry),
         ),
       );
@@ -2830,10 +2861,24 @@ class _ChatState extends State<Chat> {
                       leading: const Icon(LucideIcons.refreshCw),
                       onPressed: () {
                         Navigator.of(sheetContext).pop();
+                        final chatState = context.read<ChatBloc>().state;
+                        final chat = chatState.chat;
+                        if (chat == null) {
+                          return;
+                        }
+                        final settingsSnapshot = _settingsSnapshotFromState(
+                          context.read<SettingsCubit>().state,
+                        );
                         context.read<ChatBloc>().add(
                               ChatAttachmentRetryRequested(
                                 attachmentId: pending.id,
                                 recipients: _recipients,
+                                chat: chat,
+                                quotedDraft: chatState.quoting,
+                                subject: _subjectController.text,
+                                settings: settingsSnapshot,
+                                supportsHttpFileUpload:
+                                    chatState.supportsHttpFileUpload,
                               ),
                             );
                       },
@@ -3650,6 +3695,45 @@ class _ChatState extends State<Chat> {
               );
               final retryReport = retryEntry?.value;
               final retryShareId = retryEntry?.key;
+              VoidCallback? onFanOutRetry;
+              if (retryReport != null &&
+                  retryShareId != null &&
+                  chatEntity != null) {
+                final draft = state.fanOutDrafts[retryShareId];
+                if (draft != null) {
+                  final failedStatuses = retryReport.statuses
+                      .where(
+                        (status) => status.state == FanOutRecipientState.failed,
+                      )
+                      .toList();
+                  final settingsSnapshot = _settingsSnapshotFromState(
+                    context.read<SettingsCubit>().state,
+                  );
+                  final recipients = failedStatuses
+                      .map(
+                        (status) => ComposerRecipient(
+                          target: FanOutTarget.chat(
+                            chat: status.chat,
+                            shareSignatureEnabled:
+                                status.chat.shareSignatureEnabled ??
+                                    settingsSnapshot.shareTokenSignatureEnabled,
+                          ),
+                          included: true,
+                        ),
+                      )
+                      .toList();
+                  if (recipients.isNotEmpty) {
+                    onFanOutRetry = () => context.read<ChatBloc>().add(
+                          ChatFanOutRetryRequested(
+                            draft: draft,
+                            recipients: recipients,
+                            chat: chatEntity,
+                            settings: settingsSnapshot,
+                          ),
+                        );
+                  }
+                }
+              }
               final availableChats =
                   (chatsState()?.items ?? const <chat_models.Chat>[])
                       .where((chat) => chat.jid != chatEntity?.jid)
@@ -4787,6 +4871,7 @@ class _ChatState extends State<Chat> {
                                                     showAttachmentWarning,
                                                 retryReport: retryReport,
                                                 retryShareId: retryShareId,
+                                                onFanOutRetry: onFanOutRetry,
                                                 subjectController:
                                                     _subjectController,
                                                 subjectFocusNode:
@@ -4803,16 +4888,35 @@ class _ChatState extends State<Chat> {
                                                     _handleRecipientRemoved,
                                                 onRecipientToggled:
                                                     _handleRecipientToggled,
-                                                onAttachmentRetry: (id) =>
-                                                    context
-                                                        .read<ChatBloc>()
-                                                        .add(
-                                                          ChatAttachmentRetryRequested(
-                                                            attachmentId: id,
-                                                            recipients:
-                                                                _recipients,
+                                                onAttachmentRetry: (id) {
+                                                  final chat = chatEntity;
+                                                  if (chat == null) {
+                                                    return;
+                                                  }
+                                                  context.read<ChatBloc>().add(
+                                                        ChatAttachmentRetryRequested(
+                                                          attachmentId: id,
+                                                          recipients:
+                                                              _recipients,
+                                                          chat: chat,
+                                                          quotedDraft:
+                                                              state.quoting,
+                                                          subject:
+                                                              _subjectController
+                                                                  .text,
+                                                          settings:
+                                                              _settingsSnapshotFromState(
+                                                            context
+                                                                .read<
+                                                                    SettingsCubit>()
+                                                                .state,
                                                           ),
+                                                          supportsHttpFileUpload:
+                                                              state
+                                                                  .supportsHttpFileUpload,
                                                         ),
+                                                      );
+                                                },
                                                 onAttachmentRemove: (id) =>
                                                     context
                                                         .read<ChatBloc>()
@@ -7336,15 +7440,25 @@ class _ChatState extends State<Chat> {
                                                           VoidCallback?
                                                               onResend;
                                                           if (canResend) {
-                                                            onResend = () =>
-                                                                context
-                                                                    .read<
-                                                                        ChatBloc>()
-                                                                    .add(
-                                                                      ChatMessageResendRequested(
-                                                                        messageModel,
-                                                                      ),
-                                                                    );
+                                                            onResend = () {
+                                                              final chat =
+                                                                  chatEntity;
+                                                              if (chat ==
+                                                                  null) {
+                                                                return;
+                                                              }
+                                                              context
+                                                                  .read<
+                                                                      ChatBloc>()
+                                                                  .add(
+                                                                    ChatMessageResendRequested(
+                                                                      message:
+                                                                          messageModel,
+                                                                      chatType:
+                                                                          chat.type,
+                                                                    ),
+                                                                  );
+                                                            };
                                                           }
                                                           VoidCallback? onEdit;
                                                           if (canEdit) {
@@ -7357,32 +7471,50 @@ class _ChatState extends State<Chat> {
                                                           VoidCallback?
                                                               onPinToggle;
                                                           if (canTogglePins) {
-                                                            onPinToggle = () =>
-                                                                context
-                                                                    .read<
-                                                                        ChatBloc>()
-                                                                    .add(
-                                                                      ChatMessagePinRequested(
-                                                                        message:
-                                                                            messageModel,
-                                                                        pin:
-                                                                            !isPinned,
-                                                                      ),
-                                                                    );
+                                                            onPinToggle = () {
+                                                              final chat =
+                                                                  chatEntity;
+                                                              if (chat ==
+                                                                  null) {
+                                                                return;
+                                                              }
+                                                              context
+                                                                  .read<
+                                                                      ChatBloc>()
+                                                                  .add(
+                                                                    ChatMessagePinRequested(
+                                                                      message:
+                                                                          messageModel,
+                                                                      pin:
+                                                                          !isPinned,
+                                                                      chat:
+                                                                          chat,
+                                                                      roomState:
+                                                                          state
+                                                                              .roomState,
+                                                                    ),
+                                                                  );
+                                                            };
                                                           }
                                                           VoidCallback?
                                                               onRevokeInvite;
                                                           if (isInviteMessage &&
                                                               self) {
                                                             onRevokeInvite =
-                                                                () => context
-                                                                    .read<
-                                                                        ChatBloc>()
-                                                                    .add(
-                                                                      ChatInviteRevocationRequested(
-                                                                        messageModel,
-                                                                      ),
-                                                                    );
+                                                                () {
+                                                              context
+                                                                  .read<
+                                                                      ChatBloc>()
+                                                                  .add(
+                                                                    ChatInviteRevocationRequested(
+                                                                      message:
+                                                                          messageModel,
+                                                                      inviteeJidFallback:
+                                                                          chatEntity
+                                                                              ?.jid,
+                                                                    ),
+                                                                  );
+                                                            };
                                                           }
 
                                                           final Widget
@@ -8805,8 +8937,16 @@ class _ChatState extends State<Chat> {
   }
 
   void _toggleQuickReaction(Message message, String emoji) {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) {
+      return;
+    }
     context.read<ChatBloc>().add(
-          ChatMessageReactionToggled(message: message, emoji: emoji),
+          ChatMessageReactionToggled(
+            message: message,
+            emoji: emoji,
+            isEmailChat: chat.isEmailBacked,
+          ),
         );
   }
 
@@ -9374,8 +9514,13 @@ class _PinnedMessageTile extends StatelessWidget {
             builder: (context) => Text(l10n.chatUnpinMessage),
             child: AxiIconButton.ghost(
               onPressed: () => context.read<ChatBloc>().add(
-                    ChatMessagePinRequested(message: messageForPin, pin: false),
+                  ChatMessagePinRequested(
+                    message: messageForPin,
+                    pin: false,
+                    chat: chat,
+                    roomState: roomState,
                   ),
+                ),
               iconData: LucideIcons.pinOff,
               iconSize: context.sizing.menuItemIconSize,
             ),
@@ -11046,6 +11191,7 @@ class _ChatComposerSection extends StatelessWidget {
     this.showAttachmentWarning = false,
     this.retryReport,
     this.retryShareId,
+    this.onFanOutRetry,
     this.onTaskDropped,
   });
 
@@ -11081,6 +11227,7 @@ class _ChatComposerSection extends StatelessWidget {
   final bool showAttachmentWarning;
   final FanOutSendReport? retryReport;
   final String? retryShareId;
+  final VoidCallback? onFanOutRetry;
   final ValueChanged<CalendarDragPayload>? onTaskDropped;
 
   @override
@@ -11220,13 +11367,13 @@ class _ChatComposerSection extends StatelessWidget {
                 label,
               )
             : l10n.chatFanOutFailure(failedCount, label);
+        final retryAction = onFanOutRetry;
         notices.add(
           _ComposerNotice(
             type: _ComposerNoticeType.info,
             message: failureMessage,
-            actionLabel: l10n.chatFanOutRetry,
-            onAction: () =>
-                context.read<ChatBloc>().add(ChatFanOutRetryRequested(shareId)),
+            actionLabel: retryAction == null ? null : l10n.chatFanOutRetry,
+            onAction: retryAction,
           ),
         );
       }
@@ -12851,7 +12998,7 @@ class _ChatAttachmentTrustToggle extends StatelessWidget {
       subtitle: hint,
       value: enabled,
       onChanged: (value) => context.read<ChatBloc>().add(
-            ChatAttachmentAutoDownloadToggled(value),
+            ChatAttachmentAutoDownloadToggled(chat: chat, enabled: value),
           ),
     );
   }

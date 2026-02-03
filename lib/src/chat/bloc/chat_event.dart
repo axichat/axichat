@@ -59,7 +59,7 @@ final class ChatRoomMembersOpened extends ChatEvent {
 final class _RoomStateUpdated extends ChatEvent {
   const _RoomStateUpdated(this.roomState);
 
-  final RoomState? roomState;
+  final RoomState roomState;
 
   @override
   List<Object?> get props => [roomState];

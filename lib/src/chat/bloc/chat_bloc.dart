@@ -871,7 +871,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (isClosed) {
         return;
       }
-      _addIfOpen(ChatViewFilterChanged(filter: filter, persist: false));
+      _addIfOpen(
+        ChatViewFilterChanged(
+          filter: filter,
+          chatJid: jid!,
+          persist: false,
+        ),
+      );
     } on Exception catch (error, stackTrace) {
       _log.safeFine(_viewFilterLoadFailedLogMessage, error, stackTrace);
     }

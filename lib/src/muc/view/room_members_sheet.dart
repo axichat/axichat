@@ -244,7 +244,19 @@ class RoomMembersSheet extends StatelessWidget {
     );
     if (!context.mounted || avatar == null) return;
     final locate = context.read;
-    locate<ChatBloc>().add(ChatRoomAvatarChangeRequested(avatar));
+    final chatState = locate<ChatBloc>().state;
+    final chat = chatState.chat;
+    final roomState = chatState.roomState;
+    if (chat == null || roomState == null) {
+      return;
+    }
+    locate<ChatBloc>().add(
+          ChatRoomAvatarChangeRequested(
+            avatar: avatar,
+            chat: chat,
+            roomState: roomState,
+          ),
+        );
   }
 }
 
