@@ -951,7 +951,9 @@ class _ChatState extends State<Chat> {
     _maybeClearPendingCalendarTaskIcs(text);
     if (!context.read<SettingsCubit>().state.indicateTyping) return;
     if (!hasText) return;
-    context.read<ChatBloc>().add(const ChatTypingStarted());
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) return;
+    context.read<ChatBloc>().add(ChatTypingStarted(chat: chat));
   }
 
   void _resetRecipientsForChat(chat_models.Chat? chat) {
@@ -1312,7 +1314,11 @@ class _ChatState extends State<Chat> {
     DateTime? preferredStart,
     DateTime? preferredEnd,
   }) async {
-    if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) {
+      return;
+    }
+    if (chat.defaultTransport.isEmail) {
       _showSnackbar(
           context.l10n.chatAvailabilityRequestEmailUnsupportedMessage);
       return;
@@ -1334,6 +1340,7 @@ class _ChatState extends State<Chat> {
     }
     context.read<ChatBloc>().add(
           ChatAvailabilityMessageSent(
+            chat: chat,
             message: CalendarAvailabilityMessage.request(request: request),
           ),
         );
@@ -1373,7 +1380,11 @@ class _ChatState extends State<Chat> {
     required bool canAddToPersonalCalendar,
     required bool canAddToChatCalendar,
   }) async {
-    if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) {
+      return;
+    }
+    if (chat.defaultTransport.isEmail) {
       _showSnackbar(
           context.l10n.chatAvailabilityRequestEmailUnsupportedMessage);
       return;
@@ -1415,13 +1426,18 @@ class _ChatState extends State<Chat> {
     );
     context.read<ChatBloc>().add(
           ChatAvailabilityMessageSent(
+            chat: chat,
             message: CalendarAvailabilityMessage.response(response: response),
           ),
         );
   }
 
   void _handleAvailabilityDecline(CalendarAvailabilityRequest request) {
-    if (context.read<ChatBloc>().state.chat?.defaultTransport.isEmail == true) {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) {
+      return;
+    }
+    if (chat.defaultTransport.isEmail) {
       _showSnackbar(
           context.l10n.chatAvailabilityRequestEmailUnsupportedMessage);
       return;
@@ -1434,6 +1450,7 @@ class _ChatState extends State<Chat> {
     );
     context.read<ChatBloc>().add(
           ChatAvailabilityMessageSent(
+            chat: chat,
             message: CalendarAvailabilityMessage.response(response: response),
           ),
         );
@@ -1849,7 +1866,13 @@ class _ChatState extends State<Chat> {
   }
 
   void _setViewFilter(MessageTimelineFilter filter) {
-    context.read<ChatBloc>().add(ChatViewFilterChanged(filter: filter));
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) {
+      return;
+    }
+    context.read<ChatBloc>().add(
+          ChatViewFilterChanged(filter: filter, chatJid: chat.jid),
+        );
   }
 
   void _toggleNotifications(bool enable) {
@@ -1896,21 +1919,62 @@ class _ChatState extends State<Chat> {
                       value: locate<ChatBloc>(),
                       child: Builder(
                         builder: (dialogContext) => _RoomMembersDrawerContent(
-                          onInvite: (jid) =>
-                              locate<ChatBloc>().add(ChatInviteRequested(jid)),
-                          onAction: (occupantId, action) =>
-                              locate<ChatBloc>().add(
-                            ChatModerationActionRequested(
-                              occupantId: occupantId,
-                              action: action,
-                            ),
-                          ),
-                          onChangeNickname: (nick) => locate<ChatBloc>().add(
-                            ChatNicknameChangeRequested(nick),
-                          ),
-                          onLeaveRoom: () => locate<ChatBloc>().add(
-                            const ChatLeaveRoomRequested(),
-                          ),
+                          onInvite: (jid) {
+                            final chatState = locate<ChatBloc>().state;
+                            final chat = chatState.chat;
+                            if (chat == null) {
+                              return;
+                            }
+                            locate<ChatBloc>().add(
+                              ChatInviteRequested(
+                                jid,
+                                chat: chat,
+                                roomState: chatState.roomState,
+                              ),
+                            );
+                          },
+                          onAction: (occupantId, action) {
+                            final chatState = locate<ChatBloc>().state;
+                            final chat = chatState.chat;
+                            if (chat == null) {
+                              return;
+                            }
+                            locate<ChatBloc>().add(
+                              ChatModerationActionRequested(
+                                occupantId: occupantId,
+                                action: action,
+                                chat: chat,
+                                roomState: chatState.roomState,
+                              ),
+                            );
+                          },
+                          onChangeNickname: (nick) {
+                            final chatState = locate<ChatBloc>().state;
+                            final chat = chatState.chat;
+                            if (chat == null) {
+                              return;
+                            }
+                            locate<ChatBloc>().add(
+                              ChatNicknameChangeRequested(
+                                nickname: nick,
+                                chatJid: chat.jid,
+                                chatType: chat.type,
+                              ),
+                            );
+                          },
+                          onLeaveRoom: () {
+                            final chatState = locate<ChatBloc>().state;
+                            final chat = chatState.chat;
+                            if (chat == null) {
+                              return;
+                            }
+                            locate<ChatBloc>().add(
+                              ChatLeaveRoomRequested(
+                                chatJid: chat.jid,
+                                chatType: chat.type,
+                              ),
+                            );
+                          },
                           onClose: navigator.pop,
                         ),
                       ),
@@ -1943,19 +2007,20 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _promptContactRename() async {
-    if (context.read<ChatBloc>().state.chat == null ||
-        context.read<ChatBloc>().state.chat?.type != ChatType.chat) {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null || chat.type != ChatType.chat) {
       return;
     }
     final l10n = context.l10n;
     final result = await showContactRenameDialog(
       context: context,
-      initialValue: context.read<ChatBloc>().state.chat!.displayName,
+      initialValue: chat.displayName,
     );
     if (!mounted || result == null) return;
     context.read<ChatBloc>().add(
           ChatContactRenameRequested(
             result,
+            chat: chat,
             successMessage: l10n.chatContactRenameSuccess,
             failureMessage: l10n.chatContactRenameFailure,
           ),
@@ -1963,14 +2028,15 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleSpamToggle({required bool sendToSpam}) async {
-    if (context.read<ChatBloc>().state.chat == null ||
-        context.read<ChatBloc>().state.chat?.jid == null) {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) {
       return;
     }
     final l10n = context.l10n;
-    final chatTitle = context.read<ChatBloc>().state.chat!.displayName;
+    final chatTitle = chat.displayName;
     context.read<ChatBloc>().add(
           ChatSpamStatusRequested(
+            chat: chat,
             sendToSpam: sendToSpam,
             successTitle: sendToSpam
                 ? l10n.chatSpamReportedTitle
@@ -1984,13 +2050,15 @@ class _ChatState extends State<Chat> {
   }
 
   Future<void> _handleAddContact() async {
-    if (context.read<ChatBloc>().state.chat == null) return;
-    if (context.read<ChatBloc>().state.chat!.remoteJid.trim().isEmpty) {
+    final chat = context.read<ChatBloc>().state.chat;
+    if (chat == null) return;
+    if (chat.remoteJid.trim().isEmpty) {
       return;
     }
     final l10n = context.l10n;
     context.read<ChatBloc>().add(
           ChatContactAddRequested(
+            chat: chat,
             successTitle: l10n.rosterAddTitle,
             failureTitle: l10n.rosterAddTitle,
           ),
@@ -12378,7 +12446,10 @@ class _ChatSettingsButtons extends StatelessWidget {
         child: _ChatNotificationPreviewControl(
           setting: chat.notificationPreviewSetting,
           onChanged: (setting) => context.read<ChatBloc>().add(
-                ChatNotificationPreviewSettingChanged(setting),
+                ChatNotificationPreviewSettingChanged(
+                  chat: chat,
+                  setting: setting,
+                ),
               ),
         ),
       ),
@@ -12391,7 +12462,7 @@ class _ChatSettingsButtons extends StatelessWidget {
             value: signatureActive,
             onChanged: globalSignatureEnabled
                 ? (enabled) => context.read<ChatBloc>().add(
-                      ChatShareSignatureToggled(enabled),
+                      ChatShareSignatureToggled(chat: chat, enabled: enabled),
                     )
                 : null,
           ),

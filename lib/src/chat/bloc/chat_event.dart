@@ -59,7 +59,7 @@ final class ChatRoomMembersOpened extends ChatEvent {
 final class _RoomStateUpdated extends ChatEvent {
   const _RoomStateUpdated(this.roomState);
 
-  final RoomState roomState;
+  final RoomState? roomState;
 
   @override
   List<Object?> get props => [roomState];
@@ -156,17 +156,21 @@ final class ChatEmailHeadersRequested extends ChatEvent {
 }
 
 final class _ChatTypingStopped extends ChatEvent {
-  const _ChatTypingStopped();
+  const _ChatTypingStopped({required this.chat});
+
+  final Chat chat;
 
   @override
-  List<Object?> get props => [];
+  List<Object?> get props => [chat];
 }
 
 final class ChatTypingStarted extends ChatEvent {
-  const ChatTypingStarted();
+  const ChatTypingStarted({required this.chat});
+
+  final Chat chat;
 
   @override
-  List<Object?> get props => [];
+  List<Object?> get props => [chat];
 }
 
 final class _TypingParticipantsUpdated extends ChatEvent {
@@ -222,30 +226,39 @@ final class ChatMessageSent extends ChatEvent {
 }
 
 final class ChatAvailabilityMessageSent extends ChatEvent {
-  const ChatAvailabilityMessageSent({required this.message});
+  const ChatAvailabilityMessageSent({
+    required this.chat,
+    required this.message,
+  });
 
+  final Chat chat;
   final CalendarAvailabilityMessage message;
 
   @override
-  List<Object?> get props => [message];
+  List<Object?> get props => [chat, message];
 }
 
 final class ChatMuted extends ChatEvent {
-  const ChatMuted(this.muted);
+  const ChatMuted({required this.chatJid, required this.muted});
 
+  final String chatJid;
   final bool muted;
 
   @override
-  List<Object?> get props => [muted];
+  List<Object?> get props => [chatJid, muted];
 }
 
 final class ChatNotificationPreviewSettingChanged extends ChatEvent {
-  const ChatNotificationPreviewSettingChanged(this.setting);
+  const ChatNotificationPreviewSettingChanged({
+    required this.chat,
+    required this.setting,
+  });
 
+  final Chat chat;
   final NotificationPreviewSetting? setting;
 
   @override
-  List<Object?> get props => [setting];
+  List<Object?> get props => [chat, setting];
 }
 
 final class ChatLoadEarlier extends ChatEvent {
@@ -258,21 +271,26 @@ final class ChatLoadEarlier extends ChatEvent {
 }
 
 final class ChatShareSignatureToggled extends ChatEvent {
-  const ChatShareSignatureToggled(this.enabled);
+  const ChatShareSignatureToggled({required this.chat, required this.enabled});
 
+  final Chat chat;
   final bool enabled;
 
   @override
-  List<Object?> get props => [enabled];
+  List<Object?> get props => [chat, enabled];
 }
 
 final class ChatAttachmentAutoDownloadToggled extends ChatEvent {
-  const ChatAttachmentAutoDownloadToggled(this.enabled);
+  const ChatAttachmentAutoDownloadToggled({
+    required this.chat,
+    required this.enabled,
+  });
 
+  final Chat chat;
   final bool enabled;
 
   @override
-  List<Object?> get props => [enabled];
+  List<Object?> get props => [chat, enabled];
 }
 
 final class ChatAttachmentAutoDownloadRequested extends ChatEvent {
@@ -285,28 +303,38 @@ final class ChatAttachmentAutoDownloadRequested extends ChatEvent {
 }
 
 final class ChatResponsivityChanged extends ChatEvent {
-  const ChatResponsivityChanged(this.responsive);
+  const ChatResponsivityChanged({
+    required this.chatJid,
+    required this.responsive,
+  });
 
+  final String chatJid;
   final bool responsive;
 
   @override
-  List<Object?> get props => [responsive];
+  List<Object?> get props => [chatJid, responsive];
 }
 
 final class ChatEncryptionChanged extends ChatEvent {
-  const ChatEncryptionChanged({required this.protocol});
+  const ChatEncryptionChanged({
+    required this.chatJid,
+    required this.protocol,
+  });
 
+  final String chatJid;
   final EncryptionProtocol protocol;
 
   @override
-  List<Object?> get props => [protocol];
+  List<Object?> get props => [chatJid, protocol];
 }
 
 final class ChatEncryptionRepaired extends ChatEvent {
-  const ChatEncryptionRepaired();
+  const ChatEncryptionRepaired({required this.chatJid});
+
+  final String chatJid;
 
   @override
-  List<Object?> get props => [];
+  List<Object?> get props => [chatJid];
 }
 
 final class ChatCapabilitiesRequested extends ChatEvent {
@@ -319,22 +347,25 @@ final class ChatCapabilitiesRequested extends ChatEvent {
 }
 
 final class ChatAlertHidden extends ChatEvent {
-  const ChatAlertHidden({this.forever = false});
+  const ChatAlertHidden({required this.chatJid, this.forever = false});
 
+  final String chatJid;
   final bool forever;
 
   @override
-  List<Object?> get props => [forever];
+  List<Object?> get props => [chatJid, forever];
 }
 
 final class ChatSpamStatusRequested extends ChatEvent {
   const ChatSpamStatusRequested({
+    required this.chat,
     required this.sendToSpam,
     required this.successTitle,
     required this.successMessage,
     required this.failureMessage,
   });
 
+  final Chat chat;
   final bool sendToSpam;
   final String successTitle;
   final String successMessage;
@@ -342,6 +373,7 @@ final class ChatSpamStatusRequested extends ChatEvent {
 
   @override
   List<Object?> get props => [
+        chat,
         sendToSpam,
         successTitle,
         successMessage,
@@ -351,15 +383,17 @@ final class ChatSpamStatusRequested extends ChatEvent {
 
 final class ChatContactAddRequested extends ChatEvent {
   const ChatContactAddRequested({
+    required this.chat,
     required this.successTitle,
     required this.failureTitle,
   });
 
+  final Chat chat;
   final String successTitle;
   final String failureTitle;
 
   @override
-  List<Object?> get props => [successTitle, failureTitle];
+  List<Object?> get props => [chat, successTitle, failureTitle];
 }
 
 final class ChatRecipientEmailChatRequested extends ChatEvent {
@@ -392,26 +426,35 @@ final class ChatQuoteCleared extends ChatEvent {
 }
 
 final class ChatMessagePinRequested extends ChatEvent {
-  const ChatMessagePinRequested({required this.message, required this.pin});
+  const ChatMessagePinRequested({
+    required this.message,
+    required this.pin,
+    required this.chat,
+    required this.roomState,
+  });
 
   final Message message;
   final bool pin;
+  final Chat chat;
+  final RoomState? roomState;
 
   @override
-  List<Object?> get props => [pin];
+  List<Object?> get props => [message, pin, chat, roomState];
 }
 
 final class ChatMessageReactionToggled extends ChatEvent {
   const ChatMessageReactionToggled({
     required this.message,
     required this.emoji,
+    required this.isEmailChat,
   });
 
   final Message message;
   final String emoji;
+  final bool isEmailChat;
 
   @override
-  List<Object?> get props => const [];
+  List<Object?> get props => [message, emoji, isEmailChat];
 }
 
 final class ChatMessageForwardRequested extends ChatEvent {
@@ -430,12 +473,16 @@ final class ChatMessageForwardRequested extends ChatEvent {
 }
 
 final class ChatMessageResendRequested extends ChatEvent {
-  const ChatMessageResendRequested(this.message);
+  const ChatMessageResendRequested({
+    required this.message,
+    required this.chatType,
+  });
 
   final Message message;
+  final ChatType chatType;
 
   @override
-  List<Object?> get props => const [];
+  List<Object?> get props => [message, chatType];
 }
 
 final class ChatMessageEditRequested extends ChatEvent {
@@ -458,26 +505,48 @@ final class ChatAttachmentPicked extends ChatEvent {
   const ChatAttachmentPicked({
     required this.attachment,
     required this.recipients,
+    required this.chat,
+    required this.quotedDraft,
   });
 
   final EmailAttachment attachment;
   final List<ComposerRecipient> recipients;
+  final Chat chat;
+  final Message? quotedDraft;
 
   @override
-  List<Object?> get props => [attachment, recipients];
+  List<Object?> get props => [attachment, recipients, chat, quotedDraft];
 }
 
 final class ChatAttachmentRetryRequested extends ChatEvent {
   const ChatAttachmentRetryRequested({
     required this.attachmentId,
     required this.recipients,
+    required this.chat,
+    required this.quotedDraft,
+    required this.subject,
+    required this.settings,
+    required this.supportsHttpFileUpload,
   });
 
   final String attachmentId;
   final List<ComposerRecipient> recipients;
+  final Chat chat;
+  final Message? quotedDraft;
+  final String? subject;
+  final ChatSettingsSnapshot settings;
+  final bool supportsHttpFileUpload;
 
   @override
-  List<Object?> get props => [attachmentId, recipients];
+  List<Object?> get props => [
+        attachmentId,
+        recipients,
+        chat,
+        quotedDraft,
+        subject,
+        settings,
+        supportsHttpFileUpload,
+      ];
 }
 
 final class ChatPendingAttachmentRemoved extends ChatEvent {
@@ -490,47 +559,71 @@ final class ChatPendingAttachmentRemoved extends ChatEvent {
 }
 
 final class ChatInviteRequested extends ChatEvent {
-  const ChatInviteRequested(this.jid, {this.reason});
+  const ChatInviteRequested(
+    this.jid, {
+    required this.chat,
+    required this.roomState,
+    this.reason,
+  });
 
   final String jid;
+  final Chat chat;
+  final RoomState? roomState;
   final String? reason;
 
   @override
-  List<Object?> get props => [jid, reason];
+  List<Object?> get props => [jid, chat, roomState, reason];
 }
 
 final class ChatModerationActionRequested extends ChatEvent {
   const ChatModerationActionRequested({
     required this.occupantId,
     required this.action,
+    required this.chat,
+    required this.roomState,
     this.reason,
   });
 
   final String occupantId;
   final MucModerationAction action;
+  final Chat chat;
+  final RoomState? roomState;
   final String? reason;
 
   @override
-  List<Object?> get props => [occupantId, action, reason];
+  List<Object?> get props => [occupantId, action, chat, roomState, reason];
 }
 
 final class ChatViewFilterChanged extends ChatEvent {
-  const ChatViewFilterChanged({required this.filter, this.persist = true});
+  const ChatViewFilterChanged({
+    required this.filter,
+    required this.chatJid,
+    this.persist = true,
+  });
 
   final MessageTimelineFilter filter;
+  final String chatJid;
   final bool persist;
 
   @override
-  List<Object?> get props => [filter, persist];
+  List<Object?> get props => [filter, chatJid, persist];
 }
 
 final class ChatFanOutRetryRequested extends ChatEvent {
-  const ChatFanOutRetryRequested(this.shareId);
+  const ChatFanOutRetryRequested({
+    required this.draft,
+    required this.recipients,
+    required this.chat,
+    required this.settings,
+  });
 
-  final String shareId;
+  final FanOutDraft draft;
+  final List<ComposerRecipient> recipients;
+  final Chat chat;
+  final ChatSettingsSnapshot settings;
 
   @override
-  List<Object?> get props => [shareId];
+  List<Object?> get props => [draft, recipients, chat, settings];
 }
 
 final class ChatSubjectChanged extends ChatEvent {
@@ -543,12 +636,16 @@ final class ChatSubjectChanged extends ChatEvent {
 }
 
 final class ChatInviteRevocationRequested extends ChatEvent {
-  const ChatInviteRevocationRequested(this.message);
+  const ChatInviteRevocationRequested({
+    required this.message,
+    required this.inviteeJidFallback,
+  });
 
   final Message message;
+  final String? inviteeJidFallback;
 
   @override
-  List<Object?> get props => const [];
+  List<Object?> get props => [message, inviteeJidFallback];
 }
 
 final class ChatInviteJoinRequested extends ChatEvent {
@@ -561,41 +658,63 @@ final class ChatInviteJoinRequested extends ChatEvent {
 }
 
 final class ChatLeaveRoomRequested extends ChatEvent {
-  const ChatLeaveRoomRequested();
+  const ChatLeaveRoomRequested({required this.chatJid, required this.chatType});
+
+  final String chatJid;
+  final ChatType chatType;
 
   @override
-  List<Object?> get props => [];
+  List<Object?> get props => [chatJid, chatType];
 }
 
 final class ChatNicknameChangeRequested extends ChatEvent {
-  const ChatNicknameChangeRequested(this.nickname);
+  const ChatNicknameChangeRequested({
+    required this.nickname,
+    required this.chatJid,
+    required this.chatType,
+  });
 
   final String nickname;
+  final String chatJid;
+  final ChatType chatType;
 
   @override
-  List<Object?> get props => [nickname];
+  List<Object?> get props => [nickname, chatJid, chatType];
 }
 
 final class ChatRoomAvatarChangeRequested extends ChatEvent {
-  const ChatRoomAvatarChangeRequested(this.avatar);
+  const ChatRoomAvatarChangeRequested({
+    required this.avatar,
+    required this.chat,
+    required this.roomState,
+  });
 
   final AvatarUploadPayload avatar;
+  final Chat chat;
+  final RoomState roomState;
 
   @override
-  List<Object?> get props => [avatar.hash];
+  List<Object?> get props => [avatar.hash, chat, roomState];
 }
 
 final class ChatContactRenameRequested extends ChatEvent {
   const ChatContactRenameRequested(
     this.displayName, {
+    required this.chat,
     required this.successMessage,
     required this.failureMessage,
   });
 
   final String displayName;
+  final Chat chat;
   final String successMessage;
   final String failureMessage;
 
   @override
-  List<Object?> get props => [displayName, successMessage, failureMessage];
+  List<Object?> get props => [
+        displayName,
+        chat,
+        successMessage,
+        failureMessage,
+      ];
 }

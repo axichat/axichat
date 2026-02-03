@@ -2082,11 +2082,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatInviteRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null || chat.type != ChatType.groupChat) {
+    final chat = event.chat;
+    if (chat.type != ChatType.groupChat) {
       return;
     }
-    final roomState = state.roomState;
+    final roomState = event.roomState;
     if (roomState == null) {
       emit(
         state.copyWith(
@@ -2192,7 +2192,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final data = event.message.pseudoMessageData ?? const {};
     final roomJid = data['roomJid'] as String?;
-    final invitee = data['invitee'] as String? ?? state.chat?.jid;
+    final invitee = data['invitee'] as String? ?? event.inviteeJidFallback;
     final token = data['token'] as String?;
     if (roomJid == null || invitee == null || token == null) {
       return;
@@ -2274,8 +2274,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatLeaveRoomRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final chatJid = state.chat?.jid;
-    if (chatJid == null || state.chat?.type != ChatType.groupChat) return;
+    final chatJid = event.chatJid.trim();
+    if (chatJid.isEmpty || event.chatType != ChatType.groupChat) return;
     try {
       await _mucService.leaveRoom(chatJid);
       emit(state.copyWith(roomState: null));
@@ -2288,8 +2288,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatNicknameChangeRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final chatJid = state.chat?.jid;
-    if (chatJid == null || state.chat?.type != ChatType.groupChat) return;
+    final chatJid = event.chatJid.trim();
+    if (chatJid.isEmpty || event.chatType != ChatType.groupChat) return;
     final trimmed = event.nickname.trim();
     if (trimmed.isEmpty) return;
     try {
@@ -2324,21 +2324,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatRoomAvatarChangeRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null || chat.type != ChatType.groupChat) return;
-    final roomState = state.roomState;
-    if (roomState == null) {
-      emit(
-        state.copyWith(
-          toast: const ChatToast(
-            message: _pinRoomStateLoadingMessage,
-            variant: ChatToastVariant.warning,
-          ),
-          toastId: state.toastId + 1,
-        ),
-      );
-      return;
-    }
+    final chat = event.chat;
+    if (chat.type != ChatType.groupChat) return;
+    final roomState = event.roomState;
     final canEdit = roomState.canEditAvatar;
     if (!canEdit) {
       emit(
@@ -2394,8 +2382,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatContactRenameRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null || chat.type != ChatType.chat) return;
+    final chat = event.chat;
+    if (chat.type != ChatType.chat) return;
     final trimmed = event.displayName.trim();
     final alias = trimmed.isEmpty ? null : trimmed;
     try {
@@ -2428,13 +2416,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatModerationActionRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null ||
-        chat.type != ChatType.groupChat ||
-        state.roomState == null) {
+    final chat = event.chat;
+    if (chat.type != ChatType.groupChat || event.roomState == null) {
       return;
     }
-    final occupant = state.roomState!.occupants[event.occupantId];
+    final occupant = event.roomState!.occupants[event.occupantId];
     if (occupant == null) return;
     try {
       switch (event.action) {
@@ -2687,7 +2673,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatTypingStarted event,
     Emitter<ChatState> emit,
   ) async {
-    if (_isEmailChat) {
+    final chat = event.chat;
+    if (chat.defaultTransport.isEmail) {
       return;
     }
     if (_typingTimer case final timer?) {
@@ -2698,15 +2685,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } else {
       _typingTimer = RestartableTimer(
         const Duration(seconds: 3),
-        () => add(const _ChatTypingStopped()),
+        () => add(_ChatTypingStopped(chat: chat)),
       );
     }
-    await _chatsService.sendTyping(jid: state.chat!.jid, typing: true);
+    await _chatsService.sendTyping(jid: chat.jid, typing: true);
     emit(state.copyWith(typing: true));
   }
 
   void _onChatTypingStopped(_ChatTypingStopped event, Emitter<ChatState> emit) {
-    _stopTyping();
+    _stopTyping(chat: event.chat);
     emit(state.copyWith(typing: false));
   }
 
@@ -2743,14 +2730,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final CalendarFragmentShareDecision fragmentDecision =
         _calendarFragmentPolicy.decisionForChat(
       chat: chat,
-      roomState: state.roomState,
+      roomState: event.roomState,
     );
     final CalendarTask? effectiveTaskForXmpp =
         requestedTask == null || !fragmentDecision.canWrite
             ? null
             : requestedTask;
     final CalendarTask? effectiveTaskForEmail = requestedTask;
-    final attachments = List<PendingAttachment>.from(state.pendingAttachments);
+    final attachments = List<PendingAttachment>.from(event.pendingAttachments);
     final queuedAttachments = attachments
         .where(
           (attachment) =>
@@ -2760,8 +2747,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .toList();
     final hasQueuedAttachments = queuedAttachments.isNotEmpty;
     final bool hasCalendarTaskIcs = effectiveTaskForEmail != null;
-    final hasSubject = state.emailSubject?.trim().isNotEmpty == true;
-    final quotedDraft = state.quoting;
+    final hasSubject = subject?.trim().isNotEmpty == true;
     final hasBody = trimmedText.isNotEmpty;
     final emailBody = hasBody
         ? _composeEmailBody(trimmedText, quotedDraft)
@@ -2804,7 +2790,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final rawRequiresXmpp = xmppRecipients.isNotEmpty || rawAttachmentsViaXmpp;
     final xmppBody = _composeXmppBody(
       body: trimmedText,
-      subject: state.emailSubject,
+      subject: subject,
     );
     final hasXmppBody = xmppBody.isNotEmpty;
     final shouldSendXmppBody = hasXmppBody && !rawAttachmentsViaXmpp;
@@ -2821,7 +2807,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 .map((recipient) => recipient.target.key)
                 .toList(),
             body: emailBody ?? '',
-            subject: state.emailSubject,
+            subject: subject,
             pendingAttachments: rawAttachmentsViaEmail
                 ? queuedAttachments
                 : const <PendingAttachment>[],
@@ -2834,7 +2820,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 .map((recipient) => recipient.target.key)
                 .toList(),
             body: xmppBody,
-            subject: state.emailSubject,
+            subject: subject,
             pendingAttachments: rawAttachmentsViaXmpp
                 ? queuedAttachments
                 : const <PendingAttachment>[],
@@ -2857,7 +2843,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    if (attachmentsViaXmpp && !state.supportsHttpFileUpload) {
+    if (attachmentsViaXmpp && !event.supportsHttpFileUpload) {
       emit(
         state.copyWith(composerError: _l10n.chatComposerFileUploadUnavailable),
       );
@@ -2940,7 +2926,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               recipients: emailRecipients,
               text: emailBody,
               htmlBody: emailHtmlBody,
-              subject: state.emailSubject,
+              subject: subject,
+              chat: chat,
+              settings: settings,
               emit: emit,
             );
             if (!sent) {
@@ -2954,14 +2942,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 chat: chat,
                 body: trimmedText,
                 quotedMessage: quotedDraft,
-                subject: state.emailSubject,
+                subject: subject,
                 htmlBody: emailReplyHtmlBody,
               );
             } else {
               await emailService.sendMessage(
                 chat: chat,
                 body: emailBody,
-                subject: state.emailSubject,
+                subject: subject,
                 htmlBody: emailHtmlBody,
               );
             }
@@ -2995,6 +2983,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                     service: emailService,
                     recipients: emailRecipients,
                     emit: emit,
+                    subject: subject,
+                    settings: settings,
                     retainOnSuccess: attachmentsViaXmpp,
                     captionForBundle: captionForAttachments,
                     htmlCaptionForBundle: htmlCaptionForAttachments,
@@ -3005,6 +2995,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                     service: emailService,
                     recipients: emailRecipients,
                     emit: emit,
+                    subject: subject,
+                    settings: settings,
                     retainOnSuccess: attachmentsViaXmpp,
                     captionForFirstAttachment: captionForAttachments,
                     htmlCaptionForFirstAttachment: htmlCaptionForAttachments,
@@ -3022,6 +3014,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               service: emailService,
               recipients: emailRecipients,
               emit: emit,
+              subject: subject,
+              settings: settings,
               caption: calendarTaskCaption,
               htmlCaption: htmlCaptionForAttachments,
             );
@@ -3065,6 +3059,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           chat: chat,
           recipients: xmppRecipients,
           emit: emit,
+          supportsHttpFileUpload: event.supportsHttpFileUpload,
+          subject: subject,
           quotedDraft: quotedDraft,
           caption: hasXmppBody ? xmppBody : null,
           onLocalMessageStored: storedStanzaIds.add,
@@ -3126,6 +3122,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           recipients: xmppRecipients,
           body: trimmedText,
           attachments: queuedAttachments,
+          subject: subject,
+          quotedDraft: quotedDraft,
           emit: emit,
         );
       }
@@ -3137,6 +3135,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           recipients: xmppRecipients,
           body: trimmedText,
           attachments: queuedAttachments,
+          subject: subject,
+          quotedDraft: quotedDraft,
           emit: emit,
         );
       }
@@ -3163,10 +3163,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatAvailabilityMessageSent event,
     Emitter<ChatState> emit,
   ) async {
-    _stopTyping();
+    _stopTyping(chat: event.chat);
     emit(state.copyWith(typing: false));
-    final chat = state.chat;
-    if (chat == null || _isEmailChat) {
+    final chat = event.chat;
+    if (chat.defaultTransport.isEmail) {
       return;
     }
     if (chat.type == ChatType.groupChat) {
@@ -3184,16 +3184,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _onChatMuted(ChatMuted event, Emitter<ChatState> emit) async {
-    if (jid == null) return;
-    await _chatsService.toggleChatMuted(jid: jid!, muted: event.muted);
+    final chatJid = event.chatJid.trim();
+    if (chatJid.isEmpty) return;
+    await _chatsService.toggleChatMuted(jid: chatJid, muted: event.muted);
   }
 
   Future<void> _onChatNotificationPreviewSettingChanged(
     ChatNotificationPreviewSettingChanged event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null) return;
+    final chat = event.chat;
     await _chatsService.setChatNotificationPreviewSetting(
       jid: chat.jid,
       setting: event.setting,
@@ -3246,8 +3246,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatShareSignatureToggled event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null) return;
+    final chat = event.chat;
     await _chatsService.toggleChatShareSignature(
       jid: chat.jid,
       enabled: event.enabled,
@@ -3261,8 +3260,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatAttachmentAutoDownloadToggled event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null) return;
+    final chat = event.chat;
     await _chatsService.toggleChatAttachmentAutoDownload(
       jid: chat.jid,
       enabled: event.enabled,
@@ -3302,9 +3300,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatResponsivityChanged event,
     Emitter<ChatState> emit,
   ) async {
-    if (jid == null) return;
+    final chatJid = event.chatJid.trim();
+    if (chatJid.isEmpty) return;
     await _chatsService.toggleChatMarkerResponsive(
-      jid: jid!,
+      jid: chatJid,
       responsive: event.responsive,
     );
   }
@@ -3313,16 +3312,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatEncryptionChanged event,
     Emitter<ChatState> emit,
   ) async {
-    if (jid == null) return;
-    await _chatsService.setChatEncryption(jid: jid!, protocol: event.protocol);
+    final chatJid = event.chatJid.trim();
+    if (chatJid.isEmpty) return;
+    await _chatsService.setChatEncryption(
+      jid: chatJid,
+      protocol: event.protocol,
+    );
   }
 
   Future<void> _onChatEncryptionRepaired(
     ChatEncryptionRepaired event,
     Emitter<ChatState> emit,
   ) async {
-    if (jid == null) return;
-    await _omemoService?.recreateSessions(jid: jid!);
+    final chatJid = event.chatJid.trim();
+    if (chatJid.isEmpty) return;
+    await _omemoService?.recreateSessions(jid: chatJid);
   }
 
   Future<void> _onChatLoadEarlier(
@@ -3371,10 +3375,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatAlertHidden event,
     Emitter<ChatState> emit,
   ) async {
-    if (jid == null) return;
+    final chatJid = event.chatJid.trim();
+    if (chatJid.isEmpty) return;
     emit(state.copyWith(showAlert: false));
     if (event.forever) {
-      await _chatsService.clearChatAlert(jid: jid!);
+      await _chatsService.clearChatAlert(jid: chatJid);
     }
   }
 
@@ -3382,9 +3387,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatSpamStatusRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
+    final chat = event.chat;
     final xmppService = _xmppService;
-    if (chat == null || xmppService == null) return;
+    if (xmppService == null) return;
     try {
       await xmppService.setSpamStatus(jid: chat.jid, spam: event.sendToSpam);
     } on Exception catch (error, stackTrace) {
@@ -3415,8 +3420,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatContactAddRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null) return;
+    final chat = event.chat;
     final remoteJid = chat.remoteJid.trim();
     if (remoteJid.isEmpty) return;
     final rosterTitle = chat.contactDisplayName?.trim().isNotEmpty == true
@@ -3517,17 +3521,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatMessagePinRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null) {
-      return;
-    }
+    final chat = event.chat;
     final stanzaId = event.message.stanzaID.trim();
     if (stanzaId.isEmpty) {
       return;
     }
     final isEmailBacked = chat.isEmailBacked;
     if (chat.type == ChatType.groupChat && !isEmailBacked) {
-      final roomState = state.roomState;
+      final roomState = event.roomState;
       if (roomState == null) {
         emit(
           _attachToast(
@@ -3582,7 +3583,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatMessageReactionToggled event,
     Emitter<ChatState> emit,
   ) async {
-    if (_isEmailChat) return;
+    if (event.isEmailChat) return;
     try {
       await _messageService.reactToMessage(
         stanzaID: event.message.stanzaID,
@@ -3728,7 +3729,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final message = event.message;
-    final chatType = state.chat?.type ?? ChatType.chat;
+    final chatType = event.chatType;
     final isEmailMessage = message.deltaChatId != null;
     try {
       if (isEmailMessage) {
@@ -3798,8 +3799,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatAttachmentPicked event,
     Emitter<ChatState> emit,
   ) async {
-    final chat = state.chat;
-    if (chat == null) return;
+    final chat = event.chat;
     final recipients = event.recipients
         .where((recipient) => recipient.included)
         .toList(growable: false);
@@ -3832,7 +3832,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    final quotedDraft = state.quoting;
+    final quotedDraft = event.quotedDraft;
     final rawCaption = event.attachment.caption?.trim();
     final caption = rawCaption?.isNotEmpty == true
         ? _composeEmailBody(rawCaption!, quotedDraft)
@@ -3918,10 +3918,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final pending = _pendingAttachmentById(event.attachmentId);
-    final chat = state.chat;
-    if (pending == null ||
-        pending.status != PendingAttachmentStatus.failed ||
-        chat == null) {
+    final chat = event.chat;
+    if (pending == null || pending.status != PendingAttachmentStatus.failed) {
       return;
     }
     final recipients = event.recipients
@@ -3965,6 +3963,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         service: emailService,
         recipients: emailRecipients,
         emit: emit,
+        subject: event.subject,
+        settings: event.settings,
         retainOnSuccess: requiresXmpp,
       );
       if (!emailSent || !requiresXmpp) {
@@ -3982,7 +3982,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       chat: chat,
       recipients: xmppRecipients,
       emit: emit,
-      quotedDraft: state.quoting,
+      supportsHttpFileUpload: event.supportsHttpFileUpload,
+      subject: event.subject,
+      quotedDraft: event.quotedDraft,
     );
     if (!sent) {
       return;
@@ -4000,7 +4002,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatViewFilterChanged event,
     Emitter<ChatState> emit,
   ) async {
-    if (jid == null) return;
+    final chatJid = event.chatJid.trim();
+    if (chatJid.isEmpty) return;
     const forcedFilter = MessageTimelineFilter.allWithContact;
     final effectiveFilter =
         _forceAllWithContactViewFilter ? forcedFilter : event.filter;
@@ -4008,7 +4011,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _subscribeToMessages(limit: _currentMessageLimit, filter: effectiveFilter);
     if (event.persist && !_forceAllWithContactViewFilter) {
       await _chatsService.saveChatViewFilter(
-        jid: jid!,
+        jid: chatJid,
         filter: effectiveFilter,
       );
     }
@@ -4030,25 +4033,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    final draft = state.fanOutDrafts[event.shareId];
-    final report = state.fanOutReports[event.shareId];
-    if (draft == null || report == null) return;
-    final failedStatuses = report.statuses
-        .where((status) => status.state == FanOutRecipientState.failed)
-        .toList();
-    if (failedStatuses.isEmpty) return;
-    final recipients = failedStatuses
-        .map(
-          (status) => ComposerRecipient(
-            target: FanOutTarget.chat(
-              chat: status.chat,
-              shareSignatureEnabled: status.chat.shareSignatureEnabled ??
-                  _settingsSnapshot.shareTokenSignatureEnabled,
-            ),
-            included: true,
-          ),
-        )
-        .toList();
+    final draft = event.draft;
+    final recipients =
+        event.recipients.where((recipient) => recipient.included).toList();
     if (recipients.isEmpty) return;
     await _sendFanOut(
       recipients: recipients,
@@ -4056,6 +4043,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attachment: draft.attachment,
       shareId: draft.shareId,
       subject: draft.subject,
+      chat: event.chat,
+      settings: event.settings,
       emit: emit,
     );
   }
@@ -4076,11 +4065,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  Future<void> _stopTyping() async {
+  Future<void> _stopTyping({required Chat chat}) async {
     _typingTimer?.cancel();
     _typingTimer = null;
-    if (!_isEmailChat) {
-      await _chatsService.sendTyping(jid: state.chat!.jid, typing: false);
+    if (!chat.defaultTransport.isEmail) {
+      await _chatsService.sendTyping(jid: chat.jid, typing: false);
     }
   }
 
@@ -4090,6 +4079,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required EmailService service,
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
+    required String? subject,
+    required ChatSettingsSnapshot settings,
     bool retainOnSuccess = false,
     String? htmlCaption,
   }) async {
@@ -4106,7 +4097,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         recipients: recipients,
         attachment: current.attachment,
         htmlCaption: htmlCaption,
-        subject: state.emailSubject,
+        subject: subject,
+        chat: chat,
+        settings: settings,
         emit: emit,
       );
       if (succeeded) {
@@ -4129,7 +4122,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await service.sendAttachment(
         chat: chat,
         attachment: current.attachment,
-        subject: state.emailSubject,
+        subject: subject,
         htmlCaption: htmlCaption,
       );
       _handlePendingAttachmentSuccess(
@@ -4182,6 +4175,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required EmailService service,
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
+    required String? subject,
+    required ChatSettingsSnapshot settings,
     String? caption,
     String? htmlCaption,
   }) async {
@@ -4203,7 +4198,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         recipients: recipients,
         attachment: resolvedAttachment,
         htmlCaption: htmlCaption,
-        subject: state.emailSubject,
+        subject: subject,
+        chat: chat,
+        settings: settings,
         emit: emit,
       );
       if (!succeeded) {
@@ -4215,7 +4212,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await service.sendAttachment(
         chat: chat,
         attachment: resolvedAttachment,
-        subject: state.emailSubject,
+        subject: subject,
         htmlCaption: htmlCaption,
       );
       return true;
@@ -4274,6 +4271,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required EmailService service,
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
+    required String? subject,
+    required ChatSettingsSnapshot settings,
     bool retainOnSuccess = false,
     String? captionForFirstAttachment,
     String? htmlCaptionForFirstAttachment,
@@ -4298,6 +4297,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         service: service,
         recipients: recipients,
         emit: emit,
+        subject: subject,
+        settings: settings,
         retainOnSuccess: retainOnSuccess,
         htmlCaption:
             shouldApplyHtmlCaption ? htmlCaptionForFirstAttachment : null,
@@ -4317,6 +4318,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required EmailService service,
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
+    required String? subject,
+    required ChatSettingsSnapshot settings,
     bool retainOnSuccess = false,
     String? captionForBundle,
     String? htmlCaptionForBundle,
@@ -4332,7 +4335,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           recipients: recipients,
           attachment: resolvedAttachment,
           htmlCaption: htmlCaptionForBundle,
-          subject: state.emailSubject,
+          subject: subject,
+          chat: chat,
+          settings: settings,
           emit: emit,
         );
         if (succeeded) {
@@ -4354,7 +4359,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await service.sendAttachment(
           chat: chat,
           attachment: resolvedAttachment,
-          subject: state.emailSubject,
+          subject: subject,
           htmlCaption: htmlCaptionForBundle,
         );
         _handleBundledAttachmentSuccess(
@@ -4415,12 +4420,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Chat chat,
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
+    required bool supportsHttpFileUpload,
+    required String? subject,
     Message? quotedDraft,
     String? caption,
     String? htmlCaption,
     void Function(String stanzaId)? onLocalMessageStored,
   }) async {
-    if (!state.supportsHttpFileUpload) {
+    if (!supportsHttpFileUpload) {
       emit(
         state.copyWith(composerError: _l10n.chatComposerFileUploadUnavailable),
       );
@@ -4497,6 +4504,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             recipients: recipients,
             body: '',
             attachments: [current],
+            subject: subject,
+            quotedDraft: quotedDraft,
             emit: emit,
           );
         }
@@ -4512,6 +4521,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             recipients: recipients,
             body: '',
             attachments: [current],
+            subject: subject,
+            quotedDraft: quotedDraft,
             emit: emit,
           );
         }
@@ -4526,6 +4537,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             recipients: recipients,
             body: '',
             attachments: [current],
+            subject: subject,
+            quotedDraft: quotedDraft,
             emit: emit,
           );
         }
@@ -4541,6 +4554,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             recipients: recipients,
             body: '',
             attachments: [current],
+            subject: subject,
+            quotedDraft: quotedDraft,
             emit: emit,
           );
         }
@@ -4555,6 +4570,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             recipients: recipients,
             body: '',
             attachments: [current],
+            subject: subject,
+            quotedDraft: quotedDraft,
             emit: emit,
           );
         }
@@ -4574,6 +4591,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             recipients: recipients,
             body: '',
             attachments: [current],
+            subject: subject,
+            quotedDraft: quotedDraft,
             emit: emit,
           );
         }
@@ -5377,15 +5396,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     String? htmlCaption,
     String? shareId,
     String? subject,
+    required Chat chat,
+    required ChatSettingsSnapshot settings,
     required Emitter<ChatState> emit,
   }) async {
     final service = _emailService;
     if (service == null || recipients.isEmpty) return false;
-    final chat = state.chat;
-    if (chat == null) return false;
-    final chatShareSignatureEnabled = chat.shareSignatureEnabled ??
-        _settingsSnapshot.shareTokenSignatureEnabled;
-    final useSignatureToken = _settingsSnapshot.shareTokenSignatureEnabled &&
+    final chatShareSignatureEnabled =
+        chat.shareSignatureEnabled ?? settings.shareTokenSignatureEnabled;
+    final useSignatureToken = settings.shareTokenSignatureEnabled &&
         chatShareSignatureEnabled &&
         recipients.every((recipient) => recipient.target.shareSignatureEnabled);
     final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
@@ -5691,6 +5710,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required String body,
     required Iterable<PendingAttachment> attachments,
+    required String? subject,
+    required Message? quotedDraft,
     required Emitter<ChatState> emit,
   }) async {
     final hasAttachments = attachments.isNotEmpty;
@@ -5708,8 +5729,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         id: null,
         jids: resolvedRecipients,
         body: trimmedBody,
-        subject: state.emailSubject,
-        quotingStanzaId: state.quoting?.stanzaID,
+        subject: subject,
+        quotingStanzaId: quotedDraft?.stanzaID,
         attachments: attachmentPayload,
       );
       emit(
