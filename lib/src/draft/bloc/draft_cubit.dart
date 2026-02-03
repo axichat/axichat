@@ -51,15 +51,28 @@ class DraftSendValidationException implements Exception {
   final DraftSendFailureType type;
 }
 
+class DraftXmppTarget extends Equatable {
+  const DraftXmppTarget({
+    required this.jid,
+    required this.encryptionProtocol,
+    required this.chatType,
+  });
+
+  final String jid;
+  final EncryptionProtocol encryptionProtocol;
+  final ChatType chatType;
+
+  @override
+  List<Object?> get props => [jid, encryptionProtocol, chatType];
+}
+
 class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   static const int _emailAttachmentBundleMinimumCount = 2;
 
   DraftCubit({
     required MessageService messageService,
     EmailService? emailService,
-    required bool shareTokenSignatureEnabled,
   })  : _messageService = messageService,
-        _shareTokenSignatureEnabled = shareTokenSignatureEnabled,
         _emailService = emailService,
         super(const DraftsAvailable(items: null, visibleItems: null)) {
     _draftsSubscription = _messageService.draftsStream().listen((items) {
@@ -70,7 +83,6 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
 
   final MessageService _messageService;
   EmailService? _emailService;
-  bool _shareTokenSignatureEnabled;
   List<Draft>? _items;
   DraftSearchSnapshot _searchSnapshot = const DraftSearchSnapshot(
     query: '',
@@ -100,10 +112,6 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     return super.close();
   }
 
-  void updateShareTokenSignatureEnabled(bool enabled) {
-    _shareTokenSignatureEnabled = enabled;
-  }
-
   void updateSearchSnapshot(DraftSearchSnapshot snapshot) {
     if (_searchSnapshot == snapshot) {
       return;
@@ -131,9 +139,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
 
   Future<bool> sendDraft({
     required int? id,
-    required List<String> xmppJids,
+    required List<DraftXmppTarget> xmppTargets,
     required List<FanOutTarget> emailTargets,
     required String body,
+    required bool shareTokenSignatureEnabled,
     String? subject,
     List<EmailAttachment> attachments = const [],
   }) async {
@@ -145,11 +154,12 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           body: body,
           subject: subject,
           attachments: attachments,
+          shareTokenSignatureEnabled: shareTokenSignatureEnabled,
         );
       }
-      if (xmppJids.isNotEmpty) {
+      if (xmppTargets.isNotEmpty) {
         await _sendXmppDraft(
-          jids: xmppJids,
+          targets: xmppTargets,
           body: body,
           attachments: attachments,
         );
@@ -335,6 +345,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required String body,
     String? subject,
     required List<EmailAttachment> attachments,
+    required bool shareTokenSignatureEnabled,
   }) async {
     final emailService = _emailService;
     if (emailService == null) {
@@ -354,7 +365,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final htmlBody = trimmedBody.isNotEmpty
         ? HtmlContentCodec.fromPlainText(trimmedBody)
         : null;
-    final includeSignatureToken = _shareTokenSignatureEnabled &&
+    final includeSignatureToken = shareTokenSignatureEnabled &&
         targets.every((target) => target.shareSignatureEnabled);
     final shareId = ShareTokenCodec.generateShareId();
     final shouldSendBodyOnly =
@@ -408,7 +419,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   Future<void> _sendXmppDraft({
-    required List<String> jids,
+    required List<DraftXmppTarget> targets,
     required String body,
     required List<EmailAttachment> attachments,
   }) async {
@@ -418,16 +429,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (!hasBody && !hasAttachments) {
       throw const DraftSendValidationException(DraftSendFailureType.noContent);
     }
-    if (jids.isEmpty) {
+    if (targets.isEmpty) {
       throw const DraftSendValidationException(
         DraftSendFailureType.noRecipients,
       );
     }
-    final db = await _messageService.database;
-    final chats = await db.getChatsByJids(jids);
-    final chatByJid = <String, Chat>{
-      for (final chat in chats) chat.jid: chat,
-    };
     final attachmentGroupId =
         hasAttachments && attachments.length > 1 ? uuid.v4() : null;
     final uploads = List<XmppAttachmentUpload?>.filled(
@@ -435,10 +441,13 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       null,
     );
 
-    Future<void> sendToJid(String jid, {required bool updateUploads}) async {
-      final chat = chatByJid[jid];
-      final encryption = chat?.encryptionProtocol ?? EncryptionProtocol.omemo;
-      final chatType = chat?.type ?? ChatType.chat;
+    Future<void> sendToTarget(
+      DraftXmppTarget target, {
+      required bool updateUploads,
+    }) async {
+      final jid = target.jid;
+      final encryption = target.encryptionProtocol;
+      final chatType = target.chatType;
       if (hasBody && !hasAttachments) {
         await _messageService.sendMessage(
           jid: jid,
@@ -472,17 +481,17 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
 
     if (!hasAttachments) {
       await Future.wait(
-        jids.map((jid) => sendToJid(jid, updateUploads: false)),
+        targets.map((target) => sendToTarget(target, updateUploads: false)),
       );
       return;
     }
 
-    final firstJid = jids.first;
-    await sendToJid(firstJid, updateUploads: true);
-    final remaining = jids.skip(1).toList();
+    final firstTarget = targets.first;
+    await sendToTarget(firstTarget, updateUploads: true);
+    final remaining = targets.skip(1).toList();
     if (remaining.isEmpty) return;
     await Future.wait(
-      remaining.map((jid) => sendToJid(jid, updateUploads: false)),
+      remaining.map((target) => sendToTarget(target, updateUploads: false)),
     );
   }
 

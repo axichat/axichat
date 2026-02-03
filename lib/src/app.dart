@@ -279,10 +279,6 @@ class _AxichatState extends State<Axichat> {
                               .enableSmtp
                           ? context.read<EmailService>()
                           : null,
-                      shareTokenSignatureEnabled: context
-                          .read<SettingsCubit>()
-                          .state
-                          .shareTokenSignatureEnabled,
                     ),
                   ),
                   BlocProvider(
@@ -348,18 +344,6 @@ class _AxichatState extends State<Axichat> {
                         } else {
                           await emailService.handleNetworkAvailable();
                         }
-                      },
-                    ),
-                    BlocListener<SettingsCubit, SettingsState>(
-                      listenWhen: (previous, current) =>
-                          previous.shareTokenSignatureEnabled !=
-                          current.shareTokenSignatureEnabled,
-                      listener: (context, settings) {
-                        context
-                            .read<DraftCubit>()
-                            .updateShareTokenSignatureEnabled(
-                              settings.shareTokenSignatureEnabled,
-                            );
                       },
                     ),
                   ],

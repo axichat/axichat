@@ -2643,15 +2643,13 @@ class _ChatState extends State<Chat> {
   List<Widget> _pendingAttachmentMenuItems(PendingAttachment pending) {
     final l10n = context.l10n;
     final items = <Widget>[];
-    if (pending.attachment.isImage) {
-      items.add(
-        ShadContextMenuItem(
-          leading: const Icon(LucideIcons.eye),
-          onPressed: () => _showAttachmentPreview(pending),
-          child: Text(l10n.chatAttachmentView),
-        ),
-      );
-    }
+    items.add(
+      ShadContextMenuItem(
+        leading: const Icon(LucideIcons.eye),
+        onPressed: () => _showAttachmentPreview(pending),
+        child: Text(l10n.chatAttachmentView),
+      ),
+    );
     if (pending.status == PendingAttachmentStatus.failed) {
       items.add(
         ShadContextMenuItem(
@@ -11179,8 +11177,8 @@ class _ChatComposerSection extends StatelessWidget {
       if (myJid != null && myJid.isNotEmpty) mox.JID.fromString(myJid).domain,
     };
     final width = MediaQuery.sizeOf(context).width;
-    final composerHorizontalInset = spacing.m + spacing.xs;
-    final desktopComposerHorizontalInset = spacing.m + spacing.xs + spacing.xs;
+    final composerHorizontalInset = spacing.s + spacing.xs;
+    final desktopComposerHorizontalInset = spacing.s + spacing.xs + spacing.xs;
     final horizontalPadding = width >= smallScreen
         ? desktopComposerHorizontalInset
         : composerHorizontalInset;

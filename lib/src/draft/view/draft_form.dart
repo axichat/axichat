@@ -12,6 +12,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/attachments/view/pending_attachment_preview.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -1157,8 +1158,24 @@ class _DraftFormState extends State<DraftForm> {
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
     final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
-    final xmppJids =
-        split.xmppTargets.map(_resolveXmppJid).whereType<String>().toList();
+    final shareTokenSignatureEnabled =
+        widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled;
+    final xmppTargets = split.xmppTargets
+        .map((recipient) {
+          final jid = _resolveXmppJid(recipient);
+          if (jid == null || jid.isEmpty) {
+            return null;
+          }
+          final chat = recipient.target.chat;
+          return DraftXmppTarget(
+            jid: jid,
+            encryptionProtocol:
+                chat?.encryptionProtocol ?? EncryptionProtocol.omemo,
+            chatType: chat?.type ?? ChatType.chat,
+          );
+        })
+        .whereType<DraftXmppTarget>()
+        .toList();
     final emailTargets = split.emailTargets.map((recipient) {
       final chat = recipient.target.chat;
       if (chat != null) {
@@ -1167,8 +1184,8 @@ class _DraftFormState extends State<DraftForm> {
           return FanOutTarget.address(
             address: address,
             displayName: chat.contactDisplayName ?? chat.title,
-            shareSignatureEnabled: chat.shareSignatureEnabled ??
-                widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled,
+            shareSignatureEnabled:
+                chat.shareSignatureEnabled ?? shareTokenSignatureEnabled,
           );
         }
       }
@@ -1200,9 +1217,10 @@ class _DraftFormState extends State<DraftForm> {
     try {
       succeeded = await widget.locate<DraftCubit>().sendDraft(
             id: id,
-            xmppJids: xmppJids,
+            xmppTargets: xmppTargets,
             emailTargets: emailTargets,
             body: _bodyTextController.text,
+            shareTokenSignatureEnabled: shareTokenSignatureEnabled,
             subject: _subjectTextController.text,
             attachments: _currentAttachments(),
           );
@@ -1437,68 +1455,13 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<void> _showAttachmentPreview(PendingAttachment pending) async {
     if (!mounted) return;
-    final attachment = pending.attachment;
-    final file = File(attachment.path);
-    final missingMessage = context.l10n.draftFileMissing(attachment.path);
-    if (!await file.exists()) {
-      if (!mounted) return;
-      _showToast(missingMessage);
-      return;
-    }
-    if (!mounted) return;
-    await showFadeScaleDialog<void>(
+    final l10n = context.l10n;
+    await showPendingAttachmentPreview(
       context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        final dialogSpacing = dialogContext.spacing;
-        final mediaSize = MediaQuery.sizeOf(dialogContext);
-        final double maxWidth =
-            math.max(0.0, mediaSize.width - dialogSpacing.xl);
-        final double maxHeight =
-            math.max(0.0, mediaSize.height - dialogSpacing.xl);
-        final intrinsic = _intrinsicSizeFrom(attachment);
-        final targetSize = _fitWithinBounds(
-          intrinsicSize: intrinsic,
-          maxWidth: maxWidth,
-          maxHeight: maxHeight,
-        );
-        final sizing = dialogContext.sizing;
-        return Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              SizedBox(
-                width: targetSize.width,
-                height: targetSize.height,
-                child: InteractiveViewer(
-                  maxScale: sizing.mediaPreviewMaxScale,
-                  child: Image.file(file, fit: BoxFit.contain),
-                ),
-              ),
-              SizedBox(height: dialogSpacing.s),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AxiIconButton.ghost(
-                    iconData: LucideIcons.x,
-                    tooltip: dialogContext.l10n.commonClose,
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                  ),
-                  SizedBox(width: dialogSpacing.xs),
-                  AxiIconButton.destructive(
-                    iconData: LucideIcons.trash2,
-                    tooltip: dialogContext.l10n.draftRemoveAttachment,
-                    onPressed: () {
-                      Navigator.of(dialogContext).pop();
-                      _handlePendingAttachmentRemoved(pending.id);
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+      pending: pending,
+      onRemove: () => _handlePendingAttachmentRemoved(pending.id),
+      removeTooltip: l10n.draftRemoveAttachment,
+      closeTooltip: l10n.commonClose,
     );
   }
 
@@ -1936,27 +1899,19 @@ class _DraftAttachmentsSection extends StatelessWidget {
     final useDesktopMenu = commandSurface == CommandSurface.menu;
 
     List<Widget> menuItems(PendingAttachment pending) {
-      final actions = <AxiMenuAction>[];
-      if (pending.attachment.isImage) {
-        actions.add(
-          AxiMenuAction(
-            label: l10n.draftAttachmentPreview,
-            icon: LucideIcons.image,
-            onPressed: () => onPreview(pending),
-          ),
-        );
-      }
-      actions.add(
+      final actions = <AxiMenuAction>[
+        AxiMenuAction(
+          label: l10n.draftAttachmentPreview,
+          icon: LucideIcons.eye,
+          onPressed: () => onPreview(pending),
+        ),
         AxiMenuAction(
           label: l10n.draftRemoveAttachment,
           icon: LucideIcons.trash2,
           destructive: true,
           onPressed: () => onRemove(pending.id),
         ),
-      );
-      if (actions.isEmpty) {
-        return const [];
-      }
+      ];
       return [AxiMenu(actions: actions)];
     }
 

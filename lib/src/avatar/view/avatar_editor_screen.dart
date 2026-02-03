@@ -259,7 +259,10 @@ class _AvatarSummaryCard extends StatelessWidget {
                             state.processing ||
                             state.publishing
                         ? null
-                        : context.read<AvatarEditorCubit>().publish,
+                        : () => context.read<AvatarEditorCubit>().publish(
+                              draftAvatar: state.draftAvatar,
+                              backgroundColor: state.backgroundColor,
+                            ),
                     leading: Icon(
                       LucideIcons.save,
                       size: sizing.iconButtonIconSize,

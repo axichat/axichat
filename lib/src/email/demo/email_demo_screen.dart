@@ -170,11 +170,12 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                             child: Text(context.l10n.emailDemoProvisionButton),
                           ),
                           AxiButton.secondary(
-                            onPressed: isBusy
+                            onPressed: isBusy || state.account == null
                                 ? null
                                 : () => context
                                     .read<EmailDemoCubit>()
                                     .sendDemoMessage(
+                                      account: state.account!,
                                       body: _messageController.text,
                                       displayName:
                                           context.l10n.emailDemoDisplayNameSelf,

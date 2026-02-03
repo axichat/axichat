@@ -354,7 +354,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                                 ),
                               ),
                               if (recipients.isNotEmpty) ...[
-                                SizedBox(width: spacing.s),
+                                SizedBox(width: spacing.m),
                                 Flexible(
                                   fit: FlexFit.loose,
                                   child: _RecipientsAvatarStrip(
@@ -478,6 +478,15 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       final path = chat.avatarPath ?? chat.contactAvatarPath;
       addAvatar(chat.jid, path);
       addAvatar(chat.emailAddress, path);
+    }
+    for (final recipient in widget.recipients) {
+      final chat = recipient.target.chat;
+      final path = chat?.avatarPath ?? chat?.contactAvatarPath;
+      if (chat != null) {
+        addAvatar(chat.jid, path);
+        addAvatar(chat.emailAddress, path);
+      }
+      addAvatar(recipient.target.address, path);
     }
     return next;
   }

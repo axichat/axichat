@@ -148,7 +148,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (draftAvatar == null) {
       return state.carouselAvatar?.payload;
     }
-    final updated = await _refreshDraftPayload(draftAvatar);
+    final updated = await _refreshDraftPayload(
+      draftAvatar,
+      backgroundColor: state.backgroundColor,
+    );
     return updated?.payload;
   }
 
@@ -551,11 +554,16 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         ? draftAvatar
         : draftAvatar.copyWith(cropRect: resolvedRect);
     emit(state.copyWith(draftAvatar: nextAvatar));
-    await _refreshDraftPayload(nextAvatar);
+    await _refreshDraftPayload(
+      nextAvatar,
+      backgroundColor: state.backgroundColor,
+    );
   }
 
-  Future<void> publish() async {
-    final draftAvatar = state.draftAvatar;
+  Future<void> publish({
+    required Avatar? draftAvatar,
+    required Color backgroundColor,
+  }) async {
     if (draftAvatar == null) {
       emit(
         state.copyWith(
@@ -574,7 +582,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
     emit(state.copyWith(publishing: true, errorType: null));
     try {
-      final refreshed = await _refreshDraftPayload(draftAvatar);
+      final refreshed = await _refreshDraftPayload(
+        draftAvatar,
+        backgroundColor: backgroundColor,
+      );
       if (refreshed == null) {
         emit(state.copyWith(publishing: false));
         return;
@@ -606,7 +617,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
   }
 
-  Future<Avatar?> _refreshDraftPayload(Avatar draftAvatar) async {
+  Future<Avatar?> _refreshDraftPayload(
+    Avatar draftAvatar, {
+    required Color backgroundColor,
+  }) async {
     if (draftAvatar.source != AvatarSource.upload) {
       return draftAvatar;
     }
@@ -621,7 +635,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         avatar: draftAvatar,
         cropRect: cropRect,
         insetFraction: avatarInsetFraction,
-        backgroundColor: state.backgroundColor,
+        backgroundColor: backgroundColor,
       );
       emit(
         state.copyWith(
@@ -745,7 +759,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (draftAvatar.cropRect == resolved) return;
     final nextAvatar = draftAvatar.copyWith(cropRect: resolved);
     emit(state.copyWith(draftAvatar: nextAvatar));
-    await _refreshDraftPayload(nextAvatar);
+    await _refreshDraftPayload(
+      nextAvatar,
+      backgroundColor: state.backgroundColor,
+    );
   }
 
   Future<Uint8List?> _loadPickedFileBytes(PlatformFile file) async {

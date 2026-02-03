@@ -118,13 +118,13 @@ extension AxiTextThemeTokens on ShadTextTheme {
 
   TextStyle get sectionLabelM => muted.copyWith(
         fontSize: 12,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
         letterSpacing: 0.4,
       );
 
   TextStyle get sectionLabelLg => muted.copyWith(
         fontSize: 14,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
         letterSpacing: 0.4,
       );
 }

@@ -136,20 +136,10 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
   }
 
   Future<void> sendDemoMessage({
+    required EmailAccount account,
     required String body,
     required String displayName,
   }) async {
-    final account = state.account;
-    if (account == null) {
-      emit(
-        state.copyWith(
-          status: EmailDemoStatus.provisionFirst,
-          failure: null,
-          detail: null,
-        ),
-      );
-      return;
-    }
     emit(
       state.copyWith(
         status: EmailDemoStatus.sending,

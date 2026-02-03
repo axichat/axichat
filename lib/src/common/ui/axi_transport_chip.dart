@@ -54,8 +54,8 @@ class AxiTransportChip extends StatelessWidget {
         maxLines: 1,
         softWrap: false,
         overflow: TextOverflow.visible,
-        style: context.textTheme.small.copyWith(
-          fontWeight: FontWeight.w700,
+        style: context.textTheme.label.copyWith(
+          fontWeight: FontWeight.w500,
           color: foreground,
         ),
       ),
