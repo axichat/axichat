@@ -195,6 +195,7 @@ class _DraftFormState extends State<DraftForm> {
     final sizing = context.sizing;
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final endpointConfig = context.watch<SettingsCubit>().state.endpointConfig;
     final locate = widget.locate;
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final sectionSpacing = spacing.s + spacing.xs;
@@ -309,6 +310,9 @@ class _DraftFormState extends State<DraftForm> {
                         final sendBlocker = _sendValidationMessage(
                           hasActiveRecipients: hasActiveRecipients,
                           hasContent: hasContent,
+                          emailRecipientsUnavailable:
+                              !endpointConfig.enableSmtp &&
+                                  split.emailTargets.isNotEmpty,
                         );
                         final bool showSendBlockerMessage =
                             _showValidationMessages &&
@@ -1151,6 +1155,7 @@ class _DraftFormState extends State<DraftForm> {
     if (!transportsReady) return;
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
+    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final xmppJids =
         split.xmppTargets.map(_resolveXmppJid).whereType<String>().toList();
     final emailTargets = split.emailTargets.map((recipient) {
@@ -1171,6 +1176,8 @@ class _DraftFormState extends State<DraftForm> {
     final validationMessage = _sendValidationMessage(
       hasActiveRecipients: split.hasActiveRecipients,
       hasContent: _hasContent(hasAttachments: hasAttachments),
+      emailRecipientsUnavailable:
+          !endpointConfig.enableSmtp && split.emailTargets.isNotEmpty,
     );
     final formValid = _formKey.currentState?.validate() ?? false;
     if (validationMessage != null || !formValid) return;
@@ -1379,7 +1386,11 @@ class _DraftFormState extends State<DraftForm> {
   String? _sendValidationMessage({
     required bool hasActiveRecipients,
     required bool hasContent,
+    required bool emailRecipientsUnavailable,
   }) {
+    if (emailRecipientsUnavailable) {
+      return context.l10n.chatComposerEmailRecipientUnavailable;
+    }
     if (!hasActiveRecipients) {
       return context.l10n.draftNoRecipients;
     }

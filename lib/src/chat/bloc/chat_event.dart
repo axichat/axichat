@@ -128,6 +128,15 @@ final class ChatSettingsUpdated extends ChatEvent {
   List<Object?> get props => [settings];
 }
 
+final class ChatEmailServiceUpdated extends ChatEvent {
+  const ChatEmailServiceUpdated(this.emailService);
+
+  final EmailService? emailService;
+
+  @override
+  List<Object?> get props => [emailService];
+}
+
 final class ChatMessageFocused extends ChatEvent {
   const ChatMessageFocused(this.messageID);
 

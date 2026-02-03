@@ -337,9 +337,27 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                         ),
                         const SizedBox(width: calendarInsetSm),
                         Expanded(
-                          child: Text(
-                            l10n.recipientsHeaderTitle.toUpperCase(),
-                            style: headerStyle,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: Text(
+                                  l10n.recipientsHeaderTitle.toUpperCase(),
+                                  style: headerStyle,
+                                ),
+                              ),
+                              if (recipients.isNotEmpty) ...[
+                                SizedBox(width: spacing.xs),
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  child: _RecipientsAvatarStrip(
+                                    recipients: recipients,
+                                    avatarPathsByJid: avatarPathsByJid,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                         if (showVisibilityBadge) ...[
@@ -1321,12 +1339,12 @@ class _RecipientAutocompleteField extends StatelessWidget {
               onTapOutside: (_) => focusNode.unfocus(),
               child: Align(
                 alignment: Alignment.topLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    minWidth: 260,
-                    maxWidth: 420,
-                    maxHeight: maxOverlayHeight,
-                  ),
+                child: OverflowBox(
+                  alignment: Alignment.topLeft,
+                  minWidth: 260,
+                  maxWidth: 420,
+                  minHeight: 0,
+                  maxHeight: maxOverlayHeight,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: colors.card,
@@ -1572,6 +1590,229 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+class _RecipientsAvatarStrip extends StatelessWidget {
+  const _RecipientsAvatarStrip({
+    required this.recipients,
+    required this.avatarPathsByJid,
+  });
+
+  final List<ComposerRecipient> recipients;
+  final Map<String, String> avatarPathsByJid;
+
+  @override
+  Widget build(BuildContext context) {
+    if (recipients.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final participants = <String>[];
+    for (final recipient in recipients) {
+      final jid = recipient.target.chat?.jid ??
+          recipient.target.address ??
+          recipient.key;
+      if (jid.isEmpty) continue;
+      participants.add(jid);
+    }
+    if (participants.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return _CaterpillarAvatarStrip(
+      participants: participants,
+      avatarPathsByJid: avatarPathsByJid,
+    );
+  }
+}
+
+class _CaterpillarAvatarStrip extends StatelessWidget {
+  const _CaterpillarAvatarStrip({
+    required this.participants,
+    required this.avatarPathsByJid,
+  });
+
+  final List<String> participants;
+  final Map<String, String> avatarPathsByJid;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final spacing = context.spacing;
+        final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
+        final recipientAvatarOverlap = spacing.s + spacing.xxs;
+        final recipientOverflowGap = spacing.xs + spacing.xxs;
+        final maxWidth = constraints.hasBoundedWidth &&
+                constraints.maxWidth.isFinite &&
+                constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : double.infinity;
+        final layout = _layoutRecipientStrip(
+          context: context,
+          participants: participants,
+          maxContentWidth: maxWidth,
+        );
+        final visible = layout.items;
+        final overflowed = layout.overflowed;
+        final children = <Widget>[];
+        for (var i = 0; i < visible.length; i++) {
+          final offset = i * (recipientAvatarSize - recipientAvatarOverlap);
+          children.add(
+            Positioned(
+              left: offset,
+              child: _RecipientHeaderAvatar(
+                jid: visible[i],
+                avatarPath: avatarPathsByJid[visible[i].toLowerCase()],
+              ),
+            ),
+          );
+        }
+        if (overflowed) {
+          final offset = visible.isEmpty
+              ? 0.0
+              : visible.length *
+                      (recipientAvatarSize - recipientAvatarOverlap) +
+                  recipientOverflowGap;
+          children.add(
+            Positioned(left: offset, child: const _RecipientOverflowAvatar()),
+          );
+        }
+        final baseWidth = layout.totalWidth;
+        final totalWidth = overflowed
+            ? baseWidth + recipientOverflowGap + recipientAvatarSize
+            : math.max(baseWidth, recipientAvatarSize);
+        return SizedBox(
+          width: totalWidth,
+          height: recipientAvatarSize,
+          child: Stack(clipBehavior: Clip.none, children: children),
+        );
+      },
+    );
+  }
+}
+
+_CutoutLayoutResult<String> _layoutRecipientStrip({
+  required BuildContext context,
+  required List<String> participants,
+  required double maxContentWidth,
+}) {
+  if (participants.isEmpty || maxContentWidth <= 0) {
+    return const _CutoutLayoutResult(
+      items: <String>[],
+      overflowed: false,
+      totalWidth: 0,
+    );
+  }
+  final spacing = context.spacing;
+  final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
+  final recipientAvatarOverlap = spacing.s + spacing.xxs;
+  final visible = <String>[];
+  final additions = <double>[];
+  double used = 0;
+
+  for (final participant in participants) {
+    final addition = visible.isEmpty
+        ? recipientAvatarSize
+        : recipientAvatarSize - recipientAvatarOverlap;
+    if (used + addition > maxContentWidth) {
+      break;
+    }
+    visible.add(participant);
+    additions.add(addition);
+    used += addition;
+  }
+
+  final truncated = visible.length < participants.length;
+  double totalWidth = used;
+
+  if (truncated) {
+    var ellipsisWidth = visible.isEmpty
+        ? recipientAvatarSize
+        : recipientAvatarSize - recipientAvatarOverlap;
+    while (visible.isNotEmpty && totalWidth + ellipsisWidth > maxContentWidth) {
+      totalWidth -= additions.removeLast();
+      visible.removeLast();
+      ellipsisWidth = visible.isEmpty
+          ? recipientAvatarSize
+          : recipientAvatarSize - recipientAvatarOverlap;
+    }
+    if (visible.isEmpty) {
+      totalWidth = math.min(ellipsisWidth, maxContentWidth);
+    } else {
+      totalWidth = math.min(maxContentWidth, totalWidth + ellipsisWidth);
+    }
+  }
+
+  return _CutoutLayoutResult(
+    items: visible,
+    overflowed: truncated,
+    totalWidth: totalWidth,
+  );
+}
+
+class _CutoutLayoutResult<T> {
+  const _CutoutLayoutResult({
+    required this.items,
+    required this.overflowed,
+    required this.totalWidth,
+  });
+
+  final List<T> items;
+  final bool overflowed;
+  final double totalWidth;
+}
+
+class _RecipientOverflowAvatar extends StatelessWidget {
+  const _RecipientOverflowAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
+    return SizedBox(
+      width: recipientAvatarSize,
+      height: recipientAvatarSize,
+      child: Center(
+        child: Text(
+          context.l10n.commonEllipsis,
+          style: context.textTheme.small
+              .copyWith(
+                fontWeight: FontWeight.w700,
+                color: colors.mutedForeground,
+                height: 1,
+              )
+              .apply(leadingDistribution: TextLeadingDistribution.even),
+        ),
+      ),
+    );
+  }
+}
+
+class _RecipientHeaderAvatar extends StatelessWidget {
+  const _RecipientHeaderAvatar({required this.jid, this.avatarPath});
+
+  final String jid;
+  final String? avatarPath;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = context.colorScheme.card;
+    final borderWidth = context.borderSide.width;
+    final spacing = context.spacing;
+    final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
+    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
+    return Container(
+      width: recipientAvatarSize,
+      height: recipientAvatarSize,
+      padding: EdgeInsets.all(borderWidth),
+      decoration: ShapeDecoration(color: borderColor, shape: shape),
+      child: AxiAvatar(
+        jid: jid,
+        size: recipientAvatarSize - (borderWidth * 2),
+        avatarPath: avatarPath,
       ),
     );
   }

@@ -3201,6 +3201,21 @@ class _ChatState extends State<Chat> {
                     )));
               },
             ),
+            BlocListener<SettingsCubit, SettingsState>(
+              listenWhen: (previous, current) =>
+                  previous.endpointConfig != current.endpointConfig,
+              listener: (context, settings) async {
+                final emailService = settings.endpointConfig.enableSmtp
+                    ? context.read<EmailService>()
+                    : null;
+                context
+                    .read<ChatBloc>()
+                    .add(ChatEmailServiceUpdated(emailService));
+                await context
+                    .read<ChatSearchCubit>()
+                    .updateEmailService(emailService);
+              },
+            ),
             BlocListener<ChatSearchCubit, ChatSearchState>(
               listenWhen: (previous, current) =>
                   previous.active != current.active ||

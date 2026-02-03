@@ -92,7 +92,7 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
 
   final String jid;
   final MessageService _messageService;
-  final EmailService? _emailService;
+  EmailService? _emailService;
   final int resultLimit;
 
   Timer? _debounce;
@@ -134,6 +134,18 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     if (state.sort == sort) return;
     emit(state.copyWith(sort: sort));
     await _scheduleSearch(immediate: true);
+  }
+
+  Future<void> updateEmailService(EmailService? emailService) async {
+    if (identical(_emailService, emailService)) {
+      return;
+    }
+    _emailService = emailService;
+    final hasQuery = state.query.trim().isNotEmpty;
+    final hasSubject = state.subjectFilter?.trim().isNotEmpty == true;
+    if (state.active && (hasQuery || hasSubject)) {
+      await _scheduleSearch(immediate: true);
+    }
   }
 
   void updateFilter(MessageTimelineFilter filter) {

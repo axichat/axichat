@@ -295,6 +295,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatTypingStopped>(_onChatTypingStopped);
     on<_TypingParticipantsUpdated>(_onTypingParticipantsUpdated);
     on<ChatSettingsUpdated>(_onChatSettingsUpdated);
+    on<ChatEmailServiceUpdated>(_onChatEmailServiceUpdated);
     on<ChatMessageSent>(
       _onChatMessageSent,
       transformer: blocThrottle(downTime),
@@ -427,7 +428,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   XmppService? _xmppService;
   final ChatsService _chatsService;
   final NotificationService _notificationService;
-  final EmailService? _emailService;
+  EmailService? _emailService;
   final OmemoService? _omemoService;
   final MucService _mucService;
   ChatSettingsSnapshot _settingsSnapshot;
@@ -3200,6 +3201,43 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         chat: chat.copyWith(notificationPreviewSetting: event.setting),
       ),
     );
+  }
+
+  Future<void> _onChatEmailServiceUpdated(
+    ChatEmailServiceUpdated event,
+    Emitter<ChatState> emit,
+  ) async {
+    final emailService = event.emailService;
+    if (identical(_emailService, emailService)) {
+      return;
+    }
+    final emailSub = _emailSyncSubscription;
+    _emailSyncSubscription = null;
+    await emailSub?.cancel();
+    _emailService = emailService;
+    emit(
+      state.copyWith(
+        emailServiceAvailable: emailService != null,
+        emailSelfJid: emailService?.selfSenderJid,
+      ),
+    );
+    if (emailService != null) {
+      _emailSyncSubscription = emailService.syncStateStream.listen(
+        (syncState) => _addIfOpen(_EmailSyncStateChanged(syncState)),
+      );
+      _addIfOpen(_EmailSyncStateChanged(emailService.syncState));
+    } else {
+      _addIfOpen(const _EmailSyncStateChanged(EmailSyncState.ready()));
+    }
+    final chat = state.chat;
+    if (chat == null) {
+      return;
+    }
+    await _subscribeToMessages(
+      limit: _currentMessageLimit,
+      filter: state.viewFilter,
+    );
+    await _subscribeToPinnedMessages(chat);
   }
 
   Future<void> _onChatShareSignatureToggled(

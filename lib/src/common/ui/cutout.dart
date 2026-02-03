@@ -258,6 +258,8 @@ class _RenderCutoutSurface extends RenderBox
       Size(bodySize.width + maxRightHalfWidth, bodySize.height),
     );
     const bodyOffset = Offset.zero;
+    _bodySize = bodySize;
+    _cutoutCount = cutoutCount;
 
     bodyChildParentData(bodyChild).offset = bodyOffset;
 
@@ -348,7 +350,36 @@ class _RenderCutoutSurface extends RenderBox
 
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
-    return defaultHitTestChildren(result, position: position);
+    final bodyChild = firstChild;
+    if (bodyChild == null) return false;
+    final bodySize = _bodySize ?? bodyChild.size;
+    final cutoutCount = _cutoutCount;
+    var cutoutIndex = cutoutCount - 1;
+    RenderBox? child = lastChild;
+    while (child != null) {
+      final parentData = bodyChildParentData(child);
+      final isCutout = child != bodyChild;
+      if (isCutout && cutoutIndex >= 0) {
+        final spec = _cutouts[cutoutIndex];
+        final rect = _cutoutRect(bodySize, spec).shift(parentData.offset);
+        if (rect.contains(position)) {
+          result.add(
+            BoxHitTestEntry(child, position - parentData.offset),
+          );
+          return true;
+        }
+        cutoutIndex -= 1;
+      }
+      final hit = result.addWithPaintOffset(
+        offset: parentData.offset,
+        position: position,
+        hitTest: (result, transformed) =>
+            child!.hitTest(result, position: transformed),
+      );
+      if (hit) return true;
+      child = parentData.previousSibling;
+    }
+    return false;
   }
 
   @override
@@ -357,6 +388,9 @@ class _RenderCutoutSurface extends RenderBox
   _CutoutParentData bodyChildParentData(RenderBox child) {
     return child.parentData! as _CutoutParentData;
   }
+
+  Size? _bodySize;
+  int _cutoutCount = 0;
 }
 
 class _CutoutParentData extends ContainerBoxParentData<RenderBox> {}
