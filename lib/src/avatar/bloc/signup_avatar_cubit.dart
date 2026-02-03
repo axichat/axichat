@@ -95,6 +95,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   late final AvatarCarouselEngine _carouselEngine;
   final List<Avatar> _carouselBuffer = <Avatar>[];
   Timer? _avatarCarouselTimer;
+  int _carouselGeneration = 0;
   Future<bool>? _prefillCarouselFuture;
   _CarouselVisibility _carouselVisibility = _CarouselVisibility.visible;
   ShadColorScheme? _colors;
@@ -102,7 +103,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   @override
   Future<void> close() async {
-    _avatarCarouselTimer?.cancel();
+    _stopAvatarCarousel();
     return super.close();
   }
 
@@ -594,9 +595,13 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     }
     final colors = _colors;
     if (colors == null) return;
+    final generation = _carouselGeneration;
 
     if (state.carouselAvatar == null && _currentCarouselAvatar == null) {
       await _prefillCarousel(targetSize: 1, preferAbstract: true);
+      if (generation != _carouselGeneration) {
+        return;
+      }
       if (state.hasUserSelectedAvatar ||
           state.processing ||
           _avatarCarouselTimer != null) {
@@ -611,6 +616,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       targetSize: _avatarCarouselInitialBuffer,
       preferAbstract: !_nonAbstractReady,
     );
+    if (generation != _carouselGeneration) {
+      return;
+    }
 
     if (!_shouldRunCarousel || _avatarCarouselTimer != null) {
       return;
@@ -621,6 +629,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   void _stopAvatarCarousel() {
     _avatarCarouselTimer?.cancel();
     _avatarCarouselTimer = null;
+    _carouselGeneration++;
   }
 
   Future<void> _resumeAvatarCarouselIfNeeded() async {
@@ -845,15 +854,19 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   void _scheduleCarouselTick() {
     _avatarCarouselTimer?.cancel();
     if (!_shouldRunCarousel) return;
+    final generation = _carouselGeneration;
     _avatarCarouselTimer = Timer(
       _avatarCarouselInterval,
       () async {
-        await _handleCarouselTick();
+        await _handleCarouselTick(generation);
       },
     );
   }
 
-  Future<void> _handleCarouselTick() async {
+  Future<void> _handleCarouselTick(int generation) async {
+    if (generation != _carouselGeneration) {
+      return;
+    }
     if (!_shouldRunCarousel) {
       _stopAvatarCarousel();
       return;
@@ -871,6 +884,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         targetSize: _avatarCarouselSustainBuffer,
         preferAbstract: !_nonAbstractReady,
       );
+    }
+    if (generation != _carouselGeneration) {
+      return;
     }
     if (!_shouldRunCarousel) {
       _stopAvatarCarousel();

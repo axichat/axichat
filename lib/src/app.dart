@@ -54,7 +54,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:logging/logging.dart';
 import 'package:path/path.dart' as p;
@@ -178,8 +177,7 @@ class _AxichatState extends State<Axichat> {
         ),
         child: Builder(
           builder: (context) {
-            final storageManager = context.watch<CalendarStorageManager>();
-            final Storage? calendarStorage = storageManager.authStorage;
+            final storageManager = context.read<CalendarStorageManager>();
             return MultiRepositoryProvider(
               providers: [
                 RepositoryProvider<EmailService>(
@@ -301,105 +299,6 @@ class _AxichatState extends State<Axichat> {
                     },
                   ),
                   BlocProvider(create: (context) => ComposeWindowCubit()),
-                  if (calendarStorage != null)
-                    BlocProvider<CalendarBloc>(
-                      create: (context) {
-                        final reminderController =
-                            context.read<CalendarReminderController>();
-                        final xmppService = context.read<XmppService>();
-                        const bool seedDemoCalendar = kEnableDemoChats;
-                        final storage = calendarStorage;
-
-                        if (seedDemoCalendar) {
-                          return CalendarBloc(
-                            xmppService: xmppService,
-                            emailService: context
-                                    .read<SettingsCubit>()
-                                    .state
-                                    .endpointConfig
-                                    .enableSmtp
-                                ? context.read<EmailService>()
-                                : null,
-                            reminderController: reminderController,
-                            syncManagerBuilder: (bloc) {
-                              final manager = CalendarSyncManager(
-                                readModel: () => bloc.currentModel,
-                                applyModel: (model) async {
-                                  if (bloc.isClosed) return;
-                                  bloc.add(
-                                    CalendarEvent.remoteModelApplied(
-                                      model: model,
-                                    ),
-                                  );
-                                },
-                                sendCalendarMessage: (outbound) async {
-                                  if (bloc.isClosed) {
-                                    return;
-                                  }
-                                  final jid = xmppService.myJid;
-                                  if (jid != null) {
-                                    await xmppService.sendCalendarSyncMessage(
-                                      jid: jid,
-                                      outbound: outbound,
-                                    );
-                                  }
-                                },
-                                sendSnapshotFile:
-                                    xmppService.uploadCalendarSnapshot,
-                              );
-                              return manager;
-                            },
-                            storage: storage,
-                          )
-                            ..add(const CalendarEvent.started())
-                            ..add(
-                              CalendarEvent.remoteModelApplied(
-                                model: DemoCalendar.franklin(anchor: demoNow()),
-                              ),
-                            );
-                        }
-                        return CalendarBloc(
-                          xmppService: xmppService,
-                          emailService: context
-                                  .read<SettingsCubit>()
-                                  .state
-                                  .endpointConfig
-                                  .enableSmtp
-                              ? context.read<EmailService>()
-                              : null,
-                          reminderController: reminderController,
-                          syncManagerBuilder: (bloc) {
-                            final manager = CalendarSyncManager(
-                              readModel: () => bloc.currentModel,
-                              applyModel: (model) async {
-                                if (bloc.isClosed) return;
-                                bloc.add(
-                                  CalendarEvent.remoteModelApplied(
-                                    model: model,
-                                  ),
-                                );
-                              },
-                              sendCalendarMessage: (outbound) async {
-                                if (bloc.isClosed) {
-                                  return;
-                                }
-                                final jid = xmppService.myJid;
-                                if (jid != null) {
-                                  await xmppService.sendCalendarSyncMessage(
-                                    jid: jid,
-                                    outbound: outbound,
-                                  );
-                                }
-                              },
-                              sendSnapshotFile:
-                                  xmppService.uploadCalendarSnapshot,
-                            );
-                            return manager;
-                          },
-                          storage: storage,
-                        )..add(const CalendarEvent.started());
-                      },
-                    ),
                   if (widget._storageManager.guestStorage != null)
                     BlocProvider(
                       create: (context) => GuestCalendarBloc(
@@ -451,20 +350,6 @@ class _AxichatState extends State<Axichat> {
                         }
                       },
                     ),
-                    if (calendarStorage != null)
-                      BlocListener<SettingsCubit, SettingsState>(
-                        listenWhen: (previous, current) =>
-                            previous.endpointConfig != current.endpointConfig,
-                        listener: (context, settings) {
-                          final config = settings.endpointConfig;
-                          final emailService = context.read<EmailService>();
-                          final EmailService? activeEmailService =
-                              config.enableSmtp ? emailService : null;
-                          context
-                              .read<CalendarBloc>()
-                              .updateEmailService(activeEmailService);
-                        },
-                      ),
                     BlocListener<SettingsCubit, SettingsState>(
                       listenWhen: (previous, current) =>
                           previous.shareTokenSignatureEnabled !=
@@ -478,7 +363,130 @@ class _AxichatState extends State<Axichat> {
                       },
                     ),
                   ],
-                  child: const MaterialAxichat(),
+                  child: AnimatedBuilder(
+                    animation: storageManager,
+                    child: const MaterialAxichat(),
+                    builder: (context, child) {
+                      final calendarStorage = storageManager.authStorage;
+                      final content = child ?? const SizedBox.shrink();
+                      if (calendarStorage == null) {
+                        return content;
+                      }
+                      return BlocProvider<CalendarBloc>(
+                        create: (context) {
+                          final reminderController =
+                              context.read<CalendarReminderController>();
+                          final xmppService = context.read<XmppService>();
+                          const bool seedDemoCalendar = kEnableDemoChats;
+                          final storage = calendarStorage;
+
+                          if (seedDemoCalendar) {
+                            return CalendarBloc(
+                              xmppService: xmppService,
+                              emailService: context
+                                      .read<SettingsCubit>()
+                                      .state
+                                      .endpointConfig
+                                      .enableSmtp
+                                  ? context.read<EmailService>()
+                                  : null,
+                              reminderController: reminderController,
+                              syncManagerBuilder: (bloc) {
+                                final manager = CalendarSyncManager(
+                                  readModel: () => bloc.currentModel,
+                                  applyModel: (model) async {
+                                    if (bloc.isClosed) return;
+                                    bloc.add(
+                                      CalendarEvent.remoteModelApplied(
+                                        model: model,
+                                      ),
+                                    );
+                                  },
+                                  sendCalendarMessage: (outbound) async {
+                                    if (bloc.isClosed) {
+                                      return;
+                                    }
+                                    final jid = xmppService.myJid;
+                                    if (jid != null) {
+                                      await xmppService.sendCalendarSyncMessage(
+                                        jid: jid,
+                                        outbound: outbound,
+                                      );
+                                    }
+                                  },
+                                  sendSnapshotFile:
+                                      xmppService.uploadCalendarSnapshot,
+                                );
+                                return manager;
+                              },
+                              storage: storage,
+                            )
+                              ..add(const CalendarEvent.started())
+                              ..add(
+                                CalendarEvent.remoteModelApplied(
+                                  model:
+                                      DemoCalendar.franklin(anchor: demoNow()),
+                                ),
+                              );
+                          }
+                          return CalendarBloc(
+                            xmppService: xmppService,
+                            emailService: context
+                                    .read<SettingsCubit>()
+                                    .state
+                                    .endpointConfig
+                                    .enableSmtp
+                                ? context.read<EmailService>()
+                                : null,
+                            reminderController: reminderController,
+                            syncManagerBuilder: (bloc) {
+                              final manager = CalendarSyncManager(
+                                readModel: () => bloc.currentModel,
+                                applyModel: (model) async {
+                                  if (bloc.isClosed) return;
+                                  bloc.add(
+                                    CalendarEvent.remoteModelApplied(
+                                      model: model,
+                                    ),
+                                  );
+                                },
+                                sendCalendarMessage: (outbound) async {
+                                  if (bloc.isClosed) {
+                                    return;
+                                  }
+                                  final jid = xmppService.myJid;
+                                  if (jid != null) {
+                                    await xmppService.sendCalendarSyncMessage(
+                                      jid: jid,
+                                      outbound: outbound,
+                                    );
+                                  }
+                                },
+                                sendSnapshotFile:
+                                    xmppService.uploadCalendarSnapshot,
+                              );
+                              return manager;
+                            },
+                            storage: storage,
+                          )..add(const CalendarEvent.started());
+                        },
+                        child: BlocListener<SettingsCubit, SettingsState>(
+                          listenWhen: (previous, current) =>
+                              previous.endpointConfig != current.endpointConfig,
+                          listener: (context, settings) {
+                            final config = settings.endpointConfig;
+                            final emailService = context.read<EmailService>();
+                            final EmailService? activeEmailService =
+                                config.enableSmtp ? emailService : null;
+                            context
+                                .read<CalendarBloc>()
+                                .updateEmailService(activeEmailService);
+                          },
+                          child: content,
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             );

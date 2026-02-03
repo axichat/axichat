@@ -482,7 +482,9 @@ class _SignupFormState extends State<SignupForm>
     return BlocConsumer<AuthenticationCubit, AuthenticationState>(
       // listenWhen: (previous, current) => current is AuthenticationSignupFailure && previous is!AuthenticationSignupFailure,
       listener: (context, state) {
-        widget.onLoadingChanged?.call(_isLoadingForState(state));
+        if (widget.visible) {
+          widget.onLoadingChanged?.call(_isLoadingForState(state));
+        }
         if (_lastCaptchaServer != state.server) {
           _lastCaptchaServer = state.server;
           _reloadCaptcha();

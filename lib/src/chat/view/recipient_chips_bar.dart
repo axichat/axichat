@@ -187,6 +187,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     _prunePendingRemoval();
     _refreshAvatarPaths();
     _refreshSuggestionPools();
+    if (_focusNode.hasFocus) {
+      _controller.text = _controller.text;
+    }
   }
 
   @override
@@ -348,12 +351,13 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                                 ),
                               ),
                               if (recipients.isNotEmpty) ...[
-                                SizedBox(width: spacing.xs),
+                                SizedBox(width: spacing.s),
                                 Flexible(
                                   fit: FlexFit.loose,
                                   child: _RecipientsAvatarStrip(
                                     recipients: recipients,
                                     avatarPathsByJid: avatarPathsByJid,
+                                    backgroundColor: barBackground,
                                   ),
                                 ),
                               ],
@@ -678,6 +682,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     setState(() {
       _barCollapsed = next;
     });
+    if (next) {
+      _focusNode.unfocus();
+    }
     _animateCollapse(next);
   }
 
@@ -1599,10 +1606,12 @@ class _RecipientsAvatarStrip extends StatelessWidget {
   const _RecipientsAvatarStrip({
     required this.recipients,
     required this.avatarPathsByJid,
+    required this.backgroundColor,
   });
 
   final List<ComposerRecipient> recipients;
   final Map<String, String> avatarPathsByJid;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1623,6 +1632,7 @@ class _RecipientsAvatarStrip extends StatelessWidget {
     return _CaterpillarAvatarStrip(
       participants: participants,
       avatarPathsByJid: avatarPathsByJid,
+      backgroundColor: backgroundColor,
     );
   }
 }
@@ -1631,19 +1641,21 @@ class _CaterpillarAvatarStrip extends StatelessWidget {
   const _CaterpillarAvatarStrip({
     required this.participants,
     required this.avatarPathsByJid,
+    required this.backgroundColor,
   });
 
   final List<String> participants;
   final Map<String, String> avatarPathsByJid;
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final spacing = context.spacing;
-        final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
-        final recipientAvatarOverlap = spacing.s + spacing.xxs;
-        final recipientOverflowGap = spacing.xs + spacing.xxs;
+        final recipientAvatarSize = spacing.m + spacing.xxs;
+        final recipientAvatarOverlap = spacing.xs;
+        final recipientOverflowGap = spacing.xs;
         final maxWidth = constraints.hasBoundedWidth &&
                 constraints.maxWidth.isFinite &&
                 constraints.maxWidth > 0
@@ -1665,6 +1677,7 @@ class _CaterpillarAvatarStrip extends StatelessWidget {
               child: _RecipientHeaderAvatar(
                 jid: visible[i],
                 avatarPath: avatarPathsByJid[visible[i].toLowerCase()],
+                backgroundColor: backgroundColor,
               ),
             ),
           );
@@ -1676,7 +1689,12 @@ class _CaterpillarAvatarStrip extends StatelessWidget {
                       (recipientAvatarSize - recipientAvatarOverlap) +
                   recipientOverflowGap;
           children.add(
-            Positioned(left: offset, child: const _RecipientOverflowAvatar()),
+            Positioned(
+              left: offset,
+              child: _RecipientOverflowAvatar(
+                backgroundColor: backgroundColor,
+              ),
+            ),
           );
         }
         final baseWidth = layout.totalWidth;
@@ -1706,8 +1724,8 @@ _CutoutLayoutResult<String> _layoutRecipientStrip({
     );
   }
   final spacing = context.spacing;
-  final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
-  final recipientAvatarOverlap = spacing.s + spacing.xxs;
+  final recipientAvatarSize = spacing.m + spacing.xxs;
+  final recipientAvatarOverlap = spacing.xs;
   final visible = <String>[];
   final additions = <double>[];
   double used = 0;
@@ -1765,13 +1783,14 @@ class _CutoutLayoutResult<T> {
 }
 
 class _RecipientOverflowAvatar extends StatelessWidget {
-  const _RecipientOverflowAvatar();
+  const _RecipientOverflowAvatar({required this.backgroundColor});
+
+  final Color backgroundColor;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     final spacing = context.spacing;
-    final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
+    final recipientAvatarSize = spacing.m + spacing.xxs;
     return SizedBox(
       width: recipientAvatarSize,
       height: recipientAvatarSize,
@@ -1781,7 +1800,7 @@ class _RecipientOverflowAvatar extends StatelessWidget {
           style: context.textTheme.small
               .copyWith(
                 fontWeight: FontWeight.w700,
-                color: colors.mutedForeground,
+                color: context.colorScheme.mutedForeground,
                 height: 1,
               )
               .apply(leadingDistribution: TextLeadingDistribution.even),
@@ -1792,23 +1811,27 @@ class _RecipientOverflowAvatar extends StatelessWidget {
 }
 
 class _RecipientHeaderAvatar extends StatelessWidget {
-  const _RecipientHeaderAvatar({required this.jid, this.avatarPath});
+  const _RecipientHeaderAvatar({
+    required this.jid,
+    required this.backgroundColor,
+    this.avatarPath,
+  });
 
   final String jid;
+  final Color backgroundColor;
   final String? avatarPath;
 
   @override
   Widget build(BuildContext context) {
-    final borderColor = context.colorScheme.card;
     final borderWidth = context.borderSide.width;
     final spacing = context.spacing;
-    final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
+    final recipientAvatarSize = spacing.m + spacing.xxs;
     final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     return Container(
       width: recipientAvatarSize,
       height: recipientAvatarSize,
       padding: EdgeInsets.all(borderWidth),
-      decoration: ShapeDecoration(color: borderColor, shape: shape),
+      decoration: ShapeDecoration(color: backgroundColor, shape: shape),
       child: AxiAvatar(
         jid: jid,
         size: recipientAvatarSize - (borderWidth * 2),

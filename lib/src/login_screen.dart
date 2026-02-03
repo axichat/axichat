@@ -51,14 +51,20 @@ class _LoginScreenState extends State<LoginScreen>
   AuthenticationState? _completionHandledState;
   int _authTimeoutGeneration = 0;
   late final Future<void> _bootstrapTask;
+  late final bool _autoLoginExpected;
+  bool _bootstrapping = true;
 
   @override
   void initState() {
     super.initState();
     final bootstrap = context.read<AuthBootstrap>();
+    _autoLoginExpected = bootstrap.hasStoredLoginCredentials;
     _selectedFlow = bootstrap.hasStoredLoginCredentials
         ? _AuthFlow.login
         : _AuthFlow.signup;
+    if (_autoLoginExpected) {
+      _activeFlow = _AuthFlow.login;
+    }
     final animationDuration = context.read<SettingsCubit>().animationDuration;
     _operationProgressController = OperationProgressController(
       vsync: this,
@@ -86,6 +92,16 @@ class _LoginScreenState extends State<LoginScreen>
       if (!mounted) return;
     }
     await _handleAuthState(context.read<AuthenticationCubit>().state);
+    if (!mounted) return;
+    if (_bootstrapping) {
+      setState(() {
+        _bootstrapping = false;
+      });
+    }
+    final authState = context.read<AuthenticationCubit>().state;
+    if (authState is AuthenticationNone) {
+      _resetAuthUiState();
+    }
   }
 
   Duration _scaledDuration(Duration base, double factor) {
@@ -97,6 +113,11 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (_operationLabel.isEmpty &&
+        _autoLoginExpected &&
+        _activeFlow == _AuthFlow.login) {
+      _operationLabel = context.l10n.authLoggingIn;
+    }
   }
 
   void _handleSubmissionRequested(_AuthFlow flow, {required String label}) {
@@ -205,6 +226,9 @@ class _LoginScreenState extends State<LoginScreen>
     }
     if (state is AuthenticationNone) {
       _completionHandledState = null;
+      if (_bootstrapping && _autoLoginExpected) {
+        return;
+      }
       _resetAuthUiState();
       return;
     }
