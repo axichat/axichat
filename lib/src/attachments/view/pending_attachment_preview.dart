@@ -483,7 +483,6 @@ class _PendingAttachmentPreviewContent extends StatelessWidget {
     final textContent = data.textContent ?? '';
     return AxiModalSurface(
       backgroundColor: colors.background,
-      borderColor: colors.border,
       padding: EdgeInsets.all(spacing.m),
       child: Scrollbar(
         child: SingleChildScrollView(

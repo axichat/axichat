@@ -38,8 +38,21 @@ class CalendarLinkedTaskRegistry {
   final String _storageKey;
   final StreamController<CalendarLinkedTaskUpdate> _updatesController =
       StreamController<CalendarLinkedTaskUpdate>.broadcast();
+  final Set<String> _activeStorageIds = <String>{};
 
   Stream<CalendarLinkedTaskUpdate> get updates => _updatesController.stream;
+
+  void registerActiveStorage(String storageId) {
+    _activeStorageIds.add(storageId.trim());
+  }
+
+  void unregisterActiveStorage(String storageId) {
+    _activeStorageIds.remove(storageId.trim());
+  }
+
+  bool isStorageActive(String storageId) {
+    return _activeStorageIds.contains(storageId.trim());
+  }
 
   void notifyLinkedTaskUpdate({
     required String sourceStorageId,
@@ -48,12 +61,9 @@ class CalendarLinkedTaskRegistry {
     required CalendarLinkedTaskOperation operation,
   }) {
     final String sourceId = sourceStorageId.trim();
-    if (sourceId.isEmpty) {
-      return;
-    }
     final Set<String> targets = targetStorageIds
         .map((storageId) => storageId.trim())
-        .where((storageId) => storageId.isNotEmpty && storageId != sourceId)
+        .where((storageId) => storageId != sourceId)
         .toSet();
     if (targets.isEmpty) {
       return;
@@ -85,8 +95,7 @@ class CalendarLinkedTaskRegistry {
     if (trimmed.isEmpty) {
       return;
     }
-    final Set<String> normalizedIds =
-        storageIds.map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
+    final Set<String> normalizedIds = storageIds.map((id) => id.trim()).toSet();
     if (normalizedIds.isEmpty) {
       return;
     }

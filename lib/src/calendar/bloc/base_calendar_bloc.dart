@@ -58,6 +58,7 @@ abstract class BaseCalendarBloc
         _storage = storage,
         _nlParserService = parserService ?? NlScheduleParserService(),
         super(CalendarState.initial()) {
+    _linkedTaskRegistry.registerActiveStorage(id);
     _linkedTaskSubscription =
         _linkedTaskRegistry.updates.listen(_handleLinkedTaskUpdate);
     _assertStorageRegistered();
@@ -256,7 +257,10 @@ abstract class BaseCalendarBloc
       task: task,
       operation: registryOperation,
     );
-    for (final storageId in targets) {
+    final List<String> inactiveTargets = targets
+        .where((storageId) => !_linkedTaskRegistry.isStorageActive(storageId))
+        .toList(growable: false);
+    for (final storageId in inactiveTargets) {
       await _applyLinkedTaskToStorage(storageId, task, operation);
     }
   }
@@ -3203,6 +3207,7 @@ abstract class BaseCalendarBloc
   Future<void> close() async {
     await _pendingReminderSync;
     await _linkedTaskSubscription.cancel();
+    _linkedTaskRegistry.unregisterActiveStorage(id);
     return super.close();
   }
 

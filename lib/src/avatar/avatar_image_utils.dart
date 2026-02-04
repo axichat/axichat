@@ -99,18 +99,17 @@ ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
   );
 
   ProcessedAvatar encode(img.Image candidate) {
-    if (candidate.numChannels == 4) {
+    final hasAlpha = candidate.numChannels == 4;
+    if (hasAlpha) {
       final pngBytes = Uint8List.fromList(
         img.encodePng(candidate, level: pngCompressionLevel),
       );
-      if (pngBytes.length <= request.maxBytes) {
-        return ProcessedAvatar(
-          bytes: pngBytes,
-          mimeType: 'image/png',
-          width: candidate.width,
-          height: candidate.height,
-        );
-      }
+      return ProcessedAvatar(
+        bytes: pngBytes,
+        mimeType: 'image/png',
+        width: candidate.width,
+        height: candidate.height,
+      );
     }
 
     var quality = jpegStartQuality;
