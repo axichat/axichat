@@ -160,6 +160,7 @@ class ChatCutoutComposer extends StatelessWidget {
               ShadSeparator.horizontal(
                 thickness: context.borderSide.width,
                 color: context.borderSide.color,
+                margin: EdgeInsets.zero,
               ),
               SizedBox(height: scaled(spacing.s)),
             ],

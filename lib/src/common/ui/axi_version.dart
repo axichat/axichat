@@ -56,8 +56,10 @@ class AxiVersion extends StatelessWidget {
           cursor: SystemMouseCursors.click,
           hoverStrategies: mobileHoverStrategies,
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Flexible(
+                fit: FlexFit.loose,
                 child: Text(
                   l10n.axiVersionLabel(snapshot.requireData.version),
                   style: context.textTheme.h4,

@@ -53,6 +53,9 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void initState() {
     super.initState();
+    if (kDebugMode) {
+      _authUiLog.fine('LoginScreen init ${identityHashCode(this)}');
+    }
     final bootstrap = context.read<AuthBootstrap>();
     _selectedFlow = bootstrap.hasStoredLoginCredentials
         ? _AuthFlow.login
@@ -98,11 +101,20 @@ class _LoginScreenState extends State<LoginScreen>
     required Duration rampDuration,
   }) {
     if (_authProgressController.snapshot.isVisible) {
+      if (kDebugMode) {
+        _authUiLog.fine(
+          'Auth progress continue '
+          '(phase=${_authProgressController.snapshot.phase})',
+        );
+      }
       _authProgressController.continueWithLabel(
         label: label,
         rampDuration: rampDuration,
       );
       return;
+    }
+    if (kDebugMode) {
+      _authUiLog.fine('Auth progress start');
     }
     _authProgressController.start(
       label: label,
@@ -184,6 +196,9 @@ class _LoginScreenState extends State<LoginScreen>
         state is AuthenticationSignupFailure) {
       _completionHandled = false;
       _clearAuthTimeout();
+      if (kDebugMode) {
+        _authUiLog.fine('Auth progress fail');
+      }
       await _authProgressController.fail(
         duration: context.read<SettingsCubit>().animationDuration,
       );
@@ -201,6 +216,9 @@ class _LoginScreenState extends State<LoginScreen>
       _completionHandled = true;
       _clearAuthTimeout();
       final preloadHome = _preloadHomeScreenCache();
+      if (kDebugMode) {
+        _authUiLog.fine('Auth progress complete');
+      }
       await _authProgressController.complete(
         duration: context.read<SettingsCubit>().authCompletionDuration,
       );
@@ -209,13 +227,23 @@ class _LoginScreenState extends State<LoginScreen>
     }
     if (state is AuthenticationNone) {
       _completionHandled = false;
+      if (_authTimeoutFlow != null ||
+          _authProgressController.snapshot.isVisible) {
+        return;
+      }
       _clearAuthTimeout();
+      if (kDebugMode) {
+        _authUiLog.fine('Auth progress reset');
+      }
       _authProgressController.reset();
     }
   }
 
   @override
   void dispose() {
+    if (kDebugMode) {
+      _authUiLog.fine('LoginScreen dispose ${identityHashCode(this)}');
+    }
     _authProgressController.dispose();
     _clearAuthTimeout();
     super.dispose();
