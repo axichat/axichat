@@ -611,6 +611,8 @@ class _PathActionsState extends State<_PathActions> {
             controller: _menuController,
             closeOnTapOutside: true,
             padding: EdgeInsets.zero,
+            decoration: ShadDecoration.none,
+            shadows: const <BoxShadow>[],
             popover: (context) {
               return AxiMenu(
                 actions: [

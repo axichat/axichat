@@ -335,8 +335,20 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return;
     }
 
+    final bool canAddToPersonalNow =
+        storageManager.isAuthStorageReady && _canReadBloc<CalendarBloc>();
+    final bool canAddToChatNow =
+        widget.allowChatCopy && _canReadBloc<ChatCalendarBloc>();
+    if (!canAddToPersonalNow && !canAddToChatNow) {
+      FeedbackSystem.showInfo(
+        context,
+        l10n.chatCalendarTaskCopyUnavailableMessage,
+      );
+      return;
+    }
+
     bool didCopy = false;
-    if (decision.addToPersonal && canAddToPersonal) {
+    if (decision.addToPersonal && canAddToPersonalNow) {
       final CalendarTask personalTask = task.copyForCalendar(style);
       final bool copied = await _copyTaskToCalendar(
         task: personalTask,
@@ -348,7 +360,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       }
       didCopy = didCopy || copied;
     }
-    if (decision.addToChat && canAddToChat) {
+    if (decision.addToChat && canAddToChatNow) {
       final CalendarTask chatTask = task.copyForCalendar(style);
       final bool copied = await _copyTaskToCalendar(
         task: chatTask,
@@ -363,10 +375,10 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
 
     if (style.isLinked) {
       final Set<String> linkedStorageIds = <String>{};
-      if (decision.addToPersonal && canAddToPersonal) {
+      if (decision.addToPersonal && canAddToPersonalNow) {
         linkedStorageIds.add(context.read<CalendarBloc>().id);
       }
-      if (decision.addToChat && canAddToChat) {
+      if (decision.addToChat && canAddToChatNow) {
         linkedStorageIds.add(context.read<ChatCalendarBloc>().id);
       }
       if (linkedStorageIds.length > 1) {

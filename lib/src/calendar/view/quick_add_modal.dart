@@ -568,7 +568,11 @@ class _QuickAddModalState extends State<QuickAddModal>
     if (resolveBloc == null) {
       return null;
     }
-    return resolveBloc();
+    try {
+      return resolveBloc();
+    } on FlutterError {
+      return null;
+    }
   }
 
   Future<void> _handleCancelPressed() async {
@@ -1582,7 +1586,15 @@ Future<void> showQuickAddModal({
   BaseCalendarBloc? Function()? locateCalendarBloc,
 }) {
   BaseCalendarBloc? resolveBloc() {
-    return locateCalendarBloc?.call();
+    final resolveBloc = locateCalendarBloc;
+    if (resolveBloc == null) {
+      return null;
+    }
+    try {
+      return resolveBloc();
+    } on FlutterError {
+      return null;
+    }
   }
 
   final commandSurface = resolveCommandSurface(context);

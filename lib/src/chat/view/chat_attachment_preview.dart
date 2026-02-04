@@ -1630,6 +1630,8 @@ class _FileAttachmentState extends State<_FileAttachment> {
                       controller: _actionsController,
                       closeOnTapOutside: true,
                       padding: EdgeInsets.zero,
+                      decoration: ShadDecoration.none,
+                      shadows: const <BoxShadow>[],
                       popover: (context) {
                         return AxiMenu(
                           actions: [

@@ -77,6 +77,8 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
           controller: popoverController,
           closeOnTapOutside: true,
           padding: EdgeInsets.zero,
+          decoration: ShadDecoration.none,
+          shadows: const <BoxShadow>[],
           popover: (context) {
             return AxiMenu(
               actions: [

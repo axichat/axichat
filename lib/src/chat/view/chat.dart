@@ -9611,14 +9611,7 @@ class _ChatCalendarScope extends StatelessWidget {
         reminderController: reminderController,
         availabilityCoordinator: availabilityCoordinator,
       )..add(const CalendarEvent.started()),
-      child: Builder(
-        builder: (context) {
-          return BlocProvider<CalendarBloc>.value(
-            value: context.watch<ChatCalendarBloc>(),
-            child: child,
-          );
-        },
-      ),
+      child: child,
     );
   }
 }
@@ -9638,10 +9631,13 @@ class _ChatCalendarPanel extends StatelessWidget {
     if (!calendarAvailable || resolvedChat == null) {
       return const SizedBox.shrink();
     }
-    return ChatCalendarWidget(
-      chat: resolvedChat,
-      showHeader: true,
-      showBackButton: false,
+    return BlocProvider<CalendarBloc>.value(
+      value: context.watch<ChatCalendarBloc>(),
+      child: ChatCalendarWidget(
+        chat: resolvedChat,
+        showHeader: true,
+        showBackButton: false,
+      ),
     );
   }
 }
