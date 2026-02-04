@@ -48,33 +48,6 @@ class DeadlinePickerField extends StatefulWidget {
 }
 
 class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
-  static const _hourValues = [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
-    14,
-    15,
-    16,
-    17,
-    18,
-    19,
-    20,
-    21,
-    22,
-    23,
-  ];
-  static const _minuteValues = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
   static const double _timePickerDesiredHeight = 660.0;
   static const double _datePickerExpandedHeight = 428.0;
 
@@ -82,6 +55,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   final GlobalKey _dropdownKey = GlobalKey();
   final GlobalKey _triggerKey = GlobalKey();
 
+  final OverlayPortalController _portalController = OverlayPortalController();
   bool _isOpen = false;
   bool _isBottomSheetOpen = false;
   Object? _tapRegionGroupId;
@@ -186,6 +160,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   @override
   void dispose() {
+    if (_portalController.isShowing) {
+      _portalController.hide();
+    }
     _isOpen = false;
     super.dispose();
   }
@@ -222,6 +199,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     setState(() {
       _isOpen = true;
     });
+    _portalController.show();
   }
 
   bool get _hasMouseInput =>
@@ -362,10 +340,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 showTimeSelectors: widget.showTimeSelectors,
                 selectedHour: selectedTime.hour,
                 selectedMinute: _roundToFive(selectedTime.minute),
-                hourValues: _hourValues,
-                minuteValues: _minuteValues,
-                onHourSelected: handleHourSelected,
-                onMinuteSelected: handleMinuteSelected,
+                onTimeSelected: (time) {
+                  handleHourSelected(time.hour);
+                  handleMinuteSelected(time.minute);
+                },
               );
               final actions = _DeadlinePickerActions(
                 showTimeSelectors: widget.showTimeSelectors,
@@ -423,6 +401,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   void _hideOverlay() {
     if (!_isOpen) return;
+    _portalController.hide();
     setState(() {
       _isOpen = false;
       _initialValue = null;
@@ -700,15 +679,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       ),
     );
 
-    final geometry = _computeGeometry(context);
-    return ShadPortal(
-      visible: _isOpen,
-      anchor: ShadAnchor(
-        childAlignment: Alignment.topLeft,
-        overlayAlignment: Alignment.topLeft,
-        offset: geometry.offset,
-      ),
-      portalBuilder: (overlayContext) {
+    return OverlayPortal(
+      controller: _portalController,
+      overlayLocation: OverlayChildLocation.rootOverlay,
+      overlayChildBuilder: (overlayContext) {
         if (!_isOpen) return const SizedBox.shrink();
         final previousMonth = DateTime(
           _visibleMonth.year,
@@ -742,10 +716,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
           showTimeSelectors: widget.showTimeSelectors,
           selectedHour: selectedTime.hour,
           selectedMinute: _roundToFive(selectedTime.minute),
-          hourValues: _hourValues,
-          minuteValues: _minuteValues,
-          onHourSelected: _onHourSelected,
-          onMinuteSelected: _onMinuteSelected,
+          onTimeSelected: (time) {
+            _onHourSelected(time.hour);
+            _onMinuteSelected(time.minute);
+          },
         );
         final actions = _DeadlinePickerActions(
           showTimeSelectors: widget.showTimeSelectors,
@@ -762,17 +736,22 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 onTap: _hideOverlay,
               ),
             ),
-            InBoundsFadeScale(
-              child: _DeadlineAnchoredDropdown(
-                overlayWidth: widget.overlayWidth,
-                maxHeight: geometry.maxHeight,
-                tapRegionGroupId: _tapRegionGroupId,
-                dropdownKey: _dropdownKey,
-                showTimeSelectors: widget.showTimeSelectors,
-                monthHeader: header,
-                calendarGrid: calendarGrid,
-                timeSelectors: timeSelectors,
-                actions: actions,
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: _computeGeometry(overlayContext).offset,
+              child: InBoundsFadeScale(
+                child: _DeadlineAnchoredDropdown(
+                  overlayWidth: widget.overlayWidth,
+                  maxHeight: _computeGeometry(overlayContext).maxHeight,
+                  tapRegionGroupId: _tapRegionGroupId,
+                  dropdownKey: _dropdownKey,
+                  showTimeSelectors: widget.showTimeSelectors,
+                  monthHeader: header,
+                  calendarGrid: calendarGrid,
+                  timeSelectors: timeSelectors,
+                  actions: actions,
+                ),
               ),
             ),
           ],
@@ -804,17 +783,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final rounded = (minute / 5).round() * 5;
     return rounded == 60 ? 0 : rounded;
   }
-}
-
-List<String> _weekdayLabels(BuildContext context) {
-  final localizations = MaterialLocalizations.of(context);
-  final List<String> weekdays = localizations.narrowWeekdays;
-  final int startIndex = localizations.firstDayOfWeekIndex;
-  return List<String>.generate(
-    weekdays.length,
-    (index) => weekdays[(index + startIndex) % weekdays.length],
-    growable: false,
-  );
 }
 
 class _OverlayGeometry {
@@ -1217,84 +1185,75 @@ class _DeadlineCalendarGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final year = visibleMonth.year;
-    final month = visibleMonth.month;
-    final firstOfMonth = DateTime(year, month, 1);
-    final firstWeekday = firstOfMonth.weekday % 7;
-    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final localizations = MaterialLocalizations.of(context);
+    final int weekStartsOn = localizations.firstDayOfWeekIndex == 0
+        ? DateTime.sunday
+        : localizations.firstDayOfWeekIndex;
+    final DateTime? normalizedSelected = selectedDate == null
+        ? null
+        : DateTime(
+            selectedDate!.year,
+            selectedDate!.month,
+            selectedDate!.day,
+          );
 
-    final days = <DateTime?>[];
-    for (var i = 0; i < firstWeekday; i++) {
-      days.add(null);
-    }
-    for (var day = 1; day <= daysInMonth; day++) {
-      days.add(DateTime(year, month, day));
-    }
-    while (days.length % 7 != 0) {
-      days.add(null);
-    }
-
-    final double cellSize = context.sizing.buttonHeightRegular;
-    final double spacing = context.spacing.xs;
     return Padding(
       padding: calendarPaddingLg,
-      child: Column(
-        children: [
-          Row(
-            children: _weekdayLabels(context)
-                .map(
-                  (label) => Expanded(
-                    child: Center(
-                      child: Text(
-                        label,
-                        style: context.textTheme.labelSm.strong.copyWith(
-                          color: calendarTimeLabelColor,
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
+      child: ShadCalendar(
+        selected: normalizedSelected,
+        onChanged: (date) {
+          if (date == null || !isDateWithinBounds(date)) {
+            return;
+          }
+          onDaySelected(date);
+        },
+        showOutsideDays: true,
+        fixedWeeks: true,
+        initialMonth: visibleMonth,
+        weekStartsOn: weekStartsOn,
+        formatWeekday: (date) {
+          final labels = localizations.narrowWeekdays;
+          return labels[date.weekday % DateTime.daysPerWeek];
+        },
+        selectableDayPredicate: isDateWithinBounds,
+        hideNavigation: true,
+        headerHeight: 0,
+        headerPadding: EdgeInsets.zero,
+        captionLayoutGap: 0,
+        weekdaysPadding: const EdgeInsets.symmetric(
+          horizontal: calendarGutterMd,
+          vertical: calendarGutterSm,
+        ),
+        weekdaysTextStyle: context.textTheme.labelSm.strong.copyWith(
+          color: calendarTimeLabelColor,
+        ),
+        gridMainAxisSpacing: context.spacing.xs,
+        gridCrossAxisSpacing: context.spacing.xs,
+        dayButtonPadding: const EdgeInsets.symmetric(vertical: calendarInsetLg),
+        dayButtonTextStyle: context.textTheme.small.copyWith(
+          color: calendarTitleColor,
+        ),
+        dayButtonOutsideMonthTextStyle: context.textTheme.small.copyWith(
+          color: calendarSubtitleColor,
+        ),
+        selectedDayButtonTextStyle: context.textTheme.small.copyWith(
+          color: context.colorScheme.primaryForeground,
+        ),
+        dayButtonVariant: ShadButtonVariant.ghost,
+        dayButtonOutsideMonthVariant: ShadButtonVariant.ghost,
+        todayButtonVariant: ShadButtonVariant.outline,
+        selectedDayButtonVariant: ShadButtonVariant.primary,
+        dayButtonDecoration: ShadDecoration(
+          color: calendarContainerColor,
+          border: ShadBorder.all(
+            color: calendarBorderColor,
+            width: context.borderSide.width,
+            radius: BorderRadius.circular(context.radii.squircle),
           ),
-          const SizedBox(height: calendarGutterSm),
-          Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: days.map((date) {
-              if (date == null) {
-                return SizedBox(
-                  width: cellSize,
-                  height: cellSize,
-                );
-              }
-
-              final isSelected =
-                  selectedDate != null && _isSameDay(date, selectedDate!);
-              final isDisabled = !isDateWithinBounds(date);
-
-              return SizedBox(
-                width: cellSize,
-                height: cellSize,
-                child: AxiButton(
-                  variant: isSelected
-                      ? AxiButtonVariant.primary
-                      : AxiButtonVariant.outline,
-                  size: AxiButtonSize.sm,
-                  widthBehavior: AxiButtonWidth.expand,
-                  selected: isSelected,
-                  onPressed: isDisabled ? null : () => onDaySelected(date),
-                  child: Text('${date.day}'),
-                ),
-              );
-            }).toList(),
-          ),
-        ],
+        ),
+        dayButtonOutsideMonthOpacity: 1,
       ),
     );
-  }
-
-  bool _isSameDay(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }
 
@@ -1303,19 +1262,13 @@ class _DeadlineTimeSelectors extends StatelessWidget {
     required this.showTimeSelectors,
     required this.selectedHour,
     required this.selectedMinute,
-    required this.hourValues,
-    required this.minuteValues,
-    required this.onHourSelected,
-    required this.onMinuteSelected,
+    required this.onTimeSelected,
   });
 
   final bool showTimeSelectors;
   final int selectedHour;
   final int selectedMinute;
-  final List<int> hourValues;
-  final List<int> minuteValues;
-  final ValueChanged<int> onHourSelected;
-  final ValueChanged<int> onMinuteSelected;
+  final ValueChanged<ShadTimeOfDay> onTimeSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1347,101 +1300,44 @@ class _DeadlineTimeSelectors extends StatelessWidget {
             ),
           ),
           const SizedBox(height: calendarFormGap),
-          Row(
-            children: [
-              Expanded(
-                child: _DeadlineTimeDropdown(
-                  label: context.l10n.calendarHour,
-                  values: hourValues,
-                  selectedValue: selectedHour,
-                  onSelected: onHourSelected,
-                  formatter: (value) => value.toString().padLeft(2, '0'),
-                ),
+          ShadTimePicker(
+            initialValue: ShadTimeOfDay(
+              hour: selectedHour,
+              minute: selectedMinute,
+              second: 0,
+            ),
+            showSeconds: false,
+            showMinutes: true,
+            showHours: true,
+            alignment: WrapAlignment.start,
+            runAlignment: WrapAlignment.start,
+            crossAxisAlignment: WrapCrossAlignment.start,
+            gap: context.spacing.xs,
+            spacing: context.spacing.xs,
+            runSpacing: context.spacing.xs,
+            hourLabel: Text(context.l10n.calendarHour),
+            minuteLabel: Text(context.l10n.calendarMinute),
+            hourPlaceholder: const Text('00'),
+            minutePlaceholder: const Text('00'),
+            labelStyle: context.textTheme.labelSm.strong.copyWith(
+              color: calendarSubtitleColor,
+              letterSpacing: 0.3,
+            ),
+            style: context.textTheme.label,
+            fieldDecoration: ShadDecoration(
+              color: calendarContainerColor,
+              border: ShadBorder.all(
+                color: calendarBorderColor,
+                width: context.borderSide.width,
+                radius: BorderRadius.circular(context.radii.squircle),
               ),
-              const SizedBox(width: calendarGutterSm),
-              Expanded(
-                child: _DeadlineTimeDropdown(
-                  label: context.l10n.calendarMinute,
-                  values: minuteValues,
-                  selectedValue: selectedMinute,
-                  onSelected: onMinuteSelected,
-                  formatter: (value) => value.toString().padLeft(2, '0'),
-                ),
-              ),
-            ],
+            ),
+            onChanged: (value) {
+              onTimeSelected(value);
+            },
           ),
         ],
       ),
-    );
-  }
-}
-
-class _DeadlineTimeDropdown extends StatelessWidget {
-  const _DeadlineTimeDropdown({
-    required this.label,
-    required this.values,
-    required this.selectedValue,
-    required this.onSelected,
-    required this.formatter,
-  });
-
-  final String label;
-  final List<int> values;
-  final int selectedValue;
-  final ValueChanged<int> onSelected;
-  final String Function(int value) formatter;
-
-  @override
-  Widget build(BuildContext context) {
-    final TextStyle labelStyle = context.textTheme.labelSm.strong.copyWith(
-      color: calendarSubtitleColor,
-      letterSpacing: 0.3,
-    );
-    final ShadDecoration dropdownDecoration = ShadDecoration(
-      color: calendarContainerColor,
-      border: ShadBorder.all(
-        color: calendarBorderColor,
-        radius: BorderRadius.circular(calendarBorderRadius),
-        width: context.borderSide.width,
-      ),
-    );
-    const EdgeInsets dropdownPadding = EdgeInsets.symmetric(
-      horizontal: calendarGutterMd,
-      vertical: calendarGutterSm,
-    );
-    final Icon dropdownIcon = Icon(
-      Icons.keyboard_arrow_down_rounded,
-      size: calendarGutterMd,
-      color: calendarSubtitleColor,
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: labelStyle),
-        const SizedBox(height: calendarInsetLg),
-        AxiSelect<int>(
-          initialValue: selectedValue,
-          onChanged: (selected) {
-            if (selected == null) {
-              return;
-            }
-            onSelected(selected);
-          },
-          options: values
-              .map(
-                (value) => ShadOption<int>(
-                  value: value,
-                  child: Text(formatter(value)),
-                ),
-              )
-              .toList(growable: false),
-          selectedOptionBuilder: (context, value) => Text(formatter(value)),
-          decoration: dropdownDecoration,
-          padding: dropdownPadding,
-          trailing: dropdownIcon,
-        ),
-      ],
     );
   }
 }
