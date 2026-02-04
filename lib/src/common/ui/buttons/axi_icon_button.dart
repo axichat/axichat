@@ -274,7 +274,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                 : 0);
         final paintShape = SquircleBorder(
           borderRadius: widget.resolvedCornerRadius == null
-              ? context.radius
+              ? BorderRadius.circular(context.radii.squircle)
               : BorderRadius.circular(widget.resolvedCornerRadius!),
           side: BorderSide(color: resolvedBorder, width: resolvedBorderWidth),
         );

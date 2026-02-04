@@ -253,8 +253,7 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
       duration: baseAnimationDuration,
       tween: Tween<double>(begin: _previousProgress, end: _targetProgress),
       builder: (context, value, _) {
-        final borderRadius =
-            BorderRadius.circular(context.sizing.containerRadius);
+        final borderRadius = context.radius;
         final colors = context.colorScheme;
         const double trackMix = 0.08;
         final Color trackColor = Color.lerp(
@@ -301,7 +300,7 @@ class _ChecklistItemRow extends StatelessWidget {
     final double iconSize = context.sizing.menuItemIconSize;
     final double buttonSize = context.sizing.inputSuffixButtonSize;
     final double tapTargetSize = context.sizing.menuItemHeight;
-    final double cornerRadius = context.sizing.containerRadius;
+    final double cornerRadius = context.radii.container;
     return Padding(
       key: key,
       padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
@@ -394,7 +393,7 @@ class _ChecklistAddField extends StatelessWidget {
           buttonSize: buttonSize,
           tapTargetSize: buttonSize,
           color: colors.primary,
-          cornerRadius: context.sizing.containerRadius,
+          cornerRadius: context.radii.squircle,
           tooltip: context.l10n.calendarAddChecklistItem,
           onPressed: onSubmitted,
         ),

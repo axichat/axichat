@@ -902,12 +902,11 @@ class _ReactionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    final sizing = context.sizing;
     final highlight = reaction.reactedBySelf;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: highlight ? colors.secondary : colors.card,
-        borderRadius: BorderRadius.circular(sizing.containerRadius),
+        borderRadius: context.radius,
         border: Border.all(color: colors.border),
       ),
       child: Padding(

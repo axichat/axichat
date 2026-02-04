@@ -67,14 +67,14 @@ class AxiListTile extends StatelessWidget {
         : backgroundColor;
     final shape = surfaceShape ??
         ShadRoundedSuperellipseBorder(
-          radius: context.radius,
+          radius: BorderRadius.circular(context.radii.squircle),
           side: ShadBorderSide(
             color: context.borderSide.color,
             width: context.borderSide.width,
           ),
         ).toBorder(
           textDirection: Directionality.of(context),
-          defaultRadius: context.radius,
+          defaultRadius: BorderRadius.circular(context.radii.squircle),
         );
     final resolvedMinTileHeight = minTileHeight ??
         (subtitle == null && subtitlePlaceholder == null

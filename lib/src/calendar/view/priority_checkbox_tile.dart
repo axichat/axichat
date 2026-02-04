@@ -38,7 +38,7 @@ class PriorityCheckboxTile extends StatelessWidget {
         isIndeterminate || value ? baseBorderWidth * 2 : baseBorderWidth;
     final bool? checkboxValue = isIndeterminate ? null : value;
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
-      borderRadius: context.radius,
+      borderRadius: BorderRadius.circular(context.radii.squircle),
       side: BorderSide(
         color: borderColor,
         width: borderWidth,

@@ -20,7 +20,6 @@ class SelectionIndicator extends StatelessWidget {
 
   static const double size = 28.0;
   static const _animationDuration = Duration(milliseconds: 150);
-  static const _cornerRadius = 16.0;
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +35,7 @@ class SelectionIndicator extends StatelessWidget {
       decoration: ShapeDecoration(
         color: background,
         shape: RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.circular(_cornerRadius),
+          borderRadius: BorderRadius.circular(context.radii.squircle),
           side: BorderSide(
             color: borderColor,
             width: context.borderSide.width,

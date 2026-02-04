@@ -84,8 +84,8 @@ class _TaskTileSurfaceState extends State<TaskTileSurface> {
 
   @override
   Widget build(BuildContext context) {
-    final RoundedSuperellipseBorder shape =
-        RoundedSuperellipseBorder(borderRadius: context.radius);
+    final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(context.radii.squircle));
     final bool enabled = widget.onTap != null;
     final MouseCursor effectiveCursor = widget.mouseCursor ??
         (enabled ? SystemMouseCursors.click : MouseCursor.defer);
@@ -97,7 +97,7 @@ class _TaskTileSurfaceState extends State<TaskTileSurface> {
     final RoundedSuperellipseBorder decoratedShape = uniformSide == null
         ? shape
         : RoundedSuperellipseBorder(
-            borderRadius: context.radius,
+            borderRadius: BorderRadius.circular(context.radii.squircle),
             side: uniformSide,
           );
     final ShapeDecoration shapedDecoration = ShapeDecoration(

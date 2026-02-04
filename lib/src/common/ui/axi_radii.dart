@@ -5,18 +5,26 @@ import 'package:flutter/material.dart';
 
 class AxiRadii extends ThemeExtension<AxiRadii> {
   const AxiRadii({
+    required this.container,
     required this.squircle,
     required this.squircleSm,
     required this.pill,
   });
 
+  final double container;
   final double squircle;
   final double squircleSm;
   final double pill;
 
   @override
-  AxiRadii copyWith({double? squircle, double? squircleSm, double? pill}) {
+  AxiRadii copyWith({
+    double? container,
+    double? squircle,
+    double? squircleSm,
+    double? pill,
+  }) {
     return AxiRadii(
+      container: container ?? this.container,
       squircle: squircle ?? this.squircle,
       squircleSm: squircleSm ?? this.squircleSm,
       pill: pill ?? this.pill,
@@ -30,12 +38,14 @@ class AxiRadii extends ThemeExtension<AxiRadii> {
   }
 }
 
+const double axiContainerRadius = 8;
 const double axiSquircleRadius = 12;
 const BorderRadius axiBorderRadius =
-    BorderRadius.all(Radius.circular(axiSquircleRadius));
+    BorderRadius.all(Radius.circular(axiContainerRadius));
 
 const AxiRadii axiRadii = AxiRadii(
+  container: axiContainerRadius,
   squircle: axiSquircleRadius,
-  squircleSm: 8,
+  squircleSm: axiContainerRadius,
   pill: 1000,
 );

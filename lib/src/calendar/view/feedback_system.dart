@@ -178,7 +178,7 @@ class FeedbackSystem {
         duration: feedback.duration ?? const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(sizing.containerRadius),
+          borderRadius: context.radius,
         ),
         action: feedback.actionLabel != null && feedback.onAction != null
             ? SnackBarAction(
@@ -259,7 +259,7 @@ class InlineFeedback extends StatelessWidget {
           color: colors.background.withValues(alpha: 0.3),
           width: context.borderSide.width,
         ),
-        borderRadius: BorderRadius.circular(sizing.containerRadius),
+        borderRadius: context.radius,
       ),
       child: Row(
         children: [

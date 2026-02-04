@@ -316,7 +316,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
           padding: EdgeInsets.zero,
           backgroundColor: colors.card,
           borderColor: context.borderSide.color,
-          cornerRadius: sizing.containerRadius,
+          cornerRadius: context.radii.container,
           shadows: calendarMediumShadow,
           child: Column(
             children: [

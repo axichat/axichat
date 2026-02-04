@@ -54,7 +54,7 @@ class _CalendarTileState extends State<CalendarTile> {
           alignment: Alignment.topRight,
           depth: spacing.m,
           thickness: badgeWidth,
-          cornerRadius: sizing.containerRadius,
+          cornerRadius: context.radii.container,
           child: _ReminderBadge(count: widget.dueReminderCount),
         ),
     ];
@@ -194,7 +194,7 @@ class _ReminderBadge extends StatelessWidget {
       decoration: ShapeDecoration(
         color: colors.primary,
         shape: SquircleBorder(
-          cornerRadius: context.sizing.containerRadius,
+          cornerRadius: context.radii.container,
           side: BorderSide(
             color: colors.card,
             width: context.borderSide.width,
@@ -235,7 +235,7 @@ class _TaskTimestamp extends StatelessWidget {
         color: colors.secondary.withValues(
           alpha: context.motion.tapSplashAlpha,
         ),
-        shape: SquircleBorder(cornerRadius: context.sizing.containerRadius),
+        shape: SquircleBorder(cornerRadius: context.radii.container),
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(

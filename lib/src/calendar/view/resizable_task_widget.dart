@@ -213,8 +213,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 overlay: widget.overlay,
               );
 
-              final shape =
-                  RoundedSuperellipseBorder(borderRadius: context.radius);
+              final shape = RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(context.radii.squircle));
               final Widget shapedBody = Material(
                 color: Colors.transparent,
                 shape: shape,
@@ -443,7 +443,7 @@ class _ResizableTaskBody extends StatelessWidget {
               : 1,
     );
     final ShapeBorder shape = SquircleBorder(
-      borderRadius: context.radius,
+      cornerRadius: context.radii.squircle,
       side: borderSide,
     );
     final decoration = ShapeDecoration(
@@ -687,7 +687,7 @@ class _TaskAccentStripe extends StatelessWidget {
     return Positioned.fill(
       child: ClipPath(
         clipper: ShapeBorderClipper(
-          shape: SquircleBorder(borderRadius: context.radius),
+          shape: SquircleBorder(cornerRadius: context.radii.squircle),
         ),
         child: Align(
           alignment: Alignment.centerLeft,
@@ -717,7 +717,7 @@ class _TaskDeadlineBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: _deadlineBackgroundColor(deadline),
-        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        borderRadius: context.radius,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

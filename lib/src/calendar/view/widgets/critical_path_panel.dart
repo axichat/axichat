@@ -369,7 +369,7 @@ class CriticalPathCard extends StatelessWidget {
         ? colors.primary.withValues(alpha: 0.08)
         : colors.muted.withValues(alpha: 0.04);
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
-      borderRadius: context.radius,
+      borderRadius: BorderRadius.circular(context.radii.squircle),
       side: BorderSide(
         color: borderColor,
         width: borderWidth,
@@ -518,7 +518,7 @@ class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
                   decoration: BoxDecoration(
                     color: colors.muted.withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(
-                      context.sizing.containerRadius,
+                      context.radii.container,
                     ),
                   ),
                 ),
@@ -529,7 +529,7 @@ class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
                     decoration: BoxDecoration(
                       color: colors.primary,
                       borderRadius: BorderRadius.circular(
-                        context.sizing.containerRadius,
+                        context.radii.container,
                       ),
                     ),
                   ),
@@ -786,7 +786,7 @@ class _CriticalPathReorderHandle extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.card,
-          borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+          borderRadius: context.radius,
         ),
         child: Center(
           child: Icon(
@@ -886,8 +886,7 @@ class CriticalPathMembershipList extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: colors.muted.withValues(alpha: 0.08),
-                borderRadius:
-                    BorderRadius.circular(context.sizing.containerRadius),
+                borderRadius: context.radius,
                 border: Border.all(color: colors.border),
               ),
               child: Row(
@@ -966,16 +965,15 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final bool enabled = !widget.isBusy;
-    final RoundedSuperellipseBorder itemShape =
-        RoundedSuperellipseBorder(borderRadius: context.radius);
+    final RoundedSuperellipseBorder itemShape = RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(context.radii.squircle));
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
-      borderRadius: context.radius,
+      borderRadius: BorderRadius.circular(context.radii.squircle),
       side: BorderSide(color: colors.border, width: context.borderSide.width),
     );
     final double iconSize = context.sizing.menuItemIconSize;
     final double iconContainerSize = context.sizing.menuItemHeight;
-    final BorderRadius iconRadius =
-        BorderRadius.circular(context.sizing.containerRadius);
+    final BorderRadius iconRadius = context.radius;
     return Scrollbar(
       controller: _scrollController,
       thumbVisibility: true,
@@ -1227,7 +1225,7 @@ Future<String?> promptCriticalPathName({
 }) async {
   final controller = TextEditingController(text: initialValue ?? '');
   final FocusNode focusNode = FocusNode();
-  final GlobalKey<FormState> formKey = GlobalKey<FormState>();
+  final GlobalKey<ShadFormState> formKey = GlobalKey<ShadFormState>();
   final BuildContext modalContext = context.calendarModalContext;
   final result = await showAdaptiveBottomSheet<String>(
     context: modalContext,
@@ -1241,9 +1239,10 @@ Future<String?> promptCriticalPathName({
           final textTheme = context.textTheme;
           final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
           FocusScope.of(dialogContext).requestFocus(focusNode);
-          return Form(
+          return ShadForm(
             key: formKey,
-            autovalidateMode: AutovalidateMode.disabled,
+            autovalidateMode: ShadAutovalidateMode.disabled,
+            fieldIdSeparator: null,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,

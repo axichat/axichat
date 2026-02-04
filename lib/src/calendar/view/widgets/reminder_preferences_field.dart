@@ -334,7 +334,7 @@ class _ReminderSection extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: colors.muted.withValues(alpha: 0.16),
                   borderRadius: BorderRadius.circular(
-                    context.sizing.containerRadius,
+                    context.radii.container,
                   ),
                 ),
                 child: Text(

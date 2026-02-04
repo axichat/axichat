@@ -318,8 +318,8 @@ class _MonthDayTile extends StatelessWidget {
     final List<DayEvent> visible = events.take(_maxVisibleEvents).toList();
     final int overflow = events.length - visible.length;
 
-    final RoundedSuperellipseBorder shape =
-        RoundedSuperellipseBorder(borderRadius: context.radius);
+    final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(context.radii.squircle));
     return AxiTapBounce(
       child: ShadFocusable(
         canRequestFocus: true,
@@ -358,7 +358,7 @@ class _MonthDayTile extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: badgeBackground,
                               borderRadius: BorderRadius.circular(
-                                context.sizing.containerRadius,
+                                context.radii.container,
                               ),
                             ),
                             child: Text(
@@ -416,8 +416,8 @@ class _DayEventBullet extends StatelessWidget {
     final ShadColorScheme colors = context.colorScheme;
     final ShadTextTheme textTheme = context.textTheme;
     final double opacity = dimmed ? 0.6 : 1;
-    final RoundedSuperellipseBorder shape =
-        RoundedSuperellipseBorder(borderRadius: context.radius);
+    final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(context.radii.squircle));
 
     return Opacity(
       opacity: opacity,

@@ -501,11 +501,11 @@ class _FilterRow extends StatelessWidget {
             active ? colors.primary : colors.muted.withValues(alpha: 0.25);
         final Color textColor =
             active ? colors.primary : colors.mutedForeground;
-        final RoundedSuperellipseBorder shape =
-            RoundedSuperellipseBorder(borderRadius: context.radius);
+        final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(context.radii.squircle));
         final RoundedSuperellipseBorder decoratedShape =
             RoundedSuperellipseBorder(
-          borderRadius: context.radius,
+          borderRadius: BorderRadius.circular(context.radii.squircle),
           side: BorderSide(color: border, width: context.borderSide.width),
         );
         return AxiTapBounce(
@@ -622,7 +622,7 @@ class _MetadataTag extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: colors.muted.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        borderRadius: context.radius,
         border: Border.all(color: colors.border),
       ),
       child: Row(
@@ -713,8 +713,8 @@ class _SearchResultTile extends StatelessWidget {
         child: ShadFocusable(
           canRequestFocus: true,
           builder: (context, _, __) {
-            final RoundedSuperellipseBorder shape =
-                RoundedSuperellipseBorder(borderRadius: context.radius);
+            final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
+                borderRadius: BorderRadius.circular(context.radii.squircle));
             return Material(
               type: MaterialType.transparency,
               shape: shape,

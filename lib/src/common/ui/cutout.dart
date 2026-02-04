@@ -239,10 +239,14 @@ class _RenderCutoutSurface extends RenderBox
     }
 
     final cutoutCount = math.min(cutoutChildren.length, _cutouts.length);
+    var maxLeftHalfWidth = 0.0;
     var maxRightHalfWidth = 0.0;
     for (var i = 0; i < cutoutCount; i++) {
       final childBox = cutoutChildren[i];
       final spec = _cutouts[i];
+      if (spec.edge == CutoutEdge.left) {
+        maxLeftHalfWidth = math.max(maxLeftHalfWidth, childBox.size.width / 2);
+      }
       if (spec.edge == CutoutEdge.right) {
         maxRightHalfWidth =
             math.max(maxRightHalfWidth, childBox.size.width / 2);
@@ -250,23 +254,26 @@ class _RenderCutoutSurface extends RenderBox
     }
 
     final bodyConstraints = constraints.deflate(
-      EdgeInsetsDirectional.only(end: maxRightHalfWidth),
+      EdgeInsets.only(left: maxLeftHalfWidth, right: maxRightHalfWidth),
     );
     bodyChild.layout(bodyConstraints, parentUsesSize: true);
     final bodySize = bodyChild.size;
     size = constraints.constrain(
-      Size(bodySize.width + maxRightHalfWidth, bodySize.height),
+      Size(
+        bodySize.width + maxLeftHalfWidth + maxRightHalfWidth,
+        bodySize.height,
+      ),
     );
-    const bodyOffset = Offset.zero;
+    final bodyOffset = Offset(maxLeftHalfWidth, 0);
 
     bodyChildParentData(bodyChild).offset = bodyOffset;
 
     for (var i = 0; i < cutoutCount; i++) {
       final childBox = cutoutChildren[i];
       final spec = _cutouts[i];
-      final rect = _cutoutRect(bodySize, spec);
+      final rect = _cutoutRect(size, spec);
       final topLeft = _cutoutChildOffset(rect, spec, childBox.size);
-      bodyChildParentData(childBox).offset = bodyOffset + topLeft;
+      bodyChildParentData(childBox).offset = topLeft;
     }
   }
 
@@ -277,9 +284,8 @@ class _RenderCutoutSurface extends RenderBox
     final bodyChild = firstChild!;
     final bodyParentData = bodyChildParentData(bodyChild);
     final bodyOffset = bodyParentData.offset;
-    final bodySize = bodyChild.size;
-    final fillPath = _cutoutPath(bodySize, shape, cutouts);
-    final paintOffset = offset + bodyOffset;
+    final fillPath = _cutoutPath(size, shape, cutouts);
+    final paintOffset = offset;
 
     if (shadowOpacity > 0 && shadows.isNotEmpty) {
       for (final shadow in shadows) {
@@ -327,14 +333,14 @@ class _RenderCutoutSurface extends RenderBox
     }
     context.canvas.restore();
 
-    final clipRect = paintOffset & bodySize;
+    final clipRect = paintOffset & size;
     context.pushClipPath(
       needsCompositing,
       paintOffset,
       clipRect,
       fillPath,
       (context, offset) {
-        context.paintChild(bodyChild, offset);
+        context.paintChild(bodyChild, offset + bodyOffset);
       },
     );
 

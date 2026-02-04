@@ -278,10 +278,11 @@ class _PendingImageAttachment extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final shape = RoundedSuperellipseBorder(
-      borderRadius: context.radius,
+      borderRadius: BorderRadius.circular(context.radii.squircle),
       side: context.borderSide,
     );
-    final clipShape = RoundedSuperellipseBorder(borderRadius: context.radius);
+    final clipShape = RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(context.radii.squircle));
     final borderWidth = context.borderSide.width;
     final previewExtent = sizing.attachmentPreviewExtent;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
@@ -363,7 +364,7 @@ class _PendingFileAttachment extends StatelessWidget {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final borderRadius = BorderRadius.circular(sizing.containerRadius);
+    final borderRadius = BorderRadius.circular(context.radii.squircle);
     final isFailed = pending.status == PendingAttachmentStatus.failed;
     final background = isFailed ? colors.destructive : colors.card;
     final foreground =
@@ -395,7 +396,7 @@ class _PendingFileAttachment extends StatelessWidget {
                 height: sizing.iconButtonSize,
                 decoration: BoxDecoration(
                   color: colors.card,
-                  borderRadius: BorderRadius.circular(sizing.containerRadius),
+                  borderRadius: context.radius,
                 ),
                 child: Icon(
                   attachmentIcon(pending.attachment, typeReport: typeReport),
@@ -468,8 +469,9 @@ class _PendingImageSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final sizing = context.sizing;
     final extent = sizing.attachmentPreviewExtent;
-    final resolvedShape =
-        shape ?? RoundedSuperellipseBorder(borderRadius: context.radius);
+    final resolvedShape = shape ??
+        RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(context.radii.squircle));
     return SizedBox(
       width: extent,
       height: extent,
@@ -489,9 +491,9 @@ class _PendingFileSkeleton extends StatelessWidget {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final borderRadius = BorderRadius.circular(sizing.containerRadius);
+    final borderRadius = BorderRadius.circular(context.radii.squircle);
     final iconExtent = sizing.iconButtonSize;
-    final iconRadius = sizing.containerRadius;
+    final iconRadius = context.radii.container;
     final lineHeight = sizing.progressIndicatorBarHeight;
     final primaryLineWidth = sizing.menuMaxWidth - spacing.xl;
     final secondaryLineWidth = sizing.menuMaxWidth - spacing.xxl;
@@ -538,7 +540,7 @@ class _PendingFileSkeleton extends StatelessWidget {
                       height: sizing.buttonHeightSm,
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(
-                          sizing.containerRadius,
+                          context.radii.container,
                         ),
                         child: const _ShimmerSurface(),
                       ),
@@ -551,7 +553,7 @@ class _PendingFileSkeleton extends StatelessWidget {
                           height: lineHeight,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(
-                              sizing.containerRadius,
+                              context.radii.container,
                             ),
                             child: const _ShimmerSurface(),
                           ),
@@ -562,7 +564,7 @@ class _PendingFileSkeleton extends StatelessWidget {
                           height: lineHeight,
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(
-                              sizing.containerRadius,
+                              context.radii.container,
                             ),
                             child: const _ShimmerSurface(),
                           ),
@@ -581,7 +583,7 @@ class _PendingFileSkeleton extends StatelessWidget {
               width: actionWidth,
               height: actionWidth,
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(sizing.containerRadius),
+                borderRadius: BorderRadius.circular(context.radii.squircle),
                 child: const _ShimmerSurface(),
               ),
             ),

@@ -224,7 +224,7 @@ class _AxiListButtonState extends State<AxiListButton> {
                   )
                 : null;
         final shape = RoundedSuperellipseBorder(
-          borderRadius: context.radius,
+          borderRadius: BorderRadius.circular(context.radii.squircle),
           side: borderSide ?? BorderSide.none,
         );
         final textStyle = context.textTheme.small.copyWith(

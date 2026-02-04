@@ -72,7 +72,7 @@ class _CalendarTransferOption extends StatelessWidget {
         leading: DecoratedBox(
           decoration: BoxDecoration(
             color: iconBackground,
-            borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+            borderRadius: context.radius,
             border: Border.all(color: colors.border),
           ),
           child: Padding(

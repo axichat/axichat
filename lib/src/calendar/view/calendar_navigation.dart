@@ -721,9 +721,11 @@ class CalendarSegmentedToggle<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double cornerRadius = context.radius.topLeft.x;
+    final double cornerRadius = context.radii.squircle;
     final ShadColorScheme colors = context.colorScheme;
-    final ShapeBorder outerShape = SquircleBorder(borderRadius: context.radius);
+    final ShapeBorder outerShape = SquircleBorder(
+      cornerRadius: context.radii.squircle,
+    );
     return Material(
       color: outerDecoration.color ?? colors.secondary,
       shape: outerShape,
@@ -956,13 +958,12 @@ class _DateLabel extends StatefulWidget {
 }
 
 class _DateLabelState extends State<_DateLabel> {
-  final LayerLink _link = LayerLink();
-  OverlayEntry? _overlayEntry;
+  late final ShadPopoverController _popoverController;
   bool _isBottomSheetOpen = false;
   late DateTime _visibleMonth;
   late DateFormat _dayFormat;
   late DateFormat _monthFormat;
-  bool get _isPickerOpen => _overlayEntry != null || _isBottomSheetOpen;
+  bool get _isPickerOpen => _popoverController.isOpen || _isBottomSheetOpen;
 
   @override
   void initState() {
@@ -971,6 +972,8 @@ class _DateLabelState extends State<_DateLabel> {
       widget.state.selectedDate.year,
       widget.state.selectedDate.month,
     );
+    _popoverController = ShadPopoverController();
+    _popoverController.addListener(_handlePopoverChanged);
   }
 
   @override
@@ -991,19 +994,18 @@ class _DateLabelState extends State<_DateLabel> {
         widget.state.selectedDate.month,
       );
     }
-    if (_overlayEntry != null) {
-      _overlayEntry!.markNeedsBuild();
-    }
   }
 
   @override
   void dispose() {
-    _removeOverlay(requestRebuild: false);
+    _popoverController.removeListener(_handlePopoverChanged);
+    _popoverController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool isCompact = ResponsiveHelper.isCompact(context);
     final label = switch (widget.state.viewMode) {
       CalendarView.day => _formatDay(widget.state.selectedDate),
       CalendarView.week => context.l10n.commonRangeLabel(
@@ -1018,118 +1020,93 @@ class _DateLabelState extends State<_DateLabel> {
     final Color iconColor =
         isOpen ? calendarPrimaryColor : calendarSubtitleColor;
 
-    return CompositedTransformTarget(
-      link: _link,
-      child: SizedBox(
-        height: context.sizing.buttonHeightRegular,
-        child: AxiButton.outline(
-          onPressed: _toggleOverlay,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: context.sizing.menuItemIconSize,
-                color: iconColor,
-              ),
-              if (!hideText) ...[
-                const SizedBox(width: calendarGutterSm),
-                ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: context.sizing.menuMaxWidth,
-                  ),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+    final button = SizedBox(
+      height: context.sizing.buttonHeightRegular,
+      child: AxiButton.outline(
+        onPressed: _toggleOverlay,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.calendar_today_outlined,
+              size: context.sizing.menuItemIconSize,
+              color: iconColor,
+            ),
+            if (!hideText) ...[
+              const SizedBox(width: calendarGutterSm),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: context.sizing.menuMaxWidth,
                 ),
-              ],
-              const SizedBox(width: calendarInsetLg),
-              Icon(
-                isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
-                size: context.sizing.iconButtonIconSize,
-                color: iconColor,
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
-          ),
+            const SizedBox(width: calendarInsetLg),
+            Icon(
+              isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+              size: context.sizing.iconButtonIconSize,
+              color: iconColor,
+            ),
+          ],
         ),
       ),
+    );
+
+    if (isCompact) {
+      return button;
+    }
+
+    final spec = ResponsiveHelper.spec(context);
+    final verticalOffset = spec.contentPadding.vertical / 2;
+    return AxiPopover(
+      controller: _popoverController,
+      closeOnTapOutside: true,
+      anchor: ShadAnchorAuto(
+        offset: Offset(0, verticalOffset),
+        targetAnchor: Alignment.bottomRight,
+        followerAnchor: Alignment.topRight,
+      ),
+      padding: EdgeInsets.zero,
+      decoration: ShadDecoration.none,
+      shadows: const <BoxShadow>[],
+      popover: (context) {
+        return _CalendarDropdown(
+          monthFormat: _monthFormat,
+          month: _visibleMonth,
+          selectedWeekStart: widget.state.weekStart,
+          selectedDate: widget.state.selectedDate,
+          onClose: _popoverController.hide,
+          onMonthChanged: (month) {
+            setState(() => _visibleMonth = month);
+          },
+          onDateSelected: (date) {
+            widget.onDateSelected(date);
+            _popoverController.hide();
+          },
+        );
+      },
+      child: button,
     );
   }
 
   void _toggleOverlay() {
-    if (_overlayEntry != null) {
-      _removeOverlay();
+    if (ResponsiveHelper.isCompact(context)) {
+      _showBottomSheet();
       return;
     }
     if (_isBottomSheetOpen) {
       return;
     }
-    _showOverlay();
-  }
-
-  void _showOverlay() {
-    if (ResponsiveHelper.isCompact(context)) {
-      _showBottomSheet();
-      return;
+    if (_popoverController.isOpen) {
+      _popoverController.hide();
+    } else {
+      _popoverController.show();
     }
-    final overlay = Overlay.of(context);
-
-    final renderBox = context.findRenderObject() as RenderBox?;
-    final buttonWidth = renderBox?.size.width ?? 0;
-    final spec = ResponsiveHelper.spec(context);
-    final dropdownWidth = spec.quickAddMaxWidth ?? 340.0;
-    final horizontalOffset = buttonWidth - dropdownWidth;
-    final buttonHeight = renderBox?.size.height ?? 0;
-    final verticalOffset = buttonHeight + spec.contentPadding.vertical / 2;
-
-    final entry = OverlayEntry(
-      builder: (context) {
-        return GestureDetector(
-          onTap: () => _removeOverlay(),
-          behavior: HitTestBehavior.translucent,
-          child: Stack(
-            children: [
-              Positioned.fill(child: Container()),
-              CompositedTransformFollower(
-                link: _link,
-                offset: Offset(horizontalOffset, verticalOffset),
-                showWhenUnlinked: false,
-                child: GestureDetector(
-                  onTap: () {},
-                  behavior: HitTestBehavior.opaque,
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InBoundsFadeScale(
-                      child: _CalendarDropdown(
-                        monthFormat: _monthFormat,
-                        month: _visibleMonth,
-                        selectedWeekStart: widget.state.weekStart,
-                        selectedDate: widget.state.selectedDate,
-                        onClose: () => _removeOverlay(),
-                        onMonthChanged: (month) {
-                          setState(() => _visibleMonth = month);
-                          _overlayEntry?.markNeedsBuild();
-                        },
-                        onDateSelected: (date) {
-                          widget.onDateSelected(date);
-                          _removeOverlay();
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-
-    setState(() => _overlayEntry = entry);
-    overlay.insert(entry);
   }
 
   Future<void> _showBottomSheet() async {
@@ -1190,17 +1167,11 @@ class _DateLabelState extends State<_DateLabel> {
     }
   }
 
-  void _removeOverlay({bool requestRebuild = true}) {
-    final entry = _overlayEntry;
-    if (entry == null) {
+  void _handlePopoverChanged() {
+    if (!mounted) {
       return;
     }
-    entry.remove();
-    if (requestRebuild && mounted) {
-      setState(() => _overlayEntry = null);
-    } else {
-      _overlayEntry = null;
-    }
+    setState(() {});
   }
 
   String _formatDay(DateTime date) => _dayFormat.format(date);
@@ -1317,7 +1288,7 @@ class _CalendarDropdown extends StatelessWidget {
               }
 
               final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
-                borderRadius: context.radius,
+                borderRadius: BorderRadius.circular(context.radii.squircle),
                 side: border,
               );
               return AxiTapBounce(

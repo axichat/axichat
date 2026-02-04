@@ -1099,7 +1099,7 @@ class _SignupProgressMeter extends StatelessWidget {
         final percentLabel =
             context.l10n.commonPercentLabel(clampedPercent.round());
         final barHeight = sizing.progressIndicatorBarHeight;
-        final barRadius = BorderRadius.circular(sizing.containerRadius);
+        final barRadius = context.radius;
         return Semantics(
           label: context.l10n.signupProgressLabel,
           value: context.l10n.signupProgressValue(
@@ -1187,7 +1187,7 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
         final normalized = (animatedBits / maxEntropyBits).clamp(0.0, 1.0);
         final fillColor = _colorForLevel(strengthLevel, colors);
         final barHeight = sizing.progressIndicatorBarHeight;
-        final barRadius = BorderRadius.circular(sizing.containerRadius);
+        final barRadius = context.radius;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1365,7 +1365,7 @@ class _CaptchaFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final borderSide = context.borderSide;
-    final radius = BorderRadius.circular(context.sizing.containerRadius);
+    final radius = context.radius;
     return Container(
       width: size.width,
       height: size.height,

@@ -27,6 +27,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 const List<String> _emptyCategories = <String>[];
 const List<CalendarAttachment> _emptyAttachments = <CalendarAttachment>[];
@@ -100,7 +101,7 @@ class _DayEventEditorForm extends StatefulWidget {
 }
 
 class _DayEventEditorFormState extends State<_DayEventEditorForm> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final GlobalKey<ShadFormState> _formKey = GlobalKey<ShadFormState>();
   final CalendarTransferService _transferService =
       const CalendarTransferService();
   late final TextEditingController _titleController;
@@ -228,9 +229,10 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     return SafeArea(
       top: false,
       bottom: false,
-      child: Form(
+      child: ShadForm(
         key: _formKey,
-        autovalidateMode: AutovalidateMode.disabled,
+        autovalidateMode: ShadAutovalidateMode.disabled,
+        fieldIdSeparator: null,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,

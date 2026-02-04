@@ -101,7 +101,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   late final CalendarSidebarController _sidebarController;
   late final TaskDraftController _draftController;
   late final TaskChecklistController _checklistController;
-  final GlobalKey<FormState> _addTaskFormKey = GlobalKey<FormState>();
+  final GlobalKey<ShadFormState> _addTaskFormKey = GlobalKey<ShadFormState>();
   final _titleController = TextEditingController();
   final FocusNode _titleFocusNode = FocusNode(debugLabel: 'sidebarTitleInput');
   final _descriptionController = TextEditingController();
@@ -3093,8 +3093,7 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: calendarPrimaryColor.withValues(alpha: 0.08),
-                      borderRadius:
-                          BorderRadius.circular(context.sizing.containerRadius),
+                      borderRadius: context.radius,
                       border: Border.all(
                         color: calendarPrimaryColor.withValues(alpha: 0.35),
                       ),
@@ -3679,8 +3678,7 @@ class _SelectionRecurrenceSection extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: calendarWarningColor.withValues(alpha: 0.08),
-                    borderRadius:
-                        BorderRadius.circular(context.sizing.containerRadius),
+                    borderRadius: context.radius,
                     border: Border.all(
                       color: calendarWarningColor.withValues(alpha: 0.4),
                     ),
@@ -3740,7 +3738,7 @@ class _SelectedTaskList extends StatelessWidget {
         padding: const EdgeInsets.all(calendarGutterLg),
         decoration: BoxDecoration(
           color: calendarContainerColor,
-          borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+          borderRadius: context.radius,
           border: Border.all(color: calendarBorderColor),
         ),
         child: Text(
@@ -3880,7 +3878,7 @@ class _AddTaskSection extends StatelessWidget {
   final VoidCallback onCollapse;
   final TextEditingController titleController;
   final FocusNode titleFocusNode;
-  final GlobalKey<FormState> addTaskFormKey;
+  final GlobalKey<ShadFormState> addTaskFormKey;
   final FormFieldValidator<String> quickTaskValidator;
   final AutovalidateMode quickTaskAutovalidateMode;
   final ValueChanged<String> onQuickTaskChanged;
@@ -3930,8 +3928,10 @@ class _AddTaskSection extends StatelessWidget {
           ),
         ),
       ),
-      child: Form(
+      child: ShadForm(
         key: addTaskFormKey,
+        autovalidateMode: ShadAutovalidateMode.disabled,
+        fieldIdSeparator: null,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -4134,7 +4134,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final VoidCallback onClearFieldsPressed;
   final TextEditingController titleController;
   final FocusNode titleFocusNode;
-  final GlobalKey<FormState> addTaskFormKey;
+  final GlobalKey<ShadFormState> addTaskFormKey;
   final FormFieldValidator<String> quickTaskValidator;
   final AutovalidateMode quickTaskAutovalidateMode;
   final ValueChanged<String> onQuickTaskChanged;
@@ -4571,7 +4571,7 @@ class _SidebarAccordionSection extends StatelessWidget {
                                         )
                                       : Colors.transparent,
                                   borderRadius: BorderRadius.circular(
-                                    context.sizing.containerRadius,
+                                    context.radii.container,
                                   ),
                                   border: isHovering
                                       ? Border.all(
@@ -4860,7 +4860,7 @@ class _SidebarReorderHandle extends StatelessWidget {
       padding: const EdgeInsets.all(calendarInsetMd),
       decoration: BoxDecoration(
         color: colors.muted.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        borderRadius: context.radius,
       ),
       child: Icon(
         Icons.drag_indicator,
@@ -4894,7 +4894,7 @@ class _SectionCountBadge extends StatelessWidget {
         color: isExpanded
             ? calendarPrimaryColor
             : calendarPrimaryColor.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        borderRadius: context.radius,
       ),
       child: Text(
         '$count',

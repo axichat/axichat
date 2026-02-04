@@ -508,7 +508,7 @@ class _PendingAttachmentPreviewContent extends StatelessWidget {
       decoration: ShapeDecoration(
         color: colors.card,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+          borderRadius: context.radius,
           side: BorderSide(color: colors.border),
         ),
       ),

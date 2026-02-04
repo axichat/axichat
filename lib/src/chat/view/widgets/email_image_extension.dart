@@ -237,7 +237,7 @@ class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
         ? context.l10n.chatEmailImageFailedLabel
         : context.l10n.chatEmailImageBlockedLabel;
     final shape = RoundedSuperellipseBorder(
-      borderRadius: context.radius,
+      borderRadius: BorderRadius.circular(context.radii.squircle),
       side: context.borderSide,
     );
     final content = DecoratedBox(

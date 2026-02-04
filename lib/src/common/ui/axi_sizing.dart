@@ -40,7 +40,6 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.progressIndicatorSize,
     required this.progressIndicatorStrokeWidth,
     required this.progressIndicatorBarHeight,
-    required this.containerRadius,
   });
 
   final double iconButtonSize;
@@ -78,7 +77,6 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double progressIndicatorSize;
   final double progressIndicatorStrokeWidth;
   final double progressIndicatorBarHeight;
-  final double containerRadius;
 
   @override
   AxiSizing copyWith({
@@ -117,7 +115,6 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? progressIndicatorSize,
     double? progressIndicatorStrokeWidth,
     double? progressIndicatorBarHeight,
-    double? containerRadius,
   }) {
     return AxiSizing(
       iconButtonSize: iconButtonSize ?? this.iconButtonSize,
@@ -168,7 +165,6 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
           progressIndicatorStrokeWidth ?? this.progressIndicatorStrokeWidth,
       progressIndicatorBarHeight:
           progressIndicatorBarHeight ?? this.progressIndicatorBarHeight,
-      containerRadius: containerRadius ?? this.containerRadius,
     );
   }
 
@@ -215,5 +211,4 @@ const AxiSizing axiSizing = AxiSizing(
   progressIndicatorSize: 16,
   progressIndicatorStrokeWidth: 2,
   progressIndicatorBarHeight: 8,
-  containerRadius: 8,
 );

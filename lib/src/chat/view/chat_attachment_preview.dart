@@ -324,7 +324,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
     final sizing = context.sizing;
     final OutlinedBorder resolvedShape = widget.surfaceShape ??
         ContinuousRectangleBorder(
-          borderRadius: BorderRadius.circular(sizing.containerRadius),
+          borderRadius: context.radius,
         );
     final maxWidthFraction =
         widget.maxWidthFraction ?? sizing.dialogMaxHeightFraction;
@@ -2243,7 +2243,7 @@ class _AttachmentSurface extends StatelessWidget {
     final scope = _AttachmentSurfaceScope.maybeOf(context);
     final OutlinedBorder baseShape = scope?.shape ??
         ContinuousRectangleBorder(
-          borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+          borderRadius: context.radius,
         );
     final OutlinedBorder resolvedShape = baseShape.copyWith(
       side: resolvedBorder,

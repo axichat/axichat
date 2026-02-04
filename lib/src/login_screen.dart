@@ -44,8 +44,8 @@ class _LoginScreenState extends State<LoginScreen>
   final _authUiLog = Logger('AuthUi');
   _AuthFlow _selectedFlow = _AuthFlow.login;
   late AuthProgressController _authProgressController;
-  AuthenticationState? _seededAuthState;
-  AuthenticationState? _completionHandledState;
+  bool _didSeedAuthState = false;
+  bool _completionHandled = false;
   int _authTimeoutGeneration = 0;
   _AuthFlow? _authTimeoutFlow;
   DateTime? _autoLoginRequestedAt;
@@ -64,11 +64,11 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_seededAuthState != null) {
+    if (_didSeedAuthState) {
       return;
     }
-    _seededAuthState = context.read<AuthenticationCubit>().state;
-    _handleAuthState(_seededAuthState!);
+    _didSeedAuthState = true;
+    _handleAuthState(context.read<AuthenticationCubit>().state);
   }
 
   void _maybeAutoLogin() {
@@ -112,13 +112,13 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _handleSubmissionRequested(_AuthFlow flow) {
     if (_selectedFlow == flow) {
-      _completionHandledState = null;
+      _completionHandled = false;
       return;
     }
     setState(() {
       _selectedFlow = flow;
     });
-    _completionHandledState = null;
+    _completionHandled = false;
   }
 
   Future<void> _handleAuthState(AuthenticationState state) async {
@@ -130,15 +130,16 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     if (state is AuthenticationSignUpInProgress && !state.fromSubmission) {
+      _completionHandled = false;
       return;
     }
     if (state is AuthenticationSignUpInProgress) {
+      _completionHandled = false;
       if (_selectedFlow != _AuthFlow.signup) {
         setState(() {
           _selectedFlow = _AuthFlow.signup;
         });
       }
-      _completionHandledState = null;
       _startAuthProgress(
         label: context.l10n.authCreatingAccount,
         rampDuration: _progressRampDuration(
@@ -149,7 +150,7 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     if (state is AuthenticationLogInInProgress) {
-      _completionHandledState = null;
+      _completionHandled = false;
       if (state.fromSignup) {
         if (_selectedFlow != _AuthFlow.signup) {
           setState(() {
@@ -181,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
     if (state is AuthenticationFailure ||
         state is AuthenticationSignupFailure) {
-      _completionHandledState = null;
+      _completionHandled = false;
       _clearAuthTimeout();
       await _authProgressController.fail(
         duration: context.read<SettingsCubit>().animationDuration,
@@ -189,15 +190,15 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     if (state is AuthenticationComplete) {
-      if (state == _completionHandledState) {
+      if (_completionHandled) {
         return;
       }
       if (_authProgressController.snapshot.phase == AuthProgressPhase.idle) {
-        _completionHandledState = state;
+        _completionHandled = true;
         _clearAuthTimeout();
         return;
       }
-      _completionHandledState = state;
+      _completionHandled = true;
       _clearAuthTimeout();
       final preloadHome = _preloadHomeScreenCache();
       await _authProgressController.complete(
@@ -207,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
     if (state is AuthenticationNone) {
-      _completionHandledState = null;
+      _completionHandled = false;
       _clearAuthTimeout();
       _authProgressController.reset();
     }

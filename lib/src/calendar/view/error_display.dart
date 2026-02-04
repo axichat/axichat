@@ -39,7 +39,7 @@ class ErrorDisplay extends StatelessWidget {
       decoration: BoxDecoration(
         color: background,
         border: Border.all(color: border),
-        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        borderRadius: context.radius,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

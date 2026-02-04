@@ -3284,7 +3284,7 @@ class _CalendarWeekView extends StatelessWidget {
                                       alpha: 0.08,
                                     ),
                                     borderRadius: BorderRadius.circular(
-                                      context.sizing.containerRadius,
+                                      context.radii.container,
                                     ),
                                     border: Border.all(
                                       color: calendarDangerColor.withValues(
@@ -3518,8 +3518,8 @@ class _DayEventBulletRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final ShadTextTheme textTheme = context.textTheme;
-    final RoundedSuperellipseBorder shape =
-        RoundedSuperellipseBorder(borderRadius: context.radius);
+    final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(context.radii.squircle));
     return Padding(
       padding: const EdgeInsets.only(bottom: calendarInsetSm),
       child: AxiTapBounce(
@@ -4130,7 +4130,7 @@ class DayEventBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarPrimaryColor,
-        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        borderRadius: context.radius,
       ),
       child: Text(
         count.toString(),
@@ -4179,7 +4179,7 @@ class _CalendarZoomControls extends StatelessWidget {
         color: colors.card,
         border:
             Border.all(color: colors.border, width: context.borderSide.width),
-        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        borderRadius: context.radius,
         boxShadow: calendarMediumShadow,
       ),
       child: Row(

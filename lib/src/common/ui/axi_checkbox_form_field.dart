@@ -58,7 +58,7 @@ class AxiCheckboxFormField extends FormField<bool> {
               decoration: ShapeDecoration(
                 color: highlightColor,
                 shape: RoundedSuperellipseBorder(
-                  borderRadius: context.radius,
+                  borderRadius: BorderRadius.circular(context.radii.squircle),
                 ),
               ),
               child: Row(

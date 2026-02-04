@@ -114,8 +114,7 @@ class CalendarTaskListTile extends StatelessWidget {
               ),
               decoration: BoxDecoration(
                 color: _deadlineBackgroundColor(task.deadline!),
-                borderRadius:
-                    BorderRadius.circular(context.sizing.containerRadius),
+                borderRadius: context.radius,
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

@@ -53,7 +53,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
             backgroundColor ?? ShadTheme.of(context).colorScheme.card;
         final bool transparentSurface = resolvedBackground.a == 0;
         final BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
-          top: Radius.circular(context.sizing.containerRadius),
+          top: Radius.circular(context.radii.container),
         );
         const double zeroInset = 0;
         final double topInset =
@@ -238,8 +238,7 @@ class AxiModalSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final BorderRadiusGeometry resolvedRadius =
-        borderRadius ?? BorderRadius.circular(context.sizing.containerRadius);
+    final BorderRadiusGeometry resolvedRadius = borderRadius ?? context.radius;
     final Widget paddedChild = Padding(padding: padding, child: child);
     final ShadDecoration decoration = ShadDecoration(
       color: backgroundColor ?? ShadTheme.of(context).colorScheme.card,

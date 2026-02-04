@@ -1283,7 +1283,7 @@ class _FreeBusyPopoverContent extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        borderRadius: context.radius,
         border: Border.all(color: calendarBorderColor),
       ),
       child: Padding(
@@ -1330,7 +1330,7 @@ class _FreeBusyTileControls extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: calendarContainerColor.withValues(alpha: 0.8),
-          borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+          borderRadius: context.radius,
           border: Border.all(color: calendarBorderColor),
         ),
         child: Padding(

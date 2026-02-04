@@ -7,6 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/models/calendar_alarm.dart';
@@ -88,7 +89,7 @@ class _QuickAddModalState extends State<QuickAddModal>
   late final TaskChecklistController _checklistController;
   final _taskNameFocusNode = FocusNode();
   final List<String> _queuedCriticalPathIds = <String>[];
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final GlobalKey<ShadFormState> _formKey = GlobalKey<ShadFormState>();
   String? _initialTitleValidationMessage;
 
   late final QuickAddController _formController;
@@ -173,8 +174,10 @@ class _QuickAddModalState extends State<QuickAddModal>
       return SafeArea(
         top: false,
         bottom: false,
-        child: Form(
+        child: ShadForm(
           key: _formKey,
+          autovalidateMode: ShadAutovalidateMode.disabled,
+          fieldIdSeparator: null,
           child: _QuickAddModalContent(
             isSheet: true,
             formController: _formController,
@@ -226,8 +229,10 @@ class _QuickAddModalState extends State<QuickAddModal>
           builder: (context, child) {
             return Transform.scale(scale: _scaleAnimation.value, child: child);
           },
-          child: Form(
+          child: ShadForm(
             key: _formKey,
+            autovalidateMode: ShadAutovalidateMode.disabled,
+            fieldIdSeparator: null,
             child: _QuickAddModalContent(
               isSheet: false,
               formController: _formController,

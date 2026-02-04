@@ -1060,7 +1060,7 @@ extension ThemeExtension on BuildContext {
 
   IconThemeData get iconTheme => IconTheme.of(this);
 
-  BorderRadius get radius => ShadTheme.of(this).radius;
+  BorderRadius get radius => BorderRadius.circular(radii.container);
 
   ChatThemeTokens get chatTheme =>
       Theme.of(this).extension<ChatThemeTokens>() ??

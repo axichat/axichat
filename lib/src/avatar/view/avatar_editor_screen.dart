@@ -926,7 +926,7 @@ class _TemplatePreviewCard extends StatelessWidget {
         : null;
     final cardWidth = sizing.buttonHeightLg * 2.5;
     final overlayShape = RoundedSuperellipseBorder(
-      borderRadius: context.radius,
+      borderRadius: BorderRadius.circular(context.radii.squircle),
       side: context.borderSide,
     );
     return AxiTapBounce(

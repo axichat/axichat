@@ -2295,12 +2295,14 @@ class _ChatState extends State<Chat> {
       ..showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _handleSendMessage() async {
+  Future<void> _handleSendMessage({
+    required ChatState chatState,
+    required ChatSettingsSnapshot settingsSnapshot,
+  }) async {
     final rawText = _textController.text.trim();
     final seedText = _pendingCalendarSeedText;
     final String resolvedText =
         rawText.isNotEmpty ? rawText : (seedText ?? _emptyText);
-    final chatState = context.read<ChatBloc>().state;
     final pendingAttachments = chatState.pendingAttachments;
     final hasPreparingAttachments = pendingAttachments.any(
       (attachment) => attachment.isPreparing,
@@ -2327,8 +2329,6 @@ class _ChatState extends State<Chat> {
     if (chat == null) {
       return;
     }
-    final settingsSnapshot =
-        _settingsSnapshotFromState(context.read<SettingsCubit>().state);
     context.read<ChatBloc>().add(
           ChatMessageSent(
             chat: chat,
@@ -2466,6 +2466,8 @@ class _ChatState extends State<Chat> {
   List<ChatComposerAccessory> _composerAccessories({
     required bool canSend,
     required bool attachmentsEnabled,
+    required ChatState chatState,
+    required ChatSettingsSnapshot settingsSnapshot,
   }) {
     final accessories = <ChatComposerAccessory>[
       ChatComposerAccessory.leading(
@@ -2486,7 +2488,7 @@ class _ChatState extends State<Chat> {
             skipTraversal: !(attachmentsEnabled && !_sendingAttachment),
             child: _AttachmentAccessoryButton(
               enabled: attachmentsEnabled && !_sendingAttachment,
-              onPressed: _handleAttachmentPressed,
+              onPressed: () => _handleAttachmentPressed(chatState),
             ),
           ),
         ),
@@ -2496,7 +2498,10 @@ class _ChatState extends State<Chat> {
           order: const NumericFocusOrder(4),
           child: _SendMessageAccessory(
             enabled: canSend,
-            onPressed: _handleSendMessage,
+            onPressed: () => _handleSendMessage(
+              chatState: chatState,
+              settingsSnapshot: settingsSnapshot,
+            ),
             onLongPress: widget.readOnly ? null : _handleSendButtonLongPress,
           ),
         ),
@@ -2505,7 +2510,7 @@ class _ChatState extends State<Chat> {
     return accessories;
   }
 
-  Future<void> _handleAttachmentPressed() async {
+  Future<void> _handleAttachmentPressed(ChatState chatState) async {
     if (_sendingAttachment) return;
     final l10n = context.l10n;
     setState(() {
@@ -2544,7 +2549,6 @@ class _ChatState extends State<Chat> {
         return;
       }
       if (!mounted) return;
-      final chatState = context.read<ChatBloc>().state;
       final chat = chatState.chat;
       if (chat == null) {
         return;
@@ -2583,7 +2587,13 @@ class _ChatState extends State<Chat> {
     _showPendingAttachmentActions(pending);
   }
 
-  List<Widget> _pendingAttachmentMenuItems(PendingAttachment pending) {
+  List<Widget> _pendingAttachmentMenuItems(
+    PendingAttachment pending, {
+    required chat_models.Chat? chat,
+    required Message? quotedDraft,
+    required bool supportsHttpFileUpload,
+    required ChatSettingsSnapshot settingsSnapshot,
+  }) {
     final l10n = context.l10n;
     final items = <Widget>[];
     items.add(
@@ -2598,23 +2608,18 @@ class _ChatState extends State<Chat> {
         ShadContextMenuItem(
           leading: const Icon(LucideIcons.refreshCw),
           onPressed: () {
-            final chatState = context.read<ChatBloc>().state;
-            final chat = chatState.chat;
             if (chat == null) {
               return;
             }
-            final settingsSnapshot = _settingsSnapshotFromState(
-              context.read<SettingsCubit>().state,
-            );
             context.read<ChatBloc>().add(
                   ChatAttachmentRetryRequested(
                     attachmentId: pending.id,
                     recipients: _recipients,
                     chat: chat,
-                    quotedDraft: chatState.quoting,
+                    quotedDraft: quotedDraft,
                     subject: _subjectController.text,
                     settings: settingsSnapshot,
-                    supportsHttpFileUpload: chatState.supportsHttpFileUpload,
+                    supportsHttpFileUpload: supportsHttpFileUpload,
                   ),
                 );
           },
@@ -3459,6 +3464,9 @@ class _ChatState extends State<Chat> {
               final shareReplies = state.shareReplies;
               final recipients = _recipients;
               final pendingAttachments = state.pendingAttachments;
+              final settingsSnapshot = _settingsSnapshotFromState(
+                context.watch<SettingsCubit>().state,
+              );
               final canSendEmailAttachments = state.emailServiceAvailable &&
                   chatEntity != null &&
                   _hasEmailAttachmentTarget(
@@ -4780,12 +4788,7 @@ class _ChatState extends State<Chat> {
                                                               _subjectController
                                                                   .text,
                                                           settings:
-                                                              _settingsSnapshotFromState(
-                                                            context
-                                                                .read<
-                                                                    SettingsCubit>()
-                                                                .state,
-                                                          ),
+                                                              settingsSnapshot,
                                                           supportsHttpFileUpload:
                                                               state
                                                                   .supportsHttpFileUpload,
@@ -4805,7 +4808,16 @@ class _ChatState extends State<Chat> {
                                                 onPendingAttachmentLongPressed:
                                                     _handlePendingAttachmentLongPressed,
                                                 pendingAttachmentMenuBuilder:
-                                                    _pendingAttachmentMenuItems,
+                                                    (pending) =>
+                                                        _pendingAttachmentMenuItems(
+                                                  pending,
+                                                  chat: chatEntity,
+                                                  quotedDraft: state.quoting,
+                                                  supportsHttpFileUpload: state
+                                                      .supportsHttpFileUpload,
+                                                  settingsSnapshot:
+                                                      settingsSnapshot,
+                                                ),
                                                 buildComposerAccessories: ({
                                                   required bool canSend,
                                                 }) =>
@@ -4813,9 +4825,17 @@ class _ChatState extends State<Chat> {
                                                   canSend: canSend,
                                                   attachmentsEnabled:
                                                       attachmentsEnabled,
+                                                  chatState: state,
+                                                  settingsSnapshot:
+                                                      settingsSnapshot,
                                                 ),
                                                 onTaskDropped: _handleTaskDrop,
-                                                onSend: _handleSendMessage,
+                                                onSend: () =>
+                                                    _handleSendMessage(
+                                                  chatState: state,
+                                                  settingsSnapshot:
+                                                      settingsSnapshot,
+                                                ),
                                               );
                                             }(),
                                         ],
@@ -8949,7 +8969,9 @@ class _PinnedBadgeIcon extends StatelessWidget {
             child: DecoratedBox(
               decoration: ShapeDecoration(
                 color: colors.background,
-                shape: RoundedSuperellipseBorder(borderRadius: context.radius),
+                shape: RoundedSuperellipseBorder(
+                    borderRadius:
+                        BorderRadius.circular(context.radii.squircle)),
               ),
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -13599,7 +13621,8 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
     if (onTap == null) {
       return htmlBody;
     }
-    final shape = RoundedSuperellipseBorder(borderRadius: context.radius);
+    final shape = RoundedSuperellipseBorder(
+        borderRadius: BorderRadius.circular(context.radii.squircle));
     return ShadFocusable(
       canRequestFocus: true,
       builder: (context, focused, child) => child ?? const SizedBox.shrink(),

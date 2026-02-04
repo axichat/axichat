@@ -129,7 +129,8 @@ class _ProfileTileSurfaceState extends State<_ProfileTileSurface> {
             enabled: true,
             child: Material(
               color: Colors.transparent,
-              shape: RoundedSuperellipseBorder(borderRadius: context.radius),
+              shape: RoundedSuperellipseBorder(
+                  borderRadius: BorderRadius.circular(context.radii.squircle)),
               clipBehavior: Clip.antiAlias,
               child: AnimatedContainer(
                 duration: animationDuration,

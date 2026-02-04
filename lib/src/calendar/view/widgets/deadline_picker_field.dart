@@ -82,7 +82,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   final GlobalKey _dropdownKey = GlobalKey();
   final GlobalKey _triggerKey = GlobalKey();
 
-  final OverlayPortalController _portalController = OverlayPortalController();
   bool _isOpen = false;
   bool _isBottomSheetOpen = false;
   Object? _tapRegionGroupId;
@@ -187,9 +186,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   @override
   void dispose() {
-    if (_portalController.isShowing) {
-      _portalController.hide();
-    }
     _isOpen = false;
     super.dispose();
   }
@@ -226,7 +222,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     setState(() {
       _isOpen = true;
     });
-    _portalController.show();
   }
 
   bool get _hasMouseInput =>
@@ -428,7 +423,6 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
   void _hideOverlay() {
     if (!_isOpen) return;
-    _portalController.hide();
     setState(() {
       _isOpen = false;
       _initialValue = null;
@@ -638,76 +632,84 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
     final BorderSide baseBorder = context.borderSide;
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
-      borderRadius: context.radius,
+      borderRadius: BorderRadius.circular(context.radii.squircle),
       side: BorderSide(
         color: borderColor,
         width: baseBorder.width,
       ),
     );
     final double iconSize = context.sizing.iconButtonIconSize;
-    final trigger = AxiTapBounce(
-      enabled: enabled,
-      child: ShadFocusable(
-        canRequestFocus: enabled,
-        builder: (context, _, __) {
-          return Material(
-            type: MaterialType.transparency,
-            shape: decoratedShape,
-            clipBehavior: Clip.antiAlias,
-            child: ShadGestureDetector(
-              cursor:
-                  enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-              onTap: enabled ? () => _toggleOverlay(context) : null,
-              child: AnimatedContainer(
-                duration: calendarSlotHoverAnimationDuration,
-                padding: calendarFieldPadding,
-                decoration: ShapeDecoration(
-                  color: backgroundColor,
-                  shape: decoratedShape,
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.calendar_today_outlined,
-                      size: iconSize,
-                      color: iconColor,
-                    ),
-                    const SizedBox(width: calendarGutterMd),
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: _DeadlineFieldContent(
-                          placeholder: placeholder,
-                          valueText: displayDate,
-                          statusLabel: statusLabel,
-                          showStatusLabel: showStatusLabel,
-                          iconColor: iconColor,
+    final trigger = KeyedSubtree(
+      key: _triggerKey,
+      child: AxiTapBounce(
+        enabled: enabled,
+        child: ShadFocusable(
+          canRequestFocus: enabled,
+          builder: (context, _, __) {
+            return Material(
+              type: MaterialType.transparency,
+              shape: decoratedShape,
+              clipBehavior: Clip.antiAlias,
+              child: ShadGestureDetector(
+                cursor: enabled
+                    ? SystemMouseCursors.click
+                    : SystemMouseCursors.basic,
+                onTap: enabled ? () => _toggleOverlay(context) : null,
+                child: AnimatedContainer(
+                  duration: calendarSlotHoverAnimationDuration,
+                  padding: calendarFieldPadding,
+                  decoration: ShapeDecoration(
+                    color: backgroundColor,
+                    shape: decoratedShape,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: iconSize,
+                        color: iconColor,
+                      ),
+                      const SizedBox(width: calendarGutterMd),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _DeadlineFieldContent(
+                            placeholder: placeholder,
+                            valueText: displayDate,
+                            statusLabel: statusLabel,
+                            showStatusLabel: showStatusLabel,
+                            iconColor: iconColor,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: calendarGutterSm),
-                    Icon(
-                      _isOpen
-                          ? Icons.keyboard_arrow_up
-                          : Icons.keyboard_arrow_down,
-                      size: iconSize,
-                      color: calendarTimeLabelColor,
-                    ),
-                  ],
+                      const SizedBox(width: calendarGutterSm),
+                      Icon(
+                        _isOpen
+                            ? Icons.keyboard_arrow_up
+                            : Icons.keyboard_arrow_down,
+                        size: iconSize,
+                        color: calendarTimeLabelColor,
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
 
-    return OverlayPortal(
-      controller: _portalController,
-      overlayLocation: OverlayChildLocation.rootOverlay,
-      overlayChildBuilder: (overlayContext) {
+    final geometry = _computeGeometry(context);
+    return ShadPortal(
+      visible: _isOpen,
+      anchor: ShadAnchor(
+        childAlignment: Alignment.topLeft,
+        overlayAlignment: Alignment.topLeft,
+        offset: geometry.offset,
+      ),
+      portalBuilder: (overlayContext) {
         if (!_isOpen) return const SizedBox.shrink();
-        final geometry = _computeGeometry(overlayContext);
         final previousMonth = DateTime(
           _visibleMonth.year,
           _visibleMonth.month - 1,
@@ -760,22 +762,17 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 onTap: _hideOverlay,
               ),
             ),
-            CompositedTransformFollower(
-              link: _layerLink,
-              showWhenUnlinked: false,
-              offset: geometry.offset,
-              child: InBoundsFadeScale(
-                child: _DeadlineAnchoredDropdown(
-                  overlayWidth: widget.overlayWidth,
-                  maxHeight: geometry.maxHeight,
-                  tapRegionGroupId: _tapRegionGroupId,
-                  dropdownKey: _dropdownKey,
-                  showTimeSelectors: widget.showTimeSelectors,
-                  monthHeader: header,
-                  calendarGrid: calendarGrid,
-                  timeSelectors: timeSelectors,
-                  actions: actions,
-                ),
+            InBoundsFadeScale(
+              child: _DeadlineAnchoredDropdown(
+                overlayWidth: widget.overlayWidth,
+                maxHeight: geometry.maxHeight,
+                tapRegionGroupId: _tapRegionGroupId,
+                dropdownKey: _dropdownKey,
+                showTimeSelectors: widget.showTimeSelectors,
+                monthHeader: header,
+                calendarGrid: calendarGrid,
+                timeSelectors: timeSelectors,
+                actions: actions,
               ),
             ),
           ],
@@ -915,13 +912,13 @@ class _DeadlineDropdownSurface extends StatelessWidget {
         ),
         child: Material(
           borderRadius: BorderRadius.circular(
-            context.sizing.containerRadius,
+            context.radii.container,
           ),
           color: calendarContainerColor,
           elevation: calendarZoomControlsElevation,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(
-              context.sizing.containerRadius,
+              context.radii.container,
             ),
             child: LayoutBuilder(
               builder: (context, constraints) {

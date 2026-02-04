@@ -158,7 +158,7 @@ class EditTaskDropdown<B extends BaseCalendarBloc> extends StatefulWidget {
 
 class _EditTaskDropdownState<B extends BaseCalendarBloc>
     extends State<EditTaskDropdown<B>> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final GlobalKey<ShadFormState> _formKey = GlobalKey<ShadFormState>();
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _locationController;
@@ -465,7 +465,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         );
       },
     );
-    final double surfaceRadius = context.sizing.containerRadius;
+    final double surfaceRadius = context.radii.container;
     final BorderRadius radius = isSheet
         ? BorderRadius.vertical(top: Radius.circular(surfaceRadius))
         : BorderRadius.circular(surfaceRadius);
@@ -518,9 +518,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       final Widget? keyboardActionRow = actionRow(includeTopBorder: true);
       final Widget? footerActionRow = actionRow(includeTopBorder: false);
 
-      final Widget form = Form(
+      final Widget form = ShadForm(
         key: _formKey,
-        autovalidateMode: AutovalidateMode.disabled,
+        autovalidateMode: ShadAutovalidateMode.disabled,
+        fieldIdSeparator: null,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

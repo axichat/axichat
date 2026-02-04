@@ -880,7 +880,7 @@ class _ChatListTileState extends State<ChatListTile> {
           alignment: const Alignment(0.84, -1),
           depth: unreadDepth,
           thickness: unreadThickness,
-          cornerRadius: sizing.containerRadius,
+          cornerRadius: context.radii.container,
           child: Transform.translate(
             offset: Offset(0, scaled(unreadChildOffset)),
             child: _UnreadBadge(count: unreadCount, highlight: showUnreadBadge),
@@ -911,7 +911,7 @@ class _ChatListTileState extends State<ChatListTile> {
           alignment: const Alignment(0.52, 1),
           depth: spacing.m,
           thickness: timestampThickness,
-          cornerRadius: sizing.containerRadius,
+          cornerRadius: context.radii.container,
           child: Transform.translate(
             offset: Offset(0, -scaled(timestampOffset)),
             child: Text(
@@ -1591,7 +1591,7 @@ class _UnreadBadge extends StatelessWidget {
     final Color textColor =
         highlight ? colors.primaryForeground : colors.mutedForeground;
     final borderWidth = scaled(context.borderSide.width);
-    final cornerRadius = scaled(context.sizing.containerRadius);
+    final cornerRadius = scaled(context.radii.container);
     final horizontalPadding = scaled(spacing.s);
     final verticalPadding = scaled(spacing.xs);
     return Semantics(

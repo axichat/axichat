@@ -195,7 +195,7 @@ class _RequestStatusTile extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+        borderRadius: context.radius,
         border: Border.all(color: calendarBorderColor),
       ),
       child: Column(

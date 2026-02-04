@@ -248,8 +248,7 @@ class _SkeletonLoaderState extends State<SkeletonLoader>
   @override
   Widget build(BuildContext context) {
     final double height = widget.height ?? context.sizing.menuItemIconSize;
-    final double borderRadius =
-        widget.borderRadius ?? context.sizing.containerRadius;
+    final double borderRadius = widget.borderRadius ?? context.radii.container;
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
@@ -293,7 +292,7 @@ class TaskSkeletonTile extends StatelessWidget {
           margin: calendarMarginSmall,
           decoration: BoxDecoration(
             color: calendarContainerColor,
-            borderRadius: BorderRadius.circular(context.sizing.containerRadius),
+            borderRadius: context.radius,
             border: Border.all(
               color: calendarBorderColor,
               width: context.borderSide.width,
@@ -304,7 +303,7 @@ class TaskSkeletonTile extends StatelessWidget {
               SkeletonLoader(
                 width: iconSize,
                 height: iconSize,
-                borderRadius: context.sizing.containerRadius,
+                borderRadius: context.radii.container,
               ),
               const SizedBox(width: calendarGutterMd),
               Expanded(
@@ -328,7 +327,7 @@ class TaskSkeletonTile extends StatelessWidget {
               SkeletonLoader(
                 width: context.sizing.inputSuffixButtonSize,
                 height: context.sizing.inputSuffixButtonSize,
-                borderRadius: context.sizing.containerRadius,
+                borderRadius: context.radii.container,
               ),
             ],
           ),

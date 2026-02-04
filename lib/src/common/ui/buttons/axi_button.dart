@@ -329,7 +329,7 @@ class _AxiButtonState extends State<AxiButton> {
                   )
                 : null;
         final shape = RoundedSuperellipseBorder(
-          borderRadius: context.radius,
+          borderRadius: BorderRadius.circular(context.radii.squircle),
           side: borderSide ?? BorderSide.none,
         );
         final TextStyle baseTextStyle = switch (widget.size) {
