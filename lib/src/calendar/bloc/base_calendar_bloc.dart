@@ -58,7 +58,8 @@ abstract class BaseCalendarBloc
         _storage = storage,
         _nlParserService = parserService ?? NlScheduleParserService(),
         super(CalendarState.initial()) {
-    _registerLinkedTaskBloc();
+    _linkedTaskSubscription =
+        _linkedTaskRegistry.updates.listen(_handleLinkedTaskUpdate);
     _assertStorageRegistered();
     on<CalendarStarted>(_onStarted);
     on<CalendarDataChanged>(_onDataChanged);
@@ -131,10 +132,10 @@ abstract class BaseCalendarBloc
   int _focusSequence = 0;
   static final CalendarLinkedTaskRegistry _linkedTaskRegistry =
       CalendarLinkedTaskRegistry.instance;
-  static final Map<String, BaseCalendarBloc> _linkedTaskBlocs =
-      <String, BaseCalendarBloc>{};
   static final Map<String, Set<String>> _linkedTaskSuppression =
       <String, Set<String>>{};
+  late final StreamSubscription<CalendarLinkedTaskUpdate>
+      _linkedTaskSubscription;
 
   @override
   String get id => _storageId;
@@ -181,14 +182,6 @@ abstract class BaseCalendarBloc
     }
   }
 
-  void _registerLinkedTaskBloc() {
-    _linkedTaskBlocs[id] = this;
-  }
-
-  void _unregisterLinkedTaskBloc() {
-    _linkedTaskBlocs.remove(id);
-  }
-
   bool _consumeLinkedTaskSuppression(String taskId) {
     final Set<String>? suppressed = _linkedTaskSuppression[taskId];
     if (suppressed == null) {
@@ -207,6 +200,27 @@ abstract class BaseCalendarBloc
       () => <String>{},
     );
     suppressed.add(storageId);
+  }
+
+  void _handleLinkedTaskUpdate(CalendarLinkedTaskUpdate update) {
+    if (update.sourceStorageId == id) {
+      return;
+    }
+    if (!update.targetStorageIds.contains(id)) {
+      return;
+    }
+    final CalendarTask task = update.task;
+    final bool hasTask = state.model.tasks.containsKey(task.id);
+    switch (update.operation) {
+      case CalendarLinkedTaskOperation.update:
+        if (hasTask) {
+          add(CalendarEvent.taskUpdated(task: task));
+        }
+      case CalendarLinkedTaskOperation.delete:
+        if (hasTask) {
+          add(CalendarEvent.taskDeleted(taskId: task.id));
+        }
+    }
   }
 
   Future<void> _propagateLinkedTask(
@@ -230,12 +244,19 @@ abstract class BaseCalendarBloc
       return;
     }
     for (final storageId in targets) {
-      final BaseCalendarBloc? targetBloc = _linkedTaskBlocs[storageId];
-      if (targetBloc != null && !targetBloc.isClosed) {
-        _suppressLinkedTask(task.id, storageId);
-        _applyLinkedTaskToBloc(targetBloc, task, operation);
-        continue;
-      }
+      _suppressLinkedTask(task.id, storageId);
+    }
+    final CalendarLinkedTaskOperation registryOperation = switch (operation) {
+      _LinkedTaskOperation.update => CalendarLinkedTaskOperation.update,
+      _LinkedTaskOperation.delete => CalendarLinkedTaskOperation.delete,
+    };
+    _linkedTaskRegistry.notifyLinkedTaskUpdate(
+      sourceStorageId: sourceId,
+      targetStorageIds: targets,
+      task: task,
+      operation: registryOperation,
+    );
+    for (final storageId in targets) {
       await _applyLinkedTaskToStorage(storageId, task, operation);
     }
   }
@@ -263,24 +284,6 @@ abstract class BaseCalendarBloc
   @protected
   Future<void> propagateLinkedTaskDelete(CalendarTask task) async {
     await _propagateLinkedTask(task, _LinkedTaskOperation.delete);
-  }
-
-  void _applyLinkedTaskToBloc(
-    BaseCalendarBloc bloc,
-    CalendarTask task,
-    _LinkedTaskOperation operation,
-  ) {
-    final bool hasTask = bloc.state.model.tasks.containsKey(task.id);
-    switch (operation) {
-      case _LinkedTaskOperation.update:
-        if (hasTask) {
-          bloc.add(CalendarEvent.taskUpdated(task: task));
-        }
-      case _LinkedTaskOperation.delete:
-        if (hasTask) {
-          bloc.add(CalendarEvent.taskDeleted(taskId: task.id));
-        }
-    }
   }
 
   Future<void> _applyLinkedTaskToStorage(
@@ -3199,7 +3202,7 @@ abstract class BaseCalendarBloc
   @override
   Future<void> close() async {
     await _pendingReminderSync;
-    _unregisterLinkedTaskBloc();
+    await _linkedTaskSubscription.cancel();
     return super.close();
   }
 

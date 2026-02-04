@@ -763,10 +763,12 @@ class SettingsControls extends StatelessWidget {
   }
 
   Future<void> _showEmailContactImportDialog(BuildContext context) async {
+    context.read<EmailContactImportCubit>().reset();
     await showFadeScaleDialog<void>(
       context: context,
-      builder: (dialogContext) => EmailContactImportDialog(
-        cubit: context.read<EmailContactImportCubit>()..reset(),
+      builder: (dialogContext) => BlocProvider.value(
+        value: context.read<EmailContactImportCubit>(),
+        child: const EmailContactImportDialog(),
       ),
     );
   }

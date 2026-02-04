@@ -57,7 +57,7 @@ class QuickAddModal extends StatefulWidget {
   final LocationAutocompleteHelper locationHelper;
   final String? initialValidationMessage;
   final bool hasCalendarBloc;
-  final BaseCalendarBloc? calendarBloc;
+  final BaseCalendarBloc? Function()? locateCalendarBloc;
 
   const QuickAddModal({
     super.key,
@@ -69,7 +69,7 @@ class QuickAddModal extends StatefulWidget {
     required this.locationHelper,
     this.initialValidationMessage,
     this.hasCalendarBloc = false,
-    this.calendarBloc,
+    this.locateCalendarBloc,
   });
 
   @override
@@ -563,17 +563,24 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
   }
 
+  BaseCalendarBloc? _locateCalendarBloc() {
+    final resolveBloc = widget.locateCalendarBloc;
+    if (resolveBloc == null) {
+      return null;
+    }
+    return resolveBloc();
+  }
+
   Future<void> _handleCancelPressed() async {
     await _dismissModal();
   }
 
   List<CalendarCriticalPath> _queuedPaths() {
-    final BaseCalendarBloc? bloc = widget.calendarBloc;
-    if (bloc == null) {
+    final Map<String, CalendarCriticalPath>? byId =
+        _locateCalendarBloc()?.state.model.criticalPaths;
+    if (byId == null) {
       return const [];
     }
-    final Map<String, CalendarCriticalPath> byId =
-        bloc.state.model.criticalPaths;
     return _queuedCriticalPathIds
         .map((id) => byId[id])
         .whereType<CalendarCriticalPath>()
@@ -600,14 +607,16 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   Future<void> _queueCriticalPathForDraft() async {
     _setFormError(null);
-    final BaseCalendarBloc? bloc = widget.calendarBloc;
-    if (bloc == null) {
+    if (_locateCalendarBloc() == null) {
       _setFormError(context.l10n.calendarCriticalPathUnavailable);
       return;
     }
+    final List<CalendarCriticalPath> paths =
+        _locateCalendarBloc()?.state.model.criticalPaths.values.toList() ??
+            const <CalendarCriticalPath>[];
     await showCriticalPathPicker(
       context: context,
-      paths: bloc.state.model.criticalPaths.values.toList(),
+      paths: paths,
       stayOpen: true,
       onPathSelected: (path) async {
         _addQueuedCriticalPath(path.id);
@@ -621,11 +630,16 @@ class _QuickAddModalState extends State<QuickAddModal>
         if (!mounted || name == null) {
           return null;
         }
-        final Set<String> previousIds =
-            bloc.state.model.criticalPaths.keys.toSet();
-        bloc.add(CalendarEvent.criticalPathCreated(name: name));
+        final Set<String>? previousIds =
+            _locateCalendarBloc()?.state.model.criticalPaths.keys.toSet();
+        if (previousIds == null) {
+          return null;
+        }
+        _locateCalendarBloc()?.add(
+          CalendarEvent.criticalPathCreated(name: name),
+        );
         final String? createdId = await waitForNewPathId(
-          bloc: bloc,
+          bloc: _locateCalendarBloc()!,
           previousIds: previousIds,
         );
         if (!mounted || createdId == null) {
@@ -651,14 +665,14 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
 
     _formController.setSubmitting(true);
-    final BaseCalendarBloc? calendarBloc = widget.calendarBloc;
     final List<String> queuedPathIds = List<String>.from(
       _queuedCriticalPathIds,
     );
     final bool hasQueuedPaths = queuedPathIds.isNotEmpty;
-    final Set<String>? previousIds =
-        hasQueuedPaths ? calendarBloc?.state.model.tasks.keys.toSet() : null;
-    if (hasQueuedPaths && calendarBloc == null) {
+    final Set<String>? previousIds = hasQueuedPaths
+        ? _locateCalendarBloc()?.state.model.tasks.keys.toSet()
+        : null;
+    if (hasQueuedPaths && _locateCalendarBloc() == null) {
       _formController.setSubmitting(false);
       _setFormError(context.l10n.calendarCriticalPathUnavailable);
       return;
@@ -730,9 +744,9 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     widget.onTaskAdded(task);
 
-    if (hasQueuedPaths && calendarBloc != null && previousIds != null) {
+    if (hasQueuedPaths && previousIds != null) {
       final CalendarTask? createdTask = await _waitForNewTask(
-        calendarBloc,
+        _locateCalendarBloc()!,
         previousIds,
       );
       if (!mounted) {
@@ -740,7 +754,7 @@ class _QuickAddModalState extends State<QuickAddModal>
       }
       if (createdTask != null) {
         for (final String pathId in queuedPathIds) {
-          calendarBloc.add(
+          _locateCalendarBloc()?.add(
             CalendarEvent.criticalPathTaskAdded(
               pathId: pathId,
               taskId: createdTask.id,
@@ -1558,25 +1572,17 @@ class _QuickAddActions extends StatelessWidget {
 }
 
 // Helper function to show the modal
-Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
+Future<void> showQuickAddModal({
   required BuildContext context,
   DateTime? prefilledDateTime,
   String? prefilledText,
   required void Function(CalendarTask task) onTaskAdded,
   required LocationAutocompleteHelper locationHelper,
   String? initialValidationMessage,
-  B? calendarBloc,
-  T Function<T>()? locate,
+  BaseCalendarBloc? Function()? locateCalendarBloc,
 }) {
-  B? resolveBloc() {
-    if (locate != null) {
-      try {
-        return locate<B>();
-      } catch (_) {
-        // Fall back to the explicitly provided bloc when locate cannot resolve.
-      }
-    }
-    return calendarBloc;
+  BaseCalendarBloc? resolveBloc() {
+    return locateCalendarBloc?.call();
   }
 
   final commandSurface = resolveCommandSurface(context);
@@ -1596,8 +1602,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
       barrierColor: scrimColor,
       useRootNavigator: _calendarUseRootNavigator,
       builder: (dialogContext) {
-        final B? resolvedBloc = resolveBloc();
-        final bool hasBloc = resolvedBloc != null;
+        final bool hasBloc = resolveBloc() != null;
         Widget child = QuickAddModal(
           surface: surface,
           prefilledDateTime: prefilledDateTime,
@@ -1606,7 +1611,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
           locationHelper: locationHelper,
           initialValidationMessage: initialValidationMessage,
           hasCalendarBloc: hasBloc,
-          calendarBloc: resolvedBloc,
+          locateCalendarBloc: locateCalendarBloc,
           onDismiss: () {
             if (Navigator.of(dialogContext).canPop()) {
               Navigator.of(dialogContext).maybePop();
@@ -1630,8 +1635,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
     dialogMaxWidth: 760,
     showCloseButton: false,
     builder: (sheetContext) {
-      final B? resolvedBloc = resolveBloc();
-      final bool hasBloc = resolvedBloc != null;
+      final bool hasBloc = resolveBloc() != null;
       Widget child = QuickAddModal(
         surface: surface,
         prefilledDateTime: prefilledDateTime,
@@ -1640,7 +1644,7 @@ Future<void> showQuickAddModal<B extends BaseCalendarBloc>({
         locationHelper: locationHelper,
         initialValidationMessage: initialValidationMessage,
         hasCalendarBloc: hasBloc,
-        calendarBloc: resolvedBloc,
+        locateCalendarBloc: locateCalendarBloc,
         onDismiss: useSheet
             ? null
             : () {

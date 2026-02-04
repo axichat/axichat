@@ -23,16 +23,18 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     super.key,
     required this.path,
     required this.tasks,
+    required this.canAddToPersonal,
+    required this.canAddToChat,
+    required this.locate,
     this.footerDetails = _emptyInlineSpans,
-    this.personalBloc,
-    this.chatBloc,
   });
 
   final CalendarCriticalPath path;
   final List<CalendarTask> tasks;
   final List<InlineSpan> footerDetails;
-  final CalendarBloc? personalBloc;
-  final ChatCalendarBloc? chatBloc;
+  final bool canAddToPersonal;
+  final bool canAddToChat;
+  final T Function<T>() locate;
 
   @override
   Widget build(BuildContext context) {
@@ -44,11 +46,6 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
   }
 
   Future<void> _handleCopy(BuildContext context) async {
-    final CalendarBloc? personalBloc = this.personalBloc;
-    final ChatCalendarBloc? chatBloc = this.chatBloc;
-    final bool canAddToPersonal = personalBloc != null;
-    final bool canAddToChat = chatBloc != null;
-
     if (!canAddToPersonal && !canAddToChat) {
       FeedbackSystem.showInfo(
         context,
@@ -77,23 +74,31 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     final Set<String> taskIds = <String>{}
       ..addAll(importPath?.taskIds ?? const <String>[]);
     bool didCopy = false;
-    if (decision.addToPersonal && personalBloc != null) {
-      final bool copied = await _copyCriticalPathToCalendar(
-        bloc: personalBloc,
-        model: importModel,
-        pathId: path.id,
-        taskIds: taskIds,
-      );
-      didCopy = didCopy || copied;
+    if (decision.addToPersonal && canAddToPersonal) {
+      try {
+        final bool copied = await _copyCriticalPathToCalendar(
+          bloc: locate<CalendarBloc>(),
+          model: importModel,
+          pathId: path.id,
+          taskIds: taskIds,
+        );
+        didCopy = didCopy || copied;
+      } on FlutterError {
+        // Ignore missing bloc.
+      }
     }
-    if (decision.addToChat && chatBloc != null) {
-      final bool copied = await _copyCriticalPathToCalendar(
-        bloc: chatBloc,
-        model: importModel,
-        pathId: path.id,
-        taskIds: taskIds,
-      );
-      didCopy = didCopy || copied;
+    if (decision.addToChat && canAddToChat) {
+      try {
+        final bool copied = await _copyCriticalPathToCalendar(
+          bloc: locate<ChatCalendarBloc>(),
+          model: importModel,
+          pathId: path.id,
+          taskIds: taskIds,
+        );
+        didCopy = didCopy || copied;
+      } on FlutterError {
+        // Ignore missing bloc.
+      }
     }
 
     if (!context.mounted) {

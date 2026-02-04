@@ -35,11 +35,12 @@ class EmailContactImportTile extends StatelessWidget {
             onTap: loading
                 ? null
                 : () {
-                    final cubit = locate<EmailContactImportCubit>()..reset();
+                    locate<EmailContactImportCubit>().reset();
                     showFadeScaleDialog(
                       context: context,
-                      builder: (dialogContext) => EmailContactImportDialog(
-                        cubit: cubit,
+                      builder: (dialogContext) => BlocProvider.value(
+                        value: locate<EmailContactImportCubit>(),
+                        child: const EmailContactImportDialog(),
                       ),
                     );
                   },
@@ -76,11 +77,12 @@ class EmailContactImportActionButton extends StatelessWidget {
             onPressed: loading
                 ? null
                 : () {
-                    final cubit = locate<EmailContactImportCubit>()..reset();
+                    locate<EmailContactImportCubit>().reset();
                     showFadeScaleDialog(
                       context: context,
-                      builder: (dialogContext) => EmailContactImportDialog(
-                        cubit: cubit,
+                      builder: (dialogContext) => BlocProvider.value(
+                        value: locate<EmailContactImportCubit>(),
+                        child: const EmailContactImportDialog(),
                       ),
                     );
                   },
@@ -96,9 +98,7 @@ class EmailContactImportActionButton extends StatelessWidget {
 }
 
 class EmailContactImportDialog extends StatefulWidget {
-  const EmailContactImportDialog({super.key, required this.cubit});
-
-  final EmailContactImportCubit cubit;
+  const EmailContactImportDialog({super.key});
 
   @override
   State<EmailContactImportDialog> createState() =>
@@ -147,7 +147,9 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
     if (file == null) {
       return;
     }
-    widget.cubit.importContacts(file: file, format: _format);
+    context
+        .read<EmailContactImportCubit>()
+        .importContacts(file: file, format: _format);
   }
 
   @override
@@ -155,7 +157,6 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     return BlocConsumer<EmailContactImportCubit, EmailContactImportState>(
-      bloc: widget.cubit,
       listener: (context, state) {
         final showToast = ShadToaster.maybeOf(context)?.show;
         if (showToast == null) {

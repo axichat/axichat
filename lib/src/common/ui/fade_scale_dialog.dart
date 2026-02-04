@@ -4,7 +4,6 @@
 import 'package:animations/animations.dart';
 import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 
 const Color _defaultDialogBarrierColor = Color(0xcc000000);
@@ -27,9 +26,8 @@ Future<T?> showFadeScaleDialog<T>({
       barrierColor ?? themeBarrierColor ?? _defaultDialogBarrierColor;
   final String resolvedBarrierLabel = barrierLabel ??
       MaterialLocalizations.of(context).modalBarrierDismissLabel;
-  final SettingsCubit? settingsCubit = maybeSettingsCubit(context);
   final Duration resolvedDuration = transitionDuration ??
-      settingsCubit?.animationDuration ??
+      maybeSettingsCubit(context)?.animationDuration ??
       _fallbackDialogAnimationDuration;
 
   return showGeneralDialog<T>(

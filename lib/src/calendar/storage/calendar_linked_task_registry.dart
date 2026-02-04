@@ -1,9 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 const String _linkedTaskRegistryStorageKey = 'calendar_linked_tasks_v1';
+
+enum CalendarLinkedTaskOperation { update, delete }
+
+class CalendarLinkedTaskUpdate {
+  CalendarLinkedTaskUpdate({
+    required this.sourceStorageId,
+    required this.targetStorageIds,
+    required this.task,
+    required this.operation,
+  });
+
+  final String sourceStorageId;
+  final Set<String> targetStorageIds;
+  final CalendarTask task;
+  final CalendarLinkedTaskOperation operation;
+}
 
 class CalendarLinkedTaskRegistry {
   CalendarLinkedTaskRegistry({
@@ -17,6 +36,37 @@ class CalendarLinkedTaskRegistry {
 
   final Storage _storage;
   final String _storageKey;
+  final StreamController<CalendarLinkedTaskUpdate> _updatesController =
+      StreamController<CalendarLinkedTaskUpdate>.broadcast();
+
+  Stream<CalendarLinkedTaskUpdate> get updates => _updatesController.stream;
+
+  void notifyLinkedTaskUpdate({
+    required String sourceStorageId,
+    required Iterable<String> targetStorageIds,
+    required CalendarTask task,
+    required CalendarLinkedTaskOperation operation,
+  }) {
+    final String sourceId = sourceStorageId.trim();
+    if (sourceId.isEmpty) {
+      return;
+    }
+    final Set<String> targets = targetStorageIds
+        .map((storageId) => storageId.trim())
+        .where((storageId) => storageId.isNotEmpty && storageId != sourceId)
+        .toSet();
+    if (targets.isEmpty) {
+      return;
+    }
+    _updatesController.add(
+      CalendarLinkedTaskUpdate(
+        sourceStorageId: sourceId,
+        targetStorageIds: targets,
+        task: task,
+        operation: operation,
+      ),
+    );
+  }
 
   Set<String> linkedStorageIds(String taskId) {
     final String trimmed = taskId.trim();

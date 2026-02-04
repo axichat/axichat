@@ -802,8 +802,6 @@ class _TaskActionMenuState extends State<_TaskActionMenu> {
       controller: _controller,
       closeOnTapOutside: true,
       padding: EdgeInsets.zero,
-      decoration: const ShadDecoration.none,
-      shadows: const <BoxShadow>[],
       popover: (context) => AxiMenu(actions: actions),
       child: AxiIconButton.ghost(
         iconData: Icons.more_vert,

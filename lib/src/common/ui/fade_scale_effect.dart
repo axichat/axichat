@@ -15,8 +15,7 @@ const Curve _fadeScaleEffectCurve = Curves.linear;
 const Duration _fallbackFadeScaleDuration = Duration(milliseconds: 300);
 
 Duration resolveFadeScaleDuration(BuildContext context) {
-  final SettingsCubit? settingsCubit = maybeSettingsCubit(context);
-  if (settingsCubit == null) {
+  if (maybeSettingsCubit(context) == null) {
     return _fallbackFadeScaleDuration;
   }
   return context.select<SettingsCubit, Duration>(

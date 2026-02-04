@@ -288,13 +288,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
-    final chatsCubit = context.read<ChatsCubit>();
-    final chatsState = chatsCubit.state;
+    final chatsState = context.read<ChatsCubit>().state;
     if (chatsState.openStack.skip(1).isNotEmpty) {
-      chatsCubit.popChat();
+      context.read<ChatsCubit>().popChat();
       return;
     }
-    chatsCubit.closeAllChats();
+    context.read<ChatsCubit>().closeAllChats();
   }
 
   void _clearOpenChatHistoryEntry() {
@@ -325,12 +324,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
-    final chatsCubit = context.read<ChatsCubit>();
-    final chatsState = chatsCubit.state;
+    final chatsState = context.read<ChatsCubit>().state;
     if (!chatsState.openCalendar) {
       return;
     }
-    chatsCubit.toggleCalendar();
+    context.read<ChatsCubit>().toggleCalendar();
   }
 
   void _clearOpenCalendarHistoryEntry() {
@@ -384,9 +382,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (notifier == null || notifier.value == null) {
       return;
     }
-    final chatsCubit = context.read<ChatsCubit>();
-    if (!chatsCubit.state.openCalendar) {
-      chatsCubit.toggleCalendar();
+    if (!context.read<ChatsCubit>().state.openCalendar) {
+      context.read<ChatsCubit>().toggleCalendar();
     }
   }
 

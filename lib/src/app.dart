@@ -100,8 +100,6 @@ class _AxichatState extends State<Axichat> {
     notificationService: widget._notificationService,
   );
   late final XmppService _xmppService;
-  late final XmppActivityCubit _xmppActivityCubit;
-  late final SettingsCubit _settingsCubit;
 
   @override
   void initState() {
@@ -136,25 +134,11 @@ class _AxichatState extends State<Axichat> {
           notificationService: widget._notificationService,
           capability: widget._capability,
         );
-    _xmppActivityCubit = XmppActivityCubit(xmppBase: _xmppService);
-    _settingsCubit = SettingsCubit(
-      xmppService: _xmppService,
-      capability: widget._capability,
-    );
-    _settingsCubit.setAttachmentAutoDownloadSettings(
-      imagesEnabled: _settingsCubit.state.autoDownloadImages,
-      videosEnabled: _settingsCubit.state.autoDownloadVideos,
-      documentsEnabled: _settingsCubit.state.autoDownloadDocuments,
-      archivesEnabled: _settingsCubit.state.autoDownloadArchives,
-      force: true,
-    );
   }
 
   @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
-    _xmppActivityCubit.close();
-    _settingsCubit.close();
     Future<void>(() async {
       await _reminderController.clearAll();
     });
@@ -183,8 +167,11 @@ class _AxichatState extends State<Axichat> {
           ),
         ),
       ],
-      child: BlocProvider.value(
-        value: _settingsCubit,
+      child: BlocProvider(
+        create: (context) => SettingsCubit(
+          xmppService: _xmppService,
+          capability: widget._capability,
+        )..primeAttachmentAutoDownloadSettings(),
         child: Builder(
           builder: (context) {
             final storageManager = context.read<CalendarStorageManager>();
@@ -236,7 +223,11 @@ class _AxichatState extends State<Axichat> {
                     create: (context) => OmemoActivityCubit(
                         xmppBase: context.read<XmppService>()),
                   ),
-                  BlocProvider.value(value: _xmppActivityCubit),
+                  BlocProvider(
+                    create: (context) => XmppActivityCubit(
+                      xmppBase: context.read<XmppService>(),
+                    ),
+                  ),
                   BlocProvider(
                     create: (context) => ShareIntentCubit()..initialize(),
                   ),

@@ -483,13 +483,16 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
           return;
         }
         if (!mounted) return;
-        final GuestCalendarBloc calendarBloc =
-            context.read<GuestCalendarBloc>();
-        final CalendarModel mergedModel =
-            calendarBloc.state.model.mergeWith(importedModel);
-        calendarBloc.add(CalendarEvent.modelImported(model: importedModel));
+        final CalendarModel mergedModel = context
+            .read<GuestCalendarBloc>()
+            .state
+            .model
+            .mergeWith(importedModel);
+        context
+            .read<GuestCalendarBloc>()
+            .add(CalendarEvent.modelImported(model: importedModel));
         final bool imported = await waitForCalendarChecksum(
-          bloc: calendarBloc,
+          bloc: context.read<GuestCalendarBloc>(),
           checksum: mergedModel.checksum,
         );
         if (!mounted) {
@@ -518,12 +521,13 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
         return;
       }
       if (!mounted) return;
-      final GuestCalendarBloc calendarBloc = context.read<GuestCalendarBloc>();
       final Set<String> taskIds = <String>{}
         ..addAll(tasks.map((task) => task.id));
-      calendarBloc.add(CalendarEvent.tasksImported(tasks: tasks));
+      context
+          .read<GuestCalendarBloc>()
+          .add(CalendarEvent.tasksImported(tasks: tasks));
       final bool imported = await waitForTasksInCalendar(
-        bloc: calendarBloc,
+        bloc: context.read<GuestCalendarBloc>(),
         taskIds: taskIds,
       );
       if (!mounted) {

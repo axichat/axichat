@@ -73,10 +73,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                     ? l10n.commonFavorite
                     : l10n.commonUnfavorite,
                 onPressed: () async {
-                  final chatsCubit = context.read<ChatsCubit>();
-                  await chatsCubit.bulkToggleFavorited(
-                    favorited: shouldFavorite,
-                  );
+                  await context
+                      .read<ChatsCubit>()
+                      .bulkToggleFavorited(favorited: shouldFavorite);
                 },
               ),
               ContextActionButton(
@@ -87,10 +86,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 label:
                     shouldArchive ? l10n.commonArchive : l10n.commonUnarchive,
                 onPressed: () async {
-                  final chatsCubit = context.read<ChatsCubit>();
-                  await chatsCubit.bulkToggleArchived(
-                    archived: shouldArchive,
-                  );
+                  await context
+                      .read<ChatsCubit>()
+                      .bulkToggleArchived(archived: shouldArchive);
                 },
               ),
               ContextActionButton(
@@ -100,10 +98,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 ),
                 label: shouldHide ? l10n.commonHide : l10n.commonShow,
                 onPressed: () async {
-                  final chatsCubit = context.read<ChatsCubit>();
-                  await chatsCubit.bulkToggleHidden(
-                    hidden: shouldHide,
-                  );
+                  await context
+                      .read<ChatsCubit>()
+                      .bulkToggleHidden(hidden: shouldHide);
                 },
               ),
               ChatExportActionButton(

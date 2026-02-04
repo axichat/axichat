@@ -117,6 +117,16 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(autoLoadEmailImages: enabled));
   }
 
+  void primeAttachmentAutoDownloadSettings() {
+    setAttachmentAutoDownloadSettings(
+      imagesEnabled: state.autoDownloadImages,
+      videosEnabled: state.autoDownloadVideos,
+      documentsEnabled: state.autoDownloadDocuments,
+      archivesEnabled: state.autoDownloadArchives,
+      force: true,
+    );
+  }
+
   void setAttachmentAutoDownloadSettings({
     required bool imagesEnabled,
     required bool videosEnabled,

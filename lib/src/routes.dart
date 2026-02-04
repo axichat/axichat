@@ -51,11 +51,10 @@ class TransitionGoRouteData extends GoRouteData {
 
   @override
   Page<void> buildPage(BuildContext context, GoRouterState state) {
-    final settingsCubit = context.watch<SettingsCubit>();
-    if (settingsCubit.state.lowMotion) {
+    if (context.watch<SettingsCubit>().state.lowMotion) {
       return NoTransitionPage(child: build(context, state));
     }
-    final animationDuration = settingsCubit.animationDuration;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     return CustomTransitionPage(
       transitionDuration: animationDuration,
       reverseTransitionDuration: animationDuration,

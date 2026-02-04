@@ -102,6 +102,7 @@ import 'package:flutter/rendering.dart'
         RenderProxyBox;
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -822,8 +823,6 @@ class _ChatState extends State<Chat> {
   bool _subjectChangeSuppressed = false;
   List<ComposerRecipient> _recipients = const [];
   String? _recipientsChatJid;
-  ChatCalendarBloc? _chatCalendarBloc;
-  String? _chatCalendarJid;
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
@@ -1114,16 +1113,6 @@ class _ChatState extends State<Chat> {
     return participants;
   }
 
-  void _disposeChatCalendarBloc() {
-    final bloc = _chatCalendarBloc;
-    if (bloc == null) {
-      return;
-    }
-    bloc.close();
-    _chatCalendarBloc = null;
-    _chatCalendarJid = null;
-  }
-
   ChatCalendarSyncCoordinator? _resolveChatCalendarCoordinator({
     required CalendarStorageManager storageManager,
   }) {
@@ -1159,50 +1148,6 @@ class _ChatState extends State<Chat> {
       sendSnapshotFile: (file) =>
           locate<ChatBloc>().uploadCalendarSnapshot(file),
     );
-  }
-
-  ChatCalendarBloc? _resolveChatCalendarBloc({
-    required chat_models.Chat? chat,
-    required bool calendarAvailable,
-    required ChatCalendarSyncCoordinator? coordinator,
-  }) {
-    final resolvedChat = chat;
-    if (!calendarAvailable || resolvedChat == null) {
-      _disposeChatCalendarBloc();
-      return null;
-    }
-    if (_chatCalendarBloc != null && _chatCalendarJid == resolvedChat.jid) {
-      return _chatCalendarBloc;
-    }
-    _disposeChatCalendarBloc();
-    final storageManager = context.read<CalendarStorageManager>();
-    final storage = storageManager.authStorage;
-    final resolvedCoordinator = coordinator;
-    if (storage == null || resolvedCoordinator == null) {
-      return null;
-    }
-    final reminderController = context.read<CalendarReminderController>();
-    final xmppService = context.read<XmppService>();
-    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
-    final emailService =
-        endpointConfig.enableSmtp ? context.read<EmailService>() : null;
-    final availabilityCoordinator = _readAvailabilityShareCoordinator(
-      context,
-      calendarAvailable: storageManager.isAuthStorageReady,
-    );
-    final bloc = ChatCalendarBloc(
-      chatJid: resolvedChat.jid,
-      chatType: resolvedChat.type,
-      coordinator: resolvedCoordinator,
-      storage: storage,
-      xmppService: xmppService,
-      emailService: emailService,
-      reminderController: reminderController,
-      availabilityCoordinator: availabilityCoordinator,
-    )..add(const CalendarEvent.started());
-    _chatCalendarBloc = bloc;
-    _chatCalendarJid = resolvedChat.jid;
-    return bloc;
   }
 
   void _appendTaskShareText(CalendarTask task, {String? shareText}) {
@@ -2158,15 +2103,17 @@ class _ChatState extends State<Chat> {
   }
 
   List<BlocklistEntry> _resolveBlocklistEntries() {
-    final blocklistCubit = context.watch<BlocklistCubit>();
-    final List<BlocklistEntry>? cachedEntries = switch (blocklistCubit.state) {
-      BlocklistAvailable state => state.items ??
-          blocklistCubit[BlocklistCubit.blocklistItemsCacheKey]
-              as List<BlocklistEntry>?,
-      _ => blocklistCubit[BlocklistCubit.blocklistItemsCacheKey]
-          as List<BlocklistEntry>?,
+    final List<BlocklistEntry>? cachedEntries =
+        context.select<BlocklistCubit, List<BlocklistEntry>?>(
+      (cubit) =>
+          cubit[BlocklistCubit.blocklistItemsCacheKey] as List<BlocklistEntry>?,
+    );
+    final BlocklistState blocklistState = context.watch<BlocklistCubit>().state;
+    final List<BlocklistEntry>? resolvedEntries = switch (blocklistState) {
+      BlocklistAvailable state => state.items ?? cachedEntries,
+      _ => cachedEntries,
     };
-    return cachedEntries ?? _emptyBlocklistEntries;
+    return resolvedEntries ?? _emptyBlocklistEntries;
   }
 
   BlocklistEntry? _resolveChatBlocklistEntry({
@@ -3216,7 +3163,6 @@ class _ChatState extends State<Chat> {
     _attachmentButtonFocusNode.dispose();
     _emojiPopoverController.dispose();
     _bubbleRegionRegistry.clear();
-    _disposeChatCalendarBloc();
     _clearChatRouteHistoryEntry();
     super.dispose();
   }
@@ -3269,7 +3215,16 @@ class _ChatState extends State<Chat> {
                 await context
                     .read<ChatSearchCubit>()
                     .updateEmailService(emailService);
-                _chatCalendarBloc?.updateEmailService(emailService);
+                if (!context.mounted) {
+                  return;
+                }
+                try {
+                  context
+                      .read<ChatCalendarBloc>()
+                      .updateEmailService(emailService);
+                } on FlutterError {
+                  // Chat calendar not available in this context.
+                }
               },
             ),
             BlocListener<ChatSearchCubit, ChatSearchState>(
@@ -3595,10 +3550,6 @@ class _ChatState extends State<Chat> {
                       : null;
               final bool personalCalendarAvailable =
                   storageManager.isAuthStorageReady;
-              final CalendarBloc? personalCalendarBloc =
-                  personalCalendarAvailable
-                      ? context.read<CalendarBloc>()
-                      : null;
               final bool supportsChatCalendar =
                   chatEntity?.supportsChatCalendar ?? false;
               final bool chatCalendarReady =
@@ -3608,16 +3559,14 @@ class _ChatState extends State<Chat> {
               final bool chatCalendarEnabled =
                   (supportsChatCalendar && chatCalendarReady) ||
                       demoEmailCalendarReady;
-              final ChatCalendarBloc? chatCalendarBloc =
-                  _resolveChatCalendarBloc(
-                chat: chatEntity,
-                calendarAvailable: chatCalendarEnabled,
-                coordinator: supportsChatCalendar
-                    ? chatCalendarCoordinator
-                    : demoEmailCoordinator,
-              );
-              final bool chatCalendarAvailable =
-                  chatCalendarEnabled && chatCalendarBloc != null;
+              final ChatCalendarSyncCoordinator?
+                  resolvedChatCalendarCoordinator = supportsChatCalendar
+                      ? chatCalendarCoordinator
+                      : demoEmailCoordinator;
+              final bool chatCalendarAvailable = chatCalendarEnabled &&
+                  resolvedChatCalendarCoordinator != null &&
+                  storage != null &&
+                  chatEntity != null;
               final retryEntry = _lastReportEntryWhere(
                 fanOutReports.entries,
                 (entry) => entry.value.hasFailures,
@@ -3712,8 +3661,7 @@ class _ChatState extends State<Chat> {
                       iconData: LucideIcons.x,
                       onPressed: () {
                         if (!prepareChatExit()) return;
-                        final chatsCubit = context.read<ChatsCubit>();
-                        chatsCubit.closeAllChats();
+                        context.read<ChatsCubit>().closeAllChats();
                       },
                     );
               final List<AppBarActionItem> navigationActions =
@@ -3724,8 +3672,7 @@ class _ChatState extends State<Chat> {
                     iconData: LucideIcons.arrowLeft,
                     onPressed: () {
                       if (!prepareChatExit()) return;
-                      final chatsCubit = context.read<ChatsCubit>();
-                      chatsCubit.popChat();
+                      context.read<ChatsCubit>().popChat();
                     },
                   ),
                 if (!readOnly && forwardStack.isNotEmpty)
@@ -3734,8 +3681,7 @@ class _ChatState extends State<Chat> {
                     iconData: LucideIcons.arrowRight,
                     onPressed: () {
                       if (!prepareChatExit()) return;
-                      final chatsCubit = context.read<ChatsCubit>();
-                      chatsCubit.restoreChat();
+                      context.read<ChatsCubit>().restoreChat();
                     },
                   ),
               ];
@@ -4893,10 +4839,12 @@ class _ChatState extends State<Chat> {
                                           onClose: _closePinnedMessages,
                                           canTogglePins: canTogglePins,
                                           canShowCalendarTasks:
-                                              chatCalendarBloc != null,
-                                          personalCalendarBloc:
-                                              personalCalendarBloc,
-                                          chatCalendarBloc: chatCalendarBloc,
+                                              chatCalendarAvailable,
+                                          canAddToPersonalCalendar:
+                                              personalCalendarAvailable,
+                                          canAddToChatCalendar:
+                                              chatCalendarAvailable,
+                                          locate: context.read,
                                           roomState: state.roomState,
                                           metadataStreamFor: _metadataStreamFor,
                                           metadataInitialFor:
@@ -6341,13 +6289,11 @@ class _ChatState extends State<Chat> {
                                                                 null) {
                                                               final ShapeBorder
                                                                   calendarTaskShape =
-                                                                  chatCalendarBloc ==
-                                                                          null
+                                                                  !chatCalendarAvailable
                                                                       ? calendarMessageCardShape
                                                                       : calendarTaskBaseShape;
                                                               addExtra(
-                                                                chatCalendarBloc ==
-                                                                        null
+                                                                !chatCalendarAvailable
                                                                     ? CalendarFragmentCard(
                                                                         fragment:
                                                                             CalendarFragment.task(
@@ -6394,10 +6340,13 @@ class _ChatState extends State<Chat> {
                                                                       .tasks,
                                                                   footerDetails:
                                                                       fragmentFooterDetails,
-                                                                  personalBloc:
-                                                                      personalCalendarBloc,
-                                                                  chatBloc:
-                                                                      chatCalendarBloc,
+                                                                  canAddToPersonal:
+                                                                      personalCalendarAvailable,
+                                                                  canAddToChat:
+                                                                      chatCalendarAvailable,
+                                                                  locate:
+                                                                      context
+                                                                          .read,
                                                                 ),
                                                                 orElse: () =>
                                                                     CalendarFragmentCard(
@@ -8053,7 +8002,6 @@ class _ChatState extends State<Chat> {
                           ),
                           chat: chatEntity,
                           calendarAvailable: chatCalendarAvailable,
-                          calendarBloc: chatCalendarBloc,
                         );
                         final Widget overlayChild = switch (_chatRoute) {
                           ChatRouteIndex.main => const SizedBox.expand(),
@@ -8191,12 +8139,26 @@ class _ChatState extends State<Chat> {
                   );
                 },
               );
-              final Widget content = chatCalendarBloc == null
-                  ? scaffold
-                  : BlocProvider<ChatCalendarBloc>.value(
-                      value: chatCalendarBloc,
-                      child: scaffold,
-                    );
+              final Widget content = _ChatCalendarScope(
+                chat: chatEntity,
+                calendarAvailable: chatCalendarAvailable,
+                coordinator: resolvedChatCalendarCoordinator,
+                storage: storage,
+                xmppService: context.read<XmppService>(),
+                emailService: context
+                        .watch<SettingsCubit>()
+                        .state
+                        .endpointConfig
+                        .enableSmtp
+                    ? context.read<EmailService>()
+                    : null,
+                reminderController: context.read<CalendarReminderController>(),
+                availabilityCoordinator: _readAvailabilityShareCoordinator(
+                  context,
+                  calendarAvailable: storageManager.isAuthStorageReady,
+                ),
+                child: scaffold,
+              );
               final colors = context.colorScheme;
               return Container(
                 decoration: BoxDecoration(
@@ -8445,7 +8407,6 @@ class _ChatState extends State<Chat> {
         _showSnackbar(l10n.chatCalendarUnavailable);
         return;
       }
-      final calendarBloc = context.read<CalendarBloc>();
       final DateTime baseDate = demoNow();
       final DateTime scheduledTime = DateTime(
         baseDate.year,
@@ -8455,14 +8416,14 @@ class _ChatState extends State<Chat> {
       );
       const Duration duration = Duration(hours: 1);
       const String title = 'hang out';
-      calendarBloc.add(
-        CalendarEvent.taskAdded(
-          title: title,
-          scheduledTime: scheduledTime,
-          duration: duration,
-          priority: TaskPriority.none,
-        ),
-      );
+      context.read<CalendarBloc>().add(
+            CalendarEvent.taskAdded(
+              title: title,
+              scheduledTime: scheduledTime,
+              duration: duration,
+              priority: TaskPriority.none,
+            ),
+          );
       FeedbackSystem.showSuccess(
         context,
         l10n.chatCalendarTaskCopySuccessMessage,
@@ -8494,7 +8455,7 @@ class _ChatState extends State<Chat> {
       context: context,
       prefilledText: calendarText,
       locationHelper: locationHelper,
-      locate: context.read,
+      locateCalendarBloc: () => context.read<CalendarBloc>(),
       onTaskAdded: (task) {
         context.read<CalendarBloc>().add(
               CalendarEvent.taskAdded(
@@ -8689,7 +8650,7 @@ class _ChatState extends State<Chat> {
       context: context,
       prefilledText: calendarText,
       locationHelper: locationHelper,
-      locate: context.read,
+      locateCalendarBloc: () => context.read<CalendarBloc>(),
       onTaskAdded: (task) {
         context.read<CalendarBloc>().add(
               CalendarEvent.taskAdded(
@@ -9018,8 +8979,9 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.onClose,
     required this.canTogglePins,
     required this.canShowCalendarTasks,
-    required this.personalCalendarBloc,
-    required this.chatCalendarBloc,
+    required this.canAddToPersonalCalendar,
+    required this.canAddToChatCalendar,
+    required this.locate,
     required this.roomState,
     required this.metadataStreamFor,
     required this.metadataInitialFor,
@@ -9039,8 +9001,9 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final VoidCallback onClose;
   final bool canTogglePins;
   final bool canShowCalendarTasks;
-  final CalendarBloc? personalCalendarBloc;
-  final ChatCalendarBloc? chatCalendarBloc;
+  final bool canAddToPersonalCalendar;
+  final bool canAddToChatCalendar;
+  final T Function<T>() locate;
   final RoomState? roomState;
   final Stream<FileMetadataData?> Function(String) metadataStreamFor;
   final FileMetadataData? Function(String) metadataInitialFor;
@@ -9153,8 +9116,9 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                     roomState: widget.roomState,
                     canTogglePins: widget.canTogglePins,
                     canShowCalendarTasks: widget.canShowCalendarTasks,
-                    personalCalendarBloc: widget.personalCalendarBloc,
-                    chatCalendarBloc: widget.chatCalendarBloc,
+                    canAddToPersonalCalendar: widget.canAddToPersonalCalendar,
+                    canAddToChatCalendar: widget.canAddToChatCalendar,
+                    locate: widget.locate,
                     isHydrating: widget.pinnedMessagesHydrating,
                     accountJid: widget.accountJid,
                     metadataStreamFor: widget.metadataStreamFor,
@@ -9222,8 +9186,9 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.roomState,
     required this.canTogglePins,
     required this.canShowCalendarTasks,
-    required this.personalCalendarBloc,
-    required this.chatCalendarBloc,
+    required this.canAddToPersonalCalendar,
+    required this.canAddToChatCalendar,
+    required this.locate,
     required this.isHydrating,
     required this.accountJid,
     required this.metadataStreamFor,
@@ -9239,8 +9204,9 @@ class _PinnedMessageTile extends StatelessWidget {
   final RoomState? roomState;
   final bool canTogglePins;
   final bool canShowCalendarTasks;
-  final CalendarBloc? personalCalendarBloc;
-  final ChatCalendarBloc? chatCalendarBloc;
+  final bool canAddToPersonalCalendar;
+  final bool canAddToChatCalendar;
+  final T Function<T>() locate;
   final bool isHydrating;
   final String? accountJid;
   final Stream<FileMetadataData?> Function(String) metadataStreamFor;
@@ -9521,8 +9487,9 @@ class _PinnedMessageTile extends StatelessWidget {
           path: resolvedCriticalPath.path,
           tasks: resolvedCriticalPath.tasks,
           footerDetails: _emptyInlineSpans,
-          personalBloc: personalCalendarBloc,
-          chatBloc: chatCalendarBloc,
+          canAddToPersonal: canAddToPersonalCalendar,
+          canAddToChat: canAddToChatCalendar,
+          locate: locate,
         ),
       );
     }
@@ -9598,34 +9565,83 @@ class _PinnedMessageTile extends StatelessWidget {
   }
 }
 
-class _ChatCalendarPanel extends StatelessWidget {
-  const _ChatCalendarPanel({
+class _ChatCalendarScope extends StatelessWidget {
+  const _ChatCalendarScope({
     required this.chat,
     required this.calendarAvailable,
-    required this.calendarBloc,
+    required this.coordinator,
+    required this.storage,
+    required this.xmppService,
+    required this.emailService,
+    required this.reminderController,
+    required this.availabilityCoordinator,
+    required this.child,
   });
 
   final chat_models.Chat? chat;
   final bool calendarAvailable;
-  final ChatCalendarBloc? calendarBloc;
+  final ChatCalendarSyncCoordinator? coordinator;
+  final Storage? storage;
+  final XmppService xmppService;
+  final EmailService? emailService;
+  final CalendarReminderController reminderController;
+  final CalendarAvailabilityShareCoordinator? availabilityCoordinator;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     final resolvedChat = chat;
-    final resolvedBloc = calendarBloc;
-    if (!calendarAvailable || resolvedChat == null || resolvedBloc == null) {
+    final resolvedCoordinator = coordinator;
+    final resolvedStorage = storage;
+    if (!calendarAvailable ||
+        resolvedChat == null ||
+        resolvedCoordinator == null ||
+        resolvedStorage == null) {
+      return child;
+    }
+    return BlocProvider<ChatCalendarBloc>(
+      key: ValueKey('chat-calendar-${resolvedChat.jid}'),
+      create: (context) => ChatCalendarBloc(
+        chatJid: resolvedChat.jid,
+        chatType: resolvedChat.type,
+        coordinator: resolvedCoordinator,
+        storage: resolvedStorage,
+        xmppService: xmppService,
+        emailService: emailService,
+        reminderController: reminderController,
+        availabilityCoordinator: availabilityCoordinator,
+      )..add(const CalendarEvent.started()),
+      child: Builder(
+        builder: (context) {
+          return BlocProvider<CalendarBloc>.value(
+            value: context.watch<ChatCalendarBloc>(),
+            child: child,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ChatCalendarPanel extends StatelessWidget {
+  const _ChatCalendarPanel({
+    required this.chat,
+    required this.calendarAvailable,
+  });
+
+  final chat_models.Chat? chat;
+  final bool calendarAvailable;
+
+  @override
+  Widget build(BuildContext context) {
+    final resolvedChat = chat;
+    if (!calendarAvailable || resolvedChat == null) {
       return const SizedBox.shrink();
     }
-    return MultiBlocProvider(
-      providers: [
-        BlocProvider<ChatCalendarBloc>.value(value: resolvedBloc),
-        BlocProvider<CalendarBloc>.value(value: resolvedBloc),
-      ],
-      child: ChatCalendarWidget(
-        chat: resolvedChat,
-        showHeader: true,
-        showBackButton: false,
-      ),
+    return ChatCalendarWidget(
+      chat: resolvedChat,
+      showHeader: true,
+      showBackButton: false,
     );
   }
 }
@@ -9756,18 +9772,15 @@ class _ChatCalendarOverlay extends StatelessWidget {
     super.key,
     required this.chat,
     required this.calendarAvailable,
-    required this.calendarBloc,
   });
 
   final chat_models.Chat? chat;
   final bool calendarAvailable;
-  final ChatCalendarBloc? calendarBloc;
 
   @override
   Widget build(BuildContext context) {
     final resolvedChat = chat;
-    final resolvedBloc = calendarBloc;
-    if (!calendarAvailable || resolvedChat == null || resolvedBloc == null) {
+    if (!calendarAvailable || resolvedChat == null) {
       return const SizedBox.shrink();
     }
     return ColoredBox(
@@ -9777,7 +9790,6 @@ class _ChatCalendarOverlay extends StatelessWidget {
         child: _ChatCalendarPanel(
           chat: resolvedChat,
           calendarAvailable: calendarAvailable,
-          calendarBloc: resolvedBloc,
         ),
       ),
     );

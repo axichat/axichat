@@ -19,9 +19,8 @@ class InBoundsFadeScale extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final SettingsCubit? settingsCubit = maybeSettingsCubit(context);
     final Duration resolvedDuration = duration ??
-        (settingsCubit == null
+        (maybeSettingsCubit(context) == null
             ? _fallbackFadeScaleDuration
             : context.select<SettingsCubit, Duration>(
                 (cubit) => cubit.animationDuration,

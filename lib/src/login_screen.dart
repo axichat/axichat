@@ -86,8 +86,8 @@ class _LoginScreenState extends State<LoginScreen>
     context.read<AuthenticationCubit>().login();
   }
 
-  Duration _progressRampDuration(SettingsCubit settings) {
-    if (settings.animationDuration == Duration.zero) {
+  Duration _progressRampDuration(Duration animationDuration) {
+    if (animationDuration == Duration.zero) {
       return Duration.zero;
     }
     return authProgressRampDuration;
@@ -132,7 +132,6 @@ class _LoginScreenState extends State<LoginScreen>
     if (state is AuthenticationSignUpInProgress && !state.fromSubmission) {
       return;
     }
-    final settings = context.read<SettingsCubit>();
     if (state is AuthenticationSignUpInProgress) {
       if (_selectedFlow != _AuthFlow.signup) {
         setState(() {
@@ -142,7 +141,9 @@ class _LoginScreenState extends State<LoginScreen>
       _completionHandledState = null;
       _startAuthProgress(
         label: context.l10n.authCreatingAccount,
-        rampDuration: _progressRampDuration(settings),
+        rampDuration: _progressRampDuration(
+          context.read<SettingsCubit>().animationDuration,
+        ),
       );
       _startAuthTimeout(_AuthFlow.signup);
       return;
@@ -157,7 +158,9 @@ class _LoginScreenState extends State<LoginScreen>
         }
         _startAuthProgress(
           label: context.l10n.authSecuringLogin,
-          rampDuration: _progressRampDuration(settings),
+          rampDuration: _progressRampDuration(
+            context.read<SettingsCubit>().animationDuration,
+          ),
         );
         _startAuthTimeout(_AuthFlow.signup);
       } else {
@@ -168,7 +171,9 @@ class _LoginScreenState extends State<LoginScreen>
         }
         _startAuthProgress(
           label: context.l10n.authLoggingIn,
-          rampDuration: _progressRampDuration(settings),
+          rampDuration: _progressRampDuration(
+            context.read<SettingsCubit>().animationDuration,
+          ),
         );
         _startAuthTimeout(_AuthFlow.login);
       }
@@ -179,7 +184,7 @@ class _LoginScreenState extends State<LoginScreen>
       _completionHandledState = null;
       _clearAuthTimeout();
       await _authProgressController.fail(
-        duration: settings.animationDuration,
+        duration: context.read<SettingsCubit>().animationDuration,
       );
       return;
     }
@@ -196,7 +201,7 @@ class _LoginScreenState extends State<LoginScreen>
       _clearAuthTimeout();
       final preloadHome = _preloadHomeScreenCache();
       await _authProgressController.complete(
-        duration: settings.authCompletionDuration,
+        duration: context.read<SettingsCubit>().authCompletionDuration,
       );
       await preloadHome;
       return;

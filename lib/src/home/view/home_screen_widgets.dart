@@ -718,9 +718,8 @@ class _HomeShellNavigationRail extends StatelessWidget {
 
   void _openCalendar(BuildContext context) {
     const HomeRoute().go(context);
-    final chatsCubit = context.read<ChatsCubit>();
-    if (!chatsCubit.state.openCalendar) {
-      chatsCubit.toggleCalendar();
+    if (!context.read<ChatsCubit>().state.openCalendar) {
+      context.read<ChatsCubit>().toggleCalendar();
     }
   }
 

@@ -253,8 +253,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
 
   Future<void> _handleDemoQuickAdd() async {
     if (!kEnableDemoChats) return;
-    final CalendarBloc? personalBloc = _maybeReadPersonalCalendarBloc();
-    if (personalBloc == null) {
+    if (!_canReadBloc<CalendarBloc>()) {
       FeedbackSystem.showInfo(
         context,
         context.l10n.chatCalendarTaskCopyUnavailableMessage,
@@ -273,9 +272,11 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       scheduledTime: scheduled,
       duration: const Duration(hours: 1),
     );
-    personalBloc.add(CalendarEvent.tasksImported(tasks: <CalendarTask>[task]));
+    context
+        .read<CalendarBloc>()
+        .add(CalendarEvent.tasksImported(tasks: <CalendarTask>[task]));
     await waitForTasksInCalendar(
-      bloc: personalBloc,
+      bloc: context.read<CalendarBloc>(),
       taskIds: <String>{task.id},
     );
     if (!mounted) return;
@@ -308,10 +309,10 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     final l10n = context.l10n;
     final CalendarStorageManager storageManager =
         context.read<CalendarStorageManager>();
-    final bool canAddToPersonal = storageManager.isAuthStorageReady &&
-        _maybeReadPersonalCalendarBloc() != null;
+    final bool canAddToPersonal =
+        storageManager.isAuthStorageReady && _canReadBloc<CalendarBloc>();
     final bool canAddToChat =
-        widget.allowChatCopy && _maybeReadChatCalendarBloc() != null;
+        widget.allowChatCopy && _canReadBloc<ChatCalendarBloc>();
 
     if (!canAddToPersonal && !canAddToChat) {
       FeedbackSystem.showInfo(
@@ -334,35 +335,39 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
       return;
     }
 
-    final CalendarBloc? personalBloc = _maybeReadPersonalCalendarBloc();
-    final ChatCalendarBloc? chatBloc = _maybeReadChatCalendarBloc();
     bool didCopy = false;
-    if (decision.addToPersonal && personalBloc != null) {
+    if (decision.addToPersonal && canAddToPersonal) {
       final CalendarTask personalTask = task.copyForCalendar(style);
       final bool copied = await _copyTaskToCalendar(
         task: personalTask,
         style: style,
-        bloc: personalBloc,
+        bloc: context.read<CalendarBloc>(),
       );
+      if (!mounted) {
+        return;
+      }
       didCopy = didCopy || copied;
     }
-    if (decision.addToChat && chatBloc != null) {
+    if (decision.addToChat && canAddToChat) {
       final CalendarTask chatTask = task.copyForCalendar(style);
       final bool copied = await _copyTaskToCalendar(
         task: chatTask,
         style: style,
-        bloc: chatBloc,
+        bloc: context.read<ChatCalendarBloc>(),
       );
+      if (!mounted) {
+        return;
+      }
       didCopy = didCopy || copied;
     }
 
     if (style.isLinked) {
       final Set<String> linkedStorageIds = <String>{};
-      if (decision.addToPersonal && personalBloc != null) {
-        linkedStorageIds.add(personalBloc.id);
+      if (decision.addToPersonal && canAddToPersonal) {
+        linkedStorageIds.add(context.read<CalendarBloc>().id);
       }
-      if (decision.addToChat && chatBloc != null) {
-        linkedStorageIds.add(chatBloc.id);
+      if (decision.addToChat && canAddToChat) {
+        linkedStorageIds.add(context.read<ChatCalendarBloc>().id);
       }
       if (linkedStorageIds.length > 1) {
         await CalendarLinkedTaskRegistry.instance.addLinks(
@@ -403,19 +408,12 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     return waitForTasksInCalendar(bloc: bloc, taskIds: taskIds);
   }
 
-  CalendarBloc? _maybeReadPersonalCalendarBloc() {
+  bool _canReadBloc<T>() {
     try {
-      return context.read<CalendarBloc>();
+      context.read<T>();
+      return true;
     } on FlutterError {
-      return null;
-    }
-  }
-
-  ChatCalendarBloc? _maybeReadChatCalendarBloc() {
-    try {
-      return context.read<ChatCalendarBloc>();
-    } on FlutterError {
-      return null;
+      return false;
     }
   }
 

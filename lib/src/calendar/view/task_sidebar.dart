@@ -652,9 +652,8 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                     final locationHelper = LocationAutocompleteHelper.fromState(
                       state,
                     );
-                    final SettingsCubit settings =
-                        context.watch<SettingsCubit>();
-                    final SettingsState settingsState = settings.state;
+                    final SettingsState settingsState =
+                        context.watch<SettingsCubit>().state;
                     List<CalendarTask> selectionTasks = const [];
                     if (state.isSelectionMode) {
                       selectionTasks = _selectedTasks(state);
@@ -854,7 +853,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         settingsUnscheduledOrder,
                         unscheduledOrder,
                       )) {
-                        settings.saveUnscheduledSidebarOrder(unscheduledOrder);
+                        context
+                            .read<SettingsCubit>()
+                            .saveUnscheduledSidebarOrder(unscheduledOrder);
                       }
                       orderedUnscheduled = _orderedTasksFromOrder(
                         unscheduledTasks,
@@ -887,7 +888,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                         _reminderOrder = List<String>.from(reminderOrder);
                       }
                       if (!listEquals(settingsReminderOrder, reminderOrder)) {
-                        settings.saveReminderSidebarOrder(reminderOrder);
+                        context
+                            .read<SettingsCubit>()
+                            .saveReminderSidebarOrder(reminderOrder);
                       }
                       orderedReminders = _orderedTasksFromOrder(
                         reminderTasks,
@@ -947,10 +950,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                             settingsState.hideCompletedUnscheduled,
                         hideCompletedReminders:
                             settingsState.hideCompletedReminders,
-                        onToggleHideCompletedUnscheduled:
-                            settings.toggleHideCompletedUnscheduled,
-                        onToggleHideCompletedReminders:
-                            settings.toggleHideCompletedReminders,
+                        onToggleHideCompletedUnscheduled: (value) => context
+                            .read<SettingsCubit>()
+                            .toggleHideCompletedUnscheduled(value),
+                        onToggleHideCompletedReminders: (value) => context
+                            .read<SettingsCubit>()
+                            .toggleHideCompletedReminders(value),
                         sectionKeys: _sectionKeys,
                         onToggleSection: _sidebarController.toggleSection,
                         onSectionDragEnter: _handleSidebarSectionDragEnter,
@@ -971,7 +976,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                             cache: _unscheduledOrder,
                             updateCache: (next) {
                               _unscheduledOrder = next;
-                              settings.saveUnscheduledSidebarOrder(next);
+                              context
+                                  .read<SettingsCubit>()
+                                  .saveUnscheduledSidebarOrder(next);
                             },
                             oldIndex: oldIndex,
                             newIndex: newIndex,
@@ -983,7 +990,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                             cache: _reminderOrder,
                             updateCache: (next) {
                               _reminderOrder = next;
-                              settings.saveReminderSidebarOrder(next);
+                              context
+                                  .read<SettingsCubit>()
+                                  .saveReminderSidebarOrder(next);
                             },
                             oldIndex: oldIndex,
                             newIndex: newIndex,

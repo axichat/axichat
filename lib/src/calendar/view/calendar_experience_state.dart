@@ -253,13 +253,11 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   void _showQuickAddModal(Offset position, {required DateTime prefilledTime}) {
     final LocationAutocompleteHelper helper =
         LocationAutocompleteHelper.fromState(calendarBloc.state);
-    final locate = context.read;
     showQuickAddModal(
       context: context,
       prefilledDateTime: prefilledTime,
       locationHelper: helper,
-      calendarBloc: calendarBloc,
-      locate: locate,
+      locateCalendarBloc: () => calendarBloc,
       onTaskAdded: (task) => calendarBloc.add(
         CalendarEvent.taskAdded(
           title: task.title,
