@@ -4,6 +4,7 @@
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/fade_scale_effect.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -52,6 +53,15 @@ class AxiContextMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) return child;
     final effects = fadeScaleEffectsFor(context);
+    final resolvedDecoration = decoration ??
+        ShadDecoration(
+          color: context.colorScheme.popover,
+          border: ShadBorder.all(
+            color: context.borderSide.color,
+            width: context.borderSide.width,
+            radius: BorderRadius.circular(context.sizing.containerRadius),
+          ),
+        );
     final Widget menuBody = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,7 +77,7 @@ class AxiContextMenu extends StatelessWidget {
       groupId: groupId,
       effects: effects,
       shadows: shadows,
-      decoration: decoration,
+      decoration: resolvedDecoration,
       filter: filter,
       controller: controller,
       onTapOutside: onTapOutside,

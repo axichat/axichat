@@ -241,18 +241,19 @@ class AxiModalSurface extends StatelessWidget {
     final BorderRadiusGeometry resolvedRadius =
         borderRadius ?? BorderRadius.circular(context.sizing.containerRadius);
     final Widget paddedChild = Padding(padding: padding, child: child);
+    final ShadDecoration decoration = ShadDecoration(
+      color: backgroundColor ?? ShadTheme.of(context).colorScheme.card,
+      border: ShadBorder.all(
+        color: borderColor ?? context.borderSide.color,
+        width: context.borderSide.width,
+        radius: resolvedRadius,
+      ),
+      shadows: shadows ?? const <BoxShadow>[],
+    );
     return ClipRRect(
       borderRadius: resolvedRadius,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: backgroundColor ?? ShadTheme.of(context).colorScheme.card,
-          border: Border.all(
-            color: borderColor ?? context.borderSide.color,
-            width: context.borderSide.width,
-          ),
-          borderRadius: resolvedRadius,
-          boxShadow: shadows ?? const <BoxShadow>[],
-        ),
+      child: ShadDecorator(
+        decoration: decoration,
         child: Material(
           type: MaterialType.transparency,
           shape: RoundedRectangleBorder(borderRadius: resolvedRadius),

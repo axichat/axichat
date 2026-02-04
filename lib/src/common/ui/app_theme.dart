@@ -138,34 +138,38 @@ class AppTheme {
         ? _lightScheme(baseScheme, neutrals)
         : _darkScheme(baseScheme, neutrals);
     final baseTextTheme = ShadTextTheme();
-    TextStyle inter(TextStyle style) {
+    TextStyle inter(TextStyle style, Color color) {
       return style.copyWith(
         fontFamily: interFontFamily,
         fontFamilyFallback: interFontFallback,
+        color: color,
       );
     }
 
-    TextStyle gabarito(TextStyle style) {
+    TextStyle gabarito(TextStyle style, Color color) {
       return style.copyWith(
         fontFamily: gabaritoFontFamily,
         fontFamilyFallback: gabaritoFontFallback,
+        color: color,
       );
     }
 
+    final Color foreground = patchedScheme.foreground;
+    final Color mutedForeground = patchedScheme.mutedForeground;
     final textTheme = baseTextTheme.copyWith(
-      h1Large: gabarito(baseTextTheme.h1Large),
-      h1: gabarito(baseTextTheme.h1),
-      h2: gabarito(baseTextTheme.h2),
-      h3: gabarito(baseTextTheme.h3),
-      h4: gabarito(baseTextTheme.h4),
-      lead: inter(baseTextTheme.lead),
-      large: inter(baseTextTheme.large),
-      small: inter(baseTextTheme.small),
-      p: inter(baseTextTheme.p),
-      blockquote: inter(baseTextTheme.blockquote),
-      table: inter(baseTextTheme.table),
-      list: inter(baseTextTheme.list),
-      muted: inter(baseTextTheme.muted),
+      h1Large: gabarito(baseTextTheme.h1Large, foreground),
+      h1: gabarito(baseTextTheme.h1, foreground),
+      h2: gabarito(baseTextTheme.h2, foreground),
+      h3: gabarito(baseTextTheme.h3, foreground),
+      h4: gabarito(baseTextTheme.h4, foreground),
+      lead: inter(baseTextTheme.lead, foreground),
+      large: inter(baseTextTheme.large, foreground),
+      small: inter(baseTextTheme.small, foreground),
+      p: inter(baseTextTheme.p, foreground),
+      blockquote: inter(baseTextTheme.blockquote, foreground),
+      table: inter(baseTextTheme.table, foreground),
+      list: inter(baseTextTheme.list, foreground),
+      muted: inter(baseTextTheme.muted, mutedForeground),
     );
 
     return ShadThemeData(

@@ -216,16 +216,19 @@ class _AxiListButtonState extends State<AxiListButton> {
           background = baseBackground;
           foreground = baseForeground;
         }
-        final shape = RoundedSuperellipseBorder(
-          borderRadius: context.radius,
-          side: BorderSide(
-            color: widget.variant == AxiButtonVariant.outline
-                ? context.borderSide.color
-                : Colors.transparent,
-            width: widget.variant == AxiButtonVariant.outline
-                ? context.borderSide.width
-                : 0,
-          ),
+        final ShadBorderSide? borderSide =
+            widget.variant == AxiButtonVariant.outline
+                ? ShadBorderSide(
+                    color: context.borderSide.color,
+                    width: context.borderSide.width,
+                  )
+                : null;
+        final shape = ShadRoundedSuperellipseBorder(
+          radius: context.radius,
+          side: borderSide,
+        ).toBorder(
+          textDirection: Directionality.of(context),
+          defaultRadius: context.radius,
         );
         final textStyle = context.textTheme.small.copyWith(
           color: foreground,

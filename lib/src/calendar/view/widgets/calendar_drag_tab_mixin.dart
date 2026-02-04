@@ -194,51 +194,126 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final double height = _tabBarHeight + safeInset;
     final Color backgroundColor = context.colorScheme.background;
 
+    final double minTabWidth = context.sizing.listButtonHeight * 2;
+    final double indicatorWeight = context.borderSide.width * 3;
+    final Color hoverBackground = scheme.primary.withValues(alpha: 0.08);
+    final Color pressedBackground = scheme.primary.withValues(alpha: 0.14);
+    final ShadDecoration baseDecoration = ShadDecoration(
+      border: ShadBorder.none,
+      secondaryBorder: ShadBorder.none,
+      secondaryFocusedBorder: ShadBorder.none,
+      focusedBorder: ShadBorder.none,
+      errorBorder: ShadBorder.none,
+      secondaryErrorBorder: ShadBorder.none,
+      disableSecondaryBorder: true,
+    );
+    final ShadDecoration selectedDecoration = ShadDecoration(
+      border: ShadBorder(
+        bottom: ShadBorderSide(
+          color: scheme.primary,
+          width: indicatorWeight,
+        ),
+        radius: context.radius,
+      ),
+      disableSecondaryBorder: true,
+    );
+    final ShadDecoration tabBarDecoration = ShadDecoration(
+      color: backgroundColor,
+      border: ShadBorder.none,
+      secondaryBorder: ShadBorder.none,
+      secondaryFocusedBorder: ShadBorder.none,
+      focusedBorder: ShadBorder.none,
+      errorBorder: ShadBorder.none,
+      secondaryErrorBorder: ShadBorder.none,
+      disableSecondaryBorder: true,
+    );
+
     final Widget tabContent = SizedBox(
       height: height,
-      child: AxiTabBar(
-        controller: mobileTabController,
-        padding: EdgeInsets.only(bottom: safeInset),
-        backgroundColor: backgroundColor,
-        indicatorColor: scheme.primary,
-        indicatorWeight: 3,
-        indicatorSize: TabBarIndicatorSize.label,
-        tabs: <Widget>[
-          Tab(
-            child: DragTarget<CalendarDragPayload>(
-              hitTestBehavior: HitTestBehavior.translucent,
-              onWillAcceptWithDetails: _handleScheduleTabDragEvent,
-              onMove: _handleScheduleTabDragMove,
-              onLeave: (_) => _handleScheduleTabDragLeave(),
-              onAcceptWithDetails: (details) {
-                _handleScheduleTabDragLeave();
-                onDragCancelRequested(details.data);
-              },
-              builder: (context, _, __) => _DragTabLabel(
-                label: scheduleTabLabel,
-                scheme: scheme,
-                showCue: scheduleCueActive,
-              ),
-            ),
-          ),
-          Tab(
-            child: DragTarget<CalendarDragPayload>(
-              hitTestBehavior: HitTestBehavior.translucent,
-              onWillAcceptWithDetails: _handleTasksTabDragEvent,
-              onMove: _handleTasksTabDragMove,
-              onLeave: (_) => _handleTasksTabDragLeave(),
-              onAcceptWithDetails: (details) {
-                _handleTasksTabDragLeave();
-                onDragCancelRequested(details.data);
-              },
-              builder: (context, _, __) => _DragTabLabel(
-                label: tasksTabLabel,
-                scheme: scheme,
-                showCue: tasksCueActive,
-              ),
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double width = constraints.maxWidth;
+          final bool useScrollable = width.isFinite && width < minTabWidth * 2;
+          final Alignment tabBarAlignment =
+              useScrollable ? Alignment.centerLeft : Alignment.center;
+
+          return AnimatedBuilder(
+            animation: mobileTabController,
+            builder: (context, _) {
+              return ShadTabs<int>(
+                value: mobileTabController.index,
+                padding: EdgeInsets.only(bottom: safeInset),
+                gap: 0,
+                scrollable: useScrollable,
+                tabBarAlignment: tabBarAlignment,
+                decoration: tabBarDecoration,
+                onChanged: (value) {
+                  if (mobileTabController.index != value) {
+                    mobileTabController.animateTo(value);
+                  }
+                },
+                tabs: <ShadTab<int>>[
+                  ShadTab<int>(
+                    value: 0,
+                    decoration: baseDecoration,
+                    selectedDecoration: selectedDecoration,
+                    backgroundColor: Colors.transparent,
+                    selectedBackgroundColor: Colors.transparent,
+                    hoverBackgroundColor: hoverBackground,
+                    selectedHoverBackgroundColor: hoverBackground,
+                    pressedBackgroundColor: pressedBackground,
+                    foregroundColor: scheme.mutedForeground,
+                    selectedForegroundColor: scheme.foreground,
+                    textStyle: context.textTheme.small,
+                    child: DragTarget<CalendarDragPayload>(
+                      hitTestBehavior: HitTestBehavior.translucent,
+                      onWillAcceptWithDetails: _handleScheduleTabDragEvent,
+                      onMove: _handleScheduleTabDragMove,
+                      onLeave: (_) => _handleScheduleTabDragLeave(),
+                      onAcceptWithDetails: (details) {
+                        _handleScheduleTabDragLeave();
+                        onDragCancelRequested(details.data);
+                      },
+                      builder: (context, _, __) => _DragTabLabel(
+                        label: scheduleTabLabel,
+                        scheme: scheme,
+                        showCue: scheduleCueActive,
+                      ),
+                    ),
+                  ),
+                  ShadTab<int>(
+                    value: 1,
+                    decoration: baseDecoration,
+                    selectedDecoration: selectedDecoration,
+                    backgroundColor: Colors.transparent,
+                    selectedBackgroundColor: Colors.transparent,
+                    hoverBackgroundColor: hoverBackground,
+                    selectedHoverBackgroundColor: hoverBackground,
+                    pressedBackgroundColor: pressedBackground,
+                    foregroundColor: scheme.mutedForeground,
+                    selectedForegroundColor: scheme.foreground,
+                    textStyle: context.textTheme.small,
+                    child: DragTarget<CalendarDragPayload>(
+                      hitTestBehavior: HitTestBehavior.translucent,
+                      onWillAcceptWithDetails: _handleTasksTabDragEvent,
+                      onMove: _handleTasksTabDragMove,
+                      onLeave: (_) => _handleTasksTabDragLeave(),
+                      onAcceptWithDetails: (details) {
+                        _handleTasksTabDragLeave();
+                        onDragCancelRequested(details.data);
+                      },
+                      builder: (context, _, __) => _DragTabLabel(
+                        label: tasksTabLabel,
+                        scheme: scheme,
+                        showCue: tasksCueActive,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
 

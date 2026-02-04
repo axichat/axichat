@@ -97,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen>
     required String label,
     required Duration rampDuration,
   }) {
-    if (_authProgressController.isActive) {
+    if (_authProgressController.snapshot.isVisible) {
       _authProgressController.continueWithLabel(
         label: label,
         rampDuration: rampDuration,

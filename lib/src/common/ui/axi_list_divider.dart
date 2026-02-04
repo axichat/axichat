@@ -3,18 +3,16 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 class AxiListDivider extends StatelessWidget {
   const AxiListDivider({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Divider(
-      color: context.colorScheme.border,
-      thickness: 1.0,
-      height: 1.0,
-      indent: 0,
-      endIndent: 0,
+    return ShadSeparator.horizontal(
+      color: context.borderSide.color,
+      thickness: context.borderSide.width,
     );
   }
 }

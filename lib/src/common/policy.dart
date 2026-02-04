@@ -7,7 +7,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 class Policy {
   const Policy();
 
-  AndroidOptions getFssAndroidOptions() => const AndroidOptions();
+  AndroidOptions getFssAndroidOptions() =>
+      const AndroidOptions(encryptedSharedPreferences: true);
 
   MacOsOptions getFssMacOsOptions() => const MacOsOptions(
         accessibility: KeychainAccessibility.first_unlock_this_device,
