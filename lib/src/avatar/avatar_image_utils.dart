@@ -104,14 +104,12 @@ ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
       final pngBytes = Uint8List.fromList(
         img.encodePng(candidate, level: pngCompressionLevel),
       );
-      if (pngBytes.length <= request.maxBytes) {
-        return ProcessedAvatar(
-          bytes: pngBytes,
-          mimeType: 'image/png',
-          width: candidate.width,
-          height: candidate.height,
-        );
-      }
+      return ProcessedAvatar(
+        bytes: pngBytes,
+        mimeType: 'image/png',
+        width: candidate.width,
+        height: candidate.height,
+      );
     }
 
     var quality = jpegStartQuality;

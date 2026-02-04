@@ -312,12 +312,7 @@ class _AxiMenuItemState extends State<_AxiMenuItem> {
 
         content = Material(
           color: background,
-          shape: ShadRoundedSuperellipseBorder(
-            radius: context.radius,
-          ).toBorder(
-            textDirection: Directionality.of(context),
-            defaultRadius: context.radius,
-          ),
+          shape: RoundedSuperellipseBorder(borderRadius: context.radius),
           clipBehavior: Clip.antiAlias,
           child: ShadFocusable(
             focusNode: widget.focusNode,

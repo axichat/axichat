@@ -158,7 +158,20 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Future<void> shuffleCarousel(ShadColorScheme colors) async {
     _carouselColors = colors;
     _carouselEnabled = true;
-    if (_isCarouselBlocked()) return;
+    if (state.processing || state.shuffling || state.publishing) {
+      return;
+    }
+    if (state.draftAvatar != null) {
+      _stopAvatarCarousel();
+      _pendingCropRect = null;
+      emit(
+        state.copyWith(
+          draftAvatar: null,
+          carouselAvatar: null,
+          errorType: null,
+        ),
+      );
+    }
     if (_nextCarouselAvatar == null) {
       await _warmNextCarouselAvatar();
     }

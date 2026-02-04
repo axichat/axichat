@@ -321,19 +321,16 @@ class _AxiButtonState extends State<AxiButton> {
           hovered: hoverOrFocus,
           pressed: pressed,
         );
-        final ShadBorderSide? borderSide =
+        final BorderSide? borderSide =
             widget.variant == AxiButtonVariant.outline
-                ? ShadBorderSide(
+                ? BorderSide(
                     color: context.borderSide.color,
                     width: context.borderSide.width,
                   )
                 : null;
-        final shape = ShadRoundedSuperellipseBorder(
-          radius: context.radius,
-          side: borderSide,
-        ).toBorder(
-          textDirection: Directionality.of(context),
-          defaultRadius: context.radius,
+        final shape = RoundedSuperellipseBorder(
+          borderRadius: context.radius,
+          side: borderSide ?? BorderSide.none,
         );
         final TextStyle baseTextStyle = switch (widget.size) {
           AxiButtonSize.sm => context.textTheme.labelSm,

@@ -35,15 +35,12 @@ class SelectionIndicator extends StatelessWidget {
     Widget child = DecoratedBox(
       decoration: ShapeDecoration(
         color: background,
-        shape: ShadRoundedSuperellipseBorder(
-          radius: BorderRadius.circular(_cornerRadius),
-          side: ShadBorderSide(
+        shape: RoundedSuperellipseBorder(
+          borderRadius: BorderRadius.circular(_cornerRadius),
+          side: BorderSide(
             color: borderColor,
             width: context.borderSide.width,
           ),
-        ).toBorder(
-          textDirection: Directionality.of(context),
-          defaultRadius: BorderRadius.circular(_cornerRadius),
         ),
       ),
       child: Center(
