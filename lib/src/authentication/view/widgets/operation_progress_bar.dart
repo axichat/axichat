@@ -5,6 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum AuthProgressPhase { idle, running, completing, failing }
 
@@ -162,25 +163,17 @@ class OperationProgressBar extends StatelessWidget {
                       style: textTheme.muted,
                     ),
                     SizedBox(height: spacing.xs),
-                    Semantics(
-                      label: label,
-                      value: context.l10n.commonPercentLabel(percent),
-                      child: ClipRRect(
-                        borderRadius: borderRadius,
-                        child: SizedBox(
-                          height: barHeight,
-                          child: LinearProgressIndicator(
-                            value: animation.value.clamp(0.0, 1.0),
-                            backgroundColor: colors.muted.withValues(
-                              alpha: motion.tapHoverAlpha,
-                            ),
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              colors.primary,
-                            ),
-                            borderRadius: borderRadius,
-                          ),
-                        ),
+                    ShadProgress(
+                      value: animation.value.clamp(0.0, 1.0),
+                      minHeight: barHeight,
+                      backgroundColor: colors.muted.withValues(
+                        alpha: motion.tapHoverAlpha,
                       ),
+                      color: colors.primary,
+                      borderRadius: borderRadius,
+                      innerBorderRadius: borderRadius,
+                      semanticsLabel: label,
+                      semanticsValue: context.l10n.commonPercentLabel(percent),
                     ),
                   ],
                 );

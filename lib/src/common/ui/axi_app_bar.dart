@@ -57,10 +57,13 @@ class AxiAppBar extends StatelessWidget {
               ),
             ),
           ),
-          ClipRect(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: trailing ?? const AxiVersion(),
+          Flexible(
+            fit: FlexFit.loose,
+            child: ClipRect(
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: trailing ?? const AxiVersion(),
+              ),
             ),
           ),
         ],

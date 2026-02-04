@@ -4,6 +4,7 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:flutter/services.dart';
 
 class ChatComposerAccessory {
@@ -156,8 +157,7 @@ class ChatCutoutComposer extends StatelessWidget {
                 padding: EdgeInsets.only(bottom: scaled(spacing.xxs)),
                 child: header!,
               ),
-              Divider(
-                height: context.borderSide.width,
+              ShadSeparator.horizontal(
                 thickness: context.borderSide.width,
                 color: context.borderSide.color,
               ),

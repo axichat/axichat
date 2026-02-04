@@ -370,9 +370,8 @@ class _ProfileMainView extends StatelessWidget {
                               ),
                             ),
                           ),
-                          Divider(
-                            height: 1,
-                            thickness: 1,
+                          ShadSeparator.horizontal(
+                            thickness: context.borderSide.width,
                             color: context.colorScheme.border,
                           ),
                           Padding(
@@ -471,9 +470,8 @@ class _ProfileMainView extends StatelessWidget {
                     ],
                   ),
                 ),
-                Divider(
-                  height: 1,
-                  thickness: 1,
+                ShadSeparator.horizontal(
+                  thickness: context.borderSide.width,
                   color: context.colorScheme.border,
                 ),
                 Padding(

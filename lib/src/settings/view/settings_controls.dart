@@ -867,12 +867,13 @@ class _SettingsSectionHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Divider(
+        ShadSeparator.horizontal(
           color: context.borderSide.color,
           thickness: context.borderSide.width,
-          height: context.borderSide.width,
-          indent: dividerIndent,
-          endIndent: dividerIndent,
+          margin: EdgeInsetsDirectional.only(
+            start: dividerIndent,
+            end: dividerIndent,
+          ),
         ),
         header,
       ],

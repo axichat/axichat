@@ -57,9 +57,14 @@ class AxiVersion extends StatelessWidget {
           hoverStrategies: mobileHoverStrategies,
           child: Row(
             children: [
-              Text(
-                l10n.axiVersionLabel(snapshot.requireData.version),
-                style: context.textTheme.h4,
+              Flexible(
+                child: Text(
+                  l10n.axiVersionLabel(snapshot.requireData.version),
+                  style: context.textTheme.h4,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4.0),

@@ -2102,7 +2102,7 @@ class _ChatState extends State<Chat> {
     return false;
   }
 
-  List<BlocklistEntry> _resolveBlocklistEntries() {
+  List<BlocklistEntry> _resolveBlocklistEntries(BuildContext context) {
     final List<BlocklistEntry>? cachedEntries =
         context.select<BlocklistCubit, List<BlocklistEntry>?>(
       (cubit) =>
@@ -3405,7 +3405,7 @@ class _ChatState extends State<Chat> {
                   emailSelfJid.resolveDeltaPlaceholderJid();
               final chatEntity = state.chat;
               final List<BlocklistEntry> blocklistEntries =
-                  _resolveBlocklistEntries();
+                  _resolveBlocklistEntries(context);
               final BlocklistEntry? chatBlocklistEntry = chatEntity == null
                   ? null
                   : _resolveChatBlocklistEntry(

@@ -27,7 +27,10 @@ class AxiInputFormField extends ShadFormBuilderField<String> {
     super.error,
     super.description,
     void Function(String)? onChanged,
-    super.valueTransformer,
+    @Deprecated('Use toValueTransformer instead')
+    ToValueTransformer<String?>? valueTransformer,
+    ToValueTransformer<String?>? toValueTransformer,
+    super.fromValueTransformer,
     super.onReset,
     super.focusNode,
     ShadDecoration? decoration,
@@ -104,6 +107,7 @@ class AxiInputFormField extends ShadFormBuilderField<String> {
               (ShadTheme.of(context).inputTheme.decoration ??
                       const ShadDecoration())
                   .merge(decoration),
+          toValueTransformer: toValueTransformer ?? valueTransformer,
           builder: (field) {
             final state = field as _ShadFormBuilderInputState;
             return AxiInput(

@@ -525,7 +525,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           mainAxisSize: MainAxisSize.min,
           children: [
             popoverHeader,
-            Divider(height: context.borderSide.width),
+            ShadSeparator.horizontal(
+              color: context.borderSide.color,
+              thickness: context.borderSide.width,
+            ),
             Flexible(
               fit: FlexFit.loose,
               child: SingleChildScrollView(
@@ -731,7 +734,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Divider(height: context.borderSide.width),
+                  ShadSeparator.horizontal(
+                    color: context.borderSide.color,
+                    thickness: context.borderSide.width,
+                  ),
                   SafeArea(top: false, bottom: true, child: footerActionRow),
                 ],
               ),
@@ -1382,7 +1388,10 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
             ],
           ),
         ),
-        Divider(height: context.borderSide.width),
+        ShadSeparator.horizontal(
+          color: context.borderSide.color,
+          thickness: context.borderSide.width,
+        ),
         const SizedBox(height: calendarFormGap),
       ],
     );

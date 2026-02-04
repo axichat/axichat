@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -52,8 +53,7 @@ class CalendarMobileTabShell extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (showDivider)
-            Divider(
-              height: context.borderSide.width,
+            ShadSeparator.horizontal(
               thickness: context.borderSide.width,
               color: effectiveDivider,
             ),

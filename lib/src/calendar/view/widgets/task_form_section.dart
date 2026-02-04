@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -1247,8 +1248,8 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                     ),
                   );
                 },
-                separatorBuilder: (_, __) => Divider(
-                  height: context.borderSide.width,
+                separatorBuilder: (_, __) => ShadSeparator.horizontal(
+                  thickness: context.borderSide.width,
                   color: calendarBorderColor,
                 ),
                 itemCount: list.length,

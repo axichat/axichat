@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/material.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -262,29 +263,13 @@ class _TaskChecklistProgressBarState extends State<TaskChecklistProgressBar> {
           trackMix,
         )!;
         final double barHeight = context.sizing.progressIndicatorBarHeight;
-        return ClipRRect(
+        return ShadProgress(
+          value: value,
+          minHeight: barHeight,
+          backgroundColor: trackColor,
+          color: widget.activeColor,
           borderRadius: borderRadius,
-          child: Stack(
-            children: [
-              Container(
-                height: barHeight,
-                decoration: BoxDecoration(
-                  color: trackColor,
-                  borderRadius: borderRadius,
-                ),
-              ),
-              SizedBox(
-                height: barHeight,
-                child: LinearProgressIndicator(
-                  value: value,
-                  backgroundColor: Colors.transparent,
-                  valueColor: AlwaysStoppedAnimation<Color>(widget.activeColor),
-                  borderRadius: borderRadius,
-                  minHeight: barHeight,
-                ),
-              ),
-            ],
-          ),
+          innerBorderRadius: borderRadius,
         );
       },
     );

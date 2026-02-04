@@ -326,13 +326,14 @@ class ProgressIndicator extends StatelessWidget {
           ],
         ),
         const SizedBox(height: calendarGutterSm),
-        LinearProgressIndicator(
+        ShadProgress(
           value: progress,
+          minHeight: context.sizing.progressIndicatorBarHeight,
           backgroundColor: colors.border.withValues(alpha: 0.6),
-          valueColor: AlwaysStoppedAnimation<Color>(
-            colors.primary,
-          ),
+          color: colors.primary,
           borderRadius: BorderRadius.circular(_feedbackProgressCornerRadius),
+          innerBorderRadius:
+              BorderRadius.circular(_feedbackProgressCornerRadius),
         ),
       ],
     );
