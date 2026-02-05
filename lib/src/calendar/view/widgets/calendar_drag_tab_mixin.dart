@@ -17,7 +17,6 @@ import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 enum _CalendarDragSwitchSource { edge, tabBar }
 
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
-  static const double _tabBarHeight = kTextTabBarHeight;
   static const double _leftEdgeHotZoneWidth = calendarWeekHeaderHeight +
       calendarGutterLg +
       calendarGutterSm +
@@ -191,7 +190,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final bool scheduleCueActive = _showScheduleTabCue && _isAnyDragActive;
     final bool tasksCueActive = _showTasksTabCue && _isAnyDragActive;
     final double safeInset = _isAnyDragActive ? 0 : bottomInset;
-    final double height = _tabBarHeight + safeInset;
+    final double baseHeight = context.sizing.listButtonHeight;
+    final double height = baseHeight + safeInset;
     final Color backgroundColor = context.colorScheme.background;
 
     final double minTabWidth = context.sizing.listButtonHeight * 2;

@@ -42,7 +42,7 @@ class ArchivedChatScreen extends StatelessWidget {
     final notificationService = locate<NotificationService>();
     final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
     final EmailService? emailService =
-        endpointConfig.enableSmtp ? locate<EmailService>() : null;
+        endpointConfig.smtpEnabled ? locate<EmailService>() : null;
     final OmemoService? omemoService =
         xmppService is OmemoService ? xmppService as OmemoService : null;
     final settings = locate<SettingsCubit>().state;

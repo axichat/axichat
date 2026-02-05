@@ -32,6 +32,7 @@ class AxiListButton extends StatefulWidget {
     this.selected = false,
     this.semanticLabel,
     this.focusNode,
+    this.textStyle,
     this.foregroundColor,
     this.backgroundColor,
   }) : assert(
@@ -61,6 +62,7 @@ class AxiListButton extends StatefulWidget {
     this.selected = false,
     this.semanticLabel,
     this.focusNode,
+    this.textStyle,
     this.foregroundColor,
     this.backgroundColor,
   })  : variant = AxiButtonVariant.destructive,
@@ -90,6 +92,7 @@ class AxiListButton extends StatefulWidget {
     this.selected = false,
     this.semanticLabel,
     this.focusNode,
+    this.textStyle,
     this.foregroundColor,
     this.backgroundColor,
   })  : variant = AxiButtonVariant.ghost,
@@ -120,6 +123,7 @@ class AxiListButton extends StatefulWidget {
   final bool selected;
   final String? semanticLabel;
   final FocusNode? focusNode;
+  final TextStyle? textStyle;
   final Color? foregroundColor;
   final Color? backgroundColor;
 
@@ -190,13 +194,20 @@ class _AxiListButtonState extends State<AxiListButton> {
               hovered: hoverOrFocus,
               pressed: pressed,
             );
-        final Color baseForeground = widget.foregroundColor ??
-            widget.variant.foregroundColor(
-              theme: buttonTheme,
-              colors: colors,
-              hovered: hoverOrFocus,
-              pressed: pressed,
-            );
+        final bool useActivePrimary =
+            widget.variant == AxiButtonVariant.ghost &&
+                !widget.destructiveGhost &&
+                widget.foregroundColor == null;
+        final bool isActive = pressed || hovered || focused || widget.selected;
+        final Color baseForeground = useActivePrimary
+            ? (isActive ? colors.primary : colors.foreground)
+            : (widget.foregroundColor ??
+                widget.variant.foregroundColor(
+                  theme: buttonTheme,
+                  colors: colors,
+                  hovered: hoverOrFocus,
+                  pressed: pressed,
+                ));
         final Color background;
         final Color foreground;
         if (widget.destructiveGhost) {
@@ -227,7 +238,9 @@ class _AxiListButtonState extends State<AxiListButton> {
           borderRadius: BorderRadius.circular(context.radii.squircle),
           side: borderSide ?? BorderSide.none,
         );
-        final textStyle = context.textTheme.small.copyWith(
+        final TextStyle baseTextStyle =
+            widget.textStyle ?? context.textTheme.small;
+        final textStyle = baseTextStyle.copyWith(
           color: foreground,
           decoration: widget.variant.textDecoration(),
           decorationColor: foreground,

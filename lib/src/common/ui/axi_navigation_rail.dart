@@ -215,7 +215,6 @@ class _AxiNavigationRailItem extends StatelessWidget {
     final colors = context.colorScheme;
     final bool isCollapsed = collapsed;
     final Color iconColor = selected ? colors.primary : colors.foreground;
-    final Color textColor = selected ? colors.primary : colors.foreground;
     final Widget? badge = destination.badgeCount > 0
         ? _RailBadge(count: destination.badgeCount)
         : null;
@@ -233,7 +232,6 @@ class _AxiNavigationRailItem extends StatelessWidget {
             ? selectionOverlay
             : Color.alphaBlend(selectionOverlay, surfaceColor))
         : null;
-    final Color? foregroundColor = selected ? textColor : null;
     return AxiListButton(
       selected: selected,
       collapsed: isCollapsed,
@@ -245,13 +243,12 @@ class _AxiNavigationRailItem extends StatelessWidget {
       variant: AxiButtonVariant.ghost,
       leading: Icon(destination.icon, size: iconSize),
       trailing: badge,
-      foregroundColor: foregroundColor,
       backgroundColor: backgroundColor,
+      textStyle: context.textTheme.small.strong,
       onPressed: onTap,
       semanticLabel: destination.label,
       child: Text(
         destination.label,
-        style: context.textTheme.small.copyWith(fontWeight: FontWeight.w600),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),

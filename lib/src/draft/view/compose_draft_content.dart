@@ -35,7 +35,7 @@ class ComposeDraftContent extends StatelessWidget {
       builder: (context, settingsState) {
         final endpointConfig = settingsState.endpointConfig;
         final emailService =
-            endpointConfig.enableSmtp ? locate<EmailService>() : null;
+            endpointConfig.smtpEnabled ? locate<EmailService>() : null;
         final emailAddress = emailService?.activeAccount?.address;
         final myJid = xmppService.myJid;
         final suggestionAddresses = <String>{

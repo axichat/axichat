@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:io';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
@@ -39,14 +41,6 @@ class EndpointConfigSheet extends StatefulWidget {
 
 class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   late TextEditingController _domainController;
-  late TextEditingController _xmppHostController;
-  late TextEditingController _imapHostController;
-  late TextEditingController _smtpHostController;
-  late TextEditingController _xmppPortController;
-  late TextEditingController _imapPortController;
-  late TextEditingController _smtpPortController;
-  late TextEditingController _apiPortController;
-  late TextEditingController _emailProvisioningBaseUrlController;
   late TextEditingController _emailProvisioningPublicTokenController;
 
   EndpointConfig? _draftConfig;
@@ -56,14 +50,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   void initState() {
     super.initState();
     _domainController = TextEditingController();
-    _xmppHostController = TextEditingController();
-    _imapHostController = TextEditingController();
-    _smtpHostController = TextEditingController();
-    _xmppPortController = TextEditingController();
-    _imapPortController = TextEditingController();
-    _smtpPortController = TextEditingController();
-    _apiPortController = TextEditingController();
-    _emailProvisioningBaseUrlController = TextEditingController();
     _emailProvisioningPublicTokenController = TextEditingController();
   }
 
@@ -74,15 +60,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final config = context.read<SettingsCubit>().state.endpointConfig;
     _draftConfig = config;
     _domainController.text = config.domain;
-    _xmppHostController.text = config.xmppHost ?? '';
-    _imapHostController.text = config.imapHost ?? '';
-    _smtpHostController.text = config.smtpHost ?? '';
-    _xmppPortController.text = config.xmppPort.toString();
-    _imapPortController.text = config.imapPort.toString();
-    _smtpPortController.text = config.smtpPort.toString();
-    _apiPortController.text = config.apiPort.toString();
-    _emailProvisioningBaseUrlController.text =
-        config.emailProvisioningBaseUrl ?? '';
     _emailProvisioningPublicTokenController.text =
         config.emailProvisioningPublicToken ?? '';
   }
@@ -90,62 +67,31 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   @override
   void dispose() {
     _domainController.dispose();
-    _xmppHostController.dispose();
-    _imapHostController.dispose();
-    _smtpHostController.dispose();
-    _xmppPortController.dispose();
-    _imapPortController.dispose();
-    _smtpPortController.dispose();
-    _apiPortController.dispose();
-    _emailProvisioningBaseUrlController.dispose();
     _emailProvisioningPublicTokenController.dispose();
     super.dispose();
   }
 
-  int _parsePort(String value, int fallback) =>
-      int.tryParse(value.trim()) ?? fallback;
-
   EndpointConfig _resolveConfig(EndpointConfig current) {
-    final domain = _domainController.text.trim().isEmpty
+    final candidate = _domainController.text.trim();
+    final resolvedDomain = candidate.isEmpty ? current.domain : candidate;
+    final parsed = InternetAddress.tryParse(resolvedDomain);
+    final fallbackDomain = InternetAddress.tryParse(current.domain) == null
         ? current.domain
-        : _domainController.text.trim();
-    final xmppHost = _xmppHostController.text.trim();
-    final imapHost = _imapHostController.text.trim();
-    final smtpHost = _smtpHostController.text.trim();
-    final xmppPort = _parsePort(
-      _xmppPortController.text,
-      EndpointConfig.defaultXmppPort,
-    );
-    final imapPort = _parsePort(
-      _imapPortController.text,
-      EndpointConfig.defaultImapPort,
-    );
-    final smtpPort = _parsePort(
-      _smtpPortController.text,
-      EndpointConfig.defaultSmtpPort,
-    );
-    final apiPort = _parsePort(
-      _apiPortController.text,
-      EndpointConfig.defaultApiPort,
-    );
-    final emailProvisioningBaseUrl =
-        _emailProvisioningBaseUrlController.text.trim();
+        : EndpointConfig.defaultDomain;
+    final domain = parsed == null ? resolvedDomain : fallbackDomain;
     final emailProvisioningPublicToken =
         _emailProvisioningPublicTokenController.text.trim();
 
     return current.copyWith(
       domain: domain,
-      enableXmpp: current.enableXmpp,
-      enableSmtp: current.enableSmtp,
-      xmppHost: xmppHost.isEmpty ? null : xmppHost,
-      imapHost: imapHost.isEmpty ? null : imapHost,
-      smtpHost: smtpHost.isEmpty ? null : smtpHost,
-      xmppPort: xmppPort,
-      imapPort: imapPort,
-      smtpPort: smtpPort,
-      apiPort: apiPort,
-      emailProvisioningBaseUrl:
-          emailProvisioningBaseUrl.isEmpty ? null : emailProvisioningBaseUrl,
+      xmppHost: null,
+      imapHost: null,
+      smtpHost: null,
+      xmppPort: EndpointConfig.defaultXmppPort,
+      imapPort: EndpointConfig.defaultImapPort,
+      smtpPort: EndpointConfig.defaultSmtpPort,
+      apiPort: EndpointConfig.defaultApiPort,
+      emailProvisioningBaseUrl: null,
       emailProvisioningPublicToken: emailProvisioningPublicToken.isEmpty
           ? null
           : emailProvisioningPublicToken,
@@ -173,7 +119,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final textTheme = context.textTheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final portFieldWidth = sizing.listButtonHeight;
     final config =
         _draftConfig ?? context.watch<SettingsCubit>().state.endpointConfig;
     final placeholderStyle = textTheme.muted;
@@ -184,7 +129,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     return AxiSheetScaffold.scroll(
       header: AxiSheetHeader(
         title: Text(context.l10n.authCustomServerTitle),
-        subtitle: Text(context.l10n.authCustomServerDescription),
         onClose: () => Navigator.of(context).maybePop(),
         padding: sheetPadding.copyWith(top: spacing.m, bottom: spacing.s),
       ),
@@ -193,176 +137,35 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         AxiTextFormField(
           autocorrect: false,
           keyboardType: TextInputType.url,
+          textInputAction: TextInputAction.next,
+          minLines: 1,
+          maxLines: 1,
+          placeholderAlignment: Alignment.centerLeft,
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9.-]')),
+          ],
           controller: _domainController,
           placeholder: Text(
-            context.l10n.authCustomServerDomainOrIp,
+            context.l10n.authEndpointDomainPlaceholder,
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,
           style: inputStyle,
         ),
         SizedBox(height: spacing.s),
-        Row(
-          children: [
-            Expanded(
-              child: _ToggleTile(
-                label: context.l10n.authCustomServerXmppLabel,
-                value: config.enableXmpp,
-                onChanged: (value) => setState(
-                  () => _draftConfig = config.copyWith(enableXmpp: value),
-                ),
-              ),
-            ),
-            SizedBox(width: spacing.s),
-            Expanded(
-              child: _ToggleTile(
-                label: context.l10n.authCustomServerSmtpLabel,
-                value: config.enableSmtp,
-                onChanged: (value) => setState(
-                  () => _draftConfig = config.copyWith(enableSmtp: value),
-                ),
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: spacing.s),
-        Row(
-          children: [
-            Expanded(
-              child: AxiTextFormField(
-                autocorrect: false,
-                keyboardType: TextInputType.text,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9._:-]')),
-                ],
-                placeholder: Text(
-                  context.l10n.authCustomServerXmppHostPlaceholder,
-                  style: placeholderStyle,
-                ),
-                placeholderStyle: placeholderStyle,
-                controller: _xmppHostController,
-                style: inputStyle,
-              ),
-            ),
-            SizedBox(width: spacing.s),
-            SizedBox(
-              width: portFieldWidth,
-              child: AxiTextFormField(
-                autocorrect: false,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                placeholder: Text(
-                  context.l10n.authCustomServerPortPlaceholder,
-                  style: placeholderStyle,
-                ),
-                placeholderStyle: placeholderStyle,
-                controller: _xmppPortController,
-                style: inputStyle,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: spacing.s),
-        Row(
-          children: [
-            Expanded(
-              child: AxiTextFormField(
-                autocorrect: false,
-                keyboardType: TextInputType.url,
-                placeholder: Text(
-                  context.l10n.authCustomServerImapHostPlaceholder,
-                  style: placeholderStyle,
-                ),
-                placeholderStyle: placeholderStyle,
-                controller: _imapHostController,
-                style: inputStyle,
-              ),
-            ),
-            SizedBox(width: spacing.s),
-            SizedBox(
-              width: portFieldWidth,
-              child: AxiTextFormField(
-                autocorrect: false,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                placeholder: Text(
-                  context.l10n.authCustomServerPortPlaceholder,
-                  style: placeholderStyle,
-                ),
-                placeholderStyle: placeholderStyle,
-                controller: _imapPortController,
-                style: inputStyle,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: spacing.s),
-        Row(
-          children: [
-            Expanded(
-              child: AxiTextFormField(
-                autocorrect: false,
-                keyboardType: TextInputType.url,
-                placeholder: Text(
-                  context.l10n.authCustomServerSmtpHostPlaceholder,
-                  style: placeholderStyle,
-                ),
-                placeholderStyle: placeholderStyle,
-                controller: _smtpHostController,
-                style: inputStyle,
-              ),
-            ),
-            SizedBox(width: spacing.s),
-            SizedBox(
-              width: portFieldWidth,
-              child: AxiTextFormField(
-                autocorrect: false,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                placeholder: Text(
-                  context.l10n.authCustomServerPortPlaceholder,
-                  style: placeholderStyle,
-                ),
-                placeholderStyle: placeholderStyle,
-                controller: _smtpPortController,
-                style: inputStyle,
-              ),
-            ),
-          ],
-        ),
-        SizedBox(height: spacing.s),
-        SizedBox(
-          width: portFieldWidth,
-          child: AxiTextFormField(
-            autocorrect: false,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            placeholder: Text(
-              context.l10n.authCustomServerApiPortPlaceholder,
-              style: placeholderStyle,
-            ),
-            placeholderStyle: placeholderStyle,
-            controller: _apiPortController,
-            style: inputStyle,
+        _ToggleTile(
+          label: context.l10n.authCustomServerSmtpLabel,
+          value: config.smtpEnabled,
+          onChanged: (value) => setState(
+            () => _draftConfig = config.copyWith(smtpEnabled: value),
           ),
-        ),
-        SizedBox(height: spacing.s),
-        AxiTextFormField(
-          autocorrect: false,
-          keyboardType: TextInputType.url,
-          placeholder: Text(
-            context.l10n.authCustomServerEmailProvisioningUrlPlaceholder,
-            style: placeholderStyle,
-          ),
-          placeholderStyle: placeholderStyle,
-          controller: _emailProvisioningBaseUrlController,
-          style: inputStyle,
         ),
         SizedBox(height: spacing.s),
         AxiTextFormField(
           autocorrect: false,
           keyboardType: TextInputType.visiblePassword,
           obscureText: _emailProvisioningTokenObscure,
+          enabled: config.smtpEnabled,
           placeholder: Text(
             context.l10n.authCustomServerEmailPublicTokenPlaceholder,
             style: placeholderStyle,
@@ -379,9 +182,12 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             tapTargetSize: sizing.inputSuffixButtonSize,
             color: colors.mutedForeground,
             backgroundColor: colors.muted,
-            onPressed: () => setState(() {
-              _emailProvisioningTokenObscure = !_emailProvisioningTokenObscure;
-            }),
+            onPressed: config.smtpEnabled
+                ? () => setState(() {
+                      _emailProvisioningTokenObscure =
+                          !_emailProvisioningTokenObscure;
+                    })
+                : null,
           ),
         ),
         SizedBox(height: spacing.m),
@@ -403,10 +209,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           ],
         ),
         SizedBox(height: spacing.s),
-        Text(
-          context.l10n.authCustomServerAdvancedHint,
-          style: textTheme.muted,
-        ),
       ],
     );
   }

@@ -84,7 +84,7 @@ class SettingsControls extends StatelessWidget {
           (cubit) => cubit.state.isBusy,
         );
         final emailEnabled =
-            context.watch<SettingsCubit>().state.endpointConfig.enableSmtp;
+            context.watch<SettingsCubit>().state.endpointConfig.smtpEnabled;
         final double dividerIndent =
             fullWidthDividers ? 0.0 : sectionHeaderPadding.horizontal;
         return Column(

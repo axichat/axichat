@@ -96,41 +96,13 @@ class CalendarNavigation extends StatelessWidget {
     final spec = ResponsiveHelper.spec(context);
     final double basePadding = sidebarVisible ? spec.gridHorizontalPadding : 0;
     final double horizontalPadding = math.max(16, basePadding);
-    final bool isCompact = ResponsiveHelper.isCompact(context);
     final CalendarView viewMode = state.viewMode;
     final bool hasUndoRedo = onUndo != null || onRedo != null;
     final l10n = context.l10n;
     final String unitLabel = calendarUnitLabel(viewMode, l10n);
     final bool placeChevronsInHeader =
         spec.sizeClass != CalendarSizeClass.expanded;
-    final List<Widget> navButtons = [
-      if (!placeChevronsInHeader)
-        _IconNavButton(
-          icon: Icons.chevron_left,
-          tooltip: l10n.calendarPreviousUnit(unitLabel),
-          compact: isCompact,
-          onPressed: () => _jumpRelative(-1),
-        ),
-      _NavigationButton(
-        label: l10n.calendarToday,
-        icon: null,
-        highlighted: !_isToday(state.selectedDate),
-        tooltip: l10n.calendarToday,
-        compact: isCompact,
-        showLabelInCompact: true,
-        onPressed: _isToday(state.selectedDate)
-            ? null
-            : () => onDateSelected(DateTime.now()),
-      ),
-      if (!placeChevronsInHeader)
-        _IconNavButton(
-          icon: Icons.chevron_right,
-          tooltip: l10n.calendarNextUnit(unitLabel),
-          compact: isCompact,
-          onPressed: () => _jumpRelative(1),
-        ),
-    ];
-    const double verticalPadding = calendarInsetMd;
+    const double verticalPadding = calendarGutterSm;
     final Widget undoRedoGroup = _UndoRedoGroup(
       onUndo: onUndo,
       onRedo: onRedo,
@@ -145,6 +117,34 @@ class CalendarNavigation extends StatelessWidget {
             : MediaQuery.of(context).size.width;
         final double availableWidth = (safeMaxWidth - (horizontalPadding * 2))
             .clamp(0.0, double.infinity);
+        final bool isCompact = availableWidth < smallScreen;
+        final List<Widget> navButtons = [
+          if (!placeChevronsInHeader)
+            _IconNavButton(
+              icon: Icons.chevron_left,
+              tooltip: l10n.calendarPreviousUnit(unitLabel),
+              compact: isCompact,
+              onPressed: () => _jumpRelative(-1),
+            ),
+          _NavigationButton(
+            label: l10n.calendarToday,
+            icon: null,
+            highlighted: !_isToday(state.selectedDate),
+            tooltip: l10n.calendarToday,
+            compact: isCompact,
+            showLabelInCompact: true,
+            onPressed: _isToday(state.selectedDate)
+                ? null
+                : () => onDateSelected(DateTime.now()),
+          ),
+          if (!placeChevronsInHeader)
+            _IconNavButton(
+              icon: Icons.chevron_right,
+              tooltip: l10n.calendarNextUnit(unitLabel),
+              compact: isCompact,
+              onPressed: () => _jumpRelative(1),
+            ),
+        ];
         final bool collapseDateText =
             isCompact || availableWidth < _compactDateLabelCollapseWidth;
         final double navSpacing =
@@ -153,7 +153,6 @@ class CalendarNavigation extends StatelessWidget {
           navButtons: navButtons,
           spacing: navSpacing,
         );
-        final bool stackNavigation = isCompact || availableWidth < 560;
         final Widget trailingRow = _TrailingControls(
           state: state,
           onDateSelected: onDateSelected,
@@ -163,6 +162,7 @@ class CalendarNavigation extends StatelessWidget {
           undoRedoGroup: undoRedoGroup,
           onSearchRequested: onSearchRequested,
           onViewChanged: onViewChanged,
+          availableWidth: availableWidth,
         );
 
         final Border border = Border(
@@ -173,88 +173,54 @@ class CalendarNavigation extends StatelessWidget {
         final Color navBackground = brightness == Brightness.dark
             ? colors.card
             : calendarSidebarBackgroundColor;
-        return ColoredBox(
-          color: navBackground,
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(
-              horizontalPadding,
-              verticalPadding,
-              horizontalPadding,
-              verticalPadding,
-            ),
-            decoration: BoxDecoration(
-              color: navBackground,
-              border: border,
-              boxShadow: navShadows,
-            ),
-            child: DefaultTextStyle.merge(
-              style: context.textTheme.label
-                  .copyWith(color: colors.mutedForeground),
-              child: stackNavigation
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            if (leadingActions != null) ...[
-                              leadingActions!,
-                              SizedBox(width: navSpacing),
-                            ],
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: navRow,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: navSpacing),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Expanded(
-                              child: Align(
-                                alignment: Alignment.centerRight,
-                                child: trailingRow,
-                              ),
-                            ),
-                            if (trailingActions != null) ...[
-                              SizedBox(width: navSpacing),
-                              trailingActions!,
-                            ],
-                          ],
-                        ),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        if (leadingActions != null) ...[
-                          leadingActions!,
-                          SizedBox(width: navSpacing),
-                        ],
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: navRow,
-                          ),
-                        ),
-                        SizedBox(width: navSpacing),
-                        Flexible(
-                          flex: 0,
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: trailingRow,
-                          ),
-                        ),
-                        if (trailingActions != null) ...[
-                          SizedBox(width: navSpacing),
-                          trailingActions!,
-                        ],
-                      ],
+        return SizedBox(
+          height: context.sizing.appBarHeight,
+          child: ColoredBox(
+            color: navBackground,
+            child: Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                verticalPadding,
+                horizontalPadding,
+                verticalPadding,
+              ),
+              decoration: BoxDecoration(
+                color: navBackground,
+                border: border,
+                boxShadow: navShadows,
+              ),
+              child: DefaultTextStyle.merge(
+                style: context.textTheme.label
+                    .copyWith(color: colors.mutedForeground),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (leadingActions != null) ...[
+                      leadingActions!,
+                      SizedBox(width: navSpacing),
+                    ],
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: navRow,
+                      ),
                     ),
+                    SizedBox(width: navSpacing),
+                    Flexible(
+                      flex: 0,
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: trailingRow,
+                      ),
+                    ),
+                    if (trailingActions != null) ...[
+                      SizedBox(width: navSpacing),
+                      trailingActions!,
+                    ],
+                  ],
+                ),
+              ),
             ),
           ),
         );
@@ -557,6 +523,7 @@ class _TrailingControls extends StatelessWidget {
     required this.hasUndoRedo,
     required this.undoRedoGroup,
     required this.onViewChanged,
+    required this.availableWidth,
     this.onSearchRequested,
   });
 
@@ -567,6 +534,7 @@ class _TrailingControls extends StatelessWidget {
   final bool hasUndoRedo;
   final Widget undoRedoGroup;
   final ValueChanged<CalendarView> onViewChanged;
+  final double availableWidth;
   final VoidCallback? onSearchRequested;
 
   @override
@@ -591,6 +559,7 @@ class _TrailingControls extends StatelessWidget {
           selectedView: state.viewMode,
           onChanged: onViewChanged,
           compact: isCompact,
+          availableWidth: availableWidth,
         ),
       if (onSearchRequested != null)
         _SearchButton(onPressed: onSearchRequested!, compact: isCompact),
@@ -620,11 +589,13 @@ class CalendarViewModeToggle extends StatelessWidget {
     required this.selectedView,
     required this.onChanged,
     required this.compact,
+    required this.availableWidth,
   });
 
   final CalendarView selectedView;
   final ValueChanged<CalendarView> onChanged;
   final bool compact;
+  final double availableWidth;
 
   static const double _minWidthExpanded = 180;
   static const double _preferredWidthExpanded = 204;
@@ -636,11 +607,8 @@ class CalendarViewModeToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final ShadColorScheme colors = context.colorScheme;
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
-    final Color activeBackground = colors.primary.withValues(alpha: 0.16);
-    final Color hoverBackground = colors.primary.withValues(alpha: 0.1);
     final EdgeInsets padding = EdgeInsets.symmetric(
       horizontal: compact ? calendarGutterSm : calendarGutterMd,
     );
@@ -651,46 +619,61 @@ class CalendarViewModeToggle extends StatelessWidget {
         isExpandedSize ? _preferredWidthExpanded : _preferredWidthRegular;
     final double widthScale =
         isExpandedSize ? _widthScaleExpanded : _widthScaleRegular;
-    final double mediaWidth = MediaQuery.of(context).size.width;
     final double controlWidth = math.min(
       preferredWidth,
-      math.max(minWidth, mediaWidth * widthScale),
+      math.max(minWidth, availableWidth * widthScale),
     );
     final bool useShortLabels = !isExpandedSize;
-    final TextStyle textStyle = context.textTheme.label.strong.copyWith(
-      letterSpacing: 0.1,
-    );
-    final Color dividerColor = colors.border.withValues(alpha: 0.55);
-    final ShadDecoration outerDecoration =
-        const ShadDecoration().copyWith(color: colors.secondary);
+    final List<ShadTab<CalendarView>> tabs = <ShadTab<CalendarView>>[
+      for (int index = 0; index < _viewOrder.length; index++)
+        _CalendarTab(
+          view: _viewOrder[index],
+          label: useShortLabels
+              ? _shortLabel(_viewOrder[index], l10n)
+              : _viewLabel(_viewOrder[index], l10n),
+          padding: padding,
+          minHeight: minHeight,
+        ),
+    ];
 
-    final options = _viewOrder
-        .map(
-          (view) => CalendarSegmentedOption<CalendarView>(
-            value: view,
-            label: Text(
-              useShortLabels ? _shortLabel(view, l10n) : _viewLabel(view, l10n),
-              style: textStyle,
-              maxLines: 1,
-              softWrap: false,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        )
-        .toList(growable: false);
-    return CalendarSegmentedToggle<CalendarView>(
-      options: options,
-      selected: selectedView,
-      onChanged: onChanged,
-      minHeight: minHeight,
-      controlWidth: controlWidth,
-      padding: padding,
-      outerDecoration: outerDecoration,
-      activeBackground: activeBackground,
-      hoverBackground: hoverBackground,
-      dividerColor: dividerColor,
+    return SizedBox(
+      height: minHeight,
+      width: controlWidth,
+      child: ShadTabs<CalendarView>(
+        value: selectedView,
+        onChanged: onChanged,
+        tabs: tabs,
+        padding: EdgeInsets.symmetric(
+          horizontal: calendarGutterSm,
+          vertical: calendarInsetMd,
+        ),
+        gap: calendarInsetMd,
+        tabsGap: calendarInsetMd,
+        contentConstraints: const BoxConstraints.tightFor(height: 0),
+      ),
     );
   }
+}
+
+class _CalendarTab extends ShadTab<CalendarView> {
+  _CalendarTab({
+    required CalendarView view,
+    required String label,
+    required EdgeInsets padding,
+    required double minHeight,
+  }) : super(
+          value: view,
+          flex: 1,
+          height: minHeight,
+          padding: padding,
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.ellipsis,
+          ),
+          content: const SizedBox.shrink(),
+        );
 }
 
 class CalendarSegmentedToggle<T> extends StatelessWidget {
@@ -721,11 +704,9 @@ class CalendarSegmentedToggle<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double cornerRadius = context.radii.squircle;
+    final double cornerRadius = context.radius.topLeft.x;
     final ShadColorScheme colors = context.colorScheme;
-    final ShapeBorder outerShape = SquircleBorder(
-      cornerRadius: context.radii.squircle,
-    );
+    final ShapeBorder outerShape = SquircleBorder(borderRadius: context.radius);
     return Material(
       color: outerDecoration.color ?? colors.secondary,
       shape: outerShape,
@@ -1319,7 +1300,7 @@ class _CalendarDropdown extends StatelessWidget {
               }
 
               final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
-                borderRadius: BorderRadius.circular(context.radii.squircle),
+                borderRadius: context.radius,
                 side: border,
               );
               return AxiTapBounce(

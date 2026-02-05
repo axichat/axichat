@@ -95,7 +95,7 @@ class AttachmentGalleryPanel extends StatelessWidget {
         final endpointConfig =
             context.read<SettingsCubit>().state.endpointConfig;
         final emailService =
-            endpointConfig.enableSmtp ? context.read<EmailService>() : null;
+            endpointConfig.smtpEnabled ? context.read<EmailService>() : null;
         return AttachmentGalleryBloc(
           xmppService: context.read<XmppService>(),
           emailService: emailService,
@@ -218,7 +218,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
       listenWhen: (previous, current) =>
           previous.endpointConfig != current.endpointConfig,
       listener: (context, settings) {
-        final emailService = settings.endpointConfig.enableSmtp
+        final emailService = settings.endpointConfig.smtpEnabled
             ? context.read<EmailService>()
             : null;
         context.read<AttachmentGalleryBloc>().add(

@@ -8,8 +8,8 @@ import 'package:equatable/equatable.dart';
 class EndpointConfig extends Equatable {
   const EndpointConfig({
     this.domain = defaultDomain,
-    this.enableXmpp = true,
-    this.enableSmtp = true,
+    this.xmppEnabled = true,
+    this.smtpEnabled = true,
     this.xmppHost,
     this.xmppPort = defaultXmppPort,
     this.imapHost,
@@ -31,8 +31,8 @@ class EndpointConfig extends Equatable {
   static const int defaultApiPort = 5443;
 
   final String domain;
-  final bool enableXmpp;
-  final bool enableSmtp;
+  final bool xmppEnabled;
+  final bool smtpEnabled;
   final String? xmppHost;
   final int xmppPort;
   final String? imapHost;
@@ -46,8 +46,8 @@ class EndpointConfig extends Equatable {
 
   EndpointConfig copyWith({
     String? domain,
-    bool? enableXmpp,
-    bool? enableSmtp,
+    bool? xmppEnabled,
+    bool? smtpEnabled,
     Object? xmppHost = _unset,
     int? xmppPort,
     Object? imapHost = _unset,
@@ -61,8 +61,8 @@ class EndpointConfig extends Equatable {
   }) {
     return EndpointConfig(
       domain: domain ?? this.domain,
-      enableXmpp: enableXmpp ?? this.enableXmpp,
-      enableSmtp: enableSmtp ?? this.enableSmtp,
+      xmppEnabled: xmppEnabled ?? this.xmppEnabled,
+      smtpEnabled: smtpEnabled ?? this.smtpEnabled,
       xmppHost: xmppHost == _unset ? this.xmppHost : xmppHost as String?,
       xmppPort: xmppPort ?? this.xmppPort,
       imapHost: imapHost == _unset ? this.imapHost : imapHost as String?,
@@ -82,8 +82,8 @@ class EndpointConfig extends Equatable {
 
   Map<String, dynamic> toJson() => {
         'domain': domain,
-        'enableXmpp': enableXmpp,
-        'enableSmtp': enableSmtp,
+        'xmppEnabled': xmppEnabled,
+        'smtpEnabled': smtpEnabled,
         'xmppHost': xmppHost,
         'xmppPort': xmppPort,
         'imapHost': imapHost,
@@ -111,8 +111,10 @@ class EndpointConfig extends Equatable {
 
     return EndpointConfig(
       domain: (json['domain'] as String? ?? defaultDomain).trim(),
-      enableXmpp: json['enableXmpp'] as bool? ?? true,
-      enableSmtp: json['enableSmtp'] as bool? ?? true,
+      xmppEnabled:
+          json['xmppEnabled'] as bool? ?? json['xmppEnabled'] as bool? ?? true,
+      smtpEnabled:
+          json['smtpEnabled'] as bool? ?? json['smtpEnabled'] as bool? ?? true,
       xmppHost: (json['xmppHost'] as String?)?.trim(),
       xmppPort: readPort(json['xmppPort'], defaultXmppPort),
       imapHost: (json['imapHost'] as String?)?.trim(),
@@ -128,15 +130,11 @@ class EndpointConfig extends Equatable {
     );
   }
 
-  bool get xmppEnabled => enableXmpp;
-
-  bool get smtpEnabled => enableSmtp;
-
   @override
   List<Object?> get props => [
         domain,
-        enableXmpp,
-        enableSmtp,
+        xmppEnabled,
+        smtpEnabled,
         xmppHost,
         xmppPort,
         imapHost,

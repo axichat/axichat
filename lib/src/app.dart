@@ -8,12 +8,10 @@ import 'dart:io';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
-import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_bloc.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
-import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
@@ -23,8 +21,6 @@ import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
-import 'package:axichat/src/demo/demo_calendar.dart';
-import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
@@ -174,7 +170,6 @@ class _AxichatState extends State<Axichat> {
         )..primeAttachmentAutoDownloadSettings(),
         child: Builder(
           builder: (context) {
-            final storageManager = context.read<CalendarStorageManager>();
             return MultiRepositoryProvider(
               providers: [
                 RepositoryProvider<EmailService>(
@@ -193,7 +188,7 @@ class _AxichatState extends State<Axichat> {
                             .read<SettingsCubit>()
                             .state
                             .endpointConfig
-                            .enableSmtp
+                            .smtpEnabled
                         ? context.read<EmailService>()
                         : null,
                   )..start(),
@@ -209,7 +204,7 @@ class _AxichatState extends State<Axichat> {
                               .read<SettingsCubit>()
                               .state
                               .endpointConfig
-                              .enableSmtp
+                              .smtpEnabled
                           ? context.read<EmailService>()
                           : null,
                       homeRefreshSyncService:
@@ -259,7 +254,7 @@ class _AxichatState extends State<Axichat> {
                               .read<SettingsCubit>()
                               .state
                               .endpointConfig
-                              .enableSmtp
+                              .smtpEnabled
                           ? context.read<EmailService>()
                           : null,
                     ),
@@ -277,7 +272,7 @@ class _AxichatState extends State<Axichat> {
                               .read<SettingsCubit>()
                               .state
                               .endpointConfig
-                              .enableSmtp
+                              .smtpEnabled
                           ? context.read<EmailService>()
                           : null,
                     ),
@@ -286,7 +281,7 @@ class _AxichatState extends State<Axichat> {
                     create: (context) {
                       final endpointConfig =
                           context.read<SettingsCubit>().state.endpointConfig;
-                      final emailEnabled = endpointConfig.enableSmtp;
+                      final emailEnabled = endpointConfig.smtpEnabled;
                       return ConnectivityCubit(
                         xmppBase: context.read<XmppService>(),
                         emailEnabled: emailEnabled,
@@ -314,7 +309,7 @@ class _AxichatState extends State<Axichat> {
                         final config = settings.endpointConfig;
                         final emailService = context.read<EmailService>();
                         final EmailService? activeEmailService =
-                            config.enableSmtp ? emailService : null;
+                            config.smtpEnabled ? emailService : null;
                         context
                             .read<AuthenticationCubit>()
                             .updateEndpointConfig(config);
@@ -334,10 +329,10 @@ class _AxichatState extends State<Axichat> {
                             .updateEmailService(activeEmailService);
                         if (!context.mounted) return;
                         context.read<ConnectivityCubit>().updateEmailContext(
-                              emailEnabled: config.enableSmtp,
+                              emailEnabled: config.smtpEnabled,
                               emailService: activeEmailService,
                             );
-                        if (!config.enableSmtp) {
+                        if (!config.smtpEnabled) {
                           await emailService.shutdown(
                             clearCredentials: false,
                           );
@@ -348,130 +343,7 @@ class _AxichatState extends State<Axichat> {
                       },
                     ),
                   ],
-                  child: AnimatedBuilder(
-                    animation: storageManager,
-                    child: const MaterialAxichat(),
-                    builder: (context, child) {
-                      final calendarStorage = storageManager.authStorage;
-                      final content = child ?? const SizedBox.shrink();
-                      if (calendarStorage == null) {
-                        return content;
-                      }
-                      return BlocProvider<CalendarBloc>(
-                        create: (context) {
-                          final reminderController =
-                              context.read<CalendarReminderController>();
-                          final xmppService = context.read<XmppService>();
-                          const bool seedDemoCalendar = kEnableDemoChats;
-                          final storage = calendarStorage;
-
-                          if (seedDemoCalendar) {
-                            return CalendarBloc(
-                              xmppService: xmppService,
-                              emailService: context
-                                      .read<SettingsCubit>()
-                                      .state
-                                      .endpointConfig
-                                      .enableSmtp
-                                  ? context.read<EmailService>()
-                                  : null,
-                              reminderController: reminderController,
-                              syncManagerBuilder: (bloc) {
-                                final manager = CalendarSyncManager(
-                                  readModel: () => bloc.currentModel,
-                                  applyModel: (model) async {
-                                    if (bloc.isClosed) return;
-                                    bloc.add(
-                                      CalendarEvent.remoteModelApplied(
-                                        model: model,
-                                      ),
-                                    );
-                                  },
-                                  sendCalendarMessage: (outbound) async {
-                                    if (bloc.isClosed) {
-                                      return;
-                                    }
-                                    final jid = xmppService.myJid;
-                                    if (jid != null) {
-                                      await xmppService.sendCalendarSyncMessage(
-                                        jid: jid,
-                                        outbound: outbound,
-                                      );
-                                    }
-                                  },
-                                  sendSnapshotFile:
-                                      xmppService.uploadCalendarSnapshot,
-                                );
-                                return manager;
-                              },
-                              storage: storage,
-                            )
-                              ..add(const CalendarEvent.started())
-                              ..add(
-                                CalendarEvent.remoteModelApplied(
-                                  model:
-                                      DemoCalendar.franklin(anchor: demoNow()),
-                                ),
-                              );
-                          }
-                          return CalendarBloc(
-                            xmppService: xmppService,
-                            emailService: context
-                                    .read<SettingsCubit>()
-                                    .state
-                                    .endpointConfig
-                                    .enableSmtp
-                                ? context.read<EmailService>()
-                                : null,
-                            reminderController: reminderController,
-                            syncManagerBuilder: (bloc) {
-                              final manager = CalendarSyncManager(
-                                readModel: () => bloc.currentModel,
-                                applyModel: (model) async {
-                                  if (bloc.isClosed) return;
-                                  bloc.add(
-                                    CalendarEvent.remoteModelApplied(
-                                      model: model,
-                                    ),
-                                  );
-                                },
-                                sendCalendarMessage: (outbound) async {
-                                  if (bloc.isClosed) {
-                                    return;
-                                  }
-                                  final jid = xmppService.myJid;
-                                  if (jid != null) {
-                                    await xmppService.sendCalendarSyncMessage(
-                                      jid: jid,
-                                      outbound: outbound,
-                                    );
-                                  }
-                                },
-                                sendSnapshotFile:
-                                    xmppService.uploadCalendarSnapshot,
-                              );
-                              return manager;
-                            },
-                            storage: storage,
-                          )..add(const CalendarEvent.started());
-                        },
-                        child: BlocListener<SettingsCubit, SettingsState>(
-                          listenWhen: (previous, current) =>
-                              previous.endpointConfig != current.endpointConfig,
-                          listener: (context, settings) {
-                            final config = settings.endpointConfig;
-                            final emailService = context.read<EmailService>();
-                            final EmailService? activeEmailService =
-                                config.enableSmtp ? emailService : null;
-                            context
-                                .read<CalendarBloc>()
-                                .updateEmailService(activeEmailService);
-                          },
-                          child: content,
-                        ),
-                      );
-                    },
-                  ),
+                  child: const MaterialAxichat(),
                 ),
               ),
             );
@@ -539,7 +411,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         final notificationService = context.read<NotificationService>();
         final endpointConfig = state.endpointConfig;
         final EmailService? emailService =
-            endpointConfig.enableSmtp ? context.read<EmailService>() : null;
+            endpointConfig.smtpEnabled ? context.read<EmailService>() : null;
         notificationService
           ..mute = state.mute
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
@@ -739,7 +611,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 );
             final endpointConfig =
                 context.read<SettingsCubit>().state.endpointConfig;
-            if (endpointConfig.enableSmtp) {
+            if (endpointConfig.smtpEnabled) {
               context.read<EmailService>().updateLocalizations(
                     AppLocalizations.of(context)!,
                   );

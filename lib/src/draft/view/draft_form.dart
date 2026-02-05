@@ -312,7 +312,7 @@ class _DraftFormState extends State<DraftForm> {
                           hasActiveRecipients: hasActiveRecipients,
                           hasContent: hasContent,
                           emailRecipientsUnavailable:
-                              !endpointConfig.enableSmtp &&
+                              !endpointConfig.smtpEnabled &&
                                   split.emailTargets.isNotEmpty,
                         );
                         final bool showSendBlockerMessage =
@@ -744,8 +744,8 @@ class _DraftFormState extends State<DraftForm> {
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
     final endpointConfig = widget.locate<SettingsCubit>().state.endpointConfig;
-    final supportsEmail = endpointConfig.enableSmtp;
-    final supportsXmpp = endpointConfig.enableXmpp;
+    final supportsEmail = endpointConfig.smtpEnabled;
+    final supportsXmpp = endpointConfig.xmppEnabled;
     if (supportsEmail && !supportsXmpp) {
       return MessageTransport.email;
     }
@@ -1194,7 +1194,7 @@ class _DraftFormState extends State<DraftForm> {
       hasActiveRecipients: split.hasActiveRecipients,
       hasContent: _hasContent(hasAttachments: hasAttachments),
       emailRecipientsUnavailable:
-          !endpointConfig.enableSmtp && split.emailTargets.isNotEmpty,
+          !endpointConfig.smtpEnabled && split.emailTargets.isNotEmpty,
     );
     final formValid = _formKey.currentState?.validate() ?? false;
     if (validationMessage != null || !formValid) return;

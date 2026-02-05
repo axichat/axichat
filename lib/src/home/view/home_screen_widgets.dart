@@ -429,23 +429,111 @@ class _NexusBottomArea extends StatelessWidget {
       return ChatSelectionActionBar(selectedChats: selectedChats);
     }
     if (navPlacement == NavPlacement.bottom) {
-      final badgeOffset = Offset(0, -context.spacing.s);
-      final tabBar = Container(
-        decoration: BoxDecoration(
-          border: Border(bottom: context.borderSide),
-        ),
-        child: AxiTabBar(
-          backgroundColor: context.colorScheme.background,
-          badges: tabs.map((tab) => badgeCounts[tab.id] ?? 0).toList(),
-          badgeOffset: badgeOffset,
-          tabs: tabs.map((tab) {
-            return Tab(child: Text(tab.label));
-          }).toList(),
-        ),
+      final controller = DefaultTabController.maybeOf(context);
+      if (controller == null) {
+        return const SizedBox.shrink();
+      }
+      return AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) {
+          return _HomeBottomTabBar(
+            tabs: tabs,
+            badgeCounts: badgeCounts,
+            selectedIndex: controller.index,
+            onTabSelected: (index) {
+              if (index == controller.index || controller.indexIsChanging) {
+                return;
+              }
+              controller.animateTo(index);
+            },
+          );
+        },
       );
-      return tabBar;
     }
     return const SizedBox.shrink();
+  }
+}
+
+class _HomeBottomTabBar extends StatelessWidget {
+  const _HomeBottomTabBar({
+    required this.tabs,
+    required this.badgeCounts,
+    required this.selectedIndex,
+    required this.onTabSelected,
+  });
+
+  final List<HomeTabEntry> tabs;
+  final Map<HomeTab, int> badgeCounts;
+  final int selectedIndex;
+  final ValueChanged<int> onTabSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final colors = context.colorScheme;
+    final badgeOffset = Offset(0, -spacing.s);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.background,
+        border: Border(bottom: context.borderSide),
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.s,
+          vertical: spacing.xs,
+        ),
+        child: Row(
+          children: [
+            for (int index = 0; index < tabs.length; index++)
+              Expanded(
+                child: _HomeBottomTabItem(
+                  label: tabs[index].label,
+                  badgeCount: badgeCounts[tabs[index].id] ?? 0,
+                  badgeOffset: badgeOffset,
+                  selected: index == selectedIndex,
+                  onPressed: () => onTabSelected(index),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeBottomTabItem extends StatelessWidget {
+  const _HomeBottomTabItem({
+    required this.label,
+    required this.badgeCount,
+    required this.badgeOffset,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final String label;
+  final int badgeCount;
+  final Offset badgeOffset;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget labelWidget = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+    );
+    return AxiButton.ghost(
+      widthBehavior: AxiButtonWidth.expand,
+      selected: selected,
+      onPressed: onPressed,
+      child: AxiBadge(
+        count: badgeCount,
+        offset: badgeOffset,
+        child: labelWidget,
+      ),
+    );
   }
 }
 

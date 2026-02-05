@@ -1021,8 +1021,8 @@ class _ChatState extends State<Chat> {
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
     final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
-    final supportsEmail = endpointConfig.enableSmtp;
-    final supportsXmpp = endpointConfig.enableXmpp;
+    final supportsEmail = endpointConfig.smtpEnabled;
+    final supportsXmpp = endpointConfig.xmppEnabled;
     if (supportsEmail && !supportsXmpp) {
       return MessageTransport.email;
     }
@@ -3211,7 +3211,7 @@ class _ChatState extends State<Chat> {
               listenWhen: (previous, current) =>
                   previous.endpointConfig != current.endpointConfig,
               listener: (context, settings) async {
-                final emailService = settings.endpointConfig.enableSmtp
+                final emailService = settings.endpointConfig.smtpEnabled
                     ? context.read<EmailService>()
                     : null;
                 context
@@ -8169,7 +8169,7 @@ class _ChatState extends State<Chat> {
                         .watch<SettingsCubit>()
                         .state
                         .endpointConfig
-                        .enableSmtp
+                        .smtpEnabled
                     ? context.read<EmailService>()
                     : null,
                 reminderController: context.read<CalendarReminderController>(),
@@ -9762,7 +9762,7 @@ class _ChatGalleryOverlay extends StatelessWidget {
         final endpointConfig =
             context.read<SettingsCubit>().state.endpointConfig;
         final emailService =
-            endpointConfig.enableSmtp ? context.read<EmailService>() : null;
+            endpointConfig.smtpEnabled ? context.read<EmailService>() : null;
         return AttachmentGalleryBloc(
           xmppService: context.read<XmppService>(),
           emailService: emailService,
@@ -11212,6 +11212,8 @@ class _ChatComposerSection extends StatelessWidget {
     final horizontalPadding = width >= smallScreen
         ? desktopComposerHorizontalInset
         : composerHorizontalInset;
+    final cutoutBalanceInset = context.sizing.iconButtonTapTarget / 2;
+    final rightPadding = math.max(0.0, horizontalPadding - cutoutBalanceInset);
     final hasQueuedAttachments = pendingAttachments.any(
       (attachment) =>
           attachment.status == PendingAttachmentStatus.queued &&
@@ -11263,7 +11265,7 @@ class _ChatComposerSection extends StatelessWidget {
               padding: EdgeInsets.fromLTRB(
                 horizontalPadding,
                 spacing.m + spacing.xxs,
-                horizontalPadding,
+                rightPadding,
                 spacing.s + spacing.xxs,
               ),
               child: Column(

@@ -88,7 +88,6 @@ class EmailContactImportActionButton extends StatelessWidget {
                   },
             child: Text(
               context.l10n.emailContactsImportTitle,
-              style: context.textTheme.small,
             ),
           ),
         );

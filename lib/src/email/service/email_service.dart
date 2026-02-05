@@ -650,7 +650,7 @@ class EmailService {
   EmailAccount? get sessionCredentials => _sessionCredentials;
 
   bool get isSmtpOnly =>
-      _endpointConfig.enableSmtp && !_endpointConfig.enableXmpp;
+      _endpointConfig.smtpEnabled && !_endpointConfig.xmppEnabled;
 
   bool get isRunning => _running;
 

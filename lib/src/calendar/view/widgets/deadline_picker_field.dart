@@ -48,6 +48,33 @@ class DeadlinePickerField extends StatefulWidget {
 }
 
 class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
+  static const _hourValues = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+  ];
+  static const _minuteValues = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
   static const double _timePickerDesiredHeight = 660.0;
   static const double _datePickerExpandedHeight = 428.0;
 
@@ -340,10 +367,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                 showTimeSelectors: widget.showTimeSelectors,
                 selectedHour: selectedTime.hour,
                 selectedMinute: _roundToFive(selectedTime.minute),
-                onTimeSelected: (time) {
-                  handleHourSelected(time.hour);
-                  handleMinuteSelected(time.minute);
-                },
+                hourValues: _hourValues,
+                minuteValues: _minuteValues,
+                onHourSelected: handleHourSelected,
+                onMinuteSelected: handleMinuteSelected,
               );
               final actions = _DeadlinePickerActions(
                 showTimeSelectors: widget.showTimeSelectors,
@@ -611,71 +638,67 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
 
     final BorderSide baseBorder = context.borderSide;
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
-      borderRadius: BorderRadius.circular(context.radii.squircle),
+      borderRadius: context.radius,
       side: BorderSide(
         color: borderColor,
         width: baseBorder.width,
       ),
     );
     final double iconSize = context.sizing.iconButtonIconSize;
-    final trigger = KeyedSubtree(
-      key: _triggerKey,
-      child: AxiTapBounce(
-        enabled: enabled,
-        child: ShadFocusable(
-          canRequestFocus: enabled,
-          builder: (context, _, __) {
-            return Material(
-              type: MaterialType.transparency,
-              shape: decoratedShape,
-              clipBehavior: Clip.antiAlias,
-              child: ShadGestureDetector(
-                cursor: enabled
-                    ? SystemMouseCursors.click
-                    : SystemMouseCursors.basic,
-                onTap: enabled ? () => _toggleOverlay(context) : null,
-                child: AnimatedContainer(
-                  duration: calendarSlotHoverAnimationDuration,
-                  padding: calendarFieldPadding,
-                  decoration: ShapeDecoration(
-                    color: backgroundColor,
-                    shape: decoratedShape,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        size: iconSize,
-                        color: iconColor,
-                      ),
-                      const SizedBox(width: calendarGutterMd),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: _DeadlineFieldContent(
-                            placeholder: placeholder,
-                            valueText: displayDate,
-                            statusLabel: statusLabel,
-                            showStatusLabel: showStatusLabel,
-                            iconColor: iconColor,
-                          ),
+    final trigger = AxiTapBounce(
+      enabled: enabled,
+      child: ShadFocusable(
+        canRequestFocus: enabled,
+        builder: (context, _, __) {
+          return Material(
+            type: MaterialType.transparency,
+            shape: decoratedShape,
+            clipBehavior: Clip.antiAlias,
+            child: ShadGestureDetector(
+              cursor:
+                  enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              onTap: enabled ? () => _toggleOverlay(context) : null,
+              child: AnimatedContainer(
+                duration: calendarSlotHoverAnimationDuration,
+                padding: calendarFieldPadding,
+                decoration: ShapeDecoration(
+                  color: backgroundColor,
+                  shape: decoratedShape,
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today_outlined,
+                      size: iconSize,
+                      color: iconColor,
+                    ),
+                    const SizedBox(width: calendarGutterMd),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _DeadlineFieldContent(
+                          placeholder: placeholder,
+                          valueText: displayDate,
+                          statusLabel: statusLabel,
+                          showStatusLabel: showStatusLabel,
+                          iconColor: iconColor,
                         ),
                       ),
-                      const SizedBox(width: calendarGutterSm),
-                      Icon(
-                        _isOpen
-                            ? Icons.keyboard_arrow_up
-                            : Icons.keyboard_arrow_down,
-                        size: iconSize,
-                        color: calendarTimeLabelColor,
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: calendarGutterSm),
+                    Icon(
+                      _isOpen
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: iconSize,
+                      color: calendarTimeLabelColor,
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
 
@@ -684,6 +707,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       overlayLocation: OverlayChildLocation.rootOverlay,
       overlayChildBuilder: (overlayContext) {
         if (!_isOpen) return const SizedBox.shrink();
+        final geometry = _computeGeometry(overlayContext);
         final previousMonth = DateTime(
           _visibleMonth.year,
           _visibleMonth.month - 1,
@@ -716,10 +740,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
           showTimeSelectors: widget.showTimeSelectors,
           selectedHour: selectedTime.hour,
           selectedMinute: _roundToFive(selectedTime.minute),
-          onTimeSelected: (time) {
-            _onHourSelected(time.hour);
-            _onMinuteSelected(time.minute);
-          },
+          hourValues: _hourValues,
+          minuteValues: _minuteValues,
+          onHourSelected: _onHourSelected,
+          onMinuteSelected: _onMinuteSelected,
         );
         final actions = _DeadlinePickerActions(
           showTimeSelectors: widget.showTimeSelectors,
@@ -739,11 +763,11 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
             CompositedTransformFollower(
               link: _layerLink,
               showWhenUnlinked: false,
-              offset: _computeGeometry(overlayContext).offset,
+              offset: geometry.offset,
               child: InBoundsFadeScale(
                 child: _DeadlineAnchoredDropdown(
                   overlayWidth: widget.overlayWidth,
-                  maxHeight: _computeGeometry(overlayContext).maxHeight,
+                  maxHeight: geometry.maxHeight,
                   tapRegionGroupId: _tapRegionGroupId,
                   dropdownKey: _dropdownKey,
                   showTimeSelectors: widget.showTimeSelectors,
@@ -783,6 +807,17 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final rounded = (minute / 5).round() * 5;
     return rounded == 60 ? 0 : rounded;
   }
+}
+
+List<String> _weekdayLabels(BuildContext context) {
+  final localizations = MaterialLocalizations.of(context);
+  final List<String> weekdays = localizations.narrowWeekdays;
+  final int startIndex = localizations.firstDayOfWeekIndex;
+  return List<String>.generate(
+    weekdays.length,
+    (index) => weekdays[(index + startIndex) % weekdays.length],
+    growable: false,
+  );
 }
 
 class _OverlayGeometry {
@@ -879,15 +914,11 @@ class _DeadlineDropdownSurface extends StatelessWidget {
           ),
         ),
         child: Material(
-          borderRadius: BorderRadius.circular(
-            context.radii.container,
-          ),
+          borderRadius: BorderRadius.circular(context.radii.container),
           color: calendarContainerColor,
           elevation: calendarZoomControlsElevation,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(
-              context.radii.container,
-            ),
+            borderRadius: BorderRadius.circular(context.radii.container),
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final desiredHeight = showTimeSelectors
@@ -1185,75 +1216,87 @@ class _DeadlineCalendarGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final localizations = MaterialLocalizations.of(context);
-    final int weekStartsOn = localizations.firstDayOfWeekIndex == 0
-        ? DateTime.sunday
-        : localizations.firstDayOfWeekIndex;
-    final DateTime? normalizedSelected = selectedDate == null
-        ? null
-        : DateTime(
-            selectedDate!.year,
-            selectedDate!.month,
-            selectedDate!.day,
-          );
+    final year = visibleMonth.year;
+    final month = visibleMonth.month;
+    final firstOfMonth = DateTime(year, month, 1);
+    final firstWeekday = firstOfMonth.weekday % 7;
+    final daysInMonth = DateTime(year, month + 1, 0).day;
 
+    final days = <DateTime?>[];
+    for (var i = 0; i < firstWeekday; i++) {
+      days.add(null);
+    }
+    for (var day = 1; day <= daysInMonth; day++) {
+      days.add(DateTime(year, month, day));
+    }
+    while (days.length % 7 != 0) {
+      days.add(null);
+    }
+
+    final double cellSize = context.sizing.buttonHeightRegular;
+    final double spacing = context.spacing.xs;
     return Padding(
       padding: calendarPaddingLg,
-      child: ShadCalendar(
-        selected: normalizedSelected,
-        onChanged: (date) {
-          if (date == null || !isDateWithinBounds(date)) {
-            return;
-          }
-          onDaySelected(date);
-        },
-        showOutsideDays: true,
-        fixedWeeks: true,
-        initialMonth: visibleMonth,
-        weekStartsOn: weekStartsOn,
-        formatWeekday: (date) {
-          final labels = localizations.narrowWeekdays;
-          return labels[date.weekday % DateTime.daysPerWeek];
-        },
-        selectableDayPredicate: isDateWithinBounds,
-        hideNavigation: true,
-        headerHeight: 0,
-        headerPadding: EdgeInsets.zero,
-        captionLayoutGap: 0,
-        weekdaysPadding: const EdgeInsets.symmetric(
-          horizontal: calendarGutterMd,
-          vertical: calendarGutterSm,
-        ),
-        weekdaysTextStyle: context.textTheme.labelSm.strong.copyWith(
-          color: calendarTimeLabelColor,
-        ),
-        gridMainAxisSpacing: context.spacing.xs,
-        gridCrossAxisSpacing: context.spacing.xs,
-        dayButtonPadding: const EdgeInsets.symmetric(vertical: calendarInsetLg),
-        dayButtonTextStyle: context.textTheme.small.copyWith(
-          color: calendarTitleColor,
-        ),
-        dayButtonOutsideMonthTextStyle: context.textTheme.small.copyWith(
-          color: calendarSubtitleColor,
-        ),
-        selectedDayButtonTextStyle: context.textTheme.small.copyWith(
-          color: context.colorScheme.primaryForeground,
-        ),
-        dayButtonVariant: ShadButtonVariant.ghost,
-        dayButtonOutsideMonthVariant: ShadButtonVariant.ghost,
-        todayButtonVariant: ShadButtonVariant.outline,
-        selectedDayButtonVariant: ShadButtonVariant.primary,
-        dayButtonDecoration: ShadDecoration(
-          color: calendarContainerColor,
-          border: ShadBorder.all(
-            color: calendarBorderColor,
-            width: context.borderSide.width,
-            radius: BorderRadius.circular(context.radii.squircle),
+      child: Column(
+        children: [
+          Wrap(
+            spacing: spacing,
+            runSpacing: 0,
+            children: _weekdayLabels(context)
+                .map(
+                  (label) => SizedBox(
+                    width: cellSize,
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: context.textTheme.labelSm.strong.copyWith(
+                          color: calendarTimeLabelColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
           ),
-        ),
-        dayButtonOutsideMonthOpacity: 1,
+          const SizedBox(height: calendarGutterSm),
+          Wrap(
+            spacing: spacing,
+            runSpacing: spacing,
+            children: days.map((date) {
+              if (date == null) {
+                return SizedBox(
+                  width: cellSize,
+                  height: cellSize,
+                );
+              }
+
+              final isSelected =
+                  selectedDate != null && _isSameDay(date, selectedDate!);
+              final isDisabled = !isDateWithinBounds(date);
+
+              return SizedBox(
+                width: cellSize,
+                height: cellSize,
+                child: AxiButton(
+                  variant: isSelected
+                      ? AxiButtonVariant.primary
+                      : AxiButtonVariant.outline,
+                  size: AxiButtonSize.sm,
+                  widthBehavior: AxiButtonWidth.expand,
+                  selected: isSelected,
+                  onPressed: isDisabled ? null : () => onDaySelected(date),
+                  child: Text('${date.day}'),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
+  }
+
+  bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 }
 
@@ -1262,13 +1305,19 @@ class _DeadlineTimeSelectors extends StatelessWidget {
     required this.showTimeSelectors,
     required this.selectedHour,
     required this.selectedMinute,
-    required this.onTimeSelected,
+    required this.hourValues,
+    required this.minuteValues,
+    required this.onHourSelected,
+    required this.onMinuteSelected,
   });
 
   final bool showTimeSelectors;
   final int selectedHour;
   final int selectedMinute;
-  final ValueChanged<ShadTimeOfDay> onTimeSelected;
+  final List<int> hourValues;
+  final List<int> minuteValues;
+  final ValueChanged<int> onHourSelected;
+  final ValueChanged<int> onMinuteSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1300,44 +1349,101 @@ class _DeadlineTimeSelectors extends StatelessWidget {
             ),
           ),
           const SizedBox(height: calendarFormGap),
-          ShadTimePicker(
-            initialValue: ShadTimeOfDay(
-              hour: selectedHour,
-              minute: selectedMinute,
-              second: 0,
-            ),
-            showSeconds: false,
-            showMinutes: true,
-            showHours: true,
-            alignment: WrapAlignment.start,
-            runAlignment: WrapAlignment.start,
-            crossAxisAlignment: WrapCrossAlignment.start,
-            gap: context.spacing.xs,
-            spacing: context.spacing.xs,
-            runSpacing: context.spacing.xs,
-            hourLabel: Text(context.l10n.calendarHour),
-            minuteLabel: Text(context.l10n.calendarMinute),
-            hourPlaceholder: const Text('00'),
-            minutePlaceholder: const Text('00'),
-            labelStyle: context.textTheme.labelSm.strong.copyWith(
-              color: calendarSubtitleColor,
-              letterSpacing: 0.3,
-            ),
-            style: context.textTheme.label,
-            fieldDecoration: ShadDecoration(
-              color: calendarContainerColor,
-              border: ShadBorder.all(
-                color: calendarBorderColor,
-                width: context.borderSide.width,
-                radius: BorderRadius.circular(context.radii.squircle),
+          Row(
+            children: [
+              Expanded(
+                child: _DeadlineTimeDropdown(
+                  label: context.l10n.calendarHour,
+                  values: hourValues,
+                  selectedValue: selectedHour,
+                  onSelected: onHourSelected,
+                  formatter: (value) => value.toString().padLeft(2, '0'),
+                ),
               ),
-            ),
-            onChanged: (value) {
-              onTimeSelected(value);
-            },
+              const SizedBox(width: calendarGutterSm),
+              Expanded(
+                child: _DeadlineTimeDropdown(
+                  label: context.l10n.calendarMinute,
+                  values: minuteValues,
+                  selectedValue: selectedMinute,
+                  onSelected: onMinuteSelected,
+                  formatter: (value) => value.toString().padLeft(2, '0'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DeadlineTimeDropdown extends StatelessWidget {
+  const _DeadlineTimeDropdown({
+    required this.label,
+    required this.values,
+    required this.selectedValue,
+    required this.onSelected,
+    required this.formatter,
+  });
+
+  final String label;
+  final List<int> values;
+  final int selectedValue;
+  final ValueChanged<int> onSelected;
+  final String Function(int value) formatter;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle labelStyle = context.textTheme.labelSm.strong.copyWith(
+      color: calendarSubtitleColor,
+      letterSpacing: 0.3,
+    );
+    final ShadDecoration dropdownDecoration = ShadDecoration(
+      color: calendarContainerColor,
+      border: ShadBorder.all(
+        color: calendarBorderColor,
+        radius: BorderRadius.circular(calendarBorderRadius),
+        width: context.borderSide.width,
+      ),
+    );
+    const EdgeInsets dropdownPadding = EdgeInsets.symmetric(
+      horizontal: calendarGutterMd,
+      vertical: calendarGutterSm,
+    );
+    final Icon dropdownIcon = Icon(
+      Icons.keyboard_arrow_down_rounded,
+      size: calendarGutterMd,
+      color: calendarSubtitleColor,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: labelStyle),
+        const SizedBox(height: calendarInsetLg),
+        AxiSelect<int>(
+          initialValue: selectedValue,
+          onChanged: (selected) {
+            if (selected == null) {
+              return;
+            }
+            onSelected(selected);
+          },
+          options: values
+              .map(
+                (value) => ShadOption<int>(
+                  value: value,
+                  child: Text(formatter(value)),
+                ),
+              )
+              .toList(growable: false),
+          selectedOptionBuilder: (context, value) => Text(formatter(value)),
+          decoration: dropdownDecoration,
+          padding: dropdownPadding,
+          trailing: dropdownIcon,
+        ),
+      ],
     );
   }
 }

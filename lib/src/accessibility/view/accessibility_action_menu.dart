@@ -1430,7 +1430,7 @@ class _AccessibilityChatScope extends StatelessWidget {
         final endpointConfig =
             context.read<SettingsCubit>().state.endpointConfig;
         final emailService =
-            endpointConfig.enableSmtp ? context.read<EmailService>() : null;
+            endpointConfig.smtpEnabled ? context.read<EmailService>() : null;
         return AccessibilityChatBloc(
           jid: chatJid,
           messageService: context.read<XmppService>(),
@@ -1446,7 +1446,7 @@ class _AccessibilityChatScope extends StatelessWidget {
         listenWhen: (previous, current) =>
             previous.endpointConfig != current.endpointConfig,
         listener: (context, settings) {
-          final emailService = settings.endpointConfig.enableSmtp
+          final emailService = settings.endpointConfig.smtpEnabled
               ? context.read<EmailService>()
               : null;
           context
@@ -2613,8 +2613,8 @@ Future<void> _confirmNewContact(BuildContext context) async {
       context.read<AccessibilityActionBloc>().state.newContactInput.trim();
   if (address.isEmpty) return;
   final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
-  final supportsEmail = endpointConfig.enableSmtp;
-  final supportsXmpp = endpointConfig.enableXmpp;
+  final supportsEmail = endpointConfig.smtpEnabled;
+  final supportsXmpp = endpointConfig.xmppEnabled;
   MessageTransport? resolved;
   if (supportsEmail && !supportsXmpp) {
     resolved = MessageTransport.email;

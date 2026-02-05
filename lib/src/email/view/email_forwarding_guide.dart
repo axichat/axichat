@@ -114,7 +114,6 @@ class EmailForwardingGuideActionButton extends StatelessWidget {
         onPressed: () async => await _showGuideDialog(context),
         child: Text(
           context.l10n.emailForwardingGuideTitle,
-          style: context.textTheme.small,
         ),
       ),
     );
@@ -428,7 +427,7 @@ class _EmailForwardingWelcomeGateState
     if (_dialogShown || !mounted) {
       return;
     }
-    if (!context.read<SettingsCubit>().state.endpointConfig.enableSmtp) {
+    if (!context.read<SettingsCubit>().state.endpointConfig.smtpEnabled) {
       return;
     }
     final authState = context.read<AuthenticationCubit>().state;

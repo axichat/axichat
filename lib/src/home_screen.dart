@@ -12,13 +12,16 @@ import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
+import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
+import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
@@ -41,6 +44,7 @@ import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
+import 'package:axichat/src/demo/demo_calendar.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/view/compose_launcher.dart';
@@ -113,6 +117,121 @@ class HomeShellScope extends InheritedWidget {
         calendarTabHost != oldWidget.calendarTabHost ||
         homeTabIndex != oldWidget.homeTabIndex ||
         tabs != oldWidget.tabs;
+  }
+}
+
+class HomeShellCalendarScope extends StatelessWidget {
+  const HomeShellCalendarScope({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final storageManager = context.watch<CalendarStorageManager>();
+    final storage = storageManager.authStorage;
+    final shell = HomeShell(child: child);
+    if (storage == null) {
+      return shell;
+    }
+    final locate = context.read;
+    return BlocProvider<CalendarBloc>(
+      key: ValueKey(storage),
+      create: (context) {
+        final reminderController = locate<CalendarReminderController>();
+        final xmppService = locate<XmppService>();
+        const seedDemoCalendar = kEnableDemoChats;
+        final emailService =
+            locate<SettingsCubit>().state.endpointConfig.smtpEnabled
+                ? locate<EmailService>()
+                : null;
+        if (seedDemoCalendar) {
+          return CalendarBloc(
+            xmppService: xmppService,
+            emailService: emailService,
+            reminderController: reminderController,
+            syncManagerBuilder: (bloc) {
+              final manager = CalendarSyncManager(
+                readModel: () => bloc.currentModel,
+                applyModel: (model) async {
+                  if (bloc.isClosed) return;
+                  bloc.add(
+                    CalendarEvent.remoteModelApplied(
+                      model: model,
+                    ),
+                  );
+                },
+                sendCalendarMessage: (outbound) async {
+                  if (bloc.isClosed) {
+                    return;
+                  }
+                  final jid = xmppService.myJid;
+                  if (jid != null) {
+                    await xmppService.sendCalendarSyncMessage(
+                      jid: jid,
+                      outbound: outbound,
+                    );
+                  }
+                },
+                sendSnapshotFile: xmppService.uploadCalendarSnapshot,
+              );
+              return manager;
+            },
+            storage: storage,
+          )
+            ..add(const CalendarEvent.started())
+            ..add(
+              CalendarEvent.remoteModelApplied(
+                model: DemoCalendar.franklin(anchor: demoNow()),
+              ),
+            );
+        }
+        return CalendarBloc(
+          xmppService: xmppService,
+          emailService: emailService,
+          reminderController: reminderController,
+          syncManagerBuilder: (bloc) {
+            final manager = CalendarSyncManager(
+              readModel: () => bloc.currentModel,
+              applyModel: (model) async {
+                if (bloc.isClosed) return;
+                bloc.add(
+                  CalendarEvent.remoteModelApplied(
+                    model: model,
+                  ),
+                );
+              },
+              sendCalendarMessage: (outbound) async {
+                if (bloc.isClosed) {
+                  return;
+                }
+                final jid = xmppService.myJid;
+                if (jid != null) {
+                  await xmppService.sendCalendarSyncMessage(
+                    jid: jid,
+                    outbound: outbound,
+                  );
+                }
+              },
+              sendSnapshotFile: xmppService.uploadCalendarSnapshot,
+            );
+            return manager;
+          },
+          storage: storage,
+        )..add(const CalendarEvent.started());
+      },
+      child: BlocListener<SettingsCubit, SettingsState>(
+        listenWhen: (previous, current) =>
+            previous.endpointConfig != current.endpointConfig,
+        listener: (context, settings) {
+          final config = settings.endpointConfig;
+          final emailService = locate<EmailService>();
+          final EmailService? activeEmailService =
+              config.smtpEnabled ? emailService : null;
+          locate<CalendarBloc>().updateEmailService(activeEmailService);
+        },
+        child: shell,
+      ),
+    );
   }
 }
 
@@ -661,7 +780,7 @@ class _HomeContent extends StatelessWidget {
     final l10n = context.l10n;
     final settings = context.watch<SettingsCubit>().state;
     final endpointConfig = settings.endpointConfig;
-    final bool emailEnabled = endpointConfig.enableSmtp;
+    final bool emailEnabled = endpointConfig.smtpEnabled;
 
     final xmppService = context.watch<XmppService>();
     final isOmemo = xmppService is OmemoService;

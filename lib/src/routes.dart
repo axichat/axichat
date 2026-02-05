@@ -89,7 +89,7 @@ class HomeShellRoute extends ShellRouteData {
 
   @override
   Widget builder(BuildContext context, GoRouterState state, Widget navigator) {
-    return HomeShell(child: navigator);
+    return HomeShellCalendarScope(child: navigator);
   }
 }
 

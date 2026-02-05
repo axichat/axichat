@@ -26,7 +26,7 @@ class AttachmentGalleryScreen extends StatelessWidget {
     final leadingWidth = AxiIconButton.kDefaultSize + (spacing.s * 2);
     final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
     final EmailService? emailService =
-        endpointConfig.enableSmtp ? locate<EmailService>() : null;
+        endpointConfig.smtpEnabled ? locate<EmailService>() : null;
     return BlocProvider(
       create: (context) => AttachmentGalleryBloc(
         xmppService: locate<XmppService>(),
