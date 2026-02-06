@@ -173,11 +173,11 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
       children: [
         if (hasChips) ...[
           Wrap(
-            spacing: calendarInsetSm,
-            runSpacing: calendarInsetSm,
+            spacing: context.spacing.xxs,
+            runSpacing: context.spacing.xxs,
             children: chips,
           ),
-          const SizedBox(height: calendarGutterSm),
+          SizedBox(height: context.spacing.s),
         ],
         TaskTextField(
           controller: _urlController,
@@ -189,7 +189,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
           onChanged: _handleUrlChanged,
           enabled: widget.enabled,
         ),
-        const SizedBox(height: calendarGutterMd),
+        SizedBox(height: context.spacing.m),
         Row(
           children: [
             Expanded(
@@ -204,7 +204,7 @@ class _CalendarLinkGeoFieldsState extends State<CalendarLinkGeoFields> {
                 enabled: widget.enabled,
               ),
             ),
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             Expanded(
               child: TaskTextField(
                 controller: _longitudeController,
@@ -242,9 +242,9 @@ class _LinkGeoChip extends StatelessWidget {
     final TextStyle labelStyle =
         context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xs,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -254,8 +254,8 @@ class _LinkGeoChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: calendarGutterLg, color: calendarSubtitleColor),
-          const SizedBox(width: calendarInsetMd),
+          Icon(icon, size: context.spacing.m, color: calendarSubtitleColor),
+          SizedBox(width: context.spacing.xs),
           Flexible(
             child: Text(
               label,

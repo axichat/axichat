@@ -64,6 +64,7 @@ class CalendarSheetHeader extends StatelessWidget {
     final ShadTextTheme textTheme = context.textTheme;
     final TextStyle resolvedTitleStyle = titleStyle ?? textTheme.h4.strong;
     final TextStyle resolvedSubtitleStyle = subtitleStyle ?? textTheme.muted;
+    final spacing = context.spacing;
 
     return Padding(
       padding: padding,
@@ -76,7 +77,7 @@ class CalendarSheetHeader extends StatelessWidget {
               Expanded(child: Text(title, style: resolvedTitleStyle)),
               ...actions,
               if (onClose != null) ...[
-                if (actions.isNotEmpty) const SizedBox(width: calendarGutterSm),
+                if (actions.isNotEmpty) SizedBox(width: spacing.s),
                 CalendarSheetCloseButton(
                   iconData: closeIcon,
                   tooltip: closeTooltip,
@@ -87,7 +88,7 @@ class CalendarSheetHeader extends StatelessWidget {
             ],
           ),
           if (subtitle != null) ...[
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: spacing.xxs),
             Text(subtitle!, style: resolvedSubtitleStyle),
           ],
         ],

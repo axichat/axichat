@@ -52,6 +52,7 @@ class ScheduleRangeFields extends StatelessWidget {
         final String resolvedEndPlaceholder =
             endPlaceholder ?? l10n.commonSelectEnd;
         final bool shouldStack = constraints.maxWidth < 420;
+        final spacing = context.spacing;
         final Widget startField = _ScheduleField(
           label: resolvedStartLabel,
           placeholder: resolvedStartPlaceholder,
@@ -78,7 +79,7 @@ class ScheduleRangeFields extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               startField,
-              const SizedBox(height: calendarGutterMd),
+              SizedBox(height: spacing.m),
               endField,
             ],
           );
@@ -87,7 +88,7 @@ class ScheduleRangeFields extends StatelessWidget {
         return Row(
           children: [
             Expanded(child: startField),
-            const SizedBox(width: calendarGutterMd),
+            SizedBox(width: spacing.m),
             Expanded(child: endField),
           ],
         );
@@ -119,6 +120,7 @@ class _ScheduleField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -129,7 +131,7 @@ class _ScheduleField extends StatelessWidget {
             letterSpacing: 0.4,
           ),
         ),
-        const SizedBox(height: calendarInsetLg),
+        SizedBox(height: spacing.s),
         DeadlinePickerField(
           value: value,
           placeholder: placeholder,

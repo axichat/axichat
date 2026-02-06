@@ -165,7 +165,7 @@ class _TaskFragmentCard extends StatelessWidget {
               ),
               Expanded(
                 child: Padding(
-                  padding: calendarPaddingLg,
+                  padding: EdgeInsets.all(context.spacing.m),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     spacing: _fragmentContentSpacing,

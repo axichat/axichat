@@ -251,7 +251,7 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
     context: modalContext,
     isScrollControlled: true,
     dialogMaxWidth: 760,
-    surfacePadding: const EdgeInsets.all(calendarGutterLg),
+    surfacePadding: EdgeInsets.all(context.spacing.m),
     showCloseButton: false,
     builder: (sheetContext) {
       final B resolvedBloc = resolveBloc();
@@ -312,6 +312,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
   @override
   Widget build(BuildContext context) {
     final bool isCompact = ResponsiveHelper.isCompact(context);
+    final spacing = context.spacing;
     final CalendarCriticalPath? targetPath = widget.targetPath;
     final l10n = context.l10n;
     final String title = targetPath != null
@@ -346,7 +347,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                           subtitle: subtitle,
                           onClose: () => Navigator.of(context).maybePop(),
                         ),
-                        const SizedBox(height: calendarGutterSm),
+                        SizedBox(height: spacing.s),
                         TaskTextField(
                           controller: _queryController,
                           focusNode: _queryFocusNode,
@@ -358,17 +359,17 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                             Icons.search,
                             color: calendarSubtitleColor,
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: calendarGutterMd,
-                            vertical: 10,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: spacing.m,
+                            vertical: spacing.s,
                           ),
                         ),
-                        const SizedBox(height: calendarInsetSm),
+                        SizedBox(height: spacing.xxs),
                         _FilterRow(
                           filters: _filters,
                           onFilterToggled: _toggleFilter,
                         ),
-                        const SizedBox(height: calendarInsetSm),
+                        SizedBox(height: spacing.xxs),
                       ],
                     ),
                   ),
@@ -383,8 +384,8 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                   else
                     SliverPadding(
                       padding: EdgeInsets.only(
-                        top: calendarInsetSm,
-                        bottom: calendarInsetMd + keyboardInset,
+                        top: spacing.xxs,
+                        bottom: spacing.xs + keyboardInset,
                       ),
                       sliver: SliverList(
                         delegate: SliverChildBuilderDelegate((
@@ -392,7 +393,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                           index,
                         ) {
                           if (index.isOdd) {
-                            return const SizedBox(height: calendarInsetSm);
+                            return SizedBox(height: spacing.xxs);
                           }
                           final CalendarTask task = results[index ~/ 2];
                           final Widget trailing = _ResultMetadata(task);
@@ -490,9 +491,10 @@ class _FilterRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final double iconSize = context.sizing.menuItemIconSize;
+    final spacing = context.spacing;
     return Wrap(
-      spacing: calendarInsetSm,
-      runSpacing: calendarInsetSm,
+      spacing: spacing.xxs,
+      runSpacing: spacing.xxs,
       children: _QuickFilter.values.map((filter) {
         final bool active = filters.contains(filter);
         final Color background =
@@ -525,15 +527,15 @@ class _FilterRow extends StatelessWidget {
                       shape: decoratedShape,
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: calendarGutterSm,
-                        vertical: calendarInsetMd,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: spacing.s,
+                        vertical: spacing.xs,
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(filter.icon, size: iconSize, color: textColor),
-                          const SizedBox(width: calendarInsetSm),
+                          SizedBox(width: spacing.xxs),
                           Text(
                             filter.label(context),
                             style: context.textTheme.label.strong.copyWith(
@@ -599,8 +601,8 @@ class _ResultMetadata extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return Wrap(
-      spacing: calendarInsetSm,
-      runSpacing: calendarInsetSm,
+      spacing: context.spacing.xxs,
+      runSpacing: context.spacing.xxs,
       children: tags,
     );
   }
@@ -615,10 +617,11 @@ class _MetadataTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
+    final spacing = context.spacing;
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetSm,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.s,
+        vertical: spacing.xxs,
       ),
       decoration: BoxDecoration(
         color: colors.muted.withValues(alpha: 0.06),
@@ -633,7 +636,7 @@ class _MetadataTag extends StatelessWidget {
             size: context.sizing.menuItemIconSize,
             color: colors.mutedForeground,
           ),
-          const SizedBox(width: calendarInsetSm),
+          SizedBox(width: spacing.xxs),
           Text(
             label,
             style: context.textTheme.label.strong
@@ -661,13 +664,12 @@ class _EmptySearchState extends StatelessWidget {
     final TextStyle hintStyle = context.textTheme.muted.copyWith(
       color: colors.mutedForeground,
     );
+    final spacing = context.spacing;
     return Center(
       child: Padding(
         padding: EdgeInsets.symmetric(
-          vertical: isCompact
-              ? calendarGutterLg
-              : calendarGutterLg + calendarGutterMd,
-          horizontal: calendarGutterLg,
+          vertical: isCompact ? spacing.m : spacing.l,
+          horizontal: spacing.m,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -677,14 +679,14 @@ class _EmptySearchState extends StatelessWidget {
               size: context.sizing.menuItemHeight,
               color: colors.mutedForeground,
             ),
-            const SizedBox(height: calendarGutterSm),
+            SizedBox(height: spacing.s),
             Text(
               showHint
                   ? context.l10n.calendarTaskSearchEmptyPrompt
                   : context.l10n.calendarTaskSearchEmptyNoResults,
               style: context.textTheme.small.strong,
             ),
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: spacing.xxs),
             Text(
               context.l10n.calendarTaskSearchEmptyHint,
               style: hintStyle,
@@ -725,7 +727,7 @@ class _SearchResultTile extends StatelessWidget {
                 child: DecoratedBox(
                   decoration: ShapeDecoration(color: colors.card, shape: shape),
                   child: Padding(
-                    padding: const EdgeInsets.all(calendarGutterMd),
+                    padding: EdgeInsets.all(context.spacing.m),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -734,7 +736,7 @@ class _SearchResultTile extends StatelessWidget {
                           style: context.textTheme.small.strong,
                         ),
                         if (subtitle != null) ...[
-                          const SizedBox(height: calendarInsetSm),
+                          SizedBox(height: context.spacing.xxs),
                           Text(subtitle, style: context.textTheme.muted),
                         ],
                       ],

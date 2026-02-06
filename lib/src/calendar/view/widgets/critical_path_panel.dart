@@ -101,7 +101,7 @@ class CriticalPathPanel extends StatelessWidget {
         borderRadius: BorderRadius.zero,
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
-      padding: calendarPaddingLg,
+      padding: EdgeInsets.all(context.spacing.m),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -110,8 +110,7 @@ class CriticalPathPanel extends StatelessWidget {
               Expanded(
                 child: AxiPlainHeaderButton(
                   onPressed: _handleToggleExpanded,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: calendarInsetSm),
+                  padding: EdgeInsets.symmetric(vertical: context.spacing.xxs),
                   backgroundColor: Colors.transparent,
                   hoverBackgroundColor: Colors.transparent,
                   pressedBackgroundColor: Colors.transparent,
@@ -126,7 +125,7 @@ class CriticalPathPanel extends StatelessWidget {
                           color: colors.mutedForeground,
                         ),
                       ),
-                      const SizedBox(width: calendarInsetSm),
+                      SizedBox(width: context.spacing.xxs),
                       Flexible(
                         child: Text(
                           context.l10n.calendarCriticalPathsTitle.toUpperCase(),
@@ -143,14 +142,14 @@ class CriticalPathPanel extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (showingSinglePath && onCloseOrdering != null) ...[
-                    const SizedBox(width: calendarInsetSm),
+                    SizedBox(width: context.spacing.xxs),
                     ShadButton.ghost(
                       size: ShadButtonSize.sm,
                       onPressed: onCloseOrdering,
                       child: Text(context.l10n.calendarCriticalPathsAll),
                     ),
                   ],
-                  const SizedBox(width: calendarInsetSm),
+                  SizedBox(width: context.spacing.xxs),
                   ShadButton.ghost(
                     size: ShadButtonSize.sm,
                     onPressed: () => onToggleHideCompleted(!hideCompleted),
@@ -166,7 +165,7 @@ class CriticalPathPanel extends StatelessWidget {
                               ? colors.primary
                               : colors.mutedForeground,
                         ),
-                        const SizedBox(width: calendarInsetSm),
+                        SizedBox(width: context.spacing.xxs),
                         Text(
                           l10n.calendarCriticalPathCompletedLabel,
                           style: context.textTheme.label.strong.copyWith(
@@ -178,7 +177,7 @@ class CriticalPathPanel extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: calendarInsetSm),
+                  SizedBox(width: context.spacing.xxs),
                   AxiTooltip(
                     builder: (context) => Text(
                       context.l10n.calendarCriticalPathsNew,
@@ -211,7 +210,7 @@ class CriticalPathPanel extends StatelessWidget {
               secondChild: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: calendarGutterMd),
+                  SizedBox(height: context.spacing.m),
                   if (!hasPaths)
                     Text(
                       context.l10n.calendarCriticalPathsEmpty,
@@ -238,7 +237,7 @@ class CriticalPathPanel extends StatelessWidget {
                           onOpenPath(path);
                         },
                       ),
-                      const SizedBox(height: calendarInsetMd),
+                      SizedBox(height: context.spacing.xs),
                     ],
                     if (reorderTarget == null)
                       const SizedBox.shrink()
@@ -391,7 +390,7 @@ class CriticalPathCard extends StatelessWidget {
                   shape: decoratedShape,
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(calendarGutterMd),
+                  padding: EdgeInsets.all(context.spacing.m),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -413,7 +412,7 @@ class CriticalPathCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(height: calendarInsetSm),
+                      SizedBox(height: context.spacing.xxs),
                       Text(
                         l10n.calendarCriticalPathProgressSummary(
                           progress.completed,
@@ -421,12 +420,12 @@ class CriticalPathCard extends StatelessWidget {
                         ),
                         style: context.textTheme.label,
                       ),
-                      const SizedBox(height: calendarInsetSm),
+                      SizedBox(height: context.spacing.xxs),
                       Text(
                         l10n.calendarCriticalPathProgressHint,
                         style: context.textTheme.labelSm,
                       ),
-                      const SizedBox(height: calendarInsetSm),
+                      SizedBox(height: context.spacing.xxs),
                       _CriticalPathProgressBar(
                         progressValue: progressValue,
                         animationDuration: animationDuration,
@@ -510,7 +509,7 @@ class _CriticalPathProgressBarState extends State<_CriticalPathProgressBar> {
                 ),
               ],
             ),
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: context.spacing.xxs),
             Stack(
               children: [
                 Container(
@@ -594,7 +593,7 @@ class _PathActionsState extends State<_PathActions> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Padding(
-          padding: const EdgeInsets.only(right: calendarGutterSm),
+          padding: EdgeInsets.only(right: context.spacing.s),
           child: AxiButton.secondary(
             onPressed: widget.onFocus,
             leading: Icon(
@@ -606,7 +605,7 @@ class _PathActionsState extends State<_PathActions> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
+          padding: EdgeInsets.symmetric(horizontal: context.spacing.xs),
           child: AxiPopover(
             controller: _menuController,
             closeOnTapOutside: true,
@@ -700,13 +699,13 @@ class _FocusedPathTasks extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         Text(
           context.l10n.calendarCriticalPathTaskOrderTitle,
           style: context.textTheme.small.strong,
         ),
         if (onAddTask != null) ...[
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           SizedBox(
             width: double.infinity,
             child: AxiButton.outline(
@@ -720,12 +719,12 @@ class _FocusedPathTasks extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         Text(context.l10n.calendarCriticalPathDragHint, style: textTheme.muted),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         if (tasks.isEmpty)
           Container(
-            padding: const EdgeInsets.all(calendarGutterMd),
+            padding: EdgeInsets.all(context.spacing.m),
             decoration: BoxDecoration(
               color: colors.muted.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(calendarBorderRadius),
@@ -875,14 +874,14 @@ class CriticalPathMembershipList extends StatelessWidget {
       return Text(emptyLabel!, style: textTheme.muted);
     }
     return Wrap(
-      spacing: calendarInsetSm,
-      runSpacing: calendarInsetSm,
+      spacing: context.spacing.xxs,
+      runSpacing: context.spacing.xxs,
       children: paths
           .map(
             (path) => Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: calendarInsetMd,
-                vertical: calendarInsetSm,
+              padding: EdgeInsets.symmetric(
+                horizontal: context.spacing.xs,
+                vertical: context.spacing.xxs,
               ),
               decoration: BoxDecoration(
                 color: colors.muted.withValues(alpha: 0.08),
@@ -897,13 +896,13 @@ class CriticalPathMembershipList extends StatelessWidget {
                     size: context.sizing.menuItemIconSize,
                     color: colors.mutedForeground,
                   ),
-                  const SizedBox(width: calendarInsetSm),
+                  SizedBox(width: context.spacing.xxs),
                   Text(
                     path.name,
                     style: textTheme.small.strong,
                   ),
                   if (onRemovePath != null) ...[
-                    const SizedBox(width: calendarInsetSm),
+                    SizedBox(width: context.spacing.xxs),
                     AxiIconButton.ghost(
                       iconData: Icons.close,
                       color: colors.mutedForeground,
@@ -982,7 +981,7 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
         padding: EdgeInsets.zero,
         shrinkWrap: true,
         itemCount: widget.paths.length,
-        separatorBuilder: (_, __) => const SizedBox(height: calendarInsetSm),
+        separatorBuilder: (_, __) => SizedBox(height: context.spacing.xxs),
         itemBuilder: (context, index) {
           final path = widget.paths[index];
           return AxiTapBounce(
@@ -1009,9 +1008,9 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
                         shape: decoratedShape,
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: calendarGutterMd,
-                          vertical: calendarInsetMd,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: context.spacing.m,
+                          vertical: context.spacing.xs,
                         ),
                         child: Row(
                           children: [
@@ -1027,7 +1026,7 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
                                 size: iconSize,
                               ),
                             ),
-                            const SizedBox(width: calendarGutterSm),
+                            SizedBox(width: context.spacing.s),
                             Expanded(
                               child: Text(
                                 path.name,
@@ -1067,7 +1066,7 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
   return showAdaptiveBottomSheet<CriticalPathPickerResult>(
     context: modalContext,
     dialogMaxWidth: 420,
-    surfacePadding: const EdgeInsets.all(calendarGutterLg),
+    surfacePadding: EdgeInsets.all(context.spacing.m),
     showCloseButton: false,
     builder: (sheetContext) {
       return LayoutBuilder(
@@ -1095,13 +1094,13 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                   title: sheetContext.l10n.calendarCriticalPathAddToTitle,
                   onClose: () => Navigator.of(sheetContext).maybePop(),
                 ),
-                const SizedBox(height: calendarGutterMd),
+                SizedBox(height: context.spacing.m),
                 if (paths.isEmpty) ...[
                   Text(
                     context.l10n.calendarCriticalPathCreatePrompt,
                     style: textTheme.muted,
                   ),
-                  const SizedBox(height: calendarGutterMd),
+                  SizedBox(height: context.spacing.m),
                 ] else
                   ConstrainedBox(
                     constraints: BoxConstraints(
@@ -1143,12 +1142,12 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                       return const SizedBox.shrink();
                     }
                     return Padding(
-                      padding: const EdgeInsets.only(
-                        top: calendarGutterSm,
-                        bottom: calendarGutterSm,
+                      padding: EdgeInsets.only(
+                        top: context.spacing.s,
+                        bottom: context.spacing.s,
                       ),
                       child: Container(
-                        padding: const EdgeInsets.all(calendarInsetMd),
+                        padding: EdgeInsets.all(context.spacing.xs),
                         decoration: BoxDecoration(
                           color: colors.primary.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(
@@ -1163,7 +1162,7 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                               size: context.sizing.menuItemIconSize,
                               color: colors.primary,
                             ),
-                            const SizedBox(width: calendarInsetSm),
+                            SizedBox(width: context.spacing.xxs),
                             Expanded(
                               child: Text(
                                 status,
@@ -1178,7 +1177,7 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                     );
                   },
                 ),
-                const SizedBox(height: calendarGutterLg),
+                SizedBox(height: context.spacing.m),
                 ValueListenableBuilder<bool>(
                   valueListenable: busyNotifier,
                   builder: (context, isBusy, _) => AxiButton.ghost(
@@ -1231,7 +1230,7 @@ Future<String?> promptCriticalPathName({
     context: modalContext,
     isScrollControlled: true,
     dialogMaxWidth: 420,
-    surfacePadding: const EdgeInsets.all(calendarGutterLg),
+    surfacePadding: EdgeInsets.all(context.spacing.m),
     showCloseButton: false,
     builder: (dialogContext) {
       return StatefulBuilder(
@@ -1251,7 +1250,7 @@ Future<String?> promptCriticalPathName({
                   title: title,
                   onClose: () => Navigator.of(dialogContext).maybePop(),
                 ),
-                const SizedBox(height: calendarGutterSm),
+                SizedBox(height: context.spacing.s),
                 Flexible(
                   fit: FlexFit.loose,
                   child: SingleChildScrollView(
@@ -1263,7 +1262,7 @@ Future<String?> promptCriticalPathName({
                           context.l10n.calendarCriticalPathNamePrompt,
                           style: textTheme.muted,
                         ),
-                        const SizedBox(height: calendarGutterSm),
+                        SizedBox(height: context.spacing.s),
                         AxiTextFormField(
                           controller: controller,
                           focusNode: focusNode,
@@ -1290,7 +1289,7 @@ Future<String?> promptCriticalPathName({
                     ),
                   ),
                 ),
-                const SizedBox(height: calendarGutterMd),
+                SizedBox(height: context.spacing.m),
                 Padding(
                   padding: EdgeInsets.only(bottom: keyboardInset),
                   child: Row(
@@ -1300,7 +1299,7 @@ Future<String?> promptCriticalPathName({
                         onPressed: () => Navigator.of(dialogContext).maybePop(),
                         child: Text(context.l10n.commonCancel),
                       ),
-                      const SizedBox(width: calendarInsetSm),
+                      SizedBox(width: context.spacing.xxs),
                       AxiButton.primary(
                         onPressed: () {
                           if (!(formKey.currentState?.validate() ?? false)) {

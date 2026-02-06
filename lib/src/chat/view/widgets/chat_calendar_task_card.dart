@@ -442,7 +442,7 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
 
   EdgeInsets _shareMargin() {
     final CalendarResponsiveSpec spec =
-        ResponsiveHelper.specForSizeClass(CalendarSizeClass.compact);
+        ResponsiveHelper.specForSizeClass(context, CalendarSizeClass.compact);
     final double vertical = spec.contentPadding.vertical / 2;
     return EdgeInsets.only(top: vertical);
   }

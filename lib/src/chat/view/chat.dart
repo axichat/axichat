@@ -753,7 +753,11 @@ class _RoomMembersDrawerContent extends StatelessWidget {
   });
 
   final ValueChanged<String> onInvite;
-  final void Function(String occupantId, MucModerationAction action) onAction;
+  final void Function(
+    String occupantId,
+    MucModerationAction action,
+    String actionLabel,
+  ) onAction;
   final ValueChanged<String> onChangeNickname;
   final VoidCallback onLeaveRoom;
   final VoidCallback onClose;
@@ -7774,8 +7778,8 @@ class _ChatState extends State<Chat> {
                                                                 senderLabel,
                                                             bubble:
                                                                 bubbleWithSlack,
-                                                            spacing:
-                                                                calendarInsetLg,
+                                                            spacing: context
+                                                                .spacing.s,
                                                             alignEnd: self,
                                                           );
                                                           final messageBody =
@@ -11172,8 +11176,8 @@ class _ChatComposerSection extends StatelessWidget {
       if (myJid != null && myJid.isNotEmpty) mox.JID.fromString(myJid).domain,
     };
     final width = MediaQuery.sizeOf(context).width;
-    final composerHorizontalInset = spacing.m;
-    final desktopComposerHorizontalInset = spacing.m;
+    final composerHorizontalInset = spacing.l;
+    final desktopComposerHorizontalInset = spacing.l;
     final horizontalPadding = width >= smallScreen
         ? desktopComposerHorizontalInset
         : composerHorizontalInset;

@@ -79,9 +79,9 @@ Future<DayEventEditorResult?> showDayEventEditor({
     context: modalContext,
     isScrollControlled: true,
     dialogMaxWidth: 720,
-    surfacePadding: const EdgeInsets.symmetric(
-      horizontal: calendarGutterSm,
-      vertical: calendarInsetSm,
+    surfacePadding: EdgeInsets.symmetric(
+      horizontal: context.spacing.s,
+      vertical: context.spacing.xxs,
     ),
     showCloseButton: false,
     builder: (BuildContext sheetContext) {
@@ -184,19 +184,19 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
       rawProperties: rawProperties,
     );
     final bool showDiagnostics = hasIcsDiagnosticsData(icsMeta);
-    final double scrollBottomPadding = calendarGutterMd + keyboardInset;
+    final double scrollBottomPadding = context.spacing.m + keyboardInset;
     final Widget actions = ValueListenableBuilder<TextEditingValue>(
       valueListenable: _titleController,
       builder: (context, value, _) {
         final bool canSubmit = value.text.trim().isNotEmpty;
         return TaskFormActionsRow(
           includeTopBorder: true,
-          gap: calendarGutterSm,
-          padding: const EdgeInsets.fromLTRB(
-            calendarGutterLg,
-            calendarGutterMd,
-            calendarGutterLg,
-            calendarGutterMd,
+          gap: context.spacing.s,
+          padding: EdgeInsets.fromLTRB(
+            context.spacing.m,
+            context.spacing.m,
+            context.spacing.m,
+            context.spacing.m,
           ),
           children: [
             const Spacer(),
@@ -238,9 +238,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterMd,
-                vertical: calendarInsetSm,
+              padding: EdgeInsets.symmetric(
+                horizontal: context.spacing.m,
+                vertical: context.spacing.xxs,
               ),
               child: Row(
                 children: [
@@ -262,9 +262,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
             Flexible(
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
-                  calendarGutterMd,
-                  calendarInsetLg,
-                  calendarGutterMd,
+                  context.spacing.m,
+                  context.spacing.s,
+                  context.spacing.m,
                   scrollBottomPadding,
                 ),
                 child: Column(
@@ -282,22 +282,24 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                           : null,
                       autovalidateMode: AutovalidateMode.disabled,
                     ),
-                    const SizedBox(height: calendarGutterMd),
+                    SizedBox(height: context.spacing.m),
                     TaskDescriptionField(
                       controller: _descriptionController,
                       hintText: context.l10n.calendarOptionalDetails,
                       borderRadius: calendarBorderRadius,
                       focusBorderColor: calendarPrimaryColor,
-                      contentPadding: calendarFieldPadding,
+                      contentPadding: EdgeInsets.symmetric(
+                          horizontal: context.spacing.m,
+                          vertical: context.spacing.s),
                       minLines: 3,
                       maxLines: 3,
                     ),
                     TaskSectionDivider(
                       color: colors.border,
-                      verticalPadding: calendarGutterMd,
+                      verticalPadding: context.spacing.m,
                     ),
                     TaskSectionHeader(title: context.l10n.calendarDates),
-                    const SizedBox(height: calendarInsetLg),
+                    SizedBox(height: context.spacing.s),
                     ScheduleRangeFields(
                       start: _startDate,
                       end: _endDate,
@@ -325,7 +327,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     ),
                     TaskSectionDivider(
                       color: colors.border,
-                      verticalPadding: calendarGutterMd,
+                      verticalPadding: context.spacing.m,
                     ),
                     ReminderPreferencesField(
                       value: _reminders,
@@ -343,7 +345,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     ),
                     TaskSectionDivider(
                       color: colors.border,
-                      verticalPadding: calendarGutterMd,
+                      verticalPadding: context.spacing.m,
                     ),
                     CalendarCategoriesField(
                       categories: _categories,
@@ -352,7 +354,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     ),
                     TaskSectionDivider(
                       color: colors.border,
-                      verticalPadding: calendarGutterMd,
+                      verticalPadding: context.spacing.m,
                     ),
                     CalendarLinkGeoFields(
                       url: _url,
@@ -362,7 +364,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     ),
                     TaskSectionDivider(
                       color: colors.border,
-                      verticalPadding: calendarGutterMd,
+                      verticalPadding: context.spacing.m,
                     ),
                     CalendarParticipantsField(
                       organizer: _organizer,
@@ -375,7 +377,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     if (showInvitationStatus) ...[
                       TaskSectionDivider(
                         color: colors.border,
-                        verticalPadding: calendarGutterMd,
+                        verticalPadding: context.spacing.m,
                       ),
                       CalendarInvitationStatusField(
                         method: null,
@@ -386,19 +388,19 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                     if (_attachments.isNotEmpty) ...[
                       TaskSectionDivider(
                         color: colors.border,
-                        verticalPadding: calendarGutterMd,
+                        verticalPadding: context.spacing.m,
                       ),
                       CalendarAttachmentsField(attachments: _attachments),
                     ],
                     if (showDiagnostics) ...[
                       TaskSectionDivider(
                         color: colors.border,
-                        verticalPadding: calendarGutterMd,
+                        verticalPadding: context.spacing.m,
                       ),
                       CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
                     ],
                     if (keyboardOpen) ...[
-                      const SizedBox(height: calendarGutterMd),
+                      SizedBox(height: context.spacing.m),
                       actions,
                     ],
                   ],

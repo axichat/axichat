@@ -25,14 +25,15 @@ class CalendarAttachmentsField extends StatelessWidget {
     if (attachments.isEmpty) {
       return const SizedBox.shrink();
     }
+    final spacing = context.spacing;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(title: title),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: spacing.s),
         ...attachments.map(
           (attachment) => Padding(
-            padding: const EdgeInsets.only(bottom: calendarInsetLg),
+            padding: EdgeInsets.only(bottom: spacing.s),
             child: _AttachmentTile(attachment: attachment),
           ),
         ),
@@ -53,13 +54,14 @@ class _AttachmentTile extends StatelessWidget {
     final TextStyle secondaryStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );
+    final spacing = context.spacing;
     final String title = _attachmentTitle();
     final String? subtitle = _attachmentSubtitle();
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.s,
+        vertical: spacing.xs,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -70,17 +72,17 @@ class _AttachmentTile extends StatelessWidget {
         children: [
           Icon(
             Icons.attach_file,
-            size: calendarGutterLg,
+            size: spacing.m,
             color: calendarSubtitleColor,
           ),
-          const SizedBox(width: calendarInsetMd),
+          SizedBox(width: spacing.xs),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title, style: primaryStyle),
                 if (subtitle != null) ...[
-                  const SizedBox(height: calendarInsetSm),
+                  SizedBox(height: spacing.xxs),
                   Text(subtitle, style: secondaryStyle),
                 ],
               ],

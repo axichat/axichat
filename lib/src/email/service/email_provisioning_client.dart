@@ -56,15 +56,17 @@ class EmailProvisioningClient {
   EmailProvisioningClient({
     required Uri baseUrl,
     required String publicToken,
+    bool requirePublicToken = true,
     http.Client? httpClient,
     Logger? logger,
   })  : _baseUrl = _normalizeBase(baseUrl),
         _publicToken = _normalizePublicToken(publicToken),
+        _requirePublicToken = requirePublicToken,
         _httpClient = httpClient ?? http.Client(),
         _ownsClient = httpClient == null,
         _log = logger ?? Logger('EmailProvisioningClient') {
     _validateBaseUrl(_baseUrl);
-    if (!_publicTokenConfigured) {
+    if (_requirePublicToken && !_publicTokenConfigured) {
       _log.warning('Email provisioning public token missing.');
     }
   }
@@ -91,10 +93,16 @@ class EmailProvisioningClient {
         : envBaseUrl.isEmpty
             ? Uri.parse(_defaultProvisioningBaseUrl)
             : Uri.parse(envBaseUrl);
+    final defaultHost = Uri.parse(_defaultProvisioningBaseUrl).host;
+    final overrideProvided = publicTokenOverride != null;
     final overrideToken = publicTokenOverride?.trim() ?? '';
+    final useBundledToken =
+        !overrideProvided && baseUrl.host.toLowerCase() == defaultHost;
+    final resolvedToken = useBundledToken ? envPublicToken : overrideToken;
     return EmailProvisioningClient(
       baseUrl: baseUrl,
-      publicToken: overrideToken.isNotEmpty ? overrideToken : envPublicToken,
+      publicToken: resolvedToken,
+      requirePublicToken: useBundledToken,
       httpClient: httpClient,
       logger: logger,
     );
@@ -102,6 +110,7 @@ class EmailProvisioningClient {
 
   final Uri _baseUrl;
   final String _publicToken;
+  final bool _requirePublicToken;
   final http.Client _httpClient;
   final bool _ownsClient;
   final Logger _log;
@@ -125,6 +134,7 @@ class EmailProvisioningClient {
   }
 
   void _ensureConfigured() {
+    if (!_requirePublicToken) return;
     if (_publicTokenConfigured) return;
     throw const EmailProvisioningApiException(
       code: EmailProvisioningApiErrorCode.unavailable,
@@ -377,10 +387,15 @@ class EmailProvisioningClient {
     return _baseUrl.replace(pathSegments: segments);
   }
 
-  Map<String, String> _headers() => {
-        'Content-Type': 'application/json',
-        'X-Auth-Token': _publicToken,
-      };
+  Map<String, String> _headers() {
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+    };
+    if (_publicToken.isNotEmpty) {
+      headers['X-Auth-Token'] = _publicToken;
+    }
+    return headers;
+  }
 
   static Uri _normalizeBase(Uri baseUrl) {
     if (baseUrl.scheme.isEmpty || baseUrl.host.isEmpty) {

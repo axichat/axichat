@@ -8,6 +8,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/view/priority_checkbox_tile.dart';
+import 'recurrence_spacing_tokens.dart';
 import 'recurrence_editor.dart';
 import 'schedule_range_fields.dart';
 import 'task_text_field.dart';
@@ -50,14 +51,14 @@ class TaskSectionHeader extends StatelessWidget {
         children: [
           if (leading != null) ...[
             leading!,
-            const SizedBox(width: calendarInsetSm),
+            SizedBox(width: context.spacing.xxs),
           ],
           Flexible(
             fit: FlexFit.loose,
             child: Text(displayTitle, style: style),
           ),
           if (trailing != null) ...[
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             trailing!,
           ],
         ],
@@ -94,17 +95,17 @@ class TaskSectionExpander extends StatelessWidget {
     final Widget trailing = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (badge != null) ...[badge!, const SizedBox(width: calendarInsetSm)],
+        if (badge != null) ...[badge!, SizedBox(width: context.spacing.xxs)],
       ],
     );
     final Widget leading = Icon(
       isExpanded ? Icons.expand_less : Icons.expand_more,
-      size: calendarGutterLg,
+      size: context.spacing.m,
       color: calendarSubtitleColor,
     );
     final Widget header = AxiPlainHeaderButton(
       onPressed: enabled ? onToggle : null,
-      padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
+      padding: EdgeInsets.symmetric(vertical: context.spacing.xxs),
       child: SizedBox(
         width: double.infinity,
         child: TaskSectionHeader(
@@ -119,10 +120,10 @@ class TaskSectionExpander extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isExpanded) ...[
-          const SizedBox(height: calendarGutterSm),
+          SizedBox(height: context.spacing.s),
           IgnorePointer(ignoring: !enabled, child: child),
         ] else if (collapsedHint != null) ...[
-          const SizedBox(height: calendarGutterSm),
+          SizedBox(height: context.spacing.s),
           collapsedHint!,
         ],
       ],
@@ -148,17 +149,19 @@ class TaskSectionExpander extends StatelessWidget {
 class TaskSectionDivider extends StatelessWidget {
   const TaskSectionDivider({
     super.key,
-    this.verticalPadding = calendarGutterMd,
+    this.verticalPadding,
     this.color,
   });
 
-  final double verticalPadding;
+  final double? verticalPadding;
   final Color? color;
 
   @override
   Widget build(BuildContext context) {
+    final double resolvedPadding = verticalPadding ?? context.spacing.m;
+
     return Padding(
-      padding: EdgeInsets.symmetric(vertical: verticalPadding),
+      padding: EdgeInsets.symmetric(vertical: resolvedPadding),
       child: Container(
         height: context.borderSide.width,
         decoration: BoxDecoration(
@@ -181,7 +184,7 @@ class TaskPriorityToggles extends StatelessWidget {
     this.onUrgentChanged,
     this.isImportantIndeterminate = false,
     this.isUrgentIndeterminate = false,
-    this.spacing = calendarGutterMd,
+    this.spacing,
   });
 
   final bool isImportant;
@@ -190,10 +193,12 @@ class TaskPriorityToggles extends StatelessWidget {
   final bool isUrgentIndeterminate;
   final ValueChanged<bool>? onImportantChanged;
   final ValueChanged<bool>? onUrgentChanged;
-  final double spacing;
+  final double? spacing;
 
   @override
   Widget build(BuildContext context) {
+    final double resolvedSpacing = spacing ?? context.spacing.m;
+
     return Row(
       children: [
         Expanded(
@@ -205,7 +210,7 @@ class TaskPriorityToggles extends StatelessWidget {
             onChanged: onImportantChanged,
           ),
         ),
-        SizedBox(width: spacing),
+        SizedBox(width: resolvedSpacing),
         Expanded(
           child: PriorityCheckboxTile(
             label: context.l10n.calendarUrgent,
@@ -400,9 +405,9 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
               ),
             ),
             contentPadding: widget.contentPadding ??
-                const EdgeInsets.symmetric(
-                  horizontal: calendarGutterMd,
-                  vertical: calendarGutterMd,
+                EdgeInsets.symmetric(
+                  horizontal: context.spacing.m,
+                  vertical: context.spacing.m,
                 ),
             filled: true,
             fillColor: effectiveFill,
@@ -468,7 +473,8 @@ class TaskTitleField extends StatelessWidget {
       autovalidateMode: autovalidateMode,
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
-      contentPadding: calendarFieldPadding,
+      contentPadding: EdgeInsets.symmetric(
+          horizontal: context.spacing.m, vertical: context.spacing.s),
       errorText: errorText,
       errorStyle: errorStyle,
     );
@@ -542,7 +548,7 @@ class TaskScheduleSection extends StatelessWidget {
     required this.onStartChanged,
     required this.onEndChanged,
     this.title = 'Schedule',
-    this.spacing = calendarGutterSm,
+    this.spacing,
     this.padding = EdgeInsets.zero,
     this.headerSize = TaskSectionLabelSize.medium,
     this.headerTrailing,
@@ -562,7 +568,7 @@ class TaskScheduleSection extends StatelessWidget {
   final ValueChanged<DateTime?> onStartChanged;
   final ValueChanged<DateTime?> onEndChanged;
   final String title;
-  final double spacing;
+  final double? spacing;
   final EdgeInsetsGeometry padding;
   final TaskSectionLabelSize headerSize;
   final Widget? headerTrailing;
@@ -578,6 +584,7 @@ class TaskScheduleSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double resolvedSpacing = spacing ?? context.spacing.s;
     final bool hasSelection = start != null || end != null;
     final bool allowClear = enabled && hasSelection;
     final VoidCallback? clearHandler = allowClear
@@ -593,7 +600,7 @@ class TaskScheduleSection extends StatelessWidget {
     }
     if (clearHandler != null) {
       if (trailingChildren.isNotEmpty) {
-        trailingChildren.add(const SizedBox(width: calendarInsetMd));
+        trailingChildren.add(SizedBox(width: context.spacing.xs));
       }
       trailingChildren.add(
         TaskGhostIconButton(
@@ -617,7 +624,7 @@ class TaskScheduleSection extends StatelessWidget {
             size: headerSize,
             trailing: effectiveTrailing,
           ),
-          SizedBox(height: spacing),
+          SizedBox(height: resolvedSpacing),
           ScheduleRangeFields(
             start: start,
             end: end,
@@ -645,21 +652,14 @@ class TaskRecurrenceSection extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.title = 'Repeat',
-    this.spacing = calendarGutterSm,
+    this.spacing,
     this.padding = EdgeInsets.zero,
     this.headerSize = TaskSectionLabelSize.medium,
     this.headerTrailing,
     this.enabled = true,
     this.fallbackWeekday,
     this.referenceStart,
-    this.spacingConfig = const RecurrenceEditorSpacing(
-      chipSpacing: 6,
-      chipRunSpacing: 6,
-      weekdaySpacing: 10,
-      advancedSectionSpacing: 12,
-      endSpacing: 14,
-      fieldGap: 12,
-    ),
+    this.spacingConfig,
     this.showAdvancedToggle = true,
     this.forceAdvanced = false,
     this.chipPadding,
@@ -670,14 +670,14 @@ class TaskRecurrenceSection extends StatelessWidget {
   final RecurrenceFormValue value;
   final ValueChanged<RecurrenceFormValue> onChanged;
   final String title;
-  final double spacing;
+  final double? spacing;
   final EdgeInsetsGeometry padding;
   final TaskSectionLabelSize headerSize;
   final Widget? headerTrailing;
   final bool enabled;
   final int? fallbackWeekday;
   final DateTime? referenceStart;
-  final RecurrenceEditorSpacing spacingConfig;
+  final RecurrenceEditorSpacing? spacingConfig;
   final bool showAdvancedToggle;
   final bool forceAdvanced;
   final EdgeInsets? chipPadding;
@@ -686,6 +686,20 @@ class TaskRecurrenceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final double resolvedSpacing = spacing ?? context.spacing.s;
+    final RecurrenceEditorSpacing resolvedSpacingConfig =
+        spacingConfig ?? calendarRecurrenceSpacingStandard(context);
+    final EdgeInsets resolvedChipPadding = chipPadding ??
+        EdgeInsets.symmetric(
+          horizontal: context.spacing.m,
+          vertical: context.spacing.s,
+        );
+    final EdgeInsets resolvedWeekdayChipPadding = weekdayChipPadding ??
+        EdgeInsets.symmetric(
+          horizontal: context.spacing.m,
+          vertical: context.spacing.s,
+        );
+
     return Padding(
       padding: padding,
       child: Column(
@@ -696,26 +710,18 @@ class TaskRecurrenceSection extends StatelessWidget {
             size: headerSize,
             trailing: headerTrailing,
           ),
-          SizedBox(height: spacing),
+          SizedBox(height: resolvedSpacing),
           RecurrenceEditor(
             value: value,
             onChanged: onChanged,
             enabled: enabled,
             fallbackWeekday: fallbackWeekday,
             referenceStart: referenceStart,
-            spacing: spacingConfig,
+            spacing: resolvedSpacingConfig,
             showAdvancedToggle: showAdvancedToggle,
             forceAdvanced: forceAdvanced,
-            chipPadding: chipPadding ??
-                const EdgeInsets.symmetric(
-                  horizontal: calendarGutterMd,
-                  vertical: calendarGutterSm,
-                ),
-            weekdayChipPadding: weekdayChipPadding ??
-                const EdgeInsets.symmetric(
-                  horizontal: calendarGutterMd,
-                  vertical: calendarInsetLg,
-                ),
+            chipPadding: resolvedChipPadding,
+            weekdayChipPadding: resolvedWeekdayChipPadding,
             intervalSelectWidth:
                 intervalSelectWidth ?? calendarCompactDayColumnWidth,
           ),
@@ -816,7 +822,7 @@ class TaskDateTimeToolbar extends StatelessWidget {
     this.secondaryField,
     this.onClear,
     this.padding = EdgeInsets.zero,
-    this.gap = calendarGutterSm,
+    this.gap,
     this.clearIcon = Icons.close,
     this.clearTooltip,
   });
@@ -825,18 +831,19 @@ class TaskDateTimeToolbar extends StatelessWidget {
   final TaskDateTimeToolbarField? secondaryField;
   final VoidCallback? onClear;
   final EdgeInsetsGeometry padding;
-  final double gap;
+  final double? gap;
   final IconData clearIcon;
   final String? clearTooltip;
 
   @override
   Widget build(BuildContext context) {
+    final double resolvedGap = gap ?? context.spacing.s;
     final children = <Widget>[
       Expanded(
         child: _TaskDateTimeToolbarFields(
           primaryField: primaryField,
           secondaryField: secondaryField,
-          buttonGap: gap,
+          buttonGap: resolvedGap,
         ),
       ),
       if (onClear != null)
@@ -847,7 +854,11 @@ class TaskDateTimeToolbar extends StatelessWidget {
         ),
     ];
 
-    return TaskFormActionsRow(padding: padding, gap: gap, children: children);
+    return TaskFormActionsRow(
+      padding: padding,
+      gap: resolvedGap,
+      children: children,
+    );
   }
 }
 
@@ -1093,9 +1104,9 @@ class TaskDescriptionField extends StatelessWidget {
       borderRadius: borderRadius,
       focusBorderColor: focusBorderColor,
       contentPadding: contentPadding ??
-          const EdgeInsets.symmetric(
-            horizontal: calendarGutterLg,
-            vertical: calendarGutterMd,
+          EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.m,
           ),
     );
   }
@@ -1231,7 +1242,7 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                   final suggestion = list[index];
                   return ListTile(
                     dense: true,
-                    horizontalTitleGap: calendarGutterSm,
+                    horizontalTitleGap: context.spacing.s,
                     onTap: () {
                       onSelected(suggestion);
                       widget.onChanged?.call(suggestion.label);
@@ -1311,9 +1322,9 @@ class _TaskLocationTextInput extends StatelessWidget {
       borderRadius: borderRadius,
       focusBorderColor: focusBorderColor,
       contentPadding: contentPadding ??
-          const EdgeInsets.symmetric(
-            horizontal: calendarGutterLg,
-            vertical: calendarGutterMd,
+          EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.m,
           ),
     );
   }
@@ -1326,7 +1337,7 @@ class TaskFormActionsRow extends StatelessWidget {
   const TaskFormActionsRow({
     super.key,
     required this.children,
-    this.padding = calendarPaddingLg,
+    this.padding,
     this.includeTopBorder = false,
     this.borderColor,
     this.backgroundColor = Colors.transparent,
@@ -1334,7 +1345,7 @@ class TaskFormActionsRow extends StatelessWidget {
   });
 
   final List<Widget> children;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? padding;
   final bool includeTopBorder;
   final Color? borderColor;
   final Color backgroundColor;
@@ -1342,6 +1353,8 @@ class TaskFormActionsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final EdgeInsetsGeometry resolvedPadding =
+        padding ?? EdgeInsets.all(context.spacing.m);
     final Color resolvedBorderColor = borderColor ?? calendarBorderColor;
     final decoration = includeTopBorder
         ? BoxDecoration(
@@ -1356,7 +1369,7 @@ class TaskFormActionsRow extends StatelessWidget {
         : BoxDecoration(color: backgroundColor);
 
     return Container(
-      padding: padding,
+      padding: resolvedPadding,
       decoration: decoration,
       child: _TaskFormActionsLayout(gap: gap, children: children),
     );

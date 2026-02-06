@@ -90,7 +90,7 @@ class _CalendarParticipantsFieldState extends State<CalendarParticipantsField> {
           onChanged: widget.onOrganizerChanged,
           enabled: widget.enabled,
         ),
-        const SizedBox(height: calendarGutterMd),
+        SizedBox(height: context.spacing.m),
         _AttendeesField(
           attendees: widget.attendees,
           onChanged: widget.onAttendeesChanged,
@@ -192,7 +192,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(_organizerSectionLabel.toUpperCase(), style: labelStyle),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         Row(
           children: [
             Expanded(
@@ -207,7 +207,7 @@ class _OrganizerFieldState extends State<_OrganizerField> {
                 enabled: enabled,
               ),
             ),
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             Expanded(
               child: TaskTextField(
                 controller: _nameController,
@@ -351,7 +351,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(_attendeesSectionLabel.toUpperCase(), style: labelStyle),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         Row(
           children: [
             Expanded(
@@ -365,7 +365,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
                 enabled: enabled,
               ),
             ),
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             Expanded(
               child: TaskTextField(
                 controller: _nameController,
@@ -375,7 +375,7 @@ class _AttendeesFieldState extends State<_AttendeesField> {
                 enabled: enabled,
               ),
             ),
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             AxiIconButton(
               iconData: Icons.add,
               tooltip: _attendeeAddTooltip,
@@ -383,17 +383,17 @@ class _AttendeesFieldState extends State<_AttendeesField> {
               color: enabled ? calendarPrimaryColor : calendarSubtitleColor,
               backgroundColor: calendarContainerColor,
               borderColor: calendarBorderColor,
-              iconSize: calendarGutterLg,
+              iconSize: context.spacing.m,
             ),
           ],
         ),
         if (attendees.isNotEmpty) ...[
-          const SizedBox(height: calendarInsetMd),
+          SizedBox(height: context.spacing.xs),
           Column(
             children: attendees
                 .map(
                   (attendee) => Padding(
-                    padding: const EdgeInsets.only(bottom: calendarInsetMd),
+                    padding: EdgeInsets.only(bottom: context.spacing.xs),
                     child: _AttendeeCard(
                       attendee: attendee,
                       roleOptions: roleOptions,
@@ -440,9 +440,9 @@ class _AttendeeCard extends StatelessWidget {
             : null;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xs,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -461,7 +461,7 @@ class _AttendeeCard extends StatelessWidget {
                   children: [
                     Text(displayName, style: titleStyle),
                     if (secondary != null) ...[
-                      const SizedBox(height: calendarInsetSm),
+                      SizedBox(height: context.spacing.xxs),
                       Text(secondary, style: subtitleStyle),
                     ],
                   ],
@@ -470,7 +470,7 @@ class _AttendeeCard extends StatelessWidget {
               _AttendeeRemoveButton(onPressed: onRemove),
             ],
           ),
-          const SizedBox(height: calendarInsetMd),
+          SizedBox(height: context.spacing.xs),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -484,7 +484,7 @@ class _AttendeeCard extends StatelessWidget {
                       onChanged(attendee.copyWith(role: value)),
                 ),
               ),
-              const SizedBox(width: calendarGutterSm),
+              SizedBox(width: context.spacing.s),
               Expanded(
                 child: _ParticipantSelectField<CalendarParticipantStatus?>(
                   label: _attendeeStatusLabel,
@@ -498,13 +498,13 @@ class _AttendeeCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           ShadSwitch(
             label: const Text(_attendeeRsvpLabel),
             value: attendee.rsvp,
             onChanged: (value) => onChanged(attendee.copyWith(rsvp: value)),
           ),
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           _ParticipantActionsRow(
             status: attendee.status,
             onAccept: () => onChanged(
@@ -546,7 +546,7 @@ class _ParticipantSelectField<T> extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label.toUpperCase(), style: labelStyle),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         AxiSelect<T>(
           initialValue: value,
           onChanged: onChanged,
@@ -562,9 +562,9 @@ class _ParticipantSelectField<T> extends StatelessWidget {
               width: context.borderSide.width,
             ),
           ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd,
-            vertical: calendarGutterSm,
+          padding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.s,
           ),
           trailing: Icon(
             Icons.keyboard_arrow_down_rounded,
@@ -593,8 +593,8 @@ class _ParticipantActionsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
-      spacing: calendarGutterSm,
-      runSpacing: calendarInsetSm,
+      spacing: context.spacing.s,
+      runSpacing: context.spacing.xxs,
       children: [
         AxiButton.outline(
           onPressed: onAccept,
@@ -627,7 +627,7 @@ class _AttendeeRemoveButton extends StatelessWidget {
       color: calendarSubtitleColor,
       backgroundColor: calendarContainerColor,
       borderColor: calendarBorderColor,
-      iconSize: calendarGutterMd,
+      iconSize: context.spacing.m,
     );
   }
 }

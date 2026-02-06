@@ -534,10 +534,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               fit: FlexFit.loose,
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
-                  calendarGutterLg,
-                  calendarGutterMd,
-                  calendarGutterLg,
-                  calendarGutterMd +
+                  context.spacing.m,
+                  context.spacing.m,
+                  context.spacing.m,
+                  context.spacing.m +
                       (isSheet && keyboardOpen ? keyboardInset : 0),
                 ),
                 keyboardDismissBehavior:
@@ -551,15 +551,15 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       ),
                     if (widget.task.isOccurrence &&
                         widget.onOccurrenceUpdated != null) ...[
-                      const SizedBox(height: calendarFormGap),
+                      SizedBox(height: context.spacing.s),
                       _EditTaskOccurrenceScopeSection(
                         scope: _occurrenceScope,
                         enabled: allowsAnyEdits,
                         onChanged: (scope) =>
                             setState(() => _occurrenceScope = scope),
                       ),
-                      const TaskSectionDivider(
-                        verticalPadding: calendarGutterMd,
+                      TaskSectionDivider(
+                        verticalPadding: context.spacing.m,
                       ),
                     ],
                     _EditTaskTitleField(
@@ -573,7 +573,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       autovalidateMode: AutovalidateMode.disabled,
                       enabled: allowsFullEdits,
                     ),
-                    const SizedBox(height: calendarFormGap),
+                    SizedBox(height: context.spacing.s),
                     _EditTaskPriorityRow(
                       isImportant: _isImportant,
                       isUrgent: _isUrgent,
@@ -587,25 +587,25 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                         _isUrgent = value;
                       }),
                     ),
-                    const SizedBox(height: calendarFormGap),
+                    SizedBox(height: context.spacing.s),
                     _EditTaskDescriptionField(
                       controller: _descriptionController,
                       onChanged: _handleDescriptionChanged,
                       enabled: allowsFullEdits,
                     ),
-                    const SizedBox(height: calendarFormGap),
+                    SizedBox(height: context.spacing.s),
                     _EditTaskLocationField(
                       controller: _locationController,
                       locationHelper: widget.locationHelper,
                       onChanged: _handleLocationChanged,
                       enabled: allowsFullEdits,
                     ),
-                    const SizedBox(height: calendarFormGap),
+                    SizedBox(height: context.spacing.s),
                     TaskChecklist(
                       controller: _checklistController,
                       enabled: allowsChecklistEdits,
                     ),
-                    const TaskSectionDivider(verticalPadding: calendarGutterMd),
+                    TaskSectionDivider(verticalPadding: context.spacing.m),
                     _EditTaskScheduleSection(
                       start: _startTime,
                       end: _endTime,
@@ -613,7 +613,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       onEndChanged: _handleEndChanged,
                       enabled: allowsFullEdits,
                     ),
-                    const TaskSectionDivider(verticalPadding: calendarGutterMd),
+                    TaskSectionDivider(verticalPadding: context.spacing.m),
                     _EditTaskDeadlineField(
                       deadline: _deadline,
                       onChanged: (value) => _updateDraft(() {
@@ -622,7 +622,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       }),
                       enabled: allowsFullEdits,
                     ),
-                    const TaskSectionDivider(verticalPadding: calendarGutterMd),
+                    TaskSectionDivider(verticalPadding: context.spacing.m),
                     _EditTaskReminderSection(
                       reminders: _reminders,
                       deadline: _deadline,
@@ -638,7 +638,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       }),
                       enabled: allowsFullEdits,
                     ),
-                    const TaskSectionDivider(verticalPadding: calendarGutterMd),
+                    TaskSectionDivider(verticalPadding: context.spacing.m),
                     _EditTaskRecurrenceSection(
                       value: _recurrence,
                       fallbackWeekday: _recurrenceFallbackWeekday,
@@ -646,7 +646,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       onChanged: _handleRecurrenceChanged,
                       enabled: allowsFullEdits,
                     ),
-                    const TaskSectionDivider(verticalPadding: calendarGutterMd),
+                    TaskSectionDivider(verticalPadding: context.spacing.m),
                     CalendarCategoriesField(
                       categories: _categories,
                       onChanged: (value) => _updateDraft(() {
@@ -656,7 +656,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       surfaceColor: background,
                       enabled: allowsFullEdits,
                     ),
-                    const TaskSectionDivider(verticalPadding: calendarGutterMd),
+                    TaskSectionDivider(verticalPadding: context.spacing.m),
                     CalendarLinkGeoFields(
                       url: _url,
                       geo: _geo,
@@ -670,7 +670,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       }),
                       enabled: allowsFullEdits,
                     ),
-                    const TaskSectionDivider(verticalPadding: calendarGutterMd),
+                    TaskSectionDivider(verticalPadding: context.spacing.m),
                     CalendarParticipantsField(
                       organizer: _organizer,
                       attendees: _attendees,
@@ -685,8 +685,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       enabled: allowsFullEdits,
                     ),
                     if (showInvitationStatus) ...[
-                      const TaskSectionDivider(
-                        verticalPadding: calendarGutterMd,
+                      TaskSectionDivider(
+                        verticalPadding: context.spacing.m,
                       ),
                       CalendarInvitationStatusField(
                         method: method,
@@ -695,18 +695,18 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       ),
                     ],
                     if (_attachments.isNotEmpty) ...[
-                      const TaskSectionDivider(
-                        verticalPadding: calendarGutterMd,
+                      TaskSectionDivider(
+                        verticalPadding: context.spacing.m,
                       ),
                       CalendarAttachmentsField(attachments: _attachments),
                     ],
                     if (showDiagnostics) ...[
-                      const TaskSectionDivider(
-                        verticalPadding: calendarGutterMd,
+                      TaskSectionDivider(
+                        verticalPadding: context.spacing.m,
                       ),
                       CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
                     ],
-                    const TaskSectionDivider(verticalPadding: calendarGutterMd),
+                    TaskSectionDivider(verticalPadding: context.spacing.m),
                     _EditTaskCompletionToggle(
                       value: _isCompleted,
                       enabled: allowsFullEdits,
@@ -715,7 +715,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                         _isCompleted = value;
                       }),
                     ),
-                    const SizedBox(height: calendarFormGap),
+                    SizedBox(height: context.spacing.s),
                     if (!allowsFullEdits)
                       IgnorePointer(
                         child: _TaskCriticalPathMembership<B>(
@@ -724,7 +724,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       )
                     else
                       _TaskCriticalPathMembership<B>(task: widget.task),
-                    const SizedBox(height: calendarFormGap),
+                    SizedBox(height: context.spacing.s),
                     if (keyboardOpen && keyboardActionRow != null)
                       keyboardActionRow,
                   ],
@@ -1310,9 +1310,9 @@ class _EditTaskHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterLg,
-        vertical: calendarGutterMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.m,
+        vertical: context.spacing.m,
       ),
       child: Row(
         children: [
@@ -1327,7 +1327,7 @@ class _EditTaskHeader extends StatelessWidget {
             onPressed: onSave,
             color: calendarPrimaryColor,
           ),
-          const SizedBox(width: calendarGutterSm),
+          SizedBox(width: context.spacing.s),
           AxiIconButton.outline(
             iconData: Icons.close,
             tooltip: context.l10n.calendarCloseTooltip,
@@ -1354,9 +1354,9 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterLg,
-            vertical: calendarGutterMd,
+          padding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.m,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1365,7 +1365,7 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
                 'Task actions',
                 style: context.textTheme.sectionLabelM,
               ),
-              const SizedBox(height: calendarInsetSm),
+              SizedBox(height: context.spacing.xxs),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final double? width = constraints.maxWidth.isFinite
@@ -1393,7 +1393,7 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
           color: context.borderSide.color,
           thickness: context.borderSide.width,
         ),
-        const SizedBox(height: calendarFormGap),
+        SizedBox(height: context.spacing.s),
       ],
     );
   }
@@ -1491,7 +1491,8 @@ class _EditTaskDescriptionField extends StatelessWidget {
       textCapitalization: TextCapitalization.sentences,
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
-      contentPadding: calendarFieldPadding,
+      contentPadding: EdgeInsets.symmetric(
+          horizontal: context.spacing.m, vertical: context.spacing.s),
       enabled: enabled,
     );
   }
@@ -1516,7 +1517,8 @@ class _EditTaskLocationField extends StatelessWidget {
       controller: controller,
       hintText: context.l10n.calendarLocationOptionalHint,
       textCapitalization: TextCapitalization.words,
-      contentPadding: calendarFieldPadding,
+      contentPadding: EdgeInsets.symmetric(
+          horizontal: context.spacing.m, vertical: context.spacing.s),
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       autocomplete: locationHelper,
@@ -1544,7 +1546,7 @@ class _EditTaskScheduleSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TaskScheduleSection(
-      spacing: calendarInsetLg,
+      spacing: context.spacing.s,
       start: start,
       end: end,
       onStartChanged: onStartChanged,
@@ -1572,12 +1574,12 @@ class _EditTaskOccurrenceScopeSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const TaskSectionHeader(title: _occurrenceScopeTitle),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         Text(_occurrenceScopeHint, style: hintStyle),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         Wrap(
-          spacing: calendarGutterSm,
-          runSpacing: calendarGutterSm,
+          spacing: context.spacing.s,
+          runSpacing: context.spacing.s,
           children: OccurrenceUpdateScope.values
               .map(
                 (option) => _OccurrenceScopeChip(
@@ -1633,7 +1635,7 @@ class _EditTaskDeadlineField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(title: l10n.calendarDeadlineLabel),
-        const SizedBox(height: calendarInsetMd),
+        SizedBox(height: context.spacing.xs),
         DeadlinePickerField(
           value: deadline,
           onChanged: onChanged,
@@ -1696,7 +1698,7 @@ class _EditTaskRecurrenceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return TaskRecurrenceSection(
-      spacing: calendarInsetMd,
+      spacing: context.spacing.xs,
       value: value,
       fallbackWeekday: fallbackWeekday,
       referenceStart: referenceStart,
@@ -1784,7 +1786,7 @@ class _TaskCriticalPathMembership<B extends BaseCalendarBloc>
                 task: task,
               ),
             ),
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: context.spacing.xxs),
             CriticalPathMembershipList(
               paths: paths,
               onRemovePath: (pathId) => context.read<B>().add(
@@ -1825,7 +1827,7 @@ class _EditTaskActionsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return TaskFormActionsRow(
       includeTopBorder: includeTopBorder,
-      padding: calendarPaddingLg,
+      padding: EdgeInsets.all(context.spacing.m),
       gap: 8,
       children: [
         if (showDelete)

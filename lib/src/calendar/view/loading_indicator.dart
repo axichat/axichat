@@ -288,8 +288,11 @@ class TaskSkeletonTile extends StatelessWidget {
         final double labelSmHeight =
             context.textTheme.labelSm.fontSize ?? menuIconSize;
         return Container(
-          padding: calendarPaddingXl,
-          margin: calendarMarginSmall,
+          padding: EdgeInsets.all(context.spacing.m),
+          margin: EdgeInsets.symmetric(
+            horizontal: context.spacing.s,
+            vertical: context.spacing.xs,
+          ),
           decoration: BoxDecoration(
             color: calendarContainerColor,
             borderRadius: context.radius,
@@ -305,7 +308,7 @@ class TaskSkeletonTile extends StatelessWidget {
                 height: iconSize,
                 borderRadius: context.radii.container,
               ),
-              const SizedBox(width: calendarGutterMd),
+              SizedBox(width: context.spacing.m),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -314,16 +317,16 @@ class TaskSkeletonTile extends StatelessWidget {
                       width: double.infinity,
                       height: labelHeight,
                     ),
-                    const SizedBox(height: calendarGutterSm),
+                    SizedBox(height: context.spacing.s),
                     SkeletonLoader(
                         width: primaryLineWidth, height: labelSmHeight),
-                    const SizedBox(height: calendarInsetMd),
+                    SizedBox(height: context.spacing.xs),
                     SkeletonLoader(
                         width: secondaryLineWidth, height: labelSmHeight),
                   ],
                 ),
               ),
-              const SizedBox(width: calendarGutterMd),
+              SizedBox(width: context.spacing.m),
               SkeletonLoader(
                 width: context.sizing.inputSuffixButtonSize,
                 height: context.sizing.inputSuffixButtonSize,

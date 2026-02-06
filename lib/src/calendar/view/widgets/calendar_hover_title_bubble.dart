@@ -45,8 +45,8 @@ class CalendarHoverTitleBubble extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: BoxConstraints.tightFor(height: height),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: calendarInsetLg,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: context.spacing.s,
                     ),
                     child: Align(
                       alignment: Alignment.centerLeft,

@@ -11,6 +11,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     required this.buttonReleaseDurationFactor,
     required this.iconButtonBounceScale,
     required this.iconButtonCompactBounceScale,
+    required this.iconButtonHoverScale,
     required this.iconButtonPressDurationFactor,
     required this.iconButtonReleaseDurationFactor,
     required this.tapHoverScale,
@@ -27,6 +28,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
   final double buttonReleaseDurationFactor;
   final double iconButtonBounceScale;
   final double iconButtonCompactBounceScale;
+  final double iconButtonHoverScale;
   final double iconButtonPressDurationFactor;
   final double iconButtonReleaseDurationFactor;
   final double tapHoverScale;
@@ -44,6 +46,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     double? buttonReleaseDurationFactor,
     double? iconButtonBounceScale,
     double? iconButtonCompactBounceScale,
+    double? iconButtonHoverScale,
     double? iconButtonPressDurationFactor,
     double? iconButtonReleaseDurationFactor,
     double? tapHoverScale,
@@ -65,6 +68,7 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
           iconButtonBounceScale ?? this.iconButtonBounceScale,
       iconButtonCompactBounceScale:
           iconButtonCompactBounceScale ?? this.iconButtonCompactBounceScale,
+      iconButtonHoverScale: iconButtonHoverScale ?? this.iconButtonHoverScale,
       iconButtonPressDurationFactor:
           iconButtonPressDurationFactor ?? this.iconButtonPressDurationFactor,
       iconButtonReleaseDurationFactor: iconButtonReleaseDurationFactor ??
@@ -92,8 +96,9 @@ const AxiMotion axiMotion = AxiMotion(
   buttonCompactBounceScale: 0.93,
   buttonPressDurationFactor: 4 / 15,
   buttonReleaseDurationFactor: 3 / 5,
-  iconButtonBounceScale: 0.9,
-  iconButtonCompactBounceScale: 0.86,
+  iconButtonBounceScale: 0.94,
+  iconButtonCompactBounceScale: 0.9,
+  iconButtonHoverScale: 0.97,
   iconButtonPressDurationFactor: 4 / 15,
   iconButtonReleaseDurationFactor: 3 / 5,
   tapHoverScale: 0.985,

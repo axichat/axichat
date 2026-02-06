@@ -9,7 +9,6 @@ import 'package:flutter/foundation.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 
 typedef ResizeAutoScrollHandler = void Function(double delta);
 
@@ -88,10 +87,10 @@ class TaskInteractionController extends ChangeNotifier {
             ValueNotifier<TaskClipboardState>(const TaskClipboardState()),
         feedbackHint = ValueNotifier<DragFeedbackHint>(
           const DragFeedbackHint(
-            width: calendarTaskColumnGap,
-            pointerOffset: calendarTaskColumnGap,
-            anchorDx: calendarTaskColumnGap,
-            anchorDy: calendarTaskColumnGap,
+            width: 0,
+            pointerOffset: 0,
+            anchorDx: 0,
+            anchorDy: 0,
           ),
         ),
         hoveredTaskId = ValueNotifier<String?>(null),
@@ -562,10 +561,10 @@ class TaskInteractionController extends ChangeNotifier {
 
   void resetFeedbackHint() {
     feedbackHint.value = const DragFeedbackHint(
-      width: calendarTaskColumnGap,
-      pointerOffset: calendarTaskColumnGap,
-      anchorDx: calendarTaskColumnGap,
-      anchorDy: calendarTaskColumnGap,
+      width: 0,
+      pointerOffset: 0,
+      anchorDx: 0,
+      anchorDy: 0,
     );
   }
 

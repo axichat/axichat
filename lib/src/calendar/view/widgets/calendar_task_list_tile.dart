@@ -31,11 +31,11 @@ class CalendarTaskListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        calendarGutterMd,
-        calendarGutterSm,
-        calendarGutterSm,
-        calendarGutterSm,
+      padding: EdgeInsets.fromLTRB(
+        context.spacing.m,
+        context.spacing.s,
+        context.spacing.s,
+        context.spacing.s,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -73,10 +73,10 @@ class CalendarTaskListTile extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: calendarInsetMd),
+              SizedBox(width: context.spacing.xs),
               if (trailing != null) ...[
                 CalendarDragExclude(child: trailing!),
-                const SizedBox(width: calendarInsetMd),
+                SizedBox(width: context.spacing.xs),
               ],
               CalendarDragExclude(
                 child: CalendarCompletionCheckbox(
@@ -87,7 +87,7 @@ class CalendarTaskListTile extends StatelessWidget {
             ],
           ),
           if (task.description?.isNotEmpty == true) ...[
-            const SizedBox(height: calendarInsetMd),
+            SizedBox(height: context.spacing.xs),
             Text(
               task.description!.length > 50
                   ? '${task.description!.substring(0, 50)}...'
@@ -98,7 +98,7 @@ class CalendarTaskListTile extends StatelessWidget {
             ),
           ],
           if (task.hasChecklist) ...[
-            const SizedBox(height: calendarInsetMd),
+            SizedBox(height: context.spacing.xs),
             TaskChecklistProgressBar(
               progress: task.checklistProgress,
               activeColor: colors.primary,
@@ -106,11 +106,11 @@ class CalendarTaskListTile extends StatelessWidget {
             ),
           ],
           if (task.deadline != null) ...[
-            const SizedBox(height: calendarGutterLg),
+            SizedBox(height: context.spacing.m),
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterSm,
-                vertical: calendarInsetMd,
+              padding: EdgeInsets.symmetric(
+                horizontal: context.spacing.s,
+                vertical: context.spacing.xs,
               ),
               decoration: BoxDecoration(
                 color: _deadlineBackgroundColor(task.deadline!),
@@ -124,7 +124,7 @@ class CalendarTaskListTile extends StatelessWidget {
                     size: context.sizing.menuItemIconSize,
                     color: _deadlineColor(task.deadline!),
                   ),
-                  const SizedBox(width: calendarInsetMd),
+                  SizedBox(width: context.spacing.xs),
                   Text(
                     _deadlineLabel(context.l10n, task.deadline!),
                     style: context.textTheme.label.strong.copyWith(
@@ -137,7 +137,7 @@ class CalendarTaskListTile extends StatelessWidget {
             ),
           ],
           if (task.location?.isNotEmpty == true) ...[
-            const SizedBox(height: calendarInsetMd),
+            SizedBox(height: context.spacing.xs),
             Row(
               children: [
                 Text(

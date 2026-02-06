@@ -97,7 +97,7 @@ class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
 
 class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-  static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
+  late CalendarLayoutTheme _layoutTheme;
   late final CalendarSidebarController _sidebarController;
   late final TaskDraftController _draftController;
   late final TaskChecklistController _checklistController;
@@ -637,8 +637,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
         final CalendarSidebarState uiState = _sidebarController.state;
         final mediaQuery = MediaQuery.of(context);
         final double keyboardInset = mediaQuery.viewInsets.bottom;
-        final EdgeInsetsGeometry scrollPadding = calendarSidebarScrollPadding
-            .add(EdgeInsets.only(bottom: keyboardInset));
+        final EdgeInsetsGeometry scrollPadding = EdgeInsets.only(
+          bottom: context.spacing.l,
+        ).add(EdgeInsets.only(bottom: keyboardInset));
         return Container(
           width: uiState.width,
           decoration: BoxDecoration(
@@ -1068,6 +1069,12 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   bool _supportsDragDismiss(BuildContext context) {
     final TargetPlatform platform = defaultTargetPlatform;
     return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _layoutTheme = CalendarLayoutTheme.fromContext(context);
   }
 
   @override
@@ -2291,7 +2298,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final result = await showAdaptiveBottomSheet<bool>(
       context: modalContext,
       dialogMaxWidth: 420,
-      surfacePadding: const EdgeInsets.all(calendarGutterLg),
+      surfacePadding: EdgeInsets.all(context.spacing.m),
       showCloseButton: false,
       builder: (sheetContext) {
         return SafeArea(
@@ -2306,7 +2313,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                 subtitle: context.l10n.calendarRemovePathConfirm(path.name),
                 onClose: () => Navigator.of(sheetContext).maybePop(false),
               ),
-              const SizedBox(height: calendarGutterMd),
+              SizedBox(height: context.spacing.m),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
@@ -2314,7 +2321,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                     onPressed: () => Navigator.of(sheetContext).maybePop(false),
                     child: Text(context.l10n.commonCancel),
                   ),
-                  const SizedBox(width: calendarInsetSm),
+                  SizedBox(width: context.spacing.xxs),
                   AxiButton.destructive(
                     onPressed: () => Navigator.of(sheetContext).pop(true),
                     child: Text(sheetContext.l10n.commonDelete),
@@ -3080,16 +3087,16 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
           child: selectionMessage == null
               ? const SizedBox.shrink()
               : Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    calendarGutterLg,
+                  padding: EdgeInsets.fromLTRB(
+                    context.spacing.m,
                     0,
-                    calendarGutterLg,
-                    calendarGutterSm,
+                    context.spacing.m,
+                    context.spacing.s,
                   ),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: calendarGutterMd,
-                      vertical: calendarInsetLg,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: context.spacing.m,
+                      vertical: context.spacing.s,
                     ),
                     decoration: BoxDecoration(
                       color: calendarPrimaryColor.withValues(alpha: 0.08),
@@ -3105,7 +3112,7 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                           size: context.sizing.menuItemIconSize,
                           color: calendarPrimaryColor,
                         ),
-                        const SizedBox(width: calendarInsetLg),
+                        SizedBox(width: context.spacing.s),
                         Expanded(
                           child: Text(
                             selectionMessage!,
@@ -3119,9 +3126,9 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                 ),
         ),
         Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterLg,
-            vertical: calendarGutterLg,
+          padding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.m,
           ),
           decoration: BoxDecoration(
             color: calendarContainerColor,
@@ -3137,7 +3144,7 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
             children: [
               TaskSectionHeader(
                 title: l10n.calendarSelectionMode,
-                padding: const EdgeInsets.only(bottom: calendarGutterSm),
+                padding: EdgeInsets.only(bottom: context.spacing.s),
                 trailing: AxiButton.outline(
                   onPressed: onExitSelection,
                   child: Text(l10n.calendarExit),
@@ -3147,9 +3154,9 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                 l10n.calendarTasksSelected(total).replaceAll('#', '$total'),
                 style: calendarSubtitleTextStyle,
               ),
-              const TaskSectionDivider(verticalPadding: calendarGutterMd),
+              TaskSectionDivider(verticalPadding: context.spacing.m),
               TaskSectionHeader(title: l10n.calendarActions),
-              const SizedBox(height: calendarGutterSm),
+              SizedBox(height: context.spacing.s),
               _SelectionActionsRow<B>(
                 hasTasks: hasTasks,
                 tasks: tasks,
@@ -3157,7 +3164,7 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                 onExportSelected: onExportSelected,
                 onDeleteSelected: onDeleteSelected,
               ),
-              const TaskSectionDivider(verticalPadding: calendarGutterMd),
+              TaskSectionDivider(verticalPadding: context.spacing.m),
               _SelectionBatchEditSection(
                 hasTasks: hasTasks,
                 titleController: selectionTitleController,
@@ -3172,21 +3179,21 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                 onApplyChanges: onApplySelectionChanges,
                 timeAdjustCallbacks: timeAdjustCallbacks,
               ),
-              const TaskSectionDivider(verticalPadding: calendarGutterMd),
+              TaskSectionDivider(verticalPadding: context.spacing.m),
               TaskSectionHeader(title: l10n.calendarSetPriority),
-              const SizedBox(height: calendarGutterSm),
+              SizedBox(height: context.spacing.s),
               _SelectionPriorityControls(
                 tasks: tasks,
                 onPriorityChanged: onPriorityChanged,
               ),
-              const SizedBox(height: calendarGutterMd),
+              SizedBox(height: context.spacing.m),
               _SelectionCompletionToggle(
                 hasTasks: hasTasks,
                 allCompleted: allCompleted,
                 isIndeterminate: completionIndeterminate,
                 onChanged: onCompletionChanged,
               ),
-              const TaskSectionDivider(verticalPadding: calendarGutterMd),
+              TaskSectionDivider(verticalPadding: context.spacing.m),
               _SelectionReminderSection(
                 hasTasks: hasTasks,
                 remindersListenable: remindersNotifier,
@@ -3194,7 +3201,7 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
                 anchorListenable: reminderAnchorNotifier,
                 onChanged: onRemindersChanged,
               ),
-              const TaskSectionDivider(verticalPadding: calendarGutterMd),
+              TaskSectionDivider(verticalPadding: context.spacing.m),
               _SelectionRecurrenceSection(
                 hasTasks: hasTasks,
                 fallbackWeekday: fallbackWeekday,
@@ -3205,9 +3212,9 @@ class _SelectionPanel<B extends BaseCalendarBloc> extends StatelessWidget {
             ],
           ),
         ),
-        const SizedBox(height: calendarGutterLg),
+        SizedBox(height: context.spacing.m),
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: calendarGutterLg),
+          padding: EdgeInsets.symmetric(horizontal: context.spacing.m),
           child: _SelectedTaskList(
             tasks: tasks,
             uiState: uiState,
@@ -3242,7 +3249,7 @@ class _SelectionActionsRow<B extends BaseCalendarBloc> extends StatelessWidget {
     final l10n = context.l10n;
     return TaskFormActionsRow(
       padding: EdgeInsets.zero,
-      gap: calendarGutterSm,
+      gap: context.spacing.s,
       children: [
         TaskSecondaryButton(
           label: l10n.calendarAddToCriticalPath,
@@ -3308,7 +3315,7 @@ class _SelectionBatchEditSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(title: l10n.calendarBatchEdit),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         _SelectionTextField(
           label: l10n.calendarBatchTitle,
           controller: titleController,
@@ -3316,7 +3323,7 @@ class _SelectionBatchEditSection extends StatelessWidget {
           enabled: hasTasks,
           onChanged: onTitleChanged,
         ),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         _SelectionTextField(
           label: l10n.calendarBatchDescription,
           controller: descriptionController,
@@ -3326,7 +3333,7 @@ class _SelectionBatchEditSection extends StatelessWidget {
           maxLines: 3,
           onChanged: onDescriptionChanged,
         ),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         _SelectionLocationField(
           controller: locationController,
           helper: locationHelper,
@@ -3335,7 +3342,7 @@ class _SelectionBatchEditSection extends StatelessWidget {
           label: l10n.calendarBatchLocation,
           hint: l10n.calendarBatchLocationHint,
         ),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         IgnorePointer(
           ignoring: !hasTasks,
           child: Opacity(
@@ -3343,7 +3350,7 @@ class _SelectionBatchEditSection extends StatelessWidget {
             child: TaskChecklist(controller: checklistController),
           ),
         ),
-        const SizedBox(height: calendarGutterMd),
+        SizedBox(height: context.spacing.m),
         Align(
           alignment: Alignment.centerLeft,
           child: TaskPrimaryButton(
@@ -3352,10 +3359,10 @@ class _SelectionBatchEditSection extends StatelessWidget {
                 hasTasks && hasPendingSelectionEdits ? onApplyChanges : null,
           ),
         ),
-        const SizedBox(height: calendarGutterMd),
-        const TaskSectionDivider(verticalPadding: calendarGutterMd),
+        SizedBox(height: context.spacing.m),
+        TaskSectionDivider(verticalPadding: context.spacing.m),
         TaskSectionHeader(title: l10n.calendarAdjustTime),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         _SelectionTimeAdjustRow(
           enabled: hasTasks,
           callbacks: timeAdjustCallbacks,
@@ -3396,16 +3403,16 @@ class _SelectionTextField extends StatelessWidget {
             letterSpacing: 0.6,
           ),
         ),
-        const SizedBox(height: calendarInsetMd),
+        SizedBox(height: context.spacing.xs),
         TaskTextField(
           controller: controller,
           hintText: hint,
           enabled: enabled,
           minLines: minLines,
           maxLines: maxLines ?? minLines,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd,
-            vertical: calendarGutterSm,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.s,
           ),
           onChanged: onChanged,
         ),
@@ -3443,16 +3450,16 @@ class _SelectionLocationField extends StatelessWidget {
             letterSpacing: 0.6,
           ),
         ),
-        const SizedBox(height: calendarInsetMd),
+        SizedBox(height: context.spacing.xs),
         TaskLocationField(
           controller: controller,
           hintText: hint,
           textCapitalization: TextCapitalization.words,
           enabled: enabled,
           onChanged: onChanged,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd,
-            vertical: calendarGutterSm,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.s,
           ),
           autocomplete: helper,
         ),
@@ -3474,8 +3481,8 @@ class _SelectionTimeAdjustRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return Wrap(
-      spacing: calendarGutterSm,
-      runSpacing: calendarGutterSm,
+      spacing: context.spacing.s,
+      runSpacing: context.spacing.s,
       children: [
         _SelectionAdjustButton(
           label: l10n.calendarAdjustStartMinus,
@@ -3671,10 +3678,10 @@ class _SelectionRecurrenceSection extends StatelessWidget {
             if (isMixed) {
               children.add(
                 Container(
-                  margin: const EdgeInsets.only(bottom: calendarGutterSm),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: calendarGutterMd,
-                    vertical: calendarGutterSm,
+                  margin: EdgeInsets.only(bottom: context.spacing.s),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: context.spacing.m,
+                    vertical: context.spacing.s,
                   ),
                   decoration: BoxDecoration(
                     color: calendarWarningColor.withValues(alpha: 0.08),
@@ -3697,7 +3704,7 @@ class _SelectionRecurrenceSection extends StatelessWidget {
                 value: recurrence,
                 enabled: hasTasks,
                 fallbackWeekday: fallbackWeekday,
-                spacingConfig: calendarRecurrenceSpacingStandard,
+                spacingConfig: calendarRecurrenceSpacingStandard(context),
                 intervalSelectWidth: 118,
                 onChanged: onChanged,
               ),
@@ -3735,7 +3742,7 @@ class _SelectedTaskList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (tasks.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(calendarGutterLg),
+        padding: EdgeInsets.all(context.spacing.m),
         decoration: BoxDecoration(
           color: calendarContainerColor,
           borderRadius: context.radius,
@@ -3918,7 +3925,7 @@ class _AddTaskSection extends StatelessWidget {
       color: colors.mutedForeground,
     );
     return Container(
-      padding: calendarSidebarSectionPadding,
+      padding: EdgeInsets.all(context.spacing.m),
       decoration: BoxDecoration(
         color: calendarContainerColor,
         border: Border(
@@ -3944,18 +3951,21 @@ class _AddTaskSection extends StatelessWidget {
                     hoverBackgroundColor: Colors.transparent,
                     pressedBackgroundColor: Colors.transparent,
                     padding: EdgeInsets.zero,
-                    child: TaskSectionHeader(
-                      title: l10n.calendarAddTaskAction,
-                      size: TaskSectionLabelSize.medium,
-                      leading: AnimatedRotation(
-                        turns: -0.5,
-                        duration: baseAnimationDuration,
-                        child: chevron,
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: TaskSectionHeader(
+                        title: l10n.calendarAddTaskAction,
+                        size: TaskSectionLabelSize.medium,
+                        leading: AnimatedRotation(
+                          turns: -0.5,
+                          duration: baseAnimationDuration,
+                          child: chevron,
+                        ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: calendarInsetSm),
+                SizedBox(width: context.spacing.xxs),
                 AnimatedBuilder(
                   animation: formActivityListenable,
                   builder: (context, _) {
@@ -3973,7 +3983,7 @@ class _AddTaskSection extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: calendarSidebarSectionSpacing),
+            SizedBox(height: context.spacing.m),
             _QuickTaskInput(
               controller: titleController,
               focusNode: titleFocusNode,
@@ -3983,13 +3993,13 @@ class _AddTaskSection extends StatelessWidget {
               validator: quickTaskValidator,
               autovalidateMode: quickTaskAutovalidateMode,
             ),
-            const SizedBox(height: calendarSidebarSectionSpacing),
+            SizedBox(height: context.spacing.m),
             _PriorityToggles(
               draftController: draftController,
               onImportantChanged: onImportantChanged,
               onUrgentChanged: onUrgentChanged,
             ),
-            const SizedBox(height: calendarSidebarToggleSpacing),
+            SizedBox(height: context.spacing.m),
             _AdvancedToggle(uiState: uiState, onPressed: onAdvancedToggle),
             AnimatedSwitcher(
               duration: calendarSidebarAdvancedAnimationDuration,
@@ -4034,14 +4044,14 @@ class _AddTaskSection extends StatelessWidget {
                     )
                   : const SizedBox.shrink(key: ValueKey('advanced-hidden')),
             ),
-            const SizedBox(height: calendarSidebarSectionSpacing),
+            SizedBox(height: context.spacing.m),
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: titleController,
               builder: (context, value, _) {
                 final bool canSubmit = quickTaskValidator(value.text) == null;
                 return TaskFormActionsRow(
                   padding: EdgeInsets.zero,
-                  gap: calendarGutterSm,
+                  gap: context.spacing.s,
                   children: [
                     Expanded(
                       child: _AddTaskButton(
@@ -4054,7 +4064,7 @@ class _AddTaskSection extends StatelessWidget {
               },
             ),
             if (uiState.showAdvancedOptions) ...[
-              const SizedBox(height: calendarSidebarToggleSpacing),
+              SizedBox(height: context.spacing.m),
               _AdvancedToggle(uiState: uiState, onPressed: onAdvancedToggle),
             ],
           ],
@@ -4240,7 +4250,7 @@ class _UnscheduledSidebarContent extends StatelessWidget {
           ),
           secondChild: _CollapsedAddTaskSection(onExpand: onShowAddTaskSection),
         ),
-        if (!showAddTaskSection) const SizedBox(height: calendarInsetMd),
+        if (!showAddTaskSection) SizedBox(height: context.spacing.xs),
         _TaskSectionsPanel(
           unscheduledTasks: unscheduledTasks,
           reminderTasks: reminderTasks,
@@ -4286,25 +4296,28 @@ class _CollapsedAddTaskSection extends StatelessWidget {
         backgroundColor: Colors.transparent,
         hoverBackgroundColor: Colors.transparent,
         pressedBackgroundColor: Colors.transparent,
-        padding: calendarPaddingLg,
-        child: Row(
-          children: [
-            AnimatedRotation(
-              turns: 0,
-              duration: baseAnimationDuration,
-              child: Icon(
-                Icons.keyboard_arrow_down,
-                size: context.sizing.menuItemIconSize,
-                color: colors.mutedForeground,
+        padding: EdgeInsets.all(context.spacing.m),
+        child: SizedBox(
+          width: double.infinity,
+          child: Row(
+            children: [
+              AnimatedRotation(
+                turns: 0,
+                duration: baseAnimationDuration,
+                child: Icon(
+                  Icons.keyboard_arrow_down,
+                  size: context.sizing.menuItemIconSize,
+                  color: colors.mutedForeground,
+                ),
               ),
-            ),
-            const SizedBox(width: calendarInsetSm),
-            Text(
-              l10n.calendarAddTaskAction.toUpperCase(),
-              style: context.textTheme.sectionLabelM,
-            ),
-            const Spacer(),
-          ],
+              SizedBox(width: context.spacing.xxs),
+              Text(
+                l10n.calendarAddTaskAction.toUpperCase(),
+                style: context.textTheme.sectionLabelM,
+              ),
+              const Spacer(),
+            ],
+          ),
         ),
       ),
     );
@@ -4376,9 +4389,9 @@ class _TaskSectionsPanel extends StatelessWidget {
           onTaskDropped: onTaskDropped,
           collapsedChild: _CollapsedTaskPreview(tasks: unscheduledTasks),
           expandedChild: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterSm,
-              vertical: calendarInsetMd,
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.s,
+              vertical: context.spacing.xs,
             ),
             child: _SidebarTaskList(
               tasks: unscheduledTasks,
@@ -4394,7 +4407,7 @@ class _TaskSectionsPanel extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: calendarInsetMd),
+        SizedBox(height: context.spacing.xs),
         _SidebarAccordionSection(
           title: context.l10n.calendarRemindersTitle,
           section: CalendarSidebarSection.reminders,
@@ -4410,9 +4423,9 @@ class _TaskSectionsPanel extends StatelessWidget {
           onTaskDropped: onTaskDropped,
           collapsedChild: _CollapsedTaskPreview(tasks: reminderTasks),
           expandedChild: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterSm,
-              vertical: calendarInsetMd,
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.s,
+              vertical: context.spacing.xs,
             ),
             child: _SidebarTaskList(
               tasks: reminderTasks,
@@ -4485,37 +4498,41 @@ class _SidebarAccordionSection extends StatelessWidget {
             children: [
               AxiPlainHeaderButton(
                 onPressed: () => onToggleSection(section),
-                padding: calendarFieldPadding,
+                padding: EdgeInsets.symmetric(
+                    horizontal: context.spacing.m, vertical: context.spacing.s),
                 backgroundColor: Colors.transparent,
                 hoverBackgroundColor: Colors.transparent,
                 pressedBackgroundColor: Colors.transparent,
-                child: Row(
-                  children: [
-                    AnimatedRotation(
-                      turns: isExpanded ? -0.5 : 0,
-                      duration: baseAnimationDuration,
-                      child: Icon(
-                        Icons.keyboard_arrow_down,
-                        size: context.sizing.menuItemIconSize,
-                        color: context.colorScheme.mutedForeground,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Row(
+                    children: [
+                      AnimatedRotation(
+                        turns: isExpanded ? -0.5 : 0,
+                        duration: baseAnimationDuration,
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          size: context.sizing.menuItemIconSize,
+                          color: context.colorScheme.mutedForeground,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: calendarInsetSm),
-                    Expanded(
-                      child: Text(
-                        title.toUpperCase(),
-                        style: context.textTheme.sectionLabelM,
+                      SizedBox(width: context.spacing.xxs),
+                      Expanded(
+                        child: Text(
+                          title.toUpperCase(),
+                          style: context.textTheme.sectionLabelM,
+                        ),
                       ),
-                    ),
-                    if (trailing != null) ...[
-                      const SizedBox(width: calendarInsetSm),
-                      trailing!,
+                      if (trailing != null) ...[
+                        SizedBox(width: context.spacing.xxs),
+                        trailing!,
+                      ],
+                      _SectionCountBadge(
+                        count: itemCount,
+                        isExpanded: isExpanded,
+                      ),
                     ],
-                    _SectionCountBadge(
-                      count: itemCount,
-                      isExpanded: isExpanded,
-                    ),
-                  ],
+                  ),
                 ),
               ),
               ClipRect(
@@ -4523,7 +4540,11 @@ class _SidebarAccordionSection extends StatelessWidget {
                   duration: calendarSidebarAdvancedAnimationDuration,
                   firstChild: const SizedBox.shrink(),
                   secondChild: Container(
-                    padding: calendarAccordionPadding,
+                    padding: EdgeInsets.fromLTRB(
+                        context.spacing.m,
+                        context.spacing.s,
+                        context.spacing.m,
+                        context.spacing.s),
                     child: expandedChild,
                   ),
                   crossFadeState: isExpanded
@@ -4555,11 +4576,11 @@ class _SidebarAccordionSection extends StatelessWidget {
                                 key: ValueKey('${section.name}-collapsed'),
                                 duration:
                                     calendarTaskSplitPreviewAnimationDuration,
-                                padding: const EdgeInsets.fromLTRB(
-                                  calendarRecurrenceEndGap,
-                                  calendarInsetLg,
-                                  calendarRecurrenceEndGap,
-                                  calendarInsetLg,
+                                padding: EdgeInsets.fromLTRB(
+                                  context.spacing.m,
+                                  context.spacing.s,
+                                  context.spacing.m,
+                                  context.spacing.s,
                                 ),
                                 constraints: BoxConstraints(
                                   minHeight: context.sizing.buttonHeightRegular,
@@ -4623,7 +4644,7 @@ class _HideCompletedToggle extends StatelessWidget {
     final bool hiding = value;
     final Color foreground = hiding ? colors.primary : colors.mutedForeground;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: calendarInsetMd),
+      padding: EdgeInsets.symmetric(horizontal: context.spacing.xs),
       child: ShadButton.ghost(
         size: ShadButtonSize.sm,
         onPressed: () => onChanged(!value),
@@ -4635,7 +4656,7 @@ class _HideCompletedToggle extends StatelessWidget {
               size: context.sizing.menuItemIconSize,
               color: foreground,
             ),
-            const SizedBox(width: calendarInsetMd),
+            SizedBox(width: context.spacing.xs),
             Text(
               context.l10n.calendarCompletedLabel,
               style: context.textTheme.label.strong.copyWith(color: foreground),
@@ -4667,7 +4688,7 @@ class _CollapsedTaskPreview extends StatelessWidget {
       children: tasks
           .map(
             (task) => Padding(
-              padding: const EdgeInsets.only(bottom: calendarInsetSm),
+              padding: EdgeInsets.only(bottom: context.spacing.xxs),
               child: Text(
                 context.l10n.commonBulletLabel(task.title),
                 style: context.textTheme.label.copyWith(
@@ -4744,8 +4765,8 @@ class _SidebarTaskList extends StatelessWidget {
                       shrinkWrap: true,
                       buildDefaultDragHandles: false,
                       physics: const NeverScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: calendarInsetLg,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.spacing.s,
                         vertical: axiSpaceXxs,
                       ),
                       itemCount: tasks.length,
@@ -4772,8 +4793,8 @@ class _SidebarTaskList extends StatelessWidget {
                   : ListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: calendarInsetLg,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: context.spacing.s,
                         vertical: 2,
                       ),
                       itemCount: tasks.length,
@@ -4808,7 +4829,8 @@ class _SidebarEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: calendarActionButtonPadding,
+      padding: EdgeInsets.symmetric(
+          horizontal: context.spacing.m, vertical: context.spacing.m),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -4819,7 +4841,7 @@ class _SidebarEmptyState extends StatelessWidget {
               size: context.sizing.iconButtonTapTarget,
               color: isHovering ? calendarPrimaryColor : calendarTimeLabelColor,
             ),
-            const SizedBox(height: calendarGutterMd),
+            SizedBox(height: context.spacing.m),
             Text(
               label,
               style: context.textTheme.p.strong.copyWith(
@@ -4829,7 +4851,7 @@ class _SidebarEmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
             ),
             if (hint != null) ...[
-              const SizedBox(height: calendarInsetSm),
+              SizedBox(height: context.spacing.xxs),
               Text(
                 hint!,
                 style: context.textTheme.label
@@ -4857,7 +4879,7 @@ class _SidebarReorderHandle extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final Widget icon = Container(
-      padding: const EdgeInsets.all(calendarInsetMd),
+      padding: EdgeInsets.all(context.spacing.xs),
       decoration: BoxDecoration(
         color: colors.muted.withValues(alpha: 0.08),
         borderRadius: context.radius,
@@ -4886,9 +4908,9 @@ class _SectionCountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final badge = Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xs,
       ),
       decoration: BoxDecoration(
         color: isExpanded
@@ -5095,7 +5117,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
 
     Widget buildListTile({VoidCallback? onTap, Color? hoverColor}) {
       return TaskTileSurface(
-        margin: const EdgeInsets.only(bottom: calendarGutterSm),
+        margin: EdgeInsets.only(bottom: context.spacing.s),
         decoration: tileDecoration,
         leadingStripeColor: borderColor,
         leadingStripeWidth: stripWidth,
@@ -5149,13 +5171,11 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
           final Size screenSize = mediaQuery.size;
           final EdgeInsets viewPadding = mediaQuery.viewPadding;
 
-          const double margin = calendarPopoverScreenMargin;
+          double margin = context.spacing.m;
           const double dropdownMaxHeight = calendarSidebarPopoverMaxHeight;
           const double dropdownWidth = calendarTaskPopoverWidth;
-          const double preferredVerticalGap =
-              calendarPopoverPreferredVerticalGap;
-          const double preferredHorizontalGap =
-              calendarPopoverPreferredHorizontalGap;
+          final double preferredVerticalGap = context.spacing.s;
+          final double preferredHorizontalGap = context.spacing.m;
           const double centerDivider = 2.0;
           const double zeroClamp = 0.0;
           const double heightDifferenceThreshold = 4.0;
@@ -5178,7 +5198,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
               usableRight - (tileOrigin.dx + tileSize.width);
           final double availableLeft = tileOrigin.dx - usableLeft;
 
-          const double requiredHorizontalSpace =
+          final double requiredHorizontalSpace =
               dropdownWidth + preferredHorizontalGap;
           final bool canOpenRight = availableRight >= requiredHorizontalSpace;
           final bool canOpenLeft = availableLeft >= requiredHorizontalSpace;
@@ -5442,7 +5462,7 @@ class _SidebarResizeHandle extends StatelessWidget {
           onPointerCancel: onPointerCancel,
           child: AnimatedContainer(
             duration: calendarTaskSplitPreviewAnimationDuration,
-            width: calendarGutterMd,
+            width: context.spacing.m,
             color: uiState.isResizing
                 ? calendarPrimaryColor.withValues(alpha: 0.2)
                 : Colors.transparent,
@@ -5493,9 +5513,9 @@ class _QuickTaskInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    const padding = EdgeInsets.symmetric(
-      horizontal: calendarGutterLg,
-      vertical: 14,
+    final padding = EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.m,
     );
     final field = TaskTextFormField(
       controller: controller,
@@ -5578,7 +5598,7 @@ class _AdvancedToggle extends StatelessWidget {
               size: context.sizing.menuItemIconSize,
               color: calendarPrimaryColor,
             ),
-            const SizedBox(width: calendarInsetSm),
+            SizedBox(width: context.spacing.xxs),
             Text(
               uiState.showAdvancedOptions
                   ? l10n.calendarAdvancedHide
@@ -5646,7 +5666,7 @@ class _AdvancedOptions extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return Padding(
-      padding: const EdgeInsets.only(top: calendarGutterMd),
+      padding: EdgeInsets.only(top: context.spacing.m),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -5655,24 +5675,24 @@ class _AdvancedOptions extends StatelessWidget {
             hintText: l10n.calendarDescriptionHint,
             minLines: 2,
             maxLines: 4,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterLg,
-              vertical: calendarGutterMd,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.m,
             ),
           ),
-          const SizedBox(height: calendarInsetMd),
+          SizedBox(height: context.spacing.xs),
           TaskLocationField(
             controller: locationController,
             hintText: l10n.calendarLocationHint,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterLg,
-              vertical: calendarGutterMd,
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.m,
             ),
             autocomplete: locationHelper,
           ),
-          const SizedBox(height: calendarInsetMd),
+          SizedBox(height: context.spacing.xs),
           TaskChecklist(controller: checklistController),
-          const SizedBox(height: calendarFormGap),
+          SizedBox(height: context.spacing.s),
           _AdvancedScheduleSection(
             draftController: draftController,
             onStartChanged: onStartChanged,
@@ -5681,7 +5701,7 @@ class _AdvancedOptions extends StatelessWidget {
           ),
           const TaskSectionDivider(),
           TaskSectionHeader(title: l10n.calendarDeadlineLabel),
-          const SizedBox(height: calendarInsetLg),
+          SizedBox(height: context.spacing.s),
           AnimatedBuilder(
             animation: draftController,
             builder: (context, _) {
@@ -5748,7 +5768,7 @@ class _AdvancedOptions extends StatelessWidget {
               );
             },
           ),
-          const TaskSectionDivider(verticalPadding: calendarGutterLg),
+          TaskSectionDivider(verticalPadding: context.spacing.m),
           SizedBox(
             width: double.infinity,
             child: TaskSecondaryButton(
@@ -5758,7 +5778,7 @@ class _AdvancedOptions extends StatelessWidget {
               onPressed: onAddToCriticalPath,
             ).withTapBounce(),
           ),
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           CriticalPathMembershipList(
             paths: queuedPaths,
             onRemovePath: onRemoveQueuedPath,
@@ -5788,7 +5808,7 @@ class _AdvancedScheduleSection extends StatelessWidget {
       animation: draftController,
       builder: (context, _) {
         return TaskScheduleSection(
-          spacing: calendarInsetLg,
+          spacing: context.spacing.s,
           start: draftController.startTime,
           end: draftController.endTime,
           onStartChanged: onStartChanged,
@@ -5819,19 +5839,19 @@ class _AdvancedRecurrenceSection extends StatelessWidget {
             referenceStart?.weekday ?? DateTime.now().weekday;
 
         return TaskRecurrenceSection(
-          spacing: calendarInsetLg,
+          spacing: context.spacing.s,
           value: draftController.recurrence,
           fallbackWeekday: fallbackWeekday,
           referenceStart: referenceStart,
           showAdvancedToggle: false,
           forceAdvanced: true,
-          spacingConfig: const RecurrenceEditorSpacing(
-            chipSpacing: calendarGutterSm,
-            chipRunSpacing: calendarGutterSm,
-            weekdaySpacing: calendarGutterMd,
-            advancedSectionSpacing: calendarGutterMd,
-            endSpacing: calendarRecurrenceEndGap,
-            fieldGap: calendarGutterMd,
+          spacingConfig: RecurrenceEditorSpacing(
+            chipSpacing: context.spacing.s,
+            chipRunSpacing: context.spacing.s,
+            weekdaySpacing: context.spacing.m,
+            advancedSectionSpacing: context.spacing.m,
+            endSpacing: context.spacing.m,
+            fieldGap: context.spacing.m,
           ),
           intervalSelectWidth: calendarCompactDayColumnWidth,
           onChanged: onChanged,

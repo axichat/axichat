@@ -18,23 +18,8 @@ import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:uuid/uuid.dart';
 
-const double _availabilityEditorSpacing = 16.0;
-const double _availabilityEditorGap = 8.0;
-const double _availabilityEditorCardSpacing = 12.0;
-const double _availabilityEditorCardRadius = 12.0;
-const double _availabilityEditorCardBorderWidth = 1.0;
-const double _availabilityEditorHeaderIconSize = 18.0;
-const double _availabilityEditorRemoveIconSize = 16.0;
-const double _availabilityEditorRemoveButtonSize = 32.0;
-const double _availabilityEditorRemoveTapTargetSize = 36.0;
-const double _availabilityEditorRemoveCornerRadius = 12.0;
 const int _availabilityEditorDescriptionMinLines = 3;
 const int _availabilityEditorDescriptionMaxLines = 4;
-
-const EdgeInsets _availabilityEditorCardPadding = EdgeInsets.symmetric(
-  horizontal: 16,
-  vertical: 12,
-);
 
 const Uuid _availabilityEditorIdGenerator = Uuid();
 
@@ -97,6 +82,7 @@ class _CalendarAvailabilityEditorSheetState
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     final header = AxiSheetHeader(
       title: Text(l10n.calendarAvailabilityWindowsTitle),
       subtitle: Text(l10n.calendarAvailabilityWindowsSubtitle),
@@ -109,7 +95,7 @@ class _CalendarAvailabilityEditorSheetState
           title: l10n.calendarAvailabilityWindowsLabel,
           trailing: _AvailabilityEditorAddButton(onPressed: _handleAddWindow),
         ),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: spacing.s),
         if (_windowDrafts.isEmpty)
           Text(
             l10n.calendarAvailabilityNoWindows,
@@ -123,8 +109,8 @@ class _CalendarAvailabilityEditorSheetState
             children: [
               for (final _AvailabilityWindowDraft draft in _windowDrafts)
                 Padding(
-                  padding: const EdgeInsets.only(
-                    bottom: _availabilityEditorCardSpacing,
+                  padding: EdgeInsets.only(
+                    bottom: spacing.m,
                   ),
                   child: _AvailabilityWindowCard(
                     key: ValueKey<String>(draft.id),
@@ -138,7 +124,7 @@ class _CalendarAvailabilityEditorSheetState
                 ),
             ],
           ),
-        const SizedBox(height: _availabilityEditorSpacing),
+        SizedBox(height: spacing.m),
         _AvailabilityEditorActionRow(
           isBusy: _isSaving,
           onPressed: _handleSavePressed,
@@ -304,14 +290,18 @@ class _AvailabilityWindowCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     return Container(
-      padding: _availabilityEditorCardPadding,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.m,
+      ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(_availabilityEditorCardRadius),
+        borderRadius: BorderRadius.circular(context.radii.container),
         border: Border.all(
           color: calendarBorderColor,
-          width: _availabilityEditorCardBorderWidth,
+          width: context.borderSide.width,
         ),
       ),
       child: Column(
@@ -321,20 +311,20 @@ class _AvailabilityWindowCard extends StatelessWidget {
             title: l10n.calendarAvailabilityWindowLabel,
             trailing: _AvailabilityWindowRemoveButton(onPressed: onRemove),
           ),
-          const SizedBox(height: _availabilityEditorGap),
+          SizedBox(height: spacing.s),
           ScheduleRangeFields(
             start: draft.start,
             end: draft.end,
             onStartChanged: onStartChanged,
             onEndChanged: onEndChanged,
           ),
-          const SizedBox(height: _availabilityEditorSpacing),
+          SizedBox(height: spacing.m),
           TaskTextField(
             controller: draft.summaryController,
             labelText: l10n.calendarAvailabilitySummaryLabel,
             hintText: l10n.calendarAvailabilitySummaryHint,
           ),
-          const SizedBox(height: _availabilityEditorGap),
+          SizedBox(height: spacing.s),
           TaskTextField(
             controller: draft.descriptionController,
             labelText: l10n.calendarAvailabilityNotesLabel,
@@ -362,10 +352,10 @@ class _AvailabilityWindowRemoveButton extends StatelessWidget {
       color: calendarDangerColor,
       backgroundColor: calendarContainerColor,
       borderColor: calendarBorderColor,
-      iconSize: _availabilityEditorRemoveIconSize,
-      buttonSize: _availabilityEditorRemoveButtonSize,
-      tapTargetSize: _availabilityEditorRemoveTapTargetSize,
-      cornerRadius: _availabilityEditorRemoveCornerRadius,
+      iconSize: context.sizing.menuItemIconSize,
+      buttonSize: context.sizing.inputSuffixButtonSize,
+      tapTargetSize: context.sizing.iconButtonTapTarget,
+      cornerRadius: context.radii.container,
     );
   }
 }
@@ -379,8 +369,10 @@ class _AvailabilityEditorAddButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return AxiButton.ghost(
       onPressed: onPressed,
-      leading:
-          const Icon(LucideIcons.plus, size: _availabilityEditorHeaderIconSize),
+      leading: Icon(
+        LucideIcons.plus,
+        size: context.sizing.menuItemIconSize,
+      ),
       child: Text(context.l10n.calendarAvailabilityAddWindow),
     );
   }
@@ -402,9 +394,9 @@ class _AvailabilityEditorActionRow extends StatelessWidget {
       child: AxiButton.primary(
         onPressed: isBusy ? null : onPressed,
         loading: isBusy,
-        leading: const Icon(
+        leading: Icon(
           LucideIcons.check,
-          size: _availabilityEditorHeaderIconSize,
+          size: context.sizing.menuItemIconSize,
         ),
         child: Text(context.l10n.calendarAvailabilitySaveWindows),
       ),

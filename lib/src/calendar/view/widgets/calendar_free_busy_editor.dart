@@ -27,18 +27,10 @@ import 'package:uuid/uuid.dart';
 const double _freeBusyGridViewportHeight = 360.0;
 const double _freeBusyPreviewViewportHeight = 220.0;
 const double _freeBusyTileSplitIconSize = 16.0;
-const double _freeBusyTileOverlayPadding = 6.0;
-const double _freeBusyTileOverlayGap = 6.0;
 const double _freeBusyTileControlMinHeight = 40.0;
 const double _freeBusySwitchScale = 0.9;
 const double _freeBusyTapSlop = 4.0;
 const double _freeBusyResizeHandleExtent = 8.0;
-const double _freeBusySheetSpacing = 16.0;
-const double _freeBusySheetGap = 8.0;
-const double _freeBusySheetActionSpacing = 8.0;
-const double _freeBusySheetActionPaddingHorizontal = 12.0;
-const double _freeBusySheetActionPaddingVertical = 10.0;
-const double _freeBusySheetActionCornerRadius = 12.0;
 const int _freeBusyDayLabelLength = 3;
 const int _freeBusyZoomIndex = 0;
 const int _freeBusyMinutesPerStep = 15;
@@ -47,10 +39,11 @@ const int _freeBusyEndHour = 24;
 const Duration _freeBusyDayStep = Duration(days: 1);
 const Duration _freeBusyMinimumDuration = calendarMinimumTaskDuration;
 const Uuid _freeBusySegmentIdGenerator = Uuid();
-const EdgeInsets _freeBusyPopoverPadding = EdgeInsets.symmetric(
-  horizontal: calendarGutterMd,
-  vertical: calendarGutterSm,
-);
+EdgeInsets _freeBusyPopoverPadding(BuildContext context) =>
+    EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.s,
+    );
 
 class CalendarFreeBusyEditor extends StatefulWidget {
   const CalendarFreeBusyEditor({
@@ -112,9 +105,8 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   final CalendarSurfaceController _surfaceController =
       CalendarSurfaceController();
   final ScrollController _verticalController = ScrollController();
-  final CalendarLayoutCalculator _layoutCalculator =
-      const CalendarLayoutCalculator();
-  final CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
+  late CalendarLayoutCalculator _layoutCalculator;
+  late CalendarLayoutTheme _layoutTheme;
   late final TaskInteractionController _interactionController =
       TaskInteractionController();
   final ShadPopoverController _contextMenuController = ShadPopoverController();
@@ -128,6 +120,16 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   bool _pointerDownPrimary = false;
   bool _tapCandidate = false;
   bool _suppressInsert = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _layoutTheme = CalendarLayoutTheme.fromContext(context);
+    _layoutCalculator = CalendarLayoutCalculator(
+      theme: _layoutTheme,
+      zoomLevels: kCalendarZoomLevels,
+    );
+  }
 
   @override
   void initState() {
@@ -985,6 +987,8 @@ class _FreeBusyGridSurface extends StatelessWidget {
                           controller: controller,
                           verticalScrollController: verticalController,
                           minutesPerStep: _freeBusyMinutesPerStep,
+                          timeLabelInset: context.spacing.xs,
+                          timeTickInset: context.spacing.xxs,
                           interactionController: interactionController,
                           availabilityWindows: const <CalendarAvailabilityWindow>[],
                           availabilityOverlays: const <CalendarAvailabilityOverlay>[],
@@ -1287,7 +1291,7 @@ class _FreeBusyPopoverContent extends StatelessWidget {
         border: Border.all(color: calendarBorderColor),
       ),
       child: Padding(
-        padding: _freeBusyPopoverPadding,
+        padding: _freeBusyPopoverPadding(context),
         child: Text(
           label,
           style: context.textTheme.small.strong
@@ -1334,7 +1338,7 @@ class _FreeBusyTileControls extends StatelessWidget {
           border: Border.all(color: calendarBorderColor),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(_freeBusyTileOverlayPadding),
+          padding: EdgeInsets.all(context.spacing.s),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -1342,7 +1346,7 @@ class _FreeBusyTileControls extends StatelessWidget {
                 scale: _freeBusySwitchScale,
                 child: ShadSwitch(value: isFree, onChanged: (_) => onToggle()),
               ),
-              const SizedBox(width: _freeBusyTileOverlayGap),
+              SizedBox(width: context.spacing.s),
               AxiIconButton.ghost(
                 iconData: Icons.call_split,
                 tooltip: context.l10n.calendarFreeBusySplitTooltip,
@@ -1673,7 +1677,7 @@ class _FreeBusyEditSheetState extends State<_FreeBusyEditSheet> {
           onToggle: widget.onToggle,
           onSplit: widget.onSplit,
         ),
-        const SizedBox(height: _freeBusySheetSpacing),
+        SizedBox(height: context.spacing.m),
         _FreeBusySheetSectionLabel(
           text: context.l10n.calendarFreeBusyRangeLabel,
         ),
@@ -1741,15 +1745,13 @@ class _FreeBusySheetActions extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: context.colorScheme.card,
-              borderRadius: BorderRadius.circular(
-                _freeBusySheetActionCornerRadius,
-              ),
+              borderRadius: BorderRadius.circular(context.radii.container),
               border: Border.all(color: context.colorScheme.border),
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: _freeBusySheetActionPaddingHorizontal,
-                vertical: _freeBusySheetActionPaddingVertical,
+              padding: EdgeInsets.symmetric(
+                horizontal: context.spacing.m,
+                vertical: context.spacing.s,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1765,7 +1767,7 @@ class _FreeBusySheetActions extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: _freeBusySheetActionSpacing),
+        SizedBox(width: context.spacing.s),
         AxiButton.outline(
           onPressed: onSplit,
           child: Text(context.l10n.calendarFreeBusySplitLabel),
@@ -1783,7 +1785,7 @@ class _FreeBusySheetSectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: _freeBusySheetGap),
+      padding: EdgeInsets.only(bottom: context.spacing.s),
       child: Text(
         text,
         style: context.textTheme.sectionLabelM,

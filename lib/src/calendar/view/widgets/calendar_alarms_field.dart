@@ -147,13 +147,13 @@ class CalendarAlarmsField extends StatelessWidget {
         else
           Align(alignment: Alignment.centerRight, child: addButton),
         if (showReminderNote) ...[
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           Text(
             context.l10n.calendarAlarmsHelper,
             style: context.textTheme.muted,
           ),
         ],
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         if (items.isEmpty)
           const _AlarmEmptyState()
         else
@@ -163,7 +163,7 @@ class CalendarAlarmsField extends StatelessWidget {
                 .entries
                 .map(
                   (entry) => Padding(
-                    padding: const EdgeInsets.only(bottom: calendarGutterMd),
+                    padding: EdgeInsets.only(bottom: context.spacing.m),
                     child: _AlarmCard(
                       index: entry.key,
                       alarm: entry.value,
@@ -216,7 +216,7 @@ class _AlarmAddButton extends StatelessWidget {
       color: calendarPrimaryColor,
       backgroundColor: calendarContainerColor,
       borderColor: calendarBorderColor,
-      iconSize: calendarGutterLg,
+      iconSize: context.spacing.m,
     );
   }
 }
@@ -255,7 +255,7 @@ class _AlarmAdaptiveRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           leading,
-          const SizedBox(height: calendarGutterMd),
+          SizedBox(height: context.spacing.m),
           trailing,
         ],
       );
@@ -264,7 +264,7 @@ class _AlarmAdaptiveRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(child: leading),
-        const SizedBox(width: calendarGutterMd),
+        SizedBox(width: context.spacing.m),
         Expanded(child: trailing),
       ],
     );
@@ -373,9 +373,9 @@ class _AlarmCardState extends State<_AlarmCard> {
               );
 
         return Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd,
-            vertical: calendarGutterMd,
+          padding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.m,
           ),
           decoration: BoxDecoration(
             color: calendarContainerColor,
@@ -403,17 +403,17 @@ class _AlarmCardState extends State<_AlarmCard> {
                     color: calendarSubtitleColor,
                     backgroundColor: calendarContainerColor,
                     borderColor: calendarBorderColor,
-                    iconSize: calendarGutterMd,
+                    iconSize: context.spacing.m,
                     buttonSize: _alarmRemoveButtonSize,
                     tapTargetSize: _alarmRemoveTapTargetSize,
                   ),
                 ],
               ),
-              const SizedBox(height: calendarInsetMd),
+              SizedBox(height: context.spacing.xs),
               actionTriggerRow,
-              const SizedBox(height: calendarGutterMd),
+              SizedBox(height: context.spacing.m),
               triggerDetails,
-              const SizedBox(height: calendarGutterMd),
+              SizedBox(height: context.spacing.m),
               _AlarmRepeatField(
                 repeatController: _repeatController,
                 repeat: alarm.repeat,
@@ -427,7 +427,7 @@ class _AlarmCardState extends State<_AlarmCard> {
                 },
               ),
               if (isEmail) ...[
-                const SizedBox(height: calendarGutterMd),
+                SizedBox(height: context.spacing.m),
                 _AlarmRecipientsField(
                   recipients: alarm.recipients,
                   isCompact: isCompact,
@@ -436,7 +436,7 @@ class _AlarmCardState extends State<_AlarmCard> {
                 ),
               ],
               if (alarm.acknowledged != null) ...[
-                const SizedBox(height: calendarGutterMd),
+                SizedBox(height: context.spacing.m),
                 _AlarmAcknowledgedRow(value: alarm.acknowledged!),
               ],
             ],
@@ -522,13 +522,13 @@ class _AlarmActionField extends StatelessWidget {
                 width: calendarBorderStroke,
               ),
             ),
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarGutterSm,
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
             ),
             trailing: Icon(
               Icons.keyboard_arrow_down_rounded,
-              size: calendarGutterMd,
+              size: context.spacing.m,
               color: calendarSubtitleColor,
             ),
           )
@@ -537,10 +537,10 @@ class _AlarmActionField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AlarmFieldLabel(text: context.l10n.calendarAlarmActionLabel),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         content,
         if (helperWidget != null) ...[
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           helperWidget,
         ],
       ],
@@ -565,7 +565,7 @@ class _AlarmTriggerTypeField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AlarmFieldLabel(text: context.l10n.calendarAlarmTriggerLabel),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         AxiSelect<CalendarAlarmTriggerType>(
           initialValue: trigger.type,
           onChanged: (value) {
@@ -612,13 +612,13 @@ class _AlarmTriggerTypeField extends StatelessWidget {
               width: calendarBorderStroke,
             ),
           ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd,
-            vertical: calendarGutterSm,
+          padding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.s,
           ),
           trailing: Icon(
             Icons.keyboard_arrow_down_rounded,
-            size: calendarGutterMd,
+            size: context.spacing.m,
             color: calendarSubtitleColor,
           ),
         ),
@@ -698,7 +698,7 @@ class _AlarmRelativeTriggerField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         relativeRow,
-        const SizedBox(height: calendarInsetMd),
+        SizedBox(height: context.spacing.xs),
         _AlarmDurationRow(
           label: context.l10n.calendarAlarmOffsetLabel,
           hintText: context.l10n.calendarAlarmOffsetHint,
@@ -778,7 +778,7 @@ class _AlarmSelectRow<T> extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AlarmFieldLabel(text: label),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         AxiSelect<T>(
           initialValue: value,
           onChanged: (selected) {
@@ -803,13 +803,13 @@ class _AlarmSelectRow<T> extends StatelessWidget {
               width: calendarBorderStroke,
             ),
           ),
-          padding: const EdgeInsets.symmetric(
-            horizontal: calendarGutterMd,
-            vertical: calendarGutterSm,
+          padding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.s,
           ),
           trailing: Icon(
             Icons.keyboard_arrow_down_rounded,
-            size: calendarGutterMd,
+            size: context.spacing.m,
             color: calendarSubtitleColor,
           ),
         ),
@@ -852,7 +852,7 @@ class _AlarmRepeatField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AlarmFieldLabel(text: context.l10n.calendarAlarmRepeatLabel),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         _AlarmAdaptiveRow(
           leading: repeatCountField,
           trailing: repeatEveryField,
@@ -878,7 +878,7 @@ class _AlarmRepeatCountField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AlarmFieldLabel(text: context.l10n.calendarAlarmRepeatCountHint),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         TaskTextField(
           controller: controller,
           hintText: context.l10n.calendarAlarmRepeatCountHint,
@@ -918,7 +918,7 @@ class _AlarmDurationRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AlarmFieldLabel(text: label),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         AlarmDurationField(
           value: value,
           hintText: hintText,
@@ -987,7 +987,7 @@ class _AlarmDurationFieldState extends State<AlarmDurationField> {
             inputFormatters: _digitsOnlyInputFormatters,
           ),
         ),
-        const SizedBox(width: calendarGutterSm),
+        SizedBox(width: context.spacing.s),
         Expanded(
           child: AxiSelect<AlarmOffsetUnit>(
             initialValue: _unit,
@@ -1016,13 +1016,13 @@ class _AlarmDurationFieldState extends State<AlarmDurationField> {
                 width: calendarBorderStroke,
               ),
             ),
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarGutterSm,
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
             ),
             trailing: Icon(
               Icons.keyboard_arrow_down_rounded,
-              size: calendarGutterMd,
+              size: context.spacing.m,
               color: calendarSubtitleColor,
             ),
           ),
@@ -1132,25 +1132,25 @@ class _AlarmRecipientsFieldState extends State<_AlarmRecipientsField> {
       color: calendarPrimaryColor,
       backgroundColor: calendarContainerColor,
       borderColor: calendarBorderColor,
-      iconSize: calendarGutterLg,
+      iconSize: context.spacing.m,
     );
     final Widget inputRow = widget.isCompact
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               addressField,
-              const SizedBox(height: calendarGutterSm),
+              SizedBox(height: context.spacing.s),
               nameField,
-              const SizedBox(height: calendarGutterSm),
+              SizedBox(height: context.spacing.s),
               Align(alignment: Alignment.centerRight, child: addButton),
             ],
           )
         : Row(
             children: [
               Expanded(child: addressField),
-              const SizedBox(width: calendarGutterSm),
+              SizedBox(width: context.spacing.s),
               Expanded(child: nameField),
-              const SizedBox(width: calendarGutterSm),
+              SizedBox(width: context.spacing.s),
               addButton,
             ],
           );
@@ -1158,13 +1158,13 @@ class _AlarmRecipientsFieldState extends State<_AlarmRecipientsField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _AlarmFieldLabel(text: context.l10n.calendarAlarmRecipientsLabel),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         inputRow,
         if (widget.recipients.isNotEmpty) ...[
-          const SizedBox(height: calendarInsetMd),
+          SizedBox(height: context.spacing.xs),
           Wrap(
-            spacing: calendarGutterSm,
-            runSpacing: calendarInsetSm,
+            spacing: context.spacing.s,
+            runSpacing: context.spacing.xxs,
             children: widget.recipients
                 .map(
                   (recipient) => _AlarmRecipientChip(
@@ -1239,9 +1239,9 @@ class _AlarmRecipientChip extends StatelessWidget {
           )
         : recipient.address;
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xs,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -1252,7 +1252,7 @@ class _AlarmRecipientChip extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(display, style: labelStyle),
-          const SizedBox(width: calendarInsetSm),
+          SizedBox(width: context.spacing.xxs),
           AxiIconButton(
             iconData: Icons.close,
             tooltip: context.l10n.calendarAlarmRecipientRemoveTooltip,
@@ -1260,7 +1260,7 @@ class _AlarmRecipientChip extends StatelessWidget {
             color: calendarSubtitleColor,
             backgroundColor: calendarContainerColor,
             borderColor: calendarBorderColor,
-            iconSize: calendarGutterMd,
+            iconSize: context.spacing.m,
             buttonSize: _alarmRecipientButtonSize,
             tapTargetSize: _alarmRecipientTapTargetSize,
           ),
@@ -1282,7 +1282,7 @@ class _AlarmAcknowledgedRow extends StatelessWidget {
     return Row(
       children: [
         _AlarmFieldLabel(text: context.l10n.calendarAlarmAcknowledgedLabel),
-        const SizedBox(width: calendarGutterSm),
+        SizedBox(width: context.spacing.s),
         Expanded(
           child: Text(
             formatted,

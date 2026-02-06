@@ -13,6 +13,7 @@ class AxiTapBounce extends StatefulWidget {
     required this.child,
     this.controller,
     this.scale = 0.96,
+    this.hoverScale,
     this.enabled = true,
     this.pressDuration = const Duration(milliseconds: 80),
     this.releaseDuration = const Duration(milliseconds: 180),
@@ -23,6 +24,7 @@ class AxiTapBounce extends StatefulWidget {
   final Widget child;
   final AxiTapBounceController? controller;
   final double scale;
+  final double? hoverScale;
   final bool enabled;
   final Duration pressDuration;
   final Duration releaseDuration;
@@ -106,7 +108,7 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
   @override
   Widget build(BuildContext context) {
     if (!widget.enabled) return widget.child;
-    final double hoverScale = context.motion.tapHoverScale;
+    final double hoverScale = widget.hoverScale ?? context.motion.tapHoverScale;
     final bool isPressed = _pressState == _TapBouncePressState.pressed;
     final bool isHovered = _hovered && !isPressed;
     final double targetScale = isPressed

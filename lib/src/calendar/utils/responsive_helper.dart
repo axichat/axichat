@@ -3,6 +3,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 
 /// High level responsive buckets used across the calendar surfaces.
@@ -104,7 +105,7 @@ class ResponsiveHelper {
             vertical: spacing.m,
           ),
           modalMargin: EdgeInsets.all(spacing.m),
-          gridHorizontalPadding: calendarTaskColumnGap,
+          gridHorizontalPadding: 0,
           sidebarMinWidthFraction: calendarSidebarWidthMinFraction,
           sidebarWidthFraction: calendarSidebarWidthDefaultFraction,
           sidebarMaxWidthFraction: calendarSidebarWidthMaxFraction,
@@ -145,10 +146,14 @@ class ResponsiveHelper {
   }
 
   /// Returns the descriptor for a specific size class.
-  static CalendarResponsiveSpec specForSizeClass(CalendarSizeClass sizeClass) {
-    return _specs.firstWhere(
+  static CalendarResponsiveSpec specForSizeClass(
+    BuildContext context,
+    CalendarSizeClass sizeClass,
+  ) {
+    final specs = _specs(context.spacing);
+    return specs.firstWhere(
       (spec) => spec.sizeClass == sizeClass,
-      orElse: () => _specs.last,
+      orElse: () => specs.last,
     );
   }
 

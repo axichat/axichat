@@ -409,29 +409,12 @@ const calendarTodaySlotLightOpacity = 0.01;
 const calendarTodaySlotDarkOpacity = 0.02;
 const calendarDayHeaderLetterSpacing = 0.5;
 
-// Standard spacing values
-// Insets handle tight adjustments inside components, while gutters separate larger regions.
-const calendarInsetSm = axiSpaceXxs;
-const calendarInsetMd = axiSpaceXs;
-const calendarInsetLg = axiSpaceS;
-const calendarGutterSm = axiSpaceS;
-const calendarGutterMd = axiSpaceM;
-const calendarGutterLg = axiSpaceM;
-// Dedicated form spacing between stacked controls.
 const calendarCheckboxTapTarget = 36.0;
-const calendarFormGap = axiSpaceS;
-const calendarTaskDetailGap = axiSpaceXs;
 const calendarCompactDayColumnWidth = 120.0;
-const calendarRecurrenceEndGap = axiSpaceM;
-const calendarRecurrenceFieldGap = calendarGutterMd;
-const calendarRecurrenceCompactFieldGap = axiSpaceM;
-const calendarRecurrenceCompactWeekdayGap = calendarFormGap;
 
 // Event layout constraints
 const calendarEventMinHeight = 20.0;
 const calendarEventMinWidth = 32.0;
-const calendarTaskColumnInset = axiSpaceS;
-const calendarTaskColumnGap = 0.0;
 const calendarDayViewDefaultHourHeight = 192.0;
 const calendarDayViewDefaultSubdivisions = 4;
 const calendarVisibleHourRows = 25;
@@ -458,15 +441,6 @@ const calendarTaskPopoverFallbackHeight = 560.0;
 /// Minimum usable height for popovers to prevent truncated controls.
 const calendarTaskPopoverMinHeight = 160.0;
 
-/// Safe margin between popovers and the screen edge for pointer affordances.
-const calendarPopoverScreenMargin = axiSpaceM;
-
-/// Desired vertical gap between a task tile and its overlay content.
-const calendarPopoverPreferredVerticalGap = axiSpaceS;
-
-/// Desired horizontal gap between a task tile and its overlay content.
-const calendarPopoverPreferredHorizontalGap = axiSpaceM;
-
 // Quick add modal sizing
 /// Maximum width the quick add modal can occupy on desktop breakpoints.
 const calendarQuickAddModalMaxWidth = 400.0;
@@ -481,45 +455,6 @@ const calendarQuickAddModalCompactMaxWidth = 360.0;
 /// Collapsed task sidebar height when rendered on phones.
 const calendarMobileSidebarHeight = 200.0;
 
-// Standard EdgeInsets
-const calendarPaddingSm = EdgeInsets.all(axiSpaceXs);
-const calendarPaddingMd = EdgeInsets.all(axiSpaceS);
-const calendarPaddingLg = EdgeInsets.all(axiSpaceM);
-const calendarPaddingXl = EdgeInsets.all(axiSpaceM);
-
-// Purpose-specific paddings for shared surfaces.
-const calendarMenuItemPadding = EdgeInsets.symmetric(
-  horizontal: axiSpaceM,
-  vertical: axiSpaceM,
-);
-const calendarFieldPadding = EdgeInsets.symmetric(
-  horizontal: axiSpaceM,
-  vertical: axiSpaceS,
-);
-const calendarActionButtonPadding = EdgeInsets.symmetric(
-  horizontal: axiSpaceM,
-  vertical: axiSpaceM,
-);
-const calendarAccordionPadding = EdgeInsets.fromLTRB(
-  axiSpaceM,
-  axiSpaceS,
-  axiSpaceM,
-  calendarFormGap,
-);
-
-const calendarMarginSmall = EdgeInsets.symmetric(
-  horizontal: axiSpaceS,
-  vertical: axiSpaceXs,
-);
-const calendarMarginMedium = EdgeInsets.symmetric(
-  horizontal: axiSpaceM,
-  vertical: axiSpaceS,
-);
-const calendarMarginLarge = EdgeInsets.symmetric(
-  horizontal: axiSpaceM,
-  vertical: axiSpaceS,
-);
-
 // Sidebar layout metrics
 const calendarSidebarMinWidth = 220.0;
 const calendarSidebarWidthMinFraction = 0.25;
@@ -527,10 +462,6 @@ const calendarSidebarWidthDefaultFraction = 0.33;
 const calendarSidebarWidthMaxFraction = 0.5;
 const calendarSidebarScrollbarThickness = 6.0;
 const calendarSidebarScrollbarRadius = 8.0;
-const calendarSidebarSectionPadding = EdgeInsets.all(axiSpaceM);
-const calendarSidebarSectionSpacing = axiSpaceM;
-const calendarSidebarToggleSpacing = axiSpaceM;
-const calendarSidebarScrollPadding = EdgeInsets.only(bottom: 24.0);
 const calendarSidebarAdvancedAnimationDuration = Duration(milliseconds: 220);
 
 // Hover title preview
@@ -538,19 +469,13 @@ const calendarHoverTitleSettleDuration = Duration.zero;
 
 // Sidebar completion tile metrics
 const calendarCompletionTileBorderRadius = 10.0;
-const calendarCompletionTilePaddingHorizontal = 12.0;
-const calendarCompletionTilePaddingVertical = 10.0;
 const calendarCompletionTileActiveBorderWidth = 2.0;
 const calendarCompletionTileInactiveBorderWidth = 1.0;
-const calendarCompletionTileGap = 10.0;
 const calendarSidebarToggleDuration = Duration(milliseconds: 180);
 
 // Zoom control metrics
 const calendarZoomControlsElevation = 3.0;
 const calendarZoomControlsBorderRadius = 24.0;
-const calendarZoomControlsPaddingHorizontal = 6.0;
-const calendarZoomControlsPaddingVertical = 2.0;
-const calendarZoomControlsLabelPaddingHorizontal = 8.0;
 const calendarZoomControlsIconSize = 18.0;
 const calendarZoomLabelTextStyle = TextStyle(
   fontSize: 12,

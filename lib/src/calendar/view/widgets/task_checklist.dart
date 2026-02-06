@@ -139,7 +139,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
                   : null,
             ),
             if (items.isNotEmpty) ...[
-              const SizedBox(height: calendarInsetSm),
+              SizedBox(height: context.spacing.xxs),
               TaskChecklistProgressBar(
                 progress: progress,
                 activeColor: colors.primary,
@@ -160,8 +160,8 @@ class _TaskChecklistState extends State<TaskChecklist> {
                 child: items.isEmpty
                     ? const SizedBox.shrink()
                     : Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: calendarInsetSm,
+                        padding: EdgeInsets.symmetric(
+                          vertical: context.spacing.xxs,
                         ),
                         child: ReorderableListView.builder(
                           key: ValueKey<String>(membership.join(';')),
@@ -190,7 +190,7 @@ class _TaskChecklistState extends State<TaskChecklist> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(top: calendarInsetSm),
+              padding: EdgeInsets.only(top: context.spacing.xxs),
               child: _ChecklistAddField(
                 controller: _newItemController,
                 placeholder: widget.addPlaceholder,
@@ -303,7 +303,7 @@ class _ChecklistItemRow extends StatelessWidget {
     final double cornerRadius = context.radii.container;
     return Padding(
       key: key,
-      padding: const EdgeInsets.symmetric(vertical: calendarInsetSm),
+      padding: EdgeInsets.symmetric(vertical: context.spacing.xxs),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -312,7 +312,7 @@ class _ChecklistItemRow extends StatelessWidget {
             onChanged: onChanged,
             size: iconSize,
           ),
-          const SizedBox(width: calendarInsetSm),
+          SizedBox(width: context.spacing.xxs),
           Expanded(
             child: AxiTextField(
               controller: controller,
@@ -325,8 +325,8 @@ class _ChecklistItemRow extends StatelessWidget {
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: calendarInsetSm,
+                contentPadding: EdgeInsets.symmetric(
+                  vertical: context.spacing.xxs,
                 ),
               ),
             ),
@@ -344,14 +344,14 @@ class _ChecklistItemRow extends StatelessWidget {
             tooltip: context.l10n.calendarRemoveItem,
             onPressed: onRemove,
           ),
-          const SizedBox(width: calendarInsetSm),
+          SizedBox(width: context.spacing.xxs),
           MouseRegion(
             cursor: SystemMouseCursors.grab,
             child: ReorderableDragStartListener(
               index: index,
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: calendarInsetSm,
+                padding: EdgeInsets.symmetric(
+                  horizontal: context.spacing.xxs,
                 ),
                 child: Icon(
                   Icons.drag_indicator,
@@ -397,7 +397,7 @@ class _ChecklistAddField extends StatelessWidget {
           tooltip: context.l10n.calendarAddChecklistItem,
           onPressed: onSubmitted,
         ),
-        const SizedBox(width: calendarInsetSm),
+        SizedBox(width: context.spacing.xxs),
         Expanded(
           child: AxiTextField(
             controller: controller,
@@ -411,8 +411,8 @@ class _ChecklistAddField extends StatelessWidget {
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(
-                vertical: calendarInsetSm,
+              contentPadding: EdgeInsets.symmetric(
+                vertical: context.spacing.xxs,
               ),
             ),
             style: context.textTheme.p,

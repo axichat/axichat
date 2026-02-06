@@ -342,7 +342,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     final baseUrlOverride =
         _tryParseEmailProvisioningBaseUrl(config.emailProvisioningBaseUrl);
-    final publicTokenOverride = config.emailProvisioningPublicToken;
+    final domain = config.domain.trim().toLowerCase();
+    final publicTokenOverride = domain == EndpointConfig.defaultDomain
+        ? config.emailProvisioningPublicToken
+        : config.emailProvisioningPublicToken ?? '';
     provisioning.EmailProvisioningClient next;
     try {
       next = provisioning.EmailProvisioningClient.fromEnvironment(

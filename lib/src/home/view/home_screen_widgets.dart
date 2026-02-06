@@ -1090,7 +1090,7 @@ class _DesktopHomeRefreshButton extends StatelessWidget {
       builder: (context, status) {
         final isLoading = status.isLoading;
         final l10n = context.l10n;
-        return AxiIconButton.ghost(
+        return AxiIconButton.outline(
           iconData: LucideIcons.refreshCw,
           tooltip: l10n.homeSyncTooltip,
           loading: isLoading,

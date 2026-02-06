@@ -134,7 +134,7 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(title: widget.title),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         if (!widget.showBothAnchors)
           _ReminderSection(
             label: sectionLabel,
@@ -150,9 +150,9 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
             ),
             mixed: widget.mixed,
             zeroLabel: zeroLabel,
-            chipPadding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarGutterSm,
+            chipPadding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
             ),
           )
         else ...[
@@ -170,12 +170,12 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
             ),
             mixed: widget.mixed,
             zeroLabel: _reminderAtStartLabel,
-            chipPadding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarGutterSm,
+            chipPadding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
             ),
           ),
-          const SizedBox(height: calendarGutterMd),
+          SizedBox(height: context.spacing.m),
           _ReminderSection(
             label: _reminderBeforeDeadlineLabel,
             options: widget.deadlineOptions,
@@ -190,14 +190,14 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
             ),
             mixed: widget.mixed,
             zeroLabel: _reminderAtDeadlineLabel,
-            chipPadding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarGutterSm,
+            chipPadding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
             ),
           ),
         ],
         if (allowAdvanced) ...[
-          const SizedBox(height: calendarGutterMd),
+          SizedBox(height: context.spacing.m),
           TaskSectionExpander(
             title: _reminderAdvancedLabel,
             isExpanded: _advancedExpanded,
@@ -275,9 +275,9 @@ class _ReminderAdvancedActiveBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarInsetSm,
-        vertical: calendarInsetSm,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.xxs,
+        vertical: context.spacing.xxs,
       ),
       decoration: BoxDecoration(
         color: colors.muted.withValues(alpha: _reminderAdvancedBadgeOpacity),

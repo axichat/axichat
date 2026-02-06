@@ -288,7 +288,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
     final double inset =
         keyboardInset > safeBottom ? keyboardInset - safeBottom : 0;
-    return calendarGutterSm + inset;
+    return context.spacing.s + inset;
   }
 
   AutovalidateMode get _titleAutovalidateMode => AutovalidateMode.disabled;
@@ -932,6 +932,7 @@ class _QuickAddModalContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final responsive = ResponsiveHelper.spec(context);
+    final spacing = context.spacing;
     final double maxWidth =
         responsive.quickAddMaxWidth ?? calendarQuickAddModalMaxWidth;
     final mediaQuery = MediaQuery.of(context);
@@ -1016,12 +1017,12 @@ class _QuickAddModalContent extends StatelessWidget {
                               ? const SizedBox.shrink()
                               : Container(
                                   key: const ValueKey('quick-add-error'),
-                                  margin: const EdgeInsets.only(
-                                    bottom: calendarGutterSm,
+                                  margin: EdgeInsets.only(
+                                    bottom: spacing.s,
                                   ),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: calendarGutterMd,
-                                    vertical: calendarInsetMd,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: spacing.m,
+                                    vertical: spacing.xs,
                                   ),
                                   decoration: BoxDecoration(
                                     color: calendarDangerColor.withValues(
@@ -1043,7 +1044,7 @@ class _QuickAddModalContent extends StatelessWidget {
                                         color: calendarDangerColor,
                                         size: context.sizing.menuItemIconSize,
                                       ),
-                                      const SizedBox(width: calendarInsetSm),
+                                      SizedBox(width: spacing.xxs),
                                       Expanded(
                                         child: Text(
                                           formError!,
@@ -1066,26 +1067,26 @@ class _QuickAddModalContent extends StatelessWidget {
                           onChanged: onTaskNameChanged,
                           onSubmit: onTaskSubmit,
                         ),
-                        const SizedBox(height: calendarGutterMd),
+                        SizedBox(height: spacing.m),
                         _QuickAddPriorityToggles(
                           formController: formController,
                           onImportantChanged: onImportantChanged,
                           onUrgentChanged: onUrgentChanged,
                         ),
-                        const SizedBox(height: calendarGutterMd),
+                        SizedBox(height: spacing.m),
                         _QuickAddDescriptionField(
                           controller: descriptionController,
                         ),
-                        const SizedBox(height: calendarGutterMd),
+                        SizedBox(height: spacing.m),
                         _QuickAddLocationField(
                           controller: locationController,
                           helper: locationHelper,
                           onChanged: onLocationChanged,
                         ),
-                        const SizedBox(height: calendarGutterMd),
+                        SizedBox(height: spacing.m),
                         TaskChecklist(controller: checklistController),
-                        const TaskSectionDivider(
-                          verticalPadding: calendarGutterMd,
+                        TaskSectionDivider(
+                          verticalPadding: spacing.m,
                         ),
                         _QuickAddScheduleSection(
                           formController: formController,
@@ -1093,15 +1094,15 @@ class _QuickAddModalContent extends StatelessWidget {
                           onEndChanged: onEndChanged,
                           onClear: onScheduleCleared,
                         ),
-                        const TaskSectionDivider(
-                          verticalPadding: calendarGutterMd,
+                        TaskSectionDivider(
+                          verticalPadding: spacing.m,
                         ),
                         _QuickAddDeadlineSection(
                           formController: formController,
                           onChanged: onDeadlineChanged,
                         ),
-                        const TaskSectionDivider(
-                          verticalPadding: calendarGutterMd,
+                        TaskSectionDivider(
+                          verticalPadding: spacing.m,
                         ),
                         AnimatedBuilder(
                           animation: formController,
@@ -1116,8 +1117,8 @@ class _QuickAddModalContent extends StatelessWidget {
                             );
                           },
                         ),
-                        const TaskSectionDivider(
-                          verticalPadding: calendarGutterMd,
+                        TaskSectionDivider(
+                          verticalPadding: spacing.m,
                         ),
                         AnimatedBuilder(
                           animation: formController,
@@ -1129,8 +1130,8 @@ class _QuickAddModalContent extends StatelessWidget {
                             );
                           },
                         ),
-                        const TaskSectionDivider(
-                          verticalPadding: calendarGutterMd,
+                        TaskSectionDivider(
+                          verticalPadding: spacing.m,
                         ),
                         AnimatedBuilder(
                           animation: formController,
@@ -1143,8 +1144,8 @@ class _QuickAddModalContent extends StatelessWidget {
                             );
                           },
                         ),
-                        const TaskSectionDivider(
-                          verticalPadding: calendarGutterMd,
+                        TaskSectionDivider(
+                          verticalPadding: spacing.m,
                         ),
                         AnimatedBuilder(
                           animation: formController,
@@ -1157,15 +1158,15 @@ class _QuickAddModalContent extends StatelessWidget {
                             );
                           },
                         ),
-                        const TaskSectionDivider(
-                          verticalPadding: calendarGutterMd,
+                        TaskSectionDivider(
+                          verticalPadding: spacing.m,
                         ),
                         _QuickAddRecurrenceSection(
                           formController: formController,
                           onChanged: onRecurrenceChanged,
                           fallbackDate: fallbackDate,
                         ),
-                        const SizedBox(height: calendarGutterMd),
+                        SizedBox(height: spacing.m),
                         TaskSecondaryButton(
                           label: context.l10n.calendarAddToCriticalPath,
                           icon: Icons.route,
@@ -1174,13 +1175,13 @@ class _QuickAddModalContent extends StatelessWidget {
                                   ? null
                                   : onAddToCriticalPath,
                         ),
-                        const SizedBox(height: calendarInsetSm),
+                        SizedBox(height: spacing.xxs),
                         CriticalPathMembershipList(
                           paths: queuedPaths,
                           onRemovePath: onRemoveQueuedPath,
                         ),
                         if (keyboardOpen) ...[
-                          const SizedBox(height: calendarGutterMd),
+                          SizedBox(height: spacing.m),
                           actions,
                         ],
                       ],
@@ -1219,10 +1220,11 @@ class _QuickAddHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final double iconSize = context.sizing.iconButtonIconSize;
+    final spacing = context.spacing;
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterLg,
-        vertical: calendarGutterMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.m,
       ),
       decoration: BoxDecoration(
         border: Border(
@@ -1235,7 +1237,7 @@ class _QuickAddHeader extends StatelessWidget {
       child: Row(
         children: [
           Icon(Icons.add_task, color: calendarTitleColor, size: iconSize),
-          const SizedBox(width: calendarGutterSm),
+          SizedBox(width: spacing.s),
           Text(
             l10n.calendarAddTaskTitle,
             style: context.textTheme.h4.copyWith(color: calendarTitleColor),
@@ -1247,7 +1249,7 @@ class _QuickAddHeader extends StatelessWidget {
             onPressed: onSubmit,
             color: calendarPrimaryColor,
           ),
-          const SizedBox(width: calendarGutterSm),
+          SizedBox(width: spacing.s),
           AxiIconButton.outline(
             iconData: Icons.close,
             tooltip: context.l10n.calendarCloseTooltip,
@@ -1282,7 +1284,10 @@ class _QuickAddTaskNameField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    const padding = calendarFieldPadding;
+    final padding = EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.s,
+    );
     final field = Focus(
       onKeyEvent: (node, event) {
         if (event is KeyDownEvent &&
@@ -1331,12 +1336,16 @@ class _QuickAddDescriptionField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     return TaskDescriptionField(
       controller: controller,
       hintText: l10n.calendarDescriptionHint,
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
-      contentPadding: calendarFieldPadding,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.s,
+      ),
       textCapitalization: TextCapitalization.sentences,
     );
   }
@@ -1356,13 +1365,17 @@ class _QuickAddLocationField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     return TaskLocationField(
       controller: controller,
       hintText: l10n.calendarLocationHint,
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       textCapitalization: TextCapitalization.words,
-      contentPadding: calendarFieldPadding,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.s,
+      ),
       onChanged: onChanged,
       autocomplete: helper,
     );
@@ -1388,7 +1401,7 @@ class _QuickAddPriorityToggles extends StatelessWidget {
         return TaskPriorityToggles(
           isImportant: formController.isImportant,
           isUrgent: formController.isUrgent,
-          spacing: 10,
+          spacing: context.spacing.s,
           onImportantChanged: onImportantChanged,
           onUrgentChanged: onUrgentChanged,
         );
@@ -1419,7 +1432,7 @@ class _QuickAddScheduleSection extends StatelessWidget {
         return TaskScheduleSection(
           title: l10n.calendarScheduleLabel,
           headerSize: TaskSectionLabelSize.medium,
-          spacing: calendarGutterSm,
+          spacing: context.spacing.s,
           start: formController.startTime,
           end: formController.endTime,
           onStartChanged: onStartChanged,
@@ -1453,7 +1466,7 @@ class _QuickAddDeadlineSection extends StatelessWidget {
               title: l10n.calendarDeadlineLabel,
               size: TaskSectionLabelSize.medium,
             ),
-            const SizedBox(height: calendarGutterSm),
+            SizedBox(height: context.spacing.s),
             DeadlinePickerField(
               value: formController.deadline,
               onChanged: onChanged,
@@ -1520,11 +1533,11 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
         return TaskRecurrenceSection(
           title: l10n.calendarRepeatLabel,
           headerSize: TaskSectionLabelSize.medium,
-          spacing: calendarGutterSm,
+          spacing: context.spacing.s,
           value: formController.recurrence,
           fallbackWeekday: fallbackWeekday,
           referenceStart: formController.startTime,
-          spacingConfig: calendarRecurrenceSpacingCompact,
+          spacingConfig: calendarRecurrenceSpacingCompact(context),
           onChanged: onChanged,
         );
       },
@@ -1555,8 +1568,8 @@ class _QuickAddActions extends StatelessWidget {
         final bool disabled = isSubmitting || !canSubmit;
         return TaskFormActionsRow(
           includeTopBorder: true,
-          padding: calendarPaddingXl,
-          gap: calendarGutterMd,
+          padding: EdgeInsets.all(context.spacing.m),
+          gap: context.spacing.m,
           children: [
             Expanded(
               child: TaskSecondaryButton(

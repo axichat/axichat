@@ -86,21 +86,21 @@ class CalendarIcsDiagnosticsSection extends StatelessWidget {
       children: [
         TaskSectionHeader(title: title),
         if (metadataEntries.isNotEmpty) ...[
-          const SizedBox(height: calendarGutterSm),
+          SizedBox(height: context.spacing.s),
           _DiagnosticsGroup(
             label: _icsDiagnosticsMetadataTitle,
             child: _IcsMetadataList(entries: metadataEntries),
           ),
         ],
         if (rawProperties.isNotEmpty) ...[
-          const SizedBox(height: calendarGutterMd),
+          SizedBox(height: context.spacing.m),
           _DiagnosticsGroup(
             label: _icsDiagnosticsRawPropertiesTitle,
             child: _RawPropertiesList(properties: rawProperties),
           ),
         ],
         if (rawComponents.isNotEmpty) ...[
-          const SizedBox(height: calendarGutterMd),
+          SizedBox(height: context.spacing.m),
           _DiagnosticsGroup(
             label: _icsDiagnosticsRawComponentsTitle,
             child: _RawComponentsList(components: rawComponents),
@@ -123,7 +123,7 @@ class _DiagnosticsGroup extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _DiagnosticsGroupLabel(label: label),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         child,
       ],
     );
@@ -213,7 +213,7 @@ class _IcsMetadataList extends StatelessWidget {
       children: entries
           .map(
             (entry) => Padding(
-              padding: const EdgeInsets.only(bottom: calendarInsetMd),
+              padding: EdgeInsets.only(bottom: context.spacing.xs),
               child: _IcsMetaRow(entry: entry),
             ),
           )
@@ -240,7 +240,7 @@ class _IcsMetaRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(entry.label.toUpperCase(), style: labelStyle),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         Text(entry.value, style: valueStyle),
       ],
     );
@@ -259,7 +259,7 @@ class _RawPropertiesList extends StatelessWidget {
       children: properties
           .map(
             (property) => Padding(
-              padding: const EdgeInsets.only(bottom: calendarInsetLg),
+              padding: EdgeInsets.only(bottom: context.spacing.s),
               child: _RawPropertyTile(property: property),
             ),
           )
@@ -285,13 +285,13 @@ class _RawPropertyTile extends StatelessWidget {
       color: calendarSubtitleColor,
     );
     final EdgeInsets contentPadding = isCompact
-        ? const EdgeInsets.symmetric(
-            horizontal: calendarInsetMd,
-            vertical: calendarInsetSm,
+        ? EdgeInsets.symmetric(
+            horizontal: context.spacing.xs,
+            vertical: context.spacing.xxs,
           )
-        : const EdgeInsets.symmetric(
-            horizontal: calendarGutterSm,
-            vertical: calendarInsetMd,
+        : EdgeInsets.symmetric(
+            horizontal: context.spacing.s,
+            vertical: context.spacing.xs,
           );
 
     final Widget content = Padding(
@@ -300,15 +300,15 @@ class _RawPropertyTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(name, style: titleStyle),
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           Text(value, style: valueStyle),
           if (parameters.isNotEmpty) ...[
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: context.spacing.xxs),
             const _DiagnosticsGroupLabel(label: _icsDiagnosticsParametersLabel),
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: context.spacing.xxs),
             Wrap(
-              spacing: calendarInsetSm,
-              runSpacing: calendarInsetSm,
+              spacing: context.spacing.xxs,
+              runSpacing: context.spacing.xxs,
               children: parameters
                   .map(
                     (parameter) =>
@@ -346,9 +346,9 @@ class _ParameterChip extends StatelessWidget {
     final TextStyle labelStyle =
         context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarInsetMd,
-        vertical: calendarInsetSm,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.xs,
+        vertical: context.spacing.xxs,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -373,7 +373,7 @@ class _RawComponentsList extends StatelessWidget {
       children: components
           .map(
             (component) => Padding(
-              padding: const EdgeInsets.only(bottom: calendarInsetLg),
+              padding: EdgeInsets.only(bottom: context.spacing.s),
               child: _RawComponentTile(component: component, depth: depth),
             ),
           )
@@ -393,14 +393,15 @@ class _RawComponentTile extends StatelessWidget {
     final String name = _resolveComponentName(component.name);
     final List<CalendarRawProperty> properties = component.properties;
     final List<CalendarRawComponent> children = component.components;
-    final EdgeInsets padding = EdgeInsets.only(left: calendarInsetMd * depth);
+    final EdgeInsets padding =
+        EdgeInsets.only(left: context.spacing.xs * depth);
 
     return Padding(
       padding: padding,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: calendarGutterSm,
-          vertical: calendarInsetMd,
+        padding: EdgeInsets.symmetric(
+          horizontal: context.spacing.s,
+          vertical: context.spacing.xs,
         ),
         decoration: BoxDecoration(
           color: calendarContainerColor,
@@ -416,24 +417,24 @@ class _RawComponentTile extends StatelessWidget {
               childCount: children.length,
             ),
             if (properties.isNotEmpty) ...[
-              const SizedBox(height: calendarInsetSm),
+              SizedBox(height: context.spacing.xxs),
               const _DiagnosticsGroupLabel(
                 label: _icsDiagnosticsComponentPropertiesLabel,
               ),
-              const SizedBox(height: calendarInsetSm),
+              SizedBox(height: context.spacing.xxs),
               ...properties.map(
                 (property) => Padding(
-                  padding: const EdgeInsets.only(bottom: calendarInsetSm),
+                  padding: EdgeInsets.only(bottom: context.spacing.xxs),
                   child: _RawPropertyTile(property: property, isCompact: true),
                 ),
               ),
             ],
             if (children.isNotEmpty) ...[
-              const SizedBox(height: calendarInsetSm),
+              SizedBox(height: context.spacing.xxs),
               const _DiagnosticsGroupLabel(
                 label: _icsDiagnosticsComponentChildrenLabel,
               ),
-              const SizedBox(height: calendarInsetSm),
+              SizedBox(height: context.spacing.xxs),
               _RawComponentsList(components: children, depth: depth + 1),
             ],
           ],
@@ -471,7 +472,7 @@ class _RawComponentHeader extends StatelessWidget {
       children: [
         Text(name.toUpperCase(), style: titleStyle),
         if (counts != null) ...[
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           Text(counts, style: subtitleStyle),
         ],
       ],

@@ -527,11 +527,11 @@ class _ResizableTaskBody extends StatelessWidget {
         width >= _minDeadlineWidth;
 
     final double gap = innerHeight >= 90
-        ? calendarInsetLg
+        ? spacing.s
         : innerHeight >= 64
-            ? calendarInsetMd
+            ? spacing.xs
             : innerHeight >= 40
-                ? calendarInsetSm
+                ? spacing.xxs
                 : 0.0;
 
     final titleLines = innerHeight >= 48 ? 2 : 1;
@@ -557,7 +557,7 @@ class _ResizableTaskBody extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: title),
-            const SizedBox(width: calendarInsetLg),
+            SizedBox(width: spacing.s),
             Flexible(
               child: Text(
                 timeLabel,
@@ -709,11 +709,12 @@ class _TaskDeadlineBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     final Color color = _deadlineColor(deadline);
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.s,
+        vertical: spacing.xs,
       ),
       decoration: BoxDecoration(
         color: _deadlineBackgroundColor(deadline),
@@ -727,7 +728,7 @@ class _TaskDeadlineBadge extends StatelessWidget {
             size: context.sizing.menuItemIconSize,
             color: color,
           ),
-          const SizedBox(width: calendarInsetMd),
+          SizedBox(width: spacing.xs),
           Text(
             _deadlineLabel(l10n, deadline),
             style: context.textTheme.label.strong.copyWith(color: color),

@@ -41,8 +41,8 @@ const int _availabilityDefaultRangeDays = 7;
 const int _availabilityPresetMaxCount = 5;
 const double _availabilitySheetSectionSpacing = 16.0;
 const double _availabilitySheetSectionGap = 8.0;
-const EdgeInsets _availabilityRecipientsContentPadding =
-    EdgeInsets.symmetric(horizontal: calendarGutterLg);
+EdgeInsets _availabilityRecipientsContentPadding(BuildContext context) =>
+    EdgeInsets.symmetric(horizontal: context.spacing.m);
 const double _availabilityEditorPanelGap = 16.0;
 const double _availabilityEditorPanelMaxWidth = 420.0;
 const bool _calendarUseRootNavigator = false;
@@ -251,7 +251,13 @@ class _CalendarAvailabilityShareScreenState
             onSend: _handleSendPressed,
           );
     final Widget paddedStepChild = _step.isEditor
-        ? Padding(padding: calendarMarginLarge, child: stepChild)
+        ? Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
+            ),
+            child: stepChild,
+          )
         : stepChild;
     return Scaffold(
       backgroundColor: _availabilityShareBackgroundColor(context),
@@ -926,7 +932,10 @@ class _AvailabilityShareHeader extends StatelessWidget {
         border: Border(bottom: BorderSide(color: context.colorScheme.border)),
       ),
       child: Padding(
-        padding: calendarMarginLarge,
+        padding: EdgeInsets.symmetric(
+          horizontal: context.spacing.m,
+          vertical: context.spacing.s,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -997,7 +1006,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: _availabilityRecipientsContentPadding,
+          padding: _availabilityRecipientsContentPadding(context),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1031,7 +1040,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
         ),
         const SizedBox(height: _availabilitySheetSectionSpacing),
         Padding(
-          padding: _availabilityRecipientsContentPadding,
+          padding: _availabilityRecipientsContentPadding(context),
           child: _AvailabilityActionRow(
             isBusy: isBusy,
             label: context.l10n.commonSend,

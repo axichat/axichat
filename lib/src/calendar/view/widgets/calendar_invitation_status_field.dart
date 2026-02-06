@@ -69,26 +69,26 @@ class CalendarInvitationStatusField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TaskSectionHeader(title: title),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         if (effectiveMethod != null)
           _InvitationDetailRow(
             label: _invitationMethodLabel,
             value: effectiveMethod.label,
           ),
         if (sequence != null) ...[
-          if (effectiveMethod != null) const SizedBox(height: calendarInsetMd),
+          if (effectiveMethod != null) SizedBox(height: context.spacing.xs),
           _InvitationDetailRow(
             label: _invitationSequenceLabel,
             value: sequence!.toString(),
           ),
         ],
         if (entries.isNotEmpty) ...[
-          const SizedBox(height: calendarInsetMd),
+          SizedBox(height: context.spacing.xs),
           Text(_invitationRequestStatusLabel.toUpperCase(), style: labelStyle),
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           ...entries.map(
             (entry) => Padding(
-              padding: const EdgeInsets.only(bottom: calendarInsetSm),
+              padding: EdgeInsets.only(bottom: context.spacing.xxs),
               child: _RequestStatusTile(entry: entry),
             ),
           ),
@@ -164,7 +164,7 @@ class _InvitationDetailRow extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label.toUpperCase(), style: labelStyle),
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         Text(value, style: valueStyle),
       ],
     );
@@ -189,9 +189,9 @@ class _RequestStatusTile extends StatelessWidget {
     final String description = entry.description ?? entry.rawValue;
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xs,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -203,11 +203,11 @@ class _RequestStatusTile extends StatelessWidget {
         children: [
           Text(code, style: titleStyle),
           if (description.isNotEmpty) ...[
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: context.spacing.xxs),
             Text(description, style: subtitleStyle),
           ],
           if (entry.extra != null) ...[
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: context.spacing.xxs),
             Text(entry.extra!, style: subtitleStyle),
           ],
         ],

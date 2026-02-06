@@ -249,11 +249,12 @@ class InlineFeedback extends StatelessWidget {
   Widget build(BuildContext context) {
     final sizing = context.sizing;
     final textTheme = context.textTheme;
+    final spacing = context.spacing;
     final colors = FeedbackSystem._getColorsForTone(context, tone);
 
     return Container(
-      padding: calendarPaddingLg,
-      margin: const EdgeInsets.symmetric(vertical: calendarGutterSm),
+      padding: EdgeInsets.all(spacing.m),
+      margin: EdgeInsets.symmetric(vertical: spacing.s),
       decoration: BoxDecoration(
         color: colors.background.withValues(alpha: 0.1),
         border: Border.all(
@@ -269,7 +270,7 @@ class InlineFeedback extends StatelessWidget {
             color: colors.background,
             size: sizing.iconButtonIconSize,
           ),
-          const SizedBox(width: calendarGutterSm),
+          SizedBox(width: spacing.s),
           Expanded(
             child: Text(
               message,
@@ -277,7 +278,7 @@ class InlineFeedback extends StatelessWidget {
             ),
           ),
           if (onDismiss != null) ...[
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: spacing.s),
             GestureDetector(
               onTap: onDismiss,
               child: Icon(
@@ -326,7 +327,7 @@ class ProgressIndicator extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: calendarGutterSm),
+        SizedBox(height: context.spacing.s),
         ShadProgress(
           value: progress,
           minHeight: context.sizing.progressIndicatorBarHeight,

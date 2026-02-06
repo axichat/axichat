@@ -326,8 +326,8 @@ class _InlineSyncControls extends StatelessWidget {
     ];
 
     return Wrap(
-      spacing: calendarGutterSm,
-      runSpacing: calendarInsetMd,
+      spacing: context.spacing.s,
+      runSpacing: context.spacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: children,
     );
@@ -348,8 +348,8 @@ class _CompactSyncControls extends StatelessWidget {
     ];
 
     return Wrap(
-      spacing: calendarGutterSm,
-      runSpacing: calendarInsetMd,
+      spacing: context.spacing.s,
+      runSpacing: context.spacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: children,
     );

@@ -17,14 +17,12 @@ import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 enum _CalendarDragSwitchSource { edge, tabBar }
 
 mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
-  static const double _leftEdgeHotZoneWidth = calendarWeekHeaderHeight +
-      calendarGutterLg +
-      calendarGutterSm +
-      calendarInsetSm;
-  static const double _rightEdgeHotZoneWidth = _leftEdgeHotZoneWidth;
+  double get _leftEdgeHotZoneWidth =>
+      calendarWeekHeaderHeight + context.spacing.l;
+  double get _rightEdgeHotZoneWidth => _leftEdgeHotZoneWidth;
   static const Duration _switchDelay = baseAnimationDuration;
   static final Duration _dayShiftDelay = axiMotion.statusBannerSuccessDuration;
-  static const double _edgeActivationSlop = calendarGutterMd;
+  double get _edgeActivationSlop => context.spacing.m;
   Timer? _switchTimer;
   int? _pendingSwitchIndex;
   _CalendarDragSwitchSource? _pendingSwitchSource;
@@ -442,7 +440,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                                   color: iconColor,
                                   size: context.sizing.menuItemIconSize,
                                 ),
-                                const SizedBox(width: calendarGutterSm),
+                                SizedBox(width: context.spacing.s),
                                 Text(
                                   context.l10n.commonCancel,
                                   style: context.textTheme.label.strong
@@ -915,9 +913,9 @@ class _DragTabLabel extends StatelessWidget {
         showCue ? scheme.primary.withValues(alpha: 0.55) : Colors.transparent;
     return AnimatedContainer(
       duration: calendarTaskSplitPreviewAnimationDuration,
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetLg + calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.s,
       ),
       decoration: BoxDecoration(
         border: Border(

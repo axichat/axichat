@@ -103,7 +103,7 @@ class CalendarNavigation extends StatelessWidget {
     final String unitLabel = calendarUnitLabel(viewMode, l10n);
     final bool placeChevronsInHeader =
         spec.sizeClass != CalendarSizeClass.expanded;
-    final double verticalPadding = spacing.s;
+    final double verticalPadding = spacing.xxs;
     final Widget undoRedoGroup = _UndoRedoGroup(
       onUndo: onUndo,
       onRedo: onRedo,
@@ -608,12 +608,14 @@ class CalendarViewModeToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
     final EdgeInsets padding = EdgeInsets.symmetric(
-      horizontal: compact ? context.spacing.s : context.spacing.m,
+      horizontal: compact ? spacing.xs : spacing.s,
     );
-    final double minHeight = context.sizing.buttonHeightRegular;
+    final double minHeight = context.sizing.buttonHeightSm;
+    final TextStyle tabStyle = context.textTheme.label;
     final double minWidth =
         isExpandedSize ? _minWidthExpanded : _minWidthRegular;
     final double preferredWidth =
@@ -634,6 +636,7 @@ class CalendarViewModeToggle extends StatelessWidget {
               : _viewLabel(_viewOrder[index], l10n),
           padding: padding,
           minHeight: minHeight,
+          textStyle: tabStyle,
         ),
     ];
 
@@ -645,7 +648,7 @@ class CalendarViewModeToggle extends StatelessWidget {
         onChanged: onChanged,
         tabs: tabs,
         padding: EdgeInsets.zero,
-        gap: context.spacing.xs,
+        gap: 0,
         tabsGap: context.spacing.xs,
         contentConstraints: const BoxConstraints.tightFor(height: 0),
       ),
@@ -659,6 +662,7 @@ class _CalendarTab extends ShadTab<CalendarView> {
     required String label,
     required EdgeInsets padding,
     required double minHeight,
+    required TextStyle textStyle,
   }) : super(
           value: view,
           flex: 1,
@@ -666,6 +670,7 @@ class _CalendarTab extends ShadTab<CalendarView> {
           padding: padding,
           child: Text(
             label,
+            style: textStyle,
             maxLines: 1,
             softWrap: false,
             overflow: TextOverflow.ellipsis,

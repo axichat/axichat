@@ -390,11 +390,12 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                       availableHeight.isFinite && availableHeight > 0
                           ? math.min(desiredHeight, availableHeight)
                           : desiredHeight;
-                  const EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
-                    calendarGutterLg,
-                    calendarInsetSm,
-                    calendarGutterLg,
-                    calendarGutterLg,
+                  final spacing = context.spacing;
+                  final EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
+                    spacing.m,
+                    spacing.xxs,
+                    spacing.m,
+                    spacing.m,
                   );
                   return Padding(
                     padding: sheetPadding,
@@ -645,6 +646,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       ),
     );
     final double iconSize = context.sizing.iconButtonIconSize;
+    final spacing = context.spacing;
     final trigger = AxiTapBounce(
       enabled: enabled,
       child: ShadFocusable(
@@ -660,7 +662,10 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
               onTap: enabled ? () => _toggleOverlay(context) : null,
               child: AnimatedContainer(
                 duration: calendarSlotHoverAnimationDuration,
-                padding: calendarFieldPadding,
+                padding: EdgeInsets.symmetric(
+                  horizontal: spacing.m,
+                  vertical: spacing.s,
+                ),
                 decoration: ShapeDecoration(
                   color: backgroundColor,
                   shape: decoratedShape,
@@ -672,7 +677,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                       size: iconSize,
                       color: iconColor,
                     ),
-                    const SizedBox(width: calendarGutterMd),
+                    SizedBox(width: spacing.m),
                     Expanded(
                       child: Align(
                         alignment: Alignment.centerLeft,
@@ -685,7 +690,7 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: calendarGutterSm),
+                    SizedBox(width: spacing.s),
                     Icon(
                       _isOpen
                           ? Icons.keyboard_arrow_up
@@ -908,9 +913,7 @@ class _DeadlineDropdownSurface extends StatelessWidget {
           maxHeight: maxHeight,
           minWidth: math.max(
             minWidth,
-            (context.sizing.buttonHeightRegular * 7) +
-                context.spacing.l +
-                calendarPaddingLg.horizontal,
+            (context.sizing.buttonHeightRegular * 7) + context.spacing.xl,
           ),
         ),
         child: Material(
@@ -1106,7 +1109,7 @@ class _DeadlineFieldContent extends StatelessWidget {
               letterSpacing: 0.2,
             ),
           ),
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           Text(
             value,
             style: context.textTheme.small.copyWith(color: calendarTitleColor),
@@ -1135,10 +1138,11 @@ class _DeadlineMonthHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterMd,
-        vertical: calendarGutterSm,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.s,
+        vertical: spacing.s,
       ),
       decoration: BoxDecoration(
         border: Border(
@@ -1221,6 +1225,7 @@ class _DeadlineCalendarGrid extends StatelessWidget {
     final firstOfMonth = DateTime(year, month, 1);
     final firstWeekday = firstOfMonth.weekday % 7;
     final daysInMonth = DateTime(year, month + 1, 0).day;
+    final spacing = context.spacing;
 
     final days = <DateTime?>[];
     for (var i = 0; i < firstWeekday; i++) {
@@ -1233,64 +1238,80 @@ class _DeadlineCalendarGrid extends StatelessWidget {
       days.add(null);
     }
 
-    final double cellSize = context.sizing.buttonHeightRegular;
-    final double spacing = context.spacing.xs;
     return Padding(
-      padding: calendarPaddingLg,
-      child: Column(
-        children: [
-          Wrap(
-            spacing: spacing,
-            runSpacing: 0,
-            children: _weekdayLabels(context)
-                .map(
-                  (label) => SizedBox(
-                    width: cellSize,
-                    child: Center(
-                      child: Text(
-                        label,
-                        style: context.textTheme.labelSm.strong.copyWith(
-                          color: calendarTimeLabelColor,
-                        ),
-                      ),
+      padding: EdgeInsets.all(spacing.s),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final double maxWidth = constraints.maxWidth.isFinite
+              ? constraints.maxWidth
+              : (context.sizing.buttonHeightRegular * 7) + (spacing.xs * 6);
+          final double computedCellSize =
+              ((maxWidth - (spacing.xs * 6)) / 7).clamp(0.0, double.infinity);
+          final double cellSize = math.min(
+            context.sizing.buttonHeightRegular,
+            computedCellSize,
+          );
+          final weekdayLabels = _weekdayLabels(context);
+          final List<Widget> weekdayRow = <Widget>[];
+          for (var i = 0; i < weekdayLabels.length; i++) {
+            weekdayRow.add(
+              SizedBox(
+                width: cellSize,
+                child: Center(
+                  child: Text(
+                    weekdayLabels[i],
+                    style: context.textTheme.labelSm.strong.copyWith(
+                      color: calendarTimeLabelColor,
                     ),
                   ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: calendarGutterSm),
-          Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
-            children: days.map((date) {
-              if (date == null) {
-                return SizedBox(
-                  width: cellSize,
-                  height: cellSize,
-                );
-              }
-
-              final isSelected =
-                  selectedDate != null && _isSameDay(date, selectedDate!);
-              final isDisabled = !isDateWithinBounds(date);
-
-              return SizedBox(
-                width: cellSize,
-                height: cellSize,
-                child: AxiButton(
-                  variant: isSelected
-                      ? AxiButtonVariant.primary
-                      : AxiButtonVariant.outline,
-                  size: AxiButtonSize.sm,
-                  widthBehavior: AxiButtonWidth.expand,
-                  selected: isSelected,
-                  onPressed: isDisabled ? null : () => onDaySelected(date),
-                  child: Text('${date.day}'),
                 ),
-              );
-            }).toList(),
-          ),
-        ],
+              ),
+            );
+            if (i != weekdayLabels.length - 1) {
+              weekdayRow.add(SizedBox(width: spacing.xs));
+            }
+          }
+          return Column(
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: weekdayRow,
+              ),
+              SizedBox(height: spacing.s),
+              Wrap(
+                spacing: spacing.xs,
+                runSpacing: spacing.xs,
+                children: days.map((date) {
+                  if (date == null) {
+                    return SizedBox(
+                      width: cellSize,
+                      height: cellSize,
+                    );
+                  }
+
+                  final isSelected =
+                      selectedDate != null && _isSameDay(date, selectedDate!);
+                  final isDisabled = !isDateWithinBounds(date);
+
+                  return SizedBox(
+                    width: cellSize,
+                    height: cellSize,
+                    child: AxiButton(
+                      variant: isSelected
+                          ? AxiButtonVariant.primary
+                          : AxiButtonVariant.outline,
+                      size: AxiButtonSize.sm,
+                      widthBehavior: AxiButtonWidth.expand,
+                      selected: isSelected,
+                      onPressed: isDisabled ? null : () => onDaySelected(date),
+                      child: Text('${date.day}'),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -1326,9 +1347,9 @@ class _DeadlineTimeSelectors extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterMd,
-        vertical: 10,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.m,
+        vertical: context.spacing.s,
       ),
       decoration: BoxDecoration(
         border: Border(
@@ -1348,7 +1369,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
               letterSpacing: 0.3,
             ),
           ),
-          const SizedBox(height: calendarFormGap),
+          SizedBox(height: context.spacing.s),
           Row(
             children: [
               Expanded(
@@ -1360,7 +1381,7 @@ class _DeadlineTimeSelectors extends StatelessWidget {
                   formatter: (value) => value.toString().padLeft(2, '0'),
                 ),
               ),
-              const SizedBox(width: calendarGutterSm),
+              SizedBox(width: context.spacing.s),
               Expanded(
                 child: _DeadlineTimeDropdown(
                   label: context.l10n.calendarMinute,
@@ -1395,6 +1416,7 @@ class _DeadlineTimeDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final TextStyle labelStyle = context.textTheme.labelSm.strong.copyWith(
       color: calendarSubtitleColor,
       letterSpacing: 0.3,
@@ -1407,13 +1429,13 @@ class _DeadlineTimeDropdown extends StatelessWidget {
         width: context.borderSide.width,
       ),
     );
-    const EdgeInsets dropdownPadding = EdgeInsets.symmetric(
-      horizontal: calendarGutterMd,
-      vertical: calendarGutterSm,
+    final EdgeInsets dropdownPadding = EdgeInsets.symmetric(
+      horizontal: spacing.m,
+      vertical: spacing.s,
     );
     final Icon dropdownIcon = Icon(
       Icons.keyboard_arrow_down_rounded,
-      size: calendarGutterMd,
+      size: context.sizing.menuItemIconSize,
       color: calendarSubtitleColor,
     );
 
@@ -1421,7 +1443,7 @@ class _DeadlineTimeDropdown extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label, style: labelStyle),
-        const SizedBox(height: calendarInsetLg),
+        SizedBox(height: spacing.s),
         AxiSelect<int>(
           initialValue: selectedValue,
           onChanged: (selected) {
@@ -1467,10 +1489,9 @@ class _DeadlinePickerActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final verticalPadding =
-        showTimeSelectors ? calendarGutterMd : calendarGutterSm;
-    final horizontalPadding =
-        showTimeSelectors ? calendarGutterMd : calendarGutterLg;
+    final spacing = context.spacing;
+    final double verticalPadding = showTimeSelectors ? spacing.m : spacing.s;
+    final double horizontalPadding = spacing.s;
     final Widget content = Container(
       padding: EdgeInsets.symmetric(
         horizontal: horizontalPadding,
@@ -1491,7 +1512,7 @@ class _DeadlinePickerActions extends StatelessWidget {
             child: Text(context.l10n.commonCancel),
           ),
           if (hasValue && onClear != null) ...[
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: spacing.s),
             AxiButton.outline(
               onPressed: onClear,
               child: Text(context.l10n.commonClear),

@@ -303,11 +303,12 @@ class _GuestBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     final responsive = ResponsiveHelper.spec(context);
     final EdgeInsets basePadding = responsive.contentPadding;
+    final spacing = context.spacing;
     final EdgeInsets bannerPadding = EdgeInsets.fromLTRB(
       basePadding.left,
-      calendarGutterMd,
+      spacing.m,
       basePadding.right,
-      calendarGutterMd,
+      spacing.m,
     );
     final accent = calendarPrimaryColor;
     return Container(
@@ -330,13 +331,13 @@ class _GuestBanner extends StatelessWidget {
               onNavigateBack();
             },
           ),
-          const SizedBox(width: calendarGutterMd),
+          SizedBox(width: spacing.m),
           Icon(
             Icons.info_outline_rounded,
             size: context.sizing.menuItemIconSize,
             color: accent,
           ),
-          const SizedBox(width: calendarGutterMd),
+          SizedBox(width: spacing.m),
           Expanded(
             child: Text(
               context.l10n.calendarGuestModeNotice,
@@ -347,9 +348,9 @@ class _GuestBanner extends StatelessWidget {
               maxLines: 2,
             ),
           ),
-          const SizedBox(width: calendarGutterMd),
+          SizedBox(width: spacing.m),
           transferMenu,
-          const SizedBox(width: calendarGutterMd),
+          SizedBox(width: spacing.m),
           TaskPrimaryButton(
             label: context.l10n.calendarGuestSignUpToSync,
             onPressed: onSignUp,

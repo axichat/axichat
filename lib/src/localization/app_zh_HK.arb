@@ -811,7 +811,7 @@
   "settingsShareTokenFooter": "包含分享代幣頁腳",
   "settingsShareTokenFooterDescription": "有助於保持多收件人郵件執行緒與附件關聯。關閉後可能造成執行緒中斷。",
   "authCustomServerTitle": "自訂伺服器",
-  "authCustomServerDescription": "覆寫 XMPP/SMTP 端點或啟用 DNS 查詢。欄位留空以保留預設值。",
+  "authCustomServerDescription": "覆寫 XMPP/SMTP 端點或啟用 DNS 查詢。欄位留空以保留預設值。自訂伺服器必須依照 https://github.com/axichat/server 的步驟建立，否則很可能無法運作。",
   "authCustomServerDomainOrIp": "網域",
   "authCustomServerXmppLabel": "XMPP",
   "authCustomServerSmtpLabel": "SMTP",

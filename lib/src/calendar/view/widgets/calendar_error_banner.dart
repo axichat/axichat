@@ -3,7 +3,7 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/view/error_display.dart';
 
 /// Shared error banner wrapper for calendar surfaces (full calendar + guest)
@@ -25,7 +25,7 @@ class CalendarErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: margin ?? calendarPaddingXl,
+      margin: margin ?? EdgeInsets.all(context.spacing.m),
       child: ErrorDisplay(error: error, onRetry: onRetry, onDismiss: onDismiss),
     );
   }

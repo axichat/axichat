@@ -109,7 +109,6 @@ const double _recurrenceCompactRadius = 10;
 const double _recurrenceIconTinySize = 14;
 const double _recurrenceIconSmallSize = 16;
 const double _recurrenceIconMediumSize = 18;
-const double _recurrenceEndInputVerticalPadding = 10;
 const double _recurrenceLabelLetterSpacing = 0.4;
 
 const List<CalendarWeekday> _orderedWeekdays = <CalendarWeekday>[
@@ -677,15 +676,9 @@ class RecurrenceEditor extends StatefulWidget {
     this.spacing = const RecurrenceEditorSpacing(),
     this.showAdvancedToggle = true,
     this.forceAdvanced = false,
-    this.chipPadding = const EdgeInsets.symmetric(
-      horizontal: calendarGutterMd,
-      vertical: calendarGutterSm,
-    ),
-    this.weekdayChipPadding = const EdgeInsets.symmetric(
-      horizontal: 10,
-      vertical: 6,
-    ),
-    this.intervalSelectWidth = 120,
+    this.chipPadding,
+    this.weekdayChipPadding,
+    this.intervalSelectWidth = calendarCompactDayColumnWidth,
   });
 
   final RecurrenceFormValue value;
@@ -696,8 +689,8 @@ class RecurrenceEditor extends StatefulWidget {
   final RecurrenceEditorSpacing spacing;
   final bool showAdvancedToggle;
   final bool forceAdvanced;
-  final EdgeInsets chipPadding;
-  final EdgeInsets weekdayChipPadding;
+  final EdgeInsets? chipPadding;
+  final EdgeInsets? weekdayChipPadding;
   final double intervalSelectWidth;
 
   @override
@@ -748,6 +741,16 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
     final bool hasAdvancedData = value.hasAdvancedData;
     final bool isAdvancedVisible = forceAdvanced || _advancedExpanded;
     final bool canToggleAdvanced = showAdvancedToggle && !forceAdvanced;
+    final EdgeInsets resolvedChipPadding = widget.chipPadding ??
+        EdgeInsets.symmetric(
+          horizontal: context.spacing.m,
+          vertical: context.spacing.s,
+        );
+    final EdgeInsets resolvedWeekdayChipPadding = widget.weekdayChipPadding ??
+        EdgeInsets.symmetric(
+          horizontal: context.spacing.s,
+          vertical: context.spacing.xs,
+        );
     final children = <Widget>[
       Wrap(
         spacing: spacing.chipSpacing,
@@ -757,7 +760,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
               (freq) => _RecurrenceFrequencyChip(
                 isSelected: selectedFrequency == freq,
                 enabled: enabled,
-                padding: widget.chipPadding,
+                padding: resolvedChipPadding,
                 label: _frequencyLabel(freq),
                 onPressed: enabled
                     ? () => widget.onChanged(_normalizedForFrequency(freq))
@@ -774,7 +777,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
         ..add(
           _RecurrenceWeekdaySelector(
             enabled: enabled,
-            padding: widget.weekdayChipPadding,
+            padding: resolvedWeekdayChipPadding,
             selectedWeekdays: value.weekdays,
             onWeekdayToggled: _toggleWeekday,
           ),
@@ -866,7 +869,7 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
           );
       } else if (hasAdvancedData) {
         children
-          ..add(const SizedBox(height: calendarInsetSm))
+          ..add(SizedBox(height: context.spacing.xxs))
           ..add(const _RecurrenceAdvancedSummary());
       }
     }
@@ -1103,9 +1106,9 @@ class _RecurrenceIntervalRow extends StatelessWidget {
                 width: context.borderSide.width,
               ),
             ),
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarGutterSm,
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.s,
             ),
             trailing: Icon(
               Icons.keyboard_arrow_down_rounded,
@@ -1183,10 +1186,10 @@ class _RecurrenceEndControls extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(_recurrenceEndHeaderLabel.toUpperCase(), style: labelStyle),
-        const SizedBox(height: calendarInsetLg),
+        SizedBox(height: context.spacing.s),
         Wrap(
-          spacing: calendarGutterSm,
-          runSpacing: calendarGutterSm,
+          spacing: context.spacing.s,
+          runSpacing: context.spacing.s,
           children: _RecurrenceEndMode.values
               .map(
                 (option) => _RecurrenceEndModeChip(
@@ -1199,7 +1202,7 @@ class _RecurrenceEndControls extends StatelessWidget {
               .toList(),
         ),
         if (mode.isUntil) ...[
-          const SizedBox(height: calendarInsetLg),
+          SizedBox(height: context.spacing.s),
           DeadlinePickerField(
             value: value.until,
             placeholder: _recurrenceEndModeUntilLabel,
@@ -1208,7 +1211,7 @@ class _RecurrenceEndControls extends StatelessWidget {
             onChanged: enabled ? onUntilChanged : (_) {},
           ),
           if (derivedCount != null) ...[
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: context.spacing.xxs),
             Text(
               '$_recurrenceEndModeDerivedCountLabel'
               '$_recurrenceLabelSpacer'
@@ -1219,7 +1222,7 @@ class _RecurrenceEndControls extends StatelessWidget {
             ),
           ],
         ] else if (mode.isCount) ...[
-          const SizedBox(height: calendarInsetLg),
+          SizedBox(height: context.spacing.s),
           AxiTextField(
             controller: countController,
             enabled: enabled,
@@ -1229,9 +1232,9 @@ class _RecurrenceEndControls extends StatelessWidget {
               hintStyle: context.textTheme.label.copyWith(
                 color: calendarSubtitleColor.withValues(alpha: 0.55),
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: calendarGutterMd,
-                vertical: _recurrenceEndInputVerticalPadding,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: context.spacing.m,
+                vertical: context.spacing.m,
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(calendarBorderRadius),
@@ -1255,7 +1258,7 @@ class _RecurrenceEndControls extends StatelessWidget {
             onChanged: onCountChanged,
           ),
           if (derivedUntil != null) ...[
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: context.spacing.xxs),
             Text(
               '$_recurrenceEndModeDerivedUntilLabel'
               '$_recurrenceLabelSpacer'
@@ -1284,9 +1287,9 @@ class _RecurrenceEndModeChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const padding = EdgeInsets.symmetric(
-      horizontal: calendarGutterMd,
-      vertical: calendarGutterSm,
+    final EdgeInsets padding = EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.s,
     );
     final EdgeInsets basePadding =
         AxiButtonSize.regular.padding(context.spacing);
@@ -1469,9 +1472,9 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
     final Color iconColor = calendarSubtitleColor;
     return AxiPlainHeaderButton(
       onPressed: onPressed,
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarGutterSm,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.s,
       ),
       child: Row(
         children: [
@@ -1480,7 +1483,7 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
             style: labelStyle,
           ),
           if (hasAdvancedData) ...[
-            const SizedBox(width: calendarInsetSm),
+            SizedBox(width: context.spacing.xxs),
             _RecurrenceAdvancedActiveBadge(enabled: onPressed != null),
           ],
           const Spacer(),
@@ -1507,9 +1510,9 @@ class _RecurrenceAdvancedActiveBadge extends StatelessWidget {
       alpha: enabled ? 0.18 : 0.12,
     );
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetSm,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xxs,
       ),
       decoration: BoxDecoration(
         color: background,
@@ -1561,7 +1564,7 @@ class _RecurrenceAdvancedSection extends StatelessWidget {
       children: [
         Text(label.toUpperCase(), style: labelStyle),
         if (helper != null) ...[
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           Text(
             helper!,
             style: context.textTheme.labelSm.copyWith(
@@ -1569,7 +1572,7 @@ class _RecurrenceAdvancedSection extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: calendarInsetSm),
+        SizedBox(height: context.spacing.xxs),
         child,
       ],
     );
@@ -1621,7 +1624,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
             ),
           ),
         )
-        ..add(const SizedBox(height: calendarGutterMd));
+        ..add(SizedBox(height: context.spacing.m));
     }
 
     if (showByMonths) {
@@ -1636,7 +1639,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
             ),
           ),
         )
-        ..add(const SizedBox(height: calendarGutterMd));
+        ..add(SizedBox(height: context.spacing.m));
     }
 
     if (showByMonthDays) {
@@ -1655,7 +1658,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
             ),
           ),
         )
-        ..add(const SizedBox(height: calendarGutterMd));
+        ..add(SizedBox(height: context.spacing.m));
     }
 
     if (showByYearDays) {
@@ -1674,7 +1677,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
             ),
           ),
         )
-        ..add(const SizedBox(height: calendarGutterMd));
+        ..add(SizedBox(height: context.spacing.m));
     }
 
     if (showByWeekNumbers) {
@@ -1694,7 +1697,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
             ),
           ),
         )
-        ..add(const SizedBox(height: calendarGutterMd));
+        ..add(SizedBox(height: context.spacing.m));
     }
 
     if (showBySetPositions) {
@@ -1714,7 +1717,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
             ),
           ),
         )
-        ..add(const SizedBox(height: calendarGutterMd));
+        ..add(SizedBox(height: context.spacing.m));
     }
 
     children
@@ -1730,7 +1733,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
           ),
         ),
       )
-      ..add(const SizedBox(height: calendarGutterMd))
+      ..add(SizedBox(height: context.spacing.m))
       ..add(
         _RecurrenceAdvancedSection(
           label: _recurrenceAdvancedExDatesLabel,
@@ -1746,7 +1749,7 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
 
     if (showTimeSummary) {
       children
-        ..add(const SizedBox(height: calendarGutterMd))
+        ..add(SizedBox(height: context.spacing.m))
         ..add(
           _RecurrenceAdvancedSection(
             label: _recurrenceAdvancedTimeSummaryLabel,
@@ -1781,8 +1784,8 @@ class _RecurrenceMonthSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final Set<int> selected = selectedMonths.toSet();
     return Wrap(
-      spacing: calendarGutterSm,
-      runSpacing: calendarInsetSm,
+      spacing: context.spacing.s,
+      runSpacing: context.spacing.xxs,
       children: _monthOptions
           .map(
             (option) => _RecurrenceEndModeChip(
@@ -1922,7 +1925,7 @@ class _RecurrenceNumberListFieldState
                 enabled: widget.enabled,
               ),
             ),
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             AxiIconButton(
               iconData: Icons.add,
               tooltip: _recurrenceAdvancedAddTooltip,
@@ -1930,7 +1933,7 @@ class _RecurrenceNumberListFieldState
               color: canSubmit ? calendarPrimaryColor : calendarSubtitleColor,
               backgroundColor: calendarContainerColor,
               borderColor: calendarBorderColor,
-              iconSize: calendarGutterLg,
+              iconSize: context.spacing.m,
             ),
           ],
         );
@@ -1942,10 +1945,10 @@ class _RecurrenceNumberListFieldState
       children: [
         inputRow,
         if (values.isNotEmpty) ...[
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           Wrap(
-            spacing: calendarGutterSm,
-            runSpacing: calendarInsetSm,
+            spacing: context.spacing.s,
+            runSpacing: context.spacing.xxs,
             children: values
                 .map(
                   (value) => _RecurrenceNumberChip(
@@ -1972,9 +1975,9 @@ class _RecurrenceNumberChip extends StatelessWidget {
     final TextStyle labelStyle =
         context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xs,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -1986,7 +1989,7 @@ class _RecurrenceNumberChip extends StatelessWidget {
         children: [
           Text(value.toString(), style: labelStyle),
           if (onRemove != null) ...[
-            const SizedBox(width: calendarInsetSm),
+            SizedBox(width: context.spacing.xxs),
             _RecurrenceChipRemoveButton(onPressed: onRemove!),
           ],
         ],
@@ -2094,7 +2097,7 @@ class _RecurrenceDateListEditorState extends State<_RecurrenceDateListEditor> {
                 onChanged: widget.enabled ? _handleDateChanged : (_) {},
               ),
             ),
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             AxiIconButton(
               iconData: Icons.add,
               tooltip: _recurrenceAdvancedAddTooltip,
@@ -2102,15 +2105,15 @@ class _RecurrenceDateListEditorState extends State<_RecurrenceDateListEditor> {
               color: canSubmit ? calendarPrimaryColor : calendarSubtitleColor,
               backgroundColor: calendarContainerColor,
               borderColor: calendarBorderColor,
-              iconSize: calendarGutterLg,
+              iconSize: context.spacing.m,
             ),
           ],
         ),
         if (widget.values.isNotEmpty) ...[
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           Wrap(
-            spacing: calendarGutterSm,
-            runSpacing: calendarInsetSm,
+            spacing: context.spacing.s,
+            runSpacing: context.spacing.xxs,
             children: widget.values
                 .map(
                   (entry) => _RecurrenceDateChip(
@@ -2139,9 +2142,9 @@ class _RecurrenceDateChip extends StatelessWidget {
         context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final String label = _formatRecurrenceDateLabel(l10n, entry);
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xs,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -2153,7 +2156,7 @@ class _RecurrenceDateChip extends StatelessWidget {
         children: [
           Text(label, style: labelStyle),
           if (onRemove != null) ...[
-            const SizedBox(width: calendarInsetSm),
+            SizedBox(width: context.spacing.xxs),
             _RecurrenceChipRemoveButton(onPressed: onRemove!),
           ],
         ],
@@ -2265,9 +2268,9 @@ class _RecurrenceOrdinalWeekdayEditorState
                     width: context.borderSide.width,
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: calendarGutterMd,
-                  vertical: calendarGutterSm,
+                padding: EdgeInsets.symmetric(
+                  horizontal: context.spacing.m,
+                  vertical: context.spacing.s,
                 ),
                 trailing: Icon(
                   Icons.keyboard_arrow_down_rounded,
@@ -2276,7 +2279,7 @@ class _RecurrenceOrdinalWeekdayEditorState
                 ),
               ),
             ),
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             Expanded(
               child: AxiSelect<CalendarWeekday>(
                 enabled: widget.enabled,
@@ -2307,9 +2310,9 @@ class _RecurrenceOrdinalWeekdayEditorState
                     width: context.borderSide.width,
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: calendarGutterMd,
-                  vertical: calendarGutterSm,
+                padding: EdgeInsets.symmetric(
+                  horizontal: context.spacing.m,
+                  vertical: context.spacing.s,
                 ),
                 trailing: Icon(
                   Icons.keyboard_arrow_down_rounded,
@@ -2318,7 +2321,7 @@ class _RecurrenceOrdinalWeekdayEditorState
                 ),
               ),
             ),
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             AxiIconButton(
               iconData: Icons.add,
               tooltip: _recurrenceAdvancedAddTooltip,
@@ -2326,15 +2329,15 @@ class _RecurrenceOrdinalWeekdayEditorState
               color: canSubmit ? calendarPrimaryColor : calendarSubtitleColor,
               backgroundColor: calendarContainerColor,
               borderColor: calendarBorderColor,
-              iconSize: calendarGutterLg,
+              iconSize: context.spacing.m,
             ),
           ],
         ),
         if (entries.isNotEmpty) ...[
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           Wrap(
-            spacing: calendarGutterSm,
-            runSpacing: calendarInsetSm,
+            spacing: context.spacing.s,
+            runSpacing: context.spacing.xxs,
             children: entries
                 .map(
                   (entry) => _RecurrenceWeekdayChip(
@@ -2362,9 +2365,9 @@ class _RecurrenceWeekdayChip extends StatelessWidget {
         context.textTheme.small.strong.copyWith(color: calendarTitleColor);
     final String label = _formatByDayEntry(entry);
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetMd,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xs,
       ),
       decoration: BoxDecoration(
         color: calendarContainerColor,
@@ -2376,7 +2379,7 @@ class _RecurrenceWeekdayChip extends StatelessWidget {
         children: [
           Text(label, style: labelStyle),
           if (onRemove != null) ...[
-            const SizedBox(width: calendarInsetSm),
+            SizedBox(width: context.spacing.xxs),
             _RecurrenceChipRemoveButton(onPressed: onRemove!),
           ],
         ],
@@ -2439,11 +2442,11 @@ class _RecurrenceTimeSummaryRow extends StatelessWidget {
       color: calendarSubtitleColor,
     );
     return Padding(
-      padding: const EdgeInsets.only(bottom: calendarInsetSm),
+      padding: EdgeInsets.only(bottom: context.spacing.xxs),
       child: Row(
         children: [
           Text(label, style: labelStyle),
-          const SizedBox(width: calendarInsetSm),
+          SizedBox(width: context.spacing.xxs),
           Expanded(
             child: Text(
               values,

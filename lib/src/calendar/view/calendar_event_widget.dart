@@ -103,17 +103,18 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
   }
 
   double get _adjustedWidth {
+    final spacing = context.spacing;
     if (widget.overlapCount > 1) {
-      return (widget.width - calendarInsetMd) / widget.overlapCount -
-          calendarInsetSm;
+      return (widget.width - spacing.xs) / widget.overlapCount - spacing.xxs;
     }
-    return widget.width - calendarGutterSm;
+    return widget.width - spacing.s;
   }
 
   double get _adjustedLeftOffset {
-    final baseOffset = widget.leftOffset + calendarInsetMd;
+    final baseOffset = widget.leftOffset + context.spacing.xs;
     if (widget.overlapCount > 1) {
-      final slotWidth = (widget.width - calendarInsetMd) / widget.overlapCount;
+      final slotWidth =
+          (widget.width - context.spacing.xs) / widget.overlapCount;
       return baseOffset + (widget.overlapIndex * slotWidth);
     }
     return baseOffset;
@@ -474,6 +475,7 @@ class _CalendarEventContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     Color foregroundFor(Color background) =>
         ThemeData.estimateBrightnessForColor(background) == Brightness.dark
             ? colors.primaryForeground
@@ -527,7 +529,7 @@ class _CalendarEventContainer extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Container(
-                    width: calendarInsetMd,
+                    width: spacing.xs,
                     decoration: BoxDecoration(
                       color: stripeColor,
                       borderRadius: BorderRadius.only(
@@ -583,11 +585,12 @@ class _CalendarEventContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double dotSize = context.spacing.xxs + context.borderSide.width;
+    final spacing = context.spacing;
+    final double dotSize = spacing.xxs + context.borderSide.width;
     return Padding(
       padding: EdgeInsets.symmetric(
-        horizontal: height < 40 ? calendarInsetLg : calendarGutterSm,
-        vertical: height < 40 ? calendarInsetMd : calendarInsetLg,
+        horizontal: spacing.s,
+        vertical: height < 40 ? spacing.xs : spacing.s,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -604,7 +607,7 @@ class _CalendarEventContent extends StatelessWidget {
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: calendarInsetMd),
+                SizedBox(width: spacing.xs),
               ],
               Expanded(
                 child: Text(
@@ -624,14 +627,14 @@ class _CalendarEventContent extends StatelessWidget {
             ],
           ),
           if (height > 32 && timeRange.isNotEmpty) ...[
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: spacing.xxs),
             Text(
               timeRange,
               style: context.textTheme.labelSm.copyWith(color: mutedColor),
             ),
           ],
           if (showDescription && task.description != null) ...[
-            const SizedBox(height: calendarTaskDetailGap),
+            SizedBox(height: spacing.xs),
             Expanded(
               child: Text(
                 task.description!,
@@ -644,7 +647,7 @@ class _CalendarEventContent extends StatelessWidget {
             ),
           ],
           if (task.hasChecklist && height > 32) ...[
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: spacing.xxs),
             TaskChecklistProgressBar(
               progress: task.checklistProgress,
               activeColor: accentColor,
@@ -652,14 +655,14 @@ class _CalendarEventContent extends StatelessWidget {
             ),
           ],
           if (height > 45 && task.location?.isNotEmpty == true) ...[
-            const SizedBox(height: calendarInsetSm),
+            SizedBox(height: spacing.xxs),
             Row(
               children: [
                 Text(
                   '📍',
                   style: context.textTheme.labelSm,
                 ),
-                const SizedBox(width: calendarInsetSm),
+                SizedBox(width: spacing.xxs),
                 Expanded(
                   child: Text(
                     task.location!,
@@ -695,13 +698,14 @@ class _CalendarEventResizeHandles extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return Stack(
       children: [
         Positioned(
           top: 0,
           left: 0,
           right: 0,
-          height: calendarGutterSm,
+          height: spacing.s,
           child: MouseRegion(
             cursor: SystemMouseCursors.resizeUpDown,
             child: GestureDetector(
@@ -731,7 +735,7 @@ class _CalendarEventResizeHandles extends StatelessWidget {
           bottom: 0,
           left: 0,
           right: 0,
-          height: calendarGutterSm,
+          height: spacing.s,
           child: MouseRegion(
             cursor: SystemMouseCursors.resizeUpDown,
             child: GestureDetector(

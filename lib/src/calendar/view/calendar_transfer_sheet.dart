@@ -34,7 +34,7 @@ Future<CalendarExportFormat?> showCalendarExportFormatSheet(
             onTap: () =>
                 Navigator.of(sheetContext).pop(CalendarExportFormat.ics),
           ),
-          const SizedBox(height: calendarGutterSm),
+          SizedBox(height: sheetContext.spacing.s),
           _CalendarTransferOption(
             icon: LucideIcons.braces,
             label: sheetContext.l10n.calendarExportFormatJsonTitle,

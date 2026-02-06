@@ -126,7 +126,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const double _mobileCompactHourHeight = 60;
   static const int _resizeStepMinutes = 15;
   static const List<CalendarZoomLevel> _zoomLevels = kCalendarZoomLevels;
-  static const CalendarLayoutTheme _layoutTheme = CalendarLayoutTheme.material;
+  late CalendarLayoutTheme _layoutTheme;
   static const double _autoScrollHorizontalSlop = 32.0;
   final CalendarTransferService _transferService =
       const CalendarTransferService();
@@ -158,8 +158,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Timer? _clockTimer;
   bool _hasAutoScrolled = false;
   OverlayEntry? _activePopoverEntry;
-  final CalendarLayoutCalculator _layoutCalculator =
-      const CalendarLayoutCalculator();
+  late CalendarLayoutCalculator _layoutCalculator;
   CalendarLayoutMetrics _currentLayoutMetrics = const CalendarLayoutMetrics(
     hourHeight: 78,
     slotHeight: 78,
@@ -728,7 +727,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       final double anchorY =
           _taskInteractionController.dragPointerOffsetFromTop ?? 0.0;
       return DragFeedbackHint(
-        width: calendarTaskColumnGap,
+        width: 0,
         pointerOffset: 0.0,
         anchorDx: anchorX,
         anchorDy: anchorY,
@@ -764,7 +763,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (width <= 0) {
       _setDragFeedbackHint(
         DragFeedbackHint(
-          width: calendarTaskColumnGap,
+          width: 0,
           pointerOffset: 0.0,
           anchorDx: _taskInteractionController.dragAnchorDx ?? 0.0,
           anchorDy: _taskInteractionController.dragPointerOffsetFromTop ?? 0.0,
@@ -778,6 +777,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final CalendarLayoutTheme nextTheme =
+        CalendarLayoutTheme.fromContext(context);
+    if (!identical(_layoutTheme, nextTheme)) {
+      _layoutTheme = nextTheme;
+      _layoutCalculator = CalendarLayoutCalculator(
+        theme: _layoutTheme,
+        zoomLevels: _zoomLevels,
+      );
+    }
     _processFocusRequest(widget.focusRequest);
   }
 
@@ -1232,7 +1240,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _stopEdgeAutoScroll();
     _setDragFeedbackHint(
       const DragFeedbackHint(
-        width: calendarTaskColumnGap,
+        width: 0,
         pointerOffset: 0.0,
         anchorDx: 0.0,
         anchorDy: 0.0,
@@ -1938,11 +1946,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     const double dropdownWidth = calendarTaskPopoverWidth;
     const double dropdownMaxHeight = calendarGridPopoverMaxHeight;
     const double minimumHeight = calendarTaskPopoverMinHeight;
-    const double usableLeft = calendarPopoverScreenMargin;
-    final double usableRight = screenSize.width - calendarPopoverScreenMargin;
-    final double usableTop = safePadding.top + calendarPopoverScreenMargin;
+    final double screenMargin = context.spacing.m;
+    final double usableLeft = screenMargin;
+    final double usableRight = screenSize.width - screenMargin;
+    final double usableTop = safePadding.top + screenMargin;
     final double usableBottom =
-        screenSize.height - safePadding.bottom - calendarPopoverScreenMargin;
+        screenSize.height - safePadding.bottom - screenMargin;
     final double usableHeight = math.max(0, usableBottom - usableTop);
 
     final double leftSpace = bounds.left - usableLeft;
@@ -3270,14 +3279,14 @@ class _CalendarWeekView extends StatelessWidget {
                             : Padding(
                                 padding: EdgeInsets.fromLTRB(
                                   horizontalPadding,
-                                  calendarGutterSm,
+                                  context.spacing.s,
                                   horizontalPadding,
                                   0,
                                 ),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: calendarGutterMd,
-                                    vertical: calendarInsetLg,
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: context.spacing.m,
+                                    vertical: context.spacing.s,
                                   ),
                                   decoration: BoxDecoration(
                                     color: calendarDangerColor.withValues(
@@ -3299,7 +3308,7 @@ class _CalendarWeekView extends StatelessWidget {
                                         size: context.sizing.menuItemIconSize,
                                         color: calendarDangerColor,
                                       ),
-                                      const SizedBox(width: calendarInsetLg),
+                                      SizedBox(width: context.spacing.s),
                                       Expanded(
                                         child: Text(
                                           gridState._inlineErrorMessage!,
@@ -3458,11 +3467,11 @@ class DayEventsStrip extends StatelessWidget {
     final double iconTapTarget = context.sizing.menuItemHeight;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-        calendarGutterMd,
-        calendarInsetSm,
-        calendarGutterMd,
-        calendarInsetLg,
+      padding: EdgeInsets.fromLTRB(
+        context.spacing.m,
+        context.spacing.xxs,
+        context.spacing.m,
+        context.spacing.s,
       ),
       color: colors.card,
       child: Column(
@@ -3490,7 +3499,7 @@ class DayEventsStrip extends StatelessWidget {
               ).withTapBounce(),
             ],
           ),
-          const SizedBox(height: calendarInsetSm),
+          SizedBox(height: context.spacing.xxs),
           if (!hasEvents)
             Text(
               context.l10n.calendarDayEventsEmpty,
@@ -3521,7 +3530,7 @@ class _DayEventBulletRow extends StatelessWidget {
     final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
         borderRadius: BorderRadius.circular(context.radii.squircle));
     return Padding(
-      padding: const EdgeInsets.only(bottom: calendarInsetSm),
+      padding: EdgeInsets.only(bottom: context.spacing.xxs),
       child: AxiTapBounce(
         child: ShadFocusable(
           canRequestFocus: true,
@@ -3539,16 +3548,17 @@ class _DayEventBulletRow extends StatelessWidget {
                       WidgetSpan(
                         alignment: PlaceholderAlignment.middle,
                         child: Container(
-                          width: calendarInsetLg,
-                          height: calendarInsetLg,
+                          width: context.spacing.s,
+                          height: context.spacing.s,
                           decoration: BoxDecoration(
                             color: colors.primary,
                             shape: BoxShape.circle,
                           ),
                         ),
                       ),
-                      const WidgetSpan(
-                          child: SizedBox(width: calendarGutterSm)),
+                      WidgetSpan(
+                        child: SizedBox(width: context.spacing.s),
+                      ),
                       TextSpan(text: event.title),
                     ],
                   ),
@@ -3702,10 +3712,12 @@ class _CalendarGridContent extends StatelessWidget {
       weekStartDate: weekStartDate,
       weekEndDate: weekEndDate,
       layoutCalculator: gridState._layoutCalculator,
-      layoutTheme: _CalendarGridState._layoutTheme,
+      layoutTheme: gridState._layoutTheme,
       controller: gridState._surfaceController,
       verticalScrollController: gridState._verticalController,
       minutesPerStep: gridState._minutesPerStep,
+      timeLabelInset: context.spacing.xs,
+      timeTickInset: context.spacing.xxs,
       interactionController: gridState._taskInteractionController,
       availabilityWindows: availabilityWindows,
       availabilityOverlays: availabilityOverlays,
@@ -4104,8 +4116,8 @@ class _CalendarDayHeaderState extends State<_CalendarDayHeader> {
             ),
             if (dayEventCount > 0)
               Positioned(
-                top: calendarInsetLg,
-                right: calendarGutterSm,
+                top: context.spacing.s,
+                right: context.spacing.s,
                 child: DayEventBadge(count: dayEventCount),
               ),
           ],
@@ -4171,9 +4183,9 @@ class _CalendarZoomControls extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarZoomControlsPaddingHorizontal,
-        vertical: calendarZoomControlsPaddingVertical,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xxs,
       ),
       decoration: BoxDecoration(
         color: colors.card,
@@ -4191,8 +4203,8 @@ class _CalendarZoomControls extends StatelessWidget {
             onPressed: canZoomOut ? gridState.zoomOut : null,
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: calendarZoomControlsLabelPaddingHorizontal,
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.s,
             ),
             child: Text(gridState.zoomLabel(context.l10n), style: labelStyle),
           ),
@@ -4247,21 +4259,21 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    const EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
-      calendarGutterLg,
+    final EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
+      context.spacing.m,
       0,
-      calendarGutterLg,
-      calendarGutterLg,
+      context.spacing.m,
+      context.spacing.m,
     );
     return AxiSheetScaffold.scroll(
       header: AxiSheetHeader(
         title: Text(context.l10n.calendarSplitTaskAt),
         onClose: () => Navigator.of(context).maybePop(),
-        padding: const EdgeInsets.fromLTRB(
-          calendarGutterLg,
-          calendarGutterLg,
-          calendarGutterLg,
-          calendarInsetMd,
+        padding: EdgeInsets.fromLTRB(
+          context.spacing.m,
+          context.spacing.m,
+          context.spacing.m,
+          context.spacing.xs,
         ),
       ),
       bodyPadding: sheetPadding,
@@ -4281,7 +4293,7 @@ class _SplitTaskPickerSheetState extends State<_SplitTaskPickerSheet> {
           minDate: widget.minTime,
           maxDate: widget.maxTime,
         ),
-        const SizedBox(height: calendarGutterLg),
+        SizedBox(height: context.spacing.m),
         TaskFormActionsRow(
           padding: EdgeInsets.zero,
           gap: 12,

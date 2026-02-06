@@ -112,9 +112,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         : l10n.calendarTaskShareEditableHint;
     const int messageMinLines = 2;
     const int messageMaxLines = 4;
-    const EdgeInsets messageContentPadding = EdgeInsets.symmetric(
-      horizontal: calendarGutterLg,
-      vertical: calendarGutterMd,
+    final EdgeInsets messageContentPadding = EdgeInsets.symmetric(
+      horizontal: context.spacing.m,
+      vertical: context.spacing.m,
     );
     final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(context);
     final spacing = context.spacing;

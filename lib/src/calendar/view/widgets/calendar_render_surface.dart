@@ -212,6 +212,8 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
     required this.controller,
     required this.verticalScrollController,
     required this.minutesPerStep,
+    required this.timeLabelInset,
+    required this.timeTickInset,
     required this.interactionController,
     required this.availabilityWindows,
     required this.availabilityOverlays,
@@ -239,6 +241,8 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
   final CalendarSurfaceController controller;
   final ScrollController verticalScrollController;
   final int minutesPerStep;
+  final double timeLabelInset;
+  final double timeTickInset;
   final TaskInteractionController interactionController;
   final List<CalendarAvailabilityWindow> availabilityWindows;
   final List<CalendarAvailabilityOverlay> availabilityOverlays;
@@ -268,6 +272,8 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       controller: controller,
       verticalScrollController: verticalScrollController,
       minutesPerStep: minutesPerStep,
+      timeLabelInset: timeLabelInset,
+      timeTickInset: timeTickInset,
       interactionController: interactionController,
       availabilityWindows: availabilityWindows,
       availabilityOverlays: availabilityOverlays,
@@ -303,6 +309,8 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       ..controller = controller
       ..verticalScrollController = verticalScrollController
       ..minutesPerStep = minutesPerStep
+      ..timeLabelInset = timeLabelInset
+      ..timeTickInset = timeTickInset
       ..interactionController = interactionController
       ..availabilityWindows = availabilityWindows
       ..availabilityOverlays = availabilityOverlays
@@ -419,6 +427,8 @@ class RenderCalendarSurface extends RenderBox
     required CalendarSurfaceController controller,
     required ScrollController verticalScrollController,
     required int minutesPerStep,
+    required double timeLabelInset,
+    required double timeTickInset,
     required TaskInteractionController interactionController,
     required List<CalendarAvailabilityWindow> availabilityWindows,
     required List<CalendarAvailabilityOverlay> availabilityOverlays,
@@ -445,6 +455,8 @@ class RenderCalendarSurface extends RenderBox
         _controller = controller,
         _verticalScrollController = verticalScrollController,
         _minutesPerStep = minutesPerStep,
+        _timeLabelInset = timeLabelInset,
+        _timeTickInset = timeTickInset,
         _interactionController = interactionController,
         _availabilityWindows = availabilityWindows,
         _availabilityOverlays = availabilityOverlays,
@@ -553,6 +565,26 @@ class RenderCalendarSurface extends RenderBox
       return;
     }
     _minutesPerStep = value;
+  }
+
+  double get timeLabelInset => _timeLabelInset;
+  double _timeLabelInset;
+  set timeLabelInset(double value) {
+    if (_timeLabelInset == value) {
+      return;
+    }
+    _timeLabelInset = value;
+    markNeedsPaint();
+  }
+
+  double get timeTickInset => _timeTickInset;
+  double _timeTickInset;
+  set timeTickInset(double value) {
+    if (_timeTickInset == value) {
+      return;
+    }
+    _timeTickInset = value;
+    markNeedsPaint();
   }
 
   TaskInteractionController? get interactionController =>
@@ -1465,10 +1497,7 @@ class RenderCalendarSurface extends RenderBox
 
       if (geometry == CalendarTaskGeometry.empty) {
         child.layout(
-          const BoxConstraints.tightFor(
-            width: calendarTaskColumnGap,
-            height: calendarTaskColumnGap,
-          ),
+          const BoxConstraints.tightFor(width: 0, height: 0),
           parentUsesSize: true,
         );
         parentData
@@ -1855,8 +1884,7 @@ class RenderCalendarSurface extends RenderBox
       textDirection: TextDirection.ltr,
       textAlign: TextAlign.right,
     );
-    const double padding = calendarInsetMd;
-    final double labelRight = offset.dx + _timeColumnWidth - padding;
+    final double labelRight = offset.dx + _timeColumnWidth - _timeLabelInset;
     final int totalSlots = layoutTheme.visibleHourRows * metrics.slotsPerHour;
     final Paint tickPaint = Paint()..color = calendarBorderDarkColor;
 
@@ -1885,7 +1913,7 @@ class RenderCalendarSurface extends RenderBox
       final double tickY = slotTop;
       final double tickLength = isHourMark ? 12.0 : 8.0;
       tickPaint.strokeWidth = isHourMark ? 1.5 : 1.0;
-      final double tickEndX = offset.dx + _timeColumnWidth - calendarInsetSm;
+      final double tickEndX = offset.dx + _timeColumnWidth - _timeTickInset;
       final double tickStartX = tickEndX - tickLength;
       canvas.drawLine(
         Offset(tickStartX, tickY),

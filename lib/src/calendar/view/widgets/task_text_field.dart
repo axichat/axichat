@@ -115,9 +115,9 @@ class TaskTextField extends StatelessWidget {
           ),
         ),
         contentPadding: contentPadding ??
-            const EdgeInsets.symmetric(
-              horizontal: calendarGutterMd,
-              vertical: calendarGutterMd,
+            EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.m,
             ),
         filled: true,
         fillColor: effectiveFill,

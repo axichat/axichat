@@ -345,7 +345,7 @@ class _MonthDayTile extends StatelessWidget {
                     bottom: BorderSide(color: gridColor),
                   ),
                 ),
-                padding: calendarPaddingMd,
+                padding: EdgeInsets.all(context.spacing.s),
                 child: Opacity(
                   opacity: contentOpacity,
                   child: Column(
@@ -415,6 +415,7 @@ class _DayEventBullet extends StatelessWidget {
   Widget build(BuildContext context) {
     final ShadColorScheme colors = context.colorScheme;
     final ShadTextTheme textTheme = context.textTheme;
+    final spacing = context.spacing;
     final double opacity = dimmed ? 0.6 : 1;
     final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
         borderRadius: BorderRadius.circular(context.radii.squircle));
@@ -422,7 +423,7 @@ class _DayEventBullet extends StatelessWidget {
     return Opacity(
       opacity: opacity,
       child: Padding(
-        padding: const EdgeInsets.only(bottom: calendarInsetSm),
+        padding: EdgeInsets.only(bottom: spacing.xxs),
         child: AxiTapBounce(
           child: ShadFocusable(
             canRequestFocus: true,
@@ -438,17 +439,17 @@ class _DayEventBullet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.only(top: calendarInsetMd),
+                        padding: EdgeInsets.only(top: spacing.xs),
                         child: Container(
-                          width: calendarInsetLg,
-                          height: calendarInsetLg,
+                          width: spacing.s,
+                          height: spacing.s,
                           decoration: BoxDecoration(
                             color: colors.primary,
                             shape: BoxShape.circle,
                           ),
                         ),
                       ),
-                      const SizedBox(width: calendarGutterSm),
+                      SizedBox(width: spacing.s),
                       Expanded(
                         child: Text(
                           event.title,

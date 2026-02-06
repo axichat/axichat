@@ -181,10 +181,10 @@ class _CalendarCategoriesFieldState extends State<CalendarCategoriesField> {
       backgroundColor: barBackground,
       borderSide: BorderSide(color: calendarBorderColor),
       includeTopBorder: false,
-      padding: calendarPaddingLg,
+      padding: EdgeInsets.all(context.spacing.m),
       child: Wrap(
-        spacing: calendarGutterSm,
-        runSpacing: calendarGutterSm,
+        spacing: context.spacing.s,
+        runSpacing: context.spacing.s,
         children: chipWidgets,
       ),
     );
@@ -239,17 +239,17 @@ class _CategoryChip extends StatelessWidget {
           ? null
           : Icon(
               Icons.close,
-              size: calendarGutterMd,
+              size: context.spacing.m,
               color: colors.mutedForeground,
             ),
       onDeleted: onRemove,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.compact,
-      padding: const EdgeInsets.symmetric(
-        horizontal: calendarGutterSm,
-        vertical: calendarInsetSm,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.s,
+        vertical: context.spacing.xxs,
       ),
-      labelPadding: const EdgeInsets.symmetric(horizontal: calendarInsetSm),
+      labelPadding: EdgeInsets.symmetric(horizontal: context.spacing.xxs),
     );
   }
 }
@@ -290,7 +290,7 @@ class _CategoryInputField extends StatelessWidget {
             borderRadius: BorderRadius.circular(chipsBarHeight / 2),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: calendarGutterSm),
+            padding: EdgeInsets.symmetric(horizontal: context.spacing.s),
             child: AxiTextField(
               controller: controller,
               focusNode: focusNode,

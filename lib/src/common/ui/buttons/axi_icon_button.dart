@@ -382,6 +382,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             scale: resolvedButtonSize < compactSizeThreshold
                 ? context.motion.iconButtonCompactBounceScale
                 : context.motion.iconButtonBounceScale,
+            hoverScale: context.motion.iconButtonHoverScale,
             pressDuration: pressDuration,
             releaseDuration: releaseDuration,
             child: tappable,

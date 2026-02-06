@@ -3,6 +3,7 @@
 
 import 'dart:math' as math;
 
+import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -20,8 +21,8 @@ class CalendarLayoutTheme {
     this.edgeScrollSlowBandHeight = 44.0,
     this.edgeScrollFastOffsetPerFrame = 9.0,
     this.edgeScrollSlowOffsetPerFrame = 4.5,
-    this.eventHorizontalInset = calendarTaskColumnInset,
-    this.eventColumnGap = calendarTaskColumnGap,
+    this.eventHorizontalInset = axiSpaceS,
+    this.eventColumnGap = 0.0,
     this.eventMinHeight = calendarEventMinHeight,
     this.eventMinWidth = calendarEventMinWidth,
     this.narrowedWidthFactor = 0.5,
@@ -37,10 +38,9 @@ class CalendarLayoutTheme {
     this.sidebarScrollbarRadius = calendarSidebarScrollbarRadius,
     this.zoomControlsElevation = calendarZoomControlsElevation,
     this.zoomControlsBorderRadius = calendarZoomControlsBorderRadius,
-    this.zoomControlsPaddingHorizontal = calendarZoomControlsPaddingHorizontal,
-    this.zoomControlsPaddingVertical = calendarZoomControlsPaddingVertical,
-    this.zoomControlsLabelPaddingHorizontal =
-        calendarZoomControlsLabelPaddingHorizontal,
+    this.zoomControlsPaddingHorizontal = axiSpaceS,
+    this.zoomControlsPaddingVertical = axiSpaceXxs,
+    this.zoomControlsLabelPaddingHorizontal = axiSpaceS,
     this.zoomControlsIconSize = calendarZoomControlsIconSize,
     this.clockTickInterval = calendarClockTickInterval,
     this.dragWidthDebounceDelay = calendarDragWidthDebounceDelay,
@@ -84,6 +84,17 @@ class CalendarLayoutTheme {
   final Duration slotHoverAnimationDuration;
 
   static const CalendarLayoutTheme material = CalendarLayoutTheme();
+
+  static CalendarLayoutTheme fromContext(BuildContext context) {
+    final spacing = context.spacing;
+    return CalendarLayoutTheme(
+      eventHorizontalInset: spacing.s,
+      eventColumnGap: 0,
+      zoomControlsPaddingHorizontal: spacing.s,
+      zoomControlsPaddingVertical: spacing.xxs,
+      zoomControlsLabelPaddingHorizontal: spacing.s,
+    );
+  }
 }
 
 /// Describes a zoom configuration used by the calendar grid.

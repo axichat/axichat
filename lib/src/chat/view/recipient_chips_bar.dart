@@ -338,7 +338,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                             color: colors.mutedForeground,
                           ),
                         ),
-                        const SizedBox(width: calendarInsetSm),
+                        SizedBox(width: spacing.xxs),
                         Expanded(
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -384,9 +384,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
                               ),
                             ),
                           ),
-                          const SizedBox(width: calendarInsetLg),
+                          SizedBox(width: spacing.s),
                         ],
-                        const SizedBox(width: 8),
+                        SizedBox(width: spacing.s),
                         ChipsBarCountBadge(
                           count: recipients.length,
                           expanded: !_barCollapsed,
