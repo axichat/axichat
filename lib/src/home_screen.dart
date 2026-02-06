@@ -154,7 +154,6 @@ class HomeShellCalendarScope extends StatelessWidget {
               final manager = CalendarSyncManager(
                 readModel: () => bloc.currentModel,
                 applyModel: (model) async {
-                  if (bloc.isClosed) return;
                   bloc.add(
                     CalendarEvent.remoteModelApplied(
                       model: model,
@@ -162,9 +161,6 @@ class HomeShellCalendarScope extends StatelessWidget {
                   );
                 },
                 sendCalendarMessage: (outbound) async {
-                  if (bloc.isClosed) {
-                    return;
-                  }
                   final jid = xmppService.myJid;
                   if (jid != null) {
                     await xmppService.sendCalendarSyncMessage(
@@ -194,7 +190,6 @@ class HomeShellCalendarScope extends StatelessWidget {
             final manager = CalendarSyncManager(
               readModel: () => bloc.currentModel,
               applyModel: (model) async {
-                if (bloc.isClosed) return;
                 bloc.add(
                   CalendarEvent.remoteModelApplied(
                     model: model,
@@ -202,9 +197,6 @@ class HomeShellCalendarScope extends StatelessWidget {
                 );
               },
               sendCalendarMessage: (outbound) async {
-                if (bloc.isClosed) {
-                  return;
-                }
                 final jid = xmppService.myJid;
                 if (jid != null) {
                   await xmppService.sendCalendarSyncMessage(
@@ -1155,7 +1147,6 @@ class _HomeGlobalShortcutHandlerState
 
   bool _handleGlobalShortcut(KeyEvent event) {
     if (!_isFindActionEvent(event)) return false;
-    if (context.read<AccessibilityActionBloc>().isClosed) return false;
     context
         .read<AccessibilityActionBloc>()
         .add(const AccessibilityMenuOpened());

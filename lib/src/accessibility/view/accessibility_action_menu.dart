@@ -3048,9 +3048,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                           context.l10n.accessibilityAttachmentGeneric,
                       child: ChatAttachmentPreview(
                         stanzaId: currentMessage?.stanzaID ?? '',
-                        metadataStream: Stream<FileMetadataData?>.value(
-                          attachment,
-                        ),
+                        metadata: attachment,
                         allowed: true,
                         downloadDelegate: chatLocate == null
                             ? null

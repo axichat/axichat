@@ -19,6 +19,8 @@ class AttachmentGalleryState with _$AttachmentGalleryState {
     AttachmentGallerySourceFilter sourceFilter,
     AttachmentGalleryLayout? layoutOverride,
     @Default(<String>{}) Set<String> allowedOnceStanzaIds,
+    @Default(<String, FileMetadataData?>{})
+    Map<String, FileMetadataData?> fileMetadataById,
     String? error,
   }) = _AttachmentGalleryState;
 }

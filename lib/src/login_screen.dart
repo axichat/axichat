@@ -422,7 +422,7 @@ class _LoginScreenState extends State<LoginScreen>
                         const AxiVersion(),
                         if (kDebugMode) ...[
                           SizedBox(width: spacing.s),
-                          const DeleteCredentialsButton(),
+                          DeleteCredentialsButton(),
                         ],
                       ],
                     ),

@@ -831,7 +831,6 @@ class _ChatState extends State<Chat> {
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
-  final _fileMetadataStreamEntries = <String, _FileMetadataStreamEntry>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   var _chatOpenedAt = DateTime.now();
@@ -2075,20 +2074,18 @@ class _ChatState extends State<Chat> {
     // No-op now that recipient bar height is derived from layout constraints.
   }
 
-  _FileMetadataStreamEntry _metadataEntryFor(String id) {
-    return _fileMetadataStreamEntries.putIfAbsent(id, () {
-      final entry = _FileMetadataStreamEntry();
-      entry.attach(context.read<ChatBloc>().fileMetadataStreamFor(id));
-      return entry;
-    });
+  FileMetadataData? _metadataFor({
+    required ChatState state,
+    required String metadataId,
+  }) {
+    return state.fileMetadataById[metadataId];
   }
 
-  Stream<FileMetadataData?> _metadataStreamFor(String id) {
-    return _metadataEntryFor(id).stream;
-  }
-
-  FileMetadataData? _metadataInitialFor(String id) {
-    return _metadataEntryFor(id).latestOrNull;
+  bool _metadataPending({
+    required ChatState state,
+    required String metadataId,
+  }) {
+    return !state.fileMetadataById.containsKey(metadataId);
   }
 
   bool _hasEmailAttachmentTarget({
@@ -3165,9 +3162,6 @@ class _ChatState extends State<Chat> {
   @override
   void dispose() {
     _persistScrollOffset(key: _lastScrollStorageKey, skipPageStorage: true);
-    for (final entry in _fileMetadataStreamEntries.values) {
-      entry.dispose();
-    }
     _scrollController.dispose();
     _focusNode.dispose();
     _textController.removeListener(_typingListener);
@@ -4858,9 +4852,16 @@ class _ChatState extends State<Chat> {
                                               chatCalendarAvailable,
                                           locate: context.read,
                                           roomState: state.roomState,
-                                          metadataStreamFor: _metadataStreamFor,
-                                          metadataInitialFor:
-                                              _metadataInitialFor,
+                                          metadataFor: (metadataId) =>
+                                              _metadataFor(
+                                            state: state,
+                                            metadataId: metadataId,
+                                          ),
+                                          metadataPendingFor: (metadataId) =>
+                                              _metadataPending(
+                                            state: state,
+                                            metadataId: metadataId,
+                                          ),
                                           attachmentsBlocked:
                                               attachmentsBlockedForChat,
                                           isOneTimeAttachmentAllowed:
@@ -6363,83 +6364,67 @@ class _ChatState extends State<Chat> {
                                                             if (hasAttachmentCaption) {
                                                               final resolvedMetadataId =
                                                                   metadataIdForCaption;
+                                                              final metadata =
+                                                                  _metadataFor(
+                                                                state: state,
+                                                                metadataId:
+                                                                    resolvedMetadataId,
+                                                              );
+                                                              final filename = metadata
+                                                                      ?.filename
+                                                                      .trim() ??
+                                                                  '';
+                                                              final resolvedFilename =
+                                                                  filename.isNotEmpty
+                                                                      ? filename
+                                                                      : l10n
+                                                                          .chatAttachmentFallbackLabel;
+                                                              final sizeBytes =
+                                                                  metadata
+                                                                      ?.sizeBytes;
+                                                              final sizeLabel = sizeBytes !=
+                                                                          null &&
+                                                                      sizeBytes >
+                                                                          0
+                                                                  ? formatBytes(
+                                                                      sizeBytes,
+                                                                      l10n,
+                                                                    )
+                                                                  : l10n
+                                                                      .chatAttachmentUnknownSize;
+                                                              final caption = l10n
+                                                                  .chatAttachmentCaption(
+                                                                resolvedFilename,
+                                                                sizeLabel,
+                                                              );
                                                               bubbleTextChildren
                                                                   .add(
-                                                                StreamBuilder<
-                                                                    FileMetadataData?>(
-                                                                  stream:
-                                                                      _metadataStreamFor(
-                                                                    resolvedMetadataId,
+                                                                DynamicInlineText(
+                                                                  key: ValueKey(
+                                                                    bubbleContentKey,
                                                                   ),
-                                                                  initialData:
-                                                                      _metadataInitialFor(
-                                                                    resolvedMetadataId,
+                                                                  text:
+                                                                      TextSpan(
+                                                                    text:
+                                                                        caption,
+                                                                    style:
+                                                                        baseTextStyle,
                                                                   ),
-                                                                  builder: (
-                                                                    context,
-                                                                    snapshot,
-                                                                  ) {
-                                                                    final l10n =
-                                                                        context
-                                                                            .l10n;
-                                                                    final metadata =
-                                                                        snapshot
-                                                                            .data;
-                                                                    final filename =
-                                                                        metadata?.filename.trim() ??
-                                                                            '';
-                                                                    final resolvedFilename = filename
-                                                                            .isNotEmpty
-                                                                        ? filename
-                                                                        : l10n
-                                                                            .chatAttachmentFallbackLabel;
-                                                                    final sizeBytes =
-                                                                        metadata
-                                                                            ?.sizeBytes;
-                                                                    final sizeLabel = sizeBytes !=
-                                                                                null &&
-                                                                            sizeBytes >
-                                                                                0
-                                                                        ? formatBytes(
-                                                                            sizeBytes,
-                                                                            l10n,
-                                                                          )
-                                                                        : l10n
-                                                                            .chatAttachmentUnknownSize;
-                                                                    final caption =
-                                                                        l10n.chatAttachmentCaption(
-                                                                      resolvedFilename,
-                                                                      sizeLabel,
-                                                                    );
-                                                                    return DynamicInlineText(
-                                                                      key:
-                                                                          ValueKey(
-                                                                        bubbleContentKey,
-                                                                      ),
-                                                                      text:
-                                                                          TextSpan(
-                                                                        text:
-                                                                            caption,
-                                                                        style:
-                                                                            baseTextStyle,
-                                                                      ),
-                                                                      details: [
-                                                                        time,
-                                                                        transportDetail,
-                                                                        if (self &&
-                                                                            status !=
-                                                                                null)
-                                                                          status,
-                                                                        if (verification !=
+                                                                  details: [
+                                                                    time,
+                                                                    transportDetail,
+                                                                    if (self &&
+                                                                        status !=
                                                                             null)
-                                                                          verification,
-                                                                      ],
-                                                                      onLinkTap:
-                                                                          _handleLinkTap,
-                                                                      onLinkLongPress:
-                                                                          _handleLinkTap,
-                                                                    );
-                                                                  },
+                                                                      status,
+                                                                    if (verification !=
+                                                                        null)
+                                                                      verification,
+                                                                  ],
+                                                                  onLinkTap:
+                                                                      _handleLinkTap,
+                                                                  onLinkLongPress:
+                                                                      _handleLinkTap,
                                                                 ),
                                                               );
                                                             } else if (normalizedHtmlBody !=
@@ -6700,13 +6685,19 @@ class _ChatState extends State<Chat> {
                                                                   stanzaId:
                                                                       messageModel
                                                                           .stanzaID,
-                                                                  metadataStream:
-                                                                      _metadataStreamFor(
-                                                                    attachmentId,
+                                                                  metadata:
+                                                                      _metadataFor(
+                                                                    state:
+                                                                        state,
+                                                                    metadataId:
+                                                                        attachmentId,
                                                                   ),
-                                                                  initialMetadata:
-                                                                      _metadataInitialFor(
-                                                                    attachmentId,
+                                                                  metadataPending:
+                                                                      _metadataPending(
+                                                                    state:
+                                                                        state,
+                                                                    metadataId:
+                                                                        attachmentId,
                                                                   ),
                                                                   allowed:
                                                                       allowAttachment,
@@ -8956,8 +8947,8 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.canAddToChatCalendar,
     required this.locate,
     required this.roomState,
-    required this.metadataStreamFor,
-    required this.metadataInitialFor,
+    required this.metadataFor,
+    required this.metadataPendingFor,
     required this.attachmentsBlocked,
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
@@ -8978,8 +8969,8 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final bool canAddToChatCalendar;
   final T Function<T>() locate;
   final RoomState? roomState;
-  final Stream<FileMetadataData?> Function(String) metadataStreamFor;
-  final FileMetadataData? Function(String) metadataInitialFor;
+  final FileMetadataData? Function(String) metadataFor;
+  final bool Function(String) metadataPendingFor;
   final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
   final bool Function({required bool isSelf, required chat_models.Chat? chat})
@@ -9094,8 +9085,8 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                     locate: widget.locate,
                     isHydrating: widget.pinnedMessagesHydrating,
                     accountJid: widget.accountJid,
-                    metadataStreamFor: widget.metadataStreamFor,
-                    metadataInitialFor: widget.metadataInitialFor,
+                    metadataFor: widget.metadataFor,
+                    metadataPendingFor: widget.metadataPendingFor,
                     attachmentsBlocked: widget.attachmentsBlocked,
                     isOneTimeAttachmentAllowed:
                         widget.isOneTimeAttachmentAllowed,
@@ -9164,8 +9155,8 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.locate,
     required this.isHydrating,
     required this.accountJid,
-    required this.metadataStreamFor,
-    required this.metadataInitialFor,
+    required this.metadataFor,
+    required this.metadataPendingFor,
     required this.attachmentsBlocked,
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
@@ -9182,8 +9173,8 @@ class _PinnedMessageTile extends StatelessWidget {
   final T Function<T>() locate;
   final bool isHydrating;
   final String? accountJid;
-  final Stream<FileMetadataData?> Function(String) metadataStreamFor;
-  final FileMetadataData? Function(String) metadataInitialFor;
+  final FileMetadataData? Function(String) metadataFor;
+  final bool Function(String) metadataPendingFor;
   final bool attachmentsBlocked;
   final bool Function(String stanzaId) isOneTimeAttachmentAllowed;
   final bool Function({required bool isSelf, required chat_models.Chat? chat})
@@ -9508,8 +9499,8 @@ class _PinnedMessageTile extends StatelessWidget {
         contentChildren.add(
           ChatAttachmentPreview(
             stanzaId: message.stanzaID,
-            metadataStream: metadataStreamFor(attachmentId),
-            initialMetadata: metadataInitialFor(attachmentId),
+            metadata: metadataFor(attachmentId),
+            metadataPending: metadataPendingFor(attachmentId),
             allowed: allowAttachment,
             downloadDelegate: downloadDelegate,
             metadataReloadDelegate: metadataReloadDelegate,
@@ -9889,53 +9880,6 @@ class _AvailabilityTaskDraft {
   final String? description;
   final DateTime start;
   final Duration duration;
-}
-
-final class _FileMetadataStreamEntry {
-  final StreamController<FileMetadataData?> controller0 =
-      StreamController<FileMetadataData?>.broadcast();
-  StreamSubscription<FileMetadataData?>? subscription;
-  var hasValue = false;
-  FileMetadataData? latest;
-  Object? lastError;
-  StackTrace? lastStackTrace;
-
-  late final Stream<FileMetadataData?> stream = Stream.multi((multi) {
-    if (lastError != null) {
-      multi.addError(lastError!, lastStackTrace);
-    } else if (hasValue) {
-      multi.add(latest);
-    }
-    final subscription = controller0.stream.listen(
-      multi.add,
-      onError: (Object error, StackTrace stackTrace) =>
-          multi.addError(error, stackTrace),
-    );
-    multi.onCancel = subscription.cancel;
-  });
-
-  FileMetadataData? get latestOrNull => hasValue ? latest : null;
-
-  void attach(Stream<FileMetadataData?> source) {
-    if (subscription != null) return;
-    subscription = source.listen(
-      (value) {
-        latest = value;
-        hasValue = true;
-        controller0.add(value);
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        lastError = error;
-        lastStackTrace = stackTrace;
-        controller0.addError(error, stackTrace);
-      },
-    );
-  }
-
-  void dispose() {
-    subscription?.cancel();
-    controller0.close();
-  }
 }
 
 class _CutoutLayoutResult<T> {

@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -187,6 +188,12 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final scheme = context.colorScheme;
     final bool scheduleCueActive = _showScheduleTabCue && _isAnyDragActive;
     final bool tasksCueActive = _showTasksTabCue && _isAnyDragActive;
+    final bool lowMotion =
+        maybeSettingsCubit(context)?.state.lowMotion ?? false;
+    final bool scheduleSwitchHintActive =
+        _isAnyDragActive && mobileTabController.index == 1;
+    final bool tasksSwitchHintActive =
+        _isAnyDragActive && mobileTabController.index == 0;
     final double safeInset = _isAnyDragActive ? 0 : bottomInset;
     final double baseHeight = context.sizing.listButtonHeight;
     final double height = baseHeight + safeInset;
@@ -276,6 +283,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                         label: scheduleTabLabel,
                         scheme: scheme,
                         showCue: scheduleCueActive,
+                        shake: !lowMotion &&
+                            scheduleSwitchHintActive &&
+                            !scheduleCueActive,
                       ),
                     ),
                   ),
@@ -304,6 +314,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                         label: tasksTabLabel,
                         scheme: scheme,
                         showCue: tasksCueActive,
+                        shake: !lowMotion &&
+                            tasksSwitchHintActive &&
+                            !tasksCueActive,
                       ),
                     ),
                   ),
@@ -901,17 +914,19 @@ class _DragTabLabel extends StatelessWidget {
     required this.label,
     required this.scheme,
     required this.showCue,
+    required this.shake,
   });
 
   final Widget label;
   final ShadColorScheme scheme;
   final bool showCue;
+  final bool shake;
 
   @override
   Widget build(BuildContext context) {
     final Color cueColor =
         showCue ? scheme.primary.withValues(alpha: 0.55) : Colors.transparent;
-    return AnimatedContainer(
+    final labelContent = AnimatedContainer(
       duration: calendarTaskSplitPreviewAnimationDuration,
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.s,
@@ -929,6 +944,47 @@ class _DragTabLabel extends StatelessWidget {
         style: context.textTheme.label.strongIf(showCue),
         child: Align(alignment: Alignment.center, child: label),
       ),
+    );
+    if (!shake) {
+      return labelContent;
+    }
+    return _ShakingDragTabLabel(child: labelContent);
+  }
+}
+
+class _ShakingDragTabLabel extends StatefulWidget {
+  const _ShakingDragTabLabel({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_ShakingDragTabLabel> createState() => _ShakingDragTabLabelState();
+}
+
+class _ShakingDragTabLabelState extends State<_ShakingDragTabLabel>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: baseAnimationDuration,
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final amplitude = context.spacing.xxs;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final phase = _controller.value * math.pi * 6;
+        final dx = math.sin(phase) * amplitude;
+        return Transform.translate(offset: Offset(dx, 0), child: child);
+      },
+      child: widget.child,
     );
   }
 }

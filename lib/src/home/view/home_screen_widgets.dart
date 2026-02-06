@@ -28,8 +28,6 @@ class Nexus extends StatefulWidget {
 class _NexusState extends State<Nexus> {
   TabController? _tabController;
   _HomeDemoPhase _demoPhase = _HomeDemoPhase.idle;
-  Stream<void>? _demoResetStream;
-  StreamSubscription<void>? _demoResetSubscription;
 
   void _triggerDemoInteractivePhase() {
     if (_demoPhase != _HomeDemoPhase.idle) return;
@@ -47,20 +45,6 @@ class _NexusState extends State<Nexus> {
       _tabController?.addListener(_handleTabChanged);
       _notifyTabIndex(controller.index);
     }
-    if (!kEnableDemoChats) {
-      _teardownDemoResetSubscription();
-      return;
-    }
-    final demoResetStream = context.read<ChatsCubit>().demoResetStream;
-    if (demoResetStream == _demoResetStream) {
-      return;
-    }
-    _teardownDemoResetSubscription();
-    _demoResetStream = demoResetStream;
-    _demoResetSubscription = demoResetStream.listen((_) {
-      if (!mounted) return;
-      setState(() => _demoPhase = _HomeDemoPhase.idle);
-    });
   }
 
   void _handleTabChanged() {
@@ -78,38 +62,41 @@ class _NexusState extends State<Nexus> {
   @override
   void dispose() {
     _tabController?.removeListener(_handleTabChanged);
-    _teardownDemoResetSubscription();
     super.dispose();
   }
 
-  void _teardownDemoResetSubscription() {
-    _demoResetSubscription?.cancel();
-    _demoResetSubscription = null;
-    _demoResetStream = null;
+  void _handleDemoResetRevisionChanged() {
+    if (!kEnableDemoChats || _demoPhase == _HomeDemoPhase.idle) return;
+    setState(() => _demoPhase = _HomeDemoPhase.idle);
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<HomeSearchCubit, HomeSearchState>(
-      builder: (context, searchState) {
-        return BlocBuilder<ChatsCubit, ChatsState>(
-          builder: (context, chatsState) {
-            return _NexusScaffold(
-              tabs: widget.tabs,
-              navPlacement: widget.navPlacement,
-              showNavigationRail: widget.showNavigationRail,
-              navRailCollapsed: widget.navRailCollapsed,
-              onToggleNavRail: widget.onToggleNavRail,
-              selectedIndex: _tabController?.index ?? 0,
-              onDestinationSelected: _handleRailSelection,
-              searchState: searchState,
-              chatsState: chatsState,
-              demoPhase: _demoPhase,
-              onTriggerDemoInteractivePhase: _triggerDemoInteractivePhase,
-            );
-          },
-        );
-      },
+    return BlocListener<ChatsCubit, ChatsState>(
+      listenWhen: (previous, current) =>
+          previous.demoResetRevision != current.demoResetRevision,
+      listener: (_, __) => _handleDemoResetRevisionChanged(),
+      child: BlocBuilder<HomeSearchCubit, HomeSearchState>(
+        builder: (context, searchState) {
+          return BlocBuilder<ChatsCubit, ChatsState>(
+            builder: (context, chatsState) {
+              return _NexusScaffold(
+                tabs: widget.tabs,
+                navPlacement: widget.navPlacement,
+                showNavigationRail: widget.showNavigationRail,
+                navRailCollapsed: widget.navRailCollapsed,
+                onToggleNavRail: widget.onToggleNavRail,
+                selectedIndex: _tabController?.index ?? 0,
+                onDestinationSelected: _handleRailSelection,
+                searchState: searchState,
+                chatsState: chatsState,
+                demoPhase: _demoPhase,
+                onTriggerDemoInteractivePhase: _triggerDemoInteractivePhase,
+              );
+            },
+          );
+        },
+      ),
     );
   }
 

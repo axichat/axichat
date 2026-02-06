@@ -34,6 +34,8 @@ class ChatState with _$ChatState {
     @Default(<int, String>{}) Map<int, String> emailRawHeadersByDeltaId,
     @Default(<int>{}) Set<int> emailRawHeadersLoading,
     @Default(<int>{}) Set<int> emailRawHeadersUnavailable,
+    @Default(<String, FileMetadataData?>{})
+    Map<String, FileMetadataData?> fileMetadataById,
     @Default(<PendingAttachment>[]) List<PendingAttachment> pendingAttachments,
     ChatMessageKey? composerError,
     @Default(0) int composerHydrationId,

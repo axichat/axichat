@@ -283,6 +283,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatStarted>(_onChatStarted);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
     on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
+    on<_FileMetadataUpdated>(_onFileMetadataUpdated);
     on<ChatPinnedMessagesOpened>(_onChatPinnedMessagesOpened);
     on<_RoomStateUpdated>(_onRoomStateUpdated);
     on<_RoomRosterUpdated>(_onRoomRosterUpdated);
@@ -426,6 +427,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
+  final Map<String, StreamSubscription<FileMetadataData?>>
+      _fileMetadataSubscriptions =
+      <String, StreamSubscription<FileMetadataData?>>{};
   AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
   ChatMessageKey? _emailSyncComposerMessage;
@@ -1136,6 +1140,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _emailSyncSubscription?.cancel();
     await _connectivitySubscription?.cancel();
     await _httpUploadSupportSubscription?.cancel();
+    for (final subscription in _fileMetadataSubscriptions.values) {
+      await subscription.cancel();
+    }
+    _fileMetadataSubscriptions.clear();
     _typingTimer?.cancel();
     _typingTimer = null;
     _autoDownloadAttemptedMetadataIds.clear();
@@ -1192,6 +1200,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         pinnedMessagesLoaded: resetContext ? false : state.pinnedMessagesLoaded,
         pinnedMessagesHydrating:
             resetContext ? false : state.pinnedMessagesHydrating,
+        fileMetadataById: resetContext
+            ? const <String, FileMetadataData?>{}
+            : state.fileMetadataById,
         unreadBoundaryStanzaId:
             resetContext ? null : state.unreadBoundaryStanzaId,
         xmppCapabilities: capabilitiesShouldReset || !showXmppCapabilities
@@ -1223,6 +1234,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _shareContextAttemptedStanzaIds.clear();
       _autoDownloadAttemptedMetadataIds.clear();
       _autoDownloadAttemptedEmailMessages.clear();
+      await _syncFileMetadataSubscriptions(const <String>{});
       await _subscribeToMessages(
         limit: messageBatchSize,
         filter: nextViewFilter,
@@ -1693,12 +1705,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       messages: filteredItems,
       emailBoundaryDeltaId: emailBoundaryDeltaId,
     );
+    final nextMetadataIds = _metadataIdsForState(
+      messages: filteredItems,
+      attachmentsByMessageId: filtered.attachmentsByMessageId,
+      pinnedMessages: state.pinnedMessages,
+    );
+    await _syncFileMetadataSubscriptions(nextMetadataIds);
+    final nextFileMetadataById = _pruneFileMetadataById(
+      metadataIds: nextMetadataIds,
+      existing: state.fileMetadataById,
+    );
     emit(
       state.copyWith(
         items: filteredItems,
         messagesLoaded: true,
         attachmentMetadataIdsByMessageId: filtered.attachmentsByMessageId,
         attachmentGroupLeaderByMessageId: filtered.groupLeaderByMessageId,
+        fileMetadataById: nextFileMetadataById,
         quotedMessagesById: updatedQuotedMessages,
         unreadBoundaryStanzaId: unreadBoundary,
       ),
@@ -1872,62 +1895,154 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _PinnedMessagesUpdated event,
     Emitter<ChatState> emit,
   ) async {
-    if (event.items.isEmpty) {
-      emit(
-        state.copyWith(
-          pinnedMessages: _emptyPinnedMessageItems,
-          pinnedMessagesLoaded: true,
-        ),
-      );
-      return;
-    }
-    final orderedIds = <String>{};
-    for (final entry in event.items) {
-      final stanzaId = entry.messageStanzaId.trim();
-      if (stanzaId.isEmpty) {
-        continue;
+    var pinnedItems = _emptyPinnedMessageItems;
+    if (event.items.isNotEmpty) {
+      final orderedIds = <String>{};
+      for (final entry in event.items) {
+        final stanzaId = entry.messageStanzaId.trim();
+        if (stanzaId.isEmpty) {
+          continue;
+        }
+        orderedIds.add(stanzaId);
       }
-      orderedIds.add(stanzaId);
-    }
-    if (orderedIds.isEmpty) {
-      emit(
-        state.copyWith(
-          pinnedMessages: _emptyPinnedMessageItems,
-          pinnedMessagesLoaded: true,
-        ),
-      );
-      return;
-    }
-    final db = await _messageService.database;
-    final messages = await db.getMessagesByStanzaIds(orderedIds);
-    final messageByStanza = <String, Message>{
-      for (final message in messages) message.stanzaID: message,
-    };
-    final attachmentMaps = await _loadAttachmentMaps(messages);
-    final pinnedItems = <PinnedMessageItem>[];
-    for (final entry in event.items) {
-      final stanzaId = entry.messageStanzaId.trim();
-      if (stanzaId.isEmpty) {
-        continue;
+      if (orderedIds.isNotEmpty) {
+        final db = await _messageService.database;
+        final messages = await db.getMessagesByStanzaIds(orderedIds);
+        final messageByStanza = <String, Message>{
+          for (final message in messages) message.stanzaID: message,
+        };
+        final attachmentMaps = await _loadAttachmentMaps(messages);
+        pinnedItems = <PinnedMessageItem>[];
+        for (final entry in event.items) {
+          final stanzaId = entry.messageStanzaId.trim();
+          if (stanzaId.isEmpty) {
+            continue;
+          }
+          final message = messageByStanza[stanzaId];
+          final attachmentIds = message == null
+              ? _emptyPinnedAttachmentIds
+              : attachmentMaps.attachmentsByMessageId[_messageKey(message)] ??
+                  _emptyPinnedAttachmentIds;
+          pinnedItems.add(
+            PinnedMessageItem(
+              messageStanzaId: stanzaId,
+              chatJid: entry.chatJid,
+              pinnedAt: entry.pinnedAt,
+              message: message,
+              attachmentMetadataIds: attachmentIds,
+            ),
+          );
+        }
       }
-      final message = messageByStanza[stanzaId];
-      final attachmentIds = message == null
-          ? _emptyPinnedAttachmentIds
-          : attachmentMaps.attachmentsByMessageId[_messageKey(message)] ??
-              _emptyPinnedAttachmentIds;
-      pinnedItems.add(
-        PinnedMessageItem(
-          messageStanzaId: stanzaId,
-          chatJid: entry.chatJid,
-          pinnedAt: entry.pinnedAt,
-          message: message,
-          attachmentMetadataIds: attachmentIds,
-        ),
-      );
     }
-    emit(
-      state.copyWith(pinnedMessages: pinnedItems, pinnedMessagesLoaded: true),
+    final nextMetadataIds = _metadataIdsForState(
+      messages: state.items,
+      attachmentsByMessageId: state.attachmentMetadataIdsByMessageId,
+      pinnedMessages: pinnedItems,
     );
+    await _syncFileMetadataSubscriptions(nextMetadataIds);
+    emit(
+      state.copyWith(
+        pinnedMessages: pinnedItems,
+        pinnedMessagesLoaded: true,
+        fileMetadataById: _pruneFileMetadataById(
+          metadataIds: nextMetadataIds,
+          existing: state.fileMetadataById,
+        ),
+      ),
+    );
+  }
+
+  void _onFileMetadataUpdated(
+    _FileMetadataUpdated event,
+    Emitter<ChatState> emit,
+  ) {
+    final hasCurrentValue =
+        state.fileMetadataById.containsKey(event.metadataId);
+    final currentValue = state.fileMetadataById[event.metadataId];
+    if (hasCurrentValue && currentValue == event.metadata) {
+      return;
+    }
+    final nextMetadataById = <String, FileMetadataData?>{
+      ...state.fileMetadataById,
+      event.metadataId: event.metadata,
+    };
+    emit(state.copyWith(fileMetadataById: nextMetadataById));
+  }
+
+  Set<String> _metadataIdsForState({
+    required List<Message> messages,
+    required Map<String, List<String>> attachmentsByMessageId,
+    required List<PinnedMessageItem> pinnedMessages,
+  }) {
+    final metadataIds = <String>{};
+    for (final attachmentIds in attachmentsByMessageId.values) {
+      for (final id in attachmentIds) {
+        final trimmed = id.trim();
+        if (trimmed.isEmpty) {
+          continue;
+        }
+        metadataIds.add(trimmed);
+      }
+    }
+    for (final message in messages) {
+      final metadataId = message.fileMetadataID?.trim();
+      if (metadataId == null || metadataId.isEmpty) {
+        continue;
+      }
+      metadataIds.add(metadataId);
+    }
+    for (final item in pinnedMessages) {
+      for (final id in item.attachmentMetadataIds) {
+        final trimmed = id.trim();
+        if (trimmed.isEmpty) {
+          continue;
+        }
+        metadataIds.add(trimmed);
+      }
+    }
+    return metadataIds;
+  }
+
+  Map<String, FileMetadataData?> _pruneFileMetadataById({
+    required Set<String> metadataIds,
+    required Map<String, FileMetadataData?> existing,
+  }) {
+    if (metadataIds.isEmpty || existing.isEmpty) {
+      return const <String, FileMetadataData?>{};
+    }
+    final nextMetadataById = <String, FileMetadataData?>{};
+    for (final id in metadataIds) {
+      if (!existing.containsKey(id)) {
+        continue;
+      }
+      nextMetadataById[id] = existing[id];
+    }
+    return nextMetadataById;
+  }
+
+  Future<void> _syncFileMetadataSubscriptions(Set<String> metadataIds) async {
+    final staleIds = _fileMetadataSubscriptions.keys
+        .where((id) => !metadataIds.contains(id))
+        .toList(growable: false);
+    for (final id in staleIds) {
+      final subscription = _fileMetadataSubscriptions.remove(id);
+      await subscription?.cancel();
+    }
+    for (final id in metadataIds) {
+      if (_fileMetadataSubscriptions.containsKey(id)) {
+        continue;
+      }
+      _fileMetadataSubscriptions[id] =
+          _messageService.fileMetadataStream(id).listen(
+                (metadata) => add(
+                  _FileMetadataUpdated(
+                    metadataId: id,
+                    metadata: metadata,
+                  ),
+                ),
+              );
+    }
   }
 
   Future<void> _onChatPinnedMessagesOpened(
@@ -2474,7 +2589,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _EmailSyncStateChanged event,
     Emitter<ChatState> emit,
   ) {
-    final nextState = event.state;
+    _applyEmailSyncState(event.state, emit);
+  }
+
+  void _applyEmailSyncState(
+    EmailSyncState nextState,
+    Emitter<ChatState> emit,
+  ) {
     if (!_isEmailChat) {
       if (state.emailSyncState != nextState) {
         emit(state.copyWith(emailSyncState: nextState));
@@ -3227,9 +3348,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _emailSyncSubscription = emailService.syncStateStream.listen(
         (syncState) => add(_EmailSyncStateChanged(syncState)),
       );
-      add(_EmailSyncStateChanged(emailService.syncState));
+      _applyEmailSyncState(emailService.syncState, emit);
     } else {
-      add(const _EmailSyncStateChanged(EmailSyncState.ready()));
+      _applyEmailSyncState(const EmailSyncState.ready(), emit);
     }
     final chat = state.chat;
     if (chat == null) {
@@ -4923,9 +5044,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
   }
-
-  Stream<FileMetadataData?> fileMetadataStreamFor(String id) =>
-      _messageService.fileMetadataStream(id);
 
   Future<void> downloadFullEmailMessage(Message message) async {
     final emailService = _emailService;

@@ -136,6 +136,7 @@ class AttachmentGalleryBloc
     on<AttachmentGalleryApprovalGranted>(_onApprovalGranted);
     on<AttachmentGalleryEmailDownloadRequested>(_onEmailDownloadRequested);
     on<AttachmentGalleryEmailServiceUpdated>(_onEmailServiceUpdated);
+    on<AttachmentGalleryFileMetadataUpdated>(_onFileMetadataUpdated);
     _itemsSubscription =
         _xmppService.attachmentGalleryStream(chatJid: chatJid).listen(
               (items) => add(AttachmentGalleryItemsUpdated(items: items)),
@@ -152,9 +153,9 @@ class AttachmentGalleryBloc
   final Chat? _chatOverride;
   final bool _showChatLabel;
   StreamSubscription<List<AttachmentGalleryItem>>? _itemsSubscription;
-
-  Stream<FileMetadataData?> fileMetadataStream(String id) =>
-      _xmppService.fileMetadataStream(id);
+  final Map<String, StreamSubscription<FileMetadataData?>>
+      _fileMetadataSubscriptions =
+      <String, StreamSubscription<FileMetadataData?>>{};
 
   Future<bool> downloadInboundAttachment({
     required String metadataId,
@@ -193,6 +194,11 @@ class AttachmentGalleryBloc
     AttachmentGalleryItemsUpdated event,
     Emitter<AttachmentGalleryState> emit,
   ) {
+    _syncFileMetadataSubscriptions(event.items);
+    final nextMetadataById = _pruneFileMetadataById(
+      items: event.items,
+      existing: state.fileMetadataById,
+    );
     emit(
       state.copyWith(
         status: RequestStatus.success,
@@ -205,6 +211,7 @@ class AttachmentGalleryBloc
           sourceFilter: state.sourceFilter,
           allowedOnceStanzaIds: state.allowedOnceStanzaIds,
         ),
+        fileMetadataById: nextMetadataById,
         error: null,
       ),
     );
@@ -220,6 +227,23 @@ class AttachmentGalleryBloc
         error: event.error,
       ),
     );
+  }
+
+  void _onFileMetadataUpdated(
+    AttachmentGalleryFileMetadataUpdated event,
+    Emitter<AttachmentGalleryState> emit,
+  ) {
+    final hasCurrentValue =
+        state.fileMetadataById.containsKey(event.metadataId);
+    final currentValue = state.fileMetadataById[event.metadataId];
+    if (hasCurrentValue && currentValue == event.metadata) {
+      return;
+    }
+    final nextMetadataById = <String, FileMetadataData?>{
+      ...state.fileMetadataById,
+      event.metadataId: event.metadata,
+    };
+    emit(state.copyWith(fileMetadataById: nextMetadataById));
   }
 
   void _onQueryChanged(
@@ -427,11 +451,69 @@ class AttachmentGalleryBloc
     return List.unmodifiable(filtered);
   }
 
+  String _metadataIdForItem(AttachmentGalleryItem item) {
+    return item.metadata.id.trim();
+  }
+
+  Map<String, FileMetadataData?> _pruneFileMetadataById({
+    required List<AttachmentGalleryItem> items,
+    required Map<String, FileMetadataData?> existing,
+  }) {
+    if (items.isEmpty) {
+      return const <String, FileMetadataData?>{};
+    }
+    final nextMetadataById = <String, FileMetadataData?>{};
+    for (final item in items) {
+      final metadataId = _metadataIdForItem(item);
+      if (metadataId.isEmpty) {
+        continue;
+      }
+      nextMetadataById[metadataId] = existing.containsKey(metadataId)
+          ? existing[metadataId]
+          : item.metadata;
+    }
+    return nextMetadataById;
+  }
+
+  void _syncFileMetadataSubscriptions(List<AttachmentGalleryItem> items) {
+    final requiredIds = <String>{
+      for (final item in items)
+        if (_metadataIdForItem(item).isNotEmpty) _metadataIdForItem(item),
+    };
+    final staleIds = _fileMetadataSubscriptions.keys
+        .where((id) => !requiredIds.contains(id))
+        .toList(growable: false);
+    for (final id in staleIds) {
+      final subscription = _fileMetadataSubscriptions.remove(id);
+      if (subscription != null) {
+        unawaited(subscription.cancel());
+      }
+    }
+    for (final id in requiredIds) {
+      if (_fileMetadataSubscriptions.containsKey(id)) {
+        continue;
+      }
+      _fileMetadataSubscriptions[id] =
+          _xmppService.fileMetadataStream(id).listen(
+                (metadata) => add(
+                  AttachmentGalleryFileMetadataUpdated(
+                    metadataId: id,
+                    metadata: metadata,
+                  ),
+                ),
+              );
+    }
+  }
+
   String _normalizeStanzaId(String stanzaId) => stanzaId.trim();
 
   @override
   Future<void> close() async {
     await _itemsSubscription?.cancel();
+    for (final subscription in _fileMetadataSubscriptions.values) {
+      await subscription.cancel();
+    }
+    _fileMetadataSubscriptions.clear();
     return super.close();
   }
 }

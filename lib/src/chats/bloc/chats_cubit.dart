@@ -76,6 +76,9 @@ class ChatsCubit extends Cubit<ChatsState> {
         .listen(_updateRecipientAddressSuggestions);
     _homeRefreshSyncSubscription =
         _homeRefreshSyncService.syncUpdates.listen(_handleHomeRefreshUpdate);
+    _demoResetSubscription = _xmppService.demoResetStream.listen(
+      (_) => _handleDemoReset(),
+    );
   }
 
   static ChatsState _seedInitialState(List<Chat>? cached) {
@@ -131,6 +134,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       _homeRefreshSyncSubscription;
   late final StreamSubscription<List<String>>
       _recipientAddressSuggestionsSubscription;
+  late final StreamSubscription<void> _demoResetSubscription;
   final List<Timer> _exportCleanupTimers = [];
 
   void updateEmailService(EmailService? emailService) {
@@ -146,13 +150,16 @@ class ChatsCubit extends Cubit<ChatsState> {
     await _homeRefreshSyncSubscription.cancel();
     await _chatsSubscription.cancel();
     await _recipientAddressSuggestionsSubscription.cancel();
+    await _demoResetSubscription.cancel();
     return super.close();
   }
 
-  Stream<void> get demoResetStream => _xmppService.demoResetStream;
-
   void startDemoInteractivePhase() {
     _xmppService.startDemoInteractivePhase();
+  }
+
+  void _handleDemoReset() {
+    emit(state.copyWith(demoResetRevision: state.demoResetRevision + 1));
   }
 
   void _handleHomeRefreshUpdate(HomeRefreshSyncUpdate update) {

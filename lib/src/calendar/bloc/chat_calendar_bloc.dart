@@ -28,9 +28,6 @@ class ChatCalendarBloc extends CalendarBloc {
               chatType: chatType,
               readModel: () => bloc.currentModel,
               applyModel: (CalendarModel model) async {
-                if (bloc.isClosed) {
-                  return;
-                }
                 bloc.add(CalendarEvent.remoteModelApplied(model: model));
               },
             );

@@ -242,8 +242,8 @@ class ChatAttachmentPreview extends StatefulWidget {
   const ChatAttachmentPreview({
     super.key,
     required this.stanzaId,
-    required this.metadataStream,
-    this.initialMetadata,
+    required this.metadata,
+    this.metadataPending = false,
     required this.allowed,
     this.downloadDelegate,
     this.metadataReloadDelegate,
@@ -253,8 +253,8 @@ class ChatAttachmentPreview extends StatefulWidget {
   });
 
   final String stanzaId;
-  final Stream<FileMetadataData?> metadataStream;
-  final FileMetadataData? initialMetadata;
+  final FileMetadataData? metadata;
+  final bool metadataPending;
   final bool allowed;
   final AttachmentDownloadDelegate? downloadDelegate;
   final AttachmentMetadataReloadDelegate? metadataReloadDelegate;
@@ -332,24 +332,17 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
       child: _AttachmentSurfaceScope(
         shape: resolvedShape,
         maxWidthFraction: maxWidthFraction,
-        child: StreamBuilder<FileMetadataData?>(
-          stream: widget.metadataStream,
-          initialData: widget.initialMetadata,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return _AttachmentError(message: snapshot.error.toString());
-            }
-
+        child: Builder(
+          builder: (context) {
             final l10n = context.l10n;
             final colors = context.colorScheme;
             final stanzaId = widget.stanzaId;
             final onAllowPressed = widget.onAllowPressed;
             final downloadDelegate = widget.downloadDelegate;
             final allowed = widget.allowed;
-            final metadata = snapshot.data;
+            final metadata = widget.metadata;
             if (metadata == null) {
-              if (snapshot.connectionState != ConnectionState.active &&
-                  snapshot.connectionState != ConnectionState.done) {
+              if (widget.metadataPending) {
                 return _AttachmentSurface(
                   child: Center(
                     child: AxiProgressIndicator(color: colors.primary),

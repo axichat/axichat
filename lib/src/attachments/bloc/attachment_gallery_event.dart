@@ -49,4 +49,9 @@ class AttachmentGalleryEvent with _$AttachmentGalleryEvent {
   const factory AttachmentGalleryEvent.emailServiceUpdated({
     required EmailService? emailService,
   }) = AttachmentGalleryEmailServiceUpdated;
+
+  const factory AttachmentGalleryEvent.fileMetadataUpdated({
+    required String metadataId,
+    required FileMetadataData? metadata,
+  }) = AttachmentGalleryFileMetadataUpdated;
 }

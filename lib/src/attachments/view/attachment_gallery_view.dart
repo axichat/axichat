@@ -630,7 +630,7 @@ class AttachmentGallerySelect<T> extends StatelessWidget {
   }
 }
 
-class AttachmentGalleryEntry extends StatefulWidget {
+class AttachmentGalleryEntry extends StatelessWidget {
   const AttachmentGalleryEntry({
     super.key,
     required this.showChatLabel,
@@ -654,107 +654,98 @@ class AttachmentGalleryEntry extends StatefulWidget {
   final String metaSeparator;
 
   @override
-  State<AttachmentGalleryEntry> createState() => _AttachmentGalleryEntryState();
-}
-
-class _AttachmentGalleryEntryState extends State<AttachmentGalleryEntry> {
-  late Stream<FileMetadataData?> _metadataStream;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _metadataStream = _resolveMetadataStream(widget.entry.item.metadata.id);
-  }
-
-  @override
-  void didUpdateWidget(covariant AttachmentGalleryEntry oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    final nextId = widget.entry.item.metadata.id;
-    if (oldWidget.entry.item.metadata.id != nextId) {
-      _metadataStream = _resolveMetadataStream(nextId);
-    }
-  }
-
-  Stream<FileMetadataData?> _resolveMetadataStream(String id) =>
-      context.read<AttachmentGalleryBloc>().fileMetadataStream(id);
-
-  @override
   Widget build(BuildContext context) {
-    final message = widget.entry.item.message;
-    final metadata = widget.entry.item.metadata;
-    final chat = widget.entry.chat;
-    final isEmailChat = (chat?.defaultTransport.isEmail ?? false) ||
-        message.deltaMsgId != null ||
-        message.deltaChatId != null;
-    final allowAttachment = widget.entry.allowByTrust || widget.entry.allowOnce;
-    final downloadDelegate = isEmailChat
-        ? AttachmentDownloadDelegate(
-            () {
-              final completer = Completer<bool>();
-              context.read<AttachmentGalleryBloc>().add(
-                    AttachmentGalleryEmailDownloadRequested(
-                      message: message,
-                      completer: completer,
-                    ),
-                  );
-              return completer.future;
-            },
-          )
-        : AttachmentDownloadDelegate(
-            () =>
-                context.read<AttachmentGalleryBloc>().downloadInboundAttachment(
-                      metadataId: metadata.id,
+    final message = entry.item.message;
+    final initialMetadata = entry.item.metadata;
+    final metadataId = initialMetadata.id;
+    return BlocSelector<AttachmentGalleryBloc, AttachmentGalleryState,
+        ({FileMetadataData? metadata, bool metadataPending})>(
+      selector: (state) => (
+        metadata: state.fileMetadataById.containsKey(metadataId)
+            ? state.fileMetadataById[metadataId]
+            : initialMetadata,
+        metadataPending: !state.fileMetadataById.containsKey(metadataId),
+      ),
+      builder: (context, metadataState) {
+        final metadata = metadataState.metadata;
+        final metadataPending = metadataState.metadataPending;
+        final chat = entry.chat;
+        final isEmailChat = (chat?.defaultTransport.isEmail ?? false) ||
+            message.deltaMsgId != null ||
+            message.deltaChatId != null;
+        final allowAttachment = entry.allowByTrust || entry.allowOnce;
+        final downloadDelegate = isEmailChat
+            ? AttachmentDownloadDelegate(
+                () {
+                  final completer = Completer<bool>();
+                  context.read<AttachmentGalleryBloc>().add(
+                        AttachmentGalleryEmailDownloadRequested(
+                          message: message,
+                          completer: completer,
+                        ),
+                      );
+                  return completer.future;
+                },
+              )
+            : AttachmentDownloadDelegate(
+                () => context
+                    .read<AttachmentGalleryBloc>()
+                    .downloadInboundAttachment(
+                      metadataId: initialMetadata.id,
                       stanzaId: message.stanzaID,
                     ),
-          );
-    final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
-      () =>
-          context.read<AttachmentGalleryBloc>().reloadFileMetadata(metadata.id),
+              );
+        final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
+          () => context
+              .read<AttachmentGalleryBloc>()
+              .reloadFileMetadata(initialMetadata.id),
+        );
+        final metaText = _resolveMetaText(
+          chat: chat,
+          showChatLabel: showChatLabel,
+          separator: metaSeparator,
+        );
+        final allowPressed = allowAttachment
+            ? null
+            : () => onApproveAttachment(
+                  message: message,
+                  senderJid: message.senderJid,
+                  stanzaId: message.stanzaID,
+                  chat: chat,
+                  isEmailChat: isEmailChat,
+                  isSelf: entry.isSelf,
+                );
+        return layout == AttachmentGalleryLayout.list
+            ? AttachmentGalleryListItem(
+                metadata: metadata,
+                metadataPending: metadataPending,
+                stanzaId: message.stanzaID,
+                allowed: allowAttachment,
+                downloadDelegate: downloadDelegate,
+                metadataReloadDelegate: metadataReloadDelegate,
+                onAllowPressed: allowPressed,
+                metaText: metaText,
+              )
+            : AttachmentGalleryTile(
+                metadata: metadata,
+                metadataPending: metadataPending,
+                stanzaId: message.stanzaID,
+                allowed: allowAttachment,
+                downloadDelegate: downloadDelegate,
+                metadataReloadDelegate: metadataReloadDelegate,
+                onAllowPressed: allowPressed,
+                metaText: metaText,
+              );
+      },
     );
-    final metaText = _resolveMetaText(
-      chat: chat,
-      showChatLabel: widget.showChatLabel,
-      separator: widget.metaSeparator,
-    );
-    final allowPressed = allowAttachment
-        ? null
-        : () => widget.onApproveAttachment(
-              message: message,
-              senderJid: message.senderJid,
-              stanzaId: message.stanzaID,
-              chat: chat,
-              isEmailChat: isEmailChat,
-              isSelf: widget.entry.isSelf,
-            );
-    return widget.layout == AttachmentGalleryLayout.list
-        ? AttachmentGalleryListItem(
-            metadataStream: _metadataStream,
-            metadata: metadata,
-            stanzaId: message.stanzaID,
-            allowed: allowAttachment,
-            downloadDelegate: downloadDelegate,
-            metadataReloadDelegate: metadataReloadDelegate,
-            onAllowPressed: allowPressed,
-            metaText: metaText,
-          )
-        : AttachmentGalleryTile(
-            metadataStream: _metadataStream,
-            metadata: metadata,
-            stanzaId: message.stanzaID,
-            allowed: allowAttachment,
-            downloadDelegate: downloadDelegate,
-            metadataReloadDelegate: metadataReloadDelegate,
-            onAllowPressed: allowPressed,
-            metaText: metaText,
-          );
   }
 }
 
 class AttachmentGalleryListItem extends StatelessWidget {
   const AttachmentGalleryListItem({
     super.key,
-    required this.metadataStream,
     required this.metadata,
+    required this.metadataPending,
     required this.stanzaId,
     required this.allowed,
     required this.downloadDelegate,
@@ -763,8 +754,8 @@ class AttachmentGalleryListItem extends StatelessWidget {
     required this.metaText,
   });
 
-  final Stream<FileMetadataData?> metadataStream;
-  final FileMetadataData metadata;
+  final FileMetadataData? metadata;
+  final bool metadataPending;
   final String stanzaId;
   final bool allowed;
   final AttachmentDownloadDelegate? downloadDelegate;
@@ -791,8 +782,8 @@ class AttachmentGalleryListItem extends StatelessWidget {
         ],
         ChatAttachmentPreview(
           stanzaId: stanzaId,
-          metadataStream: metadataStream,
-          initialMetadata: metadata,
+          metadata: metadata,
+          metadataPending: metadataPending,
           allowed: allowed,
           downloadDelegate: downloadDelegate,
           metadataReloadDelegate: metadataReloadDelegate,
@@ -807,8 +798,8 @@ class AttachmentGalleryListItem extends StatelessWidget {
 class AttachmentGalleryTile extends StatelessWidget {
   const AttachmentGalleryTile({
     super.key,
-    required this.metadataStream,
     required this.metadata,
+    required this.metadataPending,
     required this.stanzaId,
     required this.allowed,
     required this.downloadDelegate,
@@ -817,8 +808,8 @@ class AttachmentGalleryTile extends StatelessWidget {
     required this.metaText,
   });
 
-  final Stream<FileMetadataData?> metadataStream;
-  final FileMetadataData metadata;
+  final FileMetadataData? metadata;
+  final bool metadataPending;
   final String stanzaId;
   final bool allowed;
   final AttachmentDownloadDelegate? downloadDelegate;
@@ -832,11 +823,11 @@ class AttachmentGalleryTile extends StatelessWidget {
     const metaMaxLines = 1;
     const previewMaxWidthFraction = 1.0;
     final metaLabel = metaText;
-    final showFilename = metadata.mediaKind != FileMetadataMediaKind.file;
+    final showFilename = metadata?.mediaKind != FileMetadataMediaKind.file;
     final preview = ChatAttachmentPreview(
       stanzaId: stanzaId,
-      metadataStream: metadataStream,
-      initialMetadata: metadata,
+      metadata: metadata,
+      metadataPending: metadataPending,
       allowed: allowed,
       downloadDelegate: downloadDelegate,
       metadataReloadDelegate: metadataReloadDelegate,
@@ -851,7 +842,7 @@ class AttachmentGalleryTile extends StatelessWidget {
         SizedBox(height: context.spacing.s),
         if (showFilename)
           Text(
-            metadata.filename,
+            metadata?.filename ?? context.l10n.chatAttachmentFallbackLabel,
             style: context.textTheme.small,
             maxLines: filenameMaxLines,
             overflow: TextOverflow.ellipsis,
