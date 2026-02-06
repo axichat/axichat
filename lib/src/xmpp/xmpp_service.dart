@@ -48,6 +48,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/muc/muc_models.dart';
@@ -517,6 +518,7 @@ class XmppService extends XmppBase
   final FutureOr<XmppDatabase> Function(String, String) _databaseFactory;
   final NotificationService _notificationService;
   final Capability _capability;
+  AppLocalizations? _localizations;
   var _autoDownloadImages = true;
   var _autoDownloadVideos = false;
   var _autoDownloadDocuments = false;
@@ -526,6 +528,13 @@ class XmppService extends XmppBase
   StreamController<anti_abuse.EmailBlocklistSyncUpdate>
       _emailBlocklistSyncUpdateController =
       StreamController<anti_abuse.EmailBlocklistSyncUpdate>.broadcast();
+
+  AppLocalizations get localizations =>
+      _localizations ?? lookupAppLocalizations(const ui.Locale('en'));
+
+  void updateLocalizations(AppLocalizations localizations) {
+    _localizations = localizations;
+  }
 
   StreamController<HttpUploadSupport> _httpUploadSupportController =
       StreamController<HttpUploadSupport>.broadcast();

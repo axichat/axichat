@@ -6,7 +6,6 @@ import 'dart:async';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -21,13 +20,11 @@ class AccessibilityActionBloc
   AccessibilityActionBloc({
     required ChatsService chatsService,
     required MessageService messageService,
-    required AppLocalizations initialLocalization,
     RosterService? rosterService,
   })  : _chatsService = chatsService,
         _messageService = messageService,
         _rosterService = rosterService,
         _log = Logger('AccessibilityActionBloc'),
-        _l10n = initialLocalization,
         super(const AccessibilityActionState.initial()) {
     on<AccessibilityMenuOpened>(_onMenuOpened);
     on<AccessibilityMenuClosed>(_onMenuClosed);
@@ -40,7 +37,6 @@ class AccessibilityActionBloc
     on<AccessibilityDiscardWarningRequested>(_onDiscardWarningRequested);
     on<AccessibilityMenuJumpedTo>(_onMenuJumpedTo);
     on<AccessibilityDataUpdated>(_onDataUpdated);
-    on<AccessibilityLocaleUpdated>(_onLocaleUpdated);
     on<AccessibilityDraftIdUpdated>(_onDraftIdUpdated);
 
     _chatSubscription = _chatsService.chatsStream().listen(
@@ -63,8 +59,6 @@ class AccessibilityActionBloc
   final MessageService _messageService;
   final RosterService? _rosterService;
   final Logger _log;
-
-  late AppLocalizations _l10n;
 
   late final StreamSubscription<List<Chat>> _chatSubscription;
   StreamSubscription<List<RosterItem>>? _rosterSubscription;
@@ -155,7 +149,7 @@ class AccessibilityActionBloc
     emit(
       state.copyWith(
         discardWarningActive: true,
-        statusMessage: _l10n.accessibilityDiscardWarning,
+        statusMessage: AccessibilityActionStatus.discardWarning,
         errorMessage: null,
       ),
     );
@@ -259,13 +253,14 @@ class AccessibilityActionBloc
   ) async {
     final trimmed = state.newContactInput.trim();
     if (!trimmed.isValidJid) {
-      emit(state.copyWith(errorMessage: _l10n.jidInputInvalid));
+      emit(state.copyWith(
+          errorMessage: AccessibilityActionError.jidInputInvalid));
       return;
     }
     final contact = AccessibilityContact(
       jid: trimmed,
       displayName: trimmed,
-      subtitle: _l10n.chatsFilterNonContacts,
+      subtitle: null,
       source: AccessibilityContactSource.manual,
       encryptionProtocol: EncryptionProtocol.omemo,
       chatType: ChatType.chat,
@@ -273,14 +268,6 @@ class AccessibilityActionBloc
       transport: event.transport,
     );
     await _handleContactSelection(contact, emit);
-  }
-
-  void _onLocaleUpdated(
-    AccessibilityLocaleUpdated event,
-    Emitter<AccessibilityActionState> emit,
-  ) {
-    if (_l10n.localeName == event.localization.localeName) return;
-    _l10n = event.localization;
   }
 
   void _onDraftIdUpdated(
@@ -525,7 +512,7 @@ class AccessibilityActionBloc
       stack: nextStack,
       composerText: draft.body ?? '',
       newContactInput: '',
-      statusMessage: _l10n.accessibilityDraftLoaded,
+      statusMessage: AccessibilityActionStatus.draftLoaded,
       errorMessage: null,
       discardWarningActive: false,
     );
@@ -675,8 +662,8 @@ class AccessibilityActionBloc
         state.copyWith(
           busy: false,
           statusMessage: action.accept
-              ? _l10n.accessibilityInviteAccepted
-              : _l10n.accessibilityInviteDismissed,
+              ? AccessibilityActionStatus.inviteAccepted
+              : AccessibilityActionStatus.inviteDismissed,
         ),
       );
     } on XmppException catch (error, stackTrace) {
@@ -684,7 +671,7 @@ class AccessibilityActionBloc
       emit(
         state.copyWith(
           busy: false,
-          errorMessage: _l10n.accessibilityInviteUpdateFailed,
+          errorMessage: AccessibilityActionError.inviteUpdateFailed,
         ),
       );
     }

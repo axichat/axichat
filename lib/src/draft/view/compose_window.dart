@@ -73,9 +73,9 @@ class _ComposeWindowHeader extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final headerHeight = sizing.buttonHeightLg;
-    final horizontalPadding = spacing.s + spacing.xs;
-    final gapSm = spacing.xs + spacing.xxs;
-    final gapMd = spacing.s + spacing.xxs;
+    final horizontalPadding = spacing.m;
+    final gapSm = spacing.s;
+    final gapMd = spacing.s;
     final subject = seed.subject.trim();
     final recipients =
         seed.jids.where((jid) => jid.trim().isNotEmpty).take(3).join(', ');

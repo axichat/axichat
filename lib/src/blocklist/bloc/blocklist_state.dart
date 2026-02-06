@@ -35,25 +35,6 @@ final class BlocklistNotice extends Equatable {
   List<Object?> get props => [type, address];
 }
 
-extension BlocklistNoticeL10n on BlocklistNotice {
-  String resolve(AppLocalizations l10n) => switch (type) {
-        BlocklistNoticeType.invalidJid => l10n.blocklistInvalidJid,
-        BlocklistNoticeType.blockFailed =>
-          l10n.blocklistBlockFailed(address ?? ''),
-        BlocklistNoticeType.unblockFailed =>
-          l10n.blocklistUnblockFailed(address ?? ''),
-        BlocklistNoticeType.blocked => l10n.blocklistBlocked(address ?? ''),
-        BlocklistNoticeType.unblocked => l10n.blocklistUnblocked(address ?? ''),
-        BlocklistNoticeType.blockUnsupported =>
-          l10n.blocklistBlockingUnsupported,
-        BlocklistNoticeType.unblockUnsupported =>
-          l10n.blocklistUnblockingUnsupported,
-        BlocklistNoticeType.unblockAllFailed => l10n.blocklistUnblockAllFailed,
-        BlocklistNoticeType.unblockAllSuccess =>
-          l10n.blocklistUnblockAllSuccess,
-      };
-}
-
 final class BlocklistAvailable extends BlocklistState {
   const BlocklistAvailable({
     required super.items,

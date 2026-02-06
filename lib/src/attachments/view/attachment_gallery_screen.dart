@@ -23,7 +23,7 @@ class AttachmentGalleryScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final leadingWidth = AxiIconButton.kDefaultSize + (spacing.s * 2);
+    final leadingWidth = AxiIconButton.kDefaultSize + spacing.m;
     final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
     final EmailService? emailService =
         endpointConfig.smtpEnabled ? locate<EmailService>() : null;

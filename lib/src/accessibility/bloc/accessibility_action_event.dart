@@ -97,15 +97,6 @@ class AccessibilityDataUpdated extends AccessibilityActionEvent {
   List<Object?> get props => [chats, roster, invites, drafts];
 }
 
-class AccessibilityLocaleUpdated extends AccessibilityActionEvent {
-  const AccessibilityLocaleUpdated(this.localization);
-
-  final AppLocalizations localization;
-
-  @override
-  List<Object?> get props => [localization.localeName];
-}
-
 class AccessibilityDraftIdUpdated extends AccessibilityActionEvent {
   const AccessibilityDraftIdUpdated(this.draftId);
 

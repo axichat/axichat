@@ -25,8 +25,8 @@ class AxiBadge extends StatelessWidget {
     final text = count > 99 ? '99+' : '$count';
     final resolvedOffset = offset ??
         Offset(
-          spacing.s + spacing.xs - spacing.xxs,
-          -(spacing.s - spacing.xs + spacing.xxs),
+          spacing.s,
+          -spacing.s,
         );
     final badge = DecoratedBox(
       decoration: BoxDecoration(

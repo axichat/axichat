@@ -576,7 +576,7 @@ class SettingsControls extends StatelessWidget {
               link: donateUrl,
               iconData: FontAwesomeIcons.heart,
             ),
-            SizedBox(height: spacing.xxl + spacing.l),
+            SizedBox(height: spacing.xxl),
           ],
         );
       },

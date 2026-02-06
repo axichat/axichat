@@ -5160,7 +5160,7 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
           const double zeroClamp = 0.0;
           const double heightDifferenceThreshold = 4.0;
           const double minimumHeight = calendarTaskPopoverMinHeight;
-          final double popoverChromeInset = context.spacing.m * 2;
+          final double popoverChromeInset = context.spacing.l;
 
           final double usableLeft = viewPadding.left + margin;
           final double usableRight =

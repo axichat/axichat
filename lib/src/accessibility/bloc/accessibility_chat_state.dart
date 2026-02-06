@@ -33,8 +33,8 @@ class AccessibilityChatState extends Equatable {
   final List<Message> messages;
   final Map<String, List<FileMetadataData>> attachments;
   final bool busy;
-  final String? statusMessage;
-  final String? errorMessage;
+  final AccessibilityChatStatus? statusMessage;
+  final AccessibilityChatError? errorMessage;
   final int sendCount;
   final int draftSaveCount;
   final int? draftId;
@@ -57,10 +57,10 @@ class AccessibilityChatState extends Equatable {
         busy: busy ?? this.busy,
         statusMessage: statusMessage == _unset
             ? this.statusMessage
-            : statusMessage as String?,
+            : statusMessage as AccessibilityChatStatus?,
         errorMessage: errorMessage == _unset
             ? this.errorMessage
-            : errorMessage as String?,
+            : errorMessage as AccessibilityChatError?,
         sendCount: sendCount ?? this.sendCount,
         draftSaveCount: draftSaveCount ?? this.draftSaveCount,
         draftId: draftId == _unset ? this.draftId : draftId as int?,

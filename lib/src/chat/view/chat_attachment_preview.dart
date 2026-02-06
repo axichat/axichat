@@ -1610,7 +1610,7 @@ class _FileAttachmentState extends State<_FileAttachment> {
           final availableWidth = constraints.maxWidth;
           final detailsWidth = availableWidth -
               sizing.iconButtonTapTarget -
-              (spacing.s * 2) -
+              (spacing.m) -
               actionRowMinWidth;
           final shouldMeasureText = availableWidth.isFinite && detailsWidth > 0;
           final TextPainter painter = TextPainter(

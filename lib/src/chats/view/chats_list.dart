@@ -160,7 +160,7 @@ class _ChatsListBody extends StatelessWidget {
     );
     final refreshSpinnerExtent = sizing.buttonHeightLg + spacing.s;
     final refreshSpinnerDimension = sizing.progressIndicatorSize + spacing.xs;
-    final refreshOffsetToArmed = spacing.xl + spacing.l;
+    final refreshOffsetToArmed = spacing.xxl;
     final refreshRevealThreshold = context.motion.tapHoverAlpha;
     final refreshIndicatorPadding = spacing.m;
     return BlocListener<ChatsCubit, ChatsState>(
@@ -790,7 +790,7 @@ class _ChatListTileState extends State<ChatListTile> {
     final double unreadHeight =
         showUnreadBadge ? _resolveUnreadHeight(context, unreadCount) : 0.0;
     final unreadCutoutVerticalClearance = spacing.xs;
-    final unreadMinDepth = spacing.s + spacing.xs;
+    final unreadMinDepth = spacing.m;
     final double unreadDepth = showUnreadBadge
         ? math.max(
             unreadMinDepth,
@@ -872,7 +872,7 @@ class _ChatListTileState extends State<ChatListTile> {
     final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final iconCutoutRadius = context.radii.squircle;
     final unreadChildOffset = -spacing.xs;
-    final timestampOffset = (spacing.xs + spacing.xxs) / 2;
+    final timestampOffset = spacing.xs;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
         CutoutSpec(
@@ -956,11 +956,11 @@ class _ChatListTileState extends State<ChatListTile> {
                       scaled(spacing.m),
                       0,
                       scaled(spacing.m),
-                      scaled(spacing.m + spacing.xs),
+                      scaled(spacing.m),
                     ),
                     child: Padding(
                       padding: EdgeInsets.symmetric(
-                        horizontal: scaled(spacing.m + spacing.xs),
+                        horizontal: scaled(spacing.m),
                       ),
                       child: _ChatActionPanel(
                         chat: item,

@@ -627,6 +627,120 @@ abstract class AppLocalizations {
   /// **'Failed to save draft. Try again.'**
   String get chatDraftSaveFailed;
 
+  /// No description provided for @chatInvitePermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to invite users to this room.'**
+  String get chatInvitePermissionDenied;
+
+  /// No description provided for @chatInviteDomainRestricted.
+  ///
+  /// In en, this message translates to:
+  /// **'Invites are limited to the default domain.'**
+  String get chatInviteDomainRestricted;
+
+  /// No description provided for @chatInviteAlreadyMember.
+  ///
+  /// In en, this message translates to:
+  /// **'User is already a member.'**
+  String get chatInviteAlreadyMember;
+
+  /// No description provided for @chatInviteSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite sent.'**
+  String get chatInviteSent;
+
+  /// No description provided for @chatInviteSendFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to send invite.'**
+  String get chatInviteSendFailed;
+
+  /// No description provided for @chatInviteRevoked.
+  ///
+  /// In en, this message translates to:
+  /// **'Invite revoked'**
+  String get chatInviteRevoked;
+
+  /// No description provided for @chatInviteRevokeFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to revoke invite.'**
+  String get chatInviteRevokeFailed;
+
+  /// No description provided for @chatInviteJoinSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Joined room.'**
+  String get chatInviteJoinSuccess;
+
+  /// No description provided for @chatInviteJoinFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not join room.'**
+  String get chatInviteJoinFailed;
+
+  /// No description provided for @chatNicknameUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Nickname updated.'**
+  String get chatNicknameUpdated;
+
+  /// No description provided for @chatNicknameUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not change nickname.'**
+  String get chatNicknameUpdateFailed;
+
+  /// No description provided for @chatRoomAvatarPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to update the room avatar.'**
+  String get chatRoomAvatarPermissionDenied;
+
+  /// No description provided for @chatRoomAvatarUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Room avatar updated.'**
+  String get chatRoomAvatarUpdated;
+
+  /// No description provided for @chatRoomAvatarUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update room avatar.'**
+  String get chatRoomAvatarUpdateFailed;
+
+  /// No description provided for @chatPinPermissionDenied.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to pin messages in this room.'**
+  String get chatPinPermissionDenied;
+
+  /// No description provided for @chatMessageForwarded.
+  ///
+  /// In en, this message translates to:
+  /// **'Message forwarded.'**
+  String get chatMessageForwarded;
+
+  /// No description provided for @chatMessageForwardFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unable to forward message.'**
+  String get chatMessageForwardFailed;
+
+  /// No description provided for @chatModerationRequested.
+  ///
+  /// In en, this message translates to:
+  /// **'Moderation request sent.'**
+  String get chatModerationRequested;
+
+  /// No description provided for @chatModerationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not complete that action. Check permissions or connectivity.'**
+  String get chatModerationFailed;
+
   /// No description provided for @chatAttachmentInaccessible.
   ///
   /// In en, this message translates to:
@@ -896,12 +1010,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Disabling can break threading and attachment grouping.'**
   String get chatSignatureHintWarning;
-
-  /// No description provided for @chatInviteRevoked.
-  ///
-  /// In en, this message translates to:
-  /// **'Invite revoked'**
-  String get chatInviteRevoked;
 
   /// No description provided for @chatInvite.
   ///
@@ -3575,7 +3683,7 @@ abstract class AppLocalizations {
   /// No description provided for @authCustomServerDomainOrIp.
   ///
   /// In en, this message translates to:
-  /// **'Domain or IP'**
+  /// **'Domain'**
   String get authCustomServerDomainOrIp;
 
   /// No description provided for @authCustomServerXmppLabel.

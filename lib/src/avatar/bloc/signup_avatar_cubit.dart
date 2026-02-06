@@ -11,7 +11,6 @@ import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
 import 'package:axichat/src/avatar/util/avatar_carousel_engine.dart';
 import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' show AvatarUploadPayload;
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
@@ -30,26 +29,6 @@ enum SignupAvatarErrorType {
   invalidImage,
   sizeExceeded,
   processingFailed,
-}
-
-extension SignupAvatarErrorTypeX on SignupAvatarErrorType {
-  String resolve(
-    AppLocalizations l10n, {
-    required bool hasSourceBytes,
-    int? maxKilobytes,
-    required int fallbackMaxKilobytes,
-  }) {
-    return switch (this) {
-      SignupAvatarErrorType.openFailed => l10n.signupAvatarOpenError,
-      SignupAvatarErrorType.readFailed => l10n.signupAvatarReadError,
-      SignupAvatarErrorType.invalidImage => l10n.signupAvatarInvalidImage,
-      SignupAvatarErrorType.sizeExceeded =>
-        l10n.signupAvatarSizeError(maxKilobytes ?? fallbackMaxKilobytes),
-      SignupAvatarErrorType.processingFailed => hasSourceBytes
-          ? l10n.signupAvatarProcessError
-          : l10n.signupAvatarRenderError,
-    };
-  }
 }
 
 class SignupAvatarCubit extends Cubit<SignupAvatarState> {

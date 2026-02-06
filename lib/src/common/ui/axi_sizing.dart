@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/ui/axi_spacing.dart';
 import 'package:flutter/material.dart';
 
 class AxiSizing extends ThemeExtension<AxiSizing> {
@@ -198,7 +199,7 @@ const AxiSizing axiSizing = AxiSizing(
   appBarScrolledUnderElevation: 0,
   dialogMaxWidth: 640,
   dialogMaxHeightFraction: 0.9,
-  composeWindowWidth: 520,
+  composeWindowWidth: axiSpaceXxl * 4,
   composeWindowExpandedWidth: 720,
   composeWindowHeight: 560,
   composeWindowExpandedHeight: 640,

@@ -29,6 +29,7 @@ import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/view/notification_l10n.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -607,6 +608,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           routerConfig: _router,
           builder: (context, child) {
             context.read<NotificationService>().updateLocalizations(
+                  AppLocalizations.of(context)!.toNotificationStrings(),
+                );
+            context
+                .read<XmppService>()
+                .updateLocalizations(AppLocalizations.of(context)!);
+            context.read<CalendarReminderController>().updateLocalizations(
                   AppLocalizations.of(context)!,
                 );
             final endpointConfig =

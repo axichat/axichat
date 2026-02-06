@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/attachments/bloc/attachment_gallery_bloc.dart';
+import 'package:axichat/src/attachments/view/attachment_gallery_l10n.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
@@ -213,7 +214,7 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     const gridMinColumns = 2;
     const gridMaxColumns = 4;
     const gridMinAvailableWidth = 0.0;
-    final gridHorizontalPadding = context.spacing.m * 2;
+    final gridHorizontalPadding = context.spacing.l;
     return BlocListener<SettingsCubit, SettingsState>(
       listenWhen: (previous, current) =>
           previous.endpointConfig != current.endpointConfig,

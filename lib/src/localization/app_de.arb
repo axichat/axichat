@@ -96,6 +96,25 @@
   "chatDraftMissingContent": "Füge vor dem Speichern eine Nachricht, einen Betreff oder einen Anhang hinzu.",
   "chatDraftSaved": "In Entwürfe gespeichert.",
   "chatDraftSaveFailed": "Entwurf konnte nicht gespeichert werden. Versuche es erneut.",
+  "chatInvitePermissionDenied": "You do not have permission to invite users to this room.",
+  "chatInviteDomainRestricted": "Invites are limited to the default domain.",
+  "chatInviteAlreadyMember": "User is already a member.",
+  "chatInviteSent": "Invite sent.",
+  "chatInviteSendFailed": "Failed to send invite.",
+  "chatInviteRevoked": "Invite revoked.",
+  "chatInviteRevokeFailed": "Failed to revoke invite.",
+  "chatInviteJoinSuccess": "Joined room.",
+  "chatInviteJoinFailed": "Could not join room.",
+  "chatNicknameUpdated": "Nickname updated.",
+  "chatNicknameUpdateFailed": "Could not change nickname.",
+  "chatRoomAvatarPermissionDenied": "You do not have permission to update the room avatar.",
+  "chatRoomAvatarUpdated": "Room avatar updated.",
+  "chatRoomAvatarUpdateFailed": "Could not update room avatar.",
+  "chatPinPermissionDenied": "You do not have permission to pin messages in this room.",
+  "chatMessageForwarded": "Message forwarded.",
+  "chatMessageForwardFailed": "Unable to forward message.",
+  "chatModerationRequested": "Moderation request sent.",
+  "chatModerationFailed": "Could not complete that action. Check permissions or connectivity.",
   "chatAttachmentInaccessible": "Die ausgewählte Datei ist nicht zugänglich.",
   "chatAttachmentFailed": "Datei konnte nicht angehängt werden.",
   "chatAttachmentView": "Ansehen",
@@ -491,7 +510,7 @@
   "calendarNothingHere": "Hier gibt es noch nichts",
   "calendarTaskNotFound": "Aufgabe nicht gefunden",
   "calendarDayEventsTitle": "Tagestermine",
-  "calendarDayEventsEmpty": "Keine Tagesereignisse für dieses Datum",
+  "calendarDayEventsEmpty": "Keine Tagesereignisse fur dieses Datum",
   "calendarDayEventsAdd": "Tagestermin hinzufügen",
   "accessibilityNewContactLabel": "Kontaktadresse",
   "accessibilityNewContactHint": "jemand@beispiel.de",
@@ -787,7 +806,7 @@
   "settingsShareTokenFooterDescription": "Hilft, E-Mail-Threads mit mehreren Empfängern und Anhängen zusammenzuhalten. Deaktivieren kann Threads aufbrechen.",
   "authCustomServerTitle": "Eigener Server",
   "authCustomServerDescription": "XMPP/SMTP-Endpunkte überschreiben oder DNS-Abfragen aktivieren. Felder leer lassen, um Standardwerte zu behalten.",
-  "authCustomServerDomainOrIp": "Domain oder IP",
+  "authCustomServerDomainOrIp": "Domain",
   "authCustomServerXmppLabel": "XMPP",
   "authCustomServerSmtpLabel": "SMTP",
   "authCustomServerUseDns": "DNS verwenden",
@@ -2625,9 +2644,7 @@
   "calendarTaskSplitRequiresSchedule": "Aufgabe muss geplant sein, um geteilt zu werden.",
   "calendarTaskSplitTooShort": "Aufgabe ist zu kurz zum Teilen.",
   "calendarTaskSplitUnable": "Aufgabe kann zu diesem Zeitpunkt nicht geteilt werden.",
-  "calendarTaskNotFound": "Aufgabe nicht gefunden",
   "calendarDayEventsLabel": "Tagesereignisse",
-  "calendarDayEventsEmpty": "Keine Tagesereignisse fur dieses Datum",
   "calendarShareAsIcsAction": "Als .ics teilen",
   "calendarCompletedLabel": "Abgeschlossen",
   "calendarDeadlineDueToday": "Fallig heute",
@@ -2692,8 +2709,7 @@
   "chatMessageDetailsMetadataLabel": "Nachrichtenmetadaten",
   "chatMessageDetailsHeadersLabel": "Roh-Header",
   "chatMessageDetailsHeadersActionLabel": "Header anzeigen",
-  "chatMessageDetailsHeadersNote":
-      "Header werden aus der ursprunglichen RFC822-Nachricht geladen.",
+  "chatMessageDetailsHeadersNote": "Header werden aus der ursprunglichen RFC822-Nachricht geladen.",
   "chatMessageDetailsHeadersLoadingLabel": "Header werden geladen...",
   "chatMessageDetailsHeadersUnavailableLabel": "Header nicht verfugbar.",
   "chatMessageDetailsStanzaIdLabel": "Stanza-ID",
@@ -2701,18 +2717,12 @@
   "chatMessageDetailsOccupantIdLabel": "Occupant-ID",
   "chatMessageDetailsDeltaIdLabel": "Delta-Nachrichten-ID",
   "chatMessageDetailsLocalIdLabel": "Lokale Nachrichten-ID",
-  "chatCalendarFragmentShareDeniedMessage":
-      "Kalenderkarten sind fur deine Rolle in diesem Raum deaktiviert.",
-  "chatAvailabilityRequestAccountMissingMessage":
-      "Verfugbarkeitsanfragen sind derzeit nicht verfugbar.",
-  "chatAvailabilityRequestEmailUnsupportedMessage":
-      "Verfugbarkeit ist fur E-Mail-Chats nicht verfugbar.",
-  "chatAvailabilityRequestInvalidRangeMessage":
-      "Der Zeitraum der Verfugbarkeitsanfrage ist ungultig.",
-  "chatAvailabilityRequestCalendarUnavailableMessage":
-      "Kalender ist nicht verfugbar.",
-  "chatAvailabilityRequestChatCalendarUnavailableMessage":
-      "Chat-Kalender ist nicht verfugbar.",
+  "chatCalendarFragmentShareDeniedMessage": "Kalenderkarten sind fur deine Rolle in diesem Raum deaktiviert.",
+  "chatAvailabilityRequestAccountMissingMessage": "Verfugbarkeitsanfragen sind derzeit nicht verfugbar.",
+  "chatAvailabilityRequestEmailUnsupportedMessage": "Verfugbarkeit ist fur E-Mail-Chats nicht verfugbar.",
+  "chatAvailabilityRequestInvalidRangeMessage": "Der Zeitraum der Verfugbarkeitsanfrage ist ungultig.",
+  "chatAvailabilityRequestCalendarUnavailableMessage": "Kalender ist nicht verfugbar.",
+  "chatAvailabilityRequestChatCalendarUnavailableMessage": "Chat-Kalender ist nicht verfugbar.",
   "chatAvailabilityRequestTaskTitleFallback": "Angeforderte Zeit",
   "chatSenderAddressPrefix": "JID: ",
   "chatRecipientVisibilityCcLabel": "CC",
@@ -2739,14 +2749,10 @@
     }
   },
   "chatInviteConfirmLabel": "Annehmen",
-  "chatChooseTextToAddHint":
-      "Wahle einen Teil der Nachricht aus, um ihn an den Kalender zu senden, oder bearbeite ihn zuerst.",
-  "chatAttachmentAutoDownloadLabel":
-      "Anhange in diesem Chat automatisch herunterladen",
-  "chatAttachmentAutoDownloadHintOn":
-      "Anhange in diesem Chat werden automatisch heruntergeladen.",
-  "chatAttachmentAutoDownloadHintOff":
-      "Anhange werden blockiert, bis du sie bestatigst.",
+  "chatChooseTextToAddHint": "Wahle einen Teil der Nachricht aus, um ihn an den Kalender zu senden, oder bearbeite ihn zuerst.",
+  "chatAttachmentAutoDownloadLabel": "Anhange in diesem Chat automatisch herunterladen",
+  "chatAttachmentAutoDownloadHintOn": "Anhange in diesem Chat werden automatisch heruntergeladen.",
+  "chatAttachmentAutoDownloadHintOff": "Anhange werden blockiert, bis du sie bestatigst.",
   "chatAttachmentCaption": "📎 {filename} ({size})",
   "@chatAttachmentCaption": {
     "placeholders": {
@@ -2764,10 +2770,8 @@
   "commonFileSizeUnitMegabytes": "MB",
   "commonFileSizeUnitGigabytes": "GB",
   "commonFileSizeUnitTerabytes": "TB",
-  "chatAttachmentTooLargeMessageDefault":
-      "Anhang uberschreitet das Serverlimit.",
-  "chatAttachmentTooLargeMessage":
-      "Anhang uberschreitet das Serverlimit ({limit}).",
+  "chatAttachmentTooLargeMessageDefault": "Anhang uberschreitet das Serverlimit.",
+  "chatAttachmentTooLargeMessage": "Anhang uberschreitet das Serverlimit ({limit}).",
   "@chatAttachmentTooLargeMessage": {
     "placeholders": {
       "limit": {
@@ -2790,8 +2794,7 @@
   "@chatUnreadDividerLabel": {
     "description": "Label for the unread messages divider in chat history."
   },
-  "messageErrorServiceUnavailableTooltip":
-      "Der Dienst meldete ein vorubergehendes Problem.",
+  "messageErrorServiceUnavailableTooltip": "Der Dienst meldete ein vorubergehendes Problem.",
   "messageErrorServiceUnavailable": "Dienst nicht verfugbar",
   "messageErrorServerNotFound": "Server nicht gefunden",
   "messageErrorServerTimeout": "Serverzeituberschreitung",
@@ -2820,50 +2823,36 @@
   "messageErrorEmailSendFailure": "E-Mail-Versand fehlgeschlagen",
   "messageErrorEmailAttachmentTooLarge": "E-Mail-Anhang zu gross",
   "messageErrorEmailRecipientRejected": "E-Mail-Empfanger abgelehnt",
-  "messageErrorEmailAuthenticationFailed":
-      "E-Mail-Authentifizierung fehlgeschlagen",
+  "messageErrorEmailAuthenticationFailed": "E-Mail-Authentifizierung fehlgeschlagen",
   "messageErrorEmailBounced": "E-Mail unzustellbar",
   "messageErrorEmailThrottled": "E-Mail gedrosselt",
-  "chatEmailResendFailedDetails":
-      "E-Mail konnte nicht erneut gesendet werden.",
+  "chatEmailResendFailedDetails": "E-Mail konnte nicht erneut gesendet werden.",
   "authEnableXmppOrSmtp": "Enable XMPP or SMTP to continue.",
   "authUsernamePasswordMismatch": "Username and password have different nullness.",
-  "authStoredCredentialsOutdated":
-      "Stored credentials are outdated. Please log in manually.",
-  "authMissingDatabaseSecrets":
-      "Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.",
+  "authStoredCredentialsOutdated": "Stored credentials are outdated. Please log in manually.",
+  "authMissingDatabaseSecrets": "Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.",
   "authInvalidCredentials": "Incorrect username or password",
   "authGenericError": "Error. Please try again later.",
-  "authStorageLocked":
-      "Storage is locked by another Axichat instance. Close other windows or processes and try again.",
-  "authEmailServerUnreachable":
-      "Unable to reach the email server. Please try again.",
+  "authStorageLocked": "Storage is locked by another Axichat instance. Close other windows or processes and try again.",
+  "authEmailServerUnreachable": "Unable to reach the email server. Please try again.",
   "authEmailSetupFailed": "Email setup failed. Please try again.",
-  "authEmailPasswordMissing":
-      "Stored email password missing. Please log in manually.",
-  "authEmailAuthFailed":
-      "Email authentication failed. Please log in again.",
-  "signupCleanupInProgress":
-      "Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online; try again once it finishes.",
+  "authEmailPasswordMissing": "Stored email password missing. Please log in manually.",
+  "authEmailAuthFailed": "Email authentication failed. Please log in again.",
+  "signupCleanupInProgress": "Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online; try again once it finishes.",
   "signupFailedTryAgain": "Failed to register, try again later.",
   "authPasswordMismatch": "New passwords do not match.",
-  "authPasswordChangeDisabled":
-      "Password changes are disabled for this account.",
-  "authPasswordChangeRejected":
-      "Current password is incorrect, or the new password does not meet server requirements.",
+  "authPasswordChangeDisabled": "Password changes are disabled for this account.",
+  "authPasswordChangeRejected": "Current password is incorrect, or the new password does not meet server requirements.",
   "authPasswordChangeFailed": "Unable to change password. Please try again later.",
   "authPasswordChangeSuccess": "Password changed successfully.",
   "authPasswordIncorrect": "Incorrect password. Please try again.",
   "authAccountNotFound": "Account not found.",
-  "authAccountDeletionDisabled":
-      "Account deletion is disabled for this account.",
+  "authAccountDeletionDisabled": "Account deletion is disabled for this account.",
   "authAccountDeletionFailed": "Unable to delete account. Please try again later.",
   "authDemoModeFailed": "Failed to start demo mode. Please try again.",
-  "authLoginBackoff":
-      "Too many attempts. Wait {seconds} seconds before trying again.",
+  "authLoginBackoff": "Too many attempts. Wait {seconds} seconds before trying again.",
   "signupAvatarCropTitle": "Crop & focus",
-  "signupAvatarCropHint":
-      "Only the area inside the circle will appear in the final avatar.",
+  "signupAvatarCropHint": "Only the area inside the circle will appear in the final avatar.",
   "xmppOperationPubSubBookmarksStart": "Syncing bookmarks...",
   "xmppOperationPubSubBookmarksSuccess": "Bookmarks synced",
   "xmppOperationPubSubBookmarksFailure": "Bookmarks sync failed",

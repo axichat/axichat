@@ -14,7 +14,7 @@ import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
-import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
+import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
@@ -23,7 +23,6 @@ import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/html_content.dart';
-import 'package:axichat/src/common/message_error_l10n.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
@@ -37,7 +36,6 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -58,12 +56,8 @@ part 'chat_bloc.freezed.dart';
 part 'chat_event.dart';
 part 'chat_state.dart';
 
-const _attachmentSendFailureMessage =
-    'Unable to send attachment. Please try again.';
 const int _emailAttachmentBundleMinimumCount = 2;
 const _calendarTaskIcsAttachmentMimeType = 'text/calendar';
-const _calendarTaskIcsAttachmentSendFailureMessage =
-    'Unable to send calendar invite. Please try again.';
 const _calendarTaskIcsAttachmentSendFailureLogMessage =
     'Failed to send calendar task attachment';
 const _attachmentMimeTypeResolutionLogMessage =
@@ -78,14 +72,7 @@ const _emptySignatureValue = '';
 const int _deltaMessageIdUnset = 0;
 const _bundledAttachmentSendFailureLogMessage =
     'Failed to send bundled email attachment';
-const _pinPermissionDeniedMessage =
-    'You do not have permission to pin messages in this room.';
-const _pinRoomStateLoadingMessage = 'Room members are still loading.';
 const _pinSyncFailedLogMessage = 'Failed to sync pinned messages.';
-const _roomAvatarPermissionDeniedMessage =
-    'You do not have permission to update the room avatar.';
-const _roomAvatarUpdateSuccessMessage = 'Room avatar updated.';
-const _roomAvatarUpdateFailureMessage = 'Could not update room avatar.';
 const _roomAvatarUpdateFailedLogMessage = 'Failed to update room avatar.';
 const _roomAffiliationRefreshFailedLogMessage =
     'Failed to refresh room affiliations.';
@@ -100,8 +87,6 @@ const _sendEmailMessageFailedLogMessage = 'Failed to send email message.';
 const _sendMessageFailedLogMessage = 'Failed to send message.';
 const _messageReactionFailedLogMessage = 'Failed to react to message.';
 const _messageForwardFailedLogMessage = 'Failed to forward message.';
-const _messageForwardSuccessToastMessage = 'Message forwarded.';
-const _messageForwardFailedToastMessage = 'Unable to forward message.';
 const _messageResendFailedLogMessage = 'Failed to resend message.';
 const _emailResendFailedLogMessage = 'Failed to resend email message.';
 const _attachmentSendFailedLogMessage = 'Failed to send attachment.';
@@ -172,7 +157,7 @@ class ChatToast extends Equatable {
   });
 
   final String? title;
-  final String? message;
+  final ChatMessageKey? message;
   final ChatToastVariant variant;
   final ChatToastAction? action;
   final int? actionDraftId;
@@ -433,11 +418,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final MucService _mucService;
   ChatSettingsSnapshot _settingsSnapshot;
 
-  AppLocalizations get _l10n {
-    final locale = _settingsSnapshot.language.locale ?? const Locale('en');
-    return lookupAppLocalizations(locale);
-  }
-
   final Logger _log = Logger('ChatBloc');
   var _pendingAttachmentSeed = 0;
   var _composerHydrationSeed = 0;
@@ -457,7 +437,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
   AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
-  String? _emailSyncComposerMessage;
+  ChatMessageKey? _emailSyncComposerMessage;
   String? _mamBeforeId;
   int? _mamTotalCount;
   bool _mamComplete = false;
@@ -2097,7 +2077,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message: 'Room members are still loading.',
+            message: ChatMessageKey.chatMembersLoading,
             variant: ChatToastVariant.warning,
           ),
           toastId: state.toastId + 1,
@@ -2112,7 +2092,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message: 'You do not have permission to invite users to this room.',
+            message: ChatMessageKey.chatInvitePermissionDenied,
             variant: ChatToastVariant.warning,
           ),
           toastId: state.toastId + 1,
@@ -2136,7 +2116,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message: 'Invites are limited to the default domain.',
+            message: ChatMessageKey.chatInviteDomainRestricted,
             variant: ChatToastVariant.warning,
           ),
           toastId: state.toastId + 1,
@@ -2159,7 +2139,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (alreadyMember) {
         emit(
           state.copyWith(
-            toast: const ChatToast(message: 'User is already a member'),
+            toast: const ChatToast(
+              message: ChatMessageKey.chatInviteAlreadyMember,
+            ),
             toastId: state.toastId + 1,
           ),
         );
@@ -2174,7 +2156,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       emit(
         state.copyWith(
-          toast: const ChatToast(message: 'Invite sent'),
+          toast: const ChatToast(message: ChatMessageKey.chatInviteSent),
           toastId: state.toastId + 1,
         ),
       );
@@ -2183,7 +2165,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message: 'Failed to send invite.',
+            message: ChatMessageKey.chatInviteSendFailed,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
@@ -2211,7 +2193,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       emit(
         state.copyWith(
-          toast: const ChatToast(message: 'Invite revoked'),
+          toast: const ChatToast(message: ChatMessageKey.chatInviteRevoked),
           toastId: state.toastId + 1,
         ),
       );
@@ -2220,7 +2202,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message: 'Failed to revoke invite',
+            message: ChatMessageKey.chatInviteRevokeFailed,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
@@ -2239,11 +2221,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final invitee = data['invitee'] as String?;
     final password = data['password'] as String?;
     if (roomJid == null) return;
-    final trimmedRoomName = roomName?.trim();
-    const fallbackRoomName = 'group chat';
-    final resolvedRoomName = trimmedRoomName?.isNotEmpty == true
-        ? trimmedRoomName!
-        : fallbackRoomName;
     if (invitee != null &&
         _chatsService.myJid != null &&
         mox.JID.fromString(invitee).toBare().toString() !=
@@ -2258,7 +2235,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       emit(
         state.copyWith(
-          toast: ChatToast(message: "Joined '$resolvedRoomName'"),
+          toast: const ChatToast(message: ChatMessageKey.chatInviteJoinSuccess),
           toastId: state.toastId + 1,
         ),
       );
@@ -2267,7 +2244,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message: 'Could not join room',
+            message: ChatMessageKey.chatInviteJoinFailed,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
@@ -2304,7 +2281,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         state.copyWith(
           chat: state.chat?.copyWith(myNickname: trimmed),
           roomState: _mucService.roomStateFor(chatJid) ?? state.roomState,
-          toast: const ChatToast(message: 'Nickname updated'),
+          toast: const ChatToast(message: ChatMessageKey.chatNicknameUpdated),
           toastId: state.toastId + 1,
         ),
       );
@@ -2317,7 +2294,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message: 'Could not change nickname',
+            message: ChatMessageKey.chatNicknameUpdateFailed,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
@@ -2338,7 +2315,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message: _roomAvatarPermissionDeniedMessage,
+            message: ChatMessageKey.chatRoomAvatarPermissionDenied,
             variant: ChatToastVariant.warning,
           ),
           toastId: state.toastId + 1,
@@ -2356,7 +2333,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emit(
           state.copyWith(
             toast: const ChatToast(
-              message: _roomAvatarUpdateFailureMessage,
+              message: ChatMessageKey.chatRoomAvatarUpdateFailed,
               variant: ChatToastVariant.destructive,
             ),
             toastId: state.toastId + 1,
@@ -2366,7 +2343,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       emit(
         state.copyWith(
-          toast: const ChatToast(message: _roomAvatarUpdateSuccessMessage),
+          toast: const ChatToast(message: ChatMessageKey.chatRoomAvatarUpdated),
           toastId: state.toastId + 1,
         ),
       );
@@ -2375,7 +2352,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message: _roomAvatarUpdateFailureMessage,
+            message: ChatMessageKey.chatRoomAvatarUpdateFailed,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
@@ -2400,7 +2377,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           chat: chat.copyWith(contactDisplayName: alias),
-          toast: ChatToast(message: event.successMessage),
+          toast: ChatToast(title: event.successMessage),
           toastId: state.toastId + 1,
         ),
       );
@@ -2409,7 +2386,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: ChatToast(
-            message: event.failureMessage,
+            title: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
@@ -2482,7 +2459,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: ChatToast(
-            message: 'Requested ${event.action.name} for ${occupant.nick}',
+            message: ChatMessageKey.chatModerationRequested,
           ),
           toastId: state.toastId + 1,
         ),
@@ -2496,8 +2473,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: const ChatToast(
-            message:
-                'Could not complete that action. Check permissions or connectivity.',
+            message: ChatMessageKey.chatModerationFailed,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
@@ -2524,12 +2500,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       _emailSyncComposerMessage = null;
     } else {
-      final message = nextState.message ?? _l10n.messageErrorServiceUnavailable;
+      const message = ChatMessageKey.messageErrorServiceUnavailable;
       _emailSyncComposerMessage = message;
       composerError = message;
     }
     emit(
-      state.copyWith(emailSyncState: nextState, composerError: composerError),
+      state.copyWith(
+        emailSyncState: nextState,
+        composerError: composerError,
+      ),
     );
   }
 
@@ -2771,7 +2750,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         !hasQueuedAttachments &&
         !hasSubject &&
         !hasCalendarTaskIcs) {
-      emit(state.copyWith(composerError: _l10n.chatComposerEmptyMessage));
+      emit(
+        state.copyWith(
+          composerError: ChatMessageKey.chatComposerEmptyMessage,
+        ),
+      );
       return;
     }
     if (state.composerError != null) {
@@ -2845,13 +2828,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final service = _emailService;
     if (requiresEmail && service == null) {
       emit(
-        state.copyWith(composerError: _l10n.chatComposerEmailUnavailable),
+        state.copyWith(
+          composerError: ChatMessageKey.chatComposerEmailUnavailable,
+        ),
       );
       return;
     }
     if (attachmentsViaXmpp && !event.supportsHttpFileUpload) {
       emit(
-        state.copyWith(composerError: _l10n.chatComposerFileUploadUnavailable),
+        state.copyWith(
+          composerError: ChatMessageKey.chatComposerFileUploadUnavailable,
+        ),
       );
       return;
     }
@@ -2865,13 +2852,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           })
         : const <ComposerRecipient>[];
     if (requiresEmail && emailRecipients.isEmpty) {
-      emit(state.copyWith(composerError: _l10n.chatComposerSelectRecipient));
+      emit(
+        state.copyWith(
+          composerError: ChatMessageKey.chatComposerSelectRecipient,
+        ),
+      );
       return;
     }
     if (requiresEmail && invalidEmailRecipients.isNotEmpty) {
       emit(
         state.copyWith(
-          composerError: _l10n.chatComposerEmailRecipientUnavailable,
+          composerError: ChatMessageKey.chatComposerEmailRecipientUnavailable,
         ),
       );
       return;
@@ -2912,7 +2903,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             );
             emit(
               state.copyWith(
-                composerError: _l10n.chatComposerAttachmentBundleFailed,
+                composerError:
+                    ChatMessageKey.chatComposerAttachmentBundleFailed,
               ),
             );
             return;
@@ -2977,8 +2969,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               emailBodyTrimmed?.isNotEmpty == true ? emailBody : null;
           final htmlCaptionForAttachments =
               captionForAttachments == null ? null : emailHtmlBody;
-          final calendarTaskCaption = captionForAttachments ??
-              effectiveTaskForEmail?.toShareText(_l10n);
+          final calendarTaskCaption =
+              captionForAttachments ?? event.calendarTaskShareText;
           var queuedAttachmentsSent = !hasQueuedEmailAttachments;
           if (hasQueuedEmailAttachments) {
             final attachmentsSent = shouldBundleEmailAttachments
@@ -3043,7 +3035,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                       : captionForAttachments;
               final String preview = caption?.trim().isNotEmpty == true
                   ? caption!.trim()
-                  : _l10n.chatAttachmentFallbackLabel;
+                  : event.attachmentFallbackLabel;
               await _messageService.updateDemoChatSummary(
                 chatJid: chat.jid,
                 lastMessage: preview,
@@ -3116,7 +3108,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final mappedError = DeltaErrorMapper.resolve(error.message);
         emit(
           state.copyWith(
-            composerError: mappedError.label(_l10n),
+            composerError: _chatMessageKeyForMessageError(mappedError),
           ),
         );
       }
@@ -3404,7 +3396,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _attachToast(
           state,
           ChatToast(
-            message: event.failureMessage,
+            title: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
         ),
@@ -3415,8 +3407,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _attachToast(
         state,
         ChatToast(
-          title: event.successTitle,
-          message: event.successMessage,
+          title: event.successMessage,
         ),
       ),
     );
@@ -3479,7 +3470,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _attachToast(
           state,
           ChatToast(
-            message: event.failureMessage,
+            title: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
         ),
@@ -3502,7 +3493,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _attachToast(
           state,
           ChatToast(
-            message: event.failureMessage,
+            title: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
         ),
@@ -3540,7 +3531,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           _attachToast(
             state,
             const ChatToast(
-              message: _pinRoomStateLoadingMessage,
+              message: ChatMessageKey.chatMembersLoading,
               variant: ChatToastVariant.warning,
             ),
           ),
@@ -3552,7 +3543,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           _attachToast(
             state,
             const ChatToast(
-              message: _pinPermissionDeniedMessage,
+              message: ChatMessageKey.chatPinPermissionDenied,
               variant: ChatToastVariant.warning,
             ),
           ),
@@ -3617,7 +3608,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          const ChatToast(message: _messageForwardSuccessToastMessage),
+          const ChatToast(message: ChatMessageKey.chatMessageForwarded),
         ),
       );
     }
@@ -3627,7 +3618,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _attachToast(
           state,
           const ChatToast(
-            message: _messageForwardFailedToastMessage,
+            message: ChatMessageKey.chatMessageForwardFailed,
             variant: ChatToastVariant.destructive,
           ),
         ),
@@ -3825,13 +3816,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (shouldUseEmail && service == null) return;
     if (shouldUseEmail &&
         !_hasEmailTarget(chat: chat, recipients: recipients)) {
+      const message =
+          ChatMessageKey.chatComposerEmailAttachmentRecipientRequired;
       emit(
         _attachToast(
           state.copyWith(
-            composerError: _l10n.chatComposerEmailAttachmentRecipientRequired,
+            composerError: message,
           ),
           ChatToast(
-            message: _l10n.chatComposerEmailAttachmentRecipientRequired,
+            message: message,
             variant: ChatToastVariant.warning,
           ),
         ),
@@ -3900,7 +3893,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (uploadLimitBytes != null &&
         uploadLimitBytes > 0 &&
         sizeBytes > uploadLimitBytes) {
-      final message = _attachmentTooLargeMessage(uploadLimitBytes);
+      const message = ChatMessageKey.messageErrorFileUploadFailure;
       _replacePendingAttachment(
         placeholder.copyWith(
           attachment: preparedAttachment,
@@ -3910,7 +3903,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
         emit,
       );
-      emit(state.copyWith(composerError: message));
+      emit(
+        state.copyWith(
+          composerError: message,
+        ),
+      );
       return;
     }
     _replacePendingAttachment(
@@ -3946,8 +3943,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          ChatToast(
-            message: _l10n.chatEmailOfflineRetryMessage,
+          const ChatToast(
+            message: ChatMessageKey.chatEmailOfflineRetryMessage,
             variant: ChatToastVariant.warning,
           ),
         ),
@@ -4031,8 +4028,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          ChatToast(
-            message: _l10n.chatEmailOfflineRetryMessage,
+          const ChatToast(
+            message: ChatMessageKey.chatEmailOfflineRetryMessage,
             variant: ChatToastVariant.warning,
           ),
         ),
@@ -4119,7 +4116,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _markPendingAttachmentFailed(
           current.id,
           emit,
-          message: state.composerError ?? _attachmentSendFailureMessage,
+          message:
+              state.composerError ?? ChatMessageKey.chatAttachmentSendFailed,
         );
       }
       return false;
@@ -4140,13 +4138,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on DeltaChatException catch (error, stackTrace) {
       _log.safeWarning(_attachmentSendFailedLogMessage, error, stackTrace);
       final mappedError = DeltaErrorMapper.resolve(error.message);
-      final readableMessage = mappedError.label(_l10n);
+      final readableMessage = _chatMessageKeyForMessageError(mappedError);
       _markPendingAttachmentFailed(current.id, emit, message: readableMessage);
-      emit(state.copyWith(composerError: readableMessage));
+      emit(
+        state.copyWith(
+          composerError: readableMessage,
+        ),
+      );
     } on Exception catch (error, stackTrace) {
       _log.safeWarning(_attachmentSendFailedLogMessage, error, stackTrace);
       _markPendingAttachmentFailed(current.id, emit);
-      emit(state.copyWith(composerError: _attachmentSendFailureMessage));
+      emit(
+        state.copyWith(
+          composerError: ChatMessageKey.chatAttachmentSendFailed,
+        ),
+      );
     }
     return false;
   }
@@ -4192,7 +4198,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (attachment == null) {
       emit(
         state.copyWith(
-          composerError: _calendarTaskIcsAttachmentSendFailureMessage,
+          composerError: ChatMessageKey.calendarTaskShareSendFailed,
         ),
       );
       return false;
@@ -4229,8 +4235,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         stackTrace,
       );
       final mappedError = DeltaErrorMapper.resolve(error.message);
-      final readableMessage = mappedError.label(_l10n);
-      emit(state.copyWith(composerError: readableMessage));
+      final readableMessage = _chatMessageKeyForMessageError(mappedError);
+      emit(
+        state.copyWith(
+          composerError: readableMessage,
+        ),
+      );
       return false;
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -4240,7 +4250,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       emit(
         state.copyWith(
-          composerError: _calendarTaskIcsAttachmentSendFailureMessage,
+          composerError: ChatMessageKey.calendarTaskShareSendFailed,
         ),
       );
       return false;
@@ -4357,7 +4367,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _markPendingAttachmentsFailed(
           attachments,
           emit,
-          message: state.composerError ?? _attachmentSendFailureMessage,
+          message:
+              state.composerError ?? ChatMessageKey.chatAttachmentSendFailed,
         );
         return false;
       }
@@ -4381,13 +4392,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           stackTrace,
         );
         final mappedError = DeltaErrorMapper.resolve(error.message);
-        final readableMessage = mappedError.label(_l10n);
+        final readableMessage = _chatMessageKeyForMessageError(mappedError);
         _markPendingAttachmentsFailed(
           attachments,
           emit,
           message: readableMessage,
         );
-        emit(state.copyWith(composerError: readableMessage));
+        emit(
+          state.copyWith(
+            composerError: readableMessage,
+          ),
+        );
       } on Exception catch (error, stackTrace) {
         _log.warning(
           _bundledAttachmentSendFailureLogMessage,
@@ -4395,7 +4410,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           stackTrace,
         );
         _markPendingAttachmentsFailed(attachments, emit);
-        emit(state.copyWith(composerError: _attachmentSendFailureMessage));
+        emit(
+          state.copyWith(
+            composerError: ChatMessageKey.chatAttachmentSendFailed,
+          ),
+        );
       }
     } finally {
       EmailAttachmentBundler.scheduleCleanup(bundledAttachment);
@@ -4435,7 +4454,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     if (!supportsHttpFileUpload) {
       emit(
-        state.copyWith(composerError: _l10n.chatComposerFileUploadUnavailable),
+        state.copyWith(
+          composerError: ChatMessageKey.chatComposerFileUploadUnavailable,
+        ),
       );
       return false;
     }
@@ -4500,8 +4521,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
         }
         _removePendingAttachment(current.id, emit);
-      } on XmppFileTooBigException catch (error) {
-        final message = _attachmentTooLargeMessage(error.maxBytes);
+      } on XmppFileTooBigException catch (_) {
+        const message = ChatMessageKey.messageErrorFileUploadFailure;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
@@ -4517,8 +4538,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         return false;
       } on XmppUploadUnavailableException catch (_) {
-        const message =
-            'File uploads are unavailable right now. Saved to drafts.';
+        const message = ChatMessageKey.chatComposerFileUploadUnavailable;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
@@ -4534,7 +4554,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         return false;
       } on XmppUploadNotSupportedException catch (_) {
-        final message = _l10n.chatComposerFileUploadUnavailable;
+        const message = ChatMessageKey.chatComposerFileUploadUnavailable;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
@@ -4550,8 +4570,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         return false;
       } on XmppUploadMisconfiguredException catch (_) {
-        const message =
-            'File upload failed because the server’s upload component is misconfigured or temporarily unavailable.';
+        const message = ChatMessageKey.messageErrorFileUploadFailure;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
@@ -4567,7 +4586,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         return false;
       } on XmppMessageException catch (_) {
-        const message = _attachmentSendFailureMessage;
+        const message = ChatMessageKey.chatAttachmentSendFailed;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
@@ -4588,7 +4607,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           error,
           stackTrace,
         );
-        const message = _attachmentSendFailureMessage;
+        const message = ChatMessageKey.chatAttachmentSendFailed;
         _markPendingAttachmentFailed(current.id, emit, message: message);
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
@@ -5338,26 +5357,81 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return true;
   }
 
-  String _formatBytes(int bytes) {
-    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    var value = bytes.toDouble();
-    var index = 0;
-    while (value >= 1024 && index < units.length - 1) {
-      value /= 1024;
-      index++;
-    }
-    final precision = value >= 10 || index == 0 ? 0 : 1;
-    return '${value.toStringAsFixed(precision)} ${units[index]}';
-  }
+  ChatMessageKey _chatMessageKeyForMessageError(MessageError error) =>
+      switch (error) {
+        MessageError.serviceUnavailable =>
+          ChatMessageKey.messageErrorServiceUnavailable,
+        MessageError.serverNotFound =>
+          ChatMessageKey.messageErrorServerNotFound,
+        MessageError.serverTimeout => ChatMessageKey.messageErrorServerTimeout,
+        MessageError.unknown => ChatMessageKey.messageErrorUnknown,
+        MessageError.notEncryptedForDevice =>
+          ChatMessageKey.messageErrorNotEncryptedForDevice,
+        MessageError.malformedKey => ChatMessageKey.messageErrorMalformedKey,
+        MessageError.unknownSPK =>
+          ChatMessageKey.messageErrorUnknownSignedPrekey,
+        MessageError.noDeviceSession =>
+          ChatMessageKey.messageErrorNoDeviceSession,
+        MessageError.skippingTooManyKeys =>
+          ChatMessageKey.messageErrorSkippingTooManyKeys,
+        MessageError.invalidHMAC => ChatMessageKey.messageErrorInvalidHmac,
+        MessageError.malformedCiphertext =>
+          ChatMessageKey.messageErrorMalformedCiphertext,
+        MessageError.noKeyMaterial => ChatMessageKey.messageErrorNoKeyMaterial,
+        MessageError.noDecryptionKey =>
+          ChatMessageKey.messageErrorNoDecryptionKey,
+        MessageError.invalidKEX => ChatMessageKey.messageErrorInvalidKex,
+        MessageError.unknownOmemoError =>
+          ChatMessageKey.messageErrorUnknownOmemo,
+        MessageError.invalidAffixElements =>
+          ChatMessageKey.messageErrorInvalidAffixElements,
+        MessageError.emptyDeviceList =>
+          ChatMessageKey.messageErrorEmptyDeviceList,
+        MessageError.omemoUnsupported =>
+          ChatMessageKey.messageErrorOmemoUnsupported,
+        MessageError.encryptionFailure =>
+          ChatMessageKey.messageErrorEncryptionFailure,
+        MessageError.invalidEnvelope =>
+          ChatMessageKey.messageErrorInvalidEnvelope,
+        MessageError.fileDownloadFailure =>
+          ChatMessageKey.messageErrorFileDownloadFailure,
+        MessageError.fileUploadFailure =>
+          ChatMessageKey.messageErrorFileUploadFailure,
+        MessageError.fileDecryptionFailure =>
+          ChatMessageKey.messageErrorFileDecryptionFailure,
+        MessageError.fileEncryptionFailure =>
+          ChatMessageKey.messageErrorFileEncryptionFailure,
+        MessageError.plaintextFileInOmemo =>
+          ChatMessageKey.messageErrorPlaintextFileInOmemo,
+        MessageError.emailSendFailure =>
+          ChatMessageKey.messageErrorEmailSendFailure,
+        MessageError.emailAttachmentTooLarge =>
+          ChatMessageKey.messageErrorEmailAttachmentTooLarge,
+        MessageError.emailRecipientRejected =>
+          ChatMessageKey.messageErrorEmailRecipientRejected,
+        MessageError.emailAuthenticationFailed =>
+          ChatMessageKey.messageErrorEmailAuthenticationFailed,
+        MessageError.emailBounced => ChatMessageKey.messageErrorEmailBounced,
+        MessageError.emailThrottled =>
+          ChatMessageKey.messageErrorEmailThrottled,
+        _ => ChatMessageKey.messageErrorUnknown,
+      };
 
-  String _attachmentTooLargeMessage(int? limitBytes) {
-    final bytes = limitBytes ?? 0;
-    if (bytes <= 0) {
-      return 'Attachment exceeds the server limit.';
-    }
-    final readableLimit = _formatBytes(bytes);
-    return 'Attachment exceeds the server limit ($readableLimit).';
-  }
+  ChatMessageKey _chatMessageKeyForFanOutFailure(
+    FanOutValidationFailure reason,
+  ) =>
+      switch (reason) {
+        FanOutValidationFailure.noRecipients =>
+          ChatMessageKey.fanOutErrorNoRecipients,
+        FanOutValidationFailure.resolveFailed =>
+          ChatMessageKey.fanOutErrorResolveFailed,
+        FanOutValidationFailure.tooManyRecipients =>
+          ChatMessageKey.fanOutErrorTooManyRecipients,
+        FanOutValidationFailure.emptyMessage =>
+          ChatMessageKey.fanOutErrorEmptyMessage,
+        FanOutValidationFailure.invalidShareToken =>
+          ChatMessageKey.fanOutErrorInvalidShareToken,
+      };
 
   String _composeXmppBody({required String body, required String? subject}) =>
       ChatSubjectCodec.composeXmppBody(body: body, subject: subject);
@@ -5447,19 +5521,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return true;
     } on FanOutValidationException catch (error) {
+      final key = _chatMessageKeyForFanOutFailure(error.reason);
       emit(
         state.copyWith(
-          composerError: error.reason.message(
-            _l10n,
-            maxRecipients: error.maxRecipients,
-          ),
+          composerError: key,
         ),
       );
       return false;
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to send fan-out message', error, stackTrace);
       emit(
-        state.copyWith(composerError: _l10n.chatComposerSendFailed),
+        state.copyWith(
+          composerError: ChatMessageKey.chatComposerSendFailed,
+        ),
       );
       return false;
     }
@@ -5484,7 +5558,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerHydrationId: nextHydrationId,
         composerHydrationText: message.plainText,
         composerError: message.error.isNotNone
-            ? message.error.label(_l10n)
+            ? _chatMessageKeyForMessageError(message.error)
             : state.composerError,
         emailSubject: nextSubject != null && nextSubject != state.emailSubject
             ? nextSubject
@@ -5562,13 +5636,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   void _markPendingAttachmentFailed(
     String attachmentId,
     Emitter<ChatState> emit, {
-    String? message,
+    ChatMessageKey? message,
   }) {
     final updated = state.pendingAttachments.map((pending) {
       if (pending.id != attachmentId) return pending;
       return pending.copyWith(
         status: PendingAttachmentStatus.failed,
-        errorMessage: message ?? _attachmentSendFailureMessage,
+        errorMessage: message ?? ChatMessageKey.chatAttachmentSendFailed,
       );
     }).toList();
     emit(state.copyWith(pendingAttachments: updated));
@@ -5577,11 +5651,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   void _markPendingAttachmentsFailed(
     Iterable<PendingAttachment> attachments,
     Emitter<ChatState> emit, {
-    String? message,
+    ChatMessageKey? message,
   }) {
     final ids = attachments.map((attachment) => attachment.id).toSet();
     if (ids.isEmpty) return;
-    final resolvedMessage = message ?? _attachmentSendFailureMessage;
+    final resolvedMessage = message ?? ChatMessageKey.chatAttachmentSendFailed;
     final updated = state.pendingAttachments.map((pending) {
       if (!ids.contains(pending.id)) return pending;
       return pending.copyWith(
@@ -5693,7 +5767,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerHydrationId: nextHydrationId,
         composerHydrationText: message.plainText,
         composerError: message.error.isNotNone
-            ? message.error.label(_l10n)
+            ? _chatMessageKeyForMessageError(message.error)
             : state.composerError,
       ),
     );
@@ -5742,7 +5816,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         _attachToast(
           state,
-          const ChatToast(message: 'Saved to Drafts because sending failed.'),
+          const ChatToast(message: ChatMessageKey.chatDraftSaved),
         ),
       );
     } catch (error, stackTrace) {
@@ -5949,9 +6023,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final mappedError = DeltaErrorMapper.resolve(error.message);
       emit(
         _attachToast(
-          state.copyWith(composerError: mappedError.label(_l10n)),
+          state.copyWith(
+            composerError: _chatMessageKeyForMessageError(mappedError),
+          ),
           ChatToast(
-            message: _l10n.chatEmailResendFailedDetails,
+            message: ChatMessageKey.chatEmailResendFailedDetails,
             variant: ChatToastVariant.destructive,
           ),
         ),

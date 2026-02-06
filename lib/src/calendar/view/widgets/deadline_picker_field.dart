@@ -909,7 +909,7 @@ class _DeadlineDropdownSurface extends StatelessWidget {
           minWidth: math.max(
             minWidth,
             (context.sizing.buttonHeightRegular * 7) +
-                (context.spacing.xs * 6) +
+                context.spacing.l +
                 calendarPaddingLg.horizontal,
           ),
         ),

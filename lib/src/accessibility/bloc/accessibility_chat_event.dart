@@ -10,15 +10,6 @@ sealed class AccessibilityChatEvent extends Equatable {
   List<Object?> get props => const [];
 }
 
-class AccessibilityChatLocaleUpdated extends AccessibilityChatEvent {
-  const AccessibilityChatLocaleUpdated(this.localization);
-
-  final AppLocalizations localization;
-
-  @override
-  List<Object?> get props => [localization.localeName];
-}
-
 class AccessibilityChatContactsUpdated extends AccessibilityChatEvent {
   const AccessibilityChatContactsUpdated({
     required this.contacts,

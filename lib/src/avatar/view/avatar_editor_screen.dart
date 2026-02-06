@@ -5,6 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
 import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
+import 'package:axichat/src/avatar/view/avatar_error_l10n.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -815,7 +816,7 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
     final cardWidth = sizing.buttonHeightLg * 2.5;
     final carouselHeight = sizing.buttonHeightLg * 3;
     final minViewportFraction =
-        (cardWidth / (cardWidth + spacing.s * 2)).clamp(0.2, 1.0).toDouble();
+        (cardWidth / (cardWidth + spacing.m)).clamp(0.2, 1.0).toDouble();
     return ShadCard(
       padding: EdgeInsets.all(spacing.m),
       child: Column(
@@ -867,7 +868,7 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
                 itemBuilder: (context, index, _) {
                   final template = templates[index];
                   return Padding(
-                    padding: EdgeInsets.symmetric(horizontal: spacing.s / 2),
+                    padding: EdgeInsets.symmetric(horizontal: spacing.xs),
                     child: _TemplatePreviewCard(
                       template: template,
                       isSelected: template.id == widget.selectedId,

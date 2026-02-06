@@ -49,8 +49,8 @@ class AccessibilityActionState extends Equatable {
   final String composerText;
   final String newContactInput;
   final bool busy;
-  final String? statusMessage;
-  final String? errorMessage;
+  final AccessibilityActionStatus? statusMessage;
+  final AccessibilityActionError? errorMessage;
   final bool discardWarningActive;
 
   AccessibilityStepEntry get currentEntry => stack.last;
@@ -83,10 +83,10 @@ class AccessibilityActionState extends Equatable {
         busy: busy ?? this.busy,
         statusMessage: statusMessage == _unset
             ? this.statusMessage
-            : statusMessage as String?,
+            : statusMessage as AccessibilityActionStatus?,
         errorMessage: errorMessage == _unset
             ? this.errorMessage
-            : errorMessage as String?,
+            : errorMessage as AccessibilityActionError?,
         discardWarningActive: discardWarningActive ?? this.discardWarningActive,
       );
 

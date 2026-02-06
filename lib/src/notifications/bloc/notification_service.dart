@@ -9,10 +9,9 @@ import 'package:app_settings/app_settings.dart';
 import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/notifications/notification_strings.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
     hide NotificationVisibility;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -66,7 +65,7 @@ class NotificationService {
 
   bool mute = false;
   bool notificationPreviewsEnabled = false;
-  AppLocalizations? _localizations;
+  NotificationStrings? _strings;
 
   bool get needsPermissions =>
       Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
@@ -79,19 +78,16 @@ class NotificationService {
   static const String _unsupportedSchedulingMessage =
       'Scheduled notifications are unavailable on this platform; skipping reminder scheduling.';
 
-  AppLocalizations get _l10n =>
-      _localizations ?? lookupAppLocalizations(const Locale('en'));
+  NotificationStrings get _l10n =>
+      _strings ?? const NotificationStrings.empty();
 
-  void updateLocalizations(AppLocalizations localizations) {
-    _localizations = localizations;
+  void updateLocalizations(NotificationStrings strings) {
+    _strings = strings;
   }
 
-  String get channel => _l10n.notificationChannelMessages;
+  String get channel => _l10n.channelMessages;
 
-  String get _genericMessageNotificationTitle =>
-      _l10n.notificationNewMessageTitle;
-
-  AppLocalizations get localizations => _l10n;
+  String get _genericMessageNotificationTitle => _l10n.newMessageTitle;
 
   Future<void> init() => _ensureInitialized();
 
@@ -121,7 +117,7 @@ class NotificationService {
           DarwinInitializationSettings();
       final LinuxInitializationSettings initializationSettingsLinux =
           LinuxInitializationSettings(
-        defaultActionName: _l10n.notificationOpenAction,
+        defaultActionName: _l10n.openAction,
       );
       final WindowsInitializationSettings initializationSettingsWindows =
           WindowsInitializationSettings(
@@ -335,8 +331,8 @@ class NotificationService {
 
   Future<void> sendBackgroundConnectionDisabledNotification() async {
     await sendNotification(
-      title: _l10n.notificationBackgroundConnectionDisabledTitle,
-      body: _l10n.notificationBackgroundConnectionDisabledBody,
+      title: _l10n.backgroundConnectionDisabledTitle,
+      body: _l10n.backgroundConnectionDisabledBody,
       allowForeground: true,
     );
   }

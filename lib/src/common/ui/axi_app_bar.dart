@@ -22,7 +22,7 @@ class AxiAppBar extends StatelessWidget {
     final hasLeading = leading != null;
     final hasTitle = showTitle;
     final spacing = context.spacing;
-    final double titleGap = spacing.s + spacing.xs;
+    final double titleGap = spacing.s;
     final baseTitleStyle = context.textTheme.h3;
     final titleStyle = baseTitleStyle.copyWith(
       fontFamily: gabaritoFontFamily,

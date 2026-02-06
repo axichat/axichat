@@ -314,6 +314,68 @@ class AppLocalizationsFr extends AppLocalizations {
       'Échec de l\'enregistrement du brouillon. Réessaie.';
 
   @override
+  String get chatInvitePermissionDenied =>
+      'You do not have permission to invite users to this room.';
+
+  @override
+  String get chatInviteDomainRestricted =>
+      'Invites are limited to the default domain.';
+
+  @override
+  String get chatInviteAlreadyMember => 'User is already a member.';
+
+  @override
+  String get chatInviteSent => 'Invite sent.';
+
+  @override
+  String get chatInviteSendFailed => 'Failed to send invite.';
+
+  @override
+  String get chatInviteRevoked => 'Invitation révoquée';
+
+  @override
+  String get chatInviteRevokeFailed => 'Failed to revoke invite.';
+
+  @override
+  String get chatInviteJoinSuccess => 'Joined room.';
+
+  @override
+  String get chatInviteJoinFailed => 'Could not join room.';
+
+  @override
+  String get chatNicknameUpdated => 'Nickname updated.';
+
+  @override
+  String get chatNicknameUpdateFailed => 'Could not change nickname.';
+
+  @override
+  String get chatRoomAvatarPermissionDenied =>
+      'You do not have permission to update the room avatar.';
+
+  @override
+  String get chatRoomAvatarUpdated => 'Room avatar updated.';
+
+  @override
+  String get chatRoomAvatarUpdateFailed => 'Could not update room avatar.';
+
+  @override
+  String get chatPinPermissionDenied =>
+      'You do not have permission to pin messages in this room.';
+
+  @override
+  String get chatMessageForwarded => 'Message forwarded.';
+
+  @override
+  String get chatMessageForwardFailed => 'Unable to forward message.';
+
+  @override
+  String get chatModerationRequested => 'Moderation request sent.';
+
+  @override
+  String get chatModerationFailed =>
+      'Could not complete that action. Check permissions or connectivity.';
+
+  @override
   String get chatAttachmentInaccessible =>
       'Le fichier sélectionné est inaccessible.';
 
@@ -469,9 +531,6 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get chatSignatureHintWarning =>
       'La désactivation peut casser les fils et les regroupements de pièces jointes.';
-
-  @override
-  String get chatInviteRevoked => 'Invitation révoquée';
 
   @override
   String get chatInvite => 'Invitation';
@@ -2006,7 +2065,7 @@ class AppLocalizationsFr extends AppLocalizations {
       'Remplace les points de terminaison XMPP/SMTP ou active les recherches DNS. Laissez les champs vides pour conserver les valeurs par défaut.';
 
   @override
-  String get authCustomServerDomainOrIp => 'Domaine ou IP';
+  String get authCustomServerDomainOrIp => 'Domaine';
 
   @override
   String get authCustomServerXmppLabel => 'XMPP';

@@ -7,7 +7,6 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -24,21 +23,6 @@ enum AttachmentGallerySortOption {
   nameDescending,
   sizeAscending,
   sizeDescending;
-
-  String label(AppLocalizations l10n) {
-    return switch (this) {
-      AttachmentGallerySortOption.newestFirst => l10n.chatSearchSortNewestFirst,
-      AttachmentGallerySortOption.oldestFirst => l10n.chatSearchSortOldestFirst,
-      AttachmentGallerySortOption.nameAscending =>
-        l10n.attachmentGallerySortNameAscLabel,
-      AttachmentGallerySortOption.nameDescending =>
-        l10n.attachmentGallerySortNameDescLabel,
-      AttachmentGallerySortOption.sizeAscending =>
-        l10n.attachmentGallerySortSizeAscLabel,
-      AttachmentGallerySortOption.sizeDescending =>
-        l10n.attachmentGallerySortSizeDescLabel,
-    };
-  }
 
   int compare(AttachmentGalleryItem a, AttachmentGalleryItem b) {
     const fallbackEpochMs = 0;
@@ -102,15 +86,6 @@ enum AttachmentGalleryTypeFilter {
   videos,
   files;
 
-  String label(AppLocalizations l10n) {
-    return switch (this) {
-      AttachmentGalleryTypeFilter.all => l10n.attachmentGalleryAllLabel,
-      AttachmentGalleryTypeFilter.images => l10n.attachmentGalleryImagesLabel,
-      AttachmentGalleryTypeFilter.videos => l10n.attachmentGalleryVideosLabel,
-      AttachmentGalleryTypeFilter.files => l10n.attachmentGalleryFilesLabel,
-    };
-  }
-
   bool matches(FileMetadataData metadata) {
     return switch (this) {
       AttachmentGalleryTypeFilter.all => true,
@@ -126,15 +101,6 @@ enum AttachmentGallerySourceFilter {
   all,
   sent,
   received;
-
-  String label(AppLocalizations l10n) {
-    return switch (this) {
-      AttachmentGallerySourceFilter.all => l10n.attachmentGalleryAllLabel,
-      AttachmentGallerySourceFilter.sent => l10n.attachmentGallerySentLabel,
-      AttachmentGallerySourceFilter.received =>
-        l10n.attachmentGalleryReceivedLabel,
-    };
-  }
 
   bool matches({required bool isSelf}) {
     return switch (this) {

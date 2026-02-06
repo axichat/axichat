@@ -129,8 +129,8 @@ class _CalendarTileState extends State<CalendarTile> {
       textDirection: Directionality.of(context),
       textScaler: textScaler,
     )..layout();
-    final horizontalPadding = spacing.s + spacing.xs;
-    final minWidth = spacing.l + spacing.s;
+    final horizontalPadding = spacing.m;
+    final minWidth = spacing.l;
     _cachedBadgeCount = count;
     _textScaleFactor = scaleFactor;
     _badgeStyleHash = nextStyleHash;
@@ -203,7 +203,7 @@ class _ReminderBadge extends StatelessWidget {
       ),
       child: Padding(
         padding: EdgeInsets.symmetric(
-          horizontal: spacing.s + spacing.xs,
+          horizontal: spacing.m,
           vertical: spacing.xs,
         ),
         child: Text(

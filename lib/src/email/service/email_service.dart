@@ -415,9 +415,7 @@ class EmailService {
   }
 
   AppLocalizations get _l10n =>
-      _localizations ??
-      _notificationService?.localizations ??
-      lookupAppLocalizations(const Locale('en'));
+      _localizations ?? lookupAppLocalizations(const Locale('en'));
 
   void updateLocalizations(AppLocalizations localizations) {
     _localizations = localizations;
@@ -2577,7 +2575,7 @@ class EmailService {
       if (context == null) {
         return;
       }
-      final l10n = notificationService.localizations;
+      final l10n = _l10n;
       final notificationBody = await _notificationBody(
         db: db,
         message: context.message,
@@ -2631,7 +2629,7 @@ class EmailService {
       if (context == null) {
         return;
       }
-      final l10n = notificationService.localizations;
+      final l10n = _l10n;
       final normalizedReaction = reaction?.trim();
       final body = normalizedReaction == null || normalizedReaction.isEmpty
           ? l10n.notificationReactionFallback
@@ -2681,7 +2679,7 @@ class EmailService {
       if (context == null) {
         return;
       }
-      final l10n = notificationService.localizations;
+      final l10n = _l10n;
       final normalizedText = text?.trim();
       final body = normalizedText == null || normalizedText.isEmpty
           ? l10n.notificationWebxdcFallback

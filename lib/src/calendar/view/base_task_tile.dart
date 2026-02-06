@@ -317,7 +317,7 @@ class _CompactTaskTile extends StatelessWidget {
       child: IntrinsicHeight(
         child: Padding(
           padding: EdgeInsets.only(
-            left: context.spacing.s + context.spacing.xs,
+            left: context.spacing.m,
           ),
           child: CalendarTaskListTile(
             task: task,

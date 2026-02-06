@@ -9,13 +9,11 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
-import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
 
 part 'accessibility_chat_event.dart';
@@ -26,7 +24,6 @@ class AccessibilityChatBloc
   AccessibilityChatBloc({
     required String jid,
     required MessageService messageService,
-    required AppLocalizations initialLocalization,
     required List<AccessibilityContact> contacts,
     required String? myJid,
     required int initialUnreadCount,
@@ -35,12 +32,10 @@ class AccessibilityChatBloc
   })  : _jid = jid,
         _messageService = messageService,
         _emailService = emailService,
-        _l10n = initialLocalization,
         _contacts = contacts,
         _myJid = myJid,
         _log = Logger('AccessibilityChatBloc'),
         super(AccessibilityChatState.initial(jid: jid, draftId: draftId)) {
-    on<AccessibilityChatLocaleUpdated>(_onLocaleUpdated);
     on<AccessibilityChatContactsUpdated>(_onContactsUpdated);
     on<AccessibilityChatUnreadUpdated>(_onUnreadUpdated);
     on<AccessibilityChatDraftIdUpdated>(_onDraftIdUpdated);
@@ -56,7 +51,6 @@ class AccessibilityChatBloc
   EmailService? _emailService;
   final Logger _log;
 
-  late AppLocalizations _l10n;
   List<AccessibilityContact> _contacts;
   String? _myJid;
 
@@ -74,14 +68,6 @@ class AccessibilityChatBloc
   Future<void> close() async {
     await _messageSubscription?.cancel();
     return super.close();
-  }
-
-  void _onLocaleUpdated(
-    AccessibilityChatLocaleUpdated event,
-    Emitter<AccessibilityChatState> emit,
-  ) {
-    if (_l10n.localeName == event.localization.localeName) return;
-    _l10n = event.localization;
   }
 
   void _onContactsUpdated(
@@ -117,7 +103,11 @@ class AccessibilityChatBloc
     final trimmedMessage = event.body.trim();
     final recipients = event.recipients;
     if (trimmedMessage.isEmpty || recipients.isEmpty) {
-      emit(state.copyWith(errorMessage: _l10n.chatDraftMissingContent));
+      emit(
+        state.copyWith(
+          errorMessage: const AccessibilityChatErrorMissingContent(),
+        ),
+      );
       return;
     }
     emit(
@@ -187,15 +177,18 @@ class AccessibilityChatBloc
       }
     }
     final failureCount = failures.length;
-    final recipientLabel = _l10n.chatFanOutRecipientLabel(failureCount);
     final failureLabel = failureCount == 0
         ? null
-        : '${_l10n.chatFanOutFailure(failureCount, recipientLabel)}: '
-            '${failures.join(', ')}';
+        : AccessibilityChatErrorSendFailures(
+            failureCount: failureCount,
+            failures: failures,
+          );
     emit(
       state.copyWith(
         busy: false,
-        statusMessage: failures.isEmpty ? _l10n.accessibilityMessageSent : null,
+        statusMessage: failures.isEmpty
+            ? const AccessibilityChatStatusMessageSent()
+            : null,
         errorMessage: failureLabel,
         sendCount: failures.isEmpty ? state.sendCount + 1 : state.sendCount,
       ),
@@ -207,7 +200,11 @@ class AccessibilityChatBloc
     Emitter<AccessibilityChatState> emit,
   ) async {
     if (event.recipients.isEmpty) {
-      emit(state.copyWith(errorMessage: _l10n.chatDraftMissingContent));
+      emit(
+        state.copyWith(
+          errorMessage: const AccessibilityChatErrorMissingContent(),
+        ),
+      );
       return;
     }
     emit(
@@ -227,7 +224,7 @@ class AccessibilityChatBloc
         state.copyWith(
           busy: false,
           draftId: result.draftId,
-          statusMessage: _l10n.chatDraftSaved,
+          statusMessage: const AccessibilityChatStatusDraftSaved(),
           errorMessage: null,
           draftSaveCount: state.draftSaveCount + 1,
         ),
@@ -241,7 +238,7 @@ class AccessibilityChatBloc
       emit(
         state.copyWith(
           busy: false,
-          errorMessage: _l10n.chatDraftMissingContent,
+          errorMessage: const AccessibilityChatErrorMissingContent(),
         ),
       );
     }
@@ -297,9 +294,11 @@ class AccessibilityChatBloc
     final latest = newMessages.isNotEmpty ? newMessages.last : null;
     final incomingStatus = latest == null
         ? null
-        : _l10n.accessibilityIncomingMessageStatus(
-            _senderLabelFor(latest),
-            _formatTimestamp(latest.timestamp),
+        : AccessibilityChatStatusIncomingMessage(
+            senderJid: _senderJidFor(latest),
+            senderDisplayName: _senderDisplayNameFor(latest),
+            isSelf: _isFromSelf(latest),
+            timestamp: latest.timestamp,
           );
     emit(
       state.copyWith(
@@ -397,12 +396,19 @@ class AccessibilityChatBloc
     return unreadCount > basePageSize ? unreadCount : basePageSize;
   }
 
-  String _senderLabelFor(Message message) {
+  bool _isFromSelf(Message message) {
     final senderBare = bareAddress(message.senderJid) ?? message.senderJid;
     final myJid = _myJid;
-    if (myJid != null && sameBareAddress(senderBare, myJid)) {
-      return _l10n.chatSenderYou;
-    }
+    if (myJid == null) return false;
+    return sameBareAddress(senderBare, myJid);
+  }
+
+  String _senderJidFor(Message message) {
+    return bareAddress(message.senderJid) ?? message.senderJid;
+  }
+
+  String _senderDisplayNameFor(Message message) {
+    final senderBare = bareAddress(message.senderJid) ?? message.senderJid;
     final matching = _contacts.firstWhere(
       (contact) => sameBareAddress(contact.jid, senderBare),
       orElse: () => AccessibilityContact(
@@ -417,11 +423,6 @@ class AccessibilityChatBloc
       ),
     );
     return matching.displayName;
-  }
-
-  String _formatTimestamp(DateTime? timestamp) {
-    final safe = timestamp ?? DateTime.now();
-    return DateFormat.yMMMd(_l10n.localeName).add_jm().format(safe);
   }
 
   String _messageId(Message message) => message.id ?? message.stanzaID;

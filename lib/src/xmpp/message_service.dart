@@ -3058,7 +3058,7 @@ mixin MessageService
 
   String _availabilityFallbackText(CalendarAvailabilityMessage message) {
     final XmppService service = owner as XmppService;
-    final l10n = service._notificationService.localizations;
+    final l10n = service.localizations;
     return message.map(
       share: (_) => l10n.calendarAvailabilityShareFallback,
       request: (_) => l10n.calendarAvailabilityRequestFallback,

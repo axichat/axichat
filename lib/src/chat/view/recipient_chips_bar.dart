@@ -2081,7 +2081,7 @@ class _CaterpillarAvatarStrip extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final spacing = context.spacing;
-        final recipientAvatarSize = spacing.m + spacing.xxs;
+        final recipientAvatarSize = spacing.m;
         final recipientAvatarOverlap = spacing.xs;
         final recipientOverflowGap = spacing.xs;
         final maxWidth = constraints.hasBoundedWidth &&
@@ -2152,7 +2152,7 @@ _CutoutLayoutResult<String> _layoutRecipientStrip({
     );
   }
   final spacing = context.spacing;
-  final recipientAvatarSize = spacing.m + spacing.xxs;
+  final recipientAvatarSize = spacing.m;
   final recipientAvatarOverlap = spacing.xs;
   final visible = <String>[];
   final additions = <double>[];
@@ -2218,7 +2218,7 @@ class _RecipientOverflowAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final recipientAvatarSize = spacing.m + spacing.xxs;
+    final recipientAvatarSize = spacing.m;
     return SizedBox(
       width: recipientAvatarSize,
       height: recipientAvatarSize,
@@ -2253,7 +2253,7 @@ class _RecipientHeaderAvatar extends StatelessWidget {
   Widget build(BuildContext context) {
     final borderWidth = context.borderSide.width;
     final spacing = context.spacing;
-    final recipientAvatarSize = spacing.m + spacing.xxs;
+    final recipientAvatarSize = spacing.m;
     final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     return Container(
       width: recipientAvatarSize,

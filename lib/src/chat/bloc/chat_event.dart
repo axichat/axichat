@@ -190,11 +190,13 @@ final class ChatMessageSent extends ChatEvent {
     required this.pendingAttachments,
     required this.settings,
     required this.supportsHttpFileUpload,
+    required this.attachmentFallbackLabel,
     this.subject,
     this.quotedDraft,
     this.roomState,
     this.calendarTaskIcs,
     this.calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
+    this.calendarTaskShareText,
   });
 
   final Chat chat;
@@ -203,11 +205,13 @@ final class ChatMessageSent extends ChatEvent {
   final List<PendingAttachment> pendingAttachments;
   final ChatSettingsSnapshot settings;
   final bool supportsHttpFileUpload;
+  final String attachmentFallbackLabel;
   final String? subject;
   final Message? quotedDraft;
   final RoomState? roomState;
   final CalendarTask? calendarTaskIcs;
   final bool calendarTaskIcsReadOnly;
+  final String? calendarTaskShareText;
 
   @override
   List<Object?> get props => [
@@ -217,11 +221,13 @@ final class ChatMessageSent extends ChatEvent {
         pendingAttachments,
         settings,
         supportsHttpFileUpload,
+        attachmentFallbackLabel,
         subject,
         quotedDraft,
         roomState,
         calendarTaskIcs,
         calendarTaskIcsReadOnly,
+        calendarTaskShareText,
       ];
 }
 

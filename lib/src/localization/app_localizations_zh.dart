@@ -300,6 +300,68 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatDraftSaveFailed => '无法保存草稿，请重试。';
 
   @override
+  String get chatInvitePermissionDenied =>
+      'You do not have permission to invite users to this room.';
+
+  @override
+  String get chatInviteDomainRestricted =>
+      'Invites are limited to the default domain.';
+
+  @override
+  String get chatInviteAlreadyMember => 'User is already a member.';
+
+  @override
+  String get chatInviteSent => 'Invite sent.';
+
+  @override
+  String get chatInviteSendFailed => 'Failed to send invite.';
+
+  @override
+  String get chatInviteRevoked => '邀请已撤销';
+
+  @override
+  String get chatInviteRevokeFailed => 'Failed to revoke invite.';
+
+  @override
+  String get chatInviteJoinSuccess => 'Joined room.';
+
+  @override
+  String get chatInviteJoinFailed => 'Could not join room.';
+
+  @override
+  String get chatNicknameUpdated => 'Nickname updated.';
+
+  @override
+  String get chatNicknameUpdateFailed => 'Could not change nickname.';
+
+  @override
+  String get chatRoomAvatarPermissionDenied =>
+      'You do not have permission to update the room avatar.';
+
+  @override
+  String get chatRoomAvatarUpdated => 'Room avatar updated.';
+
+  @override
+  String get chatRoomAvatarUpdateFailed => 'Could not update room avatar.';
+
+  @override
+  String get chatPinPermissionDenied =>
+      'You do not have permission to pin messages in this room.';
+
+  @override
+  String get chatMessageForwarded => 'Message forwarded.';
+
+  @override
+  String get chatMessageForwardFailed => 'Unable to forward message.';
+
+  @override
+  String get chatModerationRequested => 'Moderation request sent.';
+
+  @override
+  String get chatModerationFailed =>
+      'Could not complete that action. Check permissions or connectivity.';
+
+  @override
   String get chatAttachmentInaccessible => '所选文件无法访问。';
 
   @override
@@ -437,9 +499,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatSignatureHintWarning => '关闭可能导致线程和附件分组异常。';
-
-  @override
-  String get chatInviteRevoked => '邀请已撤销';
 
   @override
   String get chatInvite => '邀请';
@@ -1903,7 +1962,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '覆盖 XMPP/SMTP 端点或启用 DNS 查询。留空以使用默认值。';
 
   @override
-  String get authCustomServerDomainOrIp => '域名或 IP';
+  String get authCustomServerDomainOrIp => '域名';
 
   @override
   String get authCustomServerXmppLabel => 'XMPP';
@@ -5981,6 +6040,68 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatDraftSaveFailed => '無法儲存草稿，請再試一次。';
 
   @override
+  String get chatInvitePermissionDenied =>
+      'You do not have permission to invite users to this room.';
+
+  @override
+  String get chatInviteDomainRestricted =>
+      'Invites are limited to the default domain.';
+
+  @override
+  String get chatInviteAlreadyMember => 'User is already a member.';
+
+  @override
+  String get chatInviteSent => 'Invite sent.';
+
+  @override
+  String get chatInviteSendFailed => 'Failed to send invite.';
+
+  @override
+  String get chatInviteRevoked => '邀請已撤銷';
+
+  @override
+  String get chatInviteRevokeFailed => 'Failed to revoke invite.';
+
+  @override
+  String get chatInviteJoinSuccess => 'Joined room.';
+
+  @override
+  String get chatInviteJoinFailed => 'Could not join room.';
+
+  @override
+  String get chatNicknameUpdated => 'Nickname updated.';
+
+  @override
+  String get chatNicknameUpdateFailed => 'Could not change nickname.';
+
+  @override
+  String get chatRoomAvatarPermissionDenied =>
+      'You do not have permission to update the room avatar.';
+
+  @override
+  String get chatRoomAvatarUpdated => 'Room avatar updated.';
+
+  @override
+  String get chatRoomAvatarUpdateFailed => 'Could not update room avatar.';
+
+  @override
+  String get chatPinPermissionDenied =>
+      'You do not have permission to pin messages in this room.';
+
+  @override
+  String get chatMessageForwarded => 'Message forwarded.';
+
+  @override
+  String get chatMessageForwardFailed => 'Unable to forward message.';
+
+  @override
+  String get chatModerationRequested => 'Moderation request sent.';
+
+  @override
+  String get chatModerationFailed =>
+      'Could not complete that action. Check permissions or connectivity.';
+
+  @override
   String get chatAttachmentInaccessible => '所選檔案無法存取。';
 
   @override
@@ -6118,9 +6239,6 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatSignatureHintWarning => '停用可能會影響串接和附件分組。';
-
-  @override
-  String get chatInviteRevoked => '邀請已撤銷';
 
   @override
   String get chatInvite => '邀請';
@@ -7584,7 +7702,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
       '覆寫 XMPP/SMTP 端點或啟用 DNS 查詢。欄位留空以保留預設值。';
 
   @override
-  String get authCustomServerDomainOrIp => '網域或 IP';
+  String get authCustomServerDomainOrIp => '網域';
 
   @override
   String get authCustomServerXmppLabel => 'XMPP';

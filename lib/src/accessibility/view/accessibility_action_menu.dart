@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/bloc/accessibility_chat_bloc.dart';
+import 'package:axichat/src/accessibility/view/accessibility_l10n.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/app.dart';
@@ -71,6 +72,46 @@ int _unreadCountFor(List<AccessibilityContact> contacts, String jid) {
     }
   }
   return 0;
+}
+
+String? _contactSubtitleFor(
+  BuildContext context,
+  AccessibilityContact contact,
+) {
+  final subtitle = contact.subtitle;
+  if (subtitle != null && subtitle.isNotEmpty) {
+    return subtitle;
+  }
+  if (contact.source == AccessibilityContactSource.manual) {
+    return context.l10n.chatsFilterNonContacts;
+  }
+  return subtitle;
+}
+
+String? _actionStatusLabel(
+  BuildContext context,
+  AccessibilityActionStatus? status,
+) =>
+    status?.label(context.l10n);
+
+String? _actionErrorLabel(
+  BuildContext context,
+  AccessibilityActionError? error,
+) =>
+    error?.label(context.l10n);
+
+String? _chatStatusLabel(
+  BuildContext context,
+  AccessibilityChatStatus? status,
+) =>
+    status?.label(context.l10n);
+
+String? _chatErrorLabel(
+  BuildContext context,
+  AccessibilityChatError? error,
+) {
+  final label = error?.label(context.l10n);
+  return label == null || label.isEmpty ? null : label;
 }
 
 List<AccessibilityMenuSection> _sectionsFor(
@@ -161,7 +202,7 @@ List<AccessibilityMenuSection> _rootSectionsFor(
         (contact) => AccessibilityMenuItem(
           id: 'chat-${contact.jid}',
           label: contact.displayName,
-          description: contact.subtitle,
+          description: _contactSubtitleFor(context, contact),
           kind: AccessibilityMenuItemKind.command,
           action: AccessibilityCommandAction(
             command: AccessibilityCommand.openChat,
@@ -271,7 +312,7 @@ List<AccessibilityMenuSection> _contactSectionsFor(
         (contact) => AccessibilityMenuItem(
           id: 'contact-${contact.jid}',
           label: contact.displayName,
-          description: contact.subtitle,
+          description: _contactSubtitleFor(context, contact),
           kind: purpose == AccessibilityFlowPurpose.sendMessage
               ? AccessibilityMenuItemKind.selectContact
               : AccessibilityMenuItemKind.command,
@@ -663,20 +704,7 @@ class AccessibilityActionMenu extends StatefulWidget {
 }
 
 class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
-  String? _localeName;
   bool Function(KeyEvent event)? _globalShortcutHandler;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final localeName = context.l10n.localeName;
-    if (_localeName != localeName) {
-      _localeName = localeName;
-      context.read<AccessibilityActionBloc>().add(
-            AccessibilityLocaleUpdated(context.l10n),
-          );
-    }
-  }
 
   @override
   void initState() {
@@ -1435,7 +1463,6 @@ class _AccessibilityChatScope extends StatelessWidget {
           jid: chatJid,
           messageService: context.read<XmppService>(),
           emailService: emailService,
-          initialLocalization: context.l10n,
           contacts: state.contacts,
           myJid: state.myJid,
           initialUnreadCount: unreadCount,
@@ -1480,7 +1507,6 @@ class _AccessibilityChatSync extends StatefulWidget {
 }
 
 class _AccessibilityChatSyncState extends State<_AccessibilityChatSync> {
-  String? _localeName;
   List<AccessibilityContact>? _contacts;
   String? _myJid;
   int? _unreadCount;
@@ -1493,18 +1519,6 @@ class _AccessibilityChatSyncState extends State<_AccessibilityChatSync> {
     _myJid = widget.state.myJid;
     _unreadCount = widget.unreadCount;
     _draftId = widget.state.currentEntry.draftId;
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final localeName = context.l10n.localeName;
-    if (_localeName != localeName) {
-      _localeName = localeName;
-      context
-          .read<AccessibilityChatBloc>()
-          .add(AccessibilityChatLocaleUpdated(context.l10n));
-    }
   }
 
   @override
@@ -1679,12 +1693,16 @@ class _AccessibilityActionContent extends StatelessWidget {
     const actionsOrder = NumericFocusOrder(5);
     const actionsListOrder = NumericFocusOrder(6);
     const sectionsOrder = NumericFocusOrder(4);
-    final bannerStatus =
-        (isConversation && hasChatState ? chatState?.statusMessage : null) ??
-            state.statusMessage;
-    final bannerError =
-        (isConversation && hasChatState ? chatState?.errorMessage : null) ??
-            state.errorMessage;
+    final actionStatus = state.statusMessage;
+    final actionError = state.errorMessage;
+    final chatStatus =
+        isConversation && hasChatState ? chatState?.statusMessage : null;
+    final chatError =
+        isConversation && hasChatState ? chatState?.errorMessage : null;
+    final bannerStatus = _chatStatusLabel(context, chatStatus) ??
+        _actionStatusLabel(context, actionStatus);
+    final bannerError = _chatErrorLabel(context, chatError) ??
+        _actionErrorLabel(context, actionError);
     final busy =
         isConversation && hasChatState ? chatState?.busy ?? false : state.busy;
 

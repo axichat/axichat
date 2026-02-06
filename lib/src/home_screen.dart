@@ -11,6 +11,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
 import 'package:axichat/src/blocklist/view/blocklist_button.dart';
 import 'package:axichat/src/blocklist/view/blocklist_list.dart';
+import 'package:axichat/src/blocklist/view/blocklist_notice_l10n.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
@@ -323,7 +324,6 @@ class _HomeShellState extends State<HomeShell> {
           chatsService: context.read<XmppService>(),
           messageService: context.read<XmppService>(),
           rosterService: context.read<XmppService>() as RosterService,
-          initialLocalization: l10n,
         ),
         child: HomeShellScope(
           pendingCalendarTabIndex: _pendingCalendarTabIndex,

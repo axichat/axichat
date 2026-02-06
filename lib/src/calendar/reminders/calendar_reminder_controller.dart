@@ -3,6 +3,7 @@
 
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
@@ -22,6 +23,14 @@ class CalendarReminderController {
   final NotificationService _notificationService;
   final DateTime Function() _now;
   final Map<String, Set<int>> _scheduledIdsByEntry = {};
+  AppLocalizations? _localizations;
+
+  AppLocalizations get _l10n =>
+      _localizations ?? lookupAppLocalizations(const Locale('en'));
+
+  void updateLocalizations(AppLocalizations localizations) {
+    _localizations = localizations;
+  }
 
   /// Reconcile reminders with the provided [tasks] and [dayEvents], scheduling
   /// new alerts and cancelling obsolete ones.
@@ -70,7 +79,7 @@ class CalendarReminderController {
   ) async {
     await _cancelEntry(entryKey);
 
-    final AppLocalizations l10n = _notificationService.localizations;
+    final AppLocalizations l10n = _l10n;
     final DateTime now = _now();
     final List<_ScheduledReminder> reminders = subject.when(
       task: (CalendarTask task) => _reminderScheduleForTask(task, now, l10n),

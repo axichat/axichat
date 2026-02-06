@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/chat/view/chat_l10n.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -334,7 +335,7 @@ class _PendingImageAttachment extends StatelessWidget {
             _PendingAttachmentErrorOverlay(
               shape: clipShape,
               fileName: pending.attachment.fileName,
-              message: pending.errorMessage,
+              message: pending.errorMessage?.label(context.l10n),
               onRetry: onRetry,
               onRemove: onRemove,
             )

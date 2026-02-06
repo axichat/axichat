@@ -199,8 +199,8 @@ class _DraftFormState extends State<DraftForm> {
     final endpointConfig = context.watch<SettingsCubit>().state.endpointConfig;
     final locate = widget.locate;
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
-    final sectionSpacing = spacing.s + spacing.xs;
-    final smallGap = spacing.xs + spacing.xxs;
+    final sectionSpacing = spacing.m;
+    final smallGap = spacing.s;
     final inputPadding = EdgeInsets.symmetric(
       horizontal: spacing.s,
       vertical: spacing.xs,
@@ -1650,8 +1650,8 @@ class _TaskDragGhostOverlay extends StatelessWidget {
 
   Offset _ghostOffset(BuildContext context, Size ghostSize) {
     final spacing = context.spacing;
-    final double pointerClampPadding = spacing.xs / (spacing.m * 2);
-    final double centerFraction = spacing.m / (spacing.m * 2);
+    final double pointerClampPadding = spacing.xs / spacing.l;
+    final double centerFraction = spacing.m / spacing.l;
     final double pointerFraction =
         (payload.pointerNormalizedX ?? centerFraction)
             .clamp(0.0, 1.0)
@@ -1731,7 +1731,7 @@ class _DraftTaskDragGhost extends StatelessWidget {
       child: Container(
         width: size.width,
         constraints: BoxConstraints(minHeight: size.height),
-        padding: EdgeInsets.all(spacing.s + spacing.xs),
+        padding: EdgeInsets.all(spacing.m),
         decoration: BoxDecoration(
           color: colors.card,
           borderRadius: borderRadius,
@@ -1757,7 +1757,7 @@ class _DraftTaskDragGhost extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: textTheme.small.copyWith(color: colors.foreground),
             ),
-            SizedBox(height: spacing.xs + spacing.xxs),
+            SizedBox(height: spacing.s),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1766,7 +1766,7 @@ class _DraftTaskDragGhost extends StatelessWidget {
                   size: context.sizing.menuItemIconSize,
                   color: colors.primary,
                 ),
-                SizedBox(width: spacing.xs + spacing.xxs),
+                SizedBox(width: spacing.s),
                 Flexible(
                   child: Text(
                     _timingLabel(context),
@@ -1780,7 +1780,7 @@ class _DraftTaskDragGhost extends StatelessWidget {
               ],
             ),
             if (description != null) ...[
-              SizedBox(height: spacing.xs + spacing.xxs),
+              SizedBox(height: spacing.s),
               Text(
                 description,
                 maxLines: 2,

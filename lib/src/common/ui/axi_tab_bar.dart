@@ -74,8 +74,7 @@ class AxiTabBar extends StatelessWidget {
             final count = resolvedBadges[index];
             if (count <= 0) return tabs[index];
             final child = tabs[index];
-            final offset = badgeOffset ??
-                Offset(0, -(context.spacing.m - context.spacing.xs));
+            final offset = badgeOffset ?? Offset(0, -context.spacing.m);
             return Stack(
               clipBehavior: Clip.none,
               children: [

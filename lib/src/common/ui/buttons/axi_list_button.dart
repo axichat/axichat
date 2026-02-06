@@ -194,20 +194,13 @@ class _AxiListButtonState extends State<AxiListButton> {
               hovered: hoverOrFocus,
               pressed: pressed,
             );
-        final bool useActivePrimary =
-            widget.variant == AxiButtonVariant.ghost &&
-                !widget.destructiveGhost &&
-                widget.foregroundColor == null;
-        final bool isActive = pressed || hovered || focused || widget.selected;
-        final Color baseForeground = useActivePrimary
-            ? (isActive ? colors.primary : colors.foreground)
-            : (widget.foregroundColor ??
-                widget.variant.foregroundColor(
-                  theme: buttonTheme,
-                  colors: colors,
-                  hovered: hoverOrFocus,
-                  pressed: pressed,
-                ));
+        final Color baseForeground = widget.foregroundColor ??
+            widget.variant.foregroundColor(
+              theme: buttonTheme,
+              colors: colors,
+              hovered: hoverOrFocus,
+              pressed: pressed,
+            );
         final Color background;
         final Color foreground;
         if (widget.destructiveGhost) {

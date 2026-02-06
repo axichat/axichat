@@ -312,6 +312,68 @@ class AppLocalizationsEs extends AppLocalizations {
       'No se pudo guardar el borrador. Intenta de nuevo.';
 
   @override
+  String get chatInvitePermissionDenied =>
+      'You do not have permission to invite users to this room.';
+
+  @override
+  String get chatInviteDomainRestricted =>
+      'Invites are limited to the default domain.';
+
+  @override
+  String get chatInviteAlreadyMember => 'User is already a member.';
+
+  @override
+  String get chatInviteSent => 'Invite sent.';
+
+  @override
+  String get chatInviteSendFailed => 'Failed to send invite.';
+
+  @override
+  String get chatInviteRevoked => 'Invitación revocada';
+
+  @override
+  String get chatInviteRevokeFailed => 'Failed to revoke invite.';
+
+  @override
+  String get chatInviteJoinSuccess => 'Joined room.';
+
+  @override
+  String get chatInviteJoinFailed => 'Could not join room.';
+
+  @override
+  String get chatNicknameUpdated => 'Nickname updated.';
+
+  @override
+  String get chatNicknameUpdateFailed => 'Could not change nickname.';
+
+  @override
+  String get chatRoomAvatarPermissionDenied =>
+      'You do not have permission to update the room avatar.';
+
+  @override
+  String get chatRoomAvatarUpdated => 'Room avatar updated.';
+
+  @override
+  String get chatRoomAvatarUpdateFailed => 'Could not update room avatar.';
+
+  @override
+  String get chatPinPermissionDenied =>
+      'You do not have permission to pin messages in this room.';
+
+  @override
+  String get chatMessageForwarded => 'Message forwarded.';
+
+  @override
+  String get chatMessageForwardFailed => 'Unable to forward message.';
+
+  @override
+  String get chatModerationRequested => 'Moderation request sent.';
+
+  @override
+  String get chatModerationFailed =>
+      'Could not complete that action. Check permissions or connectivity.';
+
+  @override
   String get chatAttachmentInaccessible =>
       'El archivo seleccionado no es accesible.';
 
@@ -466,9 +528,6 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get chatSignatureHintWarning =>
       'Desactivarlo puede romper el hilo y los grupos de adjuntos.';
-
-  @override
-  String get chatInviteRevoked => 'Invitación revocada';
 
   @override
   String get chatInvite => 'Invitación';
@@ -1999,7 +2058,7 @@ class AppLocalizationsEs extends AppLocalizations {
       'Anula los endpoints XMPP/SMTP o habilita búsquedas DNS. Deja los campos vacíos para mantener los valores predeterminados.';
 
   @override
-  String get authCustomServerDomainOrIp => 'Dominio o IP';
+  String get authCustomServerDomainOrIp => 'Dominio';
 
   @override
   String get authCustomServerXmppLabel => 'XMPP';

@@ -36,6 +36,7 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chat/view/attachment_approval_dialog.dart';
+import 'package:axichat/src/chat/view/chat_l10n.dart';
 import 'package:axichat/src/chat/view/chat_alert.dart';
 import 'package:axichat/src/chat/view/chat_attachment_preview.dart';
 import 'package:axichat/src/chat/view/chat_bubble_surface.dart';
@@ -541,7 +542,7 @@ class _UnknownSenderBanner extends StatelessWidget {
             final canAddContact = !isEmailChat || state.emailServiceAvailable;
             final l10n = context.l10n;
             final spacing = context.spacing;
-            final iconSize = spacing.m + spacing.xxs;
+            final iconSize = spacing.m;
             final actions = <Widget>[
               if (onAddContact != null && canAddContact)
                 ContextActionButton(
@@ -563,7 +564,7 @@ class _UnknownSenderBanner extends StatelessWidget {
             ];
             return ListItemPadding(
               child: ShadCard(
-                padding: EdgeInsets.all(spacing.s + spacing.xs),
+                padding: EdgeInsets.all(spacing.m),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -676,7 +677,7 @@ OutlinedBorder _attachmentSurfaceShape({
   required bool chainedNext,
 }) {
   final spacing = context.spacing;
-  final radius = Radius.circular(spacing.m + spacing.xxs);
+  final radius = Radius.circular(spacing.m);
   if (!chainedPrevious && !chainedNext) {
     return ContinuousRectangleBorder(
       borderRadius: BorderRadius.all(radius),
@@ -2299,6 +2300,7 @@ class _ChatState extends State<Chat> {
     required ChatState chatState,
     required ChatSettingsSnapshot settingsSnapshot,
   }) async {
+    final l10n = context.l10n;
     final rawText = _textController.text.trim();
     final seedText = _pendingCalendarSeedText;
     final String resolvedText =
@@ -2329,6 +2331,7 @@ class _ChatState extends State<Chat> {
     if (chat == null) {
       return;
     }
+    final calendarTaskShareText = _pendingCalendarTaskIcs?.toShareText(l10n);
     context.read<ChatBloc>().add(
           ChatMessageSent(
             chat: chat,
@@ -2337,11 +2340,13 @@ class _ChatState extends State<Chat> {
             pendingAttachments: pendingAttachments,
             settings: settingsSnapshot,
             supportsHttpFileUpload: chatState.supportsHttpFileUpload,
+            attachmentFallbackLabel: l10n.chatAttachmentFallbackLabel,
             subject: _subjectController.text,
             quotedDraft: chatState.quoting,
             roomState: chatState.roomState,
             calendarTaskIcs: _pendingCalendarTaskIcs,
             calendarTaskIcsReadOnly: _calendarTaskIcsReadOnlyFallback,
+            calendarTaskShareText: calendarTaskShareText,
           ),
         );
   }
@@ -3281,19 +3286,19 @@ class _ChatState extends State<Chat> {
                 final toastWidget = switch (toast.variant) {
                   ChatToastVariant.destructive => FeedbackToast.error(
                       title: resolvedTitle,
-                      message: toast.message,
+                      message: toast.message?.label(l10n),
                       actionLabel: actionLabel,
                       onAction: onAction,
                     ),
                   ChatToastVariant.warning => FeedbackToast.warning(
                       title: resolvedTitle,
-                      message: toast.message,
+                      message: toast.message?.label(l10n),
                       actionLabel: actionLabel,
                       onAction: onAction,
                     ),
                   ChatToastVariant.info => FeedbackToast.success(
                       title: resolvedTitle,
-                      message: toast.message,
+                      message: toast.message?.label(l10n),
                       actionLabel: actionLabel,
                       onAction: onAction,
                     ),
@@ -3705,21 +3710,14 @@ class _ChatState extends State<Chat> {
               final scaffold = LayoutBuilder(
                 builder: (context, constraints) {
                   final spacing = context.spacing;
-                  final leadingInset = spacing.s + spacing.xs;
+                  final leadingInset = spacing.m;
                   final leadingSpacing = spacing.xs;
                   final actionSpacing = spacing.xxs;
                   final appBarActionsPadding = spacing.s;
-                  final collapsedLeadingWidth = spacing.xxs * 0;
-                  final avatarTitleSpacingOffset = spacing.xs;
-                  final avatarTitleSpacing =
-                      spacing.s + avatarTitleSpacingOffset;
-                  final titleMinWidth = spacing.xxl +
-                      spacing.xl +
-                      spacing.m +
-                      spacing.s +
-                      spacing.xs;
-                  final titleMaxWidth =
-                      (spacing.xxl * 3) + spacing.l + spacing.xs;
+                  final collapsedLeadingWidth = 0.0;
+                  final avatarTitleSpacing = spacing.m;
+                  final titleMinWidth = spacing.xxl;
+                  final titleMaxWidth = spacing.xxl;
                   final double appBarWidth = constraints.maxWidth;
                   final double leadingWidthExpanded = leadingActionCount == 0
                       ? collapsedLeadingWidth
@@ -4048,9 +4046,8 @@ class _ChatState extends State<Chat> {
                                   builder: (context, constraints) {
                                     final spacing = context.spacing;
                                     final messageListHorizontalPadding =
-                                        spacing.s + spacing.xs;
-                                    final pinnedPanelMinHeight =
-                                        spacing.xxs * 0;
+                                        spacing.m;
+                                    final pinnedPanelMinHeight = 0.0;
                                     final rawContentWidth = math.max(
                                       0.0,
                                       constraints.maxWidth,
@@ -4149,11 +4146,10 @@ class _ChatState extends State<Chat> {
                                       });
                                     }
                                     final selectionSpacerVisibleHeight =
-                                        spacing.l + spacing.xs;
+                                        spacing.l;
                                     const compactBubbleWidthFraction = 0.7;
                                     const regularBubbleWidthFraction = 0.7;
-                                    final selectionCutoutDepth =
-                                        spacing.m + (spacing.xxs / 2);
+                                    final selectionCutoutDepth = spacing.m;
                                     final selectionOuterInset =
                                         selectionCutoutDepth +
                                             (SelectionIndicator.size / 2);
@@ -4356,8 +4352,6 @@ class _ChatState extends State<Chat> {
                                               bodyTextTrimmed == subjectText;
                                       final displayedBody =
                                           isSubjectOnlyBody ? '' : bodyText;
-                                      final errorLabel =
-                                          e.error.label(context.l10n);
                                       final xmppCapabilities =
                                           state.xmppCapabilities;
                                       final supportsMarkers = isEmailChat ||
@@ -4402,10 +4396,14 @@ class _ChatState extends State<Chat> {
                                                   ? bodyText.isNotEmpty
                                                       ? context.l10n
                                                           .chatMessageErrorWithBody(
-                                                          errorLabel,
+                                                          e.error.label(
+                                                            context.l10n,
+                                                          ),
                                                           bodyTextTrimmed,
                                                         )
-                                                      : errorLabel
+                                                      : e.error.label(
+                                                          context.l10n,
+                                                        )
                                                   : displayedBody;
                                       final attachmentIds =
                                           attachmentsForMessage(e);
@@ -4742,8 +4740,9 @@ class _ChatState extends State<Chat> {
                                                     _composerHasContent,
                                                 selfJid: selfXmppJid,
                                                 selfIdentity: selfIdentity,
-                                                composerError:
-                                                    state.composerError,
+                                                composerError: state
+                                                    .composerError
+                                                    ?.label(context.l10n),
                                                 onComposerErrorCleared: () =>
                                                     context
                                                         .read<ChatBloc>()
@@ -4988,9 +4987,7 @@ class _ChatState extends State<Chat> {
                                                               padding: EdgeInsets
                                                                   .symmetric(
                                                                 vertical:
-                                                                    spacing.m +
-                                                                        spacing
-                                                                            .s,
+                                                                    spacing.l,
                                                                 horizontal:
                                                                     spacing.m,
                                                               ),
@@ -5276,8 +5273,7 @@ class _ChatState extends State<Chat> {
                                                                           EdgeInsets
                                                                               .symmetric(
                                                                         horizontal:
-                                                                            spacing.s +
-                                                                                spacing.xs,
+                                                                            spacing.m,
                                                                         vertical:
                                                                             spacing.s,
                                                                       ),
@@ -5431,8 +5427,7 @@ class _ChatState extends State<Chat> {
                                                                       as bool?) ??
                                                                   false;
                                                           final messageAvatarSize =
-                                                              spacing.l +
-                                                                  spacing.xs;
+                                                              spacing.l;
                                                           final avatarCutoutDepth =
                                                               messageAvatarSize /
                                                                   2;
@@ -5450,22 +5445,17 @@ class _ChatState extends State<Chat> {
                                                               Alignment
                                                                   .centerLeft.x;
                                                           final messageAvatarCornerClearance =
-                                                              spacing.xxs * 0;
+                                                              0.0;
                                                           const messageAvatarCutoutPadding =
                                                               EdgeInsets.zero;
                                                           final reactionBubbleInset =
-                                                              spacing.s +
-                                                                  spacing.xs;
+                                                              spacing.m;
                                                           final reactionCutoutDepth =
-                                                              spacing.s +
-                                                                  spacing.xs +
-                                                                  spacing.xxs;
+                                                              spacing.m;
                                                           final reactionCutoutRadius =
                                                               spacing.m;
                                                           final reactionCutoutMinThickness =
-                                                              spacing.m +
-                                                                  spacing.s +
-                                                                  spacing.xs;
+                                                              spacing.l;
                                                           final reactionStripOffset =
                                                               Offset(
                                                             0,
@@ -5480,64 +5470,47 @@ class _ChatState extends State<Chat> {
                                                                 spacing.xxs,
                                                           );
                                                           final reactionCornerClearance =
-                                                              spacing.s +
-                                                                  spacing.xs;
+                                                              spacing.m;
                                                           final recipientCutoutDepth =
                                                               spacing.m;
                                                           final recipientCutoutRadius =
-                                                              spacing.m +
-                                                                  spacing.xxs;
+                                                              spacing.m;
                                                           final recipientCutoutPadding =
                                                               EdgeInsets
                                                                   .fromLTRB(
-                                                            spacing.s +
-                                                                spacing.xxs,
+                                                            spacing.s,
                                                             spacing.xs,
-                                                            spacing.s +
-                                                                spacing.xxs,
-                                                            spacing.xs +
-                                                                spacing.xxs,
+                                                            spacing.s,
+                                                            spacing.s,
                                                           );
                                                           final recipientCutoutMinThickness =
-                                                              spacing.l +
-                                                                  spacing.m;
+                                                              spacing.xl;
                                                           final recipientBubbleInset =
                                                               recipientCutoutDepth;
                                                           final selectionCutoutDepth =
-                                                              spacing.m +
-                                                                  (spacing.xxs /
-                                                                      2);
+                                                              spacing.m;
                                                           final selectionCutoutRadius =
                                                               spacing.m;
                                                           final selectionCutoutPadding =
                                                               EdgeInsets
                                                                   .fromLTRB(
                                                             spacing.xs,
-                                                            spacing.xs +
-                                                                (spacing.xxs /
-                                                                    4),
+                                                            spacing.s,
                                                             spacing.xs,
-                                                            spacing.xs +
-                                                                (spacing.xxs /
-                                                                    4),
+                                                            spacing.s,
                                                           );
                                                           final selectionCutoutOffset =
                                                               Offset(
-                                                            -(spacing.xxs +
-                                                                (spacing.xxs /
-                                                                    2)),
+                                                            -(spacing.xs),
                                                             0,
                                                           );
                                                           final selectionCutoutThickness =
                                                               SelectionIndicator
                                                                       .size +
-                                                                  spacing.s +
-                                                                  (spacing.xxs /
-                                                                      2);
+                                                                  spacing.s;
                                                           final selectionBubbleInteriorInset =
                                                               selectionCutoutDepth +
-                                                                  spacing.xs +
-                                                                  spacing.xxs;
+                                                                  spacing.s;
                                                           final selectionBubbleVerticalInset =
                                                               spacing.xs;
                                                           final selectionOuterInset =
@@ -5552,8 +5525,7 @@ class _ChatState extends State<Chat> {
                                                           final selectionBubbleOutboundExtraGap =
                                                               spacing.s;
                                                           final selectionBubbleOutboundSpacingBoost =
-                                                              spacing.xs +
-                                                                  spacing.xxs;
+                                                              spacing.s;
                                                           final selectionBubbleInboundSpacing =
                                                               selectionBubbleInteriorInset +
                                                                   selectionBubbleInboundExtraGap;
@@ -5566,16 +5538,10 @@ class _ChatState extends State<Chat> {
                                                           final selectionAttachmentSelectedGap =
                                                               spacing.s;
                                                           final selectionExtrasViewportGap =
-                                                              spacing.l +
-                                                                  spacing.m +
-                                                                  spacing.xxs;
+                                                              spacing.xl;
                                                           final selectionExtrasMaxWidth =
-                                                              (spacing.xxl *
-                                                                      3) +
-                                                                  spacing.xl +
-                                                                  spacing.l +
-                                                                  spacing.m +
-                                                                  spacing.xs;
+                                                              context.sizing
+                                                                  .composeWindowWidth;
                                                           final showRecipientCutout =
                                                               !showCompactReactions &&
                                                                   isEmailChat &&
@@ -5653,8 +5619,7 @@ class _ChatState extends State<Chat> {
                                                               minThickness:
                                                                   selectionCutoutThickness,
                                                               cornerClearance:
-                                                                  spacing.xxs *
-                                                                      0,
+                                                                  0.0,
                                                             );
                                                           }
                                                           final bubbleContentKey =
@@ -6117,9 +6082,7 @@ class _ChatState extends State<Chat> {
                                                                   BorderRadius
                                                                       .all(
                                                                 Radius.circular(
-                                                                  spacing.m +
-                                                                      spacing
-                                                                          .xxs,
+                                                                  spacing.m,
                                                                 ),
                                                               ),
                                                             );
@@ -6974,8 +6937,7 @@ class _ChatState extends State<Chat> {
                                                                       nextIsTailSpacer);
                                                           final baseOuterBottom =
                                                               isLatestBubble
-                                                                  ? spacing.s +
-                                                                      spacing.xs
+                                                                  ? spacing.m
                                                                   : spacing.xxs;
                                                           var extraOuterBottom =
                                                               0.0;
@@ -7121,8 +7083,7 @@ class _ChatState extends State<Chat> {
                                                                   ? avatarOuterInset
                                                                   : 0;
                                                           final messageListHorizontalPadding =
-                                                              spacing.s +
-                                                                  spacing.xs;
+                                                              spacing.m;
                                                           final outerPadding =
                                                               EdgeInsets.only(
                                                             top: spacing.xxs,
@@ -7954,8 +7915,7 @@ class _ChatState extends State<Chat> {
                                                           padding: EdgeInsets
                                                               .symmetric(
                                                             horizontal:
-                                                                spacing.s +
-                                                                    spacing.xs,
+                                                                spacing.m,
                                                           ),
                                                           child: Align(
                                                             alignment: Alignment
@@ -7983,9 +7943,7 @@ class _ChatState extends State<Chat> {
                                                                 padding: EdgeInsets
                                                                     .symmetric(
                                                                   horizontal:
-                                                                      spacing.s +
-                                                                          spacing
-                                                                              .xs,
+                                                                      spacing.m,
                                                                   vertical:
                                                                       spacing.s,
                                                                 ),
@@ -9087,12 +9045,12 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    final showPanel = widget.visible && widget.maxHeight > (spacing.xxs * 0);
+    final showPanel = widget.visible && widget.maxHeight > (0.0);
     final showLoading = showPanel && !widget.pinnedMessagesLoaded;
     final Widget panelBody = showLoading
         ? Padding(
             padding: EdgeInsets.symmetric(
-              vertical: spacing.s + spacing.xs,
+              vertical: spacing.m,
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -9106,7 +9064,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
         : widget.pinnedMessages.isEmpty
             ? Padding(
                 padding: EdgeInsets.symmetric(
-                  vertical: spacing.s + spacing.xs,
+                  vertical: spacing.m,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -9159,7 +9117,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
         width: double.infinity,
         padding: EdgeInsets.symmetric(
           horizontal: spacing.m,
-          vertical: spacing.s + spacing.xs,
+          vertical: spacing.m,
         ),
         decoration: BoxDecoration(
           color: colors.card,
@@ -9183,7 +9141,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                 ),
               ],
             ),
-            SizedBox(height: spacing.s + spacing.xs),
+            SizedBox(height: spacing.m),
             Flexible(fit: FlexFit.loose, child: panelBody),
           ],
         ),
@@ -9475,7 +9433,7 @@ class _PinnedMessageTile extends StatelessWidget {
         ],
       ),
       if (messageWidget != null) ...[
-        SizedBox(height: spacing.xs + spacing.xxs),
+        SizedBox(height: spacing.s),
         messageWidget,
       ],
     ];
@@ -10005,8 +9963,8 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
   required double maxContentWidth,
 }) {
   final spacing = context.spacing;
-  final reactionChipSpacing = spacing.xxs * 0.3;
-  final reactionOverflowGlyphWidth = spacing.m + spacing.xxs;
+  final reactionChipSpacing = 0.0;
+  final reactionOverflowGlyphWidth = spacing.m;
   if (reactions.isEmpty || maxContentWidth <= 0) {
     return const _CutoutLayoutResult(
       items: <ReactionPreview>[],
@@ -10082,10 +10040,10 @@ double measureReactionChipWidth({
 }) {
   final spacing = context.spacing;
   final reactionChipPadding = EdgeInsets.symmetric(
-    horizontal: spacing.xxs * 0.1,
+    horizontal: 0.0,
     vertical: spacing.xxs,
   );
-  final reactionSubscriptPadding = spacing.xxs + (spacing.xxs / 2);
+  final reactionSubscriptPadding = spacing.xs;
   final emojiPainter = TextPainter(
     text: TextSpan(
       text: reaction.emoji,
@@ -10140,8 +10098,8 @@ _CutoutLayoutResult<chat_models.Chat> _layoutRecipientStrip({
   }
 
   final spacing = context.spacing;
-  final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
-  final recipientAvatarOverlap = spacing.s + spacing.xxs;
+  final recipientAvatarSize = spacing.l;
+  final recipientAvatarOverlap = spacing.s;
   final visible = <chat_models.Chat>[];
   final additions = <double>[];
   double used = 0;
@@ -10199,8 +10157,8 @@ _CutoutLayoutResult<String> _layoutTypingStrip({
     );
   }
   final spacing = context.spacing;
-  final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
-  final recipientAvatarOverlap = spacing.s + spacing.xxs;
+  final recipientAvatarSize = spacing.l;
+  final recipientAvatarOverlap = spacing.s;
   final capped =
       participants.take(_typingIndicatorMaxAvatars + 1).toList(growable: false);
   final visible = <String>[];
@@ -10276,7 +10234,7 @@ class _ReactionStrip extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final spacing = context.spacing;
-        final chipSpacing = spacing.xxs * 0.3;
+        final chipSpacing = 0.0;
         final overflowSpacing = spacing.xs;
         final maxWidth = constraints.hasBoundedWidth &&
                 constraints.maxWidth.isFinite &&
@@ -10321,7 +10279,7 @@ class _ReactionOverflowGlyph extends StatelessWidget {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final glyphSize = spacing.m + spacing.xxs;
+    final glyphSize = spacing.m;
     return SizedBox(
       width: glyphSize,
       height: glyphSize,
@@ -10352,9 +10310,9 @@ class _ReplyStrip extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final spacing = context.spacing;
-        final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
-        final recipientAvatarOverlap = spacing.s + spacing.xxs;
-        final recipientOverflowGap = spacing.xs + spacing.xxs;
+        final recipientAvatarSize = spacing.l;
+        final recipientAvatarOverlap = spacing.s;
+        final recipientOverflowGap = spacing.s;
         final maxWidth = constraints.hasBoundedWidth &&
                 constraints.maxWidth.isFinite &&
                 constraints.maxWidth > 0
@@ -10416,9 +10374,9 @@ class _RecipientCutoutStrip extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final spacing = context.spacing;
-        final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
-        final recipientAvatarOverlap = spacing.s + spacing.xxs;
-        final recipientOverflowGap = spacing.xs + spacing.xxs;
+        final recipientAvatarSize = spacing.l;
+        final recipientAvatarOverlap = spacing.s;
+        final recipientOverflowGap = spacing.s;
         final maxWidth = constraints.hasBoundedWidth &&
                 constraints.maxWidth.isFinite &&
                 constraints.maxWidth > 0
@@ -10475,7 +10433,7 @@ class _RecipientAvatarBadge extends StatelessWidget {
     final colors = context.colorScheme;
     final borderWidth = context.borderSide.width;
     final spacing = context.spacing;
-    final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
+    final recipientAvatarSize = spacing.l;
     final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     final avatarPath = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
     final resolvedAvatarPath =
@@ -10506,7 +10464,7 @@ class _RecipientOverflowAvatar extends StatelessWidget {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
+    final recipientAvatarSize = spacing.l;
     return SizedBox(
       width: recipientAvatarSize,
       height: recipientAvatarSize,
@@ -10583,9 +10541,9 @@ class _TypingAvatarStrip extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final spacing = context.spacing;
-        final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
-        final recipientAvatarOverlap = spacing.s + spacing.xxs;
-        final recipientOverflowGap = spacing.xs + spacing.xxs;
+        final recipientAvatarSize = spacing.l;
+        final recipientAvatarOverlap = spacing.s;
+        final recipientOverflowGap = spacing.s;
         final maxWidth = constraints.hasBoundedWidth &&
                 constraints.maxWidth.isFinite &&
                 constraints.maxWidth > 0
@@ -10646,7 +10604,7 @@ class _TypingAvatar extends StatelessWidget {
     final borderColor = context.colorScheme.card;
     final borderWidth = context.borderSide.width;
     final spacing = context.spacing;
-    final recipientAvatarSize = spacing.m + spacing.s + spacing.xs;
+    final recipientAvatarSize = spacing.l;
     final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     return Container(
       width: recipientAvatarSize,
@@ -10712,15 +10670,15 @@ class _InviteAttachmentCard extends StatelessWidget {
     const labelOverflow = TextOverflow.ellipsis;
     const iconBackgroundAlpha = 0.15;
     const actionButtonCount = 1;
-    final iconCornerRadius = spacing.s + spacing.xs;
-    final cardCornerRadius = spacing.m + spacing.xs;
-    final padding = EdgeInsets.all(spacing.s + spacing.xs);
-    final rowSpacing = spacing.s + spacing.xs;
+    final iconCornerRadius = spacing.m;
+    final cardCornerRadius = spacing.m;
+    final padding = EdgeInsets.all(spacing.m);
+    final rowSpacing = spacing.m;
     final detailSpacing = spacing.xs;
     final actionSpacing = spacing.s;
-    final iconSize = spacing.m + spacing.xs;
-    final iconWidth = spacing.l + spacing.s + spacing.xxs;
-    final iconHeight = spacing.l + spacing.s + spacing.xs + spacing.xxs;
+    final iconSize = spacing.m;
+    final iconWidth = spacing.l;
+    final iconHeight = spacing.xl;
     final actionRowMinWidth =
         (AxiIconButton.kTapTargetSize * actionButtonCount) +
             (actionSpacing * (actionButtonCount - 1));
@@ -11207,8 +11165,8 @@ class _ChatComposerSection extends StatelessWidget {
       if (myJid != null && myJid.isNotEmpty) mox.JID.fromString(myJid).domain,
     };
     final width = MediaQuery.sizeOf(context).width;
-    final composerHorizontalInset = spacing.m + spacing.xs;
-    final desktopComposerHorizontalInset = spacing.m + spacing.xs + spacing.xs;
+    final composerHorizontalInset = spacing.m;
+    final desktopComposerHorizontalInset = spacing.m;
     final horizontalPadding = width >= smallScreen
         ? desktopComposerHorizontalInset
         : composerHorizontalInset;
@@ -11264,9 +11222,9 @@ class _ChatComposerSection extends StatelessWidget {
             child: Padding(
               padding: EdgeInsets.fromLTRB(
                 horizontalPadding,
-                spacing.m + spacing.xxs,
+                spacing.m,
                 rightPadding,
-                spacing.s + spacing.xxs,
+                spacing.s,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -11274,7 +11232,7 @@ class _ChatComposerSection extends StatelessWidget {
                 children: [
                   if (attachmentTray != null) ...[
                     attachmentTray,
-                    SizedBox(height: spacing.s + spacing.xs),
+                    SizedBox(height: spacing.m),
                   ],
                   _ComposerTaskDropRegion(
                     onTaskDropped: onTaskDropped,
@@ -11354,7 +11312,7 @@ class _ChatComposerSection extends StatelessWidget {
           children.add(SizedBox(height: spacing.s));
         }
       }
-      children.add(SizedBox(height: spacing.s + spacing.xs));
+      children.add(SizedBox(height: spacing.m));
     }
     children.add(
       RecipientChipsBar(
@@ -11492,7 +11450,7 @@ class _ReadOnlyComposerBanner extends StatelessWidget {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final composerHorizontalInset = spacing.m + spacing.xs;
+    final composerHorizontalInset = spacing.m;
     return SafeArea(
       top: false,
       left: false,
@@ -11506,19 +11464,19 @@ class _ReadOnlyComposerBanner extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.fromLTRB(
               composerHorizontalInset,
-              spacing.m + spacing.xxs,
+              spacing.m,
               composerHorizontalInset,
-              spacing.m + spacing.xxs,
+              spacing.m,
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
                   LucideIcons.archive,
-                  size: spacing.m + spacing.xxs,
+                  size: spacing.m,
                   color: colors.mutedForeground,
                 ),
-                SizedBox(width: spacing.s + spacing.xs),
+                SizedBox(width: spacing.m),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -11642,8 +11600,8 @@ class _HtmlPreviewDialogState extends State<_HtmlPreviewDialog> {
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
     final spacing = context.spacing;
-    final widthInset = spacing.xl + spacing.l;
-    final heightInset = spacing.xxl + spacing.l;
+    final widthInset = spacing.xxl;
+    final heightInset = spacing.xxl;
     final maxWidth = math.max(0.0, mediaSize.width - widthInset);
     final maxHeight = math.max(0.0, mediaSize.height - heightInset);
     final colors = context.colorScheme;
@@ -11779,10 +11737,10 @@ class _ReactionChip extends StatelessWidget {
     final highlighted = data.reactedBySelf;
     final spacing = context.spacing;
     final chipPadding = EdgeInsets.symmetric(
-      horizontal: spacing.xxs * 0.1,
+      horizontal: 0.0,
       vertical: spacing.xxs,
     );
-    final subscriptPadding = spacing.xxs + (spacing.xxs / 2);
+    final subscriptPadding = spacing.xs;
     final emojiStyle = reactionEmojiTextStyle(
       context,
       highlighted: highlighted,
@@ -12109,23 +12067,23 @@ class _MessageSelectionToolbar extends StatelessWidget {
     final onReactionSelected = this.onReactionSelected;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final composerHorizontalInset = spacing.m + spacing.xs;
+    final composerHorizontalInset = spacing.m;
     final iconSize = sizing.menuItemIconSize;
     double scaled(double value) => textScaler.scale(value);
     return SelectionPanelShell(
       includeHorizontalSafeArea: false,
       padding: EdgeInsets.fromLTRB(
         scaled(composerHorizontalInset),
-        scaled(spacing.m + spacing.xxs),
+        scaled(spacing.m),
         scaled(composerHorizontalInset),
-        scaled(spacing.s + spacing.xs),
+        scaled(spacing.m),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           SelectionSummaryHeader(count: count, onClear: onClear),
-          SizedBox(height: scaled(spacing.s + spacing.xs)),
+          SizedBox(height: scaled(spacing.m)),
           Wrap(
             spacing: scaled(spacing.s),
             runSpacing: scaled(spacing.s),
@@ -12756,8 +12714,7 @@ class _ChatViewFilterControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
     final spacing = context.spacing;
-    final selectMinWidth =
-        spacing.xxl + spacing.xl + spacing.m + spacing.s + spacing.xs;
+    final selectMinWidth = spacing.xxl;
     final messageFilterOptions = _messageFilterOptions(l10n);
     return _ChatSettingsRow(
       title: filter.statusLabel(l10n),
@@ -12797,8 +12754,7 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
     final spacing = context.spacing;
-    final selectMinWidth =
-        spacing.xxl + spacing.xl + spacing.m + spacing.s + spacing.xs;
+    final selectMinWidth = spacing.xxl;
     return _ChatSettingsRow(
       title: l10n.settingsNotificationPreviews,
       trailing: SizedBox(
@@ -13867,8 +13823,7 @@ class _GuestChatState extends State<GuestChat> {
     final size = MediaQuery.sizeOf(context);
     final isDesktopWidth = size.width >= smallScreen;
     final spacing = context.spacing;
-    final guestHorizontalPadding =
-        isDesktopWidth ? spacing.m + spacing.xs + spacing.xxs : spacing.m;
+    final guestHorizontalPadding = isDesktopWidth ? spacing.l : spacing.m;
     final colors = context.colorScheme;
     return Container(
       width: double.infinity,
@@ -14244,7 +14199,7 @@ class _SenderLabelBlock extends StatelessWidget {
     );
     return Padding(
       padding: EdgeInsets.only(
-        bottom: spacing.xs + spacing.xxs,
+        bottom: spacing.s,
         left: leftInset,
       ),
       child: Column(

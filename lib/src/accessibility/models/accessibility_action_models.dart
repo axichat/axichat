@@ -34,6 +34,79 @@ enum AccessibilityMenuItemKind {
   readOnly,
 }
 
+enum AccessibilityActionStatus {
+  discardWarning,
+  draftLoaded,
+  inviteAccepted,
+  inviteDismissed,
+}
+
+enum AccessibilityActionError {
+  jidInputInvalid,
+  inviteUpdateFailed,
+}
+
+sealed class AccessibilityChatStatus extends Equatable {
+  const AccessibilityChatStatus();
+
+  @override
+  List<Object?> get props => const [];
+}
+
+class AccessibilityChatStatusMessageSent extends AccessibilityChatStatus {
+  const AccessibilityChatStatusMessageSent();
+}
+
+class AccessibilityChatStatusDraftSaved extends AccessibilityChatStatus {
+  const AccessibilityChatStatusDraftSaved();
+}
+
+class AccessibilityChatStatusIncomingMessage extends AccessibilityChatStatus {
+  const AccessibilityChatStatusIncomingMessage({
+    required this.senderJid,
+    required this.senderDisplayName,
+    required this.isSelf,
+    required this.timestamp,
+  });
+
+  final String senderJid;
+  final String senderDisplayName;
+  final bool isSelf;
+  final DateTime? timestamp;
+
+  @override
+  List<Object?> get props => [
+        senderJid,
+        senderDisplayName,
+        isSelf,
+        timestamp,
+      ];
+}
+
+sealed class AccessibilityChatError extends Equatable {
+  const AccessibilityChatError();
+
+  @override
+  List<Object?> get props => const [];
+}
+
+class AccessibilityChatErrorMissingContent extends AccessibilityChatError {
+  const AccessibilityChatErrorMissingContent();
+}
+
+class AccessibilityChatErrorSendFailures extends AccessibilityChatError {
+  const AccessibilityChatErrorSendFailures({
+    required this.failureCount,
+    required this.failures,
+  });
+
+  final int failureCount;
+  final List<String> failures;
+
+  @override
+  List<Object?> get props => [failureCount, failures];
+}
+
 class AccessibilityMenuSection extends Equatable {
   const AccessibilityMenuSection({
     required this.id,

@@ -176,6 +176,11 @@ class AppTheme {
       brightness: brightness,
       colorScheme: patchedScheme,
       textTheme: textTheme,
+      ghostButtonTheme: ShadButtonTheme(
+        foregroundColor: patchedScheme.foreground,
+        hoverForegroundColor: patchedScheme.primary,
+        pressedForegroundColor: patchedScheme.primary,
+      ),
       decoration: ShadDecoration(
         errorPadding: inputSubtextInsets,
         border: ShadBorder.fromBorderSide(
