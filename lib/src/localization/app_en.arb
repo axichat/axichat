@@ -888,7 +888,7 @@
   "settingsShareTokenFooter": "Include share token footer",
   "settingsShareTokenFooterDescription": "Helps keep multi-recipient email threads and attachments linked. Turning this off can break threading.",
   "authCustomServerTitle": "Custom server",
-  "authCustomServerDescription": "Override XMPP/SMTP endpoints or enable DNS lookups. Leave fields blank to keep defaults.",
+  "authCustomServerDescription": "Override XMPP/SMTP endpoints or enable DNS lookups. Leave fields blank to keep defaults. Custom servers must be created following the steps at https://github.com/axichat/server or they probably won't work.",
   "authCustomServerDomainOrIp": "Domain",
   "authCustomServerXmppLabel": "XMPP",
   "authCustomServerSmtpLabel": "SMTP",

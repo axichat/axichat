@@ -367,7 +367,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatMessageForwardFailed => 'Unable to forward message.';
 
   @override
-  String get chatModerationRequested => 'Moderation request sent.';
+  String chatModerationRequested(Object action, Object nickname) {
+    return 'Requested $action for $nickname.';
+  }
 
   @override
   String get chatModerationFailed =>
@@ -2055,7 +2057,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authCustomServerDescription =>
-      'Anula los endpoints XMPP/SMTP o habilita búsquedas DNS. Deja los campos vacíos para mantener los valores predeterminados.';
+      'Anula los endpoints XMPP/SMTP o habilita búsquedas DNS. Deja los campos vacíos para mantener los valores predeterminados. Los servidores personalizados deben crearse siguiendo los pasos en https://github.com/axichat/server o probablemente no funcionen.';
 
   @override
   String get authCustomServerDomainOrIp => 'Dominio';

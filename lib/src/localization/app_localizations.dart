@@ -732,8 +732,8 @@ abstract class AppLocalizations {
   /// No description provided for @chatModerationRequested.
   ///
   /// In en, this message translates to:
-  /// **'Moderation request sent.'**
-  String get chatModerationRequested;
+  /// **'Requested {action} for {nickname}.'**
+  String chatModerationRequested(Object action, Object nickname);
 
   /// No description provided for @chatModerationFailed.
   ///
@@ -3677,7 +3677,7 @@ abstract class AppLocalizations {
   /// No description provided for @authCustomServerDescription.
   ///
   /// In en, this message translates to:
-  /// **'Override XMPP/SMTP endpoints or enable DNS lookups. Leave fields blank to keep defaults.'**
+  /// **'Override XMPP/SMTP endpoints or enable DNS lookups. Leave fields blank to keep defaults. Custom servers must be created following the steps at https://github.com/axichat/server or they probably won't work.'**
   String get authCustomServerDescription;
 
   /// No description provided for @authCustomServerDomainOrIp.

@@ -811,7 +811,7 @@
   "settingsShareTokenFooter": "Incluir pie de token de compartir",
   "settingsShareTokenFooterDescription": "Ayuda a mantener enlazados los hilos de correo con varios destinatarios y sus adjuntos. Desactivarlo puede romper el hilo.",
   "authCustomServerTitle": "Servidor personalizado",
-  "authCustomServerDescription": "Anula los endpoints XMPP/SMTP o habilita búsquedas DNS. Deja los campos vacíos para mantener los valores predeterminados.",
+  "authCustomServerDescription": "Anula los endpoints XMPP/SMTP o habilita búsquedas DNS. Deja los campos vacíos para mantener los valores predeterminados. Los servidores personalizados deben crearse siguiendo los pasos en https://github.com/axichat/server o probablemente no funcionen.",
   "authCustomServerDomainOrIp": "Dominio",
   "authCustomServerXmppLabel": "XMPP",
   "authCustomServerSmtpLabel": "SMTP",

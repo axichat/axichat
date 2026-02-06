@@ -355,7 +355,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatMessageForwardFailed => 'Unable to forward message.';
 
   @override
-  String get chatModerationRequested => 'Moderation request sent.';
+  String chatModerationRequested(Object action, Object nickname) {
+    return 'Requested $action for $nickname.';
+  }
 
   @override
   String get chatModerationFailed =>
@@ -1959,7 +1961,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authCustomServerDescription =>
-      '覆盖 XMPP/SMTP 端点或启用 DNS 查询。留空以使用默认值。';
+      '覆盖 XMPP/SMTP 端点或启用 DNS 查询。留空以使用默认值。自定义服务器必须按照 https://github.com/axichat/server 的步骤创建，否则很可能无法工作。';
 
   @override
   String get authCustomServerDomainOrIp => '域名';
@@ -6095,7 +6097,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatMessageForwardFailed => 'Unable to forward message.';
 
   @override
-  String get chatModerationRequested => 'Moderation request sent.';
+  String chatModerationRequested(Object action, Object nickname) {
+    return 'Requested $action for $nickname.';
+  }
 
   @override
   String get chatModerationFailed =>
@@ -7699,7 +7703,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authCustomServerDescription =>
-      '覆寫 XMPP/SMTP 端點或啟用 DNS 查詢。欄位留空以保留預設值。';
+      '覆寫 XMPP/SMTP 端點或啟用 DNS 查詢。欄位留空以保留預設值。自訂伺服器必須依照 https://github.com/axichat/server 的步驟建立，否則很可能無法運作。';
 
   @override
   String get authCustomServerDomainOrIp => '網域';

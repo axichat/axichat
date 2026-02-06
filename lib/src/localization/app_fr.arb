@@ -811,7 +811,7 @@
   "settingsShareTokenFooter": "Inclure le pied de page du jeton de partage",
   "settingsShareTokenFooterDescription": "Aide à garder liés les fils d’e-mails multi-destinataires et leurs pièces jointes. Le désactiver peut casser le fil.",
   "authCustomServerTitle": "Serveur personnalisé",
-  "authCustomServerDescription": "Remplace les points de terminaison XMPP/SMTP ou active les recherches DNS. Laissez les champs vides pour conserver les valeurs par défaut.",
+  "authCustomServerDescription": "Remplace les points de terminaison XMPP/SMTP ou active les recherches DNS. Laissez les champs vides pour conserver les valeurs par défaut. Les serveurs personnalisés doivent être créés en suivant les étapes sur https://github.com/axichat/server, sinon ils ne fonctionneront probablement pas.",
   "authCustomServerDomainOrIp": "Domaine",
   "authCustomServerXmppLabel": "XMPP",
   "authCustomServerSmtpLabel": "SMTP",

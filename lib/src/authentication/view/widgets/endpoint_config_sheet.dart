@@ -134,6 +134,11 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
       ),
       bodyPadding: sheetPadding.copyWith(bottom: spacing.m),
       children: [
+        Text(
+          context.l10n.authCustomServerDescription,
+          style: textTheme.muted,
+        ),
+        SizedBox(height: spacing.m),
         AxiTextFormField(
           autocorrect: false,
           keyboardType: TextInputType.url,

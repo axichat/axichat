@@ -811,7 +811,7 @@
   "settingsShareTokenFooter": "Freigabe-Token-Fußzeile anhängen",
   "settingsShareTokenFooterDescription": "Hilft, E-Mail-Threads mit mehreren Empfängern und Anhängen zusammenzuhalten. Deaktivieren kann Threads aufbrechen.",
   "authCustomServerTitle": "Eigener Server",
-  "authCustomServerDescription": "XMPP/SMTP-Endpunkte überschreiben oder DNS-Abfragen aktivieren. Felder leer lassen, um Standardwerte zu behalten.",
+  "authCustomServerDescription": "XMPP/SMTP-Endpunkte überschreiben oder DNS-Abfragen aktivieren. Felder leer lassen, um Standardwerte zu behalten. Benutzerdefinierte Server müssen gemäß den Schritten auf https://github.com/axichat/server erstellt werden, sonst funktionieren sie wahrscheinlich nicht.",
   "authCustomServerDomainOrIp": "Domain",
   "authCustomServerXmppLabel": "XMPP",
   "authCustomServerSmtpLabel": "SMTP",
