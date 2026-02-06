@@ -411,26 +411,26 @@ const calendarDayHeaderLetterSpacing = 0.5;
 
 // Standard spacing values
 // Insets handle tight adjustments inside components, while gutters separate larger regions.
-const calendarInsetSm = 2.0;
-const calendarInsetMd = 4.0;
-const calendarInsetLg = 6.0;
-const calendarGutterSm = 8.0;
-const calendarGutterMd = 12.0;
-const calendarGutterLg = 16.0;
+const calendarInsetSm = axiSpaceXxs;
+const calendarInsetMd = axiSpaceXs;
+const calendarInsetLg = axiSpaceS;
+const calendarGutterSm = axiSpaceS;
+const calendarGutterMd = axiSpaceM;
+const calendarGutterLg = axiSpaceM;
 // Dedicated form spacing between stacked controls.
 const calendarCheckboxTapTarget = 36.0;
-const calendarFormGap = 10.0;
-const calendarTaskDetailGap = 3.0;
+const calendarFormGap = axiSpaceS;
+const calendarTaskDetailGap = axiSpaceXs;
 const calendarCompactDayColumnWidth = 120.0;
-const calendarRecurrenceEndGap = 14.0;
+const calendarRecurrenceEndGap = axiSpaceM;
 const calendarRecurrenceFieldGap = calendarGutterMd;
-const calendarRecurrenceCompactFieldGap = 14.0;
+const calendarRecurrenceCompactFieldGap = axiSpaceM;
 const calendarRecurrenceCompactWeekdayGap = calendarFormGap;
 
 // Event layout constraints
 const calendarEventMinHeight = 20.0;
 const calendarEventMinWidth = 32.0;
-const calendarTaskColumnInset = 6.0;
+const calendarTaskColumnInset = axiSpaceS;
 const calendarTaskColumnGap = 0.0;
 const calendarDayViewDefaultHourHeight = 192.0;
 const calendarDayViewDefaultSubdivisions = 4;
@@ -459,13 +459,13 @@ const calendarTaskPopoverFallbackHeight = 560.0;
 const calendarTaskPopoverMinHeight = 160.0;
 
 /// Safe margin between popovers and the screen edge for pointer affordances.
-const calendarPopoverScreenMargin = 16.0;
+const calendarPopoverScreenMargin = axiSpaceM;
 
 /// Desired vertical gap between a task tile and its overlay content.
-const calendarPopoverPreferredVerticalGap = 8.0;
+const calendarPopoverPreferredVerticalGap = axiSpaceS;
 
 /// Desired horizontal gap between a task tile and its overlay content.
-const calendarPopoverPreferredHorizontalGap = 12.0;
+const calendarPopoverPreferredHorizontalGap = axiSpaceM;
 
 // Quick add modal sizing
 /// Maximum width the quick add modal can occupy on desktop breakpoints.
@@ -482,31 +482,43 @@ const calendarQuickAddModalCompactMaxWidth = 360.0;
 const calendarMobileSidebarHeight = 200.0;
 
 // Standard EdgeInsets
-const calendarPaddingSm = EdgeInsets.all(4.0);
-const calendarPaddingMd = EdgeInsets.all(8.0);
-const calendarPaddingLg = EdgeInsets.all(12.0);
-const calendarPaddingXl = EdgeInsets.all(16.0);
+const calendarPaddingSm = EdgeInsets.all(axiSpaceXs);
+const calendarPaddingMd = EdgeInsets.all(axiSpaceS);
+const calendarPaddingLg = EdgeInsets.all(axiSpaceM);
+const calendarPaddingXl = EdgeInsets.all(axiSpaceM);
 
 // Purpose-specific paddings for shared surfaces.
 const calendarMenuItemPadding = EdgeInsets.symmetric(
-  horizontal: 14,
-  vertical: 12,
+  horizontal: axiSpaceM,
+  vertical: axiSpaceM,
 );
-const calendarFieldPadding = EdgeInsets.symmetric(horizontal: 14, vertical: 10);
+const calendarFieldPadding = EdgeInsets.symmetric(
+  horizontal: axiSpaceM,
+  vertical: axiSpaceS,
+);
 const calendarActionButtonPadding = EdgeInsets.symmetric(
-  horizontal: 14,
-  vertical: 14,
+  horizontal: axiSpaceM,
+  vertical: axiSpaceM,
 );
 const calendarAccordionPadding = EdgeInsets.fromLTRB(
-  14,
-  6,
-  14,
+  axiSpaceM,
+  axiSpaceS,
+  axiSpaceM,
   calendarFormGap,
 );
 
-const calendarMarginSmall = EdgeInsets.symmetric(horizontal: 8, vertical: 4);
-const calendarMarginMedium = EdgeInsets.symmetric(horizontal: 12, vertical: 6);
-const calendarMarginLarge = EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+const calendarMarginSmall = EdgeInsets.symmetric(
+  horizontal: axiSpaceS,
+  vertical: axiSpaceXs,
+);
+const calendarMarginMedium = EdgeInsets.symmetric(
+  horizontal: axiSpaceM,
+  vertical: axiSpaceS,
+);
+const calendarMarginLarge = EdgeInsets.symmetric(
+  horizontal: axiSpaceM,
+  vertical: axiSpaceS,
+);
 
 // Sidebar layout metrics
 const calendarSidebarMinWidth = 220.0;
@@ -515,9 +527,9 @@ const calendarSidebarWidthDefaultFraction = 0.33;
 const calendarSidebarWidthMaxFraction = 0.5;
 const calendarSidebarScrollbarThickness = 6.0;
 const calendarSidebarScrollbarRadius = 8.0;
-const calendarSidebarSectionPadding = EdgeInsets.all(20.0);
-const calendarSidebarSectionSpacing = 16.0;
-const calendarSidebarToggleSpacing = 12.0;
+const calendarSidebarSectionPadding = EdgeInsets.all(axiSpaceM);
+const calendarSidebarSectionSpacing = axiSpaceM;
+const calendarSidebarToggleSpacing = axiSpaceM;
 const calendarSidebarScrollPadding = EdgeInsets.only(bottom: 24.0);
 const calendarSidebarAdvancedAnimationDuration = Duration(milliseconds: 220);
 

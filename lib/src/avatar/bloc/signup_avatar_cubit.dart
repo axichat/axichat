@@ -54,7 +54,11 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
   }
 
   static const AvatarPipelineConfig _defaultPipelineConfig =
-      AvatarPipelineConfig(minJpegQuality: 35, minCropSide: minCropSide);
+      AvatarPipelineConfig(
+    minJpegQuality: 35,
+    minCropSide: minCropSide,
+    uploadMaxDimension: 0,
+  );
   static final int avatarMaxKilobytes = _defaultPipelineConfig.maxBytes ~/ 1024;
   static const int _sourceMaxBytes = 8 * 1024 * 1024;
   static const double avatarInsetFraction = 0.10;
@@ -150,6 +154,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
       _carouselBuffer.clear();
       _currentCarouselAvatar = null;
       _stopAvatarCarousel();
+      _pendingCropRect = null;
       emit(
         state.copyWith(
           avatar: null,

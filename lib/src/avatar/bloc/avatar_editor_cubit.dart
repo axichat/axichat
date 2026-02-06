@@ -45,7 +45,10 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         _random = Random(),
         _pipeline = pipeline ??
             AvatarPipeline(
-              config: const AvatarPipelineConfig(minCropSide: minCropSide),
+              config: const AvatarPipelineConfig(
+                minCropSide: minCropSide,
+                uploadMaxDimension: 0,
+              ),
             ),
         super(const AvatarEditorState()) {
     _carouselEngine = AvatarCarouselEngine(

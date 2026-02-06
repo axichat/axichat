@@ -585,6 +585,7 @@ final class ChatModerationActionRequested extends ChatEvent {
   const ChatModerationActionRequested({
     required this.occupantId,
     required this.action,
+    required this.actionLabel,
     required this.chat,
     required this.roomState,
     this.reason,
@@ -592,12 +593,20 @@ final class ChatModerationActionRequested extends ChatEvent {
 
   final String occupantId;
   final MucModerationAction action;
+  final String actionLabel;
   final Chat chat;
   final RoomState? roomState;
   final String? reason;
 
   @override
-  List<Object?> get props => [occupantId, action, chat, roomState, reason];
+  List<Object?> get props => [
+        occupantId,
+        action,
+        actionLabel,
+        chat,
+        roomState,
+        reason,
+      ];
 }
 
 final class ChatViewFilterChanged extends ChatEvent {

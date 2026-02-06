@@ -151,6 +151,9 @@ class ChatToast extends Equatable {
   const ChatToast({
     this.title,
     this.message,
+    this.messageText,
+    this.messageActionLabel,
+    this.messageTargetLabel,
     this.variant = ChatToastVariant.info,
     this.action,
     this.actionDraftId,
@@ -158,6 +161,9 @@ class ChatToast extends Equatable {
 
   final String? title;
   final ChatMessageKey? message;
+  final String? messageText;
+  final String? messageActionLabel;
+  final String? messageTargetLabel;
   final ChatToastVariant variant;
   final ChatToastAction? action;
   final int? actionDraftId;
@@ -165,7 +171,16 @@ class ChatToast extends Equatable {
   bool get isDestructive => variant == ChatToastVariant.destructive;
 
   @override
-  List<Object?> get props => [title, message, variant, action, actionDraftId];
+  List<Object?> get props => [
+        title,
+        message,
+        messageText,
+        messageActionLabel,
+        messageTargetLabel,
+        variant,
+        action,
+        actionDraftId,
+      ];
 }
 
 class ChatSettingsSnapshot extends Equatable {
@@ -2377,7 +2392,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           chat: chat.copyWith(contactDisplayName: alias),
-          toast: ChatToast(title: event.successMessage),
+          toast: ChatToast(messageText: event.successMessage),
           toastId: state.toastId + 1,
         ),
       );
@@ -2386,7 +2401,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(
           toast: ChatToast(
-            title: event.failureMessage,
+            messageText: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
           toastId: state.toastId + 1,
@@ -2460,6 +2475,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         state.copyWith(
           toast: ChatToast(
             message: ChatMessageKey.chatModerationRequested,
+            messageActionLabel: event.actionLabel,
+            messageTargetLabel: occupant.nick,
           ),
           toastId: state.toastId + 1,
         ),
@@ -3396,7 +3413,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _attachToast(
           state,
           ChatToast(
-            title: event.failureMessage,
+            messageText: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
         ),
@@ -3407,7 +3424,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _attachToast(
         state,
         ChatToast(
-          title: event.successMessage,
+          messageText: event.successMessage,
         ),
       ),
     );
@@ -3470,7 +3487,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _attachToast(
           state,
           ChatToast(
-            title: event.failureMessage,
+            messageText: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
         ),
@@ -3493,7 +3510,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _attachToast(
           state,
           ChatToast(
-            title: event.failureMessage,
+            messageText: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
         ),

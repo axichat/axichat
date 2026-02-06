@@ -46,7 +46,11 @@ class RoomMembersSheet extends StatelessWidget {
   final List<RoomMemberSection> memberSections;
   final bool canInvite;
   final ValueChanged<String> onInvite;
-  final void Function(String occupantId, MucModerationAction action) onAction;
+  final void Function(
+    String occupantId,
+    MucModerationAction action,
+    String actionLabel,
+  ) onAction;
   final String? roomAvatarPath;
   final ValueChanged<String>? onChangeNickname;
   final VoidCallback? onLeaveRoom;
@@ -314,7 +318,11 @@ class _MemberSection extends StatelessWidget {
 
   final RoomMemberSectionKind kind;
   final List<RoomMemberEntry> members;
-  final void Function(String occupantId, MucModerationAction action) onAction;
+  final void Function(
+    String occupantId,
+    MucModerationAction action,
+    String actionLabel,
+  ) onAction;
   final String? myOccupantId;
   final AppLocalizations l10n;
   final Duration animationDuration;
@@ -397,7 +405,11 @@ class _MemberTile extends StatefulWidget {
   final String subtitle;
   final List<MucModerationAction> actions;
   final String? avatarPath;
-  final void Function(String occupantId, MucModerationAction action) onAction;
+  final void Function(
+    String occupantId,
+    MucModerationAction action,
+    String actionLabel,
+  ) onAction;
   final bool isSelf;
   final AppLocalizations l10n;
   final Duration animationDuration;
@@ -475,7 +487,11 @@ class _MemberActionPanel extends StatelessWidget {
 
   final String occupantId;
   final List<MucModerationAction> actions;
-  final void Function(String occupantId, MucModerationAction action) onAction;
+  final void Function(
+    String occupantId,
+    MucModerationAction action,
+    String actionLabel,
+  ) onAction;
   final VoidCallback onClose;
   final AppLocalizations l10n;
 
@@ -494,7 +510,7 @@ class _MemberActionPanel extends StatelessWidget {
         return builder(
           onPressed: () {
             onClose();
-            onAction(occupantId, action);
+            onAction(occupantId, action, descriptor.label);
           },
           leading: Icon(descriptor.icon, size: sizing.menuItemIconSize),
           child: Text(descriptor.label),

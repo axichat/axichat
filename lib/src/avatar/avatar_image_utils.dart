@@ -165,7 +165,7 @@ AvatarPreparedSource _prepareAvatarSource(AvatarSourcePrepareRequest request) {
   }
 
   final maxDimension = request.maxDimension;
-  if (maxSide <= maxDimension) {
+  if (maxDimension <= 0 || maxSide <= maxDimension) {
     return AvatarPreparedSource(
       bytes: request.bytes,
       width: image.width,

@@ -95,14 +95,15 @@ class CalendarNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
     final double basePadding = sidebarVisible ? spec.gridHorizontalPadding : 0;
-    final double horizontalPadding = math.max(16, basePadding);
+    final spacing = context.spacing;
+    final double horizontalPadding = math.max(spacing.m, basePadding);
     final CalendarView viewMode = state.viewMode;
     final bool hasUndoRedo = onUndo != null || onRedo != null;
     final l10n = context.l10n;
     final String unitLabel = calendarUnitLabel(viewMode, l10n);
     final bool placeChevronsInHeader =
         spec.sizeClass != CalendarSizeClass.expanded;
-    const double verticalPadding = calendarGutterSm;
+    final double verticalPadding = spacing.s;
     final Widget undoRedoGroup = _UndoRedoGroup(
       onUndo: onUndo,
       onRedo: onRedo,
@@ -147,8 +148,7 @@ class CalendarNavigation extends StatelessWidget {
         ];
         final bool collapseDateText =
             isCompact || availableWidth < _compactDateLabelCollapseWidth;
-        final double navSpacing =
-            isCompact ? calendarGutterSm : calendarGutterMd;
+        final double navSpacing = isCompact ? spacing.s : spacing.m;
         final Widget navRow = _NavigationButtonRow(
           navButtons: navButtons,
           spacing: navSpacing,
@@ -436,7 +436,7 @@ class CalendarNavigationLeadingActions extends StatelessWidget {
             tooltip: backTooltip,
             onPressed: onBackPressed,
           ),
-        if (showBackButton) const SizedBox(width: calendarGutterSm),
+        if (showBackButton) SizedBox(width: context.spacing.s),
         SyncControls(
           state: state,
           compact: true,
@@ -476,7 +476,7 @@ class _UndoRedoGroup extends StatelessWidget {
     }
     if (onRedo != null) {
       if (controls.isNotEmpty) {
-        controls.add(const SizedBox(width: calendarGutterSm));
+        controls.add(SizedBox(width: context.spacing.s));
       }
       controls.add(
         _IconControlButton(
@@ -507,7 +507,7 @@ class _NavigationButtonRow extends StatelessWidget {
     }
     return Wrap(
       spacing: spacing,
-      runSpacing: calendarGutterSm,
+      runSpacing: context.spacing.s,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: navButtons,
     );
@@ -539,7 +539,8 @@ class _TrailingControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double trailingGap = isCompact ? calendarGutterSm : calendarGutterMd;
+    final double trailingGap =
+        isCompact ? context.spacing.s : context.spacing.m;
     final double maxDateLabelWidth =
         isCompact ? _compactDateLabelMaxWidth : _defaultDateLabelMaxWidth;
 
@@ -568,7 +569,7 @@ class _TrailingControls extends StatelessWidget {
 
     return Wrap(
       spacing: trailingGap,
-      runSpacing: calendarGutterSm,
+      runSpacing: context.spacing.s,
       alignment: WrapAlignment.end,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: trailingChildren,
@@ -610,7 +611,7 @@ class CalendarViewModeToggle extends StatelessWidget {
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
     final EdgeInsets padding = EdgeInsets.symmetric(
-      horizontal: compact ? calendarGutterSm : calendarGutterMd,
+      horizontal: compact ? context.spacing.s : context.spacing.m,
     );
     final double minHeight = context.sizing.buttonHeightRegular;
     final double minWidth =
@@ -643,12 +644,9 @@ class CalendarViewModeToggle extends StatelessWidget {
         value: selectedView,
         onChanged: onChanged,
         tabs: tabs,
-        padding: EdgeInsets.symmetric(
-          horizontal: calendarGutterSm,
-          vertical: calendarInsetMd,
-        ),
-        gap: calendarInsetMd,
-        tabsGap: calendarInsetMd,
+        padding: EdgeInsets.zero,
+        gap: context.spacing.xs,
+        tabsGap: context.spacing.xs,
         contentConstraints: const BoxConstraints.tightFor(height: 0),
       ),
     );
@@ -1017,7 +1015,7 @@ class _DateLabelState extends State<_DateLabel> {
                 color: iconColor,
               ),
               if (!hideText) ...[
-                const SizedBox(width: calendarGutterSm),
+                SizedBox(width: context.spacing.s),
                 ConstrainedBox(
                   constraints: BoxConstraints(
                     maxWidth: context.sizing.menuMaxWidth,
@@ -1029,7 +1027,7 @@ class _DateLabelState extends State<_DateLabel> {
                   ),
                 ),
               ],
-              const SizedBox(width: calendarInsetLg),
+              SizedBox(width: context.spacing.s),
               Icon(
                 isOpen ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
                 size: context.sizing.iconButtonIconSize,
@@ -1198,7 +1196,7 @@ class _CalendarDropdown extends StatelessWidget {
     required this.onClose,
     required this.onMonthChanged,
     required this.onDateSelected,
-    this.margin = const EdgeInsets.only(top: calendarGutterSm),
+    this.margin,
     this.useSurface = true,
   });
 
@@ -1209,12 +1207,13 @@ class _CalendarDropdown extends StatelessWidget {
   final VoidCallback onClose;
   final ValueChanged<DateTime> onMonthChanged;
   final ValueChanged<DateTime> onDateSelected;
-  final EdgeInsetsGeometry margin;
+  final EdgeInsetsGeometry? margin;
   final bool useSurface;
 
   @override
   Widget build(BuildContext context) {
     final spec = ResponsiveHelper.spec(context);
+    final spacing = context.spacing;
     final days = _monthDays(month);
     final now = DateTime.now();
     final bool fillWidth = ResponsiveHelper.isCompact(context);
@@ -1241,12 +1240,12 @@ class _CalendarDropdown extends StatelessWidget {
                 icon: Icons.chevron_left,
                 onPressed: () => onMonthChanged(_addMonths(month, -1)),
               ),
-              const SizedBox(width: calendarGutterSm),
+              SizedBox(width: spacing.s),
               _CalendarDropdownNavButton(
                 icon: Icons.chevron_right,
                 onPressed: () => onMonthChanged(_addMonths(month, 1)),
               ),
-              const SizedBox(width: calendarGutterSm),
+              SizedBox(width: spacing.s),
               CalendarSheetCloseButton(
                 tooltip: context.l10n.commonClose,
                 color: calendarSubtitleColor,
@@ -1254,16 +1253,16 @@ class _CalendarDropdown extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: calendarGutterMd),
+          SizedBox(height: spacing.m),
           const _DayHeaders(),
-          const SizedBox(height: calendarInsetLg),
+          SizedBox(height: spacing.s),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 7,
-              mainAxisSpacing: calendarInsetMd,
-              crossAxisSpacing: calendarInsetMd,
+              mainAxisSpacing: spacing.xs,
+              crossAxisSpacing: spacing.xs,
             ),
             itemCount: days.length,
             itemBuilder: (context, index) {
@@ -1320,8 +1319,8 @@ class _CalendarDropdown extends StatelessWidget {
                             shape: shape,
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: calendarInsetLg,
+                            padding: EdgeInsets.symmetric(
+                              vertical: context.spacing.s,
                             ),
                             child: Align(
                               alignment: Alignment.center,
@@ -1351,7 +1350,7 @@ class _CalendarDropdown extends StatelessWidget {
 
     return Container(
       width: width,
-      margin: margin,
+      margin: margin ?? EdgeInsets.only(top: spacing.s),
       decoration: BoxDecoration(
         color: calendarContainerColor,
         borderRadius: BorderRadius.circular(calendarBorderRadius),

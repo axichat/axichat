@@ -113,7 +113,13 @@
   "chatPinPermissionDenied": "You do not have permission to pin messages in this room.",
   "chatMessageForwarded": "Message forwarded.",
   "chatMessageForwardFailed": "Unable to forward message.",
-  "chatModerationRequested": "Moderation request sent.",
+  "chatModerationRequested": "Requested {action} for {nickname}.",
+  "@chatModerationRequested": {
+    "placeholders": {
+      "action": {},
+      "nickname": {}
+    }
+  },
   "chatModerationFailed": "Could not complete that action. Check permissions or connectivity.",
   "chatAttachmentInaccessible": "El archivo seleccionado no es accesible.",
   "chatAttachmentFailed": "No se pudo adjuntar el archivo.",

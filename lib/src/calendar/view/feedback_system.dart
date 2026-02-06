@@ -147,6 +147,7 @@ class FeedbackSystem {
     final colorsForTone = _getColorsForTone(context, feedback.tone);
     final sizing = context.sizing;
     final textTheme = context.textTheme;
+    final spacing = context.spacing;
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) {
@@ -164,7 +165,7 @@ class FeedbackSystem {
                 color: colorsForTone.foreground,
                 size: sizing.iconButtonIconSize,
               ),
-              const SizedBox(width: calendarGutterSm),
+              SizedBox(width: spacing.s),
               Expanded(
                 child: Text(
                   feedback.message,
@@ -187,7 +188,7 @@ class FeedbackSystem {
                 textColor: colorsForTone.foreground,
               )
             : null,
-        margin: calendarPaddingXl,
+        margin: EdgeInsets.all(spacing.m),
       ),
     );
   }

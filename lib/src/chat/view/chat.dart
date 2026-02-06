@@ -1882,7 +1882,7 @@ class _ChatState extends State<Chat> {
                               ),
                             );
                           },
-                          onAction: (occupantId, action) {
+                          onAction: (occupantId, action, actionLabel) {
                             final chatState = locate<ChatBloc>().state;
                             final chat = chatState.chat;
                             if (chat == null) {
@@ -1892,6 +1892,7 @@ class _ChatState extends State<Chat> {
                               ChatModerationActionRequested(
                                 occupantId: occupantId,
                                 action: action,
+                                actionLabel: actionLabel,
                                 chat: chat,
                                 roomState: chatState.roomState,
                               ),
@@ -3283,22 +3284,28 @@ class _ChatState extends State<Chat> {
                       ChatToastVariant.warning => l10n.toastHeadsUpTitle,
                       ChatToastVariant.info => l10n.toastAllSetTitle,
                     };
+                final resolvedMessage = toast.messageText ??
+                    toast.message?.label(
+                      l10n,
+                      moderationAction: toast.messageActionLabel,
+                      moderationTarget: toast.messageTargetLabel,
+                    );
                 final toastWidget = switch (toast.variant) {
                   ChatToastVariant.destructive => FeedbackToast.error(
                       title: resolvedTitle,
-                      message: toast.message?.label(l10n),
+                      message: resolvedMessage,
                       actionLabel: actionLabel,
                       onAction: onAction,
                     ),
                   ChatToastVariant.warning => FeedbackToast.warning(
                       title: resolvedTitle,
-                      message: toast.message?.label(l10n),
+                      message: resolvedMessage,
                       actionLabel: actionLabel,
                       onAction: onAction,
                     ),
                   ChatToastVariant.info => FeedbackToast.success(
                       title: resolvedTitle,
-                      message: toast.message?.label(l10n),
+                      message: resolvedMessage,
                       actionLabel: actionLabel,
                       onAction: onAction,
                     ),

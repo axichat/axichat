@@ -25,6 +25,7 @@ class ErrorDisplay extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final scheme = context.colorScheme;
+    final spacing = context.spacing;
     const double errorBackgroundMix = 0.12;
     const double errorBorderMix = 0.35;
     final Color background =
@@ -34,8 +35,8 @@ class ErrorDisplay extends StatelessWidget {
         Color.lerp(scheme.border, scheme.destructive, errorBorderMix) ??
             scheme.border;
     return Container(
-      margin: calendarPaddingXl,
-      padding: calendarPaddingXl,
+      margin: EdgeInsets.all(spacing.m),
+      padding: EdgeInsets.all(spacing.m),
       decoration: BoxDecoration(
         color: background,
         border: Border.all(color: border),
@@ -52,7 +53,7 @@ class ErrorDisplay extends StatelessWidget {
                 color: scheme.destructive,
                 size: context.sizing.iconButtonIconSize,
               ),
-              const SizedBox(width: calendarGutterSm),
+              SizedBox(width: spacing.s),
               Text(
                 l10n.calendarErrorTitle,
                 style: context.textTheme.small.strong
@@ -70,13 +71,13 @@ class ErrorDisplay extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: calendarGutterSm),
+          SizedBox(height: spacing.s),
           Text(
             _getFriendlyErrorMessage(l10n, error),
             style: context.textTheme.small.copyWith(color: scheme.foreground),
           ),
           if (onRetry != null) ...[
-            const SizedBox(height: calendarGutterMd),
+            SizedBox(height: spacing.m),
             AxiButton.outline(
               onPressed: onRetry,
               child: Text(l10n.commonRetry),
@@ -141,7 +142,7 @@ class ErrorSnackBar {
               color: scheme.destructiveForeground,
               size: context.sizing.iconButtonIconSize,
             ),
-            const SizedBox(width: calendarGutterSm),
+            SizedBox(width: context.spacing.s),
             Expanded(
               child: Text(
                 ErrorDisplay._getFriendlyErrorMessage(context.l10n, error),

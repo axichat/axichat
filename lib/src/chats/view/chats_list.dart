@@ -428,7 +428,7 @@ class _AnimatedChatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final distance = context.spacing.s / context.sizing.listButtonHeight;
+    const distance = 0.1666667;
     final offset = fromTop ? Offset(0, -distance) : Offset(0, distance);
     final slideAnimation = CurvedAnimation(
       parent: entering ? animation : ReverseAnimation(animation),

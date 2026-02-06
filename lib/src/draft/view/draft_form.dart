@@ -192,10 +192,10 @@ class _DraftFormState extends State<DraftForm> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final spacing = context.spacing;
     final sizing = context.sizing;
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
+    final spacing = context.spacing;
     final endpointConfig = context.watch<SettingsCubit>().state.endpointConfig;
     final locate = widget.locate;
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
@@ -1649,9 +1649,8 @@ class _TaskDragGhostOverlay extends StatelessWidget {
   }
 
   Offset _ghostOffset(BuildContext context, Size ghostSize) {
-    final spacing = context.spacing;
-    final double pointerClampPadding = spacing.xs / spacing.l;
-    final double centerFraction = spacing.m / spacing.l;
+    const double pointerClampPadding = 0.125;
+    const double centerFraction = 0.5;
     final double pointerFraction =
         (payload.pointerNormalizedX ?? centerFraction)
             .clamp(0.0, 1.0)

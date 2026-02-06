@@ -5,7 +5,12 @@ import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 
 extension ChatMessageKeyL10n on ChatMessageKey {
-  String label(AppLocalizations l10n) => switch (this) {
+  String label(
+    AppLocalizations l10n, {
+    String? moderationAction,
+    String? moderationTarget,
+  }) =>
+      switch (this) {
         ChatMessageKey.messageErrorServiceUnavailable =>
           l10n.messageErrorServiceUnavailable,
         ChatMessageKey.messageErrorServerNotFound =>
@@ -111,7 +116,10 @@ extension ChatMessageKeyL10n on ChatMessageKey {
         ChatMessageKey.chatMessageForwarded => l10n.chatMessageForwarded,
         ChatMessageKey.chatMessageForwardFailed =>
           l10n.chatMessageForwardFailed,
-        ChatMessageKey.chatModerationRequested => l10n.chatModerationRequested,
+        ChatMessageKey.chatModerationRequested => l10n.chatModerationRequested(
+            moderationAction ?? '',
+            moderationTarget ?? '',
+          ),
         ChatMessageKey.chatModerationFailed => l10n.chatModerationFailed,
         ChatMessageKey.fanOutErrorNoRecipients => l10n.fanOutErrorNoRecipients,
         ChatMessageKey.fanOutErrorResolveFailed =>
