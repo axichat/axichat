@@ -105,8 +105,6 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   final CalendarSurfaceController _surfaceController =
       CalendarSurfaceController();
   final ScrollController _verticalController = ScrollController();
-  late CalendarLayoutCalculator _layoutCalculator;
-  late CalendarLayoutTheme _layoutTheme;
   late final TaskInteractionController _interactionController =
       TaskInteractionController();
   final ShadPopoverController _contextMenuController = ShadPopoverController();
@@ -120,16 +118,6 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   bool _pointerDownPrimary = false;
   bool _tapCandidate = false;
   bool _suppressInsert = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _layoutTheme = CalendarLayoutTheme.fromContext(context);
-    _layoutCalculator = CalendarLayoutCalculator(
-      theme: _layoutTheme,
-      zoomLevels: kCalendarZoomLevels,
-    );
-  }
 
   @override
   void initState() {
@@ -169,6 +157,12 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final CalendarLayoutTheme layoutTheme =
+        CalendarLayoutTheme.fromContext(context);
+    final CalendarLayoutCalculator layoutCalculator = CalendarLayoutCalculator(
+      theme: layoutTheme,
+      zoomLevels: kCalendarZoomLevels,
+    );
     final DateTime rangeStart = widget.rangeStart;
     final DateTime rangeEnd = widget.rangeEnd;
     final List<DateTime> columns = _resolveColumns(rangeStart, rangeEnd);
@@ -180,8 +174,8 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
       builder: (context, constraints) {
         final double availableWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
-            : _fallbackWidth(columns.length);
-        final double timeColumnWidth = _layoutTheme.timeColumnWidth;
+            : _fallbackWidth(columns.length, layoutTheme.timeColumnWidth);
+        final double timeColumnWidth = layoutTheme.timeColumnWidth;
         const double minDayWidth = calendarCompactDayColumnWidth;
         final double requiredWidth =
             timeColumnWidth + (minDayWidth * columns.length);
@@ -195,13 +189,16 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
             : widget.viewportHeight;
         const double headerHeight = calendarWeekHeaderHeight;
         final double bodyHeight = math.max(0, viewportHeight - headerHeight);
-        final CalendarLayoutMetrics metrics = _layoutCalculator.resolveMetrics(
+        final CalendarLayoutMetrics metrics = layoutCalculator.resolveMetrics(
           zoomIndex: _freeBusyZoomIndex,
           isDayView: false,
           availableHeight: bodyHeight,
         );
 
-        final double contentHeight = _contentHeightForMetrics(metrics);
+        final double contentHeight = _contentHeightForMetrics(
+          metrics,
+          layoutTheme.visibleHourRows,
+        );
         final Widget content = _FreeBusyGridFrame(
           width: resolvedWidth,
           header: _FreeBusyGridHeaderRow(
@@ -216,8 +213,8 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
             columns: columns,
             controller: _surfaceController,
             verticalController: _verticalController,
-            layoutCalculator: _layoutCalculator,
-            layoutTheme: _layoutTheme,
+            layoutCalculator: layoutCalculator,
+            layoutTheme: layoutTheme,
             interactionController: _interactionController,
             onPointerDown: _handlePointerDown,
             onPointerMove: _handlePointerMove,
@@ -783,14 +780,16 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
     );
   }
 
-  double _fallbackWidth(int columnCount) {
-    final double timeColumnWidth = _layoutTheme.timeColumnWidth;
+  double _fallbackWidth(int columnCount, double timeColumnWidth) {
     const double minDayWidth = calendarCompactDayColumnWidth;
     return timeColumnWidth + (minDayWidth * columnCount);
   }
 
-  double _contentHeightForMetrics(CalendarLayoutMetrics metrics) {
-    final int totalSlots = _layoutTheme.visibleHourRows * metrics.slotsPerHour;
+  double _contentHeightForMetrics(
+    CalendarLayoutMetrics metrics,
+    int visibleHourRows,
+  ) {
+    final int totalSlots = visibleHourRows * metrics.slotsPerHour;
     return metrics.slotHeight * totalSlots;
   }
 }

@@ -126,22 +126,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   static const double _mobileCompactHourHeight = 60;
   static const int _resizeStepMinutes = 15;
   static const List<CalendarZoomLevel> _zoomLevels = kCalendarZoomLevels;
-  late CalendarLayoutTheme _layoutTheme;
   static const double _autoScrollHorizontalSlop = 32.0;
   final CalendarTransferService _transferService =
       const CalendarTransferService();
-
-  double get _edgeScrollFastBandHeight => _layoutTheme.edgeScrollFastBandHeight;
-
-  double get _edgeScrollSlowBandHeight => _layoutTheme.edgeScrollSlowBandHeight;
-
-  double get _edgeScrollFastOffsetPerFrame =>
-      _layoutTheme.edgeScrollFastOffsetPerFrame;
-
-  double get _edgeScrollSlowOffsetPerFrame =>
-      _layoutTheme.edgeScrollSlowOffsetPerFrame;
-
-  double get _taskPopoverHorizontalGap => _layoutTheme.popoverGap;
 
   ValueListenable<bool> get _cancelBucketHoverNotifier =>
       widget.cancelBucketHoverNotifier ?? _defaultCancelBucketHoverNotifier;
@@ -158,7 +145,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   Timer? _clockTimer;
   bool _hasAutoScrolled = false;
   OverlayEntry? _activePopoverEntry;
-  late CalendarLayoutCalculator _layoutCalculator;
   CalendarLayoutMetrics _currentLayoutMetrics = const CalendarLayoutMetrics(
     hourHeight: 78,
     slotHeight: 78,
@@ -253,7 +239,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       autoHideDuration: Duration.zero,
       initiallyVisible: true,
     );
-    _clockTimer = Timer.periodic(_layoutTheme.clockTickInterval, (_) {
+    _clockTimer = Timer.periodic(calendarClockTickInterval, (_) {
       if (mounted) {
         setState(() {});
       }
@@ -651,10 +637,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
 
+    final CalendarLayoutTheme layoutTheme =
+        CalendarLayoutTheme.fromContext(context);
     _taskInteractionController.schedulePendingWidth(
       width: width,
       forceCenter: forceCenterPointer,
-      delay: _layoutTheme.dragWidthDebounceDelay,
+      delay: layoutTheme.dragWidthDebounceDelay,
       onApply: () {
         if (!mounted) {
           return;
@@ -777,15 +765,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final CalendarLayoutTheme nextTheme =
-        CalendarLayoutTheme.fromContext(context);
-    if (!identical(_layoutTheme, nextTheme)) {
-      _layoutTheme = nextTheme;
-      _layoutCalculator = CalendarLayoutCalculator(
-        theme: _layoutTheme,
-        zoomLevels: _zoomLevels,
-      );
-    }
     _processFocusRequest(widget.focusRequest);
   }
 
@@ -1315,8 +1294,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _validateActivePopoverTarget(const <String>{});
   }
 
-  double get _timeColumnWidth => _layoutTheme.timeColumnWidth;
-
   double _getHourHeight(BuildContext context, bool compact) {
     return _resolvedHourHeight;
   }
@@ -1509,8 +1486,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
   }
 
-  double _resolveHourHeight(double availableHeight, {required bool isDayView}) {
-    var metrics = _layoutCalculator.resolveMetrics(
+  double _resolveHourHeight(
+    double availableHeight, {
+    required bool isDayView,
+    required CalendarLayoutCalculator layoutCalculator,
+  }) {
+    var metrics = layoutCalculator.resolveMetrics(
       zoomIndex: _zoomIndex,
       isDayView: isDayView,
       availableHeight: availableHeight,
@@ -1712,7 +1693,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return null;
     }
     final Offset localPosition = renderObject.globalToLocal(globalPosition);
-    if (localPosition.dx <= _timeColumnWidth ||
+    if (localPosition.dx <= renderObject.layoutTheme.timeColumnWidth ||
         _surfaceController.containsTaskAt(localPosition)) {
       return null;
     }
@@ -1856,13 +1837,15 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     required double stepHeight,
     required double hourHeight,
   }) {
+    final CalendarLayoutTheme layoutTheme =
+        CalendarLayoutTheme.fromContext(context);
     final bool hasMouse = _hasMouseInput;
     final bool enableContextMenus = hasMouse;
     return CalendarTaskEntryBindings(
       isSelectionMode: _isSelectionMode,
       isSelected: _isTaskSelected(task),
       isPopoverOpen: _taskPopoverController.isPopoverOpen(task.id),
-      splitPreviewAnimationDuration: _layoutTheme.splitPreviewAnimationDuration,
+      splitPreviewAnimationDuration: layoutTheme.splitPreviewAnimationDuration,
       contextMenuGroupId: _contextMenuGroupId,
       contextMenuBuilderFactory: enableContextMenus
           ? (menuController) => _taskContextMenuBuilder(
@@ -1991,9 +1974,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       top = usableBottom - effectiveMaxHeight;
     }
 
+    final CalendarLayoutTheme layoutTheme =
+        CalendarLayoutTheme.fromContext(context);
+    final double popoverGap = layoutTheme.popoverGap;
     double left = placeOnRight
-        ? bounds.right + _taskPopoverHorizontalGap
-        : bounds.left - dropdownWidth - _taskPopoverHorizontalGap;
+        ? bounds.right + popoverGap
+        : bounds.left - dropdownWidth - popoverGap;
 
     left = left.clamp(usableLeft, usableRight - dropdownWidth);
 
@@ -2314,6 +2300,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
       return;
     }
 
+    final CalendarLayoutTheme layoutTheme =
+        CalendarLayoutTheme.fromContext(context);
     final Offset localPosition = renderObject.globalToLocal(globalPosition);
     final double pointerX = localPosition.dx;
     final bool isPointerWithinGrid = pointerX >= -_autoScrollHorizontalSlop &&
@@ -2336,17 +2324,17 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     const double resizeSlowSpeedFactor = 0.55;
 
     final double fastBandHeight = isResizing
-        ? (_edgeScrollFastBandHeight * resizeBandFactor)
-        : _edgeScrollFastBandHeight;
+        ? (layoutTheme.edgeScrollFastBandHeight * resizeBandFactor)
+        : layoutTheme.edgeScrollFastBandHeight;
     final double slowBandHeight = isResizing
-        ? (_edgeScrollSlowBandHeight * resizeBandFactor)
-        : _edgeScrollSlowBandHeight;
+        ? (layoutTheme.edgeScrollSlowBandHeight * resizeBandFactor)
+        : layoutTheme.edgeScrollSlowBandHeight;
     final double fastOffsetPerFrame = isResizing
-        ? (_edgeScrollFastOffsetPerFrame * resizeFastSpeedFactor)
-        : _edgeScrollFastOffsetPerFrame;
+        ? (layoutTheme.edgeScrollFastOffsetPerFrame * resizeFastSpeedFactor)
+        : layoutTheme.edgeScrollFastOffsetPerFrame;
     final double slowOffsetPerFrame = isResizing
-        ? (_edgeScrollSlowOffsetPerFrame * resizeSlowSpeedFactor)
-        : _edgeScrollSlowOffsetPerFrame;
+        ? (layoutTheme.edgeScrollSlowOffsetPerFrame * resizeSlowSpeedFactor)
+        : layoutTheme.edgeScrollSlowOffsetPerFrame;
 
     double? offsetPerFrame;
     if (y <= fastBandHeight || y < 0) {
@@ -2404,7 +2392,8 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
     _verticalController.animateTo(
       target,
-      duration: _layoutTheme.scrollAnimationDuration,
+      duration:
+          CalendarLayoutTheme.fromContext(context).scrollAnimationDuration,
       curve: Curves.easeOut,
     );
   }
@@ -3170,6 +3159,13 @@ class _CalendarWeekView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final CalendarLayoutTheme layoutTheme =
+        CalendarLayoutTheme.fromContext(context);
+    final CalendarLayoutCalculator layoutCalculator = CalendarLayoutCalculator(
+      theme: layoutTheme,
+      zoomLevels: kCalendarZoomLevels,
+    );
+    final double timeColumnWidth = layoutTheme.timeColumnWidth;
     return AnimatedBuilder(
       animation: gridState._taskPopoverController,
       builder: (context, _) {
@@ -3213,7 +3209,7 @@ class _CalendarWeekView extends StatelessWidget {
                     0.0,
                     viewportWidth -
                         (horizontalPadding * 2) -
-                        gridState._timeColumnWidth -
+                        timeColumnWidth -
                         navControlsWidth,
                   );
                   if (availableForColumns <= 0) {
@@ -3266,6 +3262,7 @@ class _CalendarWeekView extends StatelessWidget {
                           isWeekView: isWeekView,
                           showNavigationControls: showHeaderNavigation,
                           compactWeekDayWidth: compactWeekDayWidth,
+                          timeColumnWidth: timeColumnWidth,
                           enableHorizontalScroll: enableHorizontalScroll,
                           horizontalScrollController: enableHorizontalScroll
                               ? gridState._horizontalHeaderController
@@ -3354,6 +3351,7 @@ class _CalendarWeekView extends StatelessWidget {
                                 gridState._resolveHourHeight(
                               availableHeight,
                               isDayView: isDayView,
+                              layoutCalculator: layoutCalculator,
                             );
                             gridState._scheduleViewportRequests();
                             return Container(
@@ -3370,6 +3368,9 @@ class _CalendarWeekView extends StatelessWidget {
                                   weekDates: weekDates,
                                   compact: compact,
                                   compactWeekDayWidth: compactWeekDayWidth,
+                                  layoutCalculator: layoutCalculator,
+                                  layoutTheme: layoutTheme,
+                                  timeColumnWidth: timeColumnWidth,
                                   enableHorizontalScroll:
                                       enableHorizontalScroll,
                                   horizontalScrollController:
@@ -3612,6 +3613,9 @@ class _CalendarGridContent extends StatelessWidget {
     required this.isWeekView,
     required this.weekDates,
     required this.compact,
+    required this.layoutCalculator,
+    required this.layoutTheme,
+    required this.timeColumnWidth,
     this.compactWeekDayWidth,
     this.horizontalScrollController,
     this.enableHorizontalScroll = false,
@@ -3622,6 +3626,9 @@ class _CalendarGridContent extends StatelessWidget {
   final bool isWeekView;
   final List<DateTime> weekDates;
   final bool compact;
+  final CalendarLayoutCalculator layoutCalculator;
+  final CalendarLayoutTheme layoutTheme;
+  final double timeColumnWidth;
   final double? compactWeekDayWidth;
   final ScrollController? horizontalScrollController;
   final bool enableHorizontalScroll;
@@ -3711,8 +3718,8 @@ class _CalendarGridContent extends StatelessWidget {
       allowDayViewZoom: gridState._shouldUseCompactZoom,
       weekStartDate: weekStartDate,
       weekEndDate: weekEndDate,
-      layoutCalculator: gridState._layoutCalculator,
-      layoutTheme: gridState._layoutTheme,
+      layoutCalculator: layoutCalculator,
+      layoutTheme: layoutTheme,
       controller: gridState._surfaceController,
       verticalScrollController: gridState._verticalController,
       minutesPerStep: gridState._minutesPerStep,
@@ -3752,7 +3759,7 @@ class _CalendarGridContent extends StatelessWidget {
     if (allowHorizontalScroll) {
       final double dayWidth = compactWeekDayWidth!;
       final double totalWidth =
-          gridState._timeColumnWidth + (dayWidth * columnSpecs.length);
+          timeColumnWidth + (dayWidth * columnSpecs.length);
       surface = SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         controller:
@@ -3883,6 +3890,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
     required this.compact,
     required this.isWeekView,
     required this.showNavigationControls,
+    required this.timeColumnWidth,
     this.compactWeekDayWidth,
     this.horizontalScrollController,
     this.enableHorizontalScroll = false,
@@ -3893,6 +3901,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
   final bool compact;
   final bool isWeekView;
   final bool showNavigationControls;
+  final double timeColumnWidth;
   final double? compactWeekDayWidth;
   final ScrollController? horizontalScrollController;
   final bool enableHorizontalScroll;
@@ -3925,7 +3934,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
     final Widget headerRow = Row(
       children: [
         Container(
-          width: gridState._timeColumnWidth,
+          width: timeColumnWidth,
           height: double.infinity,
           decoration: BoxDecoration(
             color: calendarBackgroundColor,

@@ -97,8 +97,10 @@ class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
 
 class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
-  late CalendarLayoutTheme _layoutTheme;
+  CalendarLayoutTheme get _layoutTheme =>
+      CalendarLayoutTheme.fromContext(context);
   late final CalendarSidebarController _sidebarController;
+  bool _sidebarControllerInitialized = false;
   late final TaskDraftController _draftController;
   late final TaskChecklistController _checklistController;
   final GlobalKey<ShadFormState> _addTaskFormKey = GlobalKey<ShadFormState>();
@@ -556,11 +558,6 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   @override
   void initState() {
     super.initState();
-    _sidebarController = CalendarSidebarController(
-      width: _layoutTheme.sidebarMinWidth,
-      minWidth: _layoutTheme.sidebarMinWidth,
-      maxWidth: _layoutTheme.sidebarMinWidth,
-    );
     _draftController = TaskDraftController();
     _checklistController = TaskChecklistController();
     _selectionChecklistController = TaskChecklistController();
@@ -1074,7 +1071,16 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _layoutTheme = CalendarLayoutTheme.fromContext(context);
+    final CalendarLayoutTheme layoutTheme =
+        CalendarLayoutTheme.fromContext(context);
+    if (!_sidebarControllerInitialized) {
+      _sidebarController = CalendarSidebarController(
+        width: layoutTheme.sidebarMinWidth,
+        minWidth: layoutTheme.sidebarMinWidth,
+        maxWidth: layoutTheme.sidebarMinWidth,
+      );
+      _sidebarControllerInitialized = true;
+    }
   }
 
   @override
