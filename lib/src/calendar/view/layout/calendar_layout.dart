@@ -191,240 +191,247 @@ class CalendarTaskLayout {
   final int spanDays;
 }
 
-class CalendarLayoutCalculator {
-  const CalendarLayoutCalculator({
-    this.theme = CalendarLayoutTheme.material,
-    this.zoomLevels = kCalendarZoomLevels,
-  });
+CalendarLayoutMetrics resolveCalendarLayoutMetrics({
+  required CalendarLayoutTheme theme,
+  required List<CalendarZoomLevel> zoomLevels,
+  required int zoomIndex,
+  required bool isDayView,
+  required double availableHeight,
+  bool allowDayViewZoom = false,
+}) {
+  final CalendarZoomLevel zoom = zoomLevels[zoomIndex];
+  final bool useDayViewTheme = isDayView && !allowDayViewZoom;
+  final double desiredHourHeight =
+      useDayViewTheme ? theme.dayViewHourHeight : zoom.hourHeight;
+  final int subdivisions =
+      useDayViewTheme ? theme.dayViewSubdivisions : zoom.daySubdivisions;
+  final double baseSlotHeight = desiredHourHeight / subdivisions;
+  // Legacy grid renders from 00:00 through 24:00 inclusive, resulting in 25
+  // visible hour rows.
+  final int totalSlots = theme.visibleHourRows * subdivisions;
 
-  final CalendarLayoutTheme theme;
-  final List<CalendarZoomLevel> zoomLevels;
-
-  CalendarLayoutMetrics resolveMetrics({
-    required int zoomIndex,
-    required bool isDayView,
-    required double availableHeight,
-    bool allowDayViewZoom = false,
-  }) {
-    final CalendarZoomLevel zoom = zoomLevels[zoomIndex];
-    final bool useDayViewTheme = isDayView && !allowDayViewZoom;
-    final double desiredHourHeight =
-        useDayViewTheme ? theme.dayViewHourHeight : zoom.hourHeight;
-    final int subdivisions =
-        useDayViewTheme ? theme.dayViewSubdivisions : zoom.daySubdivisions;
-    final double baseSlotHeight = desiredHourHeight / subdivisions;
-    // Legacy grid renders from 00:00 through 24:00 inclusive, resulting in 25
-    // visible hour rows.
-    final int totalSlots = theme.visibleHourRows * subdivisions;
-
-    if (!availableHeight.isFinite || availableHeight <= 0) {
-      return CalendarLayoutMetrics(
-        hourHeight: desiredHourHeight,
-        slotHeight: baseSlotHeight,
-        minutesPerSlot: (60 / subdivisions).round(),
-        slotsPerHour: subdivisions,
-      );
-    }
-
-    final double minRequiredHeight = totalSlots * baseSlotHeight;
-    if (availableHeight <= minRequiredHeight) {
-      return CalendarLayoutMetrics(
-        hourHeight: desiredHourHeight,
-        slotHeight: baseSlotHeight,
-        minutesPerSlot: (60 / subdivisions).round(),
-        slotsPerHour: subdivisions,
-      );
-    }
-
-    final double slotHeight = availableHeight / totalSlots;
-    final double resolvedHourHeight = isDayView
-        ? math.max<double>(desiredHourHeight, slotHeight * subdivisions)
-        : math.max<double>(desiredHourHeight, slotHeight);
-
+  if (!availableHeight.isFinite || availableHeight <= 0) {
     return CalendarLayoutMetrics(
-      hourHeight: resolvedHourHeight,
-      slotHeight: math.max<double>(baseSlotHeight, slotHeight),
+      hourHeight: desiredHourHeight,
+      slotHeight: baseSlotHeight,
       minutesPerSlot: (60 / subdivisions).round(),
       slotsPerHour: subdivisions,
     );
   }
 
-  double eventLeftOffset({
-    required double dayWidth,
-    required OverlapInfo overlap,
-  }) {
-    final totalColumns = math.max(1, overlap.totalColumns);
-    final columnWidth = dayWidth / totalColumns;
-    final double inset = theme.eventHorizontalInset;
-
-    double offset = columnWidth * overlap.columnIndex;
-    if (totalColumns == 1 || overlap.columnIndex == 0) {
-      offset += inset;
-    }
-    return offset;
-  }
-
-  double eventWidth({
-    required double dayWidth,
-    required OverlapInfo overlap,
-    required bool isDayView,
-    required int spanDays,
-  }) {
-    final totalColumns = math.max(1, overlap.totalColumns);
-    final columnWidth = dayWidth / totalColumns;
-    final double inset = theme.eventHorizontalInset;
-    final int effectiveSpan = math.max(1, spanDays);
-
-    double width = columnWidth * effectiveSpan;
-
-    if (totalColumns == 1) {
-      width -= inset * 2;
-    } else {
-      final bool touchesLeftEdge = overlap.columnIndex == 0;
-      final bool touchesRightEdge =
-          overlap.columnIndex + effectiveSpan >= totalColumns;
-      if (touchesLeftEdge) {
-        width -= inset;
-      }
-      if (touchesRightEdge) {
-        width -= inset;
-      }
-    }
-
-    width = math.max(width, theme.eventMinWidth);
-
-    if (isDayView) {
-      return width;
-    }
-
-    final double adjustedWidth = width - (theme.eventColumnGap * 2);
-    return math.max(adjustedWidth, theme.eventMinWidth);
-  }
-
-  double clampEventHeight(double rawHeight) {
-    return math.max(theme.eventMinHeight, rawHeight);
-  }
-
-  double computeNarrowedWidth(double slotWidth, double baselineWidth) {
-    final double effectiveSlotWidth = math.max(
-      slotWidth - (theme.eventColumnGap * 2),
-      0.0,
-    );
-    final double thresholdWidth =
-        effectiveSlotWidth * theme.narrowedWidthThresholdFactor;
-
-    if (baselineWidth <= thresholdWidth) {
-      return baselineWidth;
-    }
-
-    final double narrowed = effectiveSlotWidth * theme.narrowedWidthFactor;
-    final double minimumAllowed = math.min(theme.eventMinWidth, baselineWidth);
-    return narrowed.clamp(minimumAllowed, baselineWidth);
-  }
-
-  DateTime _normalizeEndBoundary(DateTime start, DateTime candidate) {
-    if (_isExactMidnight(candidate) && candidate.isAfter(start)) {
-      return candidate.subtract(const Duration(microseconds: 1));
-    }
-    return candidate;
-  }
-
-  bool _isExactMidnight(DateTime value) =>
-      value.hour == 0 &&
-      value.minute == 0 &&
-      value.second == 0 &&
-      value.millisecond == 0 &&
-      value.microsecond == 0;
-
-  CalendarTaskLayout? resolveTaskLayout({
-    required CalendarTask task,
-    required DateTime dayDate,
-    required DateTime weekStartDate,
-    required DateTime weekEndDate,
-    required bool isDayView,
-    required int startHour,
-    required int endHour,
-    required double dayWidth,
-    required CalendarLayoutMetrics metrics,
-    required OverlapInfo overlap,
-  }) {
-    final DateTime? scheduledTime = task.scheduledTime;
-    if (scheduledTime == null) {
-      return null;
-    }
-
-    final DateTime eventStartDate = DateTime(
-      scheduledTime.year,
-      scheduledTime.month,
-      scheduledTime.day,
-    );
-    DateTime? effectiveEnd = task.effectiveEndDate;
-    effectiveEnd ??=
-        task.duration != null ? scheduledTime.add(task.duration!) : null;
-    final DateTime layoutEndReference = effectiveEnd == null
-        ? scheduledTime
-        : _normalizeEndBoundary(scheduledTime, effectiveEnd);
-    final DateTime eventEndDate = DateTime(
-      layoutEndReference.year,
-      layoutEndReference.month,
-      layoutEndReference.day,
-    );
-
-    final DateTime clampedWeekStart =
-        eventStartDate.isBefore(weekStartDate) ? weekStartDate : eventStartDate;
-    final DateTime clampedWeekEnd =
-        eventEndDate.isAfter(weekEndDate) ? weekEndDate : eventEndDate;
-
-    if (dayDate.isAfter(clampedWeekEnd) || dayDate.isBefore(clampedWeekStart)) {
-      return null;
-    }
-
-    if (!isDayView && !DateUtils.isSameDay(dayDate, clampedWeekStart)) {
-      return null;
-    }
-
-    final int minuteDelta =
-        (scheduledTime.hour * 60 + scheduledTime.minute) - (startHour * 60);
-    if (minuteDelta < 0) {
-      return null;
-    }
-
-    if (scheduledTime.hour > endHour) {
-      return null;
-    }
-
-    final double minutesFromStart = minuteDelta.toDouble();
-    final double topOffset = metrics.verticalOffsetForMinutes(minutesFromStart);
-    final Duration duration = task.duration ?? const Duration(hours: 1);
-    final double height = clampEventHeight(metrics.heightForDuration(duration));
-
-    final int spanDays = isDayView
-        ? 1
-        : ((clampedWeekEnd.difference(clampedWeekStart).inDays + 1).clamp(
-            1,
-            7,
-          ));
-
-    final double left = eventLeftOffset(dayWidth: dayWidth, overlap: overlap);
-
-    final double width = eventWidth(
-      dayWidth: dayWidth,
-      overlap: overlap,
-      isDayView: isDayView,
-      spanDays: spanDays,
-    );
-
-    return CalendarTaskLayout(
-      left: left,
-      top: topOffset,
-      width: width,
-      height: height,
-      clampedStart: clampedWeekStart,
-      clampedEnd: clampedWeekEnd,
-      spanDays: spanDays,
+  final double minRequiredHeight = totalSlots * baseSlotHeight;
+  if (availableHeight <= minRequiredHeight) {
+    return CalendarLayoutMetrics(
+      hourHeight: desiredHourHeight,
+      slotHeight: baseSlotHeight,
+      minutesPerSlot: (60 / subdivisions).round(),
+      slotsPerHour: subdivisions,
     );
   }
+
+  final double slotHeight = availableHeight / totalSlots;
+  final double resolvedHourHeight = isDayView
+      ? math.max<double>(desiredHourHeight, slotHeight * subdivisions)
+      : math.max<double>(desiredHourHeight, slotHeight);
+
+  return CalendarLayoutMetrics(
+    hourHeight: resolvedHourHeight,
+    slotHeight: math.max<double>(baseSlotHeight, slotHeight),
+    minutesPerSlot: (60 / subdivisions).round(),
+    slotsPerHour: subdivisions,
+  );
 }
+
+double calendarEventLeftOffset({
+  required CalendarLayoutTheme theme,
+  required double dayWidth,
+  required OverlapInfo overlap,
+}) {
+  final totalColumns = math.max(1, overlap.totalColumns);
+  final columnWidth = dayWidth / totalColumns;
+  final double inset = theme.eventHorizontalInset;
+
+  double offset = columnWidth * overlap.columnIndex;
+  if (totalColumns == 1 || overlap.columnIndex == 0) {
+    offset += inset;
+  }
+  return offset;
+}
+
+double calendarEventWidth({
+  required CalendarLayoutTheme theme,
+  required double dayWidth,
+  required OverlapInfo overlap,
+  required bool isDayView,
+  required int spanDays,
+}) {
+  final totalColumns = math.max(1, overlap.totalColumns);
+  final columnWidth = dayWidth / totalColumns;
+  final double inset = theme.eventHorizontalInset;
+  final int effectiveSpan = math.max(1, spanDays);
+
+  double width = columnWidth * effectiveSpan;
+
+  if (totalColumns == 1) {
+    width -= inset * 2;
+  } else {
+    final bool touchesLeftEdge = overlap.columnIndex == 0;
+    final bool touchesRightEdge =
+        overlap.columnIndex + effectiveSpan >= totalColumns;
+    if (touchesLeftEdge) {
+      width -= inset;
+    }
+    if (touchesRightEdge) {
+      width -= inset;
+    }
+  }
+
+  width = math.max(width, theme.eventMinWidth);
+
+  if (isDayView) {
+    return width;
+  }
+
+  final double adjustedWidth = width - (theme.eventColumnGap * 2);
+  return math.max(adjustedWidth, theme.eventMinWidth);
+}
+
+double calendarClampEventHeight({
+  required CalendarLayoutTheme theme,
+  required double rawHeight,
+}) {
+  return math.max(theme.eventMinHeight, rawHeight);
+}
+
+double calendarComputeNarrowedWidth({
+  required CalendarLayoutTheme theme,
+  required double slotWidth,
+  required double baselineWidth,
+}) {
+  final double effectiveSlotWidth = math.max(
+    slotWidth - (theme.eventColumnGap * 2),
+    0.0,
+  );
+  final double thresholdWidth =
+      effectiveSlotWidth * theme.narrowedWidthThresholdFactor;
+
+  if (baselineWidth <= thresholdWidth) {
+    return baselineWidth;
+  }
+
+  final double narrowed = effectiveSlotWidth * theme.narrowedWidthFactor;
+  final double minimumAllowed = math.min(theme.eventMinWidth, baselineWidth);
+  return narrowed.clamp(minimumAllowed, baselineWidth);
+}
+
+CalendarTaskLayout? resolveCalendarTaskLayout({
+  required CalendarLayoutTheme theme,
+  required CalendarTask task,
+  required DateTime dayDate,
+  required DateTime weekStartDate,
+  required DateTime weekEndDate,
+  required bool isDayView,
+  required int startHour,
+  required int endHour,
+  required double dayWidth,
+  required CalendarLayoutMetrics metrics,
+  required OverlapInfo overlap,
+}) {
+  final DateTime? scheduledTime = task.scheduledTime;
+  if (scheduledTime == null) {
+    return null;
+  }
+
+  final DateTime eventStartDate = DateTime(
+    scheduledTime.year,
+    scheduledTime.month,
+    scheduledTime.day,
+  );
+  DateTime? effectiveEnd = task.effectiveEndDate;
+  effectiveEnd ??=
+      task.duration != null ? scheduledTime.add(task.duration!) : null;
+  final DateTime layoutEndReference = effectiveEnd == null
+      ? scheduledTime
+      : _normalizeEndBoundary(scheduledTime, effectiveEnd);
+  final DateTime eventEndDate = DateTime(
+    layoutEndReference.year,
+    layoutEndReference.month,
+    layoutEndReference.day,
+  );
+
+  final DateTime clampedWeekStart =
+      eventStartDate.isBefore(weekStartDate) ? weekStartDate : eventStartDate;
+  final DateTime clampedWeekEnd =
+      eventEndDate.isAfter(weekEndDate) ? weekEndDate : eventEndDate;
+
+  if (dayDate.isAfter(clampedWeekEnd) || dayDate.isBefore(clampedWeekStart)) {
+    return null;
+  }
+
+  if (!isDayView && !DateUtils.isSameDay(dayDate, clampedWeekStart)) {
+    return null;
+  }
+
+  final int minuteDelta =
+      (scheduledTime.hour * 60 + scheduledTime.minute) - (startHour * 60);
+  if (minuteDelta < 0) {
+    return null;
+  }
+
+  if (scheduledTime.hour > endHour) {
+    return null;
+  }
+
+  final double minutesFromStart = minuteDelta.toDouble();
+  final double topOffset = metrics.verticalOffsetForMinutes(minutesFromStart);
+  final Duration duration = task.duration ?? const Duration(hours: 1);
+  final double height = calendarClampEventHeight(
+    theme: theme,
+    rawHeight: metrics.heightForDuration(duration),
+  );
+
+  final int spanDays = isDayView
+      ? 1
+      : ((clampedWeekEnd.difference(clampedWeekStart).inDays + 1).clamp(1, 7));
+
+  final double left = calendarEventLeftOffset(
+    theme: theme,
+    dayWidth: dayWidth,
+    overlap: overlap,
+  );
+
+  final double width = calendarEventWidth(
+    theme: theme,
+    dayWidth: dayWidth,
+    overlap: overlap,
+    isDayView: isDayView,
+    spanDays: spanDays,
+  );
+
+  return CalendarTaskLayout(
+    left: left,
+    top: topOffset,
+    width: width,
+    height: height,
+    clampedStart: clampedWeekStart,
+    clampedEnd: clampedWeekEnd,
+    spanDays: spanDays,
+  );
+}
+
+DateTime _normalizeEndBoundary(DateTime start, DateTime candidate) {
+  if (_isExactMidnight(candidate) && candidate.isAfter(start)) {
+    return candidate.subtract(const Duration(microseconds: 1));
+  }
+  return candidate;
+}
+
+bool _isExactMidnight(DateTime value) =>
+    value.hour == 0 &&
+    value.minute == 0 &&
+    value.second == 0 &&
+    value.millisecond == 0 &&
+    value.microsecond == 0;
 
 /// Simple immutable description of how overlapping events should be rendered
 /// in the same column.

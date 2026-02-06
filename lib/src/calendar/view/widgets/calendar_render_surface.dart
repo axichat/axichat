@@ -207,7 +207,6 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
     required this.allowDayViewZoom,
     required this.weekStartDate,
     required this.weekEndDate,
-    required this.layoutCalculator,
     required this.layoutTheme,
     required this.controller,
     required this.verticalScrollController,
@@ -236,7 +235,6 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
   final bool allowDayViewZoom;
   final DateTime weekStartDate;
   final DateTime weekEndDate;
-  final CalendarLayoutCalculator layoutCalculator;
   final CalendarLayoutTheme layoutTheme;
   final CalendarSurfaceController controller;
   final ScrollController verticalScrollController;
@@ -267,7 +265,6 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       allowDayViewZoom: allowDayViewZoom,
       weekStartDate: weekStartDate,
       weekEndDate: weekEndDate,
-      layoutCalculator: layoutCalculator,
       layoutTheme: layoutTheme,
       controller: controller,
       verticalScrollController: verticalScrollController,
@@ -304,7 +301,6 @@ class CalendarRenderSurface extends MultiChildRenderObjectWidget {
       ..allowDayViewZoom = allowDayViewZoom
       ..weekStartDate = weekStartDate
       ..weekEndDate = weekEndDate
-      ..layoutCalculator = layoutCalculator
       ..layoutTheme = layoutTheme
       ..controller = controller
       ..verticalScrollController = verticalScrollController
@@ -422,7 +418,6 @@ class RenderCalendarSurface extends RenderBox
     required bool allowDayViewZoom,
     required DateTime weekStartDate,
     required DateTime weekEndDate,
-    required CalendarLayoutCalculator layoutCalculator,
     required CalendarLayoutTheme layoutTheme,
     required CalendarSurfaceController controller,
     required ScrollController verticalScrollController,
@@ -450,7 +445,6 @@ class RenderCalendarSurface extends RenderBox
         _allowDayViewZoom = allowDayViewZoom,
         _weekStartDate = weekStartDate,
         _weekEndDate = weekEndDate,
-        _layoutCalculator = layoutCalculator,
         _layoutTheme = layoutTheme,
         _controller = controller,
         _verticalScrollController = verticalScrollController,
@@ -519,14 +513,6 @@ class RenderCalendarSurface extends RenderBox
   set weekEndDate(DateTime value) {
     if (_weekEndDate == value) return;
     _weekEndDate = value;
-    markNeedsLayout();
-  }
-
-  CalendarLayoutCalculator get layoutCalculator => _layoutCalculator;
-  CalendarLayoutCalculator _layoutCalculator;
-  set layoutCalculator(CalendarLayoutCalculator value) {
-    if (_layoutCalculator == value) return;
-    _layoutCalculator = value;
     markNeedsLayout();
   }
 
@@ -1385,8 +1371,9 @@ class RenderCalendarSurface extends RenderBox
         constraints.hasBoundedHeight && constraints.maxHeight.isFinite
             ? constraints.maxHeight
             : double.infinity;
-    final CalendarLayoutMetrics resolvedMetrics =
-        layoutCalculator.resolveMetrics(
+    final CalendarLayoutMetrics resolvedMetrics = resolveCalendarLayoutMetrics(
+      theme: layoutTheme,
+      zoomLevels: kCalendarZoomLevels,
       zoomIndex: zoomIndex,
       isDayView: isDayView,
       availableHeight: availableHeight,
@@ -1430,9 +1417,10 @@ class RenderCalendarSurface extends RenderBox
           if (dragOverride != null) {
             final Rect rect = dragOverride.rect;
             final double columnWidth = rect.width;
-            final double narrowedWidth = layoutCalculator.computeNarrowedWidth(
-              columnWidth,
-              rect.width,
+            final double narrowedWidth = calendarComputeNarrowedWidth(
+              theme: layoutTheme,
+              slotWidth: columnWidth,
+              baselineWidth: rect.width,
             );
             final double splitWidthFactor = rect.width == 0
                 ? 1.0
@@ -1453,7 +1441,8 @@ class RenderCalendarSurface extends RenderBox
           final OverlapInfo overlap = overlapMap[task.id] ??
               const OverlapInfo(columnIndex: 0, totalColumns: 1);
 
-          final CalendarTaskLayout? layout = layoutCalculator.resolveTaskLayout(
+          final CalendarTaskLayout? layout = resolveCalendarTaskLayout(
+            theme: layoutTheme,
             task: task,
             dayDate: columnGeometry.date,
             weekStartDate: weekStartDate,
@@ -1473,9 +1462,10 @@ class RenderCalendarSurface extends RenderBox
               math.min(layout.width, columnGeometry.bounds.width),
               layout.height,
             );
-            final double narrowedWidth = layoutCalculator.computeNarrowedWidth(
-              columnGeometry.bounds.width,
-              rect.width,
+            final double narrowedWidth = calendarComputeNarrowedWidth(
+              theme: layoutTheme,
+              slotWidth: columnGeometry.bounds.width,
+              baselineWidth: rect.width,
             );
             final double splitWidthFactor = rect.width == 0
                 ? 1.0

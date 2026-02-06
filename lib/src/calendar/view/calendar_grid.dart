@@ -47,11 +47,11 @@ import 'edit_task_dropdown.dart';
 import 'feedback_system.dart';
 import 'layout/calendar_layout.dart'
     show
-        CalendarLayoutCalculator,
         CalendarLayoutMetrics,
         CalendarLayoutTheme,
         CalendarZoomLevel,
-        kCalendarZoomLevels;
+        kCalendarZoomLevels,
+        resolveCalendarLayoutMetrics;
 import 'models/task_context_action.dart';
 import 'resizable_task_widget.dart';
 import 'task_edit_session_tracker.dart';
@@ -1489,9 +1489,11 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   double _resolveHourHeight(
     double availableHeight, {
     required bool isDayView,
-    required CalendarLayoutCalculator layoutCalculator,
+    required CalendarLayoutTheme layoutTheme,
   }) {
-    var metrics = layoutCalculator.resolveMetrics(
+    var metrics = resolveCalendarLayoutMetrics(
+      theme: layoutTheme,
+      zoomLevels: kCalendarZoomLevels,
       zoomIndex: _zoomIndex,
       isDayView: isDayView,
       availableHeight: availableHeight,
@@ -3161,10 +3163,6 @@ class _CalendarWeekView extends StatelessWidget {
   Widget build(BuildContext context) {
     final CalendarLayoutTheme layoutTheme =
         CalendarLayoutTheme.fromContext(context);
-    final CalendarLayoutCalculator layoutCalculator = CalendarLayoutCalculator(
-      theme: layoutTheme,
-      zoomLevels: kCalendarZoomLevels,
-    );
     final double timeColumnWidth = layoutTheme.timeColumnWidth;
     return AnimatedBuilder(
       animation: gridState._taskPopoverController,
@@ -3351,7 +3349,7 @@ class _CalendarWeekView extends StatelessWidget {
                                 gridState._resolveHourHeight(
                               availableHeight,
                               isDayView: isDayView,
-                              layoutCalculator: layoutCalculator,
+                              layoutTheme: layoutTheme,
                             );
                             gridState._scheduleViewportRequests();
                             return Container(
@@ -3368,7 +3366,6 @@ class _CalendarWeekView extends StatelessWidget {
                                   weekDates: weekDates,
                                   compact: compact,
                                   compactWeekDayWidth: compactWeekDayWidth,
-                                  layoutCalculator: layoutCalculator,
                                   layoutTheme: layoutTheme,
                                   timeColumnWidth: timeColumnWidth,
                                   enableHorizontalScroll:
@@ -3613,7 +3610,6 @@ class _CalendarGridContent extends StatelessWidget {
     required this.isWeekView,
     required this.weekDates,
     required this.compact,
-    required this.layoutCalculator,
     required this.layoutTheme,
     required this.timeColumnWidth,
     this.compactWeekDayWidth,
@@ -3626,7 +3622,6 @@ class _CalendarGridContent extends StatelessWidget {
   final bool isWeekView;
   final List<DateTime> weekDates;
   final bool compact;
-  final CalendarLayoutCalculator layoutCalculator;
   final CalendarLayoutTheme layoutTheme;
   final double timeColumnWidth;
   final double? compactWeekDayWidth;
@@ -3718,7 +3713,6 @@ class _CalendarGridContent extends StatelessWidget {
       allowDayViewZoom: gridState._shouldUseCompactZoom,
       weekStartDate: weekStartDate,
       weekEndDate: weekEndDate,
-      layoutCalculator: layoutCalculator,
       layoutTheme: layoutTheme,
       controller: gridState._surfaceController,
       verticalScrollController: gridState._verticalController,

@@ -159,10 +159,6 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   Widget build(BuildContext context) {
     final CalendarLayoutTheme layoutTheme =
         CalendarLayoutTheme.fromContext(context);
-    final CalendarLayoutCalculator layoutCalculator = CalendarLayoutCalculator(
-      theme: layoutTheme,
-      zoomLevels: kCalendarZoomLevels,
-    );
     final DateTime rangeStart = widget.rangeStart;
     final DateTime rangeEnd = widget.rangeEnd;
     final List<DateTime> columns = _resolveColumns(rangeStart, rangeEnd);
@@ -189,7 +185,9 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
             : widget.viewportHeight;
         const double headerHeight = calendarWeekHeaderHeight;
         final double bodyHeight = math.max(0, viewportHeight - headerHeight);
-        final CalendarLayoutMetrics metrics = layoutCalculator.resolveMetrics(
+        final CalendarLayoutMetrics metrics = resolveCalendarLayoutMetrics(
+          theme: layoutTheme,
+          zoomLevels: kCalendarZoomLevels,
           zoomIndex: _freeBusyZoomIndex,
           isDayView: false,
           availableHeight: bodyHeight,
@@ -213,7 +211,6 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
             columns: columns,
             controller: _surfaceController,
             verticalController: _verticalController,
-            layoutCalculator: layoutCalculator,
             layoutTheme: layoutTheme,
             interactionController: _interactionController,
             onPointerDown: _handlePointerDown,
@@ -920,7 +917,6 @@ class _FreeBusyGridSurface extends StatelessWidget {
     required this.columns,
     required this.controller,
     required this.verticalController,
-    required this.layoutCalculator,
     required this.layoutTheme,
     required this.interactionController,
     required this.onPointerDown,
@@ -936,7 +932,6 @@ class _FreeBusyGridSurface extends StatelessWidget {
   final List<DateTime> columns;
   final CalendarSurfaceController controller;
   final ScrollController verticalController;
-  final CalendarLayoutCalculator layoutCalculator;
   final CalendarLayoutTheme layoutTheme;
   final TaskInteractionController interactionController;
   final ValueChanged<PointerDownEvent> onPointerDown;
@@ -981,7 +976,6 @@ class _FreeBusyGridSurface extends StatelessWidget {
                           allowDayViewZoom: false,
                           weekStartDate: weekStart,
                           weekEndDate: weekEnd,
-                          layoutCalculator: layoutCalculator,
                           layoutTheme: layoutTheme,
                           controller: controller,
                           verticalScrollController: verticalController,
