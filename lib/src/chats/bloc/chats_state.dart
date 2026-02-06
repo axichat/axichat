@@ -31,5 +31,6 @@ class ChatsState with _$ChatsState {
     @Default(<Chat>[]) List<Chat> selectedChats,
     @Default(<Chat>[]) List<Chat> spamVisibleItems,
     @Default(<String>{}) Set<String> spamUpdatingJids,
+    @Default(<String>[]) List<String> recipientAddressSuggestions,
   }) = _ChatsState;
 }

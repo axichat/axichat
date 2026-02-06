@@ -95,8 +95,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     final l10n = context.l10n;
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
-    final recipientSuggestionsStream =
-        widget.locate<ChatsCubit>().recipientAddressSuggestionsStream();
     final chatsSelfJid = widget.locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
@@ -135,21 +133,26 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             ),
           )
         else ...[
-          RecipientChipsBar(
-            recipients: _recipients,
-            availableChats: widget.availableChats,
-            rosterItems: rosterItems,
-            recipientSuggestionsStream: recipientSuggestionsStream,
-            selfJid: chatsSelfJid,
-            selfIdentity: selfIdentity,
-            latestStatuses: const {},
-            collapsedByDefault: false,
-            allowAddressTargets: true,
-            showSuggestionsWhenEmpty: true,
-            horizontalPadding: 0,
-            onRecipientAdded: _handleRecipientAdded,
-            onRecipientRemoved: _handleRecipientRemoved,
-            onRecipientToggled: _handleRecipientToggled,
+          BlocSelector<ChatsCubit, ChatsState, List<String>>(
+            bloc: widget.locate<ChatsCubit>(),
+            selector: (state) => state.recipientAddressSuggestions,
+            builder: (context, recipientAddressSuggestions) =>
+                RecipientChipsBar(
+              recipients: _recipients,
+              availableChats: widget.availableChats,
+              rosterItems: rosterItems,
+              databaseSuggestionAddresses: recipientAddressSuggestions,
+              selfJid: chatsSelfJid,
+              selfIdentity: selfIdentity,
+              latestStatuses: const {},
+              collapsedByDefault: false,
+              allowAddressTargets: true,
+              showSuggestionsWhenEmpty: true,
+              horizontalPadding: 0,
+              onRecipientAdded: _handleRecipientAdded,
+              onRecipientRemoved: _handleRecipientRemoved,
+              onRecipientToggled: _handleRecipientToggled,
+            ),
           ),
           SizedBox(height: spacing.m),
           Padding(

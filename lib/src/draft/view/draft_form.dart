@@ -344,9 +344,8 @@ class _DraftFormState extends State<DraftForm> {
                                         recipients: _recipients,
                                         availableChats: chats,
                                         rosterItems: rosterItems,
-                                        recipientSuggestionsStream: locate<
-                                                ChatsCubit>()
-                                            .recipientAddressSuggestionsStream(),
+                                        databaseSuggestionAddresses: chatsState
+                                            .recipientAddressSuggestions,
                                         selfJid: locate<ChatsCubit>().selfJid,
                                         selfIdentity: selfIdentity,
                                         onRecipientAdded: (target) {

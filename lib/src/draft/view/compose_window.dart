@@ -376,7 +376,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     required double stackOffset,
   }) {
     final spacing = context.spacing;
-    final horizontalInset = windowPadding + spacing.m;
+    final horizontalInset = windowPadding + spacing.l;
     final defaultOffset = Offset(
       math.max(
         windowPadding + viewPadding.left,
@@ -395,7 +395,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
             (index * stackOffset),
       ),
     );
-    final clamped = _clampOffset(
+    final clampedOffset = _clampOffset(
       offset: entry.offset ?? defaultOffset,
       viewportSize: viewportSize,
       viewPadding: viewPadding,
@@ -403,10 +403,16 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       targetHeight: targetHeight,
       windowPadding: windowPadding,
     );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ComposeWindowCubit>().initializeOffset(entry.id, clamped);
-    });
-    return clamped;
+    if (entry.offset == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.read<ComposeWindowCubit>().initializeOffset(
+              entry.id,
+              clampedOffset,
+            );
+      });
+    }
+    return clampedOffset;
   }
 
   void _handleDragStart(DragStartDetails details, Offset currentOffset) {

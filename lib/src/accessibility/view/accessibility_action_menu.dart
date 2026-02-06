@@ -734,8 +734,6 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
         pressed.contains(LogicalKeyboardKey.control);
     if (!hasMeta && !hasControl) return false;
     final locate = context.read;
-    final blocClosed = locate<AccessibilityActionBloc>().isClosed;
-    if (blocClosed) return false;
     locate<AccessibilityActionBloc>().add(const AccessibilityMenuOpened());
     return true;
   }
@@ -1051,7 +1049,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                       child: SizedBox(
                         height: modalHeight,
                         child: AxiModalSurface(
-                          padding: EdgeInsets.all(spacing.m),
+                          padding: EdgeInsets.zero,
                           child: Material(
                             type: MaterialType.transparency,
                             child: LayoutBuilder(
@@ -1068,9 +1066,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                                     child: SingleChildScrollView(
                                       controller: _scrollController,
                                       physics: const ClampingScrollPhysics(),
-                                      padding: EdgeInsets.only(
-                                        bottom: spacing.m,
-                                      ),
+                                      padding: EdgeInsets.all(spacing.m),
                                       clipBehavior: Clip.hardEdge,
                                       child: ConstrainedBox(
                                         constraints: BoxConstraints(

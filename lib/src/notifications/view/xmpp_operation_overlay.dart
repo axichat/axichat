@@ -79,7 +79,9 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
         shouldRebuild = true;
       }
       var visibilityRestored = false;
-      if (!entry.isVisible) {
+      final shouldRestoreVisibility = !entry.isVisible &&
+          (updated.status == XmppOperationStatus.inProgress || statusChanged);
+      if (shouldRestoreVisibility) {
         entry.isVisible = true;
         _cancelRemovalTimer(updated.id);
         visibilityRestored = true;
@@ -88,6 +90,8 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       if (updated.status == XmppOperationStatus.inProgress) {
         _cancelExitTimer(updated.id);
         _cancelRemovalTimer(updated.id);
+      } else if (!entry.isVisible) {
+        _cancelExitTimer(updated.id);
       } else if (statusChanged || visibilityRestored) {
         _scheduleExit(updated.id, exitDelay, animationDuration);
       } else {

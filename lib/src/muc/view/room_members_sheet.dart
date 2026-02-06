@@ -889,19 +889,23 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
           controller: _scrollController,
           padding: contentPadding,
           children: [
-            RecipientChipsBar(
-              recipients: _recipients,
-              availableChats: const <chat_models.Chat>[],
-              rosterItems: rosterItems,
-              recipientSuggestionsStream:
-                  locate<ChatsCubit>().recipientAddressSuggestionsStream(),
-              selfJid: locate<ChatsCubit>().selfJid,
-              selfIdentity: selfIdentity,
-              latestStatuses: const {},
-              onRecipientAdded: _addRecipient,
-              onRecipientRemoved: _removeRecipient,
-              onRecipientToggled: _toggleRecipient,
-              collapsedByDefault: false,
+            BlocSelector<ChatsCubit, ChatsState, List<String>>(
+              bloc: locate<ChatsCubit>(),
+              selector: (state) => state.recipientAddressSuggestions,
+              builder: (context, recipientAddressSuggestions) =>
+                  RecipientChipsBar(
+                recipients: _recipients,
+                availableChats: const <chat_models.Chat>[],
+                rosterItems: rosterItems,
+                databaseSuggestionAddresses: recipientAddressSuggestions,
+                selfJid: locate<ChatsCubit>().selfJid,
+                selfIdentity: selfIdentity,
+                latestStatuses: const {},
+                onRecipientAdded: _addRecipient,
+                onRecipientRemoved: _removeRecipient,
+                onRecipientToggled: _toggleRecipient,
+                collapsedByDefault: false,
+              ),
             ),
             SizedBox(height: spacing.s),
           ],

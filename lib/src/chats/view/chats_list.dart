@@ -871,7 +871,6 @@ class _ChatListTileState extends State<ChatListTile> {
     final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
     final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
     final iconCutoutRadius = context.radii.squircle;
-    final unreadChildOffset = -spacing.xs;
     final timestampOffset = spacing.xs;
     final cutouts = <CutoutSpec>[
       if (showUnreadBadge)
@@ -881,10 +880,7 @@ class _ChatListTileState extends State<ChatListTile> {
           depth: unreadDepth,
           thickness: unreadThickness,
           cornerRadius: context.radii.container,
-          child: Transform.translate(
-            offset: Offset(0, scaled(unreadChildOffset)),
-            child: _UnreadBadge(count: unreadCount, highlight: showUnreadBadge),
-          ),
+          child: _UnreadBadge(count: unreadCount, highlight: showUnreadBadge),
         ),
       CutoutSpec(
         edge: CutoutEdge.right,

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -26,7 +25,7 @@ class RecipientChipsBar extends StatefulWidget {
     required this.recipients,
     required this.availableChats,
     this.rosterItems = const <RosterItem>[],
-    this.recipientSuggestionsStream,
+    this.databaseSuggestionAddresses = const <String>[],
     this.selfJid,
     required this.onRecipientAdded,
     required this.onRecipientToggled,
@@ -46,7 +45,7 @@ class RecipientChipsBar extends StatefulWidget {
   final List<ComposerRecipient> recipients;
   final List<Chat> availableChats;
   final List<RosterItem> rosterItems;
-  final Stream<List<String>>? recipientSuggestionsStream;
+  final List<String> databaseSuggestionAddresses;
   final String? selfJid;
   final ValueChanged<FanOutTarget> onRecipientAdded;
   final ValueChanged<String> onRecipientToggled;
@@ -73,8 +72,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   late Object _tapRegionGroup;
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
-  StreamSubscription<List<String>>? _recipientSuggestionSubscription;
-  Stream<List<String>>? _recipientSuggestionsStream;
   List<String> _databaseSuggestionAddresses = const [];
   bool _expanded = false;
   late bool _barCollapsed;
@@ -117,47 +114,13 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     _lastRosterItems = List<RosterItem>.from(widget.rosterItems);
     _lastAvailableChats = List<Chat>.from(widget.availableChats);
     _avatarPathsByJid = _computeAvatarPaths();
+    _databaseSuggestionAddresses = widget.databaseSuggestionAddresses;
     final pools = _computeSuggestionPools();
     _availableAutocompleteChats = pools.availableChats;
     _knownDomains = pools.domains;
     _knownAddresses = pools.addresses;
     _knownAddressesLower = pools.addressesLower;
-    _updateSuggestionStream(widget.recipientSuggestionsStream);
     _updateOwnJid(widget.selfJid);
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _updateSuggestionStream(widget.recipientSuggestionsStream);
-    _updateOwnJid(widget.selfJid);
-  }
-
-  void _updateSuggestionStream(Stream<List<String>>? stream) {
-    if (identical(stream, _recipientSuggestionsStream)) return;
-    _recipientSuggestionsStream = stream;
-    _recipientSuggestionSubscription?.cancel();
-    if (stream == null) {
-      if (_databaseSuggestionAddresses.isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _databaseSuggestionAddresses = const [];
-          });
-        } else {
-          _databaseSuggestionAddresses = const [];
-        }
-        _refreshSuggestionPools();
-      }
-      return;
-    }
-    _recipientSuggestionSubscription = stream.listen((addresses) {
-      if (!mounted) return;
-      if (listEquals(addresses, _databaseSuggestionAddresses)) return;
-      setState(() {
-        _databaseSuggestionAddresses = addresses;
-      });
-      _refreshSuggestionPools();
-    });
   }
 
   void _updateOwnJid(String? jid) {
@@ -179,11 +142,11 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       _barCollapsed = widget.collapsedByDefault;
       _animateCollapse(_barCollapsed);
     }
-    if (!identical(
-      oldWidget.recipientSuggestionsStream,
-      widget.recipientSuggestionsStream,
+    if (!listEquals(
+      oldWidget.databaseSuggestionAddresses,
+      widget.databaseSuggestionAddresses,
     )) {
-      _updateSuggestionStream(widget.recipientSuggestionsStream);
+      _databaseSuggestionAddresses = widget.databaseSuggestionAddresses;
     }
     if (oldWidget.selfJid != widget.selfJid) {
       _updateOwnJid(widget.selfJid);
@@ -199,7 +162,6 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     _controller.removeListener(_handleTextChanged);
     _controller.dispose();
     _focusNode.dispose();
-    _recipientSuggestionSubscription?.cancel();
     _highlightedSuggestionIndex.dispose();
     _collapseController.dispose();
     super.dispose();

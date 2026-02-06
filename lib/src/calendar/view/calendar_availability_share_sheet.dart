@@ -991,8 +991,6 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
-    final recipientSuggestionsStream =
-        locate<ChatsCubit>().recipientAddressSuggestionsStream();
     final chatsSelfJid = locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
@@ -1023,20 +1021,24 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
             ],
           ),
         ),
-        RecipientChipsBar(
-          recipients: recipients,
-          availableChats: availableChats,
-          rosterItems: rosterItems,
-          recipientSuggestionsStream: recipientSuggestionsStream,
-          selfJid: chatsSelfJid,
-          selfIdentity: selfIdentity,
-          latestStatuses: const {},
-          collapsedByDefault: false,
-          allowAddressTargets: false,
-          showSuggestionsWhenEmpty: true,
-          onRecipientAdded: onRecipientAdded,
-          onRecipientRemoved: onRecipientRemoved,
-          onRecipientToggled: onRecipientToggled,
+        BlocSelector<ChatsCubit, ChatsState, List<String>>(
+          bloc: locate<ChatsCubit>(),
+          selector: (state) => state.recipientAddressSuggestions,
+          builder: (context, recipientAddressSuggestions) => RecipientChipsBar(
+            recipients: recipients,
+            availableChats: availableChats,
+            rosterItems: rosterItems,
+            databaseSuggestionAddresses: recipientAddressSuggestions,
+            selfJid: chatsSelfJid,
+            selfIdentity: selfIdentity,
+            latestStatuses: const {},
+            collapsedByDefault: false,
+            allowAddressTargets: false,
+            showSuggestionsWhenEmpty: true,
+            onRecipientAdded: onRecipientAdded,
+            onRecipientRemoved: onRecipientRemoved,
+            onRecipientToggled: onRecipientToggled,
+          ),
         ),
         const SizedBox(height: _availabilitySheetSectionSpacing),
         Padding(

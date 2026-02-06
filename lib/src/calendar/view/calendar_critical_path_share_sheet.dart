@@ -129,8 +129,6 @@ class _CalendarCriticalPathShareSheetState
   Widget build(BuildContext context) {
     final rosterItems =
         context.watch<RosterCubit>().state.items ?? const <RosterItem>[];
-    final recipientSuggestionsStream =
-        widget.locate<ChatsCubit>().recipientAddressSuggestionsStream();
     final chatsSelfJid = widget.locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
@@ -163,20 +161,25 @@ class _CalendarCriticalPathShareSheetState
             ),
           )
         else
-          RecipientChipsBar(
-            recipients: _recipients,
-            availableChats: widget.availableChats,
-            rosterItems: rosterItems,
-            recipientSuggestionsStream: recipientSuggestionsStream,
-            selfJid: chatsSelfJid,
-            selfIdentity: selfIdentity,
-            latestStatuses: const {},
-            collapsedByDefault: false,
-            allowAddressTargets: false,
-            showSuggestionsWhenEmpty: true,
-            onRecipientAdded: _handleRecipientAdded,
-            onRecipientRemoved: _handleRecipientRemoved,
-            onRecipientToggled: _handleRecipientToggled,
+          BlocSelector<ChatsCubit, ChatsState, List<String>>(
+            bloc: widget.locate<ChatsCubit>(),
+            selector: (state) => state.recipientAddressSuggestions,
+            builder: (context, recipientAddressSuggestions) =>
+                RecipientChipsBar(
+              recipients: _recipients,
+              availableChats: widget.availableChats,
+              rosterItems: rosterItems,
+              databaseSuggestionAddresses: recipientAddressSuggestions,
+              selfJid: chatsSelfJid,
+              selfIdentity: selfIdentity,
+              latestStatuses: const {},
+              collapsedByDefault: false,
+              allowAddressTargets: false,
+              showSuggestionsWhenEmpty: true,
+              onRecipientAdded: _handleRecipientAdded,
+              onRecipientRemoved: _handleRecipientRemoved,
+              onRecipientToggled: _handleRecipientToggled,
+            ),
           ),
         SizedBox(height: context.spacing.m),
         Padding(

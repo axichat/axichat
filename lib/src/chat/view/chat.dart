@@ -3727,8 +3727,7 @@ class _ChatState extends State<Chat> {
                   final appBarActionsPadding = spacing.s;
                   final collapsedLeadingWidth = 0.0;
                   final avatarTitleSpacing = spacing.m;
-                  final titleMinWidth = spacing.xxl;
-                  final titleMaxWidth = spacing.xxl;
+                  final titleMinWidth = context.sizing.iconButtonTapTarget * 3;
                   final double appBarWidth = constraints.maxWidth;
                   final double leadingWidthExpanded = leadingActionCount == 0
                       ? collapsedLeadingWidth
@@ -3846,14 +3845,6 @@ class _ChatState extends State<Chat> {
                                     ),
                                   );
                                 }
-                                const titleWidthScale = 0.45;
-                                final double scaledTitleWidth =
-                                    appBarWidth * titleWidthScale;
-                                final double clampedTitleWidth =
-                                    scaledTitleWidth.clamp(
-                                  titleMinWidth,
-                                  titleMaxWidth,
-                                );
                                 final baseTitleStyle = context.textTheme.h4;
                                 final titleStyle = baseTitleStyle.copyWith(
                                   fontSize: context.textTheme.large.fontSize,
@@ -3867,76 +3858,67 @@ class _ChatState extends State<Chat> {
                                     SizedBox(width: spacing.m),
                                     Flexible(
                                       fit: FlexFit.loose,
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          maxWidth: clampedTitleWidth,
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.center,
-                                              children: [
-                                                Flexible(
-                                                  fit: FlexFit.loose,
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    mainAxisSize:
-                                                        MainAxisSize.min,
-                                                    children: [
-                                                      Text(
-                                                        state.chat
-                                                                ?.displayName ??
-                                                            '',
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.center,
+                                            children: [
+                                              Flexible(
+                                                fit: FlexFit.loose,
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Text(
+                                                      state.chat?.displayName ??
+                                                          '',
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: titleStyle,
+                                                    ),
+                                                    if (secondaryLabel
+                                                        .isNotEmpty)
+                                                      SelectableText(
+                                                        secondaryLabel,
                                                         maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                        style: titleStyle,
+                                                        style: subtitleStyle,
                                                       ),
-                                                      if (secondaryLabel
-                                                          .isNotEmpty)
-                                                        SelectableText(
-                                                          secondaryLabel,
-                                                          maxLines: 1,
-                                                          style: subtitleStyle,
-                                                        ),
-                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                              if (canRenameContact)
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsetsDirectional
+                                                          .only(
+                                                    start: 6,
+                                                  ),
+                                                  child: AxiTooltip(
+                                                    builder: (context) => Text(
+                                                      context.l10n
+                                                          .chatContactRenameTooltip,
+                                                    ),
+                                                    child: AxiIconButton.ghost(
+                                                      onPressed:
+                                                          _promptContactRename,
+                                                      iconData: LucideIcons
+                                                          .pencilLine,
+                                                      iconSize: context.sizing
+                                                          .menuItemIconSize,
+                                                    ),
                                                   ),
                                                 ),
-                                                if (canRenameContact)
-                                                  Padding(
-                                                    padding:
-                                                        const EdgeInsetsDirectional
-                                                            .only(
-                                                      start: 6,
-                                                    ),
-                                                    child: AxiTooltip(
-                                                      builder: (context) =>
-                                                          Text(
-                                                        context.l10n
-                                                            .chatContactRenameTooltip,
-                                                      ),
-                                                      child:
-                                                          AxiIconButton.ghost(
-                                                        onPressed:
-                                                            _promptContactRename,
-                                                        iconData: LucideIcons
-                                                            .pencilLine,
-                                                        iconSize: context.sizing
-                                                            .menuItemIconSize,
-                                                      ),
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ],
-                                        ),
+                                            ],
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ],
@@ -11326,24 +11308,27 @@ class _ChatComposerSection extends StatelessWidget {
       children.add(SizedBox(height: spacing.m));
     }
     children.add(
-      RecipientChipsBar(
-        recipients: recipients,
-        availableChats: availableChats,
-        rosterItems:
-            context.watch<RosterCubit>().state.items ?? const <RosterItem>[],
-        recipientSuggestionsStream:
-            locate<ChatsCubit>().recipientAddressSuggestionsStream(),
-        selfJid: locate<ChatsCubit>().selfJid,
-        selfIdentity: selfIdentity,
-        latestStatuses: latestStatuses,
-        collapsedByDefault: true,
-        suggestionAddresses: suggestionAddresses,
-        suggestionDomains: suggestionDomains,
-        onRecipientAdded: onRecipientAdded,
-        onRecipientRemoved: onRecipientRemoved,
-        onRecipientToggled: onRecipientToggled,
-        visibilityLabel: visibilityLabel,
-        tapRegionGroup: tapRegionGroup,
+      BlocSelector<ChatsCubit, ChatsState, List<String>>(
+        bloc: locate<ChatsCubit>(),
+        selector: (state) => state.recipientAddressSuggestions,
+        builder: (context, recipientAddressSuggestions) => RecipientChipsBar(
+          recipients: recipients,
+          availableChats: availableChats,
+          rosterItems:
+              context.watch<RosterCubit>().state.items ?? const <RosterItem>[],
+          databaseSuggestionAddresses: recipientAddressSuggestions,
+          selfJid: locate<ChatsCubit>().selfJid,
+          selfIdentity: selfIdentity,
+          latestStatuses: latestStatuses,
+          collapsedByDefault: true,
+          suggestionAddresses: suggestionAddresses,
+          suggestionDomains: suggestionDomains,
+          onRecipientAdded: onRecipientAdded,
+          onRecipientRemoved: onRecipientRemoved,
+          onRecipientToggled: onRecipientToggled,
+          visibilityLabel: visibilityLabel,
+          tapRegionGroup: tapRegionGroup,
+        ),
       ),
     );
     children.add(composer);
@@ -12724,14 +12709,14 @@ class _ChatViewFilterControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
-    final spacing = context.spacing;
-    final selectMinWidth = spacing.xxl;
+    final sizing = context.sizing;
     final messageFilterOptions = _messageFilterOptions(l10n);
     return _ChatSettingsRow(
       title: filter.statusLabel(l10n),
-      trailing: SizedBox(
-        width: selectMinWidth,
+      trailing: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
         child: AxiSelect<MessageTimelineFilter>(
+          maxWidth: sizing.menuMaxWidth,
           initialValue: filter,
           onChanged: (value) {
             if (value == null) return;
@@ -12741,11 +12726,19 @@ class _ChatViewFilterControl extends StatelessWidget {
               .map(
                 (option) => ShadOption<MessageTimelineFilter>(
                   value: option.filter,
-                  child: Text(option.filter.menuLabel(l10n)),
+                  child: Text(
+                    option.filter.menuLabel(l10n),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               )
               .toList(),
-          selectedOptionBuilder: (_, value) => Text(value.menuLabel(l10n)),
+          selectedOptionBuilder: (_, value) => Text(
+            value.menuLabel(l10n),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       ),
     );
@@ -12764,13 +12757,13 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final AppLocalizations l10n = context.l10n;
-    final spacing = context.spacing;
-    final selectMinWidth = spacing.xxl;
+    final sizing = context.sizing;
     return _ChatSettingsRow(
       title: l10n.settingsNotificationPreviews,
-      trailing: SizedBox(
-        width: selectMinWidth,
+      trailing: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
         child: AxiSelect<NotificationPreviewSetting?>(
+          maxWidth: sizing.menuMaxWidth,
           initialValue: setting,
           onChanged: (value) {
             onChanged(value);
@@ -12789,6 +12782,8 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
                             showLabel: l10n.chatNotificationPreviewOptionShow,
                             hideLabel: l10n.chatNotificationPreviewOptionHide,
                           ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               )
@@ -12800,6 +12795,8 @@ class _ChatNotificationPreviewControl extends StatelessWidget {
                     showLabel: l10n.chatNotificationPreviewOptionShow,
                     hideLabel: l10n.chatNotificationPreviewOptionHide,
                   ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ),
@@ -14581,23 +14578,26 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
       header: header,
       bodyPadding: EdgeInsets.zero,
       children: [
-        RecipientChipsBar(
-          recipients: _recipients,
-          availableChats: widget.availableChats,
-          rosterItems:
-              context.watch<RosterCubit>().state.items ?? const <RosterItem>[],
-          recipientSuggestionsStream:
-              locate<ChatsCubit>().recipientAddressSuggestionsStream(),
-          selfJid: locate<ChatsCubit>().selfJid,
-          selfIdentity: selfIdentity,
-          latestStatuses: const {},
-          collapsedByDefault: false,
-          allowAddressTargets: false,
-          showSuggestionsWhenEmpty: true,
-          horizontalPadding: 0,
-          onRecipientAdded: _handleRecipientAdded,
-          onRecipientRemoved: _handleRecipientRemoved,
-          onRecipientToggled: _handleRecipientToggled,
+        BlocSelector<ChatsCubit, ChatsState, List<String>>(
+          bloc: locate<ChatsCubit>(),
+          selector: (state) => state.recipientAddressSuggestions,
+          builder: (context, recipientAddressSuggestions) => RecipientChipsBar(
+            recipients: _recipients,
+            availableChats: widget.availableChats,
+            rosterItems: context.watch<RosterCubit>().state.items ??
+                const <RosterItem>[],
+            databaseSuggestionAddresses: recipientAddressSuggestions,
+            selfJid: locate<ChatsCubit>().selfJid,
+            selfIdentity: selfIdentity,
+            latestStatuses: const {},
+            collapsedByDefault: false,
+            allowAddressTargets: false,
+            showSuggestionsWhenEmpty: true,
+            horizontalPadding: 0,
+            onRecipientAdded: _handleRecipientAdded,
+            onRecipientRemoved: _handleRecipientRemoved,
+            onRecipientToggled: _handleRecipientToggled,
+          ),
         ),
         SizedBox(height: sectionSpacing),
         Padding(

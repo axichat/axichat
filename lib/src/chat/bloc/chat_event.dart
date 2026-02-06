@@ -24,6 +24,13 @@ final class _ChatUpdated extends ChatEvent {
   List<Object?> get props => [chat];
 }
 
+final class _ChatStarted extends ChatEvent {
+  const _ChatStarted();
+
+  @override
+  List<Object?> get props => [];
+}
+
 final class _ChatMessagesUpdated extends ChatEvent {
   const _ChatMessagesUpdated(this.items);
 

@@ -71,6 +71,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     _chatsSubscription = _chatsService.chatsStream().listen(
           (items) => _updateChats(items),
         );
+    _recipientAddressSuggestionsSubscription = _chatsService
+        .recipientAddressSuggestionsStream()
+        .listen(_updateRecipientAddressSuggestions);
     _homeRefreshSyncSubscription =
         _homeRefreshSyncService.syncUpdates.listen(_handleHomeRefreshUpdate);
   }
@@ -126,6 +129,8 @@ class ChatsCubit extends Cubit<ChatsState> {
   late final StreamSubscription<List<Chat>> _chatsSubscription;
   late final StreamSubscription<HomeRefreshSyncUpdate>
       _homeRefreshSyncSubscription;
+  late final StreamSubscription<List<String>>
+      _recipientAddressSuggestionsSubscription;
   final List<Timer> _exportCleanupTimers = [];
 
   void updateEmailService(EmailService? emailService) {
@@ -140,6 +145,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     _exportCleanupTimers.clear();
     await _homeRefreshSyncSubscription.cancel();
     await _chatsSubscription.cancel();
+    await _recipientAddressSuggestionsSubscription.cancel();
     return super.close();
   }
 
@@ -166,6 +172,13 @@ class ChatsCubit extends Cubit<ChatsState> {
         lastSyncedAt: update.syncedAt ?? state.lastSyncedAt,
       ),
     );
+  }
+
+  void _updateRecipientAddressSuggestions(List<String> suggestions) {
+    if (listEquals(state.recipientAddressSuggestions, suggestions)) {
+      return;
+    }
+    emit(state.copyWith(recipientAddressSuggestions: suggestions));
   }
 
   void scheduleExportCleanup(File file) {
@@ -829,9 +842,6 @@ class ChatsCubit extends Cubit<ChatsState> {
     final db = await _loadDatabase();
     return db.getChatMessages(jid, start: offset, end: limit);
   }
-
-  Stream<List<String>> recipientAddressSuggestionsStream() =>
-      _chatsService.recipientAddressSuggestionsStream();
 
   String? get selfJid => _xmppService.myJid;
 }

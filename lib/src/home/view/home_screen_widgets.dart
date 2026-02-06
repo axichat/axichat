@@ -814,9 +814,6 @@ class _HomeShellNavigationRail extends StatelessWidget {
   void _selectHomeTab(BuildContext context, int index) {
     HomeShellScope.maybeOf(context)?.homeTabIndex.value = index;
     const HomeRoute().go(context);
-    if (context.read<ChatsCubit>().state.openCalendar) {
-      context.read<ChatsCubit>().toggleCalendar();
-    }
   }
 
   @override
@@ -1249,9 +1246,6 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
           }
           final tabIndex = _tabIndexForDestination(index, calendarIndex);
           if (tabIndex == null) return;
-          if (widget.calendarActive) {
-            widget.onCalendarSelected();
-          }
           setState(() => _controllerIndex = tabIndex);
           widget.onDestinationSelected(tabIndex);
         },

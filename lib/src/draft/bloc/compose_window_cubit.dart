@@ -84,9 +84,20 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
     int id,
     ComposeWindowEntry Function(ComposeWindowEntry) update,
   ) {
-    final next = state.windows
-        .map((entry) => entry.id == id ? update(entry) : entry)
-        .toList();
+    var changed = false;
+    final next = state.windows.map((entry) {
+      if (entry.id != id) {
+        return entry;
+      }
+      final updated = update(entry);
+      if (updated != entry) {
+        changed = true;
+      }
+      return updated;
+    }).toList();
+    if (!changed) {
+      return;
+    }
     emit(state.copyWith(windows: next));
   }
 
