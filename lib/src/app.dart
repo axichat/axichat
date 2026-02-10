@@ -414,7 +414,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         final EmailService? emailService =
             endpointConfig.smtpEnabled ? context.read<EmailService>() : null;
         notificationService
-          ..mute = state.mute
+          ..chatNotificationsMuted = state.chatNotificationsMuted
+          ..emailNotificationsMuted = state.emailNotificationsMuted
           ..notificationPreviewsEnabled = state.notificationPreviewsEnabled;
         emailService?.updateDefaultChatAttachmentAutoDownload(
           state.defaultChatAttachmentAutoDownload,

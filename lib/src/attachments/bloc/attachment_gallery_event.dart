@@ -50,8 +50,7 @@ class AttachmentGalleryEvent with _$AttachmentGalleryEvent {
     required EmailService? emailService,
   }) = AttachmentGalleryEmailServiceUpdated;
 
-  const factory AttachmentGalleryEvent.fileMetadataUpdated({
-    required String metadataId,
-    required FileMetadataData? metadata,
-  }) = AttachmentGalleryFileMetadataUpdated;
+  const factory AttachmentGalleryEvent.fileMetadataBatchUpdated({
+    required Map<String, FileMetadataData?> metadataById,
+  }) = AttachmentGalleryFileMetadataBatchUpdated;
 }

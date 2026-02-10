@@ -54,8 +54,12 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     updateEndpointConfig(const EndpointConfig());
   }
 
-  void toggleMute(bool mute) {
-    emit(state.copyWith(mute: mute));
+  void toggleChatNotificationsMuted(bool muted) {
+    emit(state.copyWith(chatNotificationsMuted: muted));
+  }
+
+  void toggleEmailNotificationsMuted(bool muted) {
+    emit(state.copyWith(emailNotificationsMuted: muted));
   }
 
   void toggleNotificationPreviews(bool enabled) {
@@ -68,6 +72,14 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
 
   void toggleEmailReadReceipts(bool enabled) {
     emit(state.copyWith(emailReadReceipts: enabled));
+  }
+
+  void toggleChatSendOnEnter(bool enabled) {
+    emit(state.copyWith(chatSendOnEnter: enabled));
+  }
+
+  void toggleEmailSendOnEnter(bool enabled) {
+    emit(state.copyWith(emailSendOnEnter: enabled));
   }
 
   void toggleColorfulAvatars(bool colorfulAvatars) {
@@ -164,9 +176,13 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       const keyMap = <String, String>{
         'themeMode': 'theme_mode',
         'shadColor': 'shad_color',
+        'chatNotificationsMuted': 'chat_notifications_muted',
+        'emailNotificationsMuted': 'email_notifications_muted',
         'notificationPreviewsEnabled': 'notification_previews_enabled',
         'chatReadReceipts': 'chat_read_receipts',
         'emailReadReceipts': 'email_read_receipts',
+        'chatSendOnEnter': 'chat_send_on_enter',
+        'emailSendOnEnter': 'email_send_on_enter',
         'indicateTyping': 'indicate_typing',
         'lowMotion': 'low_motion',
         'colorfulAvatars': 'colorful_avatars',
@@ -213,6 +229,14 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
           migrated['chat_read_receipts'] = migrated['read_receipts'];
         } else if (migrated.containsKey('readReceipts')) {
           migrated['chat_read_receipts'] = migrated['readReceipts'];
+        }
+      }
+      if (!migrated.containsKey('chat_notifications_muted') ||
+          !migrated.containsKey('email_notifications_muted')) {
+        final muteValue = migrated['mute'];
+        if (muteValue is bool) {
+          migrated.putIfAbsent('chat_notifications_muted', () => muteValue);
+          migrated.putIfAbsent('email_notifications_muted', () => muteValue);
         }
       }
       return SettingsState.fromJson(migrated);

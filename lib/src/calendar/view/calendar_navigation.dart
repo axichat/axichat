@@ -57,6 +57,12 @@ const List<CalendarView> _viewOrder = <CalendarView>[
   CalendarView.month,
 ];
 
+double _slidingAlignmentForIndex(int index, int count) {
+  if (count <= 1) return -1;
+  final clamped = index.clamp(0, count - 1).toInt();
+  return -1 + ((clamped * 2) / (count - 1));
+}
+
 class CalendarNavigation extends StatelessWidget {
   const CalendarNavigation({
     super.key,
@@ -627,6 +633,13 @@ class CalendarViewModeToggle extends StatelessWidget {
       math.max(minWidth, availableWidth * widthScale),
     );
     final bool useShortLabels = !isExpandedSize;
+    final int tabCount = _viewOrder.length;
+    final int selectedIndex = _viewOrder
+        .indexOf(selectedView)
+        .clamp(0, _viewOrder.length - 1)
+        .toInt();
+    final indicatorDuration = baseAnimationDuration;
+    final indicatorThickness = context.borderSide.width * 3;
     final List<ShadTab<CalendarView>> tabs = <ShadTab<CalendarView>>[
       for (int index = 0; index < _viewOrder.length; index++)
         _CalendarTab(
@@ -643,14 +656,45 @@ class CalendarViewModeToggle extends StatelessWidget {
     return SizedBox(
       height: minHeight,
       width: controlWidth,
-      child: ShadTabs<CalendarView>(
-        value: selectedView,
-        onChanged: onChanged,
-        tabs: tabs,
-        padding: EdgeInsets.zero,
-        gap: 0,
-        tabsGap: context.spacing.xs,
-        contentConstraints: const BoxConstraints.tightFor(height: 0),
+      child: Stack(
+        children: [
+          ShadTabs<CalendarView>(
+            value: selectedView,
+            onChanged: onChanged,
+            tabs: tabs,
+            padding: EdgeInsets.zero,
+            gap: 0,
+            tabsGap: context.spacing.xs,
+            contentConstraints: const BoxConstraints.tightFor(height: 0),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedAlign(
+                duration: indicatorDuration,
+                curve: Curves.easeInOutCubic,
+                alignment: Alignment(
+                  _slidingAlignmentForIndex(selectedIndex, tabCount),
+                  1,
+                ),
+                child: FractionallySizedBox(
+                  widthFactor: 1 / tabCount,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child: Container(
+                      margin:
+                          EdgeInsets.symmetric(horizontal: context.spacing.s),
+                      height: indicatorThickness,
+                      decoration: BoxDecoration(
+                        color: context.colorScheme.primary,
+                        borderRadius: BorderRadius.circular(indicatorThickness),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

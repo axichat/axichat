@@ -190,6 +190,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final bool tasksCueActive = _showTasksTabCue && _isAnyDragActive;
     final bool lowMotion =
         maybeSettingsCubit(context)?.state.lowMotion ?? false;
+    final bool scheduleSelected = mobileTabController.index == 0;
+    final bool tasksSelected = mobileTabController.index == 1;
     final bool scheduleSwitchHintActive =
         _isAnyDragActive && mobileTabController.index == 1;
     final bool tasksSwitchHintActive =
@@ -201,6 +203,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
     final double minTabWidth = context.sizing.listButtonHeight * 2;
     final double indicatorWeight = context.borderSide.width * 3;
+    final Duration indicatorDuration = lowMotion ? Duration.zero : _switchDelay;
     final Color hoverBackground = scheme.primary.withValues(alpha: 0.08);
     final Color pressedBackground = scheme.primary.withValues(alpha: 0.14);
     final ShadDecoration baseDecoration = ShadDecoration(
@@ -212,16 +215,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
       secondaryErrorBorder: ShadBorder.none,
       disableSecondaryBorder: true,
     );
-    final ShadDecoration selectedDecoration = ShadDecoration(
-      border: ShadBorder(
-        bottom: ShadBorderSide(
-          color: scheme.primary,
-          width: indicatorWeight,
-        ),
-        radius: context.radius,
-      ),
-      disableSecondaryBorder: true,
-    );
+    final ShadDecoration selectedDecoration = baseDecoration;
     final ShadDecoration tabBarDecoration = ShadDecoration(
       color: backgroundColor,
       border: ShadBorder.none,
@@ -245,7 +239,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
           return AnimatedBuilder(
             animation: mobileTabController,
             builder: (context, _) {
-              return ShadTabs<int>(
+              final tabs = ShadTabs<int>(
                 value: mobileTabController.index,
                 padding: EdgeInsets.only(bottom: safeInset),
                 gap: 0,
@@ -282,6 +276,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       builder: (context, _, __) => _DragTabLabel(
                         label: scheduleTabLabel,
                         scheme: scheme,
+                        selected: scheduleSelected,
                         showCue: scheduleCueActive,
                         shake: !lowMotion &&
                             scheduleSwitchHintActive &&
@@ -313,10 +308,48 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       builder: (context, _, __) => _DragTabLabel(
                         label: tasksTabLabel,
                         scheme: scheme,
+                        selected: tasksSelected,
                         showCue: tasksCueActive,
                         shake: !lowMotion &&
                             tasksSwitchHintActive &&
                             !tasksCueActive,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+              if (useScrollable) {
+                return tabs;
+              }
+              return Stack(
+                children: [
+                  tabs,
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: AnimatedAlign(
+                        duration: indicatorDuration,
+                        curve: Curves.easeInOutCubic,
+                        alignment: Alignment(
+                          mobileTabController.index == 0 ? -1 : 1,
+                          1,
+                        ),
+                        child: FractionallySizedBox(
+                          widthFactor: 0.5,
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Container(
+                              margin: EdgeInsets.symmetric(
+                                horizontal: context.spacing.s,
+                              ),
+                              height: indicatorWeight,
+                              decoration: BoxDecoration(
+                                color: scheme.primary,
+                                borderRadius:
+                                    BorderRadius.circular(indicatorWeight),
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -913,35 +946,42 @@ class _DragTabLabel extends StatelessWidget {
   const _DragTabLabel({
     required this.label,
     required this.scheme,
+    required this.selected,
     required this.showCue,
     required this.shake,
   });
 
   final Widget label;
   final ShadColorScheme scheme;
+  final bool selected;
   final bool showCue;
   final bool shake;
 
   @override
   Widget build(BuildContext context) {
+    final duration = maybeSettingsCubit(context)?.animationDuration ??
+        calendarTaskSplitPreviewAnimationDuration;
     final Color cueColor =
         showCue ? scheme.primary.withValues(alpha: 0.55) : Colors.transparent;
+    final double width =
+        showCue ? context.borderSide.width * 2 : context.borderSide.width;
+    final bool emphasize = showCue || selected;
     final labelContent = AnimatedContainer(
-      duration: calendarTaskSplitPreviewAnimationDuration,
+      duration: duration,
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.s,
-        vertical: context.spacing.s,
+        vertical: context.spacing.xxs,
       ),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
             color: cueColor,
-            width: context.borderSide.width * 2,
+            width: width,
           ),
         ),
       ),
       child: DefaultTextStyle.merge(
-        style: context.textTheme.label.strongIf(showCue),
+        style: context.textTheme.label.strongIf(emphasize),
         child: Align(alignment: Alignment.center, child: label),
       ),
     );

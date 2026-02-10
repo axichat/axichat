@@ -58,15 +58,11 @@ class CalendarKeyboardScope extends StatefulWidget {
       return false;
     }
     final BuildContext? context = focusNode.context;
-    if (context == null) {
+    if (context == null || !context.mounted) {
       return false;
     }
     final Widget widget = context.widget;
-    if (widget is EditableText || widget is axi.EditableText) {
-      return true;
-    }
-    return context.findAncestorWidgetOfExactType<EditableText>() != null ||
-        context.findAncestorWidgetOfExactType<axi.EditableText>() != null;
+    return widget is EditableText || widget is axi.EditableText;
   }
 
   @override

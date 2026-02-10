@@ -2600,6 +2600,7 @@ class EmailService {
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
+        channel: MessageNotificationChannel.email,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -2650,6 +2651,7 @@ class EmailService {
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
+        channel: MessageNotificationChannel.email,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(
@@ -2700,6 +2702,7 @@ class EmailService {
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
+        channel: MessageNotificationChannel.email,
       );
     } on Exception catch (error, stackTrace) {
       _log.warning(

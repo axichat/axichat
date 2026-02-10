@@ -49,17 +49,15 @@ final class _PinnedMessagesUpdated extends ChatEvent {
   List<Object?> get props => [items];
 }
 
-final class _FileMetadataUpdated extends ChatEvent {
-  const _FileMetadataUpdated({
-    required this.metadataId,
-    required this.metadata,
+final class _FileMetadataBatchUpdated extends ChatEvent {
+  const _FileMetadataBatchUpdated({
+    required this.metadataById,
   });
 
-  final String metadataId;
-  final FileMetadataData? metadata;
+  final Map<String, FileMetadataData?> metadataById;
 
   @override
-  List<Object?> get props => [metadataId, metadata];
+  List<Object?> get props => [metadataById];
 }
 
 final class ChatPinnedMessagesOpened extends ChatEvent {

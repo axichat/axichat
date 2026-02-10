@@ -9,7 +9,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -18,8 +17,6 @@ import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
-import 'package:axichat/src/calendar/view/calendar_navigation.dart';
-import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_host.dart';
 import 'calendar_task_search.dart';
 import 'calendar_experience_state.dart';
 import 'feedback_system.dart';
@@ -32,9 +29,11 @@ class CalendarWidget extends StatefulWidget {
   const CalendarWidget({
     super.key,
     this.pendingMobileTabIndex,
+    this.activeMobileTabIndex,
   });
 
   final ValueNotifier<int?>? pendingMobileTabIndex;
+  final ValueNotifier<int>? activeMobileTabIndex;
 
   @override
   State<CalendarWidget> createState() => _CalendarWidgetState();
@@ -76,6 +75,7 @@ bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
 class _CalendarWidgetState
     extends CalendarExperienceState<CalendarWidget, CalendarBloc> {
   bool _mobileInitialScrollSynced = false;
+  ValueNotifier<int?>? _pendingMobileTabNotifier;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
   late final GlobalKey<NavigatorState> _calendarNavigatorKey =
@@ -84,23 +84,63 @@ class _CalendarWidgetState
   @override
   void initState() {
     super.initState();
+    _attachPendingMobileTabNotifier();
+    mobileTabController.addListener(_handleMobileTabIndexChanged);
     _consumePendingMobileTabIndex(animate: false);
+    _syncActiveMobileTabIndex();
   }
 
   @override
   void didUpdateWidget(covariant CalendarWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _attachPendingMobileTabNotifier();
     _consumePendingMobileTabIndex(animate: true);
+    _syncActiveMobileTabIndex();
   }
 
   @override
   void dispose() {
+    _pendingMobileTabNotifier?.removeListener(_handlePendingMobileTabChange);
+    mobileTabController.removeListener(_handleMobileTabIndexChanged);
     _hoverTitleController.dispose();
     super.dispose();
   }
 
-  void _consumePendingMobileTabIndex({required bool animate}) {
+  void _attachPendingMobileTabNotifier() {
     final notifier = widget.pendingMobileTabIndex;
+    if (notifier == _pendingMobileTabNotifier) {
+      return;
+    }
+    _pendingMobileTabNotifier?.removeListener(_handlePendingMobileTabChange);
+    _pendingMobileTabNotifier = notifier;
+    _pendingMobileTabNotifier?.addListener(_handlePendingMobileTabChange);
+  }
+
+  void _handlePendingMobileTabChange() {
+    _consumePendingMobileTabIndex(animate: true);
+  }
+
+  void _handleMobileTabIndexChanged() {
+    if (mobileTabController.indexIsChanging) {
+      return;
+    }
+    _syncActiveMobileTabIndex();
+  }
+
+  void _syncActiveMobileTabIndex() {
+    final notifier = widget.activeMobileTabIndex;
+    if (notifier == null) {
+      return;
+    }
+    final int resolvedIndex = mobileTabController.index;
+    if (notifier.value == resolvedIndex) {
+      return;
+    }
+    notifier.value = resolvedIndex;
+  }
+
+  void _consumePendingMobileTabIndex({required bool animate}) {
+    final notifier = _pendingMobileTabNotifier;
     if (notifier == null) return;
     final pending = notifier.value;
     if (pending == null) return;
@@ -111,6 +151,7 @@ class _CalendarWidgetState
       mobileTabController.index = resolved;
     }
     notifier.value = null;
+    _syncActiveMobileTabIndex();
   }
 
   @override
@@ -146,6 +187,23 @@ class _CalendarWidgetState
     }
   }
 
+  @override
+  double resolveTabSwitcherBottomInset(
+    BuildContext context,
+    MediaQueryData mediaQuery,
+    bool usesDesktopLayout,
+  ) {
+    final env = EnvScope.of(context);
+    if (!usesDesktopLayout && env.navPlacement == NavPlacement.bottom) {
+      return 0;
+    }
+    return super.resolveTabSwitcherBottomInset(
+      context,
+      mediaQuery,
+      usesDesktopLayout,
+    );
+  }
+
   void _maybeSyncMobileInitialScroll() {
     if (_mobileInitialScrollSynced) {
       return;
@@ -165,19 +223,9 @@ class _CalendarWidgetState
   ) {
     final env = EnvScope.of(context);
     if (env.navPlacement == NavPlacement.bottom) {
-      final data = CalendarMobileTabHostData(
-        tabSwitcher: tabSwitcher,
-        cancelBucket: cancelBucket,
-      );
-      return CalendarMobileTabShell(
-        tabBar: CalendarMobileTabHostPublisher(
-          data: data,
-          child: const SizedBox.shrink(),
-        ),
-        cancelBucket: const SizedBox.shrink(),
-        backgroundColor: context.colorScheme.background,
-        borderColor: context.colorScheme.border,
-        dividerColor: context.colorScheme.border,
+      return const CalendarMobileTabShell(
+        tabBar: SizedBox.shrink(),
+        cancelBucket: SizedBox.shrink(),
         showTopBorder: false,
         showDivider: false,
       );
@@ -264,19 +312,6 @@ class _CalendarWidgetState
   }
 
   @override
-  Widget? buildNavigationLeadingActions(
-    BuildContext context,
-    CalendarState state,
-    bool usesDesktopLayout,
-  ) {
-    return CalendarNavigationLeadingActions(
-      state: state,
-      backTooltip: context.l10n.calendarBackToChats,
-      onBackPressed: _handleCalendarBackPressed,
-    );
-  }
-
-  @override
   Widget? buildNavigationTrailingActions(
     BuildContext context,
     CalendarState state,
@@ -347,29 +382,6 @@ class _CalendarWidgetState
     MediaQueryData mediaQuery,
   ) {
     return sizeClass == CalendarSizeClass.expanded;
-  }
-
-  void _handleCalendarBackPressed() {
-    final NavigatorState? calendarNavigator =
-        _calendarNavigatorKey.currentState;
-    if (calendarNavigator != null && calendarNavigator.canPop()) {
-      calendarNavigator.pop();
-      return;
-    }
-    if (context.read<ChatsCubit>().state.openCalendar) {
-      context.read<ChatsCubit>().toggleCalendar();
-      return;
-    }
-
-    final router = GoRouter.maybeOf(context);
-    if (router == null) {
-      return;
-    }
-    if (router.canPop()) {
-      router.pop();
-      return;
-    }
-    router.go('/');
   }
 }
 

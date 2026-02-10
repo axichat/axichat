@@ -32,27 +32,9 @@ class _RailBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final radii = context.radii;
-    final text = count > 99 ? '99+' : '$count';
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.primary,
-        borderRadius: BorderRadius.circular(radii.pill),
-        border: Border.all(
-          color: colors.background,
-          width: context.borderSide.width,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Text(
-          text,
-          style: context.textTheme.small.copyWith(
-            color: colors.primaryForeground,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
+    return AxiCountBadge(
+      count: count,
+      borderColor: colors.background,
     );
   }
 }

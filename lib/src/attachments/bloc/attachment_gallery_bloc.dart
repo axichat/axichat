@@ -136,7 +136,7 @@ class AttachmentGalleryBloc
     on<AttachmentGalleryApprovalGranted>(_onApprovalGranted);
     on<AttachmentGalleryEmailDownloadRequested>(_onEmailDownloadRequested);
     on<AttachmentGalleryEmailServiceUpdated>(_onEmailServiceUpdated);
-    on<AttachmentGalleryFileMetadataUpdated>(_onFileMetadataUpdated);
+    on<AttachmentGalleryFileMetadataBatchUpdated>(_onFileMetadataBatchUpdated);
     _itemsSubscription =
         _xmppService.attachmentGalleryStream(chatJid: chatJid).listen(
               (items) => add(AttachmentGalleryItemsUpdated(items: items)),
@@ -153,9 +153,10 @@ class AttachmentGalleryBloc
   final Chat? _chatOverride;
   final bool _showChatLabel;
   StreamSubscription<List<AttachmentGalleryItem>>? _itemsSubscription;
-  final Map<String, StreamSubscription<FileMetadataData?>>
-      _fileMetadataSubscriptions =
-      <String, StreamSubscription<FileMetadataData?>>{};
+  StreamSubscription<Map<String, FileMetadataData?>>? _fileMetadataSubscription;
+  Set<String> _trackedFileMetadataIds = const <String>{};
+  var _fileMetadataRetryAttempts = 0;
+  var _fileMetadataSubscriptionCancelling = false;
 
   Future<bool> downloadInboundAttachment({
     required String metadataId,
@@ -190,11 +191,11 @@ class AttachmentGalleryBloc
     return true;
   }
 
-  void _onItemsUpdated(
+  Future<void> _onItemsUpdated(
     AttachmentGalleryItemsUpdated event,
     Emitter<AttachmentGalleryState> emit,
-  ) {
-    _syncFileMetadataSubscriptions(event.items);
+  ) async {
+    await _syncFileMetadataSubscriptions(event.items);
     final nextMetadataById = _pruneFileMetadataById(
       items: event.items,
       existing: state.fileMetadataById,
@@ -229,20 +230,21 @@ class AttachmentGalleryBloc
     );
   }
 
-  void _onFileMetadataUpdated(
-    AttachmentGalleryFileMetadataUpdated event,
+  void _onFileMetadataBatchUpdated(
+    AttachmentGalleryFileMetadataBatchUpdated event,
     Emitter<AttachmentGalleryState> emit,
   ) {
-    final hasCurrentValue =
-        state.fileMetadataById.containsKey(event.metadataId);
-    final currentValue = state.fileMetadataById[event.metadataId];
-    if (hasCurrentValue && currentValue == event.metadata) {
+    _fileMetadataRetryAttempts = 0;
+    final nextMetadataById = _pruneFileMetadataById(
+      items: state.items,
+      existing: event.metadataById,
+    );
+    if (nextMetadataById.length == state.fileMetadataById.length &&
+        nextMetadataById.entries.every(
+          (entry) => state.fileMetadataById[entry.key] == entry.value,
+        )) {
       return;
     }
-    final nextMetadataById = <String, FileMetadataData?>{
-      ...state.fileMetadataById,
-      event.metadataId: event.metadata,
-    };
     emit(state.copyWith(fileMetadataById: nextMetadataById));
   }
 
@@ -475,34 +477,63 @@ class AttachmentGalleryBloc
     return nextMetadataById;
   }
 
-  void _syncFileMetadataSubscriptions(List<AttachmentGalleryItem> items) {
+  Future<void> _syncFileMetadataSubscriptions(
+    List<AttachmentGalleryItem> items,
+  ) async {
     final requiredIds = <String>{
       for (final item in items)
         if (_metadataIdForItem(item).isNotEmpty) _metadataIdForItem(item),
     };
-    final staleIds = _fileMetadataSubscriptions.keys
-        .where((id) => !requiredIds.contains(id))
-        .toList(growable: false);
-    for (final id in staleIds) {
-      final subscription = _fileMetadataSubscriptions.remove(id);
-      if (subscription != null) {
-        unawaited(subscription.cancel());
+    final sameIds = requiredIds.length == _trackedFileMetadataIds.length &&
+        requiredIds.containsAll(_trackedFileMetadataIds);
+    if (sameIds && _fileMetadataSubscription != null) {
+      return;
+    }
+    if (!sameIds) {
+      _fileMetadataRetryAttempts = 0;
+    }
+    _trackedFileMetadataIds = requiredIds;
+    final previous = _fileMetadataSubscription;
+    _fileMetadataSubscription = null;
+    if (previous != null) {
+      _fileMetadataSubscriptionCancelling = true;
+      try {
+        await previous.cancel();
+      } finally {
+        _fileMetadataSubscriptionCancelling = false;
       }
     }
-    for (final id in requiredIds) {
-      if (_fileMetadataSubscriptions.containsKey(id)) {
-        continue;
-      }
-      _fileMetadataSubscriptions[id] =
-          _xmppService.fileMetadataStream(id).listen(
-                (metadata) => add(
-                  AttachmentGalleryFileMetadataUpdated(
-                    metadataId: id,
-                    metadata: metadata,
-                  ),
-                ),
-              );
+    if (requiredIds.isEmpty) {
+      return;
     }
+    _fileMetadataSubscription =
+        _xmppService.fileMetadataByIdsStream(requiredIds).listen(
+      (metadataById) => add(
+        AttachmentGalleryFileMetadataBatchUpdated(
+          metadataById: metadataById,
+        ),
+      ),
+      onError: (Object error, StackTrace stackTrace) {
+        _fileMetadataSubscription = null;
+        _retryFileMetadataSubscription();
+      },
+      onDone: () {
+        _fileMetadataSubscription = null;
+        _retryFileMetadataSubscription();
+      },
+    );
+  }
+
+  void _retryFileMetadataSubscription() {
+    if (_fileMetadataSubscriptionCancelling ||
+        _trackedFileMetadataIds.isEmpty) {
+      return;
+    }
+    if (_fileMetadataRetryAttempts >= 3) {
+      return;
+    }
+    _fileMetadataRetryAttempts += 1;
+    unawaited(_syncFileMetadataSubscriptions(state.items));
   }
 
   String _normalizeStanzaId(String stanzaId) => stanzaId.trim();
@@ -510,10 +541,16 @@ class AttachmentGalleryBloc
   @override
   Future<void> close() async {
     await _itemsSubscription?.cancel();
-    for (final subscription in _fileMetadataSubscriptions.values) {
-      await subscription.cancel();
+    final metadataSubscription = _fileMetadataSubscription;
+    _fileMetadataSubscription = null;
+    _trackedFileMetadataIds = const <String>{};
+    _fileMetadataRetryAttempts = 0;
+    _fileMetadataSubscriptionCancelling = true;
+    try {
+      await metadataSubscription?.cancel();
+    } finally {
+      _fileMetadataSubscriptionCancelling = false;
     }
-    _fileMetadataSubscriptions.clear();
     return super.close();
   }
 }

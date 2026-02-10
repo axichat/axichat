@@ -1420,6 +1420,7 @@ class XmppService extends XmppBase
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
+        channel: MessageNotificationChannel.chat,
       );
     });
 

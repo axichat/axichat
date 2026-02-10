@@ -1863,6 +1863,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsSectionAppearance => '外观';
 
   @override
+  String get settingsSectionSecurity => '安全';
+
+  @override
   String get settingsLanguage => '语言';
 
   @override
@@ -1937,11 +1940,25 @@ class AppLocalizationsZh extends AppLocalizations {
       '开启后，在应用处于活动状态时打开聊天会为可见消息发送已读回执。';
 
   @override
+  String get settingsChatSendOnEnter => '按 Enter 发送聊天消息';
+
+  @override
+  String get settingsChatSendOnEnterDescription =>
+      '开启后，按 Enter 发送聊天消息；按 Shift+Enter 插入新行。';
+
+  @override
   String get settingsEmailReadReceipts => '发送邮件已读回执';
 
   @override
   String get settingsEmailReadReceiptsDescription =>
       '开启后，在应用处于活动状态时打开邮件聊天会为可见消息发送已读回执（MDN）。';
+
+  @override
+  String get settingsEmailSendOnEnter => '按 Enter 发送邮件消息';
+
+  @override
+  String get settingsEmailSendOnEnterDescription =>
+      '开启后，按 Enter 发送邮件消息；按 Shift+Enter 插入新行。';
 
   @override
   String get settingsTypingIndicators => '发送正在输入指示';
@@ -7605,6 +7622,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsSectionAppearance => '外觀';
 
   @override
+  String get settingsSectionSecurity => '安全性';
+
+  @override
   String get settingsLanguage => '語言';
 
   @override
@@ -7679,11 +7699,25 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
       '開啟後，在應用處於活動狀態時開啟聊天會為可見訊息傳送已讀回條。';
 
   @override
+  String get settingsChatSendOnEnter => '按 Enter 傳送聊天訊息';
+
+  @override
+  String get settingsChatSendOnEnterDescription =>
+      '開啟後，按 Enter 傳送聊天訊息；按 Shift+Enter 插入新行。';
+
+  @override
   String get settingsEmailReadReceipts => '傳送電郵已讀回條';
 
   @override
   String get settingsEmailReadReceiptsDescription =>
       '開啟後，在應用處於活動狀態時開啟電郵聊天會為可見訊息傳送已讀回條（MDN）。';
+
+  @override
+  String get settingsEmailSendOnEnter => '按 Enter 傳送電郵訊息';
+
+  @override
+  String get settingsEmailSendOnEnterDescription =>
+      '開啟後，按 Enter 傳送電郵訊息；按 Shift+Enter 插入新行。';
 
   @override
   String get settingsTypingIndicators => '傳送輸入指示';

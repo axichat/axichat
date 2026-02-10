@@ -283,7 +283,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_ChatStarted>(_onChatStarted);
     on<_ChatMessagesUpdated>(_onChatMessagesUpdated);
     on<_PinnedMessagesUpdated>(_onPinnedMessagesUpdated);
-    on<_FileMetadataUpdated>(_onFileMetadataUpdated);
+    on<_FileMetadataBatchUpdated>(_onFileMetadataBatchUpdated);
     on<ChatPinnedMessagesOpened>(_onChatPinnedMessagesOpened);
     on<_RoomStateUpdated>(_onRoomStateUpdated);
     on<_RoomRosterUpdated>(_onRoomRosterUpdated);
@@ -427,9 +427,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
-  final Map<String, StreamSubscription<FileMetadataData?>>
-      _fileMetadataSubscriptions =
-      <String, StreamSubscription<FileMetadataData?>>{};
+  StreamSubscription<Map<String, FileMetadataData?>>? _fileMetadataSubscription;
+  Set<String> _trackedFileMetadataIds = const <String>{};
+  var _fileMetadataRetryAttempts = _emptyMessageCount;
+  var _fileMetadataSubscriptionCancelling = false;
   AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
   ChatMessageKey? _emailSyncComposerMessage;
@@ -1140,10 +1141,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _emailSyncSubscription?.cancel();
     await _connectivitySubscription?.cancel();
     await _httpUploadSupportSubscription?.cancel();
-    for (final subscription in _fileMetadataSubscriptions.values) {
-      await subscription.cancel();
+    final metadataSubscription = _fileMetadataSubscription;
+    _fileMetadataSubscription = null;
+    _trackedFileMetadataIds = const <String>{};
+    _fileMetadataRetryAttempts = _emptyMessageCount;
+    _fileMetadataSubscriptionCancelling = true;
+    try {
+      await metadataSubscription?.cancel();
+    } finally {
+      _fileMetadataSubscriptionCancelling = false;
     }
-    _fileMetadataSubscriptions.clear();
     _typingTimer?.cancel();
     _typingTimer = null;
     _autoDownloadAttemptedMetadataIds.clear();
@@ -1953,20 +1960,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  void _onFileMetadataUpdated(
-    _FileMetadataUpdated event,
+  void _onFileMetadataBatchUpdated(
+    _FileMetadataBatchUpdated event,
     Emitter<ChatState> emit,
   ) {
-    final hasCurrentValue =
-        state.fileMetadataById.containsKey(event.metadataId);
-    final currentValue = state.fileMetadataById[event.metadataId];
-    if (hasCurrentValue && currentValue == event.metadata) {
+    _fileMetadataRetryAttempts = _emptyMessageCount;
+    final nextMetadataById = _pruneFileMetadataById(
+      metadataIds: _trackedFileMetadataIds,
+      existing: event.metadataById,
+    );
+    if (nextMetadataById.length == state.fileMetadataById.length &&
+        nextMetadataById.entries.every(
+          (entry) => state.fileMetadataById[entry.key] == entry.value,
+        )) {
       return;
     }
-    final nextMetadataById = <String, FileMetadataData?>{
-      ...state.fileMetadataById,
-      event.metadataId: event.metadata,
-    };
     emit(state.copyWith(fileMetadataById: nextMetadataById));
   }
 
@@ -2022,27 +2030,59 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _syncFileMetadataSubscriptions(Set<String> metadataIds) async {
-    final staleIds = _fileMetadataSubscriptions.keys
-        .where((id) => !metadataIds.contains(id))
-        .toList(growable: false);
-    for (final id in staleIds) {
-      final subscription = _fileMetadataSubscriptions.remove(id);
-      await subscription?.cancel();
+    final normalizedIds = <String>{
+      for (final id in metadataIds)
+        if (id.trim().isNotEmpty) id.trim(),
+    };
+    final sameIds = normalizedIds.length == _trackedFileMetadataIds.length &&
+        normalizedIds.containsAll(_trackedFileMetadataIds);
+    if (sameIds && _fileMetadataSubscription != null) {
+      return;
     }
-    for (final id in metadataIds) {
-      if (_fileMetadataSubscriptions.containsKey(id)) {
-        continue;
+    if (!sameIds) {
+      _fileMetadataRetryAttempts = _emptyMessageCount;
+    }
+    _trackedFileMetadataIds = normalizedIds;
+    final previous = _fileMetadataSubscription;
+    _fileMetadataSubscription = null;
+    if (previous != null) {
+      _fileMetadataSubscriptionCancelling = true;
+      try {
+        await previous.cancel();
+      } finally {
+        _fileMetadataSubscriptionCancelling = false;
       }
-      _fileMetadataSubscriptions[id] =
-          _messageService.fileMetadataStream(id).listen(
-                (metadata) => add(
-                  _FileMetadataUpdated(
-                    metadataId: id,
-                    metadata: metadata,
-                  ),
-                ),
-              );
     }
+    if (normalizedIds.isEmpty) {
+      return;
+    }
+    _fileMetadataSubscription =
+        _messageService.fileMetadataByIdsStream(normalizedIds).listen(
+      (metadataById) => add(
+        _FileMetadataBatchUpdated(metadataById: metadataById),
+      ),
+      onError: (Object error, StackTrace stackTrace) {
+        _fileMetadataSubscription = null;
+        _retryFileMetadataSubscription();
+      },
+      onDone: () {
+        _fileMetadataSubscription = null;
+        _retryFileMetadataSubscription();
+      },
+    );
+  }
+
+  void _retryFileMetadataSubscription() {
+    if (isClosed ||
+        _fileMetadataSubscriptionCancelling ||
+        _trackedFileMetadataIds.isEmpty) {
+      return;
+    }
+    if (_fileMetadataRetryAttempts >= 3) {
+      return;
+    }
+    _fileMetadataRetryAttempts += 1;
+    unawaited(_syncFileMetadataSubscriptions(_trackedFileMetadataIds));
   }
 
   Future<void> _onChatPinnedMessagesOpened(

@@ -1958,6 +1958,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsSectionAppearance => 'Apparence';
 
   @override
+  String get settingsSectionSecurity => 'Sécurité';
+
+  @override
   String get settingsLanguage => 'Langue';
 
   @override
@@ -2037,12 +2040,26 @@ class AppLocalizationsFr extends AppLocalizations {
       'Activé, l’ouverture d’un chat lorsque l’app est active envoie des accusés de lecture pour les messages visibles.';
 
   @override
+  String get settingsChatSendOnEnter => 'Envoyer les chats avec Entrée';
+
+  @override
+  String get settingsChatSendOnEnterDescription =>
+      'Activé, la touche Entrée envoie les messages de chat. Maj+Entrée insère une nouvelle ligne.';
+
+  @override
   String get settingsEmailReadReceipts =>
       'Envoyer les accusés de lecture des e-mails';
 
   @override
   String get settingsEmailReadReceiptsDescription =>
       'Activé, l’ouverture d’un chat e-mail lorsque l’app est active envoie des accusés de lecture (MDN) pour les messages visibles.';
+
+  @override
+  String get settingsEmailSendOnEnter => 'Envoyer les e-mails avec Entrée';
+
+  @override
+  String get settingsEmailSendOnEnterDescription =>
+      'Activé, la touche Entrée envoie les messages e-mail. Maj+Entrée insère une nouvelle ligne.';
 
   @override
   String get settingsTypingIndicators => 'Envoyer les indicateurs de saisie';

@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:flutter/widgets.dart';
+import 'package:flutter/scheduler.dart';
 
 class CalendarMobileTabHostData {
   const CalendarMobileTabHostData({
@@ -15,18 +16,52 @@ class CalendarMobileTabHostData {
 
 class CalendarMobileTabHostController extends ChangeNotifier {
   CalendarMobileTabHostData? _data;
+  bool _notificationScheduled = false;
+  bool _disposed = false;
 
   CalendarMobileTabHostData? get data => _data;
 
   void update(CalendarMobileTabHostData data) {
+    if (identical(_data, data)) {
+      return;
+    }
     _data = data;
-    notifyListeners();
+    _notifyListenersSafely();
   }
 
   void clear() {
     if (_data == null) return;
     _data = null;
-    notifyListeners();
+    _notifyListenersSafely();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _notifyListenersSafely() {
+    if (_disposed || !hasListeners) {
+      return;
+    }
+    final SchedulerPhase phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle ||
+        phase == SchedulerPhase.postFrameCallbacks) {
+      notifyListeners();
+      return;
+    }
+    if (_notificationScheduled) {
+      return;
+    }
+    _notificationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _notificationScheduled = false;
+      if (_disposed || !hasListeners) {
+        return;
+      }
+      notifyListeners();
+    });
   }
 }
 

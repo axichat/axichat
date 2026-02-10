@@ -1076,11 +1076,39 @@ class FileMetadataAccessor
           .getSingleOrNull();
 
   Future<List<FileMetadataData>> selectForIds(List<String> ids) {
-    if (ids.isEmpty) return Future.value(const []);
-    return (select(
-      table,
-    )..where((table) => table.id.isIn(ids)))
-        .get();
+    final normalizedIds = _normalizedUniqueIds(ids);
+    if (normalizedIds.isEmpty) return Future.value(const []);
+    const maxInClauseItems = 900;
+    if (normalizedIds.length <= maxInClauseItems) {
+      return (select(
+        table,
+      )..where((table) => table.id.isIn(normalizedIds)))
+          .get();
+    }
+    return _selectForIdsChunked(
+      ids: normalizedIds,
+      chunkSize: maxInClauseItems,
+    );
+  }
+
+  Stream<List<FileMetadataData>> watchForIds(List<String> ids) {
+    final normalizedIds = _normalizedUniqueIds(ids);
+    if (normalizedIds.isEmpty) {
+      return Stream.value(const <FileMetadataData>[]);
+    }
+    const maxInClauseItems = 900;
+    if (normalizedIds.length <= maxInClauseItems) {
+      return (select(
+        table,
+      )..where((table) => table.id.isIn(normalizedIds)))
+          .watch();
+    }
+    final trackedIds = normalizedIds.toSet();
+    return select(table).watch().map(
+          (rows) => rows
+              .where((row) => trackedIds.contains(row.id))
+              .toList(growable: false),
+        );
   }
 
   Stream<FileMetadataData?> watchOne(String id) => (select(
@@ -1098,6 +1126,51 @@ class FileMetadataAccessor
   @override
   Future<void> deleteOne(String id) =>
       (delete(table)..where((item) => item.id.equals(id))).go();
+
+  List<String> _normalizedUniqueIds(List<String> ids) {
+    if (ids.isEmpty) {
+      return const <String>[];
+    }
+    final seen = <String>{};
+    final normalized = <String>[];
+    for (final rawId in ids) {
+      final id = rawId.trim();
+      if (id.isEmpty || !seen.add(id)) {
+        continue;
+      }
+      normalized.add(id);
+    }
+    return normalized;
+  }
+
+  Future<List<FileMetadataData>> _selectForIdsChunked({
+    required List<String> ids,
+    required int chunkSize,
+  }) async {
+    final byId = <String, FileMetadataData>{};
+    var start = 0;
+    while (start < ids.length) {
+      final end =
+          start + chunkSize < ids.length ? start + chunkSize : ids.length;
+      final chunk = ids.sublist(start, end);
+      final rows = await (select(
+        table,
+      )..where((table) => table.id.isIn(chunk)))
+          .get();
+      for (final metadata in rows) {
+        byId[metadata.id] = metadata;
+      }
+      start = end;
+    }
+    final ordered = <FileMetadataData>[];
+    for (final id in ids) {
+      final metadata = byId[id];
+      if (metadata != null) {
+        ordered.add(metadata);
+      }
+    }
+    return ordered;
+  }
 }
 
 @DriftAccessor(tables: [Chats])

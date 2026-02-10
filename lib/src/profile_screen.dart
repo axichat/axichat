@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/main.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
@@ -127,15 +128,15 @@ class _ProfileBodyState extends State<_ProfileBody> {
   String? _applicationVersion;
 
   var _profileRoute = _ProfileRoute.main;
-  final GlobalKey _profileHeaderKey = GlobalKey();
   final ScrollController _profileScrollController = ScrollController();
   final ScrollController _settingsScrollController = ScrollController();
-  final ValueNotifier<double> _profileScrollOffset = ValueNotifier<double>(0);
   final ValueNotifier<double> _settingsScrollOffset = ValueNotifier<double>(0);
   final SettingsSectionAnchors _settingsAnchors = SettingsSectionAnchors(
+    importantKey: GlobalKey(),
     accountKey: GlobalKey(),
     dataKey: GlobalKey(),
     appearanceKey: GlobalKey(),
+    securityKey: GlobalKey(),
     chatPreferencesKey: GlobalKey(),
     emailPreferencesKey: GlobalKey(),
     aboutKey: GlobalKey(),
@@ -164,15 +165,8 @@ class _ProfileBodyState extends State<_ProfileBody> {
   void dispose() {
     _settingsScrollController.dispose();
     _profileScrollController.dispose();
-    _profileScrollOffset.dispose();
     _settingsScrollOffset.dispose();
     super.dispose();
-  }
-
-  double _resolveSettingsBaseOffset() {
-    final double headerHeight =
-        _profileHeaderKey.currentContext?.size?.height ?? 0;
-    return headerHeight + _profileIndicatorSpacing;
   }
 
   @override
@@ -183,6 +177,8 @@ class _ProfileBodyState extends State<_ProfileBody> {
         final colors = context.colorScheme;
         final demoOffline = context.read<XmppService>().demoOfflineMode;
         final profileSidebarColor = colors.background;
+        final showLeadingBack =
+            _profileRoute != _ProfileRoute.main || _canPopRoute(context);
         return Scaffold(
           appBar: AppBar(
             title: Text(l10n.profileTitle),
@@ -205,24 +201,25 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   ),
                 ),
             ],
-            leadingWidth: AxiIconButton.kDefaultSize + 24,
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: SizedBox(
-                  width: AxiIconButton.kDefaultSize,
-                  height: AxiIconButton.kDefaultSize,
-                  child: AxiIconButton.ghost(
-                    iconData: LucideIcons.arrowLeft,
-                    tooltip: l10n.commonBack,
-                    onPressed: () => _profileRoute == _ProfileRoute.main
-                        ? context.pop()
-                        : _setRoute(_ProfileRoute.main),
-                  ),
-                ),
-              ),
-            ),
+            leadingWidth:
+                showLeadingBack ? AxiIconButton.kDefaultSize + 24 : null,
+            leading: showLeadingBack
+                ? Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        width: AxiIconButton.kDefaultSize,
+                        height: AxiIconButton.kDefaultSize,
+                        child: AxiIconButton.ghost(
+                          iconData: LucideIcons.arrowLeft,
+                          tooltip: l10n.commonBack,
+                          onPressed: () => _handleLeadingBackPressed(context),
+                        ),
+                      ),
+                    ),
+                  )
+                : null,
           ),
           body: SafeArea(
             child: LayoutBuilder(
@@ -245,10 +242,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
                       settingsAnchors: _settingsAnchors,
                       settingsScrollController: _settingsScrollController,
                       profileScrollController: _profileScrollController,
-                      profileScrollOffset: _profileScrollOffset,
                       settingsScrollOffset: _settingsScrollOffset,
-                      profileHeaderKey: _profileHeaderKey,
-                      baseOffsetResolver: _resolveSettingsBaseOffset,
                       locate: widget.locate,
                       onNavigate: _setRoute,
                     ),
@@ -263,6 +257,27 @@ class _ProfileBodyState extends State<_ProfileBody> {
       },
     );
   }
+
+  bool _canPopRoute(BuildContext context) {
+    final router = GoRouter.maybeOf(context);
+    if (router != null) {
+      return router.canPop();
+    }
+    return Navigator.of(context).canPop();
+  }
+
+  void _handleLeadingBackPressed(BuildContext context) {
+    if (_profileRoute != _ProfileRoute.main) {
+      _setRoute(_ProfileRoute.main);
+      return;
+    }
+    final router = GoRouter.maybeOf(context);
+    if (router != null && router.canPop()) {
+      router.pop();
+      return;
+    }
+    Navigator.of(context).maybePop();
+  }
 }
 
 class _ProfileMainView extends StatelessWidget {
@@ -275,10 +290,7 @@ class _ProfileMainView extends StatelessWidget {
     required this.settingsAnchors,
     required this.settingsScrollController,
     required this.profileScrollController,
-    required this.profileScrollOffset,
     required this.settingsScrollOffset,
-    required this.profileHeaderKey,
-    required this.baseOffsetResolver,
     required this.locate,
     required this.onNavigate,
   });
@@ -291,10 +303,7 @@ class _ProfileMainView extends StatelessWidget {
   final SettingsSectionAnchors settingsAnchors;
   final ScrollController settingsScrollController;
   final ScrollController profileScrollController;
-  final ValueNotifier<double> profileScrollOffset;
   final ValueNotifier<double> settingsScrollOffset;
-  final GlobalKey profileHeaderKey;
-  final double Function() baseOffsetResolver;
   final T Function<T>() locate;
   final ValueChanged<_ProfileRoute> onNavigate;
 
@@ -317,126 +326,47 @@ class _ProfileMainView extends StatelessWidget {
       locate: locate,
       onNavigate: onNavigate,
     );
+    final showImportantSection = context.select<SettingsCubit, bool>(
+          (cubit) => cubit.canForegroundService,
+        ) &&
+        !foregroundServiceActive.value;
     if (!isWideLayout) {
-      final Duration animationDuration =
-          context.watch<SettingsCubit>().animationDuration;
-      const profileSectionPadding = EdgeInsets.symmetric(
-        horizontal: _profileHeaderSpacing,
-        vertical: _profileHeaderSpacing,
+      final spacing = context.spacing;
+      final profileSectionPadding = EdgeInsets.symmetric(
+        horizontal: spacing.s,
+        vertical: spacing.s,
       );
-      return Stack(
-        children: [
-          NotificationListener<ScrollNotification>(
-            onNotification: (notification) {
-              if (notification.metrics.axis == Axis.vertical) {
-                profileScrollOffset.value = notification.metrics.pixels;
-              }
-              return false;
-            },
-            child: SingleChildScrollView(
-              controller: profileScrollController,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  KeyedSubtree(
-                    key: profileHeaderKey,
-                    child: ColoredBox(
-                      color: sidebarColor,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: profileSectionPadding,
-                            child: Align(
-                              alignment: Alignment.topCenter,
-                              child: ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(maxWidth: 500.0),
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.stretch,
-                                  children: [
-                                    const _ProfileStatusHeader(),
-                                    const SizedBox(
-                                      height: _profileCardSectionSpacing,
-                                    ),
-                                    card,
-                                    const SizedBox(
-                                      height: _profileCardSectionSpacing,
-                                    ),
-                                    const ProfileFingerprint(),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                          ShadSeparator.horizontal(
-                            thickness: context.borderSide.width,
-                            color: context.colorScheme.border,
-                          ),
-                          Padding(
-                            padding: profileSectionPadding,
-                            child: Align(
-                              alignment: Alignment.topCenter,
-                              child: ConstrainedBox(
-                                constraints:
-                                    const BoxConstraints(maxWidth: 500.0),
-                                child: _SettingsJumpMenu(
-                                  anchors: settingsAnchors,
-                                  emailEnabled: emailEnabled,
-                                  scrollController: profileScrollController,
-                                  scrollOffsetListenable: profileScrollOffset,
-                                  baseOffsetResolver: baseOffsetResolver,
-                                  textAlign: TextAlign.center,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+      return SingleChildScrollView(
+        controller: profileScrollController,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ColoredBox(
+              color: sidebarColor,
+              child: Padding(
+                padding: profileSectionPadding,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 500.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const _ProfileStatusHeader(),
+                        const SizedBox(height: _profileCardSectionSpacing),
+                        card,
+                        const SizedBox(height: _profileCardSectionSpacing),
+                        const ProfileFingerprint(),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: _profileIndicatorSpacing),
-                  settings,
-                ],
+                ),
               ),
             ),
-          ),
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: profileScrollController,
-              builder: (context, child) {
-                final double headerHeight =
-                    profileHeaderKey.currentContext?.size?.height ?? 0;
-                if (headerHeight == 0 ||
-                    !profileScrollController.hasClients ||
-                    profileScrollController.offset <= headerHeight) {
-                  return const SizedBox.shrink();
-                }
-                return Align(
-                  alignment: Alignment.bottomRight,
-                  child: SafeArea(
-                    minimum: const EdgeInsets.all(16),
-                    child: AxiIconButton.ghost(
-                      iconData: LucideIcons.arrowUp,
-                      tooltip: context.l10n.profileJumpToTop,
-                      onPressed: () async {
-                        if (!profileScrollController.hasClients) {
-                          return;
-                        }
-                        await profileScrollController.animateTo(
-                          0,
-                          duration: animationDuration,
-                          curve: _profileFadeCurve,
-                        );
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+            const SizedBox(height: _profileIndicatorSpacing),
+            settings,
+          ],
+        ),
       );
     }
     const sidebarPadding = EdgeInsets.symmetric(
@@ -478,10 +408,10 @@ class _ProfileMainView extends StatelessWidget {
                   padding: sidebarPadding,
                   child: _SettingsJumpMenu(
                     anchors: settingsAnchors,
+                    showImportantSection: showImportantSection,
                     emailEnabled: emailEnabled,
                     scrollController: settingsScrollController,
                     scrollOffsetListenable: settingsScrollOffset,
-                    baseOffsetResolver: () => 0,
                     textAlign: TextAlign.right,
                   ),
                 ),
@@ -820,7 +750,7 @@ class _SettingsPanel extends StatelessWidget {
       children: [
         SettingsControls(
           showDivider: showTopDivider,
-          fullWidthDividers: isWideLayout,
+          fullWidthDividers: true,
           anchors: anchors,
           locate: locate,
           onChangePassword: () => onNavigate(_ProfileRoute.changePassword),
@@ -835,18 +765,18 @@ class _SettingsPanel extends StatelessWidget {
 class _SettingsJumpMenu extends StatefulWidget {
   const _SettingsJumpMenu({
     required this.anchors,
+    required this.showImportantSection,
     required this.emailEnabled,
     required this.scrollController,
     required this.scrollOffsetListenable,
-    required this.baseOffsetResolver,
     required this.textAlign,
   });
 
   final SettingsSectionAnchors anchors;
+  final bool showImportantSection;
   final bool emailEnabled;
   final ScrollController scrollController;
   final ValueListenable<double> scrollOffsetListenable;
-  final double Function() baseOffsetResolver;
   final TextAlign textAlign;
 
   @override
@@ -868,6 +798,7 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.scrollController != widget.scrollController ||
         oldWidget.anchors != widget.anchors ||
+        oldWidget.showImportantSection != widget.showImportantSection ||
         oldWidget.scrollOffsetListenable != widget.scrollOffsetListenable ||
         oldWidget.emailEnabled != widget.emailEnabled) {
       _refreshSectionOffsets();
@@ -884,17 +815,21 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
     final Duration animationDuration =
         context.watch<SettingsCubit>().animationDuration;
     final sectionKeys = <GlobalKey?>[
+      if (widget.showImportantSection) widget.anchors.importantKey,
       widget.anchors.accountKey,
       widget.anchors.dataKey,
       widget.anchors.appearanceKey,
+      widget.anchors.securityKey,
       widget.anchors.chatPreferencesKey,
       if (widget.emailEnabled) widget.anchors.emailPreferencesKey,
       widget.anchors.aboutKey,
     ];
     final sectionLabels = <String>[
+      if (widget.showImportantSection) context.l10n.settingsSectionImportant,
       context.l10n.settingsSectionAccount,
       context.l10n.settingsSectionData,
       context.l10n.settingsSectionAppearance,
+      context.l10n.settingsSectionSecurity,
       context.l10n.settingsSectionChats,
       if (widget.emailEnabled) context.l10n.settingsSectionEmail,
       context.l10n.settingsSectionAbout,
@@ -954,9 +889,11 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
         return;
       }
       final keys = <GlobalKey?>[
+        if (widget.showImportantSection) widget.anchors.importantKey,
         widget.anchors.accountKey,
         widget.anchors.dataKey,
         widget.anchors.appearanceKey,
+        widget.anchors.securityKey,
         widget.anchors.chatPreferencesKey,
         if (widget.emailEnabled) widget.anchors.emailPreferencesKey,
         widget.anchors.aboutKey,
@@ -999,9 +936,7 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
         _sectionOffsets.length != _sectionHeights.length) {
       return 0;
     }
-    final double baseOffset = widget.baseOffsetResolver();
-    final double currentOffset =
-        (scrollOffset - baseOffset).clamp(0, double.infinity);
+    final double currentOffset = scrollOffset.clamp(0, double.infinity);
     const double sectionThreshold = 2 / 3;
     int selectedIndex = 0;
     for (final entry in _sectionOffsets.indexed) {

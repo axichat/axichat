@@ -9,7 +9,6 @@ import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
-import 'package:axichat/src/calendar/view/calendar_navigation.dart';
 import 'package:axichat/src/calendar/view/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
@@ -19,6 +18,7 @@ import 'package:axichat/src/calendar/view/widgets/calendar_hover_title_scope.dar
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -27,8 +27,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 const bool _chatCalendarSurfacePopEnabledDefault = true;
-const String _chatCalendarHeaderAssertMessage =
-    'ChatCalendarWidget requires onBackPressed when showHeader and showBackButton are true.';
 
 bool _resolveChatCalendarSurfacePopEnabled(BuildContext context) {
   return context.watch<ChatsCubit>().state.openChatCalendar ||
@@ -39,15 +37,11 @@ class ChatCalendarWidget extends StatefulWidget {
   const ChatCalendarWidget({
     super.key,
     required this.chat,
-    this.onBackPressed,
     this.showHeader = true,
-    this.showBackButton = true,
   });
 
-  final VoidCallback? onBackPressed;
   final Chat chat;
   final bool showHeader;
-  final bool showBackButton;
 
   @override
   State<ChatCalendarWidget> createState() => _ChatCalendarWidgetState();
@@ -130,6 +124,15 @@ class _ChatCalendarWidgetState
     Widget tabSwitcher,
     Widget cancelBucket,
   ) {
+    final env = EnvScope.of(context);
+    if (env.navPlacement == NavPlacement.bottom) {
+      return const CalendarMobileTabShell(
+        tabBar: SizedBox.shrink(),
+        cancelBucket: SizedBox.shrink(),
+        showTopBorder: false,
+        showDivider: false,
+      );
+    }
     final colors = context.colorScheme;
     return CalendarMobileTabShell(
       tabBar: tabSwitcher,
@@ -190,12 +193,6 @@ class _ChatCalendarWidgetState
     Widget layout,
   ) {
     final Widget tintedLayout = CalendarNavSurface(child: layout);
-    assert(
-      !widget.showHeader ||
-          !widget.showBackButton ||
-          widget.onBackPressed != null,
-      _chatCalendarHeaderAssertMessage,
-    );
     final Widget calendarBody = CalendarHoverTitleScope(
       controller: _hoverTitleController,
       child: tintedLayout,
@@ -215,20 +212,6 @@ class _ChatCalendarWidgetState
   ) {
     final locate = context.read;
     return () => _openTaskSearch(locate<ChatCalendarBloc>(), locate: locate);
-  }
-
-  @override
-  Widget? buildNavigationLeadingActions(
-    BuildContext context,
-    CalendarState state,
-    bool usesDesktopLayout,
-  ) {
-    return CalendarNavigationLeadingActions(
-      state: state,
-      backTooltip: context.l10n.chatBack,
-      onBackPressed: widget.onBackPressed,
-      showBackButton: widget.showBackButton,
-    );
   }
 
   @override

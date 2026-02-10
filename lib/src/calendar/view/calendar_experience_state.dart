@@ -6,6 +6,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
@@ -144,14 +145,21 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
               );
         final Widget dragTargets =
             isMonthView ? const SizedBox.shrink() : buildDragEdgeTargets();
-        final double keyboardInset = mediaQuery.viewInsets.bottom;
-        final double bottomInset =
-            keyboardInset > 0 ? 0 : mediaQuery.viewPadding.bottom;
+        final double tabSwitcherBottomInset = resolveTabSwitcherBottomInset(
+          context,
+          mediaQuery,
+          usesDesktopLayout,
+        );
+        final double cancelBucketBottomInset = resolveCancelBucketBottomInset(
+          context,
+          mediaQuery,
+          usesDesktopLayout,
+        );
         final Widget tabSwitcher = usesDesktopLayout
             ? const SizedBox.shrink()
             : buildDragAwareTabBar(
                 context: context,
-                bottomInset: bottomInset,
+                bottomInset: tabSwitcherBottomInset,
                 scheduleTabLabel: buildScheduleTabLabel(context),
                 tasksTabLabel: buildTasksTabLabel(
                   context,
@@ -163,7 +171,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
             ? const SizedBox.shrink()
             : buildDragCancelBucket(
                 context: context,
-                bottomInset: bottomInset,
+                bottomInset: cancelBucketBottomInset,
               );
         final Widget mobileTabShell = usesDesktopLayout
             ? const SizedBox.shrink()
@@ -461,10 +469,30 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
 
   /// Builds the tab label for the schedule pane. Subclasses can override to
   /// customize text/style.
-  Widget buildScheduleTabLabel(BuildContext context) => Text(
-        context.l10n.calendarScheduleLabel,
-        style: context.textTheme.small.strong,
+  Widget buildScheduleTabLabel(BuildContext context) => Icon(
+        LucideIcons.calendarClock,
+        size: context.sizing.menuItemIconSize,
       );
+
+  double resolveTabSwitcherBottomInset(
+    BuildContext context,
+    MediaQueryData mediaQuery,
+    bool usesDesktopLayout,
+  ) {
+    return _keyboardAdjustedBottomInset(mediaQuery);
+  }
+
+  double resolveCancelBucketBottomInset(
+    BuildContext context,
+    MediaQueryData mediaQuery,
+    bool usesDesktopLayout,
+  ) {
+    return _keyboardAdjustedBottomInset(mediaQuery);
+  }
+
+  double _keyboardAdjustedBottomInset(MediaQueryData mediaQuery) {
+    return mediaQuery.viewInsets.bottom > 0 ? 0 : mediaQuery.viewPadding.bottom;
+  }
 
   /// Builds the tasks tab label so guests can tint it differently.
   Widget buildTasksTabLabel(
@@ -472,7 +500,26 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     bool highlight,
     Animation<double> animation,
   ) {
-    return TasksTabLabel(highlight: highlight, animation: animation);
+    final colors = context.colorScheme;
+    final iconSize = context.sizing.menuItemIconSize;
+    if (!highlight) {
+      return Icon(LucideIcons.squareCheck, size: iconSize);
+    }
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final t = animation.value;
+        final iconColor = Color.lerp(colors.foreground, colors.primary, t)!;
+        return Transform.scale(
+          scale: 1 + (0.12 * t),
+          child: Icon(
+            LucideIcons.squareCheck,
+            size: iconSize,
+            color: iconColor,
+          ),
+        );
+      },
+    );
   }
 
   /// Wraps the tab/cancel bucket chrome for mobile layouts.

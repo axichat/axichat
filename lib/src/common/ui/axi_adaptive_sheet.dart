@@ -31,8 +31,24 @@ Future<T?> showAdaptiveBottomSheet<T>({
   EdgeInsetsGeometry? surfacePadding,
 }) {
   final commandSurface = resolveCommandSurface(context);
+  final colorScheme = ShadTheme.of(context).colorScheme;
+  final spacing = context.spacing;
+  final sizing = context.sizing;
+  final containerRadius = context.radii.container;
   final EdgeInsetsGeometry resolvedSurfacePadding =
-      surfacePadding ?? EdgeInsets.all(context.spacing.m);
+      surfacePadding ?? EdgeInsets.all(spacing.m);
+  final Color resolvedBackground = backgroundColor ?? colorScheme.card;
+  final BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
+    top: Radius.circular(containerRadius),
+  );
+  final EdgeInsets resolvedInsets = dialogInsetPadding ??
+      EdgeInsets.symmetric(
+        horizontal: spacing.l,
+        vertical: spacing.l,
+      );
+  final double resolvedDialogMaxWidth = dialogMaxWidth ?? sizing.dialogMaxWidth;
+  final double resolvedDialogMaxHeightFraction =
+      dialogMaxHeightFraction ?? sizing.dialogMaxHeightFraction;
 
   if (commandSurface == CommandSurface.sheet) {
     return showModalBottomSheet<T>(
@@ -49,12 +65,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
         final MediaQueryData windowMediaQuery = MediaQueryData.fromView(
           View.of(sheetContext),
         );
-        final Color resolvedBackground =
-            backgroundColor ?? ShadTheme.of(context).colorScheme.card;
         final bool transparentSurface = resolvedBackground.a == 0;
-        final BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
-          top: Radius.circular(context.radii.container),
-        );
         const double zeroInset = 0;
         final double topInset =
             useSafeArea ? windowMediaQuery.viewPadding.top : zeroInset;
@@ -99,14 +110,6 @@ Future<T?> showAdaptiveBottomSheet<T>({
     );
   }
 
-  final Color resolvedBackground =
-      backgroundColor ?? ShadTheme.of(context).colorScheme.card;
-  final EdgeInsets resolvedInsets = dialogInsetPadding ??
-      EdgeInsets.symmetric(
-        horizontal: context.spacing.l,
-        vertical: context.spacing.l,
-      );
-
   return showFadeScaleDialog<T>(
     context: context,
     barrierColor: barrierColor,
@@ -131,10 +134,8 @@ Future<T?> showAdaptiveBottomSheet<T>({
       );
       final Widget constrainedChild = ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: dialogMaxWidth ?? context.sizing.dialogMaxWidth,
-          maxHeight: size.height *
-              (dialogMaxHeightFraction ??
-                  context.sizing.dialogMaxHeightFraction),
+          maxWidth: resolvedDialogMaxWidth,
+          maxHeight: size.height * resolvedDialogMaxHeightFraction,
         ),
         child: child,
       );
@@ -147,7 +148,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
         shadowColor: Colors.transparent,
         child: AxiModalSurface(
           backgroundColor: resolvedBackground,
-          borderColor: ShadTheme.of(context).colorScheme.border,
+          borderColor: colorScheme.border,
           padding: resolvedSurfacePadding,
           child: wrappedChild,
         ),

@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:math' as math;
-
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -29,11 +27,6 @@ class CalendarTile extends StatefulWidget {
 }
 
 class _CalendarTileState extends State<CalendarTile> {
-  double _cachedBadgeWidth = 0;
-  int? _cachedBadgeCount;
-  double _textScaleFactor = 1;
-  int _badgeStyleHash = 0;
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
@@ -41,21 +34,19 @@ class _CalendarTileState extends State<CalendarTile> {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final showBadge = widget.dueReminderCount > 0;
-    final badgeWidth = showBadge
-        ? _resolveBadgeWidth(
-            context,
-            widget.dueReminderCount,
-          )
-        : 0.0;
+    final badgeDiameter = _resolveBadgeDiameter(context);
     final cutouts = <CutoutSpec>[
       if (showBadge)
         CutoutSpec(
           edge: CutoutEdge.top,
-          alignment: Alignment.topRight,
-          depth: spacing.m,
-          thickness: badgeWidth,
-          cornerRadius: context.radii.container,
-          child: _ReminderBadge(count: widget.dueReminderCount),
+          alignment: const Alignment(0.86, -1),
+          depth: (badgeDiameter / 2) + spacing.s,
+          thickness: badgeDiameter + (spacing.xs * 2),
+          cornerRadius: context.radii.squircle,
+          child: _ReminderBadge(
+            count: widget.dueReminderCount,
+            diameter: badgeDiameter,
+          ),
         ),
     ];
 
@@ -99,44 +90,14 @@ class _CalendarTileState extends State<CalendarTile> {
     ).withTapBounce();
   }
 
-  double _resolveBadgeWidth(BuildContext context, int count) {
+  double _resolveBadgeDiameter(BuildContext context) {
     final textScaler = MediaQuery.of(context).textScaler;
-    final scaleFactor = textScaler.scale(1);
-    final spacing = context.spacing;
-    final badgeStyle = context.textTheme.small.copyWith(
-      fontWeight: FontWeight.w700,
-    );
-    final nextStyleHash = Object.hash(
-      badgeStyle.fontSize,
-      badgeStyle.fontFamily,
-      badgeStyle.fontWeight,
-      badgeStyle.letterSpacing,
-      spacing.s,
-      spacing.xs,
-      spacing.l,
-    );
-    if (_cachedBadgeCount == count &&
-        _cachedBadgeWidth > 0 &&
-        _textScaleFactor == scaleFactor &&
-        _badgeStyleHash == nextStyleHash) {
-      return _cachedBadgeWidth;
+    final baseDiameter = context.sizing.iconButtonIconSize;
+    final scaledDiameter = textScaler.scale(baseDiameter);
+    if (!scaledDiameter.isFinite || scaledDiameter <= 0) {
+      return baseDiameter;
     }
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: '$count',
-        style: badgeStyle,
-      ),
-      textDirection: Directionality.of(context),
-      textScaler: textScaler,
-    )..layout();
-    final horizontalPadding = spacing.m;
-    final minWidth = spacing.l;
-    _cachedBadgeCount = count;
-    _textScaleFactor = scaleFactor;
-    _badgeStyleHash = nextStyleHash;
-    _cachedBadgeWidth =
-        math.max(minWidth, textPainter.width + (horizontalPadding * 2));
-    return _cachedBadgeWidth;
+    return scaledDiameter;
   }
 }
 
@@ -182,39 +143,18 @@ class _CalendarAvatar extends StatelessWidget {
 }
 
 class _ReminderBadge extends StatelessWidget {
-  const _ReminderBadge({required this.count});
+  const _ReminderBadge({required this.count, required this.diameter});
 
   final int count;
+  final double diameter;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final spacing = context.spacing;
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: colors.primary,
-        shape: SquircleBorder(
-          cornerRadius: context.radii.container,
-          side: BorderSide(
-            color: colors.card,
-            width: context.borderSide.width,
-          ),
-        ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.m,
-          vertical: spacing.xs,
-        ),
-        child: Text(
-          '$count',
-          maxLines: 1,
-          style: context.textTheme.small.copyWith(
-            color: colors.primaryForeground,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
+    return AxiCountBadge(
+      count: count,
+      diameter: diameter,
+      borderColor: colors.card,
     );
   }
 }

@@ -37,6 +37,8 @@ const WindowRateLimit _messageNotificationGlobalRateLimit = WindowRateLimit(
   window: _messageNotificationRateLimitWindow,
 );
 
+enum MessageNotificationChannel { chat, email }
+
 ///Call [init].
 class NotificationService {
   NotificationService([FlutterLocalNotificationsPlugin? plugin])
@@ -64,6 +66,8 @@ class NotificationService {
   Future<PackageInfo>? _packageInfoFuture;
 
   bool mute = false;
+  bool chatNotificationsMuted = false;
+  bool emailNotificationsMuted = false;
   bool notificationPreviewsEnabled = false;
   NotificationStrings? _strings;
 
@@ -264,8 +268,9 @@ class NotificationService {
     String? payload,
     String? threadKey,
     bool? showPreviewOverride,
+    MessageNotificationChannel channel = MessageNotificationChannel.chat,
   }) async {
-    if (mute) return;
+    if (mute || _isChannelMuted(channel)) return;
     if (!await hasAllNotificationPermissions()) return;
     final bool appInForeground = await _isAppOnForeground();
     if (!allowForeground && appInForeground) {
@@ -297,6 +302,13 @@ class NotificationService {
       notificationDetails: notificationDetails,
       payload: payload,
     );
+  }
+
+  bool _isChannelMuted(MessageNotificationChannel channel) {
+    return switch (channel) {
+      MessageNotificationChannel.chat => chatNotificationsMuted,
+      MessageNotificationChannel.email => emailNotificationsMuted,
+    };
   }
 
   Future<void> dismissMessageNotification({required String threadKey}) async {

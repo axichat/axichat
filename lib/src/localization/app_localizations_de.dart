@@ -1957,6 +1957,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsSectionAppearance => 'Erscheinungsbild';
 
   @override
+  String get settingsSectionSecurity => 'Sicherheit';
+
+  @override
   String get settingsLanguage => 'Sprache';
 
   @override
@@ -2035,12 +2038,26 @@ class AppLocalizationsDe extends AppLocalizations {
       'Wenn aktiviert, sendet das Öffnen eines Chats bei aktiver App Lesebestätigungen für sichtbare Nachrichten.';
 
   @override
+  String get settingsChatSendOnEnter => 'Chat-Nachrichten mit Enter senden';
+
+  @override
+  String get settingsChatSendOnEnterDescription =>
+      'Wenn aktiviert, sendet Enter Chat-Nachrichten. Umschalt+Enter fügt eine neue Zeile ein.';
+
+  @override
   String get settingsEmailReadReceipts =>
       'Lesebestätigungen für E-Mails senden';
 
   @override
   String get settingsEmailReadReceiptsDescription =>
       'Wenn aktiviert, sendet das Öffnen eines E-Mail-Chats bei aktiver App Lesebestätigungen (MDNs) für sichtbare Nachrichten.';
+
+  @override
+  String get settingsEmailSendOnEnter => 'E-Mail-Nachrichten mit Enter senden';
+
+  @override
+  String get settingsEmailSendOnEnterDescription =>
+      'Wenn aktiviert, sendet Enter E-Mail-Nachrichten. Umschalt+Enter fügt eine neue Zeile ein.';
 
   @override
   String get settingsTypingIndicators => 'Tippanzeigen senden';

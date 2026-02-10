@@ -15,15 +15,17 @@ void main() {
         modifiedAt: start,
       );
 
-      const calculator = CalendarLayoutCalculator();
-      final metrics = calculator.resolveMetrics(
+      final metrics = resolveCalendarLayoutMetrics(
+        theme: CalendarLayoutTheme.material,
+        zoomLevels: kCalendarZoomLevels,
         zoomIndex: 0,
         isDayView: false,
         availableHeight: 1200,
         allowDayViewZoom: true,
       );
 
-      final layout = calculator.resolveTaskLayout(
+      final layout = resolveCalendarTaskLayout(
+        theme: CalendarLayoutTheme.material,
         task: task,
         dayDate: DateTime(2024, 1, 1),
         weekStartDate: DateTime(2023, 12, 31),

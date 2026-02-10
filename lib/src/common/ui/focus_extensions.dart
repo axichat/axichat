@@ -14,11 +14,10 @@ extension TextInputFocusManager on FocusManager {
     if (focusContext == null) {
       return false;
     }
-    final Widget focusedWidget = focusContext.widget;
-    if (focusedWidget is EditableText || focusedWidget is axi.EditableText) {
-      return true;
+    if (!focusContext.mounted) {
+      return false;
     }
-    return focusContext.findAncestorWidgetOfExactType<EditableText>() != null ||
-        focusContext.findAncestorWidgetOfExactType<axi.EditableText>() != null;
+    final Widget focusedWidget = focusContext.widget;
+    return focusedWidget is EditableText || focusedWidget is axi.EditableText;
   }
 }

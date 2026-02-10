@@ -196,7 +196,8 @@ class _DraftFormState extends State<DraftForm> {
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final spacing = context.spacing;
-    final endpointConfig = context.watch<SettingsCubit>().state.endpointConfig;
+    final settingsState = context.watch<SettingsCubit>().state;
+    final endpointConfig = settingsState.endpointConfig;
     final locate = widget.locate;
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final sectionSpacing = spacing.m;
@@ -296,6 +297,13 @@ class _DraftFormState extends State<DraftForm> {
                         );
                         final split = _splitRecipients();
                         final hasActiveRecipients = split.hasActiveRecipients;
+                        final hasEmailTargets = split.emailTargets.isNotEmpty;
+                        final hasXmppTargets = split.xmppTargets.isNotEmpty;
+                        final sendOnEnter = _resolveSendOnEnter(
+                          hasEmailTargets: hasEmailTargets,
+                          hasXmppTargets: hasXmppTargets,
+                          settings: settingsState,
+                        );
                         final hasContent =
                             _hasContent(hasAttachments: hasAttachments);
                         final canSave = enabled &&
@@ -491,13 +499,48 @@ class _DraftFormState extends State<DraftForm> {
                                 child: Semantics(
                                   label: l10n.draftMessageSemantics,
                                   textField: true,
-                                  child: AxiTextFormField(
-                                    controller: _bodyTextController,
-                                    focusNode: _bodyFocusNode,
-                                    enabled: enabled,
-                                    minLines: 7,
-                                    maxLines: null,
-                                    placeholder: Text(l10n.draftMessageHint),
+                                  child: Shortcuts(
+                                    shortcuts: readyToSend && sendOnEnter
+                                        ? const <ShortcutActivator, Intent>{
+                                            SingleActivator(
+                                              LogicalKeyboardKey.enter,
+                                            ): _SendDraftIntent(),
+                                          }
+                                        : const <ShortcutActivator, Intent>{},
+                                    child: Actions(
+                                      actions: <Type, Action<Intent>>{
+                                        _SendDraftIntent:
+                                            CallbackAction<_SendDraftIntent>(
+                                          onInvoke: (_) {
+                                            if (readyToSend &&
+                                                sendOnEnter &&
+                                                enabled) {
+                                              unawaited(_handleSendDraft());
+                                            }
+                                            return null;
+                                          },
+                                        ),
+                                      },
+                                      child: AxiTextFormField(
+                                        controller: _bodyTextController,
+                                        focusNode: _bodyFocusNode,
+                                        enabled: enabled,
+                                        minLines: 7,
+                                        maxLines: null,
+                                        textInputAction: sendOnEnter
+                                            ? TextInputAction.send
+                                            : TextInputAction.newline,
+                                        onSubmitted: (_) {
+                                          if (readyToSend &&
+                                              sendOnEnter &&
+                                              enabled) {
+                                            unawaited(_handleSendDraft());
+                                          }
+                                        },
+                                        placeholder:
+                                            Text(l10n.draftMessageHint),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -1326,6 +1369,20 @@ class _DraftFormState extends State<DraftForm> {
     );
   }
 
+  bool _resolveSendOnEnter({
+    required bool hasEmailTargets,
+    required bool hasXmppTargets,
+    required SettingsState settings,
+  }) {
+    if (hasEmailTargets && hasXmppTargets) {
+      return settings.chatSendOnEnter && settings.emailSendOnEnter;
+    }
+    if (hasEmailTargets) {
+      return settings.emailSendOnEnter;
+    }
+    return settings.chatSendOnEnter;
+  }
+
   String? _resolveXmppJid(ComposerRecipient recipient) {
     final chat = recipient.target.chat;
     final transport = recipient.target.transport ?? chat?.defaultTransport;
@@ -1519,6 +1576,10 @@ class _DraftFormState extends State<DraftForm> {
       },
     );
   }
+}
+
+class _SendDraftIntent extends Intent {
+  const _SendDraftIntent();
 }
 
 class _DraftTaskDropRegion extends StatefulWidget {

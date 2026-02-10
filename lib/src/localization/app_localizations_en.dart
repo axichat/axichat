@@ -1924,6 +1924,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSectionAppearance => 'Appearance';
 
   @override
+  String get settingsSectionSecurity => 'Security';
+
+  @override
   String get settingsLanguage => 'Language';
 
   @override
@@ -2002,11 +2005,25 @@ class AppLocalizationsEn extends AppLocalizations {
       'When on, opening a chat while the app is active sends read receipts for visible messages.';
 
   @override
+  String get settingsChatSendOnEnter => 'Send chat messages on Enter';
+
+  @override
+  String get settingsChatSendOnEnterDescription =>
+      'When on, pressing Enter sends chat messages. Shift+Enter inserts a new line.';
+
+  @override
   String get settingsEmailReadReceipts => 'Send email read receipts';
 
   @override
   String get settingsEmailReadReceiptsDescription =>
       'When on, opening an email chat while the app is active sends read receipts (MDNs) for visible messages.';
+
+  @override
+  String get settingsEmailSendOnEnter => 'Send email messages on Enter';
+
+  @override
+  String get settingsEmailSendOnEnterDescription =>
+      'When on, pressing Enter sends email messages. Shift+Enter inserts a new line.';
 
   @override
   String get settingsTypingIndicators => 'Send typing indicators';

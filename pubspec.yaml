@@ -105,6 +105,7 @@ dependencies:
   custom_refresh_indicator: ^4.0.1
   pdfrx: ^2.2.24
   charset_converter: ^2.3.0
+  google_nav_bar: ^5.0.7
 
 dependency_overrides:
   pinenacl: ^0.6.0

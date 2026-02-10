@@ -2105,6 +2105,34 @@ class _ChatState extends State<Chat> {
     return false;
   }
 
+  bool _resolveComposerSendOnEnter({
+    required List<ComposerRecipient> recipients,
+    required SettingsState settings,
+  }) {
+    var hasEmail = false;
+    var hasXmpp = false;
+    for (final recipient in recipients) {
+      if (!recipient.included) {
+        continue;
+      }
+      final transport =
+          recipient.target.chat?.defaultTransport ?? recipient.target.transport;
+      if (transport?.isEmail ?? false) {
+        hasEmail = true;
+      }
+      if (transport?.isXmpp ?? false) {
+        hasXmpp = true;
+      }
+      if (hasEmail && hasXmpp) {
+        return settings.chatSendOnEnter && settings.emailSendOnEnter;
+      }
+    }
+    if (hasEmail) {
+      return settings.emailSendOnEnter;
+    }
+    return settings.chatSendOnEnter;
+  }
+
   List<BlocklistEntry> _resolveBlocklistEntries(BuildContext context) {
     final List<BlocklistEntry>? cachedEntries =
         context.select<BlocklistCubit, List<BlocklistEntry>?>(
@@ -3474,8 +3502,12 @@ class _ChatState extends State<Chat> {
               final shareReplies = state.shareReplies;
               final recipients = _recipients;
               final pendingAttachments = state.pendingAttachments;
-              final settingsSnapshot = _settingsSnapshotFromState(
-                context.watch<SettingsCubit>().state,
+              final settingsState = context.watch<SettingsCubit>().state;
+              final settingsSnapshot =
+                  _settingsSnapshotFromState(settingsState);
+              final composerSendOnEnter = _resolveComposerSendOnEnter(
+                recipients: recipients,
+                settings: settingsState,
               );
               final canSendEmailAttachments = state.emailServiceAvailable &&
                   chatEntity != null &&
@@ -4816,6 +4848,8 @@ class _ChatState extends State<Chat> {
                                                       settingsSnapshot,
                                                 ),
                                                 onTaskDropped: _handleTaskDrop,
+                                                sendOnEnter:
+                                                    composerSendOnEnter,
                                                 onSend: () =>
                                                     _handleSendMessage(
                                                   chatState: state,
@@ -9600,7 +9634,6 @@ class _ChatCalendarPanel extends StatelessWidget {
       child: ChatCalendarWidget(
         chat: resolvedChat,
         showHeader: true,
-        showBackButton: false,
       ),
     );
   }
@@ -11043,6 +11076,7 @@ class _ChatComposerSection extends StatelessWidget {
     required this.onPendingAttachmentLongPressed,
     required this.pendingAttachmentMenuBuilder,
     required this.buildComposerAccessories,
+    required this.sendOnEnter,
     required this.onSend,
     this.composerError,
     this.onComposerErrorCleared,
@@ -11079,6 +11113,7 @@ class _ChatComposerSection extends StatelessWidget {
       pendingAttachmentMenuBuilder;
   final List<ChatComposerAccessory> Function({required bool canSend})
       buildComposerAccessories;
+  final bool sendOnEnter;
   final VoidCallback onSend;
   final String? composerError;
   final VoidCallback? onComposerErrorCleared;
@@ -11182,6 +11217,7 @@ class _ChatComposerSection extends StatelessWidget {
                       header: header,
                       actions: buildComposerAccessories(canSend: sendEnabled),
                       sendEnabled: sendEnabled,
+                      sendOnEnter: sendOnEnter,
                     ),
                   ),
                 ],
@@ -13848,6 +13884,8 @@ class _GuestChatState extends State<GuestChat> {
                     attachmentsEnabled: false,
                   ),
                   sendEnabled: _composerHasContent,
+                  sendOnEnter:
+                      context.watch<SettingsCubit>().state.chatSendOnEnter,
                 ),
               ),
             ),

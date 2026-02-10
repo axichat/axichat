@@ -61,6 +61,7 @@ class CutoutSpec {
     required this.thickness,
     required this.child,
     this.cornerRadius = 16,
+    this.shape = CutoutShape.squircle,
   });
 
   final CutoutEdge edge;
@@ -69,6 +70,7 @@ class CutoutSpec {
   final double thickness;
   final Widget child;
   final double cornerRadius;
+  final CutoutShape shape;
 
   CutoutSpec scaled(double factor) {
     if (factor == 1) return this;
@@ -79,11 +81,14 @@ class CutoutSpec {
       thickness: thickness * factor,
       child: child,
       cornerRadius: cornerRadius * factor,
+      shape: shape,
     );
   }
 }
 
 enum CutoutEdge { top, right, bottom, left }
+
+enum CutoutShape { squircle, circle }
 
 class _CutoutRender extends MultiChildRenderObjectWidget {
   _CutoutRender({
@@ -367,9 +372,12 @@ Path _cutoutPath(Size size, OutlinedBorder shape, List<CutoutSpec> cutouts) {
   var fillPath = Path()..addPath(outerPath, Offset.zero);
   for (final spec in cutouts) {
     final cutoutRect = _cutoutRect(size, spec);
-    final cutoutPath = SquircleBorder(
-      cornerRadius: spec.cornerRadius,
-    ).getOuterPath(cutoutRect);
+    final Path cutoutPath = switch (spec.shape) {
+      CutoutShape.squircle => SquircleBorder(
+          cornerRadius: spec.cornerRadius,
+        ).getOuterPath(cutoutRect),
+      CutoutShape.circle => Path()..addOval(cutoutRect),
+    };
     fillPath = Path.combine(PathOperation.difference, fillPath, cutoutPath);
   }
   return fillPath;

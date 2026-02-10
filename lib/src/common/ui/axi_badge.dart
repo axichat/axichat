@@ -3,6 +3,72 @@
 
 import 'package:flutter/material.dart';
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/squircle_border.dart';
+
+class AxiCountBadge extends StatelessWidget {
+  const AxiCountBadge({
+    super.key,
+    required this.count,
+    this.backgroundColor,
+    this.borderColor,
+    this.textColor,
+    this.diameter,
+    this.cornerRadius,
+  });
+
+  final int count;
+  final Color? backgroundColor;
+  final Color? borderColor;
+  final Color? textColor;
+  final double? diameter;
+  final double? cornerRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final text = count > 99 ? '99+' : '$count';
+    final resolvedDiameter = diameter ?? sizing.iconButtonIconSize;
+    return IntrinsicWidth(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: resolvedDiameter,
+          minHeight: resolvedDiameter,
+        ),
+        child: DecoratedBox(
+          decoration: ShapeDecoration(
+            color: backgroundColor ?? colors.destructive,
+            shape: SquircleBorder(
+              cornerRadius: cornerRadius ?? context.radii.container,
+              side: BorderSide(
+                color: borderColor ?? colors.background,
+                width: context.borderSide.width,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: spacing.xs,
+              vertical: spacing.xxs,
+            ),
+            child: Center(
+              child: Text(
+                text,
+                maxLines: 1,
+                textAlign: TextAlign.center,
+                style: context.textTheme.small.copyWith(
+                  color: textColor ?? colors.destructiveForeground,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class AxiBadge extends StatelessWidget {
   const AxiBadge({
@@ -19,38 +85,12 @@ class AxiBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (count <= 0) return child;
-    final colors = context.colorScheme;
     final spacing = context.spacing;
-    final radii = context.radii;
-    final text = count > 99 ? '99+' : '$count';
     final resolvedOffset = offset ??
         Offset(
           spacing.s,
           -spacing.s,
         );
-    final badge = DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.primary,
-        borderRadius: BorderRadius.circular(radii.pill),
-        border: Border.all(
-          color: colors.background,
-          width: context.borderSide.width,
-        ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.s,
-          vertical: spacing.xs,
-        ),
-        child: Text(
-          text,
-          style: context.textTheme.small.copyWith(
-            color: colors.primaryForeground,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
 
     return Stack(
       clipBehavior: Clip.none,
@@ -59,7 +99,7 @@ class AxiBadge extends StatelessWidget {
         Positioned(
           top: resolvedOffset.dy,
           right: resolvedOffset.dx,
-          child: badge,
+          child: AxiCountBadge(count: count),
         ),
       ],
     );

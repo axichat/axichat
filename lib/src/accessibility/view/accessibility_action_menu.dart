@@ -1413,7 +1413,9 @@ bool _isTextInputFocused() {
   final focus = FocusManager.instance.primaryFocus;
   final focusContext = focus?.context;
   if (focusContext == null) return false;
-  return focusContext.findAncestorWidgetOfExactType<EditableText>() != null;
+  if (!focusContext.mounted) return false;
+  final focusedWidget = focusContext.widget;
+  return focusedWidget is EditableText;
 }
 
 class _AccessibilityGroupMarker extends InheritedWidget {
@@ -3118,7 +3120,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
   bool get isEditingText {
     final focus = FocusManager.instance.primaryFocus;
     if (focus == null) return false;
-    return focus.context?.findAncestorWidgetOfExactType<EditableText>() != null;
+    final focusContext = focus.context;
+    if (focusContext == null || !focusContext.mounted) return false;
+    return focusContext.widget is EditableText;
   }
 
   @override

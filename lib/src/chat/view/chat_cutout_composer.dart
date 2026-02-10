@@ -66,6 +66,7 @@ class ChatCutoutComposer extends StatelessWidget {
     required this.onSend,
     required this.actions,
     required this.sendEnabled,
+    required this.sendOnEnter,
     this.minLines = 1,
     this.maxLines = 6,
     this.header,
@@ -78,6 +79,7 @@ class ChatCutoutComposer extends StatelessWidget {
   final VoidCallback onSend;
   final List<ChatComposerAccessory> actions;
   final bool sendEnabled;
+  final bool sendOnEnter;
   final int minLines;
   final int maxLines;
   final Widget? header;
@@ -100,7 +102,7 @@ class ChatCutoutComposer extends StatelessWidget {
       horizontalInset,
       verticalInset,
     );
-    final shortcuts = sendEnabled
+    final shortcuts = sendEnabled && sendOnEnter
         ? const <ShortcutActivator, Intent>{
             SingleActivator(LogicalKeyboardKey.enter): _SendMessageIntent(),
           }
@@ -195,7 +197,7 @@ class ChatCutoutComposer extends StatelessWidget {
                       ),
                     ),
                     onSubmitted: (_) {
-                      if (sendEnabled) onSend();
+                      if (sendEnabled && sendOnEnter) onSend();
                     },
                   ),
                 ),

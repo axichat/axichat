@@ -3488,6 +3488,12 @@ abstract class AppLocalizations {
   /// **'Appearance'**
   String get settingsSectionAppearance;
 
+  /// No description provided for @settingsSectionSecurity.
+  ///
+  /// In en, this message translates to:
+  /// **'Security'**
+  String get settingsSectionSecurity;
+
   /// No description provided for @settingsLanguage.
   ///
   /// In en, this message translates to:
@@ -3632,6 +3638,18 @@ abstract class AppLocalizations {
   /// **'When on, opening a chat while the app is active sends read receipts for visible messages.'**
   String get settingsChatReadReceiptsDescription;
 
+  /// No description provided for @settingsChatSendOnEnter.
+  ///
+  /// In en, this message translates to:
+  /// **'Send chat messages on Enter'**
+  String get settingsChatSendOnEnter;
+
+  /// No description provided for @settingsChatSendOnEnterDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When on, pressing Enter sends chat messages. Shift+Enter inserts a new line.'**
+  String get settingsChatSendOnEnterDescription;
+
   /// No description provided for @settingsEmailReadReceipts.
   ///
   /// In en, this message translates to:
@@ -3643,6 +3661,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'When on, opening an email chat while the app is active sends read receipts (MDNs) for visible messages.'**
   String get settingsEmailReadReceiptsDescription;
+
+  /// No description provided for @settingsEmailSendOnEnter.
+  ///
+  /// In en, this message translates to:
+  /// **'Send email messages on Enter'**
+  String get settingsEmailSendOnEnter;
+
+  /// No description provided for @settingsEmailSendOnEnterDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'When on, pressing Enter sends email messages. Shift+Enter inserts a new line.'**
+  String get settingsEmailSendOnEnterDescription;
 
   /// No description provided for @settingsTypingIndicators.
   ///

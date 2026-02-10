@@ -6419,6 +6419,37 @@ mixin MessageService
         },
       );
 
+  Stream<Map<String, FileMetadataData?>> fileMetadataByIdsStream(
+    Set<String> ids,
+  ) =>
+      createSingleItemStream<Map<String, FileMetadataData?>, XmppDatabase>(
+        watchFunction: (db) async {
+          final normalizedIds = <String>{
+            for (final id in ids)
+              if (id.trim().isNotEmpty) id.trim(),
+          };
+          if (normalizedIds.isEmpty) {
+            return Stream.value(const <String, FileMetadataData?>{});
+          }
+          final orderedIds = normalizedIds.toList(growable: false);
+          final initialRows = await db.getFileMetadataForIds(orderedIds);
+          final initialById = <String, FileMetadataData?>{
+            for (final id in orderedIds) id: null,
+            for (final metadata in initialRows) metadata.id: metadata,
+          };
+          if (db is! XmppDrift) {
+            return Stream.value(initialById);
+          }
+          final stream = db.fileMetadataAccessor.watchForIds(orderedIds).map(
+                (rows) => <String, FileMetadataData?>{
+                  for (final id in orderedIds) id: null,
+                  for (final metadata in rows) metadata.id: metadata,
+                },
+              );
+          return stream.startWith(initialById);
+        },
+      );
+
   Stream<List<AttachmentGalleryItem>> attachmentGalleryStream({
     String? chatJid,
   }) =>

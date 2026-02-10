@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -70,24 +71,20 @@ class _GuestCalendarWidgetState
       spec.modalMargin;
 
   @override
-  Widget buildTasksTabLabel(
-    BuildContext context,
-    bool highlight,
-    Animation<double> animation,
-  ) {
-    return TasksTabLabel(
-      highlight: highlight,
-      animation: animation,
-      baseColor: calendarPrimaryColor,
-    );
-  }
-
-  @override
   CalendarMobileTabShell buildMobileTabShell(
     BuildContext context,
     Widget tabSwitcher,
     Widget cancelBucket,
   ) {
+    final env = EnvScope.of(context);
+    if (env.navPlacement == NavPlacement.bottom) {
+      return const CalendarMobileTabShell(
+        tabBar: SizedBox.shrink(),
+        cancelBucket: SizedBox.shrink(),
+        showTopBorder: false,
+        showDivider: false,
+      );
+    }
     final colors = context.colorScheme;
     return CalendarMobileTabShell(
       tabBar: tabSwitcher,

@@ -376,22 +376,24 @@ class _NexusTabViews extends StatelessWidget {
           },
         ),
       ],
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(bottom: context.borderSide),
-        ),
-        child: TabBarView(
-          physics: tabViewPhysics,
-          children: tabs.map((tab) {
-            return Scaffold(
-              resizeToAvoidBottomInset: false,
-              extendBodyBehindAppBar: true,
-              body: tab.body,
-              floatingActionButtonAnimator: const _ScaleOnlyFabAnimator(),
-              floatingActionButton: selectedChats.isNotEmpty ? null : tab.fab,
-            );
-          }).toList(),
-        ),
+      child: TabBarView(
+        physics: tabViewPhysics,
+        children: tabs.map((tab) {
+          final floatingActionButton =
+              selectedChats.isNotEmpty ? null : tab.fab;
+          return Scaffold(
+            resizeToAvoidBottomInset: false,
+            extendBodyBehindAppBar: true,
+            body: tab.body,
+            floatingActionButtonAnimator: const _ScaleOnlyFabAnimator(),
+            floatingActionButton: floatingActionButton == null
+                ? null
+                : Padding(
+                    padding: EdgeInsets.only(bottom: context.spacing.xs),
+                    child: floatingActionButton,
+                  ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -456,33 +458,61 @@ class _HomeBottomTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (tabs.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final spacing = context.spacing;
+    final sizing = context.sizing;
     final colors = context.colorScheme;
-    final badgeOffset = Offset(0, -spacing.s);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border(bottom: context.borderSide),
+    final motion = context.motion;
+    final int safeSelectedIndex =
+        selectedIndex.clamp(0, tabs.length - 1).toInt();
+    return Padding(
+      padding: EdgeInsetsDirectional.fromSTEB(
+        spacing.xs,
+        0,
+        spacing.xs,
+        spacing.s,
       ),
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.s,
-          vertical: spacing.xs,
+      child: ShadTabs<int>(
+        value: safeSelectedIndex,
+        scrollable: false,
+        tabsGap: 0,
+        gap: 0,
+        padding: EdgeInsets.zero,
+        decoration: ShadDecoration(
+          color: colors.card,
+          border: ShadBorder.all(
+            color: colors.border,
+            width: context.borderSide.width,
+            radius: BorderRadius.circular(context.radii.container),
+          ),
+          secondaryBorder: ShadBorder.none,
+          secondaryFocusedBorder: ShadBorder.none,
         ),
-        child: Row(
-          children: [
-            for (int index = 0; index < tabs.length; index++)
-              Expanded(
-                child: _HomeBottomTabItem(
-                  label: tabs[index].label,
-                  badgeCount: badgeCounts[tabs[index].id] ?? 0,
-                  badgeOffset: badgeOffset,
-                  selected: index == selectedIndex,
-                  onPressed: () => onTabSelected(index),
-                ),
-              ),
-          ],
-        ),
+        onChanged: (value) {
+          if (value != safeSelectedIndex) {
+            onTabSelected(value);
+          }
+        },
+        tabs: List<ShadTab<int>>.generate(tabs.length, (index) {
+          final tab = tabs[index];
+          return ShadTab<int>(
+            value: index,
+            height: sizing.iconButtonSize,
+            backgroundColor: Colors.transparent,
+            selectedBackgroundColor: colors.primary.withValues(
+              alpha: motion.tapHoverAlpha,
+            ),
+            foregroundColor: colors.mutedForeground,
+            selectedForegroundColor: colors.foreground,
+            child: _HomeBottomTabItem(
+              label: tab.label,
+              badgeCount: badgeCounts[tab.id] ?? 0,
+              selected: index == safeSelectedIndex,
+            ),
+          );
+        }),
       ),
     );
   }
@@ -492,33 +522,56 @@ class _HomeBottomTabItem extends StatelessWidget {
   const _HomeBottomTabItem({
     required this.label,
     required this.badgeCount,
-    required this.badgeOffset,
     required this.selected,
-    required this.onPressed,
   });
 
   final String label;
   final int badgeCount;
-  final Offset badgeOffset;
   final bool selected;
-  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final Widget labelWidget = Text(
-      label,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      textAlign: TextAlign.center,
-    );
-    return AxiButton.ghost(
-      widthBehavior: AxiButtonWidth.expand,
-      selected: selected,
-      onPressed: onPressed,
-      child: AxiBadge(
-        count: badgeCount,
-        offset: badgeOffset,
-        child: labelWidget,
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final Duration animationDuration =
+        context.watch<SettingsCubit>().animationDuration;
+    final badgeDiameter = sizing.iconButtonIconSize;
+    final endPadding = badgeCount > 0 ? spacing.s : spacing.xs;
+    return SizedBox(
+      height: sizing.iconButtonSize,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Center(
+            child: AnimatedScale(
+              duration: animationDuration,
+              curve: Curves.easeInOutCubic,
+              scale: selected ? 1.04 : 1,
+              child: Padding(
+                padding: EdgeInsetsDirectional.only(
+                  start: spacing.xs,
+                  end: endPadding,
+                ),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: context.textTheme.small.strongIf(selected),
+                ),
+              ),
+            ),
+          ),
+          if (badgeCount > 0)
+            PositionedDirectional(
+              top: -spacing.xs,
+              end: -spacing.xs,
+              child: AxiCountBadge(
+                count: badgeCount,
+                diameter: badgeDiameter,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -527,109 +580,20 @@ class _HomeBottomTabItem extends StatelessWidget {
 class _HomeShellBottomBar extends StatelessWidget {
   const _HomeShellBottomBar({
     required this.pendingCalendarTabIndex,
-    required this.calendarTabHost,
+    required this.calendarTabIndex,
     required this.calendarAvailable,
   });
 
   final ValueNotifier<int?> pendingCalendarTabIndex;
-  final CalendarMobileTabHostController calendarTabHost;
+  final ValueNotifier<int> calendarTabIndex;
   final bool calendarAvailable;
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<ChatsCubit, ChatsState, bool>(
-      selector: (state) => state.openCalendar,
-      builder: (context, openCalendar) {
-        return AnimatedBuilder(
-          animation: calendarTabHost,
-          builder: (context, _) {
-            final hostData = calendarTabHost.data;
-            if (openCalendar && hostData != null) {
-              return _HomeShellCalendarBar(
-                tabSwitcher: hostData.tabSwitcher,
-                cancelBucket: hostData.cancelBucket,
-                onHomePressed: () =>
-                    context.read<ChatsCubit>().toggleCalendar(),
-              );
-            }
-            return _HomeShellDefaultBar(
-              calendarAvailable: calendarAvailable,
-              pendingCalendarTabIndex: pendingCalendarTabIndex,
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-class _HomeShellCalendarBar extends StatelessWidget {
-  const _HomeShellCalendarBar({
-    required this.tabSwitcher,
-    required this.cancelBucket,
-    required this.onHomePressed,
-  });
-
-  final Widget tabSwitcher;
-  final Widget cancelBucket;
-  final VoidCallback onHomePressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    return CalendarMobileTabShell(
-      tabBar: _HomeShellCalendarNavRow(
-        tabSwitcher: tabSwitcher,
-        onHomePressed: onHomePressed,
-      ),
-      cancelBucket: cancelBucket,
-      backgroundColor: colors.background,
-      borderColor: colors.border,
-      dividerColor: colors.border,
-      showTopBorder: true,
-      showDivider: false,
-    );
-  }
-}
-
-class _HomeShellCalendarNavRow extends StatelessWidget {
-  const _HomeShellCalendarNavRow({
-    required this.tabSwitcher,
-    required this.onHomePressed,
-  });
-
-  final Widget tabSwitcher;
-  final VoidCallback onHomePressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final sizing = context.sizing;
-    final l10n = context.l10n;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: spacing.s,
-          vertical: spacing.xs,
-        ),
-        child: Row(
-          children: [
-            _BottomNavItem(
-              label: Text(l10n.homeTabChats),
-              icon: Icon(
-                LucideIcons.messagesSquare,
-                size: sizing.menuItemIconSize,
-              ),
-              onPressed: onHomePressed,
-            ),
-            Expanded(child: tabSwitcher),
-            _SettingsBottomNavItem(
-              label: l10n.settingsButtonLabel,
-            ),
-          ],
-        ),
-      ),
+    return _HomeShellDefaultBar(
+      calendarAvailable: calendarAvailable,
+      pendingCalendarTabIndex: pendingCalendarTabIndex,
+      calendarTabIndex: calendarTabIndex,
     );
   }
 }
@@ -638,83 +602,257 @@ class _HomeShellDefaultBar extends StatelessWidget {
   const _HomeShellDefaultBar({
     required this.calendarAvailable,
     required this.pendingCalendarTabIndex,
+    required this.calendarTabIndex,
   });
 
   final bool calendarAvailable;
   final ValueNotifier<int?> pendingCalendarTabIndex;
+  final ValueNotifier<int> calendarTabIndex;
 
   void _openHome(BuildContext context) {
+    HomeShellScope.maybeOf(context)?.homeTabIndex.value = 0;
     const HomeRoute().go(context);
+    if (context.read<ChatsCubit>().state.openCalendar) {
+      context.read<ChatsCubit>().toggleCalendar();
+    }
     context.read<ChatsCubit>().closeAllChats();
   }
 
   void _requestCalendarTab(BuildContext context, int index) {
     pendingCalendarTabIndex.value = index;
+    calendarTabIndex.value = index;
     const HomeRoute().go(context);
+    if (!context.read<ChatsCubit>().state.openCalendar) {
+      context.read<ChatsCubit>().toggleCalendar();
+    }
+  }
+
+  void _openSettings(BuildContext context) {
+    context.push(const ProfileRoute().location, extra: context.read);
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
     final spacing = context.spacing;
     final sizing = context.sizing;
     final colors = context.colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.background,
-        border: Border(top: context.borderSide),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: spacing.s,
-            vertical: spacing.xs,
+    final l10n = context.l10n;
+    final router = GoRouter.of(context);
+    final chatsState = context.watch<ChatsCubit>().state;
+    final chatItems = chatsState.items ?? const <m.Chat>[];
+    final unreadChatsCount = chatItems
+        .where((chat) => !chat.archived && !chat.spam)
+        .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
+    final invitesCount = context.watch<RosterCubit>().inviteCount;
+    final draftsCount = context.watch<DraftCubit>().state.items?.length ?? 0;
+    final spamCount =
+        chatItems.where((chat) => chat.spam && !chat.archived).length;
+    final chatsBadgeCount =
+        unreadChatsCount + invitesCount + draftsCount + spamCount;
+    int scheduledAlertsCount = 0;
+    int unscheduledAlertsCount = 0;
+    if (calendarAvailable) {
+      final tasks = context.watch<CalendarBloc>().state.model.tasks.values;
+      for (final task in tasks) {
+        if (task.isCompleted) {
+          continue;
+        }
+        final hasReminderOffsets = task.effectiveReminders.isEnabled;
+        final hasIcsAlarm = task.icsMeta?.alarms.isNotEmpty ?? false;
+        if (!hasReminderOffsets && !hasIcsAlarm) {
+          continue;
+        }
+        if (task.isScheduled) {
+          scheduledAlertsCount += 1;
+        } else {
+          unscheduledAlertsCount += 1;
+        }
+      }
+    }
+    final profile = context.watch<ProfileCubit>().state;
+    final bool openCalendar = chatsState.openCalendar;
+    final String settingsPath = const ProfileRoute().location;
+    return AnimatedBuilder(
+      animation: router.routerDelegate,
+      builder: (context, _) {
+        final String routePath = router.routeInformationProvider.value.uri.path;
+        final bool settingsActive =
+            routePath == settingsPath || routePath.startsWith('$settingsPath/');
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: colors.background,
+            border: Border(top: context.borderSide),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _BottomNavItem(
-                  label: Text(l10n.homeTabChats),
-                  icon: Icon(
-                    LucideIcons.messagesSquare,
-                    size: sizing.menuItemIconSize,
-                  ),
-                  onPressed: () => _openHome(context),
-                ),
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsetsDirectional.only(
+                start: spacing.xs,
+                end: spacing.xs,
+                top: spacing.s,
+                bottom: spacing.s,
               ),
-              Expanded(
-                child: _BottomNavItem(
-                  label: Text(l10n.calendarScheduleLabel),
-                  icon: Icon(
-                    LucideIcons.calendarClock,
-                    size: sizing.menuItemIconSize,
-                  ),
-                  onPressed: calendarAvailable
-                      ? () => _requestCalendarTab(context, 0)
-                      : null,
-                ),
+              child: ValueListenableBuilder<int>(
+                valueListenable: calendarTabIndex,
+                builder: (context, activeCalendarTab, _) {
+                  final int safeCalendarTab =
+                      activeCalendarTab.clamp(0, 1).toInt();
+                  final int selectedIndex = settingsActive
+                      ? 3
+                      : openCalendar
+                          ? (safeCalendarTab == 0 ? 1 : 2)
+                          : 0;
+                  final bool calendarDisabled = !calendarAvailable;
+                  final Color disabledColor =
+                      colors.mutedForeground.withValues(alpha: 0.45);
+                  final homeColor = selectedIndex == 0
+                      ? colors.foreground
+                      : colors.mutedForeground;
+                  final scheduleColor = calendarDisabled
+                      ? disabledColor
+                      : selectedIndex == 1
+                          ? colors.foreground
+                          : colors.mutedForeground;
+                  final tasksColor = calendarDisabled
+                      ? disabledColor
+                      : selectedIndex == 2
+                          ? colors.foreground
+                          : colors.mutedForeground;
+                  final avatar = AxiAvatar(
+                    jid: profile.jid,
+                    subscription: m.Subscription.both,
+                    avatarPath: profile.avatarPath,
+                    presence: null,
+                    status: null,
+                    active: false,
+                    shape: AxiAvatarShape.squircle,
+                    size: sizing.iconButtonSize,
+                  );
+                  return GNav(
+                    key: ValueKey(selectedIndex),
+                    selectedIndex: selectedIndex,
+                    duration: context.watch<SettingsCubit>().animationDuration,
+                    haptic: true,
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
+                    tabBorderRadius: context.radii.squircle,
+                    curve: Curves.easeInOutCubic,
+                    gap: spacing.xs,
+                    iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                    color: colors.mutedForeground,
+                    activeColor: colors.foreground,
+                    textStyle: context.textTheme.small.strong,
+                    tabBackgroundColor: colors.secondary.withValues(
+                      alpha: context.motion.tapHoverAlpha,
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: spacing.s,
+                      vertical: spacing.s,
+                    ),
+                    onTabChange: (index) {
+                      if (index == selectedIndex) {
+                        return;
+                      }
+                      switch (index) {
+                        case 0:
+                          _openHome(context);
+                        case 1:
+                          if (!calendarAvailable) return;
+                          _requestCalendarTab(context, 0);
+                        case 2:
+                          if (!calendarAvailable) return;
+                          _requestCalendarTab(context, 1);
+                        case 3:
+                          _openSettings(context);
+                      }
+                    },
+                    tabs: [
+                      GButton(
+                        icon: LucideIcons.messagesSquare,
+                        text: l10n.homeTabChats,
+                        leading: _HomeBottomNavBadgeIcon(
+                          iconData: LucideIcons.messagesSquare,
+                          badgeCount: chatsBadgeCount,
+                          color: homeColor,
+                          iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                        ),
+                        iconColor: colors.mutedForeground,
+                        iconActiveColor: colors.foreground,
+                      ),
+                      GButton(
+                        icon: LucideIcons.calendarClock,
+                        text: l10n.calendarScheduleLabel,
+                        leading: _HomeBottomNavBadgeIcon(
+                          iconData: LucideIcons.calendarClock,
+                          badgeCount: scheduledAlertsCount,
+                          color: scheduleColor,
+                          iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                        ),
+                        iconColor: calendarDisabled
+                            ? disabledColor
+                            : colors.mutedForeground,
+                        iconActiveColor: calendarDisabled
+                            ? disabledColor
+                            : colors.foreground,
+                      ),
+                      GButton(
+                        icon: LucideIcons.squareCheck,
+                        text: l10n.calendarFragmentTaskLabel,
+                        leading: _HomeBottomNavBadgeIcon(
+                          iconData: LucideIcons.squareCheck,
+                          badgeCount: unscheduledAlertsCount,
+                          color: tasksColor,
+                          iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                        ),
+                        iconColor: calendarDisabled
+                            ? disabledColor
+                            : colors.mutedForeground,
+                        iconActiveColor: calendarDisabled
+                            ? disabledColor
+                            : colors.foreground,
+                      ),
+                      GButton(
+                        icon: LucideIcons.user,
+                        text: l10n.settingsButtonLabel,
+                        leading: avatar,
+                        iconColor: colors.mutedForeground,
+                        iconActiveColor: colors.foreground,
+                      ),
+                    ],
+                  );
+                },
               ),
-              Expanded(
-                child: _BottomNavItem(
-                  label: const TasksTabLabel(),
-                  icon: Icon(
-                    LucideIcons.squareCheck,
-                    size: sizing.menuItemIconSize,
-                  ),
-                  onPressed: calendarAvailable
-                      ? () => _requestCalendarTab(context, 1)
-                      : null,
-                ),
-              ),
-              Expanded(
-                child: _SettingsBottomNavItem(
-                  label: l10n.settingsButtonLabel,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        );
+      },
+    );
+  }
+}
+
+class _HomeBottomNavBadgeIcon extends StatelessWidget {
+  const _HomeBottomNavBadgeIcon({
+    required this.iconData,
+    required this.badgeCount,
+    required this.color,
+    required this.iconSize,
+  });
+
+  final IconData iconData;
+  final int badgeCount;
+  final Color color;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return AxiBadge(
+      count: badgeCount,
+      offset: Offset(0, -spacing.s),
+      child: Icon(
+        iconData,
+        color: color,
+        size: iconSize,
       ),
     );
   }
@@ -815,69 +953,6 @@ class _HomeShellNavigationRail extends StatelessWidget {
       onCalendarSelected: () => _openCalendar(context),
       onCollapsedChanged: onCollapsedChanged,
       badgeCounts: badgeCounts,
-    );
-  }
-}
-
-class _BottomNavItem extends StatelessWidget {
-  const _BottomNavItem({
-    required this.label,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final Widget label;
-  final Widget icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final textStyle = context.textTheme.small;
-    return AxiButton.ghost(
-      widthBehavior: AxiButtonWidth.expand,
-      onPressed: onPressed,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          icon,
-          SizedBox(height: spacing.xxs),
-          DefaultTextStyle.merge(
-            style: textStyle,
-            textAlign: TextAlign.center,
-            child: label,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsBottomNavItem extends StatelessWidget {
-  const _SettingsBottomNavItem({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<ProfileCubit, ProfileState>(
-      builder: (context, state) {
-        final sizing = context.sizing;
-        return _BottomNavItem(
-          label: Text(label),
-          icon: AxiAvatar(
-            jid: state.jid,
-            subscription: m.Subscription.both,
-            avatarPath: state.avatarPath,
-            presence: null,
-            status: null,
-            active: false,
-            size: sizing.iconButtonIconSize,
-          ),
-          onPressed: () =>
-              context.go(const ProfileRoute().location, extra: context.read),
-        );
-      },
     );
   }
 }

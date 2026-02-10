@@ -711,9 +711,6 @@ class _ChatListTileState extends State<ChatListTile> {
   late final FocusNode _focusNode;
   String? _cachedTimestampLabel;
   double _cachedTimestampWidth = 0;
-  int? _cachedUnreadCount;
-  double _cachedUnreadWidth = 0;
-  double _cachedUnreadHeight = 0;
   double _textScaleFactor = 1;
 
   @override
@@ -735,11 +732,6 @@ class _ChatListTileState extends State<ChatListTile> {
       setState(() {
         _showActions = false;
       });
-    }
-    if (oldWidget.item.unreadCount != widget.item.unreadCount) {
-      _cachedUnreadCount = null;
-      _cachedUnreadWidth = 0;
-      _cachedUnreadHeight = 0;
     }
     if (oldWidget.item.lastMessage != widget.item.lastMessage) {
       _cachedTimestampLabel = null;
@@ -777,24 +769,19 @@ class _ChatListTileState extends State<ChatListTile> {
       _textScaleFactor = scaleFactor;
       _cachedTimestampLabel = null;
       _cachedTimestampWidth = 0;
-      _cachedUnreadCount = null;
-      _cachedUnreadWidth = 0;
-      _cachedUnreadHeight = 0;
     }
 
     final displayName = item.displayName;
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
-    final double unreadThickness =
-        showUnreadBadge ? _resolveUnreadWidth(context, unreadCount) : 0.0;
-    final double unreadHeight =
-        showUnreadBadge ? _resolveUnreadHeight(context, unreadCount) : 0.0;
+    final double unreadDiameter =
+        showUnreadBadge ? _resolveUnreadDiameter(context) : 0.0;
     final unreadCutoutVerticalClearance = spacing.xs;
     final unreadMinDepth = spacing.m;
     final double unreadDepth = showUnreadBadge
         ? math.max(
             unreadMinDepth,
-            (unreadHeight / 2) + unreadCutoutVerticalClearance,
+            (unreadDiameter / 2) + unreadCutoutVerticalClearance,
           )
         : 0.0;
     final subtitleText = _subtitlePreview(item.lastMessage);
@@ -877,10 +864,14 @@ class _ChatListTileState extends State<ChatListTile> {
         CutoutSpec(
           edge: CutoutEdge.top,
           alignment: const Alignment(0.84, -1),
-          depth: unreadDepth,
-          thickness: unreadThickness,
-          cornerRadius: context.radii.container,
-          child: _UnreadBadge(count: unreadCount, highlight: showUnreadBadge),
+          depth: unreadDepth + spacing.xxs,
+          thickness: unreadDiameter + (spacing.xxs * 2),
+          cornerRadius: context.radii.squircle,
+          child: _UnreadBadge(
+            count: unreadCount,
+            highlight: showUnreadBadge,
+            diameter: unreadDiameter,
+          ),
         ),
       CutoutSpec(
         edge: CutoutEdge.right,
@@ -1041,64 +1032,14 @@ class _ChatListTileState extends State<ChatListTile> {
     return _cachedTimestampWidth;
   }
 
-  double _resolveUnreadWidth(BuildContext context, int count) {
-    if (_cachedUnreadCount == count && _cachedUnreadWidth > 0) {
-      return _cachedUnreadWidth;
-    }
-    _cacheUnreadMetrics(context, count);
-    return _cachedUnreadWidth;
-  }
-
-  double _resolveUnreadHeight(BuildContext context, int count) {
-    if (_cachedUnreadCount == count && _cachedUnreadHeight > 0) {
-      return _cachedUnreadHeight;
-    }
-    _cacheUnreadMetrics(context, count);
-    return _cachedUnreadHeight;
-  }
-
-  void _cacheUnreadMetrics(BuildContext context, int count) {
-    final spacing = context.spacing;
-    final borderWidth = context.borderSide.width;
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: '$count',
-        style: context.textTheme.small.copyWith(
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      textDirection: Directionality.of(context),
-      textScaler: MediaQuery.of(context).textScaler,
-    )..layout();
-    final textWidth = textPainter.width;
-    final textHeight = textPainter.height;
+  double _resolveUnreadDiameter(BuildContext context) {
     final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) {
-      if (!value.isFinite) {
-        return value;
-      }
-      final scaledValue = textScaler.scale(value);
-      if (!scaledValue.isFinite || scaledValue <= 0) {
-        return value;
-      }
-      return scaledValue;
+    final baseDiameter = context.sizing.iconButtonIconSize;
+    final scaledDiameter = textScaler.scale(baseDiameter);
+    if (!scaledDiameter.isFinite || scaledDiameter <= 0) {
+      return baseDiameter;
     }
-
-    final horizontalPadding = scaled(spacing.s);
-    final verticalPadding = scaled(spacing.xs);
-    final minWidth = scaled(spacing.l);
-    final cutoutClearance = scaled(spacing.xs);
-    final scaledBorderWidth = scaled(borderWidth);
-    _cachedUnreadCount = count;
-    _cachedUnreadWidth = math.max(
-      minWidth,
-      textWidth +
-          (horizontalPadding * 2) +
-          (scaledBorderWidth * 2) +
-          cutoutClearance,
-    );
-    _cachedUnreadHeight =
-        textHeight + (verticalPadding * 2) + (scaledBorderWidth * 2);
+    return scaledDiameter;
   }
 
   String? _subtitlePreview(String? rawMessage) {
@@ -1558,63 +1499,34 @@ Future<bool> _confirmChatExport(BuildContext context) async {
 }
 
 class _UnreadBadge extends StatelessWidget {
-  const _UnreadBadge({required this.count, required this.highlight});
+  const _UnreadBadge({
+    required this.count,
+    required this.highlight,
+    required this.diameter,
+  });
 
   final int count;
   final bool highlight;
+  final double diameter;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final motion = context.motion;
-    final spacing = context.spacing;
-    final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) {
-      if (!value.isFinite) {
-        return value;
-      }
-      final scaledValue = textScaler.scale(value);
-      if (!scaledValue.isFinite || scaledValue <= 0) {
-        return value;
-      }
-      return scaledValue;
-    }
 
     final Color background = highlight
-        ? colors.primary
-        : colors.secondary.withValues(alpha: motion.tapSplashAlpha);
+        ? colors.destructive
+        : colors.destructive.withValues(alpha: context.motion.tapSplashAlpha);
     final Color borderColor = highlight ? colors.background : colors.border;
-    final Color textColor =
-        highlight ? colors.primaryForeground : colors.mutedForeground;
-    final borderWidth = scaled(context.borderSide.width);
-    final cornerRadius = scaled(context.radii.container);
-    final horizontalPadding = scaled(spacing.s);
-    final verticalPadding = scaled(spacing.xs);
+    final Color textColor = colors.destructiveForeground;
     return Semantics(
       container: true,
       label: context.l10n.chatsUnreadLabel(count),
-      child: DecoratedBox(
-        decoration: ShapeDecoration(
-          color: background,
-          shape: SquircleBorder(
-            cornerRadius: cornerRadius,
-            side: BorderSide(color: borderColor, width: borderWidth),
-          ),
-        ),
-        child: Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: horizontalPadding,
-            vertical: verticalPadding,
-          ),
-          child: Text(
-            '$count',
-            maxLines: 1,
-            style: context.textTheme.small.copyWith(
-              color: textColor,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
+      child: AxiCountBadge(
+        count: count,
+        diameter: diameter,
+        backgroundColor: background,
+        borderColor: borderColor,
+        textColor: textColor,
       ),
     );
   }

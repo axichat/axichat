@@ -17,15 +17,14 @@ class KeyboardPopScope extends StatelessWidget {
     return ListenableBuilder(
       listenable: FocusManager.instance,
       builder: (context, _) {
-        final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+        final hasTextInputFocus = FocusManager.instance.isTextInputFocused;
         return PopScope(
-          canPop:
-              keyboardInset == 0 || !FocusManager.instance.isTextInputFocused,
+          canPop: !hasTextInputFocus,
           onPopInvokedWithResult: (didPop, __) {
             if (didPop) {
               return;
             }
-            if (keyboardInset > 0 && FocusManager.instance.isTextInputFocused) {
+            if (hasTextInputFocus) {
               FocusManager.instance.primaryFocus?.unfocus();
             }
           },

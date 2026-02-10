@@ -71,6 +71,7 @@ class CalendarBloc extends BaseCalendarBloc {
   StreamSubscription<CalendarSyncDispatch>? _calendarSyncSubscription;
   StreamSubscription<CalendarSyncWarning>? _calendarSyncWarningSubscription;
   StreamSubscription<XmppStreamReady>? _streamReadySubscription;
+  Future<void> _pendingCalendarDispatch = Future<void>.value();
 
   void updateEmailService(EmailService? emailService) {
     _emailService = emailService;
@@ -135,14 +136,16 @@ class CalendarBloc extends BaseCalendarBloc {
     }
     _calendarSyncSubscription ??=
         _xmppService.calendarSyncDispatchStream.listen(
-      (dispatch) async {
-        try {
-          final applied =
-              await _syncManager.onCalendarMessage(dispatch.inbound);
-          dispatch.complete(applied);
-        } catch (error, stackTrace) {
-          dispatch.completeError(error, stackTrace);
-        }
+      (dispatch) {
+        _pendingCalendarDispatch = _pendingCalendarDispatch.then((_) async {
+          try {
+            final applied =
+                await _syncManager.onCalendarMessage(dispatch.inbound);
+            dispatch.complete(applied);
+          } catch (error, stackTrace) {
+            dispatch.completeError(error, stackTrace);
+          }
+        });
       },
     );
     _calendarSyncWarningSubscription ??=
@@ -379,10 +382,11 @@ class CalendarBloc extends BaseCalendarBloc {
 
   @override
   Future<void> close() async {
+    _onDispose?.call();
     await _calendarSyncSubscription?.cancel();
     await _calendarSyncWarningSubscription?.cancel();
     await _streamReadySubscription?.cancel();
-    _onDispose?.call();
+    await _pendingCalendarDispatch;
     return super.close();
   }
 

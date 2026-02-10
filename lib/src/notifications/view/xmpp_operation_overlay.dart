@@ -8,7 +8,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:flutter/material.dart';
@@ -22,9 +21,18 @@ class XmppOperationOverlay extends StatefulWidget {
 }
 
 class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
+  static const _completionExitDelay = Duration(seconds: 1);
+  static const _toastSlideOffset = Offset(0.22, 0.0);
+
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   final List<_ToastEntry> _entries = <_ToastEntry>[];
+  final List<XmppOperation> _pendingInsertions = <XmppOperation>[];
   final Map<String, Timer> _exitTimers = <String, Timer>{};
-  final Map<String, Timer> _removalTimers = <String, Timer>{};
+  Timer? _insertCooldownTimer;
+  bool _isInsertAnimating = false;
+  final List<String> _pendingRemovals = <String>[];
+  Timer? _removalCooldownTimer;
+  bool _isRemoving = false;
 
   @override
   void initState() {
@@ -43,10 +51,8 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
       timer.cancel();
     }
     _exitTimers.clear();
-    for (final timer in _removalTimers.values) {
-      timer.cancel();
-    }
-    _removalTimers.clear();
+    _insertCooldownTimer?.cancel();
+    _removalCooldownTimer?.cancel();
     super.dispose();
   }
 
@@ -60,8 +66,6 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     };
     var shouldRebuild = false;
     final List<String> removalQueue = <String>[];
-    final animationDuration = _resolveAnimationDuration();
-    final exitDelay = _resolveExitDelay(animationDuration);
 
     for (final entry in _entries) {
       final XmppOperation? updated = incoming.remove(entry.operation.id);
@@ -78,37 +82,22 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
         entry.operation = updated;
         shouldRebuild = true;
       }
-      var visibilityRestored = false;
-      final shouldRestoreVisibility = !entry.isVisible &&
-          (updated.status == XmppOperationStatus.inProgress || statusChanged);
-      if (shouldRestoreVisibility) {
-        entry.isVisible = true;
-        _cancelRemovalTimer(updated.id);
-        visibilityRestored = true;
-        shouldRebuild = true;
-      }
       if (updated.status == XmppOperationStatus.inProgress) {
         _cancelExitTimer(updated.id);
-        _cancelRemovalTimer(updated.id);
-      } else if (!entry.isVisible) {
-        _cancelExitTimer(updated.id);
-      } else if (statusChanged || visibilityRestored) {
-        _scheduleExit(updated.id, exitDelay, animationDuration);
+        _cancelPendingRemoval(updated.id);
       } else {
-        _ensureExitScheduled(updated.id, exitDelay, animationDuration);
+        _ensureExitScheduled(updated.id);
       }
     }
 
     for (final id in removalQueue) {
-      if (_startExitNow(id, animationDuration)) {
-        shouldRebuild = true;
-      }
+      _queueRemoval(id);
     }
 
+    _syncPendingInsertions(coalesced);
     for (final operation in coalesced) {
       if (incoming.containsKey(operation.id)) {
-        _insertEntry(operation);
-        shouldRebuild = true;
+        _queueInsertion(operation);
       }
     }
 
@@ -124,32 +113,93 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     if (_entries.any((entry) => entry.operation.id == operation.id)) {
       return;
     }
-    _entries.insert(0, _ToastEntry(operation: operation));
+    final index = _entries.length;
+    _entries.add(_ToastEntry(operation: operation));
+    final listState = _listKey.currentState;
+    if (listState == null) {
+      setState(() {});
+      return;
+    }
+    listState.insertItem(index, duration: _resolveAnimationDuration());
   }
 
-  void _scheduleExit(String id, Duration delay, Duration animationDuration) {
-    _cancelExitTimer(id);
-    _exitTimers[id] = Timer(delay, () {
+  void _syncPendingInsertions(List<XmppOperation> operations) {
+    final Map<String, XmppOperation> incoming = <String, XmppOperation>{
+      for (final operation in operations) operation.id: operation,
+    };
+    _pendingInsertions.removeWhere((pending) {
+      final XmppOperation? updated = incoming[pending.id];
+      return updated == null ||
+          updated.status != XmppOperationStatus.inProgress;
+    });
+    for (var index = 0; index < _pendingInsertions.length; index += 1) {
+      final pending = _pendingInsertions[index];
+      final XmppOperation? updated = incoming[pending.id];
+      if (updated != null && updated != pending) {
+        _pendingInsertions[index] = updated;
+      }
+    }
+  }
+
+  void _queueInsertion(XmppOperation operation) {
+    if (operation.status != XmppOperationStatus.inProgress) {
+      return;
+    }
+    if (_entries.any((entry) => entry.operation.id == operation.id)) {
+      return;
+    }
+    final int pendingIndex =
+        _pendingInsertions.indexWhere((entry) => entry.id == operation.id);
+    if (pendingIndex != -1) {
+      _pendingInsertions[pendingIndex] = operation;
+      return;
+    }
+    _pendingInsertions.add(operation);
+    _processInsertQueue();
+  }
+
+  void _processInsertQueue() {
+    if (!mounted || _isInsertAnimating || _pendingInsertions.isEmpty) {
+      return;
+    }
+    final XmppOperation operation = _pendingInsertions.removeAt(0);
+    _isInsertAnimating = true;
+    _insertEntry(operation);
+    _startInsertCooldown();
+  }
+
+  void _startInsertCooldown() {
+    _insertCooldownTimer?.cancel();
+    final duration = _resolveAnimationDuration();
+    if (duration == Duration.zero) {
+      _isInsertAnimating = false;
+      _processInsertQueue();
+      return;
+    }
+    _insertCooldownTimer = Timer(duration, () {
       if (!mounted) {
         return;
       }
-      final changed = _setEntryVisibility(id, false);
-      if (changed) {
-        setState(() {});
-      }
-      _scheduleRemoval(id, animationDuration);
+      _isInsertAnimating = false;
+      _processInsertQueue();
     });
   }
 
-  void _ensureExitScheduled(
-    String id,
-    Duration delay,
-    Duration animationDuration,
-  ) {
+  void _scheduleExit(String id) {
+    _cancelExitTimer(id);
+    _exitTimers[id] = Timer(_completionExitDelay, () {
+      if (!mounted) {
+        return;
+      }
+      _queueRemoval(id);
+    });
+  }
+
+  void _ensureExitScheduled(String id) {
     if (_exitTimers.containsKey(id)) {
       return;
     }
-    _scheduleExit(id, delay, animationDuration);
+    _scheduleExit(id);
   }
 
   void _cancelExitTimer(String id) {
@@ -157,54 +207,73 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     timer?.cancel();
   }
 
-  void _cancelRemovalTimer(String id) {
-    final Timer? timer = _removalTimers.remove(id);
-    timer?.cancel();
+  void _cancelPendingRemoval(String id) {
+    _pendingRemovals.removeWhere((pendingId) => pendingId == id);
   }
 
-  bool _startExitNow(String id, Duration animationDuration) {
-    _cancelExitTimer(id);
-    _cancelRemovalTimer(id);
-    if (!_hasEntry(id)) {
-      return false;
+  void _queueRemoval(String id) {
+    if (_pendingRemovals.contains(id)) {
+      return;
     }
-    final changed = _setEntryVisibility(id, false);
-    _scheduleRemoval(id, animationDuration);
-    return changed;
+    if (_entries.indexWhere((entry) => entry.operation.id == id) == -1) {
+      return;
+    }
+    _pendingRemovals.add(id);
+    _processRemovalQueue();
   }
 
-  void _scheduleRemoval(String id, Duration animationDuration) {
-    _cancelRemovalTimer(id);
-    _removalTimers[id] = Timer(animationDuration, () {
+  void _processRemovalQueue() {
+    if (!mounted || _isRemoving || _pendingRemovals.isEmpty) {
+      return;
+    }
+    final id = _pendingRemovals.removeAt(0);
+    if (_entries.indexWhere((entry) => entry.operation.id == id) == -1) {
+      _processRemovalQueue();
+      return;
+    }
+    _isRemoving = true;
+    _removeEntry(id, animated: true);
+    _startRemovalCooldown();
+  }
+
+  void _startRemovalCooldown() {
+    _removalCooldownTimer?.cancel();
+    final duration = _resolveAnimationDuration();
+    if (duration == Duration.zero) {
+      _isRemoving = false;
+      _processRemovalQueue();
+      return;
+    }
+    _removalCooldownTimer = Timer(duration, () {
       if (!mounted) {
         return;
       }
-      _removeEntry(id);
-      setState(() {});
+      _isRemoving = false;
+      _processRemovalQueue();
     });
   }
 
-  bool _hasEntry(String id) {
-    return _entries.any((entry) => entry.operation.id == id);
-  }
-
-  bool _setEntryVisibility(String id, bool isVisible) {
-    for (final entry in _entries) {
-      if (entry.operation.id == id) {
-        if (entry.isVisible == isVisible) {
-          return false;
-        }
-        entry.isVisible = isVisible;
-        return true;
-      }
-    }
-    return false;
-  }
-
-  void _removeEntry(String id) {
+  void _removeEntry(String id, {required bool animated}) {
     _cancelExitTimer(id);
-    _cancelRemovalTimer(id);
-    _entries.removeWhere((entry) => entry.operation.id == id);
+    final index = _entries.indexWhere((entry) => entry.operation.id == id);
+    if (index == -1) {
+      return;
+    }
+    final removedEntry = _entries.removeAt(index);
+    final listState = _listKey.currentState;
+    if (!animated || listState == null) {
+      setState(() {});
+      return;
+    }
+    listState.removeItem(
+      index,
+      (context, animation) => _AnimatedToastListItem(
+        operation: removedEntry.operation,
+        animation: animation,
+        removing: true,
+      ),
+      duration: _resolveAnimationDuration(),
+    );
   }
 
   Duration _resolveAnimationDuration() {
@@ -212,19 +281,8 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
         context.motion.statusBannerSuccessDuration;
   }
 
-  Duration _resolveExitDelay(Duration animationDuration) {
-    final totalDuration = context.motion.statusBannerSuccessDuration;
-    final delay = totalDuration - animationDuration;
-    return delay.isNegative ? Duration.zero : delay;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final animationDuration = maybeSettingsCubit(context) == null
-        ? context.motion.statusBannerSuccessDuration
-        : context.select<SettingsCubit, Duration>(
-            (cubit) => cubit.animationDuration,
-          );
     return BlocListener<XmppActivityCubit, XmppActivityState>(
       listener: (context, state) => _syncOperations(state.operations),
       child: IgnorePointer(
@@ -243,29 +301,19 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
                 maxWidth: context.sizing.menuMaxWidth,
                 maxHeight: context.sizing.menuMaxHeight,
               ),
-              child: ListView.builder(
-                reverse: true,
+              child: AnimatedList(
+                key: _listKey,
+                initialItemCount: _entries.length,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 padding: EdgeInsets.symmetric(vertical: context.spacing.xs),
                 clipBehavior: Clip.none,
-                itemCount: _entries.length,
-                itemBuilder: (context, index) {
+                itemBuilder: (context, index, animation) {
                   final _ToastEntry entry = _entries[index];
-                  return Padding(
-                    padding: EdgeInsets.only(bottom: context.spacing.s),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _AnimatedToast(
-                        key: ValueKey(entry.operation.id),
-                        isVisible: entry.isVisible,
-                        duration: animationDuration,
-                        child: InBoundsFadeScale(
-                          child:
-                              _XmppOperationToast(operation: entry.operation),
-                        ),
-                      ),
-                    ),
+                  return _AnimatedToastListItem(
+                    key: ValueKey<String>(entry.operation.id),
+                    operation: entry.operation,
+                    animation: animation,
                   );
                 },
               ),
@@ -386,40 +434,155 @@ class _OperationStatusIcon extends StatelessWidget {
 }
 
 class _ToastEntry {
-  _ToastEntry({required this.operation}) : isVisible = true;
+  _ToastEntry({required this.operation});
 
   XmppOperation operation;
-  bool isVisible;
 }
 
-class _AnimatedToast extends StatelessWidget {
-  const _AnimatedToast({
-    required this.isVisible,
-    required this.duration,
-    required this.child,
+class _AnimatedToastListItem extends StatelessWidget {
+  const _AnimatedToastListItem({
+    required this.operation,
+    required this.animation,
+    this.removing = false,
     super.key,
   });
 
-  final bool isVisible;
-  final Duration duration;
-  final Widget child;
+  static const _entryCurve = Curves.easeOutCubic;
+  static const _exitCurve = Curves.easeInCubic;
+  static const _entryOpacity = 0.0;
+  static const _entrySize = 0.0;
+  static const _exitMotionPhaseEnd = 0.72;
+
+  final XmppOperation operation;
+  final Animation<double> animation;
+  final bool removing;
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedSize(
-      duration: duration,
-      curve: Curves.easeInOutCubic,
-      alignment: Alignment.topLeft,
-      child: AnimatedSlide(
-        offset:
-            isVisible ? Offset.zero : context.motion.statusBannerSlideOffset,
-        duration: duration,
-        curve: Curves.easeInOutCubic,
-        child: AnimatedOpacity(
-          opacity: isVisible ? 1 : 0,
-          duration: duration,
-          curve: Curves.easeInOutCubic,
-          child: child,
+    if (removing) {
+      return _RemovingToastListItem(
+        operation: operation,
+        animation: animation,
+      );
+    }
+    return _EnteringToastListItem(
+      operation: operation,
+      animation: animation,
+    );
+  }
+}
+
+class _EnteringToastListItem extends StatelessWidget {
+  const _EnteringToastListItem({
+    required this.operation,
+    required this.animation,
+  });
+
+  final XmppOperation operation;
+  final Animation<double> animation;
+
+  @override
+  Widget build(BuildContext context) {
+    final CurvedAnimation curve = CurvedAnimation(
+      parent: animation,
+      curve: _AnimatedToastListItem._entryCurve,
+    );
+    final Animation<double> fadeAnimation = Tween<double>(
+      begin: _AnimatedToastListItem._entryOpacity,
+      end: 1.0,
+    ).animate(curve);
+    final Animation<Offset> slideAnimation = Tween<Offset>(
+      begin: _XmppOperationOverlayState._toastSlideOffset,
+      end: Offset.zero,
+    ).animate(curve);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.spacing.s),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: AnimatedBuilder(
+          animation: curve,
+          child: _XmppOperationToast(operation: operation),
+          builder: (context, child) {
+            return Align(
+              alignment: Alignment.bottomLeft,
+              heightFactor: _AnimatedToastListItem._entrySize +
+                  (1.0 - _AnimatedToastListItem._entrySize) * curve.value,
+              child: FadeTransition(
+                opacity: fadeAnimation,
+                child: SlideTransition(
+                  position: slideAnimation,
+                  child: child,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _RemovingToastListItem extends StatelessWidget {
+  const _RemovingToastListItem({
+    required this.operation,
+    required this.animation,
+  });
+
+  final XmppOperation operation;
+  final Animation<double> animation;
+
+  @override
+  Widget build(BuildContext context) {
+    final Animation<double> removalProgress = CurvedAnimation(
+      parent: ReverseAnimation(animation),
+      curve: Curves.linear,
+    );
+    final Animation<double> motionCurve = CurvedAnimation(
+      parent: removalProgress,
+      curve: const Interval(
+        0.0,
+        _AnimatedToastListItem._exitMotionPhaseEnd,
+        curve: _AnimatedToastListItem._exitCurve,
+      ),
+    );
+    final Animation<double> collapseCurve = CurvedAnimation(
+      parent: removalProgress,
+      curve: const Interval(
+        _AnimatedToastListItem._exitMotionPhaseEnd,
+        1.0,
+        curve: _AnimatedToastListItem._exitCurve,
+      ),
+    );
+    final Animation<double> fadeAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(motionCurve);
+    final Animation<Offset> slideAnimation = Tween<Offset>(
+      begin: Offset.zero,
+      end: _XmppOperationOverlayState._toastSlideOffset,
+    ).animate(motionCurve);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: context.spacing.s),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: AnimatedBuilder(
+          animation: removalProgress,
+          child: _XmppOperationToast(operation: operation),
+          builder: (context, child) {
+            return Align(
+              alignment: Alignment.bottomLeft,
+              heightFactor: 1.0 - collapseCurve.value,
+              child: FadeTransition(
+                opacity: fadeAnimation,
+                child: SlideTransition(
+                  position: slideAnimation,
+                  child: child,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

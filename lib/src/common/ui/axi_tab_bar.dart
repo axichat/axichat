@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/axi_badge.dart';
 import 'package:flutter/material.dart';
 
 /// Shared tab bar used across Axichat surfaces so styling stays consistent.
@@ -43,7 +44,6 @@ class AxiTabBar extends StatelessWidget {
   Widget build(BuildContext context) {
     assert(tabs.isNotEmpty, 'Tabs cannot be empty');
     final scheme = context.colorScheme;
-    final radii = context.radii;
     final WidgetStateProperty<Color?> overlayColor =
         WidgetStateColor.resolveWith((states) {
       if (states.contains(WidgetState.pressed)) {
@@ -73,40 +73,11 @@ class AxiTabBar extends StatelessWidget {
           return List<Widget>.generate(tabs.length, (index) {
             final count = resolvedBadges[index];
             if (count <= 0) return tabs[index];
-            final child = tabs[index];
             final offset = badgeOffset ?? Offset(0, -context.spacing.m);
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                child,
-                Positioned(
-                  top: offset.dy,
-                  right: offset.dx,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: scheme.primary,
-                      borderRadius: BorderRadius.circular(radii.pill),
-                      border: Border.all(
-                        color: backgroundColor ?? scheme.background,
-                        width: context.borderSide.width,
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      child: Text(
-                        count > 99 ? '99+' : '$count',
-                        style: context.textTheme.small.copyWith(
-                          color: scheme.primaryForeground,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            return AxiBadge(
+              count: count,
+              offset: offset,
+              child: tabs[index],
             );
           });
         }
