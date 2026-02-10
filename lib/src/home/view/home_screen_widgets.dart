@@ -205,15 +205,17 @@ class _NexusScaffold extends StatelessWidget {
       selectedChats: selectedChats,
       showToast: showToast,
     );
-    final bottomArea = _NexusBottomArea(
+    final topTabs = _NexusTopTabs(
       navPlacement: navPlacement,
       tabs: tabs,
       selectedChats: selectedChats,
       badgeCounts: badgeCounts,
     );
+    final bottomArea = _NexusBottomArea(selectedChats: selectedChats);
     final column = Column(
       children: [
         header,
+        topTabs,
         Expanded(child: tabViews),
         bottomArea,
       ],
@@ -399,8 +401,8 @@ class _NexusTabViews extends StatelessWidget {
   }
 }
 
-class _NexusBottomArea extends StatelessWidget {
-  const _NexusBottomArea({
+class _NexusTopTabs extends StatelessWidget {
+  const _NexusTopTabs({
     required this.navPlacement,
     required this.tabs,
     required this.selectedChats,
@@ -414,32 +416,46 @@ class _NexusBottomArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (selectedChats.isNotEmpty) {
-      return ChatSelectionActionBar(selectedChats: selectedChats);
-    }
-    if (navPlacement == NavPlacement.bottom) {
+    if (navPlacement == NavPlacement.bottom && selectedChats.isEmpty) {
       final controller = DefaultTabController.maybeOf(context);
       if (controller == null) {
         return const SizedBox.shrink();
       }
-      return AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) {
-          return _HomeBottomTabBar(
-            tabs: tabs,
-            badgeCounts: badgeCounts,
-            selectedIndex: controller.index,
-            onTabSelected: (index) {
-              if (index == controller.index || controller.indexIsChanging) {
-                return;
-              }
-              controller.animateTo(index);
-            },
-          );
-        },
+      return Padding(
+        padding: EdgeInsets.only(top: context.spacing.s),
+        child: AnimatedBuilder(
+          animation: controller,
+          builder: (context, _) {
+            return _HomeBottomTabBar(
+              tabs: tabs,
+              badgeCounts: badgeCounts,
+              selectedIndex: controller.index,
+              onTabSelected: (index) {
+                if (index == controller.index || controller.indexIsChanging) {
+                  return;
+                }
+                controller.animateTo(index);
+              },
+            );
+          },
+        ),
       );
     }
     return const SizedBox.shrink();
+  }
+}
+
+class _NexusBottomArea extends StatelessWidget {
+  const _NexusBottomArea({required this.selectedChats});
+
+  final List<m.Chat> selectedChats;
+
+  @override
+  Widget build(BuildContext context) {
+    if (selectedChats.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return ChatSelectionActionBar(selectedChats: selectedChats);
   }
 }
 
@@ -469,10 +485,10 @@ class _HomeBottomTabBar extends StatelessWidget {
         selectedIndex.clamp(0, tabs.length - 1).toInt();
     return Padding(
       padding: EdgeInsetsDirectional.fromSTEB(
-        spacing.xs,
+        spacing.m,
         0,
-        spacing.xs,
-        spacing.s,
+        spacing.m,
+        0,
       ),
       child: ShadTabs<int>(
         value: safeSelectedIndex,
@@ -725,8 +741,7 @@ class _HomeShellDefaultBar extends StatelessWidget {
                     presence: null,
                     status: null,
                     active: false,
-                    shape: AxiAvatarShape.squircle,
-                    size: sizing.iconButtonSize,
+                    size: sizing.iconButtonIconSize + spacing.xxs,
                   );
                   return GNav(
                     key: ValueKey(selectedIndex),
@@ -846,14 +861,25 @@ class _HomeBottomNavBadgeIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    return AxiBadge(
-      count: badgeCount,
-      offset: Offset(0, -spacing.s),
-      child: Icon(
-        iconData,
-        color: color,
-        size: iconSize,
-      ),
+    final badgeDiameter = context.sizing.iconButtonIconSize;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(
+          iconData,
+          color: color,
+          size: iconSize,
+        ),
+        if (badgeCount > 0)
+          PositionedDirectional(
+            top: -spacing.s,
+            end: -spacing.s,
+            child: AxiCountBadge(
+              count: badgeCount,
+              diameter: badgeDiameter,
+            ),
+          ),
+      ],
     );
   }
 }

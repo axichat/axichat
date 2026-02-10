@@ -5,13 +5,10 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
-import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
-import 'package:axichat/src/chats/view/calendar_tile.dart';
 import 'package:axichat/src/chats/view/widgets/chat_export_action_button.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
@@ -202,37 +199,14 @@ class _ChatsListBody extends StatelessWidget {
               ),
             );
           } else {
-            final includeCalendarShortcut =
-                showCalendarShortcut && calendarAvailable && !isDesktopPlatform;
             final visibleItems = state.visibleItems;
             Widget body;
             if (visibleItems.isEmpty) {
-              body = Column(
-                children: [
-                  if (includeCalendarShortcut)
-                    ListItemPadding(
-                      child: BlocBuilder<CalendarBloc, CalendarState>(
-                        builder: (context, state) {
-                          final currentTask = state.currentTaskAt(
-                            DateTime.now(),
-                          );
-                          return CalendarTile(
-                            onTap: () =>
-                                context.read<ChatsCubit>().toggleCalendar(),
-                            currentTask: currentTask,
-                            nextTask: state.nextTask,
-                            dueReminderCount: state.dueReminders?.length ?? 0,
-                          );
-                        },
-                      ),
-                    ),
-                  Center(
-                    child: Text(
-                      l10n.chatsEmptyList,
-                      style: context.textTheme.muted,
-                    ),
-                  ),
-                ],
+              body = Center(
+                child: Text(
+                  l10n.chatsEmptyList,
+                  style: context.textTheme.muted,
+                ),
               );
             } else {
               final scrollPhysics = AlwaysScrollableScrollPhysics(
@@ -246,7 +220,6 @@ class _ChatsListBody extends StatelessWidget {
                   now: kEnableDemoChats ? demoNow : DateTime.now,
                   builder: (context, nowListenable) => AnimatedChatsListView(
                     items: visibleItems,
-                    includeCalendarShortcut: includeCalendarShortcut,
                     animationDuration:
                         context.watch<SettingsCubit>().animationDuration,
                     scrollPhysics: scrollPhysics,
@@ -254,26 +227,6 @@ class _ChatsListBody extends StatelessWidget {
                     openJid: state.openJid,
                     timestampNowListenable: nowListenable,
                     selfIdentity: selfIdentity,
-                    calendarShortcut: includeCalendarShortcut
-                        ? ListItemPadding(
-                            child: BlocBuilder<CalendarBloc, CalendarState>(
-                              builder: (context, state) {
-                                final currentTask = state.currentTaskAt(
-                                  DateTime.now(),
-                                );
-                                return CalendarTile(
-                                  onTap: () => context
-                                      .read<ChatsCubit>()
-                                      .toggleCalendar(),
-                                  currentTask: currentTask,
-                                  nextTask: state.nextTask,
-                                  dueReminderCount:
-                                      state.dueReminders?.length ?? 0,
-                                );
-                              },
-                            ),
-                          )
-                        : null,
                   ),
                 ),
               );
@@ -535,8 +488,6 @@ class AnimatedChatsListView extends StatefulWidget {
     required this.openJid,
     required this.timestampNowListenable,
     required this.selfIdentity,
-    this.includeCalendarShortcut = false,
-    this.calendarShortcut,
   });
 
   final List<Chat> items;
@@ -546,8 +497,6 @@ class AnimatedChatsListView extends StatefulWidget {
   final String? openJid;
   final ValueListenable<DateTime> timestampNowListenable;
   final SelfIdentitySnapshot selfIdentity;
-  final bool includeCalendarShortcut;
-  final Widget? calendarShortcut;
 
   @override
   State<AnimatedChatsListView> createState() => _AnimatedChatsListViewState();
@@ -680,12 +629,6 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
         },
       ),
     ];
-    if (widget.includeCalendarShortcut && widget.calendarShortcut != null) {
-      slivers.insert(
-        0,
-        SliverToBoxAdapter(child: widget.calendarShortcut),
-      );
-    }
     return RawScrollbar(
       interactive: true,
       controller: _scrollController,

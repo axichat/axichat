@@ -214,9 +214,19 @@ class _AxiAvatarState extends State<AxiAvatar> {
 
   @override
   Widget build(BuildContext context) {
+    final radii = context.radii;
+    final sizing = context.sizing;
+    final sizeSpan = sizing.iconButtonSize - sizing.iconButtonIconSize;
+    final clampedProgress = sizeSpan <= 0
+        ? 1.0
+        : ((widget.size - sizing.iconButtonIconSize) / sizeSpan)
+            .clamp(0.0, 1.0)
+            .toDouble();
+    final squircleCornerRadius = radii.squircleSm +
+        ((radii.squircle - radii.squircleSm) * clampedProgress);
     final ShapeBorder avatarShape = widget.shape == AxiAvatarShape.circle
         ? const CircleBorder()
-        : SquircleBorder(cornerRadius: context.radii.squircle);
+        : SquircleBorder(cornerRadius: squircleCornerRadius);
     final Uint8List? avatarBytes = _resolvedAvatarBytes;
 
     Widget child = SizedBox.square(
