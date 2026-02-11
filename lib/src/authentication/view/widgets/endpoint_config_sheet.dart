@@ -89,7 +89,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
       imapPort: EndpointConfig.defaultImapPort,
       smtpPort: EndpointConfig.defaultSmtpPort,
       apiPort: EndpointConfig.defaultApiPort,
-      emailProvisioningBaseUrl: null,
       emailProvisioningPublicToken: emailProvisioningPublicToken.isEmpty
           ? null
           : emailProvisioningPublicToken,
