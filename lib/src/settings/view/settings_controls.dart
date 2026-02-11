@@ -587,6 +587,21 @@ class SettingsControls extends StatelessWidget {
                 Padding(
                   padding: switchPadding,
                   child: ShadSwitch(
+                    label: Text(context.l10n.settingsEmailComposerWatermark),
+                    sublabel: Text(
+                      context.l10n.settingsEmailComposerWatermarkDescription,
+                    ),
+                    value: state.emailComposerWatermarkEnabled,
+                    onChanged: emailEnabled
+                        ? (enabled) => context
+                            .read<SettingsCubit>()
+                            .toggleEmailComposerWatermark(enabled)
+                        : null,
+                  ),
+                ),
+                Padding(
+                  padding: switchPadding,
+                  child: ShadSwitch(
                     label: Text(context.l10n.settingsEmailSendOnEnter),
                     sublabel:
                         Text(context.l10n.settingsEmailSendOnEnterDescription),

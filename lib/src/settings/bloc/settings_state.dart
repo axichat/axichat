@@ -43,6 +43,7 @@ class SettingsState with _$SettingsState {
     @Default(<String>[]) List<String> unscheduledSidebarOrder,
     @Default(<String>[]) List<String> reminderSidebarOrder,
     @Default(false) bool autoLoadEmailImages,
+    @Default(true) bool emailComposerWatermarkEnabled,
     @Default(true) bool autoDownloadImages,
     @Default(false) bool autoDownloadVideos,
     @Default(false) bool autoDownloadDocuments,

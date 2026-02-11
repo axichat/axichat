@@ -425,6 +425,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatComposerEmailHint => 'Enviar mensaje de correo';
 
   @override
+  String get chatComposerEmailWatermark => 'Sent from Axichat';
+
+  @override
   String get chatTransportChoiceTitle => 'Choose how to send';
 
   @override
@@ -2057,6 +2060,14 @@ class AppLocalizationsEs extends AppLocalizations {
   @override
   String get settingsEmailSendOnEnterDescription =>
       'Si está activado, Enter envía mensajes de correo. Mayús+Enter inserta una línea nueva.';
+
+  @override
+  String get settingsEmailComposerWatermark =>
+      'Prellenar marca de agua de correo';
+
+  @override
+  String get settingsEmailComposerWatermarkDescription =>
+      'Rellena previamente los correos nuevos con el texto \"Sent from Axichat\" que puedes editar o eliminar.';
 
   @override
   String get settingsTypingIndicators => 'Enviar indicadores de escritura';

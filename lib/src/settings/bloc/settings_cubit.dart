@@ -105,6 +105,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(shareTokenSignatureEnabled: enabled));
   }
 
+  void toggleEmailComposerWatermark(bool enabled) {
+    emit(state.copyWith(emailComposerWatermarkEnabled: enabled));
+  }
+
   void toggleHideCompletedScheduled(bool hide) {
     emit(state.copyWith(hideCompletedScheduled: hide));
   }
@@ -187,6 +191,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'lowMotion': 'low_motion',
         'colorfulAvatars': 'colorful_avatars',
         'shareTokenSignatureEnabled': 'share_token_signature_enabled',
+        'emailComposerWatermarkEnabled': 'email_composer_watermark_enabled',
         'hideCompletedScheduled': 'hide_completed_scheduled',
         'hideCompletedUnscheduled': 'hide_completed_unscheduled',
         'hideCompletedReminders': 'hide_completed_reminders',

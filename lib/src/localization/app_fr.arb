@@ -137,6 +137,7 @@
   "chatEmptySearch": "Aucun résultat",
   "chatEmptyMessages": "Aucun message",
   "chatComposerEmailHint": "Envoyer un message e-mail",
+  "chatComposerEmailWatermark": "Sent from Axichat",
   "chatTransportChoiceTitle": "Choose how to send",
   "chatTransportChoiceMessage": "This address could be chat or email. How should Axichat send to {address}?",
   "@chatTransportChoiceMessage": {
@@ -812,6 +813,8 @@
   "settingsEmailReadReceiptsDescription": "Activé, l’ouverture d’un chat e-mail lorsque l’app est active envoie des accusés de lecture (MDN) pour les messages visibles.",
   "settingsEmailSendOnEnter": "Envoyer les e-mails avec Entrée",
   "settingsEmailSendOnEnterDescription": "Activé, la touche Entrée envoie les messages e-mail. Maj+Entrée insère une nouvelle ligne.",
+  "settingsEmailComposerWatermark": "Préremplir le filigrane e-mail",
+  "settingsEmailComposerWatermarkDescription": "Préremplit les nouveaux e-mails avec le texte \"Sent from Axichat\" que vous pouvez modifier ou supprimer.",
   "settingsTypingIndicators": "Envoyer les indicateurs de saisie",
   "settingsTypingIndicatorsDescription": "Permet aux autres dans le chat de voir quand vous tapez.",
   "settingsShareTokenFooter": "Inclure le pied de page du jeton de partage",

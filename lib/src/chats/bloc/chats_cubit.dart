@@ -104,6 +104,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       openStack: const <String>[],
       forwardStack: const <String>[],
       openCalendar: false,
+      calendarTabIndex: 0,
       openChatCalendar: false,
       openChatRoute: ChatRouteIndex.main,
       items: items,
@@ -476,7 +477,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     }
     // Close calendar when opening chat
     if (state.openCalendar) {
-      emit(state.copyWith(openCalendar: false, openChatCalendar: false));
+      closeCalendar();
     }
     await openChat(jid: jid);
   }
@@ -557,12 +558,43 @@ class ChatsCubit extends Cubit<ChatsState> {
     await _chatsService.closeChat();
   }
 
+  int _normalizeCalendarTabIndex(int tabIndex) => tabIndex.clamp(0, 1).toInt();
+
+  void setCalendarTabIndex({required int tabIndex}) {
+    final normalized = _normalizeCalendarTabIndex(tabIndex);
+    if (state.calendarTabIndex == normalized) {
+      return;
+    }
+    emit(state.copyWith(calendarTabIndex: normalized));
+  }
+
+  void openCalendarAt({required int tabIndex}) {
+    final normalized = _normalizeCalendarTabIndex(tabIndex);
+    if (state.openCalendar && state.calendarTabIndex == normalized) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        openCalendar: true,
+        calendarTabIndex: normalized,
+        openChatCalendar: false,
+      ),
+    );
+  }
+
+  void closeCalendar() {
+    if (!state.openCalendar) {
+      return;
+    }
+    emit(state.copyWith(openCalendar: false, openChatCalendar: false));
+  }
+
   void toggleCalendar() {
     if (state.openCalendar) {
-      emit(state.copyWith(openCalendar: false, openChatCalendar: false));
-    } else {
-      emit(state.copyWith(openCalendar: true, openChatCalendar: false));
+      closeCalendar();
+      return;
     }
+    openCalendarAt(tabIndex: state.calendarTabIndex);
   }
 
   void setOpenChatRoute({required ChatRouteIndex route}) {

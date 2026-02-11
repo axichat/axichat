@@ -92,24 +92,18 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
       ),
     ];
 
-enum HomeBottomDestination { home, schedule, tasks, settings }
-
 class HomeShellScope extends InheritedWidget {
   const HomeShellScope({
     super.key,
-    required this.pendingCalendarTabIndex,
-    required this.calendarTabIndex,
     required this.calendarBottomDragSession,
-    required this.bottomDestination,
+    required this.bottomNavIndex,
     required this.homeTabIndex,
     required this.tabs,
     required super.child,
   });
 
-  final ValueNotifier<int?> pendingCalendarTabIndex;
-  final ValueNotifier<int> calendarTabIndex;
   final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
-  final ValueNotifier<HomeBottomDestination> bottomDestination;
+  final ValueNotifier<int> bottomNavIndex;
   final ValueNotifier<int> homeTabIndex;
   final List<HomeTabEntry> tabs;
 
@@ -119,10 +113,8 @@ class HomeShellScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(HomeShellScope oldWidget) {
-    return pendingCalendarTabIndex != oldWidget.pendingCalendarTabIndex ||
-        calendarTabIndex != oldWidget.calendarTabIndex ||
-        calendarBottomDragSession != oldWidget.calendarBottomDragSession ||
-        bottomDestination != oldWidget.bottomDestination ||
+    return calendarBottomDragSession != oldWidget.calendarBottomDragSession ||
+        bottomNavIndex != oldWidget.bottomNavIndex ||
         homeTabIndex != oldWidget.homeTabIndex ||
         tabs != oldWidget.tabs;
   }
@@ -245,22 +237,16 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  final ValueNotifier<int?> _pendingCalendarTabIndex =
-      ValueNotifier<int?>(null);
-  final ValueNotifier<int> _calendarTabIndex = ValueNotifier<int>(0);
   final ValueNotifier<CalendarBottomDragSession?> _calendarBottomDragSession =
       ValueNotifier<CalendarBottomDragSession?>(null);
-  final ValueNotifier<HomeBottomDestination> _bottomDestination =
-      ValueNotifier<HomeBottomDestination>(HomeBottomDestination.home);
+  final ValueNotifier<int> _bottomNavIndex = ValueNotifier<int>(0);
   final ValueNotifier<int> _homeTabIndex = ValueNotifier<int>(0);
   bool _railCollapsed = true;
 
   @override
   void dispose() {
-    _pendingCalendarTabIndex.dispose();
-    _calendarTabIndex.dispose();
     _calendarBottomDragSession.dispose();
-    _bottomDestination.dispose();
+    _bottomNavIndex.dispose();
     _homeTabIndex.dispose();
     super.dispose();
   }
@@ -330,10 +316,8 @@ class _HomeShellState extends State<HomeShell> {
           rosterService: context.read<XmppService>() as RosterService,
         ),
         child: HomeShellScope(
-          pendingCalendarTabIndex: _pendingCalendarTabIndex,
-          calendarTabIndex: _calendarTabIndex,
           calendarBottomDragSession: _calendarBottomDragSession,
-          bottomDestination: _bottomDestination,
+          bottomNavIndex: _bottomNavIndex,
           homeTabIndex: _homeTabIndex,
           tabs: tabs,
           child: child,
@@ -374,10 +358,8 @@ class _HomeShellState extends State<HomeShell> {
             ),
           ),
           _HomeShellBottomBar(
-            pendingCalendarTabIndex: _pendingCalendarTabIndex,
-            calendarTabIndex: _calendarTabIndex,
             calendarBottomDragSession: _calendarBottomDragSession,
-            bottomDestination: _bottomDestination,
+            bottomNavIndex: _bottomNavIndex,
             calendarAvailable: calendarAvailable,
           ),
         ],
@@ -395,14 +377,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
-  ValueNotifier<int?>? _pendingCalendarTabIndex;
   bool _railCollapsed = true;
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
 
   @override
   void dispose() {
-    _pendingCalendarTabIndex?.removeListener(_handlePendingCalendarTabChange);
     _shortcutFocusNode.dispose();
     _clearOpenChatHistoryEntry();
     _clearOpenCalendarHistoryEntry();
@@ -462,7 +442,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!chatsState.openCalendar) {
       return;
     }
-    context.read<ChatsCubit>().toggleCalendar();
+    HomeShellScope.maybeOf(context)?.bottomNavIndex.value = 0;
+    context.read<ChatsCubit>().closeCalendar();
   }
 
   void _clearOpenCalendarHistoryEntry() {
@@ -496,29 +477,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.didChangeDependencies();
     final chatsState = context.read<ChatsCubit>().state;
     _syncHomeHistoryEntries(chatsState);
-    _updatePendingCalendarTabIndexListener();
-  }
-
-  void _updatePendingCalendarTabIndexListener() {
-    final scope = HomeShellScope.maybeOf(context);
-    final notifier = scope?.pendingCalendarTabIndex;
-    if (notifier == _pendingCalendarTabIndex) {
-      return;
-    }
-    _pendingCalendarTabIndex?.removeListener(_handlePendingCalendarTabChange);
-    _pendingCalendarTabIndex = notifier;
-    _pendingCalendarTabIndex?.addListener(_handlePendingCalendarTabChange);
-    _handlePendingCalendarTabChange();
-  }
-
-  void _handlePendingCalendarTabChange() {
-    final notifier = _pendingCalendarTabIndex;
-    if (notifier == null || notifier.value == null) {
-      return;
-    }
-    if (!context.read<ChatsCubit>().state.openCalendar) {
-      context.read<ChatsCubit>().toggleCalendar();
-    }
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
@@ -533,8 +491,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final storageManager = context.watch<CalendarStorageManager>();
     final homeTabIndex = HomeShellScope.maybeOf(context)?.homeTabIndex;
-    final pendingCalendarTabIndex =
-        HomeShellScope.maybeOf(context)?.pendingCalendarTabIndex;
+    final bottomNavIndex = HomeShellScope.maybeOf(context)?.bottomNavIndex;
     final calendarBottomDragSession =
         HomeShellScope.maybeOf(context)?.calendarBottomDragSession;
     final tabs =
@@ -544,7 +501,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: _HomeContent(
         storageManager: storageManager,
         shortcutFocusNode: _shortcutFocusNode,
-        pendingCalendarTabIndex: pendingCalendarTabIndex,
+        bottomNavIndex: bottomNavIndex,
         calendarBottomDragSession: calendarBottomDragSession,
         tabs: tabs,
         railCollapsed: _railCollapsed,
@@ -817,7 +774,7 @@ class _HomeContent extends StatelessWidget {
   const _HomeContent({
     required this.storageManager,
     required this.shortcutFocusNode,
-    required this.pendingCalendarTabIndex,
+    required this.bottomNavIndex,
     required this.calendarBottomDragSession,
     required this.tabs,
     required this.railCollapsed,
@@ -829,7 +786,7 @@ class _HomeContent extends StatelessWidget {
 
   final CalendarStorageManager storageManager;
   final FocusNode shortcutFocusNode;
-  final ValueNotifier<int?>? pendingCalendarTabIndex;
+  final ValueNotifier<int>? bottomNavIndex;
   final ValueNotifier<CalendarBottomDragSession?>? calendarBottomDragSession;
   final List<HomeTabEntry> tabs;
   final bool railCollapsed;
@@ -837,6 +794,8 @@ class _HomeContent extends StatelessWidget {
   final ValueChanged<bool> onRailCollapsedChanged;
   final ValueChanged<ChatsState> onSyncHomeHistoryEntries;
   final KeyEventResult Function(FocusNode, KeyEvent) onHomeKeyEvent;
+
+  int _normalizeBottomNavIndex(int index) => index.clamp(0, 3).toInt();
 
   @override
   Widget build(BuildContext context) {
@@ -851,7 +810,6 @@ class _HomeContent extends StatelessWidget {
     final navPlacement = env.navPlacement;
     final Storage? calendarStorage = storageManager.authStorage;
     final bool hasCalendarBloc = storageManager.isAuthStorageReady;
-    final calendarTabIndex = HomeShellScope.maybeOf(context)?.calendarTabIndex;
     final String? openJid = context.select<ChatsCubit, String?>(
       (cubit) => cubit.state.openJid,
     );
@@ -879,8 +837,13 @@ class _HomeContent extends StatelessWidget {
                   child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
                     builder: (context, state) {
                       final chatsState = context.watch<ChatsCubit>().state;
-                      final bool openCalendar =
-                          hasCalendarBloc && chatsState.openCalendar;
+                      final int selectedBottomIndex =
+                          _normalizeBottomNavIndex(bottomNavIndex?.value ?? 0);
+                      final bool openCalendar = hasCalendarBloc &&
+                          (selectedBottomIndex == 1 ||
+                              selectedBottomIndex == 2);
+                      final int calendarTabIndex =
+                          selectedBottomIndex == 2 ? 1 : 0;
                       final chatRoute = chatsState.openChatRoute;
                       final Widget chatPaneContent =
                           openJid == null ? const GuestChat() : const Chat();
@@ -924,8 +887,20 @@ class _HomeContent extends StatelessWidget {
                           children: [
                             Expanded(
                               child: CalendarWidget(
-                                pendingMobileTabIndex: pendingCalendarTabIndex,
-                                activeMobileTabIndex: calendarTabIndex,
+                                mobileTabIndex: calendarTabIndex,
+                                onMobileTabIndexChanged: (tabIndex) {
+                                  final safeTab = tabIndex.clamp(0, 1).toInt();
+                                  final scope = HomeShellScope.maybeOf(context);
+                                  if (scope != null) {
+                                    scope.bottomNavIndex.value =
+                                        safeTab == 0 ? 1 : 2;
+                                  }
+                                  context
+                                      .read<ChatsCubit>()
+                                      .setCalendarTabIndex(
+                                        tabIndex: safeTab,
+                                      );
+                                },
                                 bottomDragSession: calendarBottomDragSession,
                               ),
                             ),
@@ -1140,7 +1115,25 @@ class _HomeActionLayer extends StatelessWidget {
               ToggleCalendarIntent: CallbackAction<ToggleCalendarIntent>(
                 onInvoke: (_) {
                   if (!hasCalendarBloc) return null;
-                  locate<ChatsCubit>().toggleCalendar();
+                  final scope = HomeShellScope.maybeOf(context);
+                  final int currentIndex =
+                      (scope?.bottomNavIndex.value ?? 0).clamp(0, 3).toInt();
+                  if (currentIndex == 1 || currentIndex == 2) {
+                    if (scope != null) {
+                      scope.bottomNavIndex.value = 0;
+                    }
+                    locate<ChatsCubit>().closeCalendar();
+                    return null;
+                  }
+                  final calendarTabIndex =
+                      locate<ChatsCubit>().state.calendarTabIndex;
+                  final openIndex = calendarTabIndex == 0 ? 1 : 2;
+                  if (scope != null) {
+                    scope.bottomNavIndex.value = openIndex;
+                  }
+                  locate<ChatsCubit>().openCalendarAt(
+                    tabIndex: calendarTabIndex,
+                  );
                   return null;
                 },
               ),

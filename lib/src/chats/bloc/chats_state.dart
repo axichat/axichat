@@ -10,6 +10,7 @@ class ChatsState with _$ChatsState {
     @Default(<String>[]) List<String> openStack,
     @Default(<String>[]) List<String> forwardStack,
     required bool openCalendar,
+    @Default(0) int calendarTabIndex,
     @Default(false) bool openChatCalendar,
     @Default(ChatRouteIndex.main) ChatRouteIndex openChatRoute,
     required List<Chat>? items,

@@ -35,13 +35,13 @@ class CalendarBottomDragSession {
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({
     super.key,
-    this.pendingMobileTabIndex,
-    this.activeMobileTabIndex,
+    this.mobileTabIndex = 0,
+    this.onMobileTabIndexChanged,
     this.bottomDragSession,
   });
 
-  final ValueNotifier<int?>? pendingMobileTabIndex;
-  final ValueNotifier<int>? activeMobileTabIndex;
+  final int mobileTabIndex;
+  final ValueChanged<int>? onMobileTabIndexChanged;
   final ValueNotifier<CalendarBottomDragSession?>? bottomDragSession;
 
   @override
@@ -84,7 +84,6 @@ bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
 class _CalendarWidgetState
     extends CalendarExperienceState<CalendarWidget, CalendarBloc> {
   bool _mobileInitialScrollSynced = false;
-  ValueNotifier<int?>? _pendingMobileTabNotifier;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
   late final GlobalKey<NavigatorState> _calendarNavigatorKey =
@@ -93,24 +92,19 @@ class _CalendarWidgetState
   @override
   void initState() {
     super.initState();
-    _attachPendingMobileTabNotifier();
     mobileTabController.addListener(_handleMobileTabIndexChanged);
-    _consumePendingMobileTabIndex(animate: false);
-    _syncActiveMobileTabIndex();
+    _syncMobileTabController(animate: false);
   }
 
   @override
   void didUpdateWidget(covariant CalendarWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _attachPendingMobileTabNotifier();
-    _consumePendingMobileTabIndex(animate: true);
-    _syncActiveMobileTabIndex();
+    _syncMobileTabController(animate: true);
   }
 
   @override
   void dispose() {
     _clearHomeBottomDragState();
-    _pendingMobileTabNotifier?.removeListener(_handlePendingMobileTabChange);
     mobileTabController.removeListener(_handleMobileTabIndexChanged);
     _hoverTitleController.dispose();
     super.dispose();
@@ -123,52 +117,24 @@ class _CalendarWidgetState
     }
   }
 
-  void _attachPendingMobileTabNotifier() {
-    final notifier = widget.pendingMobileTabIndex;
-    if (notifier == _pendingMobileTabNotifier) {
-      return;
-    }
-    _pendingMobileTabNotifier?.removeListener(_handlePendingMobileTabChange);
-    _pendingMobileTabNotifier = notifier;
-    _pendingMobileTabNotifier?.addListener(_handlePendingMobileTabChange);
-  }
-
-  void _handlePendingMobileTabChange() {
-    _consumePendingMobileTabIndex(animate: true);
-  }
-
   void _handleMobileTabIndexChanged() {
     if (mobileTabController.indexIsChanging) {
       return;
     }
-    _syncActiveMobileTabIndex();
+    widget.onMobileTabIndexChanged?.call(mobileTabController.index);
   }
 
-  void _syncActiveMobileTabIndex() {
-    final notifier = widget.activeMobileTabIndex;
-    if (notifier == null) {
+  void _syncMobileTabController({required bool animate}) {
+    final int resolved =
+        widget.mobileTabIndex.clamp(0, mobileTabController.length - 1);
+    if (mobileTabController.index == resolved) {
       return;
     }
-    final int resolvedIndex = mobileTabController.index;
-    if (notifier.value == resolvedIndex) {
-      return;
-    }
-    notifier.value = resolvedIndex;
-  }
-
-  void _consumePendingMobileTabIndex({required bool animate}) {
-    final notifier = _pendingMobileTabNotifier;
-    if (notifier == null) return;
-    final pending = notifier.value;
-    if (pending == null) return;
-    final resolved = pending.clamp(0, mobileTabController.length - 1);
-    if (animate && mobileTabController.index != resolved) {
+    if (animate) {
       mobileTabController.animateTo(resolved);
-    } else {
-      mobileTabController.index = resolved;
+      return;
     }
-    notifier.value = null;
-    _syncActiveMobileTabIndex();
+    mobileTabController.index = resolved;
   }
 
   @override

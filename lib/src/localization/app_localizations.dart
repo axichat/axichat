@@ -837,6 +837,12 @@ abstract class AppLocalizations {
   /// **'Send email message'**
   String get chatComposerEmailHint;
 
+  /// No description provided for @chatComposerEmailWatermark.
+  ///
+  /// In en, this message translates to:
+  /// **'Sent from Axichat'**
+  String get chatComposerEmailWatermark;
+
   /// No description provided for @chatTransportChoiceTitle.
   ///
   /// In en, this message translates to:
@@ -3679,6 +3685,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'When on, pressing Enter sends email messages. Shift+Enter inserts a new line.'**
   String get settingsEmailSendOnEnterDescription;
+
+  /// No description provided for @settingsEmailComposerWatermark.
+  ///
+  /// In en, this message translates to:
+  /// **'Prepopulate email watermark'**
+  String get settingsEmailComposerWatermark;
+
+  /// No description provided for @settingsEmailComposerWatermarkDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Pre-fills new email messages with \"Sent from Axichat\" text that you can edit or delete.'**
+  String get settingsEmailComposerWatermarkDescription;
 
   /// No description provided for @settingsTypingIndicators.
   ///

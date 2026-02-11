@@ -137,6 +137,7 @@
   "chatEmptySearch": "Sin coincidencias",
   "chatEmptyMessages": "Sin mensajes",
   "chatComposerEmailHint": "Enviar mensaje de correo",
+  "chatComposerEmailWatermark": "Sent from Axichat",
   "chatTransportChoiceTitle": "Choose how to send",
   "chatTransportChoiceMessage": "This address could be chat or email. How should Axichat send to {address}?",
   "@chatTransportChoiceMessage": {
@@ -812,6 +813,8 @@
   "settingsEmailReadReceiptsDescription": "Si está activado, abrir un chat de correo mientras la app está activa envía confirmaciones de lectura (MDN) para los mensajes visibles.",
   "settingsEmailSendOnEnter": "Enviar correos con Enter",
   "settingsEmailSendOnEnterDescription": "Si está activado, Enter envía mensajes de correo. Mayús+Enter inserta una línea nueva.",
+  "settingsEmailComposerWatermark": "Prellenar marca de agua de correo",
+  "settingsEmailComposerWatermarkDescription": "Rellena previamente los correos nuevos con el texto \"Sent from Axichat\" que puedes editar o eliminar.",
   "settingsTypingIndicators": "Enviar indicadores de escritura",
   "settingsTypingIndicatorsDescription": "Permite que otros en el chat vean cuando estás escribiendo.",
   "settingsShareTokenFooter": "Incluir pie de token de compartir",

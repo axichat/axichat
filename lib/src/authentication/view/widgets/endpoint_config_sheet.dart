@@ -12,7 +12,6 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class EndpointConfigSheet extends StatefulWidget {
   const EndpointConfigSheet({super.key, required this.compact});
@@ -44,7 +43,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
   late TextEditingController _emailProvisioningPublicTokenController;
 
   EndpointConfig? _draftConfig;
-  var _emailProvisioningTokenObscure = true;
 
   @override
   void initState() {
@@ -115,10 +113,8 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final spacing = context.spacing;
-    final sizing = context.sizing;
     final config =
         _draftConfig ?? context.watch<SettingsCubit>().state.endpointConfig;
     final placeholderStyle = textTheme.muted;
@@ -168,8 +164,10 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         SizedBox(height: spacing.s),
         AxiTextFormField(
           autocorrect: false,
-          keyboardType: TextInputType.visiblePassword,
-          obscureText: _emailProvisioningTokenObscure,
+          keyboardType: TextInputType.text,
+          textInputAction: TextInputAction.next,
+          minLines: 1,
+          maxLines: 1,
           enabled: config.smtpEnabled,
           placeholder: Text(
             context.l10n.authCustomServerEmailPublicTokenPlaceholder,
@@ -178,22 +176,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           placeholderStyle: placeholderStyle,
           controller: _emailProvisioningPublicTokenController,
           style: inputStyle,
-          trailing: AxiIconButton.ghost(
-            iconData: _emailProvisioningTokenObscure
-                ? LucideIcons.eyeOff
-                : LucideIcons.eye,
-            iconSize: sizing.inputSuffixIconSize,
-            buttonSize: sizing.inputSuffixButtonSize,
-            tapTargetSize: sizing.inputSuffixButtonSize,
-            color: colors.mutedForeground,
-            backgroundColor: colors.muted,
-            onPressed: config.smtpEnabled
-                ? () => setState(() {
-                      _emailProvisioningTokenObscure =
-                          !_emailProvisioningTokenObscure;
-                    })
-                : null,
-          ),
         ),
         SizedBox(height: spacing.m),
         Row(

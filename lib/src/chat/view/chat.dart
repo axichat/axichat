@@ -942,7 +942,15 @@ class _ChatState extends State<Chat> {
   void _typingListener() {
     final text = _textController.text;
     final hasText = text.isNotEmpty;
-    final trimmedHasText = text.trim().isNotEmpty;
+    final chatState = context.read<ChatBloc>().state;
+    final settings = context.read<SettingsCubit>().state;
+    final trimmedHasText = _isEmailComposerWatermarkOnly(
+      text: text,
+      chatState: chatState,
+      settings: settings,
+    )
+        ? false
+        : text.trim().isNotEmpty;
     if (_composerHasText != trimmedHasText && mounted) {
       setState(() {
         _composerHasText = trimmedHasText;
@@ -2105,6 +2113,62 @@ class _ChatState extends State<Chat> {
     return false;
   }
 
+  String _emailComposerWatermarkText() {
+    return '\n\n${context.l10n.chatComposerEmailWatermark}';
+  }
+
+  bool _isEmailComposerWatermarkOnly({
+    required String text,
+    required ChatState chatState,
+    SettingsState? settings,
+  }) {
+    final resolvedSettings = settings ?? context.read<SettingsCubit>().state;
+    final isEmailChat = chatState.chat?.defaultTransport.isEmail ?? false;
+    if (!isEmailChat || !resolvedSettings.emailComposerWatermarkEnabled) {
+      return false;
+    }
+    return text == _emailComposerWatermarkText();
+  }
+
+  void _syncEmailComposerWatermark({
+    required ChatState chatState,
+    SettingsState? settings,
+    bool forceInsert = false,
+  }) {
+    final resolvedSettings = settings ?? context.read<SettingsCubit>().state;
+    final currentText = _textController.text;
+    if (_isEmailComposerWatermarkOnly(
+      text: currentText,
+      chatState: chatState,
+      settings: resolvedSettings,
+    )) {
+      if (forceInsert) {
+        return;
+      }
+      return;
+    }
+    final isEmailChat = chatState.chat?.defaultTransport.isEmail ?? false;
+    final watermark = _emailComposerWatermarkText();
+    if (!isEmailChat || !resolvedSettings.emailComposerWatermarkEnabled) {
+      if (currentText == watermark) {
+        _textController.value = _textController.value.copyWith(
+          text: _emptyText,
+          selection: const TextSelection.collapsed(offset: 0),
+          composing: TextRange.empty,
+        );
+      }
+      return;
+    }
+    if (!forceInsert && currentText.trim().isNotEmpty) {
+      return;
+    }
+    _textController.value = _textController.value.copyWith(
+      text: watermark,
+      selection: const TextSelection.collapsed(offset: 0),
+      composing: TextRange.empty,
+    );
+  }
+
   bool _resolveComposerSendOnEnter({
     required List<ComposerRecipient> recipients,
     required SettingsState settings,
@@ -2331,7 +2395,13 @@ class _ChatState extends State<Chat> {
     required ChatSettingsSnapshot settingsSnapshot,
   }) async {
     final l10n = context.l10n;
-    final rawText = _textController.text.trim();
+    final rawComposerText = _textController.text;
+    final rawText = _isEmailComposerWatermarkOnly(
+      text: rawComposerText,
+      chatState: chatState,
+    )
+        ? _emptyText
+        : rawComposerText.trim();
     final seedText = _pendingCalendarSeedText;
     final String resolvedText =
         rawText.isNotEmpty ? rawText : (seedText ?? _emptyText);
@@ -3185,6 +3255,7 @@ class _ChatState extends State<Chat> {
     }
     _syncChatRoute();
     _updateChatRouteHistoryEntry();
+    _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
   }
 
   @override
@@ -3236,13 +3307,19 @@ class _ChatState extends State<Chat> {
                   previous.autoDownloadArchives !=
                       current.autoDownloadArchives ||
                   previous.shareTokenSignatureEnabled !=
-                      current.shareTokenSignatureEnabled,
+                      current.shareTokenSignatureEnabled ||
+                  previous.emailComposerWatermarkEnabled !=
+                      current.emailComposerWatermarkEnabled,
               listener: (context, settings) {
                 context
                     .read<ChatBloc>()
                     .add(ChatSettingsUpdated(_settingsSnapshotFromState(
                       settings,
                     )));
+                _syncEmailComposerWatermark(
+                  chatState: context.read<ChatBloc>().state,
+                  settings: settings,
+                );
               },
             ),
             BlocListener<SettingsCubit, SettingsState>(
@@ -3370,6 +3447,10 @@ class _ChatState extends State<Chat> {
                     _pendingCalendarSeedText = null;
                   });
                 }
+                _syncEmailComposerWatermark(
+                  chatState: context.read<ChatBloc>().state,
+                  forceInsert: true,
+                );
                 _focusNode.requestFocus();
               },
             ),
@@ -3401,6 +3482,7 @@ class _ChatState extends State<Chat> {
                 _hydratedAnimatedMessages = false;
                 _chatOpenedAt = DateTime.now();
                 _resetRecipientsForChat(state.chat);
+                _syncEmailComposerWatermark(chatState: state);
                 if (state.messagesLoaded) {
                   _hydrateAnimatedMessages(state.items);
                 }
@@ -3439,7 +3521,13 @@ class _ChatState extends State<Chat> {
               _textController
                 ..text = text
                 ..selection = TextSelection.collapsed(offset: text.length);
-              _composerHasText = text.trim().isNotEmpty;
+              _composerHasText = _isEmailComposerWatermarkOnly(
+                text: text,
+                chatState: state,
+              )
+                  ? false
+                  : text.trim().isNotEmpty;
+              _syncEmailComposerWatermark(chatState: state);
               if (!_focusNode.hasFocus) {
                 _focusNode.requestFocus();
               }
@@ -4763,6 +4851,10 @@ class _ChatState extends State<Chat> {
                                                     pendingAttachments,
                                                 composerHasText:
                                                     _composerHasContent,
+                                                composerMinLines:
+                                                    isDefaultEmail ? 3 : 1,
+                                                composerMaxLines:
+                                                    isDefaultEmail ? 12 : 6,
                                                 selfJid: selfXmppJid,
                                                 selfIdentity: selfIdentity,
                                                 composerError: state
@@ -11065,6 +11157,8 @@ class _ChatComposerSection extends StatelessWidget {
     required this.visibilityLabel,
     required this.pendingAttachments,
     required this.composerHasText,
+    required this.composerMinLines,
+    required this.composerMaxLines,
     required this.selfJid,
     required this.selfIdentity,
     required this.subjectController,
@@ -11100,6 +11194,8 @@ class _ChatComposerSection extends StatelessWidget {
   final String? visibilityLabel;
   final List<PendingAttachment> pendingAttachments;
   final bool composerHasText;
+  final int composerMinLines;
+  final int composerMaxLines;
   final String? selfJid;
   final SelfIdentitySnapshot selfIdentity;
   final TextEditingController subjectController;
@@ -11218,6 +11314,8 @@ class _ChatComposerSection extends StatelessWidget {
                       controller: textController,
                       focusNode: textFocusNode,
                       hintText: hintText,
+                      minLines: composerMinLines,
+                      maxLines: composerMaxLines,
                       semanticsLabel: context.l10n.chatComposerSemantics,
                       onSend: onSend,
                       header: header,

@@ -412,6 +412,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatComposerEmailHint => '发送邮件消息';
 
   @override
+  String get chatComposerEmailWatermark => 'Sent from Axichat';
+
+  @override
   String get chatTransportChoiceTitle => 'Choose how to send';
 
   @override
@@ -1962,6 +1965,13 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get settingsEmailSendOnEnterDescription =>
       '开启后，按 Enter 发送邮件消息；按 Shift+Enter 插入新行。';
+
+  @override
+  String get settingsEmailComposerWatermark => 'Prepopulate email watermark';
+
+  @override
+  String get settingsEmailComposerWatermarkDescription =>
+      'Pre-fills new email messages with \"Sent from Axichat\" text that you can edit or delete.';
 
   @override
   String get settingsTypingIndicators => '发送正在输入指示';
