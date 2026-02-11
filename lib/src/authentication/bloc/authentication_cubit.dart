@@ -336,15 +336,32 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Uri? _resolveEmailProvisioningBaseUrl(EndpointConfig config) {
+    final override =
+        _tryParseEmailProvisioningBaseUrl(config.emailProvisioningBaseUrl);
+    if (override != null) {
+      return override;
+    }
+    final domain = config.domain.trim().toLowerCase();
+    if (domain.isEmpty || domain == EndpointConfig.defaultDomain) {
+      return null;
+    }
+    const provisioningPort = 8443;
+    return Uri(
+      scheme: 'https',
+      host: domain,
+      port: provisioningPort,
+    );
+  }
+
   void _rebuildEmailProvisioningClient(EndpointConfig config) {
     if (_injectedEmailProvisioningClient != null) {
       return;
     }
-    final baseUrlOverride =
-        _tryParseEmailProvisioningBaseUrl(config.emailProvisioningBaseUrl);
+    final baseUrlOverride = _resolveEmailProvisioningBaseUrl(config);
     final domain = config.domain.trim().toLowerCase();
     final publicTokenOverride = domain == EndpointConfig.defaultDomain
-        ? config.emailProvisioningPublicToken
+        ? null
         : config.emailProvisioningPublicToken ?? '';
     provisioning.EmailProvisioningClient next;
     try {
