@@ -15,6 +15,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeTabChats => '聊天';
 
   @override
+  String get homeBottomNavHome => '主页';
+
+  @override
   String get homeTabDrafts => '草稿';
 
   @override
@@ -3666,6 +3669,13 @@ class AppLocalizationsZh extends AppLocalizations {
       'Only for trusted chats.';
 
   @override
+  String get settingsAutoDownloadScopeAlways => 'Always';
+
+  @override
+  String get settingsAutoDownloadScopeTrustedContacts =>
+      'Only for trusted contacts.';
+
+  @override
   String get emailContactsImportTitle => 'Import contacts';
 
   @override
@@ -5772,6 +5782,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get homeTabChats => '聊天';
+
+  @override
+  String get homeBottomNavHome => '主頁';
 
   @override
   String get homeTabDrafts => '草稿';
@@ -9423,6 +9436,13 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   @override
   String get settingsAutoDownloadArchivesDescription =>
       'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadScopeAlways => 'Always';
+
+  @override
+  String get settingsAutoDownloadScopeTrustedContacts =>
+      'Only for trusted contacts.';
 
   @override
   String get emailContactsImportTitle => 'Import contacts';

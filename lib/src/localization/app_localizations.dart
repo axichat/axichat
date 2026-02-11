@@ -117,6 +117,12 @@ abstract class AppLocalizations {
   /// **'Chats'**
   String get homeTabChats;
 
+  /// No description provided for @homeBottomNavHome.
+  ///
+  /// In en, this message translates to:
+  /// **'Home'**
+  String get homeBottomNavHome;
+
   /// No description provided for @homeTabDrafts.
   ///
   /// In en, this message translates to:
@@ -6763,6 +6769,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only for trusted chats.'**
   String get settingsAutoDownloadArchivesDescription;
+
+  /// No description provided for @settingsAutoDownloadScopeAlways.
+  ///
+  /// In en, this message translates to:
+  /// **'Always'**
+  String get settingsAutoDownloadScopeAlways;
+
+  /// No description provided for @settingsAutoDownloadScopeTrustedContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'Only for trusted contacts.'**
+  String get settingsAutoDownloadScopeTrustedContacts;
 
   /// No description provided for @emailContactsImportTitle.
   ///

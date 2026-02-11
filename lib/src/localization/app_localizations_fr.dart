@@ -15,6 +15,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get homeTabChats => 'Conversations';
 
   @override
+  String get homeBottomNavHome => 'Accueil';
+
+  @override
   String get homeTabDrafts => 'Brouillons';
 
   @override
@@ -3839,6 +3842,13 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get settingsAutoDownloadArchivesDescription =>
       'Only for trusted chats.';
+
+  @override
+  String get settingsAutoDownloadScopeAlways => 'Always';
+
+  @override
+  String get settingsAutoDownloadScopeTrustedContacts =>
+      'Only for trusted contacts.';
 
   @override
   String get emailContactsImportTitle => 'Import contacts';

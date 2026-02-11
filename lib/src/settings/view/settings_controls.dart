@@ -407,7 +407,11 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsAutoDownloadImages),
                     sublabel: Text(
-                        context.l10n.settingsAutoDownloadImagesDescription),
+                      state.autoDownloadImages
+                          ? context.l10n.settingsAutoDownloadScopeAlways
+                          : context
+                              .l10n.settingsAutoDownloadScopeTrustedContacts,
+                    ),
                     value: state.autoDownloadImages,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -424,7 +428,11 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsAutoDownloadVideos),
                     sublabel: Text(
-                        context.l10n.settingsAutoDownloadVideosDescription),
+                      state.autoDownloadVideos
+                          ? context.l10n.settingsAutoDownloadScopeAlways
+                          : context
+                              .l10n.settingsAutoDownloadScopeTrustedContacts,
+                    ),
                     value: state.autoDownloadVideos,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -441,7 +449,11 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsAutoDownloadDocuments),
                     sublabel: Text(
-                        context.l10n.settingsAutoDownloadDocumentsDescription),
+                      state.autoDownloadDocuments
+                          ? context.l10n.settingsAutoDownloadScopeAlways
+                          : context
+                              .l10n.settingsAutoDownloadScopeTrustedContacts,
+                    ),
                     value: state.autoDownloadDocuments,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -458,7 +470,11 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsAutoDownloadArchives),
                     sublabel: Text(
-                        context.l10n.settingsAutoDownloadArchivesDescription),
+                      state.autoDownloadArchives
+                          ? context.l10n.settingsAutoDownloadScopeAlways
+                          : context
+                              .l10n.settingsAutoDownloadScopeTrustedContacts,
+                    ),
                     value: state.autoDownloadArchives,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -500,8 +516,6 @@ class SettingsControls extends StatelessWidget {
                   padding: switchPadding,
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsChatReadReceipts),
-                    sublabel:
-                        Text(context.l10n.settingsChatReadReceiptsDescription),
                     value: state.chatReadReceipts,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -564,8 +578,6 @@ class SettingsControls extends StatelessWidget {
                   padding: switchPadding,
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsEmailReadReceipts),
-                    sublabel:
-                        Text(context.l10n.settingsEmailReadReceiptsDescription),
                     value: state.emailReadReceipts,
                     onChanged: emailEnabled
                         ? (enabled) => context

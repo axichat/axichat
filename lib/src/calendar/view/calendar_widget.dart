@@ -25,15 +25,24 @@ import 'task_sidebar.dart';
 import 'widgets/calendar_hover_title_scope.dart';
 import 'widgets/calendar_mobile_tab_shell.dart';
 
+@immutable
+class CalendarBottomDragSession {
+  const CalendarBottomDragSession({this.pointer});
+
+  final Offset? pointer;
+}
+
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({
     super.key,
     this.pendingMobileTabIndex,
     this.activeMobileTabIndex,
+    this.bottomDragSession,
   });
 
   final ValueNotifier<int?>? pendingMobileTabIndex;
   final ValueNotifier<int>? activeMobileTabIndex;
+  final ValueNotifier<CalendarBottomDragSession?>? bottomDragSession;
 
   @override
   State<CalendarWidget> createState() => _CalendarWidgetState();
@@ -100,10 +109,18 @@ class _CalendarWidgetState
 
   @override
   void dispose() {
+    _clearHomeBottomDragState();
     _pendingMobileTabNotifier?.removeListener(_handlePendingMobileTabChange);
     mobileTabController.removeListener(_handleMobileTabIndexChanged);
     _hoverTitleController.dispose();
     super.dispose();
+  }
+
+  void _clearHomeBottomDragState() {
+    final notifier = widget.bottomDragSession;
+    if (notifier?.value != null) {
+      notifier!.value = null;
+    }
   }
 
   void _attachPendingMobileTabNotifier() {
@@ -175,6 +192,27 @@ class _CalendarWidgetState
       );
       calendarBloc.add(const CalendarEvent.syncWarningCleared());
     }
+  }
+
+  @override
+  void onCalendarDragSessionStarted() {
+    final notifier = widget.bottomDragSession;
+    if (notifier != null) {
+      notifier.value = const CalendarBottomDragSession();
+    }
+  }
+
+  @override
+  void onCalendarDragPositionChanged(Offset globalPosition) {
+    final notifier = widget.bottomDragSession;
+    if (notifier != null) {
+      notifier.value = CalendarBottomDragSession(pointer: globalPosition);
+    }
+  }
+
+  @override
+  void onCalendarDragSessionEnded() {
+    _clearHomeBottomDragState();
   }
 
   @override

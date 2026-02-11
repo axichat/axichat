@@ -1,6 +1,7 @@
 {
   "appTitle": "axichat",
   "homeTabChats": "Conversaciones",
+  "homeBottomNavHome": "Inicio",
   "homeTabDrafts": "Borradores",
   "homeTabSpam": "Correo no deseado",
   "homeTabBlocked": "Bloqueados",
@@ -1599,6 +1600,8 @@
   "settingsAutoDownloadDocumentsDescription": "Only for trusted chats.",
   "settingsAutoDownloadArchives": "Auto-download archives",
   "settingsAutoDownloadArchivesDescription": "Only for trusted chats.",
+  "settingsAutoDownloadScopeAlways": "Always",
+  "settingsAutoDownloadScopeTrustedContacts": "Only for trusted contacts.",
   "emailContactsImportTitle": "Import contacts",
   "emailContactsImportSubtitle": "Gmail, Outlook, Yahoo CSVs, or vCards.",
   "emailContactsImportFileAccessError": "Unable to access the selected file.",

@@ -481,6 +481,7 @@ class _HomeBottomTabBar extends StatelessWidget {
     final sizing = context.sizing;
     final colors = context.colorScheme;
     final motion = context.motion;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final int safeSelectedIndex =
         selectedIndex.clamp(0, tabs.length - 1).toInt();
     return Padding(
@@ -490,45 +491,79 @@ class _HomeBottomTabBar extends StatelessWidget {
         spacing.m,
         0,
       ),
-      child: ShadTabs<int>(
-        value: safeSelectedIndex,
-        scrollable: false,
-        tabsGap: 0,
-        gap: 0,
-        padding: EdgeInsets.zero,
-        decoration: ShadDecoration(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
           color: colors.card,
-          border: ShadBorder.all(
+          border: Border.all(
             color: colors.border,
             width: context.borderSide.width,
-            radius: BorderRadius.circular(context.radii.container),
           ),
-          secondaryBorder: ShadBorder.none,
-          secondaryFocusedBorder: ShadBorder.none,
+          borderRadius: BorderRadius.circular(context.radii.container),
         ),
-        onChanged: (value) {
-          if (value != safeSelectedIndex) {
-            onTabSelected(value);
-          }
-        },
-        tabs: List<ShadTab<int>>.generate(tabs.length, (index) {
-          final tab = tabs[index];
-          return ShadTab<int>(
-            value: index,
-            height: sizing.iconButtonSize,
-            backgroundColor: Colors.transparent,
-            selectedBackgroundColor: colors.primary.withValues(
-              alpha: motion.tapHoverAlpha,
-            ),
-            foregroundColor: colors.mutedForeground,
-            selectedForegroundColor: colors.foreground,
-            child: _HomeBottomTabItem(
-              label: tab.label,
-              badgeCount: badgeCounts[tab.id] ?? 0,
-              selected: index == safeSelectedIndex,
-            ),
-          );
-        }),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(context.radii.container),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final tabWidth =
+                  tabs.isEmpty ? 0.0 : constraints.maxWidth / tabs.length;
+              return Stack(
+                children: [
+                  AnimatedPositionedDirectional(
+                    duration: animationDuration,
+                    curve: Curves.easeInOutCubic,
+                    start: tabWidth * safeSelectedIndex,
+                    top: spacing.xxs,
+                    bottom: spacing.xxs,
+                    width: tabWidth,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: colors.primary.withValues(
+                          alpha: motion.tapSplashAlpha,
+                        ),
+                        borderRadius:
+                            BorderRadius.circular(context.radii.container),
+                      ),
+                    ),
+                  ),
+                  ShadTabs<int>(
+                    value: safeSelectedIndex,
+                    scrollable: false,
+                    tabsGap: 0,
+                    gap: 0,
+                    padding: EdgeInsets.zero,
+                    decoration: ShadDecoration(
+                      color: Colors.transparent,
+                      border: ShadBorder.none,
+                      secondaryBorder: ShadBorder.none,
+                      secondaryFocusedBorder: ShadBorder.none,
+                    ),
+                    onChanged: (value) {
+                      if (value != safeSelectedIndex) {
+                        onTabSelected(value);
+                      }
+                    },
+                    tabs: List<ShadTab<int>>.generate(tabs.length, (index) {
+                      final tab = tabs[index];
+                      return ShadTab<int>(
+                        value: index,
+                        height: sizing.iconButtonSize,
+                        backgroundColor: Colors.transparent,
+                        selectedBackgroundColor: Colors.transparent,
+                        foregroundColor: colors.mutedForeground,
+                        selectedForegroundColor: colors.foreground,
+                        child: _HomeBottomTabItem(
+                          label: tab.label,
+                          badgeCount: badgeCounts[tab.id] ?? 0,
+                          selected: index == safeSelectedIndex,
+                        ),
+                      );
+                    }),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -597,11 +632,13 @@ class _HomeShellBottomBar extends StatelessWidget {
   const _HomeShellBottomBar({
     required this.pendingCalendarTabIndex,
     required this.calendarTabIndex,
+    required this.calendarBottomDragSession,
     required this.calendarAvailable,
   });
 
   final ValueNotifier<int?> pendingCalendarTabIndex;
   final ValueNotifier<int> calendarTabIndex;
+  final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
   final bool calendarAvailable;
 
   @override
@@ -610,20 +647,73 @@ class _HomeShellBottomBar extends StatelessWidget {
       calendarAvailable: calendarAvailable,
       pendingCalendarTabIndex: pendingCalendarTabIndex,
       calendarTabIndex: calendarTabIndex,
+      calendarBottomDragSession: calendarBottomDragSession,
     );
   }
 }
 
-class _HomeShellDefaultBar extends StatelessWidget {
+class _HomeShellDefaultBar extends StatefulWidget {
   const _HomeShellDefaultBar({
     required this.calendarAvailable,
     required this.pendingCalendarTabIndex,
     required this.calendarTabIndex,
+    required this.calendarBottomDragSession,
   });
 
   final bool calendarAvailable;
   final ValueNotifier<int?> pendingCalendarTabIndex;
   final ValueNotifier<int> calendarTabIndex;
+  final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
+
+  @override
+  State<_HomeShellDefaultBar> createState() => _HomeShellDefaultBarState();
+}
+
+class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
+  final GlobalKey _scheduleTabKey = GlobalKey(
+    debugLabel: 'home-bottom-schedule-tab',
+  );
+  final GlobalKey _tasksTabKey = GlobalKey(debugLabel: 'home-bottom-tasks-tab');
+  Timer? _calendarDragSwitchTimer;
+  int? _hoveredCalendarTargetTab;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.calendarBottomDragSession.addListener(_handleCalendarDragSignal);
+    widget.calendarTabIndex.addListener(_handleCalendarDragSignal);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _handleCalendarDragSignal();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeShellDefaultBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.calendarBottomDragSession !=
+        widget.calendarBottomDragSession) {
+      oldWidget.calendarBottomDragSession.removeListener(
+        _handleCalendarDragSignal,
+      );
+      widget.calendarBottomDragSession.addListener(_handleCalendarDragSignal);
+    }
+    if (oldWidget.calendarTabIndex != widget.calendarTabIndex) {
+      oldWidget.calendarTabIndex.removeListener(_handleCalendarDragSignal);
+      widget.calendarTabIndex.addListener(_handleCalendarDragSignal);
+    }
+    _handleCalendarDragSignal();
+  }
+
+  @override
+  void dispose() {
+    widget.calendarBottomDragSession.removeListener(_handleCalendarDragSignal);
+    widget.calendarTabIndex.removeListener(_handleCalendarDragSignal);
+    _cancelCalendarDragSwitchTimer();
+    super.dispose();
+  }
 
   void _openHome(BuildContext context) {
     HomeShellScope.maybeOf(context)?.homeTabIndex.value = 0;
@@ -635,8 +725,8 @@ class _HomeShellDefaultBar extends StatelessWidget {
   }
 
   void _requestCalendarTab(BuildContext context, int index) {
-    pendingCalendarTabIndex.value = index;
-    calendarTabIndex.value = index;
+    widget.pendingCalendarTabIndex.value = index;
+    widget.calendarTabIndex.value = index;
     const HomeRoute().go(context);
     if (!context.read<ChatsCubit>().state.openCalendar) {
       context.read<ChatsCubit>().toggleCalendar();
@@ -645,6 +735,131 @@ class _HomeShellDefaultBar extends StatelessWidget {
 
   void _openSettings(BuildContext context) {
     context.push(const ProfileRoute().location, extra: context.read);
+  }
+
+  int? _normalizeCalendarTabIndex(int? value) {
+    if (value == null) {
+      return null;
+    }
+    if (value == 0 || value == 1) {
+      return value;
+    }
+    return null;
+  }
+
+  Rect? _calendarTabRectForIndex(int index) {
+    final GlobalKey key = index == 0 ? _scheduleTabKey : _tasksTabKey;
+    final BuildContext? tabContext = key.currentContext;
+    final RenderBox? box = tabContext?.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) {
+      return null;
+    }
+    final Size size = box.size;
+    if (!size.width.isFinite ||
+        !size.height.isFinite ||
+        size.width <= 0 ||
+        size.height <= 0) {
+      return null;
+    }
+    final Offset origin = box.localToGlobal(Offset.zero);
+    return origin & size;
+  }
+
+  void _cancelCalendarDragSwitchTimer() {
+    _calendarDragSwitchTimer?.cancel();
+    _calendarDragSwitchTimer = null;
+  }
+
+  void _setHoveredCalendarTargetTab(int? targetTab) {
+    if (_hoveredCalendarTargetTab == targetTab) {
+      return;
+    }
+    _cancelCalendarDragSwitchTimer();
+    if (!mounted) {
+      _hoveredCalendarTargetTab = targetTab;
+      return;
+    }
+    setState(() {
+      _hoveredCalendarTargetTab = targetTab;
+    });
+  }
+
+  void _setCalendarDragCleared() {
+    if (_hoveredCalendarTargetTab == null) {
+      return;
+    }
+    _cancelCalendarDragSwitchTimer();
+    if (!mounted) {
+      _hoveredCalendarTargetTab = null;
+      return;
+    }
+    setState(() {
+      _hoveredCalendarTargetTab = null;
+    });
+  }
+
+  void _scheduleCalendarDragSwitch(int targetTab) {
+    if (_hoveredCalendarTargetTab != targetTab) {
+      return;
+    }
+    if (_calendarDragSwitchTimer?.isActive == true) {
+      return;
+    }
+    final duration = context.read<SettingsCubit>().animationDuration;
+    _calendarDragSwitchTimer = Timer(duration, () {
+      if (!mounted) {
+        return;
+      }
+      if (_hoveredCalendarTargetTab != targetTab) {
+        return;
+      }
+      if (widget.calendarBottomDragSession.value == null) {
+        return;
+      }
+      _requestCalendarTab(context, targetTab);
+      setState(() {
+        _hoveredCalendarTargetTab = null;
+      });
+      _cancelCalendarDragSwitchTimer();
+    });
+  }
+
+  void _handleCalendarDragSignal() {
+    if (!mounted) {
+      return;
+    }
+    final CalendarBottomDragSession? dragSession =
+        widget.calendarBottomDragSession.value;
+    final int? sourceTab = dragSession == null
+        ? null
+        : _normalizeCalendarTabIndex(widget.calendarTabIndex.value);
+    if (sourceTab == null) {
+      _setCalendarDragCleared();
+      return;
+    }
+    if (!widget.calendarAvailable ||
+        !context.read<ChatsCubit>().state.openCalendar) {
+      _setHoveredCalendarTargetTab(null);
+      return;
+    }
+    final Offset? pointer = dragSession.pointer;
+    if (pointer == null) {
+      _setHoveredCalendarTargetTab(null);
+      return;
+    }
+    final int targetTab = sourceTab == 0 ? 1 : 0;
+    final Rect? targetRect = _calendarTabRectForIndex(targetTab);
+    if (targetRect == null) {
+      _setHoveredCalendarTargetTab(null);
+      return;
+    }
+    final Rect hitRect = targetRect.inflate(context.spacing.s);
+    if (!hitRect.contains(pointer)) {
+      _setHoveredCalendarTargetTab(null);
+      return;
+    }
+    _setHoveredCalendarTargetTab(targetTab);
+    _scheduleCalendarDragSwitch(targetTab);
   }
 
   @override
@@ -667,7 +882,7 @@ class _HomeShellDefaultBar extends StatelessWidget {
         unreadChatsCount + invitesCount + draftsCount + spamCount;
     int scheduledAlertsCount = 0;
     int unscheduledAlertsCount = 0;
-    if (calendarAvailable) {
+    if (widget.calendarAvailable) {
       final tasks = context.watch<CalendarBloc>().state.model.tasks.values;
       for (final task in tasks) {
         if (task.isCompleted) {
@@ -686,14 +901,21 @@ class _HomeShellDefaultBar extends StatelessWidget {
       }
     }
     final profile = context.watch<ProfileCubit>().state;
+    final bool lowMotion = context.watch<SettingsCubit>().state.lowMotion;
     final bool openCalendar = chatsState.openCalendar;
     final String settingsPath = const ProfileRoute().location;
     return AnimatedBuilder(
       animation: router.routerDelegate,
       builder: (context, _) {
-        final String routePath = router.routeInformationProvider.value.uri.path;
+        bool isSettingsPath(String path) {
+          return path == settingsPath || path.startsWith('$settingsPath/');
+        }
+
+        final String currentLocation =
+            router.routeInformationProvider.value.uri.path;
+        final String matchedLocation = router.state.matchedLocation;
         final bool settingsActive =
-            routePath == settingsPath || routePath.startsWith('$settingsPath/');
+            isSettingsPath(currentLocation) || isSettingsPath(matchedLocation);
         return DecoratedBox(
           decoration: BoxDecoration(
             color: colors.background,
@@ -709,7 +931,7 @@ class _HomeShellDefaultBar extends StatelessWidget {
                 bottom: spacing.s,
               ),
               child: ValueListenableBuilder<int>(
-                valueListenable: calendarTabIndex,
+                valueListenable: widget.calendarTabIndex,
                 builder: (context, activeCalendarTab, _) {
                   final int safeCalendarTab =
                       activeCalendarTab.clamp(0, 1).toInt();
@@ -718,7 +940,7 @@ class _HomeShellDefaultBar extends StatelessWidget {
                       : openCalendar
                           ? (safeCalendarTab == 0 ? 1 : 2)
                           : 0;
-                  final bool calendarDisabled = !calendarAvailable;
+                  final bool calendarDisabled = !widget.calendarAvailable;
                   final Color disabledColor =
                       colors.mutedForeground.withValues(alpha: 0.45);
                   final homeColor = selectedIndex == 0
@@ -734,6 +956,17 @@ class _HomeShellDefaultBar extends StatelessWidget {
                       : selectedIndex == 2
                           ? colors.foreground
                           : colors.mutedForeground;
+                  final int? dragSourceTab =
+                      widget.calendarBottomDragSession.value == null
+                          ? null
+                          : safeCalendarTab;
+                  final bool dragHintActive = !lowMotion &&
+                      widget.calendarAvailable &&
+                      openCalendar &&
+                      dragSourceTab != null;
+                  final bool shakeSchedule =
+                      dragHintActive && dragSourceTab == 1;
+                  final bool shakeTasks = dragHintActive && dragSourceTab == 0;
                   final avatar = AxiAvatar(
                     jid: profile.jid,
                     subscription: m.Subscription.both,
@@ -752,7 +985,7 @@ class _HomeShellDefaultBar extends StatelessWidget {
                     tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
                     tabBorderRadius: context.radii.squircle,
                     curve: Curves.easeInOutCubic,
-                    gap: spacing.xs,
+                    gap: spacing.s,
                     iconSize: sizing.iconButtonIconSize + spacing.xxs,
                     color: colors.mutedForeground,
                     activeColor: colors.foreground,
@@ -772,10 +1005,10 @@ class _HomeShellDefaultBar extends StatelessWidget {
                         case 0:
                           _openHome(context);
                         case 1:
-                          if (!calendarAvailable) return;
+                          if (!widget.calendarAvailable) return;
                           _requestCalendarTab(context, 0);
                         case 2:
-                          if (!calendarAvailable) return;
+                          if (!widget.calendarAvailable) return;
                           _requestCalendarTab(context, 1);
                         case 3:
                           _openSettings(context);
@@ -783,10 +1016,10 @@ class _HomeShellDefaultBar extends StatelessWidget {
                     },
                     tabs: [
                       GButton(
-                        icon: LucideIcons.messagesSquare,
-                        text: l10n.homeTabChats,
+                        icon: LucideIcons.house,
+                        text: l10n.homeBottomNavHome,
                         leading: _HomeBottomNavBadgeIcon(
-                          iconData: LucideIcons.messagesSquare,
+                          iconData: LucideIcons.house,
                           badgeCount: chatsBadgeCount,
                           color: homeColor,
                           iconSize: sizing.iconButtonIconSize + spacing.xxs,
@@ -796,12 +1029,16 @@ class _HomeShellDefaultBar extends StatelessWidget {
                       ),
                       GButton(
                         icon: LucideIcons.calendarClock,
+                        key: _scheduleTabKey,
                         text: l10n.calendarScheduleLabel,
-                        leading: _HomeBottomNavBadgeIcon(
-                          iconData: LucideIcons.calendarClock,
-                          badgeCount: scheduledAlertsCount,
-                          color: scheduleColor,
-                          iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                        leading: _BottomNavShake(
+                          enabled: shakeSchedule,
+                          child: _HomeBottomNavBadgeIcon(
+                            iconData: LucideIcons.calendarClock,
+                            badgeCount: scheduledAlertsCount,
+                            color: scheduleColor,
+                            iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                          ),
                         ),
                         iconColor: calendarDisabled
                             ? disabledColor
@@ -812,12 +1049,16 @@ class _HomeShellDefaultBar extends StatelessWidget {
                       ),
                       GButton(
                         icon: LucideIcons.squareCheck,
+                        key: _tasksTabKey,
                         text: l10n.calendarFragmentTaskLabel,
-                        leading: _HomeBottomNavBadgeIcon(
-                          iconData: LucideIcons.squareCheck,
-                          badgeCount: unscheduledAlertsCount,
-                          color: tasksColor,
-                          iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                        leading: _BottomNavShake(
+                          enabled: shakeTasks,
+                          child: _HomeBottomNavBadgeIcon(
+                            iconData: LucideIcons.squareCheck,
+                            badgeCount: unscheduledAlertsCount,
+                            color: tasksColor,
+                            iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                          ),
                         ),
                         iconColor: calendarDisabled
                             ? disabledColor
@@ -841,6 +1082,70 @@ class _HomeShellDefaultBar extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _BottomNavShake extends StatefulWidget {
+  const _BottomNavShake({required this.enabled, required this.child});
+
+  final bool enabled;
+  final Widget child;
+
+  @override
+  State<_BottomNavShake> createState() => _BottomNavShakeState();
+}
+
+class _BottomNavShakeState extends State<_BottomNavShake>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: baseAnimationDuration,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.enabled) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _BottomNavShake oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled == widget.enabled) {
+      return;
+    }
+    if (widget.enabled) {
+      _controller.repeat();
+      return;
+    }
+    _controller.stop();
+    _controller.value = 0;
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.enabled) {
+      return widget.child;
+    }
+    final maxAngle =
+        (context.spacing.xxs / context.sizing.iconButtonSize) * 0.6;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        final phase = _controller.value * math.pi * 2;
+        final angle = math.sin(phase) * maxAngle;
+        return Transform.rotate(angle: angle, child: child);
+      },
+      child: widget.child,
     );
   }
 }

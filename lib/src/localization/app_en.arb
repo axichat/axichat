@@ -4,6 +4,7 @@
     "description": "The title of the application"
   },
   "homeTabChats": "Chats",
+  "homeBottomNavHome": "Home",
   "homeTabDrafts": "Drafts",
   "homeTabSpam": "Spam",
   "homeTabBlocked": "Blocked",
@@ -1676,6 +1677,8 @@
   "settingsAutoDownloadDocumentsDescription": "Only for trusted chats.",
   "settingsAutoDownloadArchives": "Auto-download archives",
   "settingsAutoDownloadArchivesDescription": "Only for trusted chats.",
+  "settingsAutoDownloadScopeAlways": "Always",
+  "settingsAutoDownloadScopeTrustedContacts": "Only for trusted contacts.",
   "emailContactsImportTitle": "Import contacts",
   "emailContactsImportSubtitle": "Gmail, Outlook, Yahoo CSVs, or vCards.",
   "emailContactsImportFileAccessError": "Unable to access the selected file.",

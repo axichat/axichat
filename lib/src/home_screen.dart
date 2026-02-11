@@ -97,6 +97,7 @@ class HomeShellScope extends InheritedWidget {
     super.key,
     required this.pendingCalendarTabIndex,
     required this.calendarTabIndex,
+    required this.calendarBottomDragSession,
     required this.homeTabIndex,
     required this.tabs,
     required super.child,
@@ -104,6 +105,7 @@ class HomeShellScope extends InheritedWidget {
 
   final ValueNotifier<int?> pendingCalendarTabIndex;
   final ValueNotifier<int> calendarTabIndex;
+  final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
   final ValueNotifier<int> homeTabIndex;
   final List<HomeTabEntry> tabs;
 
@@ -115,6 +117,7 @@ class HomeShellScope extends InheritedWidget {
   bool updateShouldNotify(HomeShellScope oldWidget) {
     return pendingCalendarTabIndex != oldWidget.pendingCalendarTabIndex ||
         calendarTabIndex != oldWidget.calendarTabIndex ||
+        calendarBottomDragSession != oldWidget.calendarBottomDragSession ||
         homeTabIndex != oldWidget.homeTabIndex ||
         tabs != oldWidget.tabs;
   }
@@ -240,6 +243,8 @@ class _HomeShellState extends State<HomeShell> {
   final ValueNotifier<int?> _pendingCalendarTabIndex =
       ValueNotifier<int?>(null);
   final ValueNotifier<int> _calendarTabIndex = ValueNotifier<int>(0);
+  final ValueNotifier<CalendarBottomDragSession?> _calendarBottomDragSession =
+      ValueNotifier<CalendarBottomDragSession?>(null);
   final ValueNotifier<int> _homeTabIndex = ValueNotifier<int>(0);
   bool _railCollapsed = true;
 
@@ -247,6 +252,7 @@ class _HomeShellState extends State<HomeShell> {
   void dispose() {
     _pendingCalendarTabIndex.dispose();
     _calendarTabIndex.dispose();
+    _calendarBottomDragSession.dispose();
     _homeTabIndex.dispose();
     super.dispose();
   }
@@ -318,6 +324,7 @@ class _HomeShellState extends State<HomeShell> {
         child: HomeShellScope(
           pendingCalendarTabIndex: _pendingCalendarTabIndex,
           calendarTabIndex: _calendarTabIndex,
+          calendarBottomDragSession: _calendarBottomDragSession,
           homeTabIndex: _homeTabIndex,
           tabs: tabs,
           child: child,
@@ -360,6 +367,7 @@ class _HomeShellState extends State<HomeShell> {
           _HomeShellBottomBar(
             pendingCalendarTabIndex: _pendingCalendarTabIndex,
             calendarTabIndex: _calendarTabIndex,
+            calendarBottomDragSession: _calendarBottomDragSession,
             calendarAvailable: calendarAvailable,
           ),
         ],
@@ -517,6 +525,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final homeTabIndex = HomeShellScope.maybeOf(context)?.homeTabIndex;
     final pendingCalendarTabIndex =
         HomeShellScope.maybeOf(context)?.pendingCalendarTabIndex;
+    final calendarBottomDragSession =
+        HomeShellScope.maybeOf(context)?.calendarBottomDragSession;
     final tabs =
         HomeShellScope.maybeOf(context)?.tabs ?? const <HomeTabEntry>[];
     return _HomeExitPopGuard(
@@ -525,6 +535,7 @@ class _HomeScreenState extends State<HomeScreen> {
         storageManager: storageManager,
         shortcutFocusNode: _shortcutFocusNode,
         pendingCalendarTabIndex: pendingCalendarTabIndex,
+        calendarBottomDragSession: calendarBottomDragSession,
         tabs: tabs,
         railCollapsed: _railCollapsed,
         onToggleNavRail: () {
@@ -797,6 +808,7 @@ class _HomeContent extends StatelessWidget {
     required this.storageManager,
     required this.shortcutFocusNode,
     required this.pendingCalendarTabIndex,
+    required this.calendarBottomDragSession,
     required this.tabs,
     required this.railCollapsed,
     required this.onToggleNavRail,
@@ -808,6 +820,7 @@ class _HomeContent extends StatelessWidget {
   final CalendarStorageManager storageManager;
   final FocusNode shortcutFocusNode;
   final ValueNotifier<int?>? pendingCalendarTabIndex;
+  final ValueNotifier<CalendarBottomDragSession?>? calendarBottomDragSession;
   final List<HomeTabEntry> tabs;
   final bool railCollapsed;
   final VoidCallback onToggleNavRail;
@@ -903,6 +916,7 @@ class _HomeContent extends StatelessWidget {
                               child: CalendarWidget(
                                 pendingMobileTabIndex: pendingCalendarTabIndex,
                                 activeMobileTabIndex: calendarTabIndex,
+                                bottomDragSession: calendarBottomDragSession,
                               ),
                             ),
                           ],

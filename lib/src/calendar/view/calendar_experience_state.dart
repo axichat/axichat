@@ -122,9 +122,10 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
         );
         final Widget sidebar = CalendarSidebarHost<B>(
           sidebarKey: _sidebarKey,
-          onDragSessionStarted: handleGridDragSessionStarted,
-          onDragSessionEnded: handleGridDragSessionEnded,
-          onDragGlobalPositionChanged: handleGridDragPositionChanged,
+          onDragSessionStarted: _handleCalendarSidebarDragSessionStarted,
+          onDragSessionEnded: _handleCalendarSidebarDragSessionEnded,
+          onDragGlobalPositionChanged:
+              _handleCalendarSidebarDragPositionChanged,
         );
         final bool isMonthView = state.viewMode == CalendarView.month;
         final Widget calendarSurface = isMonthView
@@ -286,20 +287,47 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   }
 
   void _handleCalendarGridDragSessionStarted() {
-    handleGridDragSessionStarted();
+    _handleCalendarDragSessionStarted();
     _sidebarKey.currentState?.handleExternalGridDragStarted(
       isTouchMode: !_hasMouseDevice,
     );
   }
 
   void _handleCalendarGridDragPositionChanged(Offset globalPosition) {
-    handleGridDragPositionChanged(globalPosition);
+    _handleCalendarDragPositionChanged(globalPosition);
     _sidebarKey.currentState?.handleExternalGridDragPosition(globalPosition);
   }
 
   void _handleCalendarGridDragSessionEnded() {
-    handleGridDragSessionEnded();
+    _handleCalendarDragSessionEnded();
     _sidebarKey.currentState?.handleExternalGridDragEnded();
+  }
+
+  void _handleCalendarSidebarDragSessionStarted() {
+    _handleCalendarDragSessionStarted();
+  }
+
+  void _handleCalendarSidebarDragPositionChanged(Offset globalPosition) {
+    _handleCalendarDragPositionChanged(globalPosition);
+  }
+
+  void _handleCalendarSidebarDragSessionEnded() {
+    _handleCalendarDragSessionEnded();
+  }
+
+  void _handleCalendarDragSessionStarted() {
+    onCalendarDragSessionStarted();
+    handleGridDragSessionStarted();
+  }
+
+  void _handleCalendarDragPositionChanged(Offset globalPosition) {
+    onCalendarDragPositionChanged(globalPosition);
+    handleGridDragPositionChanged(globalPosition);
+  }
+
+  void _handleCalendarDragSessionEnded() {
+    onCalendarDragSessionEnded();
+    handleGridDragSessionEnded();
   }
 
   void _handleKeyboardCancelDrag() {
@@ -348,6 +376,15 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
       CalendarEvent.dateSelected(date: selected.add(Duration(days: deltaDays))),
     );
   }
+
+  @protected
+  void onCalendarDragSessionStarted() {}
+
+  @protected
+  void onCalendarDragPositionChanged(Offset globalPosition) {}
+
+  @protected
+  void onCalendarDragSessionEnded() {}
 
   /// Hook for subclasses to react to bloc state changes.
   void handleStateChanges(BuildContext context, CalendarState state);
