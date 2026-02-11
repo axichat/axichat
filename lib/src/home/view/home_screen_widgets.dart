@@ -506,15 +506,20 @@ class _HomeBottomTabBar extends StatelessWidget {
             builder: (context, constraints) {
               final tabWidth =
                   tabs.isEmpty ? 0.0 : constraints.maxWidth / tabs.length;
+              final indicatorInset = spacing.xxs;
+              final indicatorWidth = math.max(
+                0,
+                tabWidth - (indicatorInset * 2),
+              );
               return Stack(
                 children: [
                   AnimatedPositionedDirectional(
                     duration: animationDuration,
                     curve: Curves.easeInOutCubic,
-                    start: tabWidth * safeSelectedIndex,
-                    top: spacing.xxs,
-                    bottom: spacing.xxs,
-                    width: tabWidth,
+                    start: (tabWidth * safeSelectedIndex) + indicatorInset,
+                    top: indicatorInset,
+                    bottom: indicatorInset,
+                    width: indicatorWidth,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: colors.primary.withValues(

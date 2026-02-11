@@ -114,8 +114,8 @@ DateTime _atWeekdayTime(
 }
 
 List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
-  const String printingHouse = 'Market Street Printing House';
-  const String postOffice = 'Philadelphia Post Office';
+  const String printingHouse = 'Market Street Studio Hub';
+  const String postOffice = 'Philadelphia Shipping Office';
   const String workshop = 'Workshop';
   const int tuesdayOffset = 1;
   const int saturdayOffset = 5;
@@ -132,13 +132,13 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
   tasks
     ..add(
       _scheduledTask(
-        title: 'Rise & plan the day (virtues)',
+        title: 'Rise & plan the day (priorities)',
         scheduledTime: _atWeekdayTime(weekStart, 0, hour: 5, minute: 10),
         duration: const Duration(minutes: 25),
         priority: TaskPriority.important,
         reminders: startReminder,
         checklist: const <TaskChecklistItem>[
-          TaskChecklistItem(id: 'virtue', label: 'Select virtue of the day'),
+          TaskChecklistItem(id: 'virtue', label: 'Select focus for the day'),
           TaskChecklistItem(id: 'top3', label: 'Write top 3 intentions'),
         ],
       ),
@@ -153,30 +153,30 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Morning correspondence & ledgers',
+        title: 'Morning inbox & followups',
         scheduledTime: _atWeekdayTime(weekStart, 0, hour: 8, minute: 5),
         duration: const Duration(minutes: 70),
         location: printingHouse,
         priority: TaskPriority.important,
         reminders: startReminder,
         checklist: const <TaskChecklistItem>[
-          TaskChecklistItem(id: 'letters', label: 'Reply to letters'),
-          TaskChecklistItem(id: 'accounts', label: 'Update accounts'),
-          TaskChecklistItem(id: 'plan', label: 'Set today’s priorities'),
+          TaskChecklistItem(id: 'letters', label: 'Reply to messages'),
+          TaskChecklistItem(id: 'accounts', label: 'Update dashboards'),
+          TaskChecklistItem(id: 'plan', label: "Set today's priorities"),
         ],
       ),
     )
     ..add(
       _scheduledTask(
-        title: 'Press run: Gazette proofs & corrections',
+        title: 'Publishing block: newsletter edits & revisions',
         scheduledTime: _atWeekdayTime(weekStart, 0, hour: 9, minute: 30),
         duration: const Duration(minutes: 90),
         location: printingHouse,
         priority: TaskPriority.important,
         checklist: const <TaskChecklistItem>[
-          TaskChecklistItem(id: 'edit', label: 'Edit copy'),
-          TaskChecklistItem(id: 'set', label: 'Set type'),
-          TaskChecklistItem(id: 'proof', label: 'Proof & correct'),
+          TaskChecklistItem(id: 'edit', label: 'Edit draft'),
+          TaskChecklistItem(id: 'set', label: 'Set layout'),
+          TaskChecklistItem(id: 'proof', label: 'Review & correct'),
         ],
       ),
     )
@@ -190,7 +190,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Walk to market (fresh supplies)',
+        title: 'Walk to store (fresh supplies)',
         scheduledTime: _atWeekdayTime(weekStart, 0, hour: 12, minute: 10),
         duration: const Duration(minutes: 35),
         location: 'Market',
@@ -198,7 +198,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Dispatches & deliveries',
+        title: 'Shipments & deliveries',
         scheduledTime: _atWeekdayTime(weekStart, 0, hour: 13, minute: 20),
         duration: const Duration(minutes: 50),
         location: postOffice,
@@ -207,7 +207,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Experiments & notes (electricity)',
+        title: 'Prototypes & notes (hardware)',
         scheduledTime: _atWeekdayTime(weekStart, 0, hour: 15, minute: 5),
         duration: const Duration(minutes: 80),
         location: workshop,
@@ -215,7 +215,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Evening letters (friends & patrons)',
+        title: 'Evening messages (friends & clients)',
         scheduledTime: _atWeekdayTime(weekStart, 0, hour: 19, minute: 10),
         duration: const Duration(minutes: 60),
         location: 'Home',
@@ -234,7 +234,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
   tasks
     ..add(
       _scheduledTask(
-        title: 'Early workshop: tools & repairs',
+        title: 'Early workshop: tools & prep',
         scheduledTime: _atWeekdayTime(
           weekStart,
           tuesdayOffset,
@@ -247,7 +247,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Appointments & walk-ins',
+        title: 'Appointments & check-ins',
         scheduledTime: _atWeekdayTime(
           weekStart,
           tuesdayOffset,
@@ -260,7 +260,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..addAll(<CalendarTask>[
       _scheduledTask(
-        title: 'Committee meeting: civic improvements',
+        title: 'Committee meeting: product improvements',
         scheduledTime: _atWeekdayTime(
           weekStart,
           tuesdayOffset,
@@ -268,11 +268,11 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
           minute: 30,
         ),
         duration: const Duration(minutes: 90),
-        location: 'State House',
+        location: 'Main Office',
         priority: TaskPriority.urgent,
       ),
       _scheduledTask(
-        title: 'Printer’s client: pamphlet commission',
+        title: 'Client request: campaign brochure',
         scheduledTime: _atWeekdayTime(
           weekStart,
           tuesdayOffset,
@@ -286,7 +286,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     ])
     ..add(
       _scheduledTask(
-        title: 'Press run: type setting & proofs',
+        title: 'Publishing block: layout pass & proofs',
         scheduledTime: _atWeekdayTime(
           weekStart,
           tuesdayOffset,
@@ -300,7 +300,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Apprentices: instruction & review',
+        title: 'Teammates: instruction & review',
         scheduledTime: _atWeekdayTime(
           weekStart,
           tuesdayOffset,
@@ -314,7 +314,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Library Company: acquire new volumes',
+        title: 'Research block: acquire new references',
         scheduledTime: _atWeekdayTime(
           weekStart,
           tuesdayOffset,
@@ -322,7 +322,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
           minute: 10,
         ),
         duration: const Duration(minutes: 60),
-        location: 'Library Company Hall',
+        location: 'Research Team Room',
         priority: TaskPriority.important,
       ),
     )
@@ -336,7 +336,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
           minute: 30,
         ),
         duration: const Duration(minutes: 90),
-        location: 'Tavern',
+        location: 'Cafe',
       ),
     );
 
@@ -347,12 +347,12 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
         title: 'Swim / exercise',
         scheduledTime: _atWeekdayTime(weekStart, 2, hour: 5, minute: 45),
         duration: const Duration(minutes: 40),
-        location: 'River',
+        location: 'Gym',
       ),
     )
     ..add(
       _scheduledTask(
-        title: 'Subscriptions, invoices, and receipts',
+        title: 'Billing, invoices, and receipts',
         scheduledTime: _atWeekdayTime(weekStart, 2, hour: 9, minute: 5),
         duration: const Duration(minutes: 80),
         location: printingHouse,
@@ -361,10 +361,10 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Library Company: acquire new volumes',
+        title: 'Research block: acquire new references',
         scheduledTime: _atWeekdayTime(weekStart, 2, hour: 13, minute: 10),
         duration: const Duration(minutes: 65),
-        location: 'Library Company Hall',
+        location: 'Research Team Room',
         priority: TaskPriority.important,
       ),
     )
@@ -389,7 +389,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
   tasks
     ..add(
       _scheduledTask(
-        title: 'Post Office: routes & complaints',
+        title: 'Shipping desk: routes & complaints',
         scheduledTime: _atWeekdayTime(weekStart, 3, hour: 7, minute: 50),
         duration: const Duration(minutes: 55),
         location: postOffice,
@@ -398,7 +398,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Apprentices: instruction & review',
+        title: 'Teammates: instruction & review',
         scheduledTime: _atWeekdayTime(weekStart, 3, hour: 9, minute: 30),
         duration: const Duration(minutes: 70),
         location: workshop,
@@ -407,7 +407,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Experiment prep (glass, silk, brass)',
+        title: 'Prototype prep (parts, cables, tools)',
         scheduledTime: _atWeekdayTime(weekStart, 3, hour: 14, minute: 0),
         duration: const Duration(minutes: 45),
         location: workshop,
@@ -415,7 +415,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Evening reading: philosophy',
+        title: 'Evening reading: strategy',
         scheduledTime: _atWeekdayTime(weekStart, 3, hour: 21, minute: 0),
         duration: const Duration(minutes: 45),
         location: 'Home',
@@ -426,7 +426,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
   tasks
     ..add(
       _scheduledTask(
-        title: 'Morning correspondence & ledgers',
+        title: 'Morning inbox & followups',
         scheduledTime: _atWeekdayTime(weekStart, 4, hour: 7, minute: 30),
         duration: const Duration(minutes: 60),
         location: printingHouse,
@@ -435,24 +435,24 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Weekly mail dispatch (seal & log)',
+        title: 'Weekly shipment dispatch (pack & log)',
         scheduledTime: _atWeekdayTime(weekStart, 4, hour: 13, minute: 0),
         duration: const Duration(minutes: 90),
         location: postOffice,
         priority: TaskPriority.critical,
         checklist: const <TaskChecklistItem>[
-          TaskChecklistItem(id: 'sort', label: 'Sort packets'),
-          TaskChecklistItem(id: 'seal', label: 'Seal bags'),
+          TaskChecklistItem(id: 'sort', label: 'Sort packages'),
+          TaskChecklistItem(id: 'seal', label: 'Seal boxes'),
           TaskChecklistItem(id: 'log', label: 'Log departures'),
         ],
       ),
     )
     ..add(
       _scheduledTask(
-        title: 'Junto: discussion & minutes',
+        title: 'Sync: discussion & minutes',
         scheduledTime: _atWeekdayTime(weekStart, 4, hour: 19, minute: 30),
         duration: const Duration(minutes: 110),
-        location: 'Junto Club',
+        location: 'Team Hub',
         priority: TaskPriority.important,
       ),
     );
@@ -488,7 +488,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
     )
     ..add(
       _scheduledTask(
-        title: 'Fix the kite & twine (for next storm)',
+        title: 'Fix the router & cabling (for next sprint)',
         scheduledTime: _atWeekdayTime(
           weekStart,
           saturdayOffset,
@@ -518,7 +518,7 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
   tasks
     ..add(
       _scheduledTask(
-        title: 'Quiet reading & correspondence',
+        title: 'Quiet reading & catchup',
         scheduledTime: _atWeekdayTime(
           weekStart,
           sundayOffset,
@@ -561,40 +561,41 @@ List<CalendarTask> _scheduledWeekTasks(DateTime weekStart) {
 }
 
 List<CalendarTask> _unscheduledTasks() {
-  const String printingHouse = 'Market Street Printing House';
+  const String printingHouse = 'Market Street Studio Hub';
   return <CalendarTask>[
     _unscheduledTask(
-      title: 'Order fresh typefaces (long primer)',
+      title: 'Order fresh templates (landing page)',
       location: printingHouse,
       priority: TaskPriority.important,
     ),
     _unscheduledTask(
-      title: 'Sketch improvements to the Franklin stove',
+      title: 'Sketch improvements to the office setup',
       priority: TaskPriority.important,
       checklist: const <TaskChecklistItem>[
-        TaskChecklistItem(id: 'draft', label: 'Draft new airflow sketch'),
+        TaskChecklistItem(id: 'draft', label: 'Draft new layout sketch'),
         TaskChecklistItem(id: 'measure', label: 'Note measurements'),
       ],
     ),
-    _unscheduledTask(title: 'Read: Addison & Steele (notes for style)'),
-    _unscheduledTask(title: 'Repair kite silk & twine for the next storm'),
+    _unscheduledTask(title: 'Read: long product briefs (notes for style)'),
     _unscheduledTask(
-      title: 'Write short notes of thanks (subscriptions and favors)',
+        title: 'Repair spare cables & adapters for the next deploy'),
+    _unscheduledTask(
+      title: 'Write short notes of thanks (customers and favors)',
     ),
     _unscheduledTask(title: 'Prepare Sunday dinner list'),
     _unscheduledTask(
-      title: 'Junto: prepare agenda & minutes',
+      title: 'Sync prep: agenda & minutes',
       priority: TaskPriority.important,
-      location: 'Junto Club',
+      location: 'Team Hub',
     ),
     _unscheduledTask(
-      title: 'Library Company: trustees session (schedule time)',
+      title: 'Research group: planning session (schedule time)',
       priority: TaskPriority.important,
-      location: 'Library Company Hall',
+      location: 'Research Team Room',
     ),
-    _unscheduledTask(title: 'Draft sermon notes (optional)'),
+    _unscheduledTask(title: 'Draft meeting notes (optional)'),
     _unscheduledTask(
-      title: 'Organize workshop shelves',
+      title: 'Organize studio shelves',
       location: 'Workshop',
       checklist: const <TaskChecklistItem>[
         TaskChecklistItem(id: 'bins', label: 'Label bins'),
@@ -605,8 +606,8 @@ List<CalendarTask> _unscheduledTasks() {
 }
 
 List<CalendarTask> _reminderTasks(DateTime weekStart) {
-  const String postOffice = 'Philadelphia Post Office';
-  const String printingHouse = 'Market Street Printing House';
+  const String postOffice = 'Philadelphia Shipping Office';
+  const String printingHouse = 'Market Street Studio Hub';
 
   const ReminderPreferences deadlineReminder = ReminderPreferences(
     enabled: true,
@@ -618,7 +619,7 @@ List<CalendarTask> _reminderTasks(DateTime weekStart) {
 
   return <CalendarTask>[
     _deadlineTask(
-      title: 'Reply to Paris letter',
+      title: 'Reply to vendor email',
       deadline: _atWeekdayTime(weekStart, 1, hour: 20, minute: 0),
       priority: TaskPriority.important,
       reminders: deadlineReminder,
@@ -626,26 +627,26 @@ List<CalendarTask> _reminderTasks(DateTime weekStart) {
     _deadlineTask(
       title: 'Return borrowed book',
       deadline: _atWeekdayTime(weekStart, 3, hour: 16, minute: 0),
-      location: 'Library Company Hall',
+      location: 'Research Team Room',
       priority: TaskPriority.urgent,
       reminders: deadlineReminder,
     ),
     _deadlineTask(
-      title: 'Send subscription receipts',
+      title: 'Send billing receipts',
       deadline: _atWeekdayTime(weekStart, 2, hour: 18, minute: 0),
       location: printingHouse,
       priority: TaskPriority.important,
       reminders: deadlineReminder,
     ),
     _deadlineTask(
-      title: 'Pay rent for the printing house',
+      title: 'Pay rent for the studio office',
       deadline: _atWeekdayTime(weekStart, 4, hour: 17, minute: 0),
       location: printingHouse,
       priority: TaskPriority.urgent,
       reminders: deadlineReminder,
     ),
     _deadlineTask(
-      title: 'Post Office: confirm weekly route changes',
+      title: 'Shipping desk: confirm weekly route changes',
       deadline: _atWeekdayTime(weekStart, 0, hour: 19, minute: 0),
       location: postOffice,
       priority: TaskPriority.urgent,
@@ -657,17 +658,17 @@ List<CalendarTask> _reminderTasks(DateTime weekStart) {
 List<DayEvent> _dayEvents(DateTime weekStart) {
   return <DayEvent>[
     DayEvent.create(
-      title: 'Market day',
+      title: 'Errands day',
       startDate: weekStart.add(const Duration(days: 2)),
       description: 'Errands, supplies, and quick meetings.',
     ),
     DayEvent.create(
-      title: 'Fire company drill',
+      title: 'Safety team drill',
       startDate: weekStart.add(const Duration(days: 3)),
-      description: 'Equipment check & muster practice.',
+      description: 'Equipment check & response practice.',
     ),
     DayEvent.create(
-      title: 'Weekend visitors',
+      title: 'Weekend guests',
       startDate: weekStart.add(const Duration(days: 5)),
       endDate: weekStart.add(const Duration(days: 6)),
       description: 'Guests in town; keep the schedule flexible.',
@@ -690,13 +691,13 @@ CalendarModel _attachCriticalPaths(CalendarModel model) {
   }
 
   final CalendarTask? correspondence = findByTitle(
-    'Morning correspondence & ledgers',
+    'Morning inbox & followups',
   );
   final CalendarTask? proofs = findByTitle(
-    'Press run: Gazette proofs & corrections',
+    'Publishing block: newsletter edits & revisions',
   );
   final CalendarTask? dispatches = findByTitle(
-    'Weekly mail dispatch (seal & log)',
+    'Weekly shipment dispatch (pack & log)',
   );
 
   final List<String> pathTaskIds = <String>[
@@ -710,7 +711,7 @@ CalendarModel _attachCriticalPaths(CalendarModel model) {
   }
 
   final CalendarCriticalPath path = CalendarCriticalPath.create(
-    name: 'Gazette & Dispatch',
+    name: 'Publishing & Shipping',
   );
   CalendarModel updated = model.addCriticalPath(path);
   for (final String taskId in pathTaskIds) {

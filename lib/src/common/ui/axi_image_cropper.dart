@@ -8,7 +8,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:crop_your_image/crop_your_image.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -159,11 +158,10 @@ class _AxiImageCropperState extends State<AxiImageCropper> {
                           baseColor: colors.card,
                           maskColor: colors.background.withValues(alpha: 0.55),
                           radius: radius.topLeft.x,
+                          clipBehavior: Clip.none,
                           initialRectBuilder: InitialRectBuilder.withArea(
                             initialArea,
                           ),
-                          willUpdateScale: (_) => false,
-                          scrollZoomSensitivity: 0,
                           overlayBuilder: (context, rect) {
                             if (!_isValidRect(rect)) {
                               return const SizedBox.shrink();
@@ -176,7 +174,7 @@ class _AxiImageCropperState extends State<AxiImageCropper> {
                                   borderColor: colors.primary,
                                   gridColor: colors.border,
                                   radius: radius,
-                                  borderWidth: borderSide.width,
+                                  borderWidth: borderSide.width * 2,
                                 ),
                               ),
                             );
@@ -232,7 +230,6 @@ class _AxiImageCropperState extends State<AxiImageCropper> {
                           ),
                         ),
                       ),
-                      const _CropScrollSignalForwarder(),
                     ],
                   ),
                 ),
@@ -322,29 +319,6 @@ class _AxiImageCropperState extends State<AxiImageCropper> {
 
 bool _isValidRect(Rect rect) =>
     rect.isFinite && rect.width > 0 && rect.height > 0;
-
-class _CropScrollSignalForwarder extends StatelessWidget {
-  const _CropScrollSignalForwarder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerSignal: (event) {
-        if (event is! PointerScrollEvent) return;
-        final scrollable = Scrollable.maybeOf(context);
-        final position = scrollable?.position;
-        if (position == null) return;
-        final target = (position.pixels + event.scrollDelta.dy)
-            .clamp(position.minScrollExtent, position.maxScrollExtent)
-            .toDouble();
-        if (target == position.pixels) return;
-        position.jumpTo(target);
-      },
-      child: const SizedBox.expand(),
-    );
-  }
-}
 
 class _CropGridPainter extends CustomPainter {
   _CropGridPainter({

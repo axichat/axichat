@@ -45,12 +45,12 @@ class DemoChats {
 
   static const String _demoDomain = 'axi.im';
   static const String _demoConferenceDomain = 'conference.$_demoDomain';
-  static const String _washingtonJid = 'washington@$_demoDomain';
-  static const String _jeffersonJid = 'jefferson@$_demoDomain';
-  static const String _adamsJid = 'adams@$_demoDomain';
-  static const String _madisonJid = 'madison@$_demoDomain';
-  static const String _hamiltonJid = 'hamilton@$_demoDomain';
-  static const String _groupJid = 'founders@$_demoConferenceDomain';
+  static const String _washingtonJid = 'george@$_demoDomain';
+  static const String _jeffersonJid = 'thomas@$_demoDomain';
+  static const String _adamsJid = 'john@$_demoDomain';
+  static const String _madisonJid = 'james@$_demoDomain';
+  static const String _hamiltonJid = 'alex@$_demoDomain';
+  static const String _groupJid = 'team@$_demoConferenceDomain';
   static const String contact1Jid = 'noah@outlook.com';
 
   static const Map<String, DemoContactAvatar> _avatars =
@@ -212,21 +212,21 @@ class DemoChats {
         senderJid: washingtonJid,
         chatJid: washingtonJid,
         body:
-            'French powder ships leave soon; keep your lines steady while we hold the river posts tight until they land.',
+            'QA build notes landed early; keep your branch steady while we hold release tags tight until reviews clear tonight.',
         timestamp: now.subtract(const Duration(minutes: 14)),
       ),
       message(
         stanzaId: 'demo-washington-2',
         senderJid: washingtonJid,
         chatJid: washingtonJid,
-        body: 'The winter camp strains the army. Can you secure more supplies?',
+        body: 'The sprint board is crowded. Can you secure more testers today?',
         timestamp: now.subtract(const Duration(minutes: 17)),
       ),
       message(
         stanzaId: 'demo-washington-1',
         senderJid: kDemoSelfJid,
         chatJid: washingtonJid,
-        body: 'Working Paris for muskets and powder now.',
+        body: 'Working vendors for devices and access now.',
         timestamp: now.subtract(const Duration(minutes: 20)),
       ),
     ];
@@ -243,7 +243,7 @@ class DemoChats {
         stanzaId: 'demo-jefferson-3',
         senderJid: jeffersonJid,
         chatJid: jeffersonJid,
-        body: 'Adjusting grievances order before committee meets.',
+        body: 'Reordering agenda items before planning sync.',
         timestamp: now.subtract(const Duration(minutes: 49)),
       ),
       message(
@@ -251,14 +251,14 @@ class DemoChats {
         senderJid: kDemoSelfJid,
         chatJid: jeffersonJid,
         body:
-            'The tone is bold; consider tightening the grievances sequence so the close lands harder.',
+            'The draft is close; consider tightening the opening sequence so the ending lands clearer.',
         timestamp: now.subtract(const Duration(minutes: 52)),
       ),
       message(
         stanzaId: 'demo-jefferson-1',
         senderJid: jeffersonJid,
         chatJid: jeffersonJid,
-        body: 'Preamble centers natural rights. Thoughts?',
+        body: 'Intro centers customer outcomes. Thoughts?',
         timestamp: now.subtract(const Duration(minutes: 55)),
       ),
     ];
@@ -268,7 +268,7 @@ class DemoChats {
         stanzaId: 'demo-adams-4',
         senderJid: adamsJid,
         chatJid: adamsJid,
-        body: 'Good. I will press the hesitant delegations.',
+        body: 'Good. I will nudge the hesitant stakeholders.',
         timestamp: now.subtract(const Duration(minutes: 62)),
       ),
       message(
@@ -282,7 +282,7 @@ class DemoChats {
         stanzaId: 'demo-adams-2',
         senderJid: kDemoSelfJid,
         chatJid: adamsJid,
-        body: 'Tell them a unified procurement will keep New England supplied.',
+        body: 'Tell them a shared rollout will keep East teams supplied.',
         timestamp: now.subtract(const Duration(minutes: 66)),
       ),
       message(
@@ -290,7 +290,7 @@ class DemoChats {
         senderJid: adamsJid,
         chatJid: adamsJid,
         body:
-            'Militias are eager but fear losing stores if Congress delays aid.',
+            'Teams are eager but fear losing budget if leadership delays approval.',
         timestamp: now.subtract(const Duration(minutes: 70)),
       ),
     ];
@@ -301,14 +301,14 @@ class DemoChats {
         senderJid: kDemoSelfJid,
         chatJid: madisonJid,
         body:
-            'Send me the outline; I will annotate margins tonight and return it.',
+            'Send me the outline; I will annotate sections tonight and return it.',
         timestamp: now.subtract(const Duration(minutes: 76)),
       ),
       message(
         stanzaId: 'demo-madison-3',
         senderJid: madisonJid,
         chatJid: madisonJid,
-        body: 'Drafting notes on representation to circulate quietly.',
+        body: 'Drafting notes on onboarding to circulate quietly.',
         timestamp: now.subtract(const Duration(minutes: 78)),
       ),
       message(
@@ -316,14 +316,14 @@ class DemoChats {
         senderJid: kDemoSelfJid,
         chatJid: madisonJid,
         body:
-            'Agreed. Independence must rest on a compact sturdy enough to last.',
+            'Agreed. Launch plans must rest on a process strong enough long-term.',
         timestamp: now.subtract(const Duration(minutes: 82)),
       ),
       message(
         stanzaId: 'demo-madison-1',
         senderJid: madisonJid,
         chatJid: madisonJid,
-        body: 'We need unity now, but a workable union after victory.',
+        body: 'We need alignment now, plus a workable process after launch.',
         timestamp: now.subtract(const Duration(minutes: 86)),
       ),
     ];
@@ -334,76 +334,77 @@ class DemoChats {
         senderJid: kDemoSelfJid,
         chatJid: hamiltonJid,
         body:
-            'We can float a short loan if New York pledges customs. Keep them moving.',
+            'We can float a short buffer if New York confirms invoices. Keep them moving.',
         timestamp: now.subtract(const Duration(minutes: 91)),
       ),
       message(
         stanzaId: 'demo-hamilton-3',
         senderJid: hamiltonJid,
         chatJid: hamiltonJid,
-        body: 'Then we must secure the ports quickly.',
+        body: 'Then we must secure the vendors quickly.',
         timestamp: now.subtract(const Duration(minutes: 93)),
       ),
       message(
         stanzaId: 'demo-hamilton-2',
         senderJid: kDemoSelfJid,
         chatJid: hamiltonJid,
-        body: 'French loans can steady us, paired with reliable customs soon.',
+        body:
+            'Bridge funding can steady us, paired with reliable billing soon.',
         timestamp: now.subtract(const Duration(minutes: 96)),
       ),
       message(
         stanzaId: 'demo-hamilton-1',
         senderJid: hamiltonJid,
         chatJid: hamiltonJid,
-        body: 'Army finance is threadbare; credit dries faster each week.',
+        body: 'Project finance is tight; cash burns faster each week.',
         timestamp: now.subtract(const Duration(minutes: 100)),
       ),
     ];
 
     final roomOccupants = <String, Occupant>{
-      '$groupJid/Franklin': Occupant(
-        occupantId: '$groupJid/Franklin',
-        nick: 'Franklin',
+      '$groupJid/Ben': Occupant(
+        occupantId: '$groupJid/Ben',
+        nick: 'Ben',
         realJid: kDemoSelfJid,
         affiliation: OccupantAffiliation.owner,
         role: OccupantRole.moderator,
         chatType: ChatType.groupChat,
       ),
-      '$groupJid/Washington': Occupant(
-        occupantId: '$groupJid/Washington',
-        nick: 'Washington',
+      '$groupJid/George': Occupant(
+        occupantId: '$groupJid/George',
+        nick: 'George',
         realJid: washingtonJid,
         affiliation: OccupantAffiliation.admin,
         role: OccupantRole.participant,
         chatType: ChatType.groupChat,
       ),
-      '$groupJid/Jefferson': Occupant(
-        occupantId: '$groupJid/Jefferson',
-        nick: 'Jefferson',
+      '$groupJid/Thomas': Occupant(
+        occupantId: '$groupJid/Thomas',
+        nick: 'Thomas',
         realJid: jeffersonJid,
         affiliation: OccupantAffiliation.member,
         role: OccupantRole.participant,
         chatType: ChatType.groupChat,
       ),
-      '$groupJid/Adams': Occupant(
-        occupantId: '$groupJid/Adams',
-        nick: 'Adams',
+      '$groupJid/John': Occupant(
+        occupantId: '$groupJid/John',
+        nick: 'John',
         realJid: adamsJid,
         affiliation: OccupantAffiliation.member,
         role: OccupantRole.participant,
         chatType: ChatType.groupChat,
       ),
-      '$groupJid/Madison': Occupant(
-        occupantId: '$groupJid/Madison',
-        nick: 'Madison',
+      '$groupJid/James': Occupant(
+        occupantId: '$groupJid/James',
+        nick: 'James',
         realJid: madisonJid,
         affiliation: OccupantAffiliation.member,
         role: OccupantRole.participant,
         chatType: ChatType.groupChat,
       ),
-      '$groupJid/Hamilton': Occupant(
-        occupantId: '$groupJid/Hamilton',
-        nick: 'Hamilton',
+      '$groupJid/Alex': Occupant(
+        occupantId: '$groupJid/Alex',
+        nick: 'Alex',
         realJid: hamiltonJid,
         affiliation: OccupantAffiliation.member,
         role: OccupantRole.participant,
@@ -414,62 +415,61 @@ class DemoChats {
     final groupMessages = [
       message(
         stanzaId: 'demo-group-6',
-        senderJid: '$groupJid/Hamilton',
+        senderJid: '$groupJid/Alex',
         chatJid: groupJid,
-        body:
-            'Creditors will watch; independence must come with a revenue plan.',
+        body: 'Clients will watch; launch must come with a support plan.',
         timestamp: now.subtract(const Duration(minutes: 25)),
-        occupantId: '$groupJid/Hamilton',
+        occupantId: '$groupJid/Alex',
       ),
       message(
         stanzaId: 'demo-group-5b',
-        senderJid: '$groupJid/Madison',
+        senderJid: '$groupJid/James',
         chatJid: groupJid,
         body:
-            'Also: whoever drafts the instructions should leave room for amendments later.',
+            'Also: whoever drafts the checklist should leave room for edits later.',
         timestamp: now.subtract(const Duration(minutes: 26)),
-        occupantId: '$groupJid/Madison',
+        occupantId: '$groupJid/James',
       ),
       message(
         stanzaId: 'demo-group-5',
-        senderJid: '$groupJid/Madison',
+        senderJid: '$groupJid/James',
         chatJid: groupJid,
-        body: 'States must pledge stores once we adopt the declaration.',
+        body: 'Teams must commit resources once we adopt the rollout.',
         timestamp: now.subtract(const Duration(minutes: 27)),
-        occupantId: '$groupJid/Madison',
+        occupantId: '$groupJid/James',
       ),
       message(
         stanzaId: 'demo-group-4',
-        senderJid: '$groupJid/Washington',
+        senderJid: '$groupJid/George',
         chatJid: groupJid,
-        body: 'Declare it, and the army will defend it.',
+        body: 'Ship it, and the team will back it.',
         timestamp: now.subtract(const Duration(minutes: 29)),
-        occupantId: '$groupJid/Washington',
+        occupantId: '$groupJid/George',
       ),
       message(
         stanzaId: 'demo-group-3',
-        senderJid: '$groupJid/Franklin',
+        senderJid: '$groupJid/Ben',
         chatJid: groupJid,
         body:
-            'Let the words sing; we must all hang together after we sign, and a clean preamble will steady wavering hands.',
+            'Let the message land; we must all stay aligned after we ship, and a clear summary will steady nervous stakeholders.',
         timestamp: now.subtract(const Duration(minutes: 31)),
-        occupantId: '$groupJid/Franklin',
+        occupantId: '$groupJid/Ben',
       ),
       message(
         stanzaId: 'demo-group-2',
-        senderJid: '$groupJid/Adams',
+        senderJid: '$groupJid/John',
         chatJid: groupJid,
-        body: 'We need every colony behind this or it fractures.',
+        body: 'We need every squad aligned here or it fragments.',
         timestamp: now.subtract(const Duration(minutes: 33)),
-        occupantId: '$groupJid/Adams',
+        occupantId: '$groupJid/John',
       ),
       message(
         stanzaId: 'demo-group-1',
-        senderJid: '$groupJid/Jefferson',
+        senderJid: '$groupJid/Thomas',
         chatJid: groupJid,
-        body: 'Drafting the opening on equal rights now.',
+        body: 'Drafting the kickoff notes for tomorrow now.',
         timestamp: now.subtract(const Duration(minutes: 35)),
-        occupantId: '$groupJid/Jefferson',
+        occupantId: '$groupJid/Thomas',
       ),
     ];
 
@@ -479,7 +479,7 @@ class DemoChats {
     );
     final groupChat = Chat(
       jid: groupJid,
-      title: 'Founders',
+      title: 'Team',
       type: ChatType.groupChat,
       myNickname: kDemoSelfDisplayName,
       contactJid: groupJid,
@@ -509,23 +509,23 @@ class DemoChats {
 
     return [
       DemoChatScript(
-        chat: directChat(washingtonJid, 'Washington', washingtonMessages),
+        chat: directChat(washingtonJid, 'George', washingtonMessages),
         messages: washingtonMessages,
       ),
       DemoChatScript(
-        chat: directChat(jeffersonJid, 'Jefferson', jeffersonMessages),
+        chat: directChat(jeffersonJid, 'Thomas', jeffersonMessages),
         messages: jeffersonMessages,
       ),
       DemoChatScript(
-        chat: directChat(adamsJid, 'Adams', adamsMessages),
+        chat: directChat(adamsJid, 'John', adamsMessages),
         messages: adamsMessages,
       ),
       DemoChatScript(
-        chat: directChat(madisonJid, 'Madison', madisonMessages),
+        chat: directChat(madisonJid, 'James', madisonMessages),
         messages: madisonMessages,
       ),
       DemoChatScript(
-        chat: directChat(hamiltonJid, 'Hamilton', hamiltonMessages),
+        chat: directChat(hamiltonJid, 'Alex', hamiltonMessages),
         messages: hamiltonMessages,
       ),
       DemoChatScript(
@@ -586,7 +586,7 @@ class DemoChats {
         roomState: RoomState(
           roomJid: groupJid,
           occupants: roomOccupants,
-          myOccupantId: '$groupJid/Franklin',
+          myOccupantId: '$groupJid/Ben',
         ),
       ),
     ];

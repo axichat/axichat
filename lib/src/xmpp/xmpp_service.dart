@@ -1748,11 +1748,11 @@ class XmppService extends XmppBase
 
   static const _demoFounderBareJids = <String>[
     kDemoSelfJid,
-    'washington@axi.im',
-    'jefferson@axi.im',
-    'adams@axi.im',
-    'madison@axi.im',
-    'hamilton@axi.im',
+    'george@axi.im',
+    'thomas@axi.im',
+    'john@axi.im',
+    'james@axi.im',
+    'alex@axi.im',
   ];
 
   Future<void> _seedDemoReactions(List<DemoChatScript> scripts) async {
@@ -1793,7 +1793,7 @@ class XmppService extends XmppBase
               .where(
                 (message) =>
                     (_nickFromSender(message.senderJid) ?? '').toLowerCase() ==
-                    'franklin',
+                    'ben',
               )
               .firstOrNull;
           if (franklinMessage != null &&
@@ -1860,7 +1860,7 @@ class XmppService extends XmppBase
           final madisonMessages = messages.where(
             (message) =>
                 (_nickFromSender(message.senderJid) ?? '').toLowerCase() ==
-                'madison',
+                'james',
           );
           final madisonSecondMessage =
               madisonMessages.length >= 2 ? madisonMessages.elementAt(1) : null;
@@ -1873,7 +1873,7 @@ class XmppService extends XmppBase
             );
             await db.replaceReactions(
               messageId: madisonSecondMessage.stanzaID,
-              senderJid: 'washington@axi.im',
+              senderJid: 'george@axi.im',
               emojis: const [_demoReactionClap],
             );
           }
@@ -2004,11 +2004,11 @@ class XmppService extends XmppBase
     }
     return switch (normalized) {
       kDemoSelfJid => _demoFranklinBackground,
-      'washington@axi.im' => _demoWashingtonBackground,
-      'jefferson@axi.im' => _demoJeffersonBackground,
-      'adams@axi.im' => _demoAdamsBackground,
-      'madison@axi.im' => _demoMadisonBackground,
-      'hamilton@axi.im' => _demoHamiltonBackground,
+      'george@axi.im' => _demoWashingtonBackground,
+      'thomas@axi.im' => _demoJeffersonBackground,
+      'john@axi.im' => _demoAdamsBackground,
+      'james@axi.im' => _demoMadisonBackground,
+      'alex@axi.im' => _demoHamiltonBackground,
       _ => null,
     };
   }

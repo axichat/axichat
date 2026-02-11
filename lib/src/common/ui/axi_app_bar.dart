@@ -35,40 +35,51 @@ class AxiAppBar extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(bottom: context.borderSide),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: ClipRect(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (hasLeading) leading!,
-                    if (hasLeading && hasTitle) SizedBox(width: titleGap),
-                    if (hasTitle)
-                      Text(
-                        appDisplayName,
-                        style: titleStyle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final trailingMaxWidth = constraints.maxWidth / 2;
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: ClipRect(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        if (hasLeading)
+                          Flexible(
+                            fit: FlexFit.loose,
+                            child: ClipRect(child: leading!),
+                          ),
+                        if (hasLeading && hasTitle) SizedBox(width: titleGap),
+                        if (hasTitle)
+                          Expanded(
+                            child: Text(
+                              appDisplayName,
+                              style: titleStyle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          Flexible(
-            fit: FlexFit.loose,
-            child: ClipRect(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: trailing ?? const AxiVersion(),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: trailingMaxWidth),
+                child: ClipRect(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: trailing ?? const AxiVersion(),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

@@ -85,8 +85,6 @@ class AxiNavigationRail extends StatelessWidget {
         : selectedIndex.clamp(0, destinations.length - 1);
     final Color surfaceColor = backgroundColor ?? colors.background;
     final titleStyle = context.textTheme.h2.copyWith(
-      fontFamily: gabaritoFontFamily,
-      fontFamilyFallback: gabaritoFontFallback,
       fontWeight: _railTitleFontWeight,
       color: colors.foreground,
     );
@@ -226,7 +224,7 @@ class _AxiNavigationRailItem extends StatelessWidget {
       leading: Icon(destination.icon, size: iconSize),
       trailing: badge,
       backgroundColor: backgroundColor,
-      textStyle: context.textTheme.small.strong,
+      textStyle: context.textTheme.small,
       onPressed: onTap,
       semanticLabel: destination.label,
       child: Text(

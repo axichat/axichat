@@ -92,7 +92,6 @@ class _AvatarEditorBody extends StatelessWidget {
                         profile: context.watch<ProfileCubit>().state,
                         isWide: isWide,
                       ),
-                      _AvatarEditorToolsSection(state: state),
                       _DefaultsSection(templates: templates, state: state),
                     ],
                   ),
@@ -100,64 +99,6 @@ class _AvatarEditorBody extends StatelessWidget {
               ),
             ),
           ),
-        );
-      },
-    );
-  }
-}
-
-class _AvatarEditorToolsSection extends StatelessWidget {
-  const _AvatarEditorToolsSection({required this.state});
-
-  final AvatarEditorState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final template = state.draftAvatar?.template;
-    final spacing = context.spacing;
-    final sizing = context.sizing;
-    final toolsSpacing = spacing.s;
-    final maxPanelWidth = sizing.menuMaxWidth;
-    final showBackgroundPicker =
-        state.draftAvatar?.source == AvatarSource.template &&
-            template != null &&
-            template.category != AvatarTemplateCategory.abstract &&
-            template.hasAlphaBackground;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxWidth = constraints.maxWidth;
-        final isCompact = maxWidth < mediumScreen;
-        if (isCompact) {
-          return Column(
-            spacing: toolsSpacing,
-            children: [
-              _CropCard(state: state),
-              if (showBackgroundPicker) _BackgroundPicker(state: state),
-            ],
-          );
-        }
-
-        final panelCount = showBackgroundPicker ? 2 : 1;
-        final panelWidth = (panelCount == 2
-                ? (maxWidth - toolsSpacing) / panelCount
-                : maxWidth)
-            .clamp(0.0, maxPanelWidth)
-            .toDouble();
-        return Wrap(
-          spacing: toolsSpacing,
-          runSpacing: toolsSpacing,
-          alignment: WrapAlignment.center,
-          children: [
-            SizedBox(
-              width: panelWidth,
-              child: _CropCard(state: state),
-            ),
-            if (showBackgroundPicker)
-              SizedBox(
-                width: panelWidth,
-                child: _BackgroundPicker(state: state),
-              ),
-          ],
         );
       },
     );
@@ -181,99 +122,57 @@ class _AvatarSummaryCard extends StatelessWidget {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
+    final template = state.draftAvatar?.template;
+    final showBackgroundPicker =
+        state.draftAvatar?.source == AvatarSource.template &&
+            template != null &&
+            template.category != AvatarTemplateCategory.abstract &&
+            template.hasAlphaBackground;
     final size =
         isWide ? sizing.buttonHeightLg * 2 : sizing.buttonHeightLg * 1.5;
-    final previewBytes = state.displayedBytes;
     final errorText = state.errorType?.resolve(l10n);
     final avatarSavedMessage = l10n.avatarSavedMessage;
     final showSuccessMessage = !state.publishing &&
         errorText == null &&
         state.lastSavedHash != null &&
         state.draftAvatar?.payload.hash == state.lastSavedHash;
+    final centerStage = _AvatarCenterStage(
+      state: state,
+      profile: profile,
+      avatarSize: size,
+    );
+    final actionButtons = _AvatarActionButtons(state: state);
 
     return ShadCard(
       padding: EdgeInsets.all(spacing.m),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: spacing.s,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: spacing.m,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            spacing: spacing.s,
-            children: [
-              Hero(
-                tag: 'avatar',
-                child: AxiAvatar(
-                  jid: profile.jid,
-                  size: size,
-                  subscription: Subscription.both,
-                  avatarBytes: previewBytes,
-                  avatarPath: previewBytes == null ? profile.avatarPath : null,
+          if (isWide)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: sizing.menuMaxWidth,
+                  child: showBackgroundPicker
+                      ? _BackgroundPicker(state: state)
+                      : const SizedBox.shrink(),
                 ),
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  spacing: spacing.xs,
-                  children: [
-                    Text(
-                      profile.username,
-                      style: context.textTheme.h3.copyWith(
-                        color: colors.foreground,
-                      ),
-                    ),
-                    Text(profile.jid, style: context.textTheme.muted),
-                  ],
+                SizedBox(width: spacing.m),
+                Expanded(child: centerStage),
+                SizedBox(width: spacing.m),
+                SizedBox(
+                  width: sizing.menuMaxWidth,
+                  child: actionButtons,
                 ),
-              ),
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                spacing: spacing.s,
-                children: [
-                  AxiButton.outline(
-                    loading: state.shuffling,
-                    onPressed:
-                        state.processing || state.publishing || state.shuffling
-                            ? null
-                            : () => context
-                                .read<AvatarEditorCubit>()
-                                .shuffleTemplate(colors),
-                    leading: Icon(
-                      LucideIcons.refreshCw,
-                      size: sizing.iconButtonIconSize,
-                    ),
-                    child: Text(l10n.signupAvatarShuffle),
-                  ),
-                  AxiButton.outline(
-                    onPressed: state.processing || state.publishing
-                        ? null
-                        : context.read<AvatarEditorCubit>().pickImage,
-                    leading: Icon(
-                      LucideIcons.upload,
-                      size: sizing.iconButtonIconSize,
-                    ),
-                    child: Text(l10n.signupAvatarUploadImage),
-                  ),
-                  AxiButton.primary(
-                    loading: state.publishing,
-                    onPressed: state.draftAvatar == null ||
-                            state.processing ||
-                            state.publishing
-                        ? null
-                        : () => context.read<AvatarEditorCubit>().publish(
-                              draftAvatar: state.draftAvatar,
-                              backgroundColor: state.backgroundColor,
-                            ),
-                    leading: Icon(
-                      LucideIcons.save,
-                      size: sizing.iconButtonIconSize,
-                    ),
-                    child: Text(l10n.avatarSaveAvatar),
-                  ),
-                ],
-              ),
-            ],
-          ),
+              ],
+            )
+          else ...[
+            if (showBackgroundPicker) _BackgroundPicker(state: state),
+            centerStage,
+            actionButtons,
+          ],
           if (errorText != null)
             Container(
               width: double.infinity,
@@ -314,8 +213,8 @@ class _AvatarSummaryCard extends StatelessWidget {
   }
 }
 
-class _CropCard extends StatelessWidget {
-  const _CropCard({required this.state});
+class _AvatarActionButtons extends StatelessWidget {
+  const _AvatarActionButtons({required this.state});
 
   final AvatarEditorState state;
 
@@ -323,6 +222,69 @@ class _CropCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: spacing.s,
+      children: [
+        AxiButton.outline(
+          loading: state.shuffling,
+          onPressed: state.processing || state.publishing || state.shuffling
+              ? null
+              : () => context.read<AvatarEditorCubit>().shuffleTemplate(colors),
+          leading: Icon(
+            LucideIcons.refreshCw,
+            size: sizing.iconButtonIconSize,
+          ),
+          child: Text(l10n.signupAvatarShuffle),
+        ),
+        AxiButton.outline(
+          onPressed: state.processing || state.publishing
+              ? null
+              : context.read<AvatarEditorCubit>().pickImage,
+          leading: Icon(
+            LucideIcons.upload,
+            size: sizing.iconButtonIconSize,
+          ),
+          child: Text(l10n.signupAvatarUploadImage),
+        ),
+        AxiButton.primary(
+          loading: state.publishing,
+          onPressed:
+              state.draftAvatar == null || state.processing || state.publishing
+                  ? null
+                  : () => context.read<AvatarEditorCubit>().publish(
+                        draftAvatar: state.draftAvatar,
+                        backgroundColor: state.backgroundColor,
+                      ),
+          leading: Icon(
+            LucideIcons.save,
+            size: sizing.iconButtonIconSize,
+          ),
+          child: Text(l10n.avatarSaveAvatar),
+        ),
+      ],
+    );
+  }
+}
+
+class _AvatarCenterStage extends StatelessWidget {
+  const _AvatarCenterStage({
+    required this.state,
+    required this.profile,
+    required this.avatarSize,
+  });
+
+  final AvatarEditorState state;
+  final ProfileState profile;
+  final double avatarSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final l10n = context.l10n;
     final spacing = context.spacing;
     final sizing = context.sizing;
     final draftAvatar = state.draftAvatar;
@@ -342,7 +304,8 @@ class _CropCard extends StatelessWidget {
               )
             : null)
         : draftAvatar?.cropRect;
-    final hasPreview = sourceBytes != null &&
+    final hasCropPreview = draftAvatar?.source == AvatarSource.upload &&
+        sourceBytes != null &&
         sourceBytes.isNotEmpty &&
         imageWidth != null &&
         imageHeight != null &&
@@ -351,46 +314,15 @@ class _CropCard extends StatelessWidget {
         cropRect != null &&
         cropRect.width > 0 &&
         cropRect.height > 0;
-    return ShadCard(
-      padding: EdgeInsets.all(spacing.m),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        spacing: spacing.s,
-        children: [
-          Text(
-            l10n.avatarCropTitle,
-            style: context.textTheme.h4.copyWith(color: colors.foreground),
-          ),
-          Text(
-            l10n.avatarCropDescription,
-            style: context.textTheme.small.copyWith(
-              color: colors.mutedForeground,
-            ),
-          ),
-          if (!hasPreview)
-            Container(
-              height: sizing.buttonHeightLg * 4,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: colors.card,
-                borderRadius: context.radius,
-                border: Border.fromBorderSide(
-                  context.borderSide.copyWith(color: colors.border),
-                ),
-              ),
-              child: Text(
-                l10n.avatarCropPlaceholder,
-                style: context.textTheme.small.copyWith(
-                  color: colors.mutedForeground,
-                ),
-              ),
-            )
-          else
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: spacing.s,
-              children: [
-                Center(
+    final previewBytes = state.displayedBytes;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Hero(
+          tag: 'avatar',
+          child: hasCropPreview
+              ? ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
                   child: AxiImageCropper(
                     bytes: sourceBytes,
                     imageWidth: imageWidth,
@@ -405,44 +337,45 @@ class _CropCard extends StatelessWidget {
                         : null,
                     minCropSide: AvatarEditorCubit.minCropSide,
                   ),
+                )
+              : AxiAvatar(
+                  jid: profile.jid,
+                  size: avatarSize,
+                  subscription: Subscription.both,
+                  avatarBytes: previewBytes,
+                  avatarPath: previewBytes == null ? profile.avatarPath : null,
                 ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: AxiButton.secondary(
-                    onPressed: canCommit
-                        ? () => context
-                            .read<AvatarEditorCubit>()
-                            .commitCrop(cropRect)
-                        : null,
-                    child: Text(l10n.commonDone),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    spacing: spacing.xs,
-                    children: [
-                      Text(
-                        l10n.avatarCropSizeLabel(cropRect.width.round()),
-                        style: context.textTheme.small.copyWith(
-                          color: colors.foreground,
-                        ),
-                      ),
-                      Text(
-                        l10n.avatarCropSavedSize,
-                        style: context.textTheme.small.copyWith(
-                          color: colors.mutedForeground,
-                        ),
-                        textAlign: TextAlign.end,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        ),
+        if (hasCropPreview)
+          Padding(
+            padding: EdgeInsets.only(top: spacing.s),
+            child: AxiButton.secondary(
+              onPressed: canCommit
+                  ? () => context.read<AvatarEditorCubit>().commitCrop(cropRect)
+                  : null,
+              child: Text(l10n.commonDone),
             ),
-        ],
-      ),
+          ),
+        SizedBox(height: spacing.m),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          spacing: spacing.xxs,
+          children: [
+            Text(
+              profile.username,
+              style: context.textTheme.h3.copyWith(
+                color: colors.foreground,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            Text(
+              profile.jid,
+              style: context.textTheme.muted,
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
@@ -815,8 +748,6 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
     final canNavigate = templates.length > 1;
     final cardWidth = sizing.buttonHeightLg * 2.5;
     final carouselHeight = sizing.buttonHeightLg * 3;
-    final minViewportFraction =
-        (cardWidth / (cardWidth + spacing.m)).clamp(0.2, 1.0).toDouble();
     return ShadCard(
       padding: EdgeInsets.all(spacing.m),
       child: Column(
@@ -858,10 +789,11 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
           ),
           LayoutBuilder(
             builder: (context, constraints) {
-              final viewportFraction = (cardWidth / constraints.maxWidth).clamp(
-                minViewportFraction,
-                1.0,
-              );
+              final availableWidth =
+                  constraints.maxWidth > 0 ? constraints.maxWidth : cardWidth;
+              final viewportFraction = canNavigate
+                  ? (cardWidth / availableWidth).clamp(0.56, 0.78).toDouble()
+                  : 1.0;
               return CarouselSlider.builder(
                 carouselController: _carouselController,
                 itemCount: templates.length,
@@ -880,7 +812,11 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
                 options: CarouselOptions(
                   height: carouselHeight,
                   viewportFraction: viewportFraction,
-                  enlargeCenterPage: true,
+                  enlargeCenterPage: canNavigate,
+                  enlargeFactor: 0.22,
+                  enableInfiniteScroll: canNavigate,
+                  clipBehavior: Clip.none,
+                  padEnds: false,
                 ),
               );
             },
@@ -920,22 +856,25 @@ class _TemplatePreviewCard extends StatelessWidget {
             fontWeight: FontWeight.w700,
           )
         : context.textTheme.small.copyWith(color: colors.mutedForeground);
-    final border = isSelected
-        ? Border.fromBorderSide(
-            context.borderSide.copyWith(color: colors.primary),
-          )
-        : null;
+    final borderWidth =
+        isSelected ? context.borderSide.width * 2 : context.borderSide.width;
+    final border = Border.fromBorderSide(
+      context.borderSide.copyWith(
+        color: isSelected ? colors.primary : colors.border,
+        width: borderWidth,
+      ),
+    );
     final cardWidth = sizing.buttonHeightLg * 2.5;
     final overlayShape = RoundedSuperellipseBorder(
       borderRadius: BorderRadius.circular(context.radii.squircle),
-      side: context.borderSide,
+      side: BorderSide.none,
     );
     return AxiTapBounce(
       enabled: true,
       child: Material(
         color: Colors.transparent,
         shape: overlayShape,
-        clipBehavior: Clip.antiAlias,
+        clipBehavior: Clip.none,
         child: ShadFocusable(
           canRequestFocus: true,
           builder: (context, focused, child) =>

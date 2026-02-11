@@ -620,7 +620,7 @@ class CalendarViewModeToggle extends StatelessWidget {
     final EdgeInsets padding = EdgeInsets.symmetric(
       horizontal: compact ? spacing.xs : spacing.s,
     );
-    final double minHeight = context.sizing.buttonHeightSm;
+    final double minHeight = context.sizing.buttonHeightRegular;
     final TextStyle tabStyle = context.textTheme.label;
     final double minWidth =
         isExpandedSize ? _minWidthExpanded : _minWidthRegular;
@@ -633,13 +633,20 @@ class CalendarViewModeToggle extends StatelessWidget {
       math.max(minWidth, availableWidth * widthScale),
     );
     final bool useShortLabels = !isExpandedSize;
-    final int tabCount = _viewOrder.length;
-    final int selectedIndex = _viewOrder
-        .indexOf(selectedView)
-        .clamp(0, _viewOrder.length - 1)
-        .toInt();
-    final indicatorDuration = baseAnimationDuration;
-    final indicatorThickness = context.borderSide.width * 3;
+    final ShadDecoration tabBarDecoration = ShadDecoration(
+      color: context.colorScheme.card,
+      border: ShadBorder.all(
+        color: context.colorScheme.border,
+        width: context.borderSide.width,
+        radius: BorderRadius.circular(context.radii.container),
+      ),
+      secondaryBorder: ShadBorder.none,
+      secondaryFocusedBorder: ShadBorder.none,
+      focusedBorder: ShadBorder.none,
+      errorBorder: ShadBorder.none,
+      secondaryErrorBorder: ShadBorder.none,
+      disableSecondaryBorder: true,
+    );
     final List<ShadTab<CalendarView>> tabs = <ShadTab<CalendarView>>[
       for (int index = 0; index < _viewOrder.length; index++)
         _CalendarTab(
@@ -650,51 +657,27 @@ class CalendarViewModeToggle extends StatelessWidget {
           padding: padding,
           minHeight: minHeight,
           textStyle: tabStyle,
+          backgroundColor: Colors.transparent,
+          selectedBackgroundColor: context.colorScheme.primary.withValues(
+            alpha: context.motion.tapSplashAlpha,
+          ),
+          foregroundColor: context.colorScheme.mutedForeground,
+          selectedForegroundColor: context.colorScheme.foreground,
         ),
     ];
 
     return SizedBox(
       height: minHeight,
       width: controlWidth,
-      child: Stack(
-        children: [
-          ShadTabs<CalendarView>(
-            value: selectedView,
-            onChanged: onChanged,
-            tabs: tabs,
-            padding: EdgeInsets.zero,
-            gap: 0,
-            tabsGap: context.spacing.xs,
-            contentConstraints: const BoxConstraints.tightFor(height: 0),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: AnimatedAlign(
-                duration: indicatorDuration,
-                curve: Curves.easeInOutCubic,
-                alignment: Alignment(
-                  _slidingAlignmentForIndex(selectedIndex, tabCount),
-                  1,
-                ),
-                child: FractionallySizedBox(
-                  widthFactor: 1 / tabCount,
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Container(
-                      margin:
-                          EdgeInsets.symmetric(horizontal: context.spacing.s),
-                      height: indicatorThickness,
-                      decoration: BoxDecoration(
-                        color: context.colorScheme.primary,
-                        borderRadius: BorderRadius.circular(indicatorThickness),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
+      child: ShadTabs<CalendarView>(
+        value: selectedView,
+        onChanged: onChanged,
+        tabs: tabs,
+        padding: EdgeInsets.zero,
+        gap: 0,
+        tabsGap: context.spacing.xs,
+        contentConstraints: const BoxConstraints.tightFor(height: 0),
+        decoration: tabBarDecoration,
       ),
     );
   }
@@ -707,11 +690,19 @@ class _CalendarTab extends ShadTab<CalendarView> {
     required EdgeInsets padding,
     required double minHeight,
     required TextStyle textStyle,
+    required Color backgroundColor,
+    required Color selectedBackgroundColor,
+    required Color foregroundColor,
+    required Color selectedForegroundColor,
   }) : super(
           value: view,
           flex: 1,
           height: minHeight,
           padding: padding,
+          backgroundColor: backgroundColor,
+          selectedBackgroundColor: selectedBackgroundColor,
+          foregroundColor: foregroundColor,
+          selectedForegroundColor: selectedForegroundColor,
           decoration: const ShadDecoration(
             border: ShadBorder.none,
             secondaryBorder: ShadBorder.none,

@@ -202,10 +202,10 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final Color backgroundColor = context.colorScheme.background;
 
     final double minTabWidth = context.sizing.listButtonHeight * 2;
-    final double indicatorWeight = context.borderSide.width * 3;
-    final Duration indicatorDuration = lowMotion ? Duration.zero : _switchDelay;
     final Color hoverBackground = scheme.primary.withValues(alpha: 0.08);
     final Color pressedBackground = scheme.primary.withValues(alpha: 0.14);
+    final Color selectedBackground =
+        scheme.primary.withValues(alpha: context.motion.tapSplashAlpha);
     final ShadDecoration baseDecoration = ShadDecoration(
       border: ShadBorder.none,
       secondaryBorder: ShadBorder.none,
@@ -254,10 +254,11 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                 tabs: <ShadTab<int>>[
                   ShadTab<int>(
                     value: 0,
+                    height: baseHeight,
                     decoration: baseDecoration,
                     selectedDecoration: selectedDecoration,
                     backgroundColor: Colors.transparent,
-                    selectedBackgroundColor: Colors.transparent,
+                    selectedBackgroundColor: selectedBackground,
                     hoverBackgroundColor: hoverBackground,
                     selectedHoverBackgroundColor: hoverBackground,
                     pressedBackgroundColor: pressedBackground,
@@ -286,10 +287,11 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                   ),
                   ShadTab<int>(
                     value: 1,
+                    height: baseHeight,
                     decoration: baseDecoration,
                     selectedDecoration: selectedDecoration,
                     backgroundColor: Colors.transparent,
-                    selectedBackgroundColor: Colors.transparent,
+                    selectedBackgroundColor: selectedBackground,
                     hoverBackgroundColor: hoverBackground,
                     selectedHoverBackgroundColor: hoverBackground,
                     pressedBackgroundColor: pressedBackground,
@@ -318,43 +320,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                   ),
                 ],
               );
-              if (useScrollable) {
-                return tabs;
-              }
-              return Stack(
-                children: [
-                  tabs,
-                  Positioned.fill(
-                    child: IgnorePointer(
-                      child: AnimatedAlign(
-                        duration: indicatorDuration,
-                        curve: Curves.easeInOutCubic,
-                        alignment: Alignment(
-                          mobileTabController.index == 0 ? -1 : 1,
-                          1,
-                        ),
-                        child: FractionallySizedBox(
-                          widthFactor: 0.5,
-                          child: Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Container(
-                              margin: EdgeInsets.symmetric(
-                                horizontal: context.spacing.s,
-                              ),
-                              height: indicatorWeight,
-                              decoration: BoxDecoration(
-                                color: scheme.primary,
-                                borderRadius:
-                                    BorderRadius.circular(indicatorWeight),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
+              return tabs;
             },
           );
         },

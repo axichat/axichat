@@ -12,7 +12,7 @@ DateTime demoNow() {
   return now.add(Duration(days: deltaDays));
 }
 
-const String kDemoSelfJid = 'franklin@axi.im';
-const String kDemoSelfDisplayName = 'Franklin';
-const String kDemoDatabasePrefix = 'demo_franklin';
+const String kDemoSelfJid = 'ben@axi.im';
+const String kDemoSelfDisplayName = 'Ben';
+const String kDemoDatabasePrefix = 'demo_ben';
 const String kDemoDatabasePassphrase = 'axi_demo_passphrase_32byte_key__';

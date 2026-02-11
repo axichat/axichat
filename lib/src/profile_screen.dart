@@ -373,6 +373,12 @@ class _ProfileMainView extends StatelessWidget {
       horizontal: _profileWideHorizontalPadding,
       vertical: _profileWideHeaderSpacing,
     );
+    final jumpMenuPadding = EdgeInsetsDirectional.only(
+      start: _profileWideHorizontalPadding,
+      end: context.spacing.s,
+      top: _profileWideHeaderSpacing,
+      bottom: _profileWideHeaderSpacing,
+    );
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -405,14 +411,14 @@ class _ProfileMainView extends StatelessWidget {
                   color: context.colorScheme.border,
                 ),
                 Padding(
-                  padding: sidebarPadding,
+                  padding: jumpMenuPadding,
                   child: _SettingsJumpMenu(
                     anchors: settingsAnchors,
                     showImportantSection: showImportantSection,
                     emailEnabled: emailEnabled,
                     scrollController: settingsScrollController,
                     scrollOffsetListenable: settingsScrollOffset,
-                    textAlign: TextAlign.right,
+                    textAlign: TextAlign.left,
                   ),
                 ),
               ],
@@ -971,6 +977,7 @@ class _SettingsJumpLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final MainAxisAlignment alignment = switch (textAlign) {
       TextAlign.right => MainAxisAlignment.end,
       TextAlign.center => MainAxisAlignment.center,
@@ -982,20 +989,22 @@ class _SettingsJumpLink extends StatelessWidget {
         colors.secondary.withValues(alpha: selectedOpacity);
     return ShadButton.ghost(
       size: ShadButtonSize.sm,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.xs,
+        vertical: spacing.xs,
+      ),
       mainAxisAlignment: alignment,
       foregroundColor: jumpColor,
       hoverForegroundColor: jumpColor,
+      textStyle: context.textTheme.small.copyWith(
+        color: jumpColor,
+      ),
       backgroundColor: selected ? selectedBackground : null,
       hoverBackgroundColor: selected ? selectedBackground : null,
       onPressed: onTap,
-      child: DefaultTextStyle.merge(
-        style: context.textTheme.small.copyWith(
-          color: jumpColor,
-        ),
-        child: Text(
-          label,
-          textAlign: textAlign,
-        ),
+      child: Text(
+        label,
+        textAlign: textAlign,
       ),
     ).withTapBounce();
   }
