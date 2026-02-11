@@ -3701,7 +3701,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsShareTokenFooterDescription.
   ///
   /// In en, this message translates to:
-  /// **'Helps keep multi-recipient email threads and attachments linked. Turning this off can break threading.'**
+  /// **'Adds Axichat share tokens for multi-recipient email fan-out to preserve linking and threading.'**
   String get settingsShareTokenFooterDescription;
 
   /// No description provided for @authCustomServerTitle.
@@ -6731,7 +6731,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsAutoDownloadImagesDescription.
   ///
   /// In en, this message translates to:
-  /// **'Only for trusted chats.'**
+  /// **'Applies when this chat allows automatic downloads.'**
   String get settingsAutoDownloadImagesDescription;
 
   /// No description provided for @settingsAutoDownloadVideos.
@@ -6743,7 +6743,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsAutoDownloadVideosDescription.
   ///
   /// In en, this message translates to:
-  /// **'Only for trusted chats.'**
+  /// **'Applies when this chat allows automatic downloads.'**
   String get settingsAutoDownloadVideosDescription;
 
   /// No description provided for @settingsAutoDownloadDocuments.
@@ -6755,7 +6755,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsAutoDownloadDocumentsDescription.
   ///
   /// In en, this message translates to:
-  /// **'Only for trusted chats.'**
+  /// **'Applies when this chat allows automatic downloads.'**
   String get settingsAutoDownloadDocumentsDescription;
 
   /// No description provided for @settingsAutoDownloadArchives.
@@ -6767,7 +6767,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsAutoDownloadArchivesDescription.
   ///
   /// In en, this message translates to:
-  /// **'Only for trusted chats.'**
+  /// **'Applies when this chat allows automatic downloads.'**
   String get settingsAutoDownloadArchivesDescription;
 
   /// No description provided for @settingsAutoDownloadScopeAlways.

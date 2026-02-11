@@ -3229,6 +3229,12 @@ class _ChatState extends State<Chat> {
                   previous.language != current.language ||
                   previous.chatReadReceipts != current.chatReadReceipts ||
                   previous.emailReadReceipts != current.emailReadReceipts ||
+                  previous.autoDownloadImages != current.autoDownloadImages ||
+                  previous.autoDownloadVideos != current.autoDownloadVideos ||
+                  previous.autoDownloadDocuments !=
+                      current.autoDownloadDocuments ||
+                  previous.autoDownloadArchives !=
+                      current.autoDownloadArchives ||
                   previous.shareTokenSignatureEnabled !=
                       current.shareTokenSignatureEnabled,
               listener: (context, settings) {

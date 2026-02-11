@@ -3806,27 +3806,29 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsAutoDownloadImages => 'Auto-download images';
 
   @override
-  String get settingsAutoDownloadImagesDescription => 'Only for trusted chats.';
+  String get settingsAutoDownloadImagesDescription =>
+      'Applies when this chat allows automatic downloads.';
 
   @override
   String get settingsAutoDownloadVideos => 'Auto-download videos';
 
   @override
-  String get settingsAutoDownloadVideosDescription => 'Only for trusted chats.';
+  String get settingsAutoDownloadVideosDescription =>
+      'Applies when this chat allows automatic downloads.';
 
   @override
   String get settingsAutoDownloadDocuments => 'Auto-download documents';
 
   @override
   String get settingsAutoDownloadDocumentsDescription =>
-      'Only for trusted chats.';
+      'Applies when this chat allows automatic downloads.';
 
   @override
   String get settingsAutoDownloadArchives => 'Auto-download archives';
 
   @override
   String get settingsAutoDownloadArchivesDescription =>
-      'Only for trusted chats.';
+      'Applies when this chat allows automatic downloads.';
 
   @override
   String get settingsAutoDownloadScopeAlways => 'Always';

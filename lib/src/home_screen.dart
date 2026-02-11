@@ -92,12 +92,15 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
       ),
     ];
 
+enum HomeBottomDestination { home, schedule, tasks, settings }
+
 class HomeShellScope extends InheritedWidget {
   const HomeShellScope({
     super.key,
     required this.pendingCalendarTabIndex,
     required this.calendarTabIndex,
     required this.calendarBottomDragSession,
+    required this.bottomDestination,
     required this.homeTabIndex,
     required this.tabs,
     required super.child,
@@ -106,6 +109,7 @@ class HomeShellScope extends InheritedWidget {
   final ValueNotifier<int?> pendingCalendarTabIndex;
   final ValueNotifier<int> calendarTabIndex;
   final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
+  final ValueNotifier<HomeBottomDestination> bottomDestination;
   final ValueNotifier<int> homeTabIndex;
   final List<HomeTabEntry> tabs;
 
@@ -118,6 +122,7 @@ class HomeShellScope extends InheritedWidget {
     return pendingCalendarTabIndex != oldWidget.pendingCalendarTabIndex ||
         calendarTabIndex != oldWidget.calendarTabIndex ||
         calendarBottomDragSession != oldWidget.calendarBottomDragSession ||
+        bottomDestination != oldWidget.bottomDestination ||
         homeTabIndex != oldWidget.homeTabIndex ||
         tabs != oldWidget.tabs;
   }
@@ -245,6 +250,8 @@ class _HomeShellState extends State<HomeShell> {
   final ValueNotifier<int> _calendarTabIndex = ValueNotifier<int>(0);
   final ValueNotifier<CalendarBottomDragSession?> _calendarBottomDragSession =
       ValueNotifier<CalendarBottomDragSession?>(null);
+  final ValueNotifier<HomeBottomDestination> _bottomDestination =
+      ValueNotifier<HomeBottomDestination>(HomeBottomDestination.home);
   final ValueNotifier<int> _homeTabIndex = ValueNotifier<int>(0);
   bool _railCollapsed = true;
 
@@ -253,6 +260,7 @@ class _HomeShellState extends State<HomeShell> {
     _pendingCalendarTabIndex.dispose();
     _calendarTabIndex.dispose();
     _calendarBottomDragSession.dispose();
+    _bottomDestination.dispose();
     _homeTabIndex.dispose();
     super.dispose();
   }
@@ -325,6 +333,7 @@ class _HomeShellState extends State<HomeShell> {
           pendingCalendarTabIndex: _pendingCalendarTabIndex,
           calendarTabIndex: _calendarTabIndex,
           calendarBottomDragSession: _calendarBottomDragSession,
+          bottomDestination: _bottomDestination,
           homeTabIndex: _homeTabIndex,
           tabs: tabs,
           child: child,
@@ -368,6 +377,7 @@ class _HomeShellState extends State<HomeShell> {
             pendingCalendarTabIndex: _pendingCalendarTabIndex,
             calendarTabIndex: _calendarTabIndex,
             calendarBottomDragSession: _calendarBottomDragSession,
+            bottomDestination: _bottomDestination,
             calendarAvailable: calendarAvailable,
           ),
         ],

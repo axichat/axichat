@@ -2040,7 +2040,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsShareTokenFooterDescription =>
-      'Helps keep multi-recipient email threads and attachments linked. Turning this off can break threading.';
+      'Adds Axichat share tokens for multi-recipient email fan-out to preserve linking and threading.';
 
   @override
   String get authCustomServerTitle => 'Custom server';
@@ -3756,27 +3756,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAutoDownloadImages => 'Auto-download images';
 
   @override
-  String get settingsAutoDownloadImagesDescription => 'Only for trusted chats.';
+  String get settingsAutoDownloadImagesDescription =>
+      'Applies when this chat allows automatic downloads.';
 
   @override
   String get settingsAutoDownloadVideos => 'Auto-download videos';
 
   @override
-  String get settingsAutoDownloadVideosDescription => 'Only for trusted chats.';
+  String get settingsAutoDownloadVideosDescription =>
+      'Applies when this chat allows automatic downloads.';
 
   @override
   String get settingsAutoDownloadDocuments => 'Auto-download documents';
 
   @override
   String get settingsAutoDownloadDocumentsDescription =>
-      'Only for trusted chats.';
+      'Applies when this chat allows automatic downloads.';
 
   @override
   String get settingsAutoDownloadArchives => 'Auto-download archives';
 
   @override
   String get settingsAutoDownloadArchivesDescription =>
-      'Only for trusted chats.';
+      'Applies when this chat allows automatic downloads.';
 
   @override
   String get settingsAutoDownloadScopeAlways => 'Always';
