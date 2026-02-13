@@ -57,12 +57,6 @@ const List<CalendarView> _viewOrder = <CalendarView>[
   CalendarView.month,
 ];
 
-double _slidingAlignmentForIndex(int index, int count) {
-  if (count <= 1) return -1;
-  final clamped = index.clamp(0, count - 1).toInt();
-  return -1 + ((clamped * 2) / (count - 1));
-}
-
 class CalendarNavigation extends StatelessWidget {
   const CalendarNavigation({
     super.key,
@@ -615,10 +609,21 @@ class CalendarViewModeToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
+    final shadTheme = ShadTheme.of(context);
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
     final EdgeInsets padding = EdgeInsets.symmetric(
       horizontal: compact ? spacing.xs : spacing.s,
+    );
+    const tabDecoration = ShadDecoration(
+      color: Colors.transparent,
+      border: ShadBorder.none,
+      secondaryBorder: ShadBorder.none,
+      secondaryFocusedBorder: ShadBorder.none,
+      focusedBorder: ShadBorder.none,
+      errorBorder: ShadBorder.none,
+      secondaryErrorBorder: ShadBorder.none,
+      disableSecondaryBorder: true,
     );
     final double minHeight = context.sizing.buttonHeightRegular;
     final TextStyle tabStyle = context.textTheme.label;
@@ -633,20 +638,13 @@ class CalendarViewModeToggle extends StatelessWidget {
       math.max(minWidth, availableWidth * widthScale),
     );
     final bool useShortLabels = !isExpandedSize;
-    final ShadDecoration tabBarDecoration = ShadDecoration(
-      color: context.colorScheme.card,
-      border: ShadBorder.all(
-        color: context.colorScheme.border,
-        width: context.borderSide.width,
-        radius: BorderRadius.circular(context.radii.container),
-      ),
-      secondaryBorder: ShadBorder.none,
-      secondaryFocusedBorder: ShadBorder.none,
-      focusedBorder: ShadBorder.none,
-      errorBorder: ShadBorder.none,
-      secondaryErrorBorder: ShadBorder.none,
-      disableSecondaryBorder: true,
-    );
+    final int tabCount = _viewOrder.length;
+    final int safeSelectedIndex = _viewOrder
+        .indexOf(selectedView)
+        .clamp(0, _viewOrder.length - 1)
+        .toInt();
+    final horizontalIndicatorInset = spacing.xs;
+    final verticalIndicatorInset = spacing.xs;
     final List<ShadTab<CalendarView>> tabs = <ShadTab<CalendarView>>[
       for (int index = 0; index < _viewOrder.length; index++)
         _CalendarTab(
@@ -657,27 +655,89 @@ class CalendarViewModeToggle extends StatelessWidget {
           padding: padding,
           minHeight: minHeight,
           textStyle: tabStyle,
+          decoration: tabDecoration,
           backgroundColor: Colors.transparent,
-          selectedBackgroundColor: context.colorScheme.primary.withValues(
-            alpha: context.motion.tapSplashAlpha,
-          ),
+          selectedBackgroundColor: Colors.transparent,
           foregroundColor: context.colorScheme.mutedForeground,
           selectedForegroundColor: context.colorScheme.foreground,
         ),
     ];
 
     return SizedBox(
-      height: minHeight,
       width: controlWidth,
-      child: ShadTabs<CalendarView>(
-        value: selectedView,
-        onChanged: onChanged,
-        tabs: tabs,
-        padding: EdgeInsets.zero,
-        gap: 0,
-        tabsGap: context.spacing.xs,
-        contentConstraints: const BoxConstraints.tightFor(height: 0),
-        decoration: tabBarDecoration,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: minHeight),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: context.colorScheme.card,
+            border: Border.all(
+              color: context.colorScheme.border,
+              width: context.borderSide.width,
+            ),
+            borderRadius: BorderRadius.circular(context.radii.container),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(context.radii.container),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final tabWidth =
+                    tabCount == 0 ? 0.0 : constraints.maxWidth / tabCount;
+                final indicatorWidth = math.max(
+                  0.0,
+                  tabWidth - (horizontalIndicatorInset * 2),
+                );
+                return Stack(
+                  children: [
+                    AnimatedPositionedDirectional(
+                      duration: baseAnimationDuration,
+                      curve: Curves.easeInOutCubic,
+                      start: (tabWidth * safeSelectedIndex) +
+                          horizontalIndicatorInset,
+                      top: verticalIndicatorInset,
+                      bottom: verticalIndicatorInset,
+                      width: indicatorWidth,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: context.colorScheme.primary.withValues(
+                            alpha: context.motion.tapSplashAlpha,
+                          ),
+                          borderRadius:
+                              BorderRadius.circular(context.radii.container),
+                        ),
+                      ),
+                    ),
+                    ShadTheme(
+                      data: shadTheme.copyWith(
+                        tabsTheme: shadTheme.tabsTheme.copyWith(
+                          tabDecoration: tabDecoration,
+                          tabSelectedDecoration: tabDecoration,
+                          tabBackgroundColor: Colors.transparent,
+                          tabSelectedBackgroundColor: Colors.transparent,
+                          tabHoverBackgroundColor: Colors.transparent,
+                          tabSelectedHoverBackgroundColor: Colors.transparent,
+                          tabShadows: const <BoxShadow>[],
+                          tabSelectedShadows: const <BoxShadow>[],
+                        ),
+                      ),
+                      child: ShadTabs<CalendarView>(
+                        value: selectedView,
+                        onChanged: onChanged,
+                        tabs: tabs,
+                        padding: EdgeInsets.zero,
+                        gap: 0,
+                        tabsGap: 0,
+                        contentConstraints: const BoxConstraints.tightFor(
+                          height: 0,
+                        ),
+                        decoration: tabDecoration,
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -690,6 +750,7 @@ class _CalendarTab extends ShadTab<CalendarView> {
     required EdgeInsets padding,
     required double minHeight,
     required TextStyle textStyle,
+    required ShadDecoration decoration,
     required Color backgroundColor,
     required Color selectedBackgroundColor,
     required Color foregroundColor,
@@ -701,26 +762,14 @@ class _CalendarTab extends ShadTab<CalendarView> {
           padding: padding,
           backgroundColor: backgroundColor,
           selectedBackgroundColor: selectedBackgroundColor,
+          hoverBackgroundColor: Colors.transparent,
+          selectedHoverBackgroundColor: Colors.transparent,
+          pressedBackgroundColor: Colors.transparent,
+          shadows: const <BoxShadow>[],
+          selectedShadows: const <BoxShadow>[],
           foregroundColor: foregroundColor,
           selectedForegroundColor: selectedForegroundColor,
-          decoration: const ShadDecoration(
-            border: ShadBorder.none,
-            secondaryBorder: ShadBorder.none,
-            secondaryFocusedBorder: ShadBorder.none,
-            focusedBorder: ShadBorder.none,
-            errorBorder: ShadBorder.none,
-            secondaryErrorBorder: ShadBorder.none,
-            disableSecondaryBorder: true,
-          ),
-          selectedDecoration: const ShadDecoration(
-            border: ShadBorder.none,
-            secondaryBorder: ShadBorder.none,
-            secondaryFocusedBorder: ShadBorder.none,
-            focusedBorder: ShadBorder.none,
-            errorBorder: ShadBorder.none,
-            secondaryErrorBorder: ShadBorder.none,
-            disableSecondaryBorder: true,
-          ),
+          decoration: decoration,
           child: Text(
             label,
             style: textStyle,

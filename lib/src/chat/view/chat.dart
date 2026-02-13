@@ -987,6 +987,7 @@ class _ChatState extends State<Chat> {
     }
     if (!mounted) return;
     setState(() {});
+    _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
   }
 
   void _handleRecipientAdded(FanOutTarget target) {
@@ -1021,6 +1022,7 @@ class _ChatState extends State<Chat> {
       setState(() {
         _recipients = updated;
       });
+      _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
       return;
     }
     setState(() {
@@ -1029,6 +1031,7 @@ class _ChatState extends State<Chat> {
         ComposerRecipient(target: target, included: true),
       ];
     });
+    _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
   }
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
@@ -1045,6 +1048,9 @@ class _ChatState extends State<Chat> {
       return null;
     }
     final hinted = hintTransportForAddress(address);
+    if (hinted != null) {
+      return hinted;
+    }
     return showTransportChoiceDialog(
       context,
       address: address,
@@ -1060,6 +1066,7 @@ class _ChatState extends State<Chat> {
     setState(() {
       _recipients = updated;
     });
+    _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
   }
 
   void _handleRecipientToggled(String key) {
@@ -1074,6 +1081,7 @@ class _ChatState extends State<Chat> {
     setState(() {
       _recipients = updated;
     });
+    _syncEmailComposerWatermark(chatState: context.read<ChatBloc>().state);
   }
 
   void _handleRecipientAddedFromChat(chat_models.Chat chat) {
@@ -2113,6 +2121,30 @@ class _ChatState extends State<Chat> {
     return false;
   }
 
+  bool _hasIncludedEmailRecipient(List<ComposerRecipient> recipients) {
+    for (final recipient in recipients) {
+      if (!recipient.included) {
+        continue;
+      }
+      final transport =
+          recipient.target.chat?.defaultTransport ?? recipient.target.transport;
+      if (transport?.isEmail ?? false) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isEmailComposerActive({
+    required ChatState chatState,
+    List<ComposerRecipient>? recipients,
+  }) {
+    if (chatState.chat?.defaultTransport.isEmail ?? false) {
+      return true;
+    }
+    return _hasIncludedEmailRecipient(recipients ?? _recipients);
+  }
+
   String _emailComposerWatermarkText() {
     return '\n\n${context.l10n.chatComposerEmailWatermark}';
   }
@@ -2123,8 +2155,8 @@ class _ChatState extends State<Chat> {
     SettingsState? settings,
   }) {
     final resolvedSettings = settings ?? context.read<SettingsCubit>().state;
-    final isEmailChat = chatState.chat?.defaultTransport.isEmail ?? false;
-    if (!isEmailChat || !resolvedSettings.emailComposerWatermarkEnabled) {
+    final isEmailComposer = _isEmailComposerActive(chatState: chatState);
+    if (!isEmailComposer || !resolvedSettings.emailComposerWatermarkEnabled) {
       return false;
     }
     return text == _emailComposerWatermarkText();
@@ -2147,9 +2179,9 @@ class _ChatState extends State<Chat> {
       }
       return;
     }
-    final isEmailChat = chatState.chat?.defaultTransport.isEmail ?? false;
+    final isEmailComposer = _isEmailComposerActive(chatState: chatState);
     final watermark = _emailComposerWatermarkText();
-    if (!isEmailChat || !resolvedSettings.emailComposerWatermarkEnabled) {
+    if (!isEmailComposer || !resolvedSettings.emailComposerWatermarkEnabled) {
       if (currentText == watermark) {
         _textController.value = _textController.value.copyWith(
           text: _emptyText,
@@ -3595,6 +3627,10 @@ class _ChatState extends State<Chat> {
               final shareContexts = state.shareContexts;
               final shareReplies = state.shareReplies;
               final recipients = _recipients;
+              final isEmailComposer = _isEmailComposerActive(
+                chatState: state,
+                recipients: recipients,
+              );
               final pendingAttachments = state.pendingAttachments;
               final settingsState = context.watch<SettingsCubit>().state;
               final settingsSnapshot =
@@ -4690,7 +4726,7 @@ class _ChatState extends State<Chat> {
                                         ),
                                       ),
                                     );
-                                    final composerHintText = isDefaultEmail
+                                    final composerHintText = isEmailComposer
                                         ? context.l10n.chatComposerEmailHint
                                         : context.l10n.chatComposerMessageHint;
                                     Widget quoteSection;
@@ -4852,9 +4888,8 @@ class _ChatState extends State<Chat> {
                                                 composerHasText:
                                                     _composerHasContent,
                                                 composerMinLines:
-                                                    isDefaultEmail ? 3 : 1,
-                                                composerMaxLines:
-                                                    isDefaultEmail ? 12 : 6,
+                                                    isEmailComposer ? 3 : 1,
+                                                composerMaxLines: 6,
                                                 selfJid: selfXmppJid,
                                                 selfIdentity: selfIdentity,
                                                 composerError: state
@@ -11487,8 +11522,6 @@ class _SubjectTextField extends StatelessWidget {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final subjectStyle = context.textTheme.p.copyWith(
-      fontSize: 14,
-      height: 1.05,
       fontWeight: FontWeight.w600,
       color: colors.foreground,
     );
@@ -11506,7 +11539,7 @@ class _SubjectTextField extends StatelessWidget {
           onEditingComplete: onSubmitted,
           style: subjectStyle,
           decoration: InputDecoration(
-            hintText: l10n.chatSubjectHint,
+            hintText: '${l10n.chatSubjectHint}:',
             hintStyle: context.textTheme.muted.copyWith(
               color: colors.mutedForeground.withValues(alpha: 0.9),
             ),

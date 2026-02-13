@@ -53,21 +53,40 @@ const Set<String> _emailDomainHints = <String>{
 };
 
 const Set<String> _xmppDomainHints = <String>{
+  'axi.im',
   'conversations.im',
   'disroot.org',
   'jabber.org',
 };
 
 MessageTransport? hintTransportForAddress(String? address) {
-  final domain = addressDomainPart(address)?.toLowerCase();
+  final domain = _hintDomainForAddress(address);
   if (domain == null || domain.isEmpty) {
     return null;
   }
-  if (_emailDomainHints.contains(domain)) {
+  if (_matchesHintedDomain(domain, _emailDomainHints)) {
     return MessageTransport.email;
   }
-  if (_xmppDomainHints.contains(domain)) {
+  if (_matchesHintedDomain(domain, _xmppDomainHints)) {
     return MessageTransport.xmpp;
   }
   return null;
+}
+
+String? _hintDomainForAddress(String? address) {
+  final bare = bareAddress(address);
+  final domain = addressDomainPart(bare ?? address)?.trim().toLowerCase();
+  if (domain == null || domain.isEmpty) {
+    return null;
+  }
+  return domain.endsWith('.') ? domain.substring(0, domain.length - 1) : domain;
+}
+
+bool _matchesHintedDomain(String domain, Set<String> hints) {
+  for (final hint in hints) {
+    if (domain == hint || domain.endsWith('.$hint')) {
+      return true;
+    }
+  }
+  return false;
 }

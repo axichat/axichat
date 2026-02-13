@@ -522,10 +522,9 @@ class _SignupFormState extends State<SignupForm>
               spacing.m,
             );
             final fieldSpacing = EdgeInsets.symmetric(vertical: spacing.s);
-            final captchaSize = Size(
-              sizing.menuMaxWidth,
-              sizing.listButtonHeight,
-            );
+            final captchaMaxWidth = sizing.menuMaxWidth;
+            final captchaMinHeight = sizing.buttonHeightRegular * 2;
+            final captchaMaxHeight = sizing.buttonHeightLg * 3;
             final animationDuration =
                 context.watch<SettingsCubit>().animationDuration;
             final usernameDescriptionHeight = _usernameDescriptionHeight;
@@ -898,7 +897,13 @@ class _SignupFormState extends State<SignupForm>
                                                       .signupCaptchaInstructions,
                                                   image: true,
                                                   child: _CaptchaFrame(
-                                                    size: captchaSize,
+                                                    constraints: BoxConstraints(
+                                                      minHeight:
+                                                          captchaMinHeight,
+                                                      maxHeight:
+                                                          captchaMaxHeight,
+                                                      maxWidth: captchaMaxWidth,
+                                                    ),
                                                     child: captchaSurface,
                                                   )),
                                               SizedBox(width: spacing.s),
@@ -928,7 +933,7 @@ class _SignupFormState extends State<SignupForm>
                                   Padding(
                                     padding: fieldSpacing,
                                     child: SizedBox(
-                                      width: captchaSize.width,
+                                      width: captchaMaxWidth,
                                       child: AxiTextFormField(
                                         autocorrect: false,
                                         keyboardType: TextInputType.number,
@@ -1358,27 +1363,28 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
 }
 
 class _CaptchaFrame extends StatelessWidget {
-  const _CaptchaFrame({required this.child, required this.size});
+  const _CaptchaFrame({required this.child, required this.constraints});
 
   final Widget child;
-  final Size size;
+  final BoxConstraints constraints;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final borderSide = context.borderSide;
     final radius = context.radius;
-    return Container(
-      width: size.width,
-      height: size.height,
-      decoration: BoxDecoration(
-        borderRadius: radius,
-        border: Border.fromBorderSide(borderSide),
-        color: colors.card,
-      ),
-      child: ClipRRect(
-        borderRadius: radius,
-        child: SizedBox.expand(child: child),
+    return ConstrainedBox(
+      constraints: constraints,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: radius,
+          border: Border.fromBorderSide(borderSide),
+          color: colors.card,
+        ),
+        child: ClipRRect(
+          borderRadius: radius,
+          child: SizedBox.expand(child: child),
+        ),
       ),
     );
   }
@@ -1403,12 +1409,14 @@ class _CaptchaImage extends StatefulWidget {
 
 class _CaptchaImageState extends State<_CaptchaImage> {
   int _retryCount = 0;
+  bool _retryScheduled = false;
 
   @override
   void didUpdateWidget(covariant _CaptchaImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
       _retryCount = 0;
+      _retryScheduled = false;
     }
   }
 
@@ -1416,7 +1424,7 @@ class _CaptchaImageState extends State<_CaptchaImage> {
   Widget build(BuildContext context) {
     return Image.network(
       widget.url,
-      fit: BoxFit.cover,
+      fit: BoxFit.contain,
       excludeFromSemantics: true,
       loadingBuilder: (context, child, loadingProgress) {
         final ready = loadingProgress == null;
@@ -1428,7 +1436,7 @@ class _CaptchaImageState extends State<_CaptchaImage> {
         );
       },
       errorBuilder: (context, error, stackTrace) {
-        const maxAttempts = 1;
+        const maxAttempts = 2;
         if (_retryCount < maxAttempts - 1) {
           _retryCount++;
           imageCache.evict(NetworkImage(widget.url));
@@ -1436,7 +1444,14 @@ class _CaptchaImageState extends State<_CaptchaImage> {
         }
         if (_retryCount == maxAttempts - 1) {
           _retryCount++;
-          widget.onRetry();
+          if (!_retryScheduled) {
+            _retryScheduled = true;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _retryScheduled = false;
+              widget.onRetry();
+            });
+          }
         }
         if (widget.showErrorMessageOnError) {
           return const _CaptchaErrorMessage();

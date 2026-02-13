@@ -330,6 +330,7 @@ class _HomeShellState extends State<HomeShell> {
         _HomeShellRailLayout(
           tabs: tabs,
           homeTabIndex: _homeTabIndex,
+          bottomNavIndex: _bottomNavIndex,
           calendarAvailable: calendarAvailable,
           collapsed: _railCollapsed,
           badgeCounts: badgeCounts,
@@ -379,13 +380,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = true;
   LocalHistoryEntry? _openChatHistoryEntry;
-  LocalHistoryEntry? _openCalendarHistoryEntry;
+  ValueNotifier<int>? _bottomNavIndexNotifier;
 
   @override
   void dispose() {
     _shortcutFocusNode.dispose();
     _clearOpenChatHistoryEntry();
-    _clearOpenCalendarHistoryEntry();
+    _bottomNavIndexNotifier?.removeListener(_handleBottomNavIndexChanged);
+    _bottomNavIndexNotifier = null;
     super.dispose();
   }
 
@@ -418,7 +420,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _updateOpenChatHistoryEntry(ChatsState state) {
     final route = ModalRoute.of(context);
-    if (route == null || state.openStack.isEmpty || state.openCalendar) {
+    if (route == null || state.openStack.isEmpty || _isPrimaryCalendarActive) {
       _clearOpenChatHistoryEntry();
       return;
     }
@@ -430,51 +432,35 @@ class _HomeScreenState extends State<HomeScreen> {
     route.addLocalHistoryEntry(entry);
   }
 
-  void _handleOpenCalendarHistoryRemoved() {
-    if (_openCalendarHistoryEntry == null) {
-      return;
+  bool get _isPrimaryCalendarActive {
+    final notifier = _bottomNavIndexNotifier;
+    if (notifier == null) {
+      return false;
     }
-    _openCalendarHistoryEntry = null;
+    final int index = notifier.value.clamp(0, 3).toInt();
+    return index == 1 || index == 2;
+  }
+
+  void _handleBottomNavIndexChanged() {
     if (!mounted) {
       return;
     }
-    final chatsState = context.read<ChatsCubit>().state;
-    if (!chatsState.openCalendar) {
-      return;
-    }
-    HomeShellScope.maybeOf(context)?.bottomNavIndex.value = 0;
-    context.read<ChatsCubit>().closeCalendar();
-  }
-
-  void _clearOpenCalendarHistoryEntry() {
-    final entry = _openCalendarHistoryEntry;
-    _openCalendarHistoryEntry = null;
-    entry?.remove();
-  }
-
-  void _updateOpenCalendarHistoryEntry(ChatsState state) {
-    final route = ModalRoute.of(context);
-    if (route == null || !state.openCalendar) {
-      _clearOpenCalendarHistoryEntry();
-      return;
-    }
-    if (_openCalendarHistoryEntry != null) {
-      return;
-    }
-    final entry =
-        LocalHistoryEntry(onRemove: _handleOpenCalendarHistoryRemoved);
-    _openCalendarHistoryEntry = entry;
-    route.addLocalHistoryEntry(entry);
+    _syncHomeHistoryEntries(context.read<ChatsCubit>().state);
   }
 
   void _syncHomeHistoryEntries(ChatsState state) {
     _updateOpenChatHistoryEntry(state);
-    _updateOpenCalendarHistoryEntry(state);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final nextBottomNav = HomeShellScope.maybeOf(context)?.bottomNavIndex;
+    if (_bottomNavIndexNotifier != nextBottomNav) {
+      _bottomNavIndexNotifier?.removeListener(_handleBottomNavIndexChanged);
+      _bottomNavIndexNotifier = nextBottomNav;
+      _bottomNavIndexNotifier?.addListener(_handleBottomNavIndexChanged);
+    }
     final chatsState = context.read<ChatsCubit>().state;
     _syncHomeHistoryEntries(chatsState);
   }
@@ -498,6 +484,7 @@ class _HomeScreenState extends State<HomeScreen> {
         HomeShellScope.maybeOf(context)?.tabs ?? const <HomeTabEntry>[];
     return _HomeExitPopGuard(
       homeTabIndex: homeTabIndex,
+      bottomNavIndex: bottomNavIndex,
       child: _HomeContent(
         storageManager: storageManager,
         shortcutFocusNode: _shortcutFocusNode,
@@ -525,36 +512,59 @@ class _HomeScreenState extends State<HomeScreen> {
 class _HomeExitPopGuard extends StatelessWidget {
   const _HomeExitPopGuard({
     required this.homeTabIndex,
+    required this.bottomNavIndex,
     required this.child,
   });
 
   final ValueNotifier<int>? homeTabIndex;
+  final ValueNotifier<int>? bottomNavIndex;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final notifier = homeTabIndex;
-    if (notifier == null) {
+    final homeNotifier = homeTabIndex;
+    if (homeNotifier == null) {
       return child;
     }
     return ValueListenableBuilder<int>(
-      valueListenable: notifier,
+      valueListenable: homeNotifier,
       builder: (context, activeIndex, _) {
-        return BlocSelector<ChatsCubit, ChatsState, bool>(
-          selector: (state) => state.openCalendar || state.openStack.isNotEmpty,
-          builder: (context, hasInternalBackStack) {
-            final canPop = hasInternalBackStack || activeIndex == 0;
+        final bottomNotifier = bottomNavIndex;
+        final content = BlocSelector<ChatsCubit, ChatsState, bool>(
+          selector: (state) => state.openStack.isNotEmpty,
+          builder: (context, hasOpenChatStack) {
+            final selectedBottomIndex = bottomNotifier?.value ?? 0;
+            final bool isPrimaryCalendar =
+                selectedBottomIndex == 1 || selectedBottomIndex == 2;
+            final canPop = isPrimaryCalendar
+                ? false
+                : hasOpenChatStack || activeIndex == 0;
             return PopScope(
               canPop: canPop,
               onPopInvokedWithResult: (didPop, _) {
-                if (didPop || canPop || notifier.value == 0) {
+                if (didPop || canPop) {
                   return;
                 }
-                notifier.value = 0;
+                if (isPrimaryCalendar) {
+                  if (bottomNotifier != null) {
+                    bottomNotifier.value = 0;
+                  }
+                  return;
+                }
+                if (homeNotifier.value != 0) {
+                  homeNotifier.value = 0;
+                }
               },
               child: child,
             );
           },
+        );
+        if (bottomNotifier == null) {
+          return content;
+        }
+        return ValueListenableBuilder<int>(
+          valueListenable: bottomNotifier,
+          builder: (context, _, __) => content,
         );
       },
     );
@@ -825,8 +835,7 @@ class _HomeContent extends StatelessWidget {
       builder: (context) {
         return BlocListener<ChatsCubit, ChatsState>(
           listenWhen: (previous, current) =>
-              previous.openStack != current.openStack ||
-              previous.openCalendar != current.openCalendar,
+              previous.openStack != current.openStack,
           listener: (context, state) => onSyncHomeHistoryEntries(state),
           child: KeyboardPopScope(
             child: Column(
@@ -837,13 +846,6 @@ class _HomeContent extends StatelessWidget {
                   child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
                     builder: (context, state) {
                       final chatsState = context.watch<ChatsCubit>().state;
-                      final int selectedBottomIndex =
-                          _normalizeBottomNavIndex(bottomNavIndex?.value ?? 0);
-                      final bool openCalendar = hasCalendarBloc &&
-                          (selectedBottomIndex == 1 ||
-                              selectedBottomIndex == 2);
-                      final int calendarTabIndex =
-                          selectedBottomIndex == 2 ? 1 : 0;
                       final chatRoute = chatsState.openChatRoute;
                       final Widget chatPaneContent =
                           openJid == null ? const GuestChat() : const Chat();
@@ -881,7 +883,7 @@ class _HomeContent extends StatelessWidget {
                         return content;
                       }
 
-                      Widget calendarLayout() {
+                      Widget calendarLayout(int calendarTabIndex) {
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
@@ -895,11 +897,6 @@ class _HomeContent extends StatelessWidget {
                                     scope.bottomNavIndex.value =
                                         safeTab == 0 ? 1 : 2;
                                   }
-                                  context
-                                      .read<ChatsCubit>()
-                                      .setCalendarTabIndex(
-                                        tabIndex: safeTab,
-                                      );
                                 },
                                 bottomDragSession: calendarBottomDragSession,
                               ),
@@ -908,19 +905,39 @@ class _HomeContent extends StatelessWidget {
                         );
                       }
 
-                      final bool demoOffline =
-                          context.watch<XmppService>().demoOfflineMode;
+                      Widget contentForBottomIndex(int selectedBottomIndex) {
+                        final bool openCalendar = hasCalendarBloc &&
+                            (selectedBottomIndex == 1 ||
+                                selectedBottomIndex == 2);
+                        final int calendarTabIndex =
+                            selectedBottomIndex == 2 ? 1 : 0;
+                        final bool demoOffline =
+                            context.watch<XmppService>().demoOfflineMode;
+                        final bool showChatCalendar =
+                            openJid != null && chatRoute.isCalendar;
+                        return SafeArea(
+                          top: state is ConnectivityConnected || demoOffline,
+                          bottom: navPlacement != NavPlacement.bottom,
+                          child: openCalendar
+                              ? calendarLayout(calendarTabIndex)
+                              : chatLayout(
+                                  showChatCalendar: showChatCalendar,
+                                ),
+                        );
+                      }
 
-                      final bool showChatCalendar =
-                          openJid != null && chatRoute.isCalendar;
-                      return SafeArea(
-                        top: state is ConnectivityConnected || demoOffline,
-                        bottom: navPlacement != NavPlacement.bottom,
-                        child: openCalendar
-                            ? calendarLayout()
-                            : chatLayout(
-                                showChatCalendar: showChatCalendar,
-                              ),
+                      final bottomIndexNotifier = bottomNavIndex;
+                      if (bottomIndexNotifier == null) {
+                        return contentForBottomIndex(0);
+                      }
+
+                      return ValueListenableBuilder<int>(
+                        valueListenable: bottomIndexNotifier,
+                        builder: (context, selectedBottomIndex, _) {
+                          final int safeSelectedBottomIndex =
+                              _normalizeBottomNavIndex(selectedBottomIndex);
+                          return contentForBottomIndex(safeSelectedBottomIndex);
+                        },
                       );
                     },
                   ),
@@ -1122,18 +1139,11 @@ class _HomeActionLayer extends StatelessWidget {
                     if (scope != null) {
                       scope.bottomNavIndex.value = 0;
                     }
-                    locate<ChatsCubit>().closeCalendar();
                     return null;
                   }
-                  final calendarTabIndex =
-                      locate<ChatsCubit>().state.calendarTabIndex;
-                  final openIndex = calendarTabIndex == 0 ? 1 : 2;
                   if (scope != null) {
-                    scope.bottomNavIndex.value = openIndex;
+                    scope.bottomNavIndex.value = 1;
                   }
-                  locate<ChatsCubit>().openCalendarAt(
-                    tabIndex: calendarTabIndex,
-                  );
                   return null;
                 },
               ),

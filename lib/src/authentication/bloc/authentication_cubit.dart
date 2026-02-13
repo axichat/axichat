@@ -2283,10 +2283,29 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final document = XmlDocument.parse(captchaHtml);
       final images = document.findAllElements('img');
       final first = images.isEmpty ? null : images.first;
-      return first?.getAttribute('src')?.trim() ?? '';
+      final src = first?.getAttribute('src')?.trim() ?? '';
+      return _normalizeCaptchaSrc(src);
     } on Exception catch (_) {
       return '';
     }
+  }
+
+  String _normalizeCaptchaSrc(String src) {
+    final trimmed = src.trim();
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    final host = endpointConfig.domain.trim();
+    final resolvedHost = host.isEmpty ? EndpointConfig.defaultDomain : host;
+    final hostSubstituted = trimmed.replaceAll('@HOST@', resolvedHost);
+    final parsed = Uri.tryParse(hostSubstituted);
+    if (parsed == null) {
+      return hostSubstituted;
+    }
+    if (parsed.hasScheme) {
+      return parsed.toString();
+    }
+    return _buildBaseUrl().resolveUri(parsed).toString();
   }
 
   Future<String> fetchCaptchaSrcWithRetry() async {

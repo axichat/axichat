@@ -35,7 +35,6 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart' as anti_abuse;
 import 'package:axichat/src/common/network_availability.dart';
 import 'package:axichat/src/common/network_safety.dart';
-import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/security_flags.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -275,17 +274,6 @@ final serverLookup = <String, IOEndpoint>{
 };
 
 const String _bookmarks2NodeXmlns = 'urn:xmpp:bookmarks:1';
-
-bool _isFirstPartyJid({required mox.JID? myJid, required String jid}) {
-  if (myJid == null) {
-    return false;
-  }
-  final target = parseJid(jid);
-  if (target == null) return false;
-  final myDomain = myJid.domain.trim().toLowerCase();
-  final targetDomain = target.domain.trim().toLowerCase();
-  return targetDomain == myDomain || targetDomain.endsWith('.$myDomain');
-}
 
 typedef ConnectionState = mox.XmppConnectionState;
 

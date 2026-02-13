@@ -23,17 +23,30 @@ class ComposeWindowOverlay extends StatelessWidget {
         final mediaQuery = MediaQuery.of(context);
         final mediaSize = mediaQuery.size;
         final viewPadding = mediaQuery.viewPadding;
-        return Stack(
-          children: [
-            for (var index = 0; index < state.windows.length; index++)
-              _ComposeWindowShell(
-                key: ValueKey(state.windows[index].id),
-                entry: state.windows[index],
-                index: index,
-                viewportSize: mediaSize,
-                viewPadding: viewPadding,
-              ),
-          ],
+        final viewInsets = mediaQuery.viewInsets;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final boundedSize = constraints.biggest;
+            final viewportSize = Size(
+              boundedSize.width.isFinite ? boundedSize.width : mediaSize.width,
+              boundedSize.height.isFinite
+                  ? boundedSize.height
+                  : mediaSize.height,
+            );
+            return Stack(
+              children: [
+                for (var index = 0; index < state.windows.length; index++)
+                  _ComposeWindowShell(
+                    key: ValueKey(state.windows[index].id),
+                    entry: state.windows[index],
+                    index: index,
+                    viewportSize: viewportSize,
+                    viewPadding: viewPadding,
+                    viewInsets: viewInsets,
+                  ),
+              ],
+            );
+          },
         );
       },
     );
@@ -231,12 +244,14 @@ class _ComposeWindowShell extends StatefulWidget {
     required this.index,
     required this.viewportSize,
     required this.viewPadding,
+    required this.viewInsets,
   });
 
   final ComposeWindowEntry entry;
   final int index;
   final Size viewportSize;
   final EdgeInsets viewPadding;
+  final EdgeInsets viewInsets;
 
   @override
   State<_ComposeWindowShell> createState() => _ComposeWindowShellState();
@@ -265,9 +280,16 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     final baseHeight = sizing.composeWindowHeight;
     final expandedHeight = sizing.composeWindowExpandedHeight;
     final minHeight = sizing.composeWindowMinHeight;
+    final systemInsets = _systemInsets(
+      viewPadding: widget.viewPadding,
+      viewInsets: widget.viewInsets,
+    );
 
     final double availableWidth = math.max(
-      mediaSize.width - (windowPadding * 2),
+      mediaSize.width -
+          (windowPadding * 2) -
+          systemInsets.left -
+          systemInsets.right,
       0,
     );
     final double targetWidth = math.max(
@@ -279,7 +301,10 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     );
 
     final double availableHeight = math.max(
-      mediaSize.height - (windowPadding * 2),
+      mediaSize.height -
+          (windowPadding * 2) -
+          systemInsets.top -
+          systemInsets.bottom,
       0,
     );
     final double normalHeight = math.max(
@@ -297,6 +322,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       entry: entry,
       viewportSize: mediaSize,
       viewPadding: widget.viewPadding,
+      viewInsets: widget.viewInsets,
       targetWidth: targetWidth,
       targetHeight: normalHeight,
       index: widget.index,
@@ -369,6 +395,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     required ComposeWindowEntry entry,
     required Size viewportSize,
     required EdgeInsets viewPadding,
+    required EdgeInsets viewInsets,
     required double targetWidth,
     required double targetHeight,
     required int index,
@@ -376,22 +403,26 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     required double stackOffset,
   }) {
     final spacing = context.spacing;
+    final systemInsets = _systemInsets(
+      viewPadding: viewPadding,
+      viewInsets: viewInsets,
+    );
     final horizontalInset = windowPadding + spacing.l;
     final defaultOffset = Offset(
       math.max(
-        windowPadding + viewPadding.left,
+        windowPadding + systemInsets.left,
         viewportSize.width -
             targetWidth -
             horizontalInset -
-            viewPadding.right -
+            systemInsets.right -
             (index * stackOffset),
       ),
       math.max(
-        windowPadding + viewPadding.top,
+        windowPadding + systemInsets.top,
         viewportSize.height -
             targetHeight -
             windowPadding -
-            viewPadding.bottom -
+            systemInsets.bottom -
             (index * stackOffset),
       ),
     );
@@ -399,6 +430,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       offset: entry.offset ?? defaultOffset,
       viewportSize: viewportSize,
       viewPadding: viewPadding,
+      viewInsets: viewInsets,
       targetWidth: targetWidth,
       targetHeight: targetHeight,
       windowPadding: windowPadding,
@@ -439,6 +471,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       offset: candidate,
       viewportSize: viewportSize,
       viewPadding: widget.viewPadding,
+      viewInsets: widget.viewInsets,
       targetWidth: targetWidth,
       targetHeight: targetHeight,
       windowPadding: windowPadding,
@@ -458,20 +491,37 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
     required Offset offset,
     required Size viewportSize,
     required EdgeInsets viewPadding,
+    required EdgeInsets viewInsets,
     required double targetWidth,
     required double targetHeight,
     required double windowPadding,
   }) {
+    final systemInsets = _systemInsets(
+      viewPadding: viewPadding,
+      viewInsets: viewInsets,
+    );
     final maxX = math.max(
-      windowPadding + viewPadding.left,
-      viewportSize.width - targetWidth - windowPadding - viewPadding.right,
+      windowPadding + systemInsets.left,
+      viewportSize.width - targetWidth - windowPadding - systemInsets.right,
     );
     final maxY = math.max(
-      windowPadding + viewPadding.top,
-      viewportSize.height - targetHeight - windowPadding - viewPadding.bottom,
+      windowPadding + systemInsets.top,
+      viewportSize.height - targetHeight - windowPadding - systemInsets.bottom,
     );
-    final dx = offset.dx.clamp(windowPadding + viewPadding.left, maxX);
-    final dy = offset.dy.clamp(windowPadding + viewPadding.top, maxY);
+    final dx = offset.dx.clamp(windowPadding + systemInsets.left, maxX);
+    final dy = offset.dy.clamp(windowPadding + systemInsets.top, maxY);
     return Offset(dx, dy);
+  }
+
+  EdgeInsets _systemInsets({
+    required EdgeInsets viewPadding,
+    required EdgeInsets viewInsets,
+  }) {
+    return EdgeInsets.fromLTRB(
+      math.max(viewPadding.left, viewInsets.left),
+      math.max(viewPadding.top, viewInsets.top),
+      math.max(viewPadding.right, viewInsets.right),
+      math.max(viewPadding.bottom, viewInsets.bottom),
+    );
   }
 }

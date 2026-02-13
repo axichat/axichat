@@ -117,7 +117,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
     final config =
         _draftConfig ?? context.watch<SettingsCubit>().state.endpointConfig;
     final placeholderStyle = textTheme.muted;
-    final inputStyle = textTheme.p;
     final EdgeInsets sheetPadding = EdgeInsets.symmetric(
       horizontal: widget.compact ? spacing.m : spacing.l,
     );
@@ -138,7 +137,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           autocorrect: false,
           keyboardType: TextInputType.url,
           textInputAction: TextInputAction.next,
-          minLines: 1,
           maxLines: 1,
           placeholderAlignment: Alignment.centerLeft,
           inputFormatters: [
@@ -150,7 +148,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
             style: placeholderStyle,
           ),
           placeholderStyle: placeholderStyle,
-          style: inputStyle,
         ),
         SizedBox(height: spacing.s),
         _ToggleTile(
@@ -165,7 +162,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           autocorrect: false,
           keyboardType: TextInputType.text,
           textInputAction: TextInputAction.next,
-          minLines: 1,
           maxLines: 1,
           enabled: config.smtpEnabled,
           placeholder: Text(
@@ -174,7 +170,6 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
           ),
           placeholderStyle: placeholderStyle,
           controller: _emailProvisioningPublicTokenController,
-          style: inputStyle,
         ),
         SizedBox(height: spacing.m),
         Row(

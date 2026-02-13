@@ -29,32 +29,35 @@ class AxiAppBar extends StatelessWidget {
       fontFamilyFallback: gabaritoFontFallback,
       fontWeight: appBarTitleFontWeight,
     );
+    final trailingContent = ClipRect(
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: trailing ?? const AxiVersion(),
+      ),
+    );
     return Container(
       height: context.sizing.appBarHeight,
       padding: EdgeInsets.symmetric(vertical: spacing.s, horizontal: spacing.m),
       decoration: BoxDecoration(
         border: Border(bottom: context.borderSide),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final trailingMaxWidth = constraints.maxWidth / 2;
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: ClipRect(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.max,
-                      children: [
-                        if (hasLeading)
-                          Flexible(
-                            fit: FlexFit.loose,
-                            child: ClipRect(child: leading!),
-                          ),
-                        if (hasLeading && hasTitle) SizedBox(width: titleGap),
-                        if (hasTitle)
+      child: hasTitle
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: ClipRect(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          if (hasLeading)
+                            Flexible(
+                              fit: FlexFit.loose,
+                              child: ClipRect(child: leading!),
+                            ),
+                          if (hasLeading) SizedBox(width: titleGap),
                           Expanded(
                             child: Text(
                               appDisplayName,
@@ -63,24 +66,27 @@ class AxiAppBar extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
+                trailingContent,
+              ],
+            )
+          : ClipRect(
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (hasLeading)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: leading!,
+                    ),
+                  trailingContent,
+                ],
               ),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: trailingMaxWidth),
-                child: ClipRect(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: trailing ?? const AxiVersion(),
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+            ),
     );
   }
 }

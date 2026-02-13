@@ -2783,14 +2783,6 @@ mixin MessageService
       _log.warning('Attempted to send a message before a JID was bound.');
       throw XmppMessageException();
     }
-    if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
-      _log.warning(
-        SafeLogging.sanitizeMessage(
-          'Blocked XMPP send to foreign domain: $jid',
-        ),
-      );
-      throw XmppForeignDomainException();
-    }
     final offlineDemo = demoOfflineMode;
     final isGroupChat = chatType == ChatType.groupChat;
     if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
@@ -3084,10 +3076,6 @@ mixin MessageService
     if (accountJid == null) {
       _log.warning('Attempted to send an attachment before a JID was bound.');
       throw XmppMessageException();
-    }
-    if (!_isFirstPartyJid(myJid: _myJid, jid: jid)) {
-      _log.warning('Blocked XMPP attachment send to foreign domain.');
-      throw XmppForeignDomainException();
     }
     final isGroupChat = chatType == ChatType.groupChat;
     final senderJid = isGroupChat

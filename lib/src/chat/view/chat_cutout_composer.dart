@@ -90,12 +90,9 @@ class ChatCutoutComposer extends StatelessWidget {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final textScaler = MediaQuery.of(context).textScaler;
-    double scaled(double value) => textScaler.scale(value);
-    final horizontalInset = scaled(spacing.l);
-    final verticalInset = scaled(spacing.m);
-    final headerAwareTopInset =
-        header == null ? verticalInset : scaled(spacing.s);
+    final horizontalInset = spacing.l;
+    final verticalInset = spacing.m;
+    final headerAwareTopInset = header == null ? verticalInset : spacing.s;
     final padding = EdgeInsetsDirectional.fromSTEB(
       horizontalInset,
       headerAwareTopInset,
@@ -117,9 +114,6 @@ class ChatCutoutComposer extends StatelessWidget {
     };
 
     final textStyle = context.textTheme.p;
-    final cursorHeight = textStyle.fontSize == null
-        ? null
-        : textScaler.scale(textStyle.fontSize!) * (textStyle.height ?? 1);
     final cutoutGap = spacing.xxs;
     final iconButtonSize = sizing.iconButtonSize;
     final defaultCutoutThickness = iconButtonSize + (cutoutGap * 2);
@@ -156,7 +150,7 @@ class ChatCutoutComposer extends StatelessWidget {
           children: [
             if (header != null) ...[
               Padding(
-                padding: EdgeInsets.only(bottom: scaled(spacing.xxs)),
+                padding: EdgeInsets.only(bottom: spacing.xxs),
                 child: header!,
               ),
               ShadSeparator.horizontal(
@@ -164,7 +158,7 @@ class ChatCutoutComposer extends StatelessWidget {
                 color: context.borderSide.color,
                 margin: EdgeInsets.zero,
               ),
-              SizedBox(height: scaled(spacing.s)),
+              SizedBox(height: spacing.s),
             ],
             Shortcuts(
               shortcuts: shortcuts,
@@ -181,7 +175,6 @@ class ChatCutoutComposer extends StatelessWidget {
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
                     style: textStyle,
-                    cursorHeight: cursorHeight,
                     decoration: InputDecoration(
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,

@@ -193,7 +193,6 @@ class _NexusScaffold extends StatelessWidget {
     final header = _NexusHeader(
       tabs: tabs,
       headerActions: headerActions,
-      navRailVisible: navPlacement == NavPlacement.rail && showNavigationRail,
     );
     final tabViews = _NexusTabViews(
       tabs: tabs,
@@ -250,12 +249,10 @@ class _NexusHeader extends StatelessWidget {
   const _NexusHeader({
     required this.tabs,
     required this.headerActions,
-    required this.navRailVisible,
   });
 
   final List<HomeTabEntry> tabs;
   final List<AppBarActionItem> headerActions;
-  final bool navRailVisible;
 
   @override
   Widget build(BuildContext context) {
@@ -265,15 +262,10 @@ class _NexusHeader extends StatelessWidget {
       children: [
         AxiAppBar(
           showTitle: false,
-          leading: _TransportStatusChips(
-            maxWidth: navRailVisible ? null : context.sizing.menuMaxWidth,
-          ),
+          leading: const _TransportStatusChips(),
           trailing: AppBarActions(
             actions: headerActions,
             spacing: spacing.s,
-            overflowBreakpoint: 0,
-            forceCollapsed: false,
-            availableWidth: double.infinity,
           ),
         ),
         _HomeSearchPanel(tabs: tabs),
@@ -283,9 +275,7 @@ class _NexusHeader extends StatelessWidget {
 }
 
 class _TransportStatusChips extends StatelessWidget {
-  const _TransportStatusChips({this.maxWidth});
-
-  final double? maxWidth;
+  const _TransportStatusChips();
 
   @override
   Widget build(BuildContext context) {
@@ -310,11 +300,7 @@ class _TransportStatusChips extends StatelessWidget {
             compact: true,
           ),
         );
-        if (maxWidth == null) return indicator;
-        return ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth!),
-          child: indicator,
-        );
+        return indicator;
       },
     );
   }
@@ -481,6 +467,17 @@ class _HomeBottomTabBar extends StatelessWidget {
     final sizing = context.sizing;
     final colors = context.colorScheme;
     final motion = context.motion;
+    final shadTheme = ShadTheme.of(context);
+    const tabDecoration = ShadDecoration(
+      color: Colors.transparent,
+      border: ShadBorder.none,
+      secondaryBorder: ShadBorder.none,
+      secondaryFocusedBorder: ShadBorder.none,
+      focusedBorder: ShadBorder.none,
+      errorBorder: ShadBorder.none,
+      secondaryErrorBorder: ShadBorder.none,
+      disableSecondaryBorder: true,
+    );
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final int safeSelectedIndex =
         selectedIndex.clamp(0, tabs.length - 1).toInt();
@@ -506,19 +503,21 @@ class _HomeBottomTabBar extends StatelessWidget {
             builder: (context, constraints) {
               final tabWidth =
                   tabs.isEmpty ? 0.0 : constraints.maxWidth / tabs.length;
-              final indicatorInset = spacing.xxs;
+              final horizontalIndicatorInset = spacing.xs;
+              final verticalIndicatorInset = spacing.xs;
               final indicatorWidth = math.max(
-                0,
-                tabWidth - (indicatorInset * 2),
+                0.0,
+                tabWidth - (horizontalIndicatorInset * 2),
               );
               return Stack(
                 children: [
                   AnimatedPositionedDirectional(
                     duration: animationDuration,
                     curve: Curves.easeInOutCubic,
-                    start: (tabWidth * safeSelectedIndex) + indicatorInset,
-                    top: indicatorInset,
-                    bottom: indicatorInset,
+                    start: (tabWidth * safeSelectedIndex) +
+                        horizontalIndicatorInset,
+                    top: verticalIndicatorInset,
+                    bottom: verticalIndicatorInset,
                     width: indicatorWidth,
                     child: DecoratedBox(
                       decoration: BoxDecoration(
@@ -530,39 +529,63 @@ class _HomeBottomTabBar extends StatelessWidget {
                       ),
                     ),
                   ),
-                  ShadTabs<int>(
-                    value: safeSelectedIndex,
-                    scrollable: false,
-                    tabsGap: 0,
-                    gap: 0,
-                    padding: EdgeInsets.zero,
-                    decoration: ShadDecoration(
-                      color: Colors.transparent,
-                      border: ShadBorder.none,
-                      secondaryBorder: ShadBorder.none,
-                      secondaryFocusedBorder: ShadBorder.none,
+                  ShadTheme(
+                    data: shadTheme.copyWith(
+                      tabsTheme: shadTheme.tabsTheme.copyWith(
+                        tabDecoration: tabDecoration,
+                        tabSelectedDecoration: tabDecoration,
+                        tabBackgroundColor: Colors.transparent,
+                        tabSelectedBackgroundColor: Colors.transparent,
+                        tabHoverBackgroundColor: Colors.transparent,
+                        tabSelectedHoverBackgroundColor: Colors.transparent,
+                        tabShadows: const <BoxShadow>[],
+                        tabSelectedShadows: const <BoxShadow>[],
+                      ),
                     ),
-                    onChanged: (value) {
-                      if (value != safeSelectedIndex) {
-                        onTabSelected(value);
-                      }
-                    },
-                    tabs: List<ShadTab<int>>.generate(tabs.length, (index) {
-                      final tab = tabs[index];
-                      return ShadTab<int>(
-                        value: index,
-                        height: sizing.iconButtonSize,
-                        backgroundColor: Colors.transparent,
-                        selectedBackgroundColor: Colors.transparent,
-                        foregroundColor: colors.mutedForeground,
-                        selectedForegroundColor: colors.foreground,
-                        child: _HomeBottomTabItem(
-                          label: tab.label,
-                          badgeCount: badgeCounts[tab.id] ?? 0,
-                          selected: index == safeSelectedIndex,
-                        ),
-                      );
-                    }),
+                    child: ShadTabs<int>(
+                      value: safeSelectedIndex,
+                      scrollable: false,
+                      tabsGap: 0,
+                      gap: 0,
+                      padding: EdgeInsets.zero,
+                      decoration: const ShadDecoration(
+                        color: Colors.transparent,
+                        border: ShadBorder.none,
+                        secondaryBorder: ShadBorder.none,
+                        secondaryFocusedBorder: ShadBorder.none,
+                        focusedBorder: ShadBorder.none,
+                        errorBorder: ShadBorder.none,
+                        secondaryErrorBorder: ShadBorder.none,
+                        disableSecondaryBorder: true,
+                      ),
+                      onChanged: (value) {
+                        if (value != safeSelectedIndex) {
+                          onTabSelected(value);
+                        }
+                      },
+                      tabs: List<ShadTab<int>>.generate(tabs.length, (index) {
+                        final tab = tabs[index];
+                        return ShadTab<int>(
+                          value: index,
+                          height: sizing.iconButtonSize,
+                          decoration: tabDecoration,
+                          backgroundColor: Colors.transparent,
+                          selectedBackgroundColor: Colors.transparent,
+                          hoverBackgroundColor: Colors.transparent,
+                          selectedHoverBackgroundColor: Colors.transparent,
+                          pressedBackgroundColor: Colors.transparent,
+                          shadows: const <BoxShadow>[],
+                          selectedShadows: const <BoxShadow>[],
+                          foregroundColor: colors.mutedForeground,
+                          selectedForegroundColor: colors.foreground,
+                          child: _HomeBottomTabItem(
+                            label: tab.label,
+                            badgeCount: badgeCounts[tab.id] ?? 0,
+                            selected: index == safeSelectedIndex,
+                          ),
+                        );
+                      }),
+                    ),
                   ),
                 ],
               );
@@ -730,18 +753,12 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     if (safeIndex == 0) {
       HomeShellScope.maybeOf(context)?.homeTabIndex.value = 0;
       const HomeRoute().go(context);
-      final chatsCubit = context.read<ChatsCubit>();
-      if (chatsCubit.state.openCalendar) {
-        chatsCubit.closeCalendar();
-      }
-      chatsCubit.closeAllChats();
+      context.read<ChatsCubit>().closeAllChats();
       return;
     }
 
     if (safeIndex == 1 || safeIndex == 2) {
-      final int calendarTabIndex = safeIndex == 1 ? 0 : 1;
       const HomeRoute().go(context);
-      context.read<ChatsCubit>().openCalendarAt(tabIndex: calendarTabIndex);
       return;
     }
 
@@ -1190,6 +1207,7 @@ class _HomeShellRailLayout extends StatelessWidget {
   const _HomeShellRailLayout({
     required this.tabs,
     required this.homeTabIndex,
+    required this.bottomNavIndex,
     required this.calendarAvailable,
     required this.collapsed,
     required this.onCollapsedChanged,
@@ -1198,7 +1216,8 @@ class _HomeShellRailLayout extends StatelessWidget {
   });
 
   final List<HomeTabEntry> tabs;
-  final ValueListenable<int> homeTabIndex;
+  final ValueNotifier<int> homeTabIndex;
+  final ValueNotifier<int> bottomNavIndex;
   final bool calendarAvailable;
   final bool collapsed;
   final ValueChanged<bool> onCollapsedChanged;
@@ -1207,21 +1226,26 @@ class _HomeShellRailLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocSelector<ChatsCubit, ChatsState, bool>(
-      selector: (state) => state.openCalendar,
-      builder: (context, calendarActive) {
+    return ValueListenableBuilder<int>(
+      valueListenable: homeTabIndex,
+      builder: (context, selectedIndex, _) {
         return ValueListenableBuilder<int>(
-          valueListenable: homeTabIndex,
-          builder: (context, selectedIndex, _) {
+          valueListenable: bottomNavIndex,
+          builder: (context, selectedBottomIndex, _) {
             if (tabs.isEmpty) {
               return child;
             }
+            final int safeBottomIndex = selectedBottomIndex.clamp(0, 3).toInt();
+            final bool calendarActive =
+                safeBottomIndex == 1 || safeBottomIndex == 2;
             return Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _HomeShellNavigationRail(
                   tabs: tabs,
                   selectedIndex: selectedIndex,
+                  homeTabIndex: homeTabIndex,
+                  bottomNavIndex: bottomNavIndex,
                   collapsed: collapsed,
                   calendarAvailable: calendarAvailable,
                   calendarActive: calendarActive,
@@ -1242,6 +1266,8 @@ class _HomeShellNavigationRail extends StatelessWidget {
   const _HomeShellNavigationRail({
     required this.tabs,
     required this.selectedIndex,
+    required this.homeTabIndex,
+    required this.bottomNavIndex,
     required this.collapsed,
     required this.calendarAvailable,
     required this.calendarActive,
@@ -1251,6 +1277,8 @@ class _HomeShellNavigationRail extends StatelessWidget {
 
   final List<HomeTabEntry> tabs;
   final int selectedIndex;
+  final ValueNotifier<int> homeTabIndex;
+  final ValueNotifier<int> bottomNavIndex;
   final bool collapsed;
   final bool calendarAvailable;
   final bool calendarActive;
@@ -1258,20 +1286,13 @@ class _HomeShellNavigationRail extends StatelessWidget {
   final Map<HomeTab, int> badgeCounts;
 
   void _openCalendar(BuildContext context) {
-    final chatsCubit = context.read<ChatsCubit>();
-    final calendarTabIndex = chatsCubit.state.calendarTabIndex;
-    final bottomIndex = calendarTabIndex == 0 ? 1 : 2;
-    final scope = HomeShellScope.maybeOf(context);
-    if (scope != null) {
-      scope.bottomNavIndex.value = bottomIndex;
-    }
-    const HomeRoute().go(context);
-    chatsCubit.openCalendarAt(tabIndex: calendarTabIndex);
+    final currentIndex = bottomNavIndex.value.clamp(0, 3).toInt();
+    bottomNavIndex.value = currentIndex == 2 ? 2 : 1;
   }
 
   void _selectHomeTab(BuildContext context, int index) {
-    HomeShellScope.maybeOf(context)?.homeTabIndex.value = index;
-    const HomeRoute().go(context);
+    bottomNavIndex.value = 0;
+    homeTabIndex.value = index;
   }
 
   @override

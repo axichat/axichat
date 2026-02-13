@@ -192,7 +192,6 @@ class _DraftFormState extends State<DraftForm> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final sizing = context.sizing;
     final colors = context.colorScheme;
     final textTheme = context.textTheme;
     final spacing = context.spacing;
@@ -202,11 +201,6 @@ class _DraftFormState extends State<DraftForm> {
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final sectionSpacing = spacing.m;
     final smallGap = spacing.s;
-    final inputPadding = EdgeInsets.symmetric(
-      horizontal: spacing.s,
-      vertical: spacing.xs,
-    );
-    final subjectHeight = sizing.buttonHeightRegular;
 
     return BlocBuilder<ProfileCubit, ProfileState>(
       bloc: locate<ProfileCubit>(),
@@ -415,24 +409,14 @@ class _DraftFormState extends State<DraftForm> {
                                                   _subjectTextController,
                                               focusNode: _subjectFocusNode,
                                               enabled: enabled,
-                                              minLines: 1,
                                               maxLines: 1,
                                               textInputAction:
                                                   TextInputAction.next,
                                               onSubmitted: (_) =>
                                                   _bodyFocusNode.requestFocus(),
                                               placeholder: Text(
-                                                l10n.draftSubjectHintOptional,
+                                                '${l10n.chatSubjectHint}:',
                                               ),
-                                              constraints:
-                                                  BoxConstraints.tightFor(
-                                                height: subjectHeight,
-                                              ),
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.center,
-                                              placeholderAlignment:
-                                                  Alignment.centerLeft,
-                                              inputPadding: inputPadding,
                                             ),
                                           ),
                                         ),
@@ -798,6 +782,9 @@ class _DraftFormState extends State<DraftForm> {
       return null;
     }
     final hinted = hintTransportForAddress(address);
+    if (hinted != null) {
+      return hinted;
+    }
     return showTransportChoiceDialog(
       context,
       address: address,

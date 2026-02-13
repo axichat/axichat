@@ -17,8 +17,8 @@ Future<MessageTransport?> showTransportChoiceDialog(
   final title = l10n.chatTransportChoiceTitle;
   final message = l10n.chatTransportChoiceMessage(address);
   final cancelLabel = l10n.chatAttachmentExportCancel;
-  final chatLabel = l10n.chatComposerMessageHint;
-  final emailLabel = l10n.chatComposerEmailHint;
+  final chatLabel = MessageTransport.xmpp.label;
+  final emailLabel = MessageTransport.email.label;
   return showFadeScaleDialog<MessageTransport>(
     context: context,
     builder: (dialogContext) {

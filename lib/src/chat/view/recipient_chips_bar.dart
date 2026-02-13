@@ -111,6 +111,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       curve: Curves.easeInOutCubic,
     );
     _controller.addListener(_handleTextChanged);
+    _focusNode.addListener(_handleFocusChanged);
     _lastRosterItems = List<RosterItem>.from(widget.rosterItems);
     _lastAvailableChats = List<Chat>.from(widget.availableChats);
     _avatarPathsByJid = _computeAvatarPaths();
@@ -160,6 +161,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   @override
   void dispose() {
     _controller.removeListener(_handleTextChanged);
+    _focusNode.removeListener(_handleFocusChanged);
     _controller.dispose();
     _focusNode.dispose();
     _highlightedSuggestionIndex.dispose();
@@ -625,6 +627,16 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     if (_pendingRemovalKey != null && _controller.text.isNotEmpty) {
       _clearPendingRemoval();
     }
+  }
+
+  void _handleFocusChanged() {
+    if (_focusNode.hasFocus) {
+      return;
+    }
+    if (_controller.text.trim().isEmpty) {
+      return;
+    }
+    _handleAutocompleteSubmit();
   }
 
   KeyEventResult _moveAutocompleteHighlight(int delta) {
@@ -1140,7 +1152,7 @@ class _RecipientChipAvatar extends StatelessWidget {
         : AxiAvatar(
             jid: target.address ?? target.displayName ?? '',
             size: avatarSize,
-            shape: AxiAvatarShape.circle,
+            shape: AxiAvatarShape.squircle,
             avatarPath: _avatarPathForKey(
               target.address ?? target.displayName,
             ),
@@ -1624,6 +1636,14 @@ final class _RecipientAutocompleteOverlayState
     widget.onOptionsChanged(const <FanOutTarget>[]);
   }
 
+  void _handleOutsideTap() {
+    if (widget.controller.text.trim().isNotEmpty) {
+      widget.onSubmitted();
+    }
+    widget.focusNode.unfocus();
+    _dismissOverlay();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
@@ -1674,7 +1694,7 @@ final class _RecipientAutocompleteOverlayState
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.translucent,
-                  onTap: _dismissOverlay,
+                  onTap: _handleOutsideTap,
                 ),
               ),
               CompositedTransformFollower(
@@ -1683,7 +1703,7 @@ final class _RecipientAutocompleteOverlayState
                 offset: overlayOffset,
                 child: TapRegion(
                   groupId: widget.tapRegionGroup,
-                  onTapOutside: (_) => _dismissOverlay(),
+                  onTapOutside: (_) => _handleOutsideTap(),
                   child: Align(
                     alignment: Alignment.topLeft,
                     child: ConstrainedBox(
@@ -1758,7 +1778,7 @@ final class _RecipientAutocompleteOverlayState
         },
         child: TapRegion(
           groupId: widget.tapRegionGroup,
-          onTapOutside: (_) => widget.focusNode.unfocus(),
+          onTapOutside: (_) => _handleOutsideTap(),
           child: SizedBox(
             key: _triggerKey,
             height: chipsBarHeight,
@@ -2258,7 +2278,7 @@ class _SuggestionAvatar extends StatelessWidget {
     return AxiAvatar(
       jid: jid,
       size: 32,
-      shape: AxiAvatarShape.circle,
+      shape: AxiAvatarShape.squircle,
       avatarPath: avatarPath,
     );
   }
