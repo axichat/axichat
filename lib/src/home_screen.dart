@@ -258,6 +258,8 @@ class _HomeShellState extends State<HomeShell> {
     final storageManager = context.watch<CalendarStorageManager>();
     final calendarAvailable = storageManager.isAuthStorageReady;
     final chatsState = context.watch<ChatsCubit>().state;
+    final isChatOpen = chatsState.openJid != null;
+    final isChatCalendarRoute = chatsState.openChatRoute.isCalendar;
     final chatItems = chatsState.items ?? const <m.Chat>[];
     final badgeCounts = <HomeTab, int>{
       HomeTab.invites: context.watch<RosterCubit>().inviteCount,
@@ -345,25 +347,38 @@ class _HomeShellState extends State<HomeShell> {
     }
 
     return buildShellChild(
-      Column(
-        children: [
-          Expanded(
-            child: Builder(
-              builder: (context) {
-                final mediaQuery = MediaQuery.of(context);
-                return MediaQuery(
-                  data: mediaQuery.removePadding(removeBottom: true),
-                  child: widget.child,
-                );
-              },
-            ),
-          ),
-          _HomeShellBottomBar(
-            calendarBottomDragSession: _calendarBottomDragSession,
-            bottomNavIndex: _bottomNavIndex,
-            calendarAvailable: calendarAvailable,
-          ),
-        ],
+      ValueListenableBuilder<int>(
+        valueListenable: _bottomNavIndex,
+        builder: (context, selectedBottomIndex, _) {
+          final safeSelectedBottomIndex =
+              selectedBottomIndex.clamp(0, 3).toInt();
+          final hideBottomBarForChat = isChatOpen &&
+              safeSelectedBottomIndex == 0 &&
+              !isChatCalendarRoute;
+          return Column(
+            children: [
+              Expanded(
+                child: Builder(
+                  builder: (context) {
+                    final mediaQuery = MediaQuery.of(context);
+                    return MediaQuery(
+                      data: mediaQuery.removePadding(
+                        removeBottom: !hideBottomBarForChat,
+                      ),
+                      child: widget.child,
+                    );
+                  },
+                ),
+              ),
+              if (!hideBottomBarForChat)
+                _HomeShellBottomBar(
+                  calendarBottomDragSession: _calendarBottomDragSession,
+                  bottomNavIndex: _bottomNavIndex,
+                  calendarAvailable: calendarAvailable,
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -380,12 +395,14 @@ class _HomeScreenState extends State<HomeScreen> {
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = true;
   LocalHistoryEntry? _openChatHistoryEntry;
+  LocalHistoryEntry? _openCalendarHistoryEntry;
   ValueNotifier<int>? _bottomNavIndexNotifier;
 
   @override
   void dispose() {
     _shortcutFocusNode.dispose();
     _clearOpenChatHistoryEntry();
+    _clearOpenCalendarHistoryEntry();
     _bottomNavIndexNotifier?.removeListener(_handleBottomNavIndexChanged);
     _bottomNavIndexNotifier = null;
     super.dispose();
@@ -432,6 +449,45 @@ class _HomeScreenState extends State<HomeScreen> {
     route.addLocalHistoryEntry(entry);
   }
 
+  void _handleOpenCalendarHistoryRemoved() {
+    if (_openCalendarHistoryEntry == null) {
+      return;
+    }
+    _openCalendarHistoryEntry = null;
+    if (!mounted) {
+      return;
+    }
+    final notifier = _bottomNavIndexNotifier;
+    if (notifier == null) {
+      return;
+    }
+    final index = notifier.value.clamp(0, 3).toInt();
+    if (index == 1 || index == 2) {
+      notifier.value = 0;
+    }
+  }
+
+  void _clearOpenCalendarHistoryEntry() {
+    final entry = _openCalendarHistoryEntry;
+    _openCalendarHistoryEntry = null;
+    entry?.remove();
+  }
+
+  void _updateOpenCalendarHistoryEntry() {
+    final route = ModalRoute.of(context);
+    if (route == null || !_isPrimaryCalendarActive) {
+      _clearOpenCalendarHistoryEntry();
+      return;
+    }
+    if (_openCalendarHistoryEntry != null) {
+      return;
+    }
+    final entry =
+        LocalHistoryEntry(onRemove: _handleOpenCalendarHistoryRemoved);
+    _openCalendarHistoryEntry = entry;
+    route.addLocalHistoryEntry(entry);
+  }
+
   bool get _isPrimaryCalendarActive {
     final notifier = _bottomNavIndexNotifier;
     if (notifier == null) {
@@ -450,6 +506,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _syncHomeHistoryEntries(ChatsState state) {
     _updateOpenChatHistoryEntry(state);
+    _updateOpenCalendarHistoryEntry();
   }
 
   @override
@@ -536,19 +593,12 @@ class _HomeExitPopGuard extends StatelessWidget {
             final selectedBottomIndex = bottomNotifier?.value ?? 0;
             final bool isPrimaryCalendar =
                 selectedBottomIndex == 1 || selectedBottomIndex == 2;
-            final canPop = isPrimaryCalendar
-                ? false
-                : hasOpenChatStack || activeIndex == 0;
+            final canPop =
+                isPrimaryCalendar || hasOpenChatStack || activeIndex == 0;
             return PopScope(
               canPop: canPop,
               onPopInvokedWithResult: (didPop, _) {
                 if (didPop || canPop) {
-                  return;
-                }
-                if (isPrimaryCalendar) {
-                  if (bottomNotifier != null) {
-                    bottomNotifier.value = 0;
-                  }
                   return;
                 }
                 if (homeNotifier.value != 0) {
@@ -965,7 +1015,8 @@ class _HomeContent extends StatelessWidget {
             },
           )
         : mainContent;
-    final shouldResizeForKeyboard = navPlacement != NavPlacement.bottom;
+    final shouldResizeForKeyboard =
+        navPlacement != NavPlacement.bottom || openJid != null;
 
     final scaffold = Scaffold(
       resizeToAvoidBottomInset: shouldResizeForKeyboard,

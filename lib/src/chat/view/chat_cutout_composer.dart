@@ -175,6 +175,7 @@ class ChatCutoutComposer extends StatelessWidget {
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
                     style: textStyle,
+                    cursorHeight: textStyle.fontSize,
                     decoration: InputDecoration(
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,

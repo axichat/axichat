@@ -1424,6 +1424,29 @@ final class _RecipientAutocompleteOverlayState
 
   List<FanOutTarget> _options = const <FanOutTarget>[];
 
+  void _showOverlayPortal() {
+    if (_portalController.isShowing) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _portalController.isShowing) {
+        return;
+      }
+      _portalController.show();
+      setState(() {});
+    });
+  }
+
+  void _hideOverlayPortal() {
+    if (!_portalController.isShowing) {
+      return;
+    }
+    _portalController.hide();
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
   void _recomputeOptions() {
     final query = widget.controller.text.trim();
     final next = query.isEmpty && !widget.showSuggestionsWhenEmpty
@@ -1441,18 +1464,9 @@ final class _RecipientAutocompleteOverlayState
             widget.showSuggestionsWhenEmpty) &&
         _options.isNotEmpty;
     if (shouldShow) {
-      if (!_portalController.isShowing) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          if (!_portalController.isShowing) {
-            _portalController.show();
-          }
-        });
-      }
+      _showOverlayPortal();
     } else {
-      if (_portalController.isShowing) {
-        _portalController.hide();
-      }
+      _hideOverlayPortal();
       widget.onOptionsChanged(const <FanOutTarget>[]);
     }
   }
@@ -1630,9 +1644,7 @@ final class _RecipientAutocompleteOverlayState
   }
 
   void _dismissOverlay() {
-    if (_portalController.isShowing) {
-      _portalController.hide();
-    }
+    _hideOverlayPortal();
     widget.onOptionsChanged(const <FanOutTarget>[]);
   }
 
@@ -1649,121 +1661,134 @@ final class _RecipientAutocompleteOverlayState
     final colors = context.colorScheme;
     final hintColor = colors.mutedForeground.withValues(alpha: 0.8);
     final textStyle = context.textTheme.p;
+    final canPop = !_portalController.isShowing;
 
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: OverlayPortal(
-        controller: _portalController,
-        overlayChildBuilder: (overlayContext) {
-          if (_options.isEmpty || !widget.focusNode.hasFocus) {
-            return const SizedBox.shrink();
-          }
+    return PopScope(
+      canPop: canPop,
+      onPopInvokedWithResult: (didPop, __) {
+        if (didPop || canPop) {
+          return;
+        }
+        _dismissOverlay();
+        widget.focusNode.unfocus();
+      },
+      child: CompositedTransformTarget(
+        link: _layerLink,
+        child: OverlayPortal(
+          controller: _portalController,
+          overlayChildBuilder: (overlayContext) {
+            if (_options.isEmpty || !widget.focusNode.hasFocus) {
+              return const SizedBox.shrink();
+            }
 
-          final limits = _overlayLimits(overlayContext);
-          if (limits.maxHeight <= 0) {
-            return const SizedBox.shrink();
-          }
+            final limits = _overlayLimits(overlayContext);
+            if (limits.maxHeight <= 0) {
+              return const SizedBox.shrink();
+            }
 
-          final overlayColors = overlayContext.colorScheme;
-          final overlayTextTheme = overlayContext.textTheme;
-          final overlayRadius = BorderRadius.circular(20);
-          final titleStyle = overlayTextTheme.p.copyWith(
-            fontWeight: FontWeight.w600,
-            color: overlayColors.foreground,
-          );
-          final subtitleStyle = overlayTextTheme.small.copyWith(
-            color: overlayColors.mutedForeground,
-          );
-          final dividerColor = overlayColors.border.withValues(alpha: 0.55);
-          final hoverColor = overlayColors.muted.withValues(alpha: 0.08);
-          final highlightColor = overlayColors.primary.withValues(alpha: 0.12);
-          final trailingIconColor = overlayColors.muted.withValues(alpha: 0.9);
-          final overlayWidth = _computeOverlayWidth(
-            overlayContext: overlayContext,
-            limits: limits,
-            titleStyle: titleStyle,
-            subtitleStyle: subtitleStyle,
-          );
-          final overlayOffset = _overlayOffsetForWidth(
-            limits: limits,
-            width: overlayWidth,
-          );
+            final overlayColors = overlayContext.colorScheme;
+            final overlayTextTheme = overlayContext.textTheme;
+            final overlayRadius = BorderRadius.circular(20);
+            final titleStyle = overlayTextTheme.p.copyWith(
+              fontWeight: FontWeight.w600,
+              color: overlayColors.foreground,
+            );
+            final subtitleStyle = overlayTextTheme.small.copyWith(
+              color: overlayColors.mutedForeground,
+            );
+            final dividerColor = overlayColors.border.withValues(alpha: 0.55);
+            final hoverColor = overlayColors.muted.withValues(alpha: 0.08);
+            final highlightColor =
+                overlayColors.primary.withValues(alpha: 0.12);
+            final trailingIconColor =
+                overlayColors.muted.withValues(alpha: 0.9);
+            final overlayWidth = _computeOverlayWidth(
+              overlayContext: overlayContext,
+              limits: limits,
+              titleStyle: titleStyle,
+              subtitleStyle: subtitleStyle,
+            );
+            final overlayOffset = _overlayOffsetForWidth(
+              limits: limits,
+              width: overlayWidth,
+            );
 
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: _handleOutsideTap,
+            return Stack(
+              children: [
+                Positioned.fill(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _handleOutsideTap,
+                  ),
                 ),
-              ),
-              CompositedTransformFollower(
-                link: _layerLink,
-                showWhenUnlinked: false,
-                offset: overlayOffset,
-                child: TapRegion(
-                  groupId: widget.tapRegionGroup,
-                  onTapOutside: (_) => _handleOutsideTap(),
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        minWidth: limits.minWidth,
-                        maxWidth: limits.maxWidth,
-                        maxHeight: limits.maxHeight,
-                      ),
-                      child: SizedBox(
-                        width: overlayWidth,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: overlayColors.card,
-                            borderRadius: overlayRadius,
-                            border: Border.all(
-                              color:
-                                  overlayColors.border.withValues(alpha: 0.9),
-                              width: 1,
+                CompositedTransformFollower(
+                  link: _layerLink,
+                  showWhenUnlinked: false,
+                  offset: overlayOffset,
+                  child: TapRegion(
+                    groupId: widget.tapRegionGroup,
+                    onTapOutside: (_) => _handleOutsideTap(),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(
+                          minWidth: limits.minWidth,
+                          maxWidth: limits.maxWidth,
+                          maxHeight: limits.maxHeight,
+                        ),
+                        child: SizedBox(
+                          width: overlayWidth,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: overlayColors.card,
+                              borderRadius: overlayRadius,
+                              border: Border.all(
+                                color:
+                                    overlayColors.border.withValues(alpha: 0.9),
+                                width: 1,
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.12),
+                                  blurRadius: 28,
+                                  offset: const Offset(0, 18),
+                                ),
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.05),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.12),
-                                blurRadius: 28,
-                                offset: const Offset(0, 18),
-                              ),
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 8,
-                                offset: const Offset(0, 6),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: overlayRadius,
-                            child: Material(
-                              color: Colors.transparent,
-                              child: ValueListenableBuilder<int?>(
-                                valueListenable:
-                                    widget.highlightedIndexListenable,
-                                builder: (context, highlightedIndex, _) {
-                                  return _AutocompleteOptionsList(
-                                    options: _options,
-                                    avatarPathsByJid: widget.avatarPathsByJid,
-                                    selfIdentity: widget.selfIdentity,
-                                    onSelected: (option) {
-                                      widget.onRecipientAdded(option);
-                                      widget.controller.clear();
-                                      _dismissOverlay();
-                                      widget.focusNode.requestFocus();
-                                    },
-                                    titleStyle: titleStyle,
-                                    subtitleStyle: subtitleStyle,
-                                    dividerColor: dividerColor,
-                                    trailingIconColor: trailingIconColor,
-                                    hoverColor: hoverColor,
-                                    highlightColor: highlightColor,
-                                    highlightedIndex: highlightedIndex,
-                                    maxHeight: limits.maxHeight,
-                                  );
-                                },
+                            child: ClipRRect(
+                              borderRadius: overlayRadius,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: ValueListenableBuilder<int?>(
+                                  valueListenable:
+                                      widget.highlightedIndexListenable,
+                                  builder: (context, highlightedIndex, _) {
+                                    return _AutocompleteOptionsList(
+                                      options: _options,
+                                      avatarPathsByJid: widget.avatarPathsByJid,
+                                      selfIdentity: widget.selfIdentity,
+                                      onSelected: (option) {
+                                        widget.onRecipientAdded(option);
+                                        widget.controller.clear();
+                                        _dismissOverlay();
+                                        widget.focusNode.requestFocus();
+                                      },
+                                      titleStyle: titleStyle,
+                                      subtitleStyle: subtitleStyle,
+                                      dividerColor: dividerColor,
+                                      trailingIconColor: trailingIconColor,
+                                      hoverColor: hoverColor,
+                                      highlightColor: highlightColor,
+                                      highlightedIndex: highlightedIndex,
+                                      maxHeight: limits.maxHeight,
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                           ),
@@ -1772,74 +1797,75 @@ final class _RecipientAutocompleteOverlayState
                     ),
                   ),
                 ),
-              ),
-            ],
-          );
-        },
-        child: TapRegion(
-          groupId: widget.tapRegionGroup,
-          onTapOutside: (_) => _handleOutsideTap(),
-          child: SizedBox(
-            key: _triggerKey,
-            height: chipsBarHeight,
-            child: Padding(
-              padding:
-                  EdgeInsets.symmetric(horizontal: widget.fieldOuterPadding),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: widget.backgroundColor,
-                    borderRadius: BorderRadius.circular(chipsBarHeight / 2),
-                  ),
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: widget.fieldInnerPadding,
+              ],
+            );
+          },
+          child: TapRegion(
+            groupId: widget.tapRegionGroup,
+            onTapOutside: (_) => _handleOutsideTap(),
+            child: SizedBox(
+              key: _triggerKey,
+              height: chipsBarHeight,
+              child: Padding(
+                padding:
+                    EdgeInsets.symmetric(horizontal: widget.fieldOuterPadding),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: widget.backgroundColor,
+                      borderRadius: BorderRadius.circular(chipsBarHeight / 2),
                     ),
-                    child: AxiTextField(
-                      groupId: widget.tapRegionGroup,
-                      controller: widget.controller,
-                      focusNode: widget.focusNode,
-                      maxLines: 1,
-                      keyboardType: TextInputType.emailAddress,
-                      textCapitalization: TextCapitalization.none,
-                      autocorrect: false,
-                      smartDashesType: SmartDashesType.disabled,
-                      smartQuotesType: SmartQuotesType.disabled,
-                      enableSuggestions: false,
-                      autofillHints: const [AutofillHints.email],
-                      inputFormatters: [
-                        FilteringTextInputFormatter.deny(RegExp(r'\\s')),
-                      ],
-                      decoration: InputDecoration(
-                        hintText: context.l10n.recipientsAddHint,
-                        hintStyle: textStyle.copyWith(color: hintColor),
-                        isDense: true,
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: widget.fieldInnerPadding,
                       ),
-                      style: textStyle,
-                      strutStyle: StrutStyle.fromTextStyle(textStyle),
-                      textInputAction: TextInputAction.done,
-                      onEditingComplete: () => widget.focusNode.requestFocus(),
-                      textAlignVertical: TextAlignVertical.center,
-                      onSubmitted: (_) {
-                        final handled = widget.onSubmitted();
-                        if (!handled) {
-                          final trimmed = widget.controller.text.trim();
-                          if (trimmed.isNotEmpty &&
-                              widget.onManualEntry(trimmed)) {
-                            widget.controller.clear();
-                            _dismissOverlay();
+                      child: AxiTextField(
+                        groupId: widget.tapRegionGroup,
+                        controller: widget.controller,
+                        focusNode: widget.focusNode,
+                        maxLines: 1,
+                        keyboardType: TextInputType.emailAddress,
+                        textCapitalization: TextCapitalization.none,
+                        autocorrect: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        enableSuggestions: false,
+                        autofillHints: const [AutofillHints.email],
+                        inputFormatters: [
+                          FilteringTextInputFormatter.deny(RegExp(r'\\s')),
+                        ],
+                        decoration: InputDecoration(
+                          hintText: context.l10n.recipientsAddHint,
+                          hintStyle: textStyle.copyWith(color: hintColor),
+                          isDense: true,
+                          filled: false,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          errorBorder: InputBorder.none,
+                          focusedErrorBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        style: textStyle,
+                        strutStyle: StrutStyle.fromTextStyle(textStyle),
+                        textInputAction: TextInputAction.done,
+                        onEditingComplete: () =>
+                            widget.focusNode.requestFocus(),
+                        textAlignVertical: TextAlignVertical.center,
+                        onSubmitted: (_) {
+                          final handled = widget.onSubmitted();
+                          if (!handled) {
+                            final trimmed = widget.controller.text.trim();
+                            if (trimmed.isNotEmpty &&
+                                widget.onManualEntry(trimmed)) {
+                              widget.controller.clear();
+                              _dismissOverlay();
+                            }
                           }
-                        }
-                        widget.focusNode.requestFocus();
-                      },
+                          widget.focusNode.requestFocus();
+                        },
+                      ),
                     ),
                   ),
                 ),

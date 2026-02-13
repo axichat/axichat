@@ -50,7 +50,6 @@ import 'package:axichat/src/chat/view/widgets/calendar_availability_request_shee
 import 'package:axichat/src/chat/view/widgets/calendar_availability_viewer.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
-import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
@@ -2174,9 +2173,6 @@ class _ChatState extends State<Chat> {
       chatState: chatState,
       settings: resolvedSettings,
     )) {
-      if (forceInsert) {
-        return;
-      }
       return;
     }
     final isEmailComposer = _isEmailComposerActive(chatState: chatState);
@@ -2191,7 +2187,21 @@ class _ChatState extends State<Chat> {
       }
       return;
     }
-    if (!forceInsert && currentText.trim().isNotEmpty) {
+    if (currentText.trim().isNotEmpty) {
+      if (currentText.endsWith(watermark)) {
+        return;
+      }
+      final selection = _textController.selection;
+      final watermarkOffset = forceInsert
+          ? currentText.length
+          : (selection.isValid
+              ? selection.extentOffset.clamp(0, currentText.length).toInt()
+              : currentText.length);
+      _textController.value = _textController.value.copyWith(
+        text: '$currentText$watermark',
+        selection: TextSelection.collapsed(offset: watermarkOffset),
+        composing: TextRange.empty,
+      );
       return;
     }
     _textController.value = _textController.value.copyWith(
@@ -3559,7 +3569,10 @@ class _ChatState extends State<Chat> {
               )
                   ? false
                   : text.trim().isNotEmpty;
-              _syncEmailComposerWatermark(chatState: state);
+              _syncEmailComposerWatermark(
+                chatState: state,
+                forceInsert: true,
+              );
               if (!_focusNode.hasFocus) {
                 _focusNode.requestFocus();
               }
@@ -5011,8 +5024,6 @@ class _ChatState extends State<Chat> {
                                               state.pinnedMessagesHydrating,
                                           onClose: _closePinnedMessages,
                                           canTogglePins: canTogglePins,
-                                          canShowCalendarTasks:
-                                              chatCalendarAvailable,
                                           canAddToPersonalCalendar:
                                               personalCalendarAvailable,
                                           canAddToChatCalendar:
@@ -5463,12 +5474,6 @@ class _ChatState extends State<Chat> {
                                                               message.customProperties?[
                                                                       _calendarTaskIcsPropertyKey]
                                                                   as CalendarTask?;
-                                                          final bool
-                                                              calendarTaskIcsReadOnly =
-                                                              (message.customProperties?[
-                                                                          _calendarTaskIcsReadOnlyPropertyKey]
-                                                                      as bool?) ??
-                                                                  _calendarTaskIcsReadOnlyFallback;
                                                           final CalendarAvailabilityMessage?
                                                               availabilityMessage =
                                                               message.customProperties?[
@@ -6247,16 +6252,6 @@ class _ChatState extends State<Chat> {
                                                                 ),
                                                               ),
                                                             );
-                                                            const calendarTaskBaseShape =
-                                                                RoundedRectangleBorder(
-                                                              borderRadius:
-                                                                  BorderRadius
-                                                                      .all(
-                                                                Radius.circular(
-                                                                  calendarEventRadius,
-                                                                ),
-                                                              ),
-                                                            );
                                                             if (availabilityMessage !=
                                                                 null) {
                                                               availabilityMessage
@@ -6431,42 +6426,18 @@ class _ChatState extends State<Chat> {
                                                               );
                                                             } else if (calendarTaskIcs !=
                                                                 null) {
-                                                              final ShapeBorder
-                                                                  calendarTaskShape =
-                                                                  !chatCalendarAvailable
-                                                                      ? calendarMessageCardShape
-                                                                      : calendarTaskBaseShape;
                                                               addExtra(
-                                                                !chatCalendarAvailable
-                                                                    ? CalendarFragmentCard(
-                                                                        fragment:
-                                                                            CalendarFragment.task(
-                                                                          task:
-                                                                              calendarTaskIcs,
-                                                                        ),
-                                                                        footerDetails:
-                                                                            taskFooterDetails,
-                                                                      )
-                                                                    : ChatCalendarTaskCard(
-                                                                        task:
-                                                                            calendarTaskIcs,
-                                                                        readOnly:
-                                                                            (calendarTaskIcsReadOnly && !self) ||
-                                                                                demoEmailCalendarEnabled,
-                                                                        requireImportConfirmation:
-                                                                            !self,
-                                                                        allowChatCopy:
-                                                                            !demoEmailCalendarEnabled,
-                                                                        demoQuickAdd:
-                                                                            demoEmailCalendarEnabled &&
-                                                                                !self,
-                                                                        footerDetails:
-                                                                            taskFooterDetails,
-                                                                        isShareFragment:
-                                                                            true,
-                                                                      ),
+                                                                CalendarFragmentCard(
+                                                                  fragment:
+                                                                      CalendarFragment.task(
+                                                                    task:
+                                                                        calendarTaskIcs,
+                                                                  ),
+                                                                  footerDetails:
+                                                                      taskFooterDetails,
+                                                                ),
                                                                 shape:
-                                                                    calendarTaskShape,
+                                                                    calendarMessageCardShape,
                                                               );
                                                             } else if (displayFragment !=
                                                                 null) {
@@ -9109,7 +9080,6 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.pinnedMessagesHydrating,
     required this.onClose,
     required this.canTogglePins,
-    required this.canShowCalendarTasks,
     required this.canAddToPersonalCalendar,
     required this.canAddToChatCalendar,
     required this.locate,
@@ -9131,7 +9101,6 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final bool pinnedMessagesHydrating;
   final VoidCallback onClose;
   final bool canTogglePins;
-  final bool canShowCalendarTasks;
   final bool canAddToPersonalCalendar;
   final bool canAddToChatCalendar;
   final T Function<T>() locate;
@@ -9246,7 +9215,6 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                     chat: resolvedChat,
                     roomState: widget.roomState,
                     canTogglePins: widget.canTogglePins,
-                    canShowCalendarTasks: widget.canShowCalendarTasks,
                     canAddToPersonalCalendar: widget.canAddToPersonalCalendar,
                     canAddToChatCalendar: widget.canAddToChatCalendar,
                     locate: widget.locate,
@@ -9316,7 +9284,6 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.chat,
     required this.roomState,
     required this.canTogglePins,
-    required this.canShowCalendarTasks,
     required this.canAddToPersonalCalendar,
     required this.canAddToChatCalendar,
     required this.locate,
@@ -9334,7 +9301,6 @@ class _PinnedMessageTile extends StatelessWidget {
   final chat_models.Chat chat;
   final RoomState? roomState;
   final bool canTogglePins;
-  final bool canShowCalendarTasks;
   final bool canAddToPersonalCalendar;
   final bool canAddToChatCalendar;
   final T Function<T>() locate;
@@ -9589,25 +9555,12 @@ class _PinnedMessageTile extends StatelessWidget {
       ],
     ];
     if (hasCalendarTask) {
-      final bool taskReadOnly =
-          message?.calendarTaskIcsReadOnly ?? _calendarTaskIcsReadOnlyFallback;
       contentChildren.add(SizedBox(height: spacing.s));
       contentChildren.add(
-        canShowCalendarTasks
-            ? ChatCalendarTaskCard(
-                task: calendarTask,
-                readOnly: taskReadOnly,
-                requireImportConfirmation: !isSelf,
-                demoQuickAdd: kEnableDemoChats &&
-                    chat.defaultTransport.isEmail &&
-                    !isSelf,
-                footerDetails: _emptyInlineSpans,
-                isShareFragment: true,
-              )
-            : CalendarFragmentCard(
-                fragment: CalendarFragment.task(task: calendarTask),
-                footerDetails: _emptyInlineSpans,
-              ),
+        CalendarFragmentCard(
+          fragment: CalendarFragment.task(task: calendarTask),
+          footerDetails: _emptyInlineSpans,
+        ),
       );
     }
     final resolvedCriticalPath = criticalPathFragment;
@@ -11304,6 +11257,7 @@ class _ChatComposerSection extends StatelessWidget {
     final showAttachmentTray = pendingAttachments.isNotEmpty;
     final commandSurface = resolveCommandSurface(context);
     final useDesktopMenu = commandSurface == CommandSurface.menu;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     Widget? attachmentTray;
     if (showAttachmentTray) {
       attachmentTray = PendingAttachmentList(
@@ -11320,6 +11274,7 @@ class _ChatComposerSection extends StatelessWidget {
       top: false,
       left: false,
       right: false,
+      bottom: !keyboardVisible,
       child: SizedBox(
         width: double.infinity,
         child: ColoredBox(
@@ -11451,6 +11406,7 @@ class _ChatComposerSection extends StatelessWidget {
       ),
     );
     children.add(composer);
+    final composerBottomPadding = keyboardVisible ? 0.0 : spacing.s;
     return TapRegion(
       groupId: tapRegionGroup,
       onTapOutside: (_) {
@@ -11461,7 +11417,7 @@ class _ChatComposerSection extends StatelessWidget {
         subjectFocusNode.unfocus();
       },
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
+        padding: EdgeInsets.only(bottom: composerBottomPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: children,
@@ -11521,6 +11477,7 @@ class _SubjectTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
+    final spacing = context.spacing;
     final subjectStyle = context.textTheme.p.copyWith(
       fontWeight: FontWeight.w600,
       color: colors.foreground,
@@ -11530,25 +11487,35 @@ class _SubjectTextField extends StatelessWidget {
       child: Semantics(
         label: l10n.chatSubjectSemantics,
         textField: true,
-        child: AxiTextField(
-          controller: controller,
-          focusNode: focusNode,
-          textInputAction: TextInputAction.next,
-          textCapitalization: TextCapitalization.sentences,
-          onSubmitted: (_) => onSubmitted(),
-          onEditingComplete: onSubmitted,
-          style: subjectStyle,
-          decoration: InputDecoration(
-            hintText: '${l10n.chatSubjectHint}:',
-            hintStyle: context.textTheme.muted.copyWith(
-              color: colors.mutedForeground.withValues(alpha: 0.9),
+        child: Row(
+          children: [
+            Text(
+              '${l10n.chatSubjectHint}:',
+              style: context.textTheme.muted.copyWith(
+                color: colors.mutedForeground.withValues(alpha: 0.9),
+              ),
             ),
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            isCollapsed: true,
-            contentPadding: EdgeInsets.zero,
-          ),
+            SizedBox(width: spacing.xs),
+            Expanded(
+              child: AxiTextField(
+                controller: controller,
+                focusNode: focusNode,
+                textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.sentences,
+                onSubmitted: (_) => onSubmitted(),
+                onEditingComplete: onSubmitted,
+                style: subjectStyle,
+                cursorHeight: subjectStyle.fontSize,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isCollapsed: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

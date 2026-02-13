@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:animations/animations.dart';
-import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 // ignore: depend_on_referenced_packages
@@ -12,15 +11,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 const double _fadeScaleEffectStart = 0.0;
 const double _fadeScaleEffectEnd = 1.0;
 const Curve _fadeScaleEffectCurve = Curves.linear;
-const Duration _fallbackFadeScaleDuration = Duration(milliseconds: 300);
 
 Duration resolveFadeScaleDuration(BuildContext context) {
-  if (maybeSettingsCubit(context) == null) {
-    return _fallbackFadeScaleDuration;
-  }
-  return context.select<SettingsCubit, Duration>(
-    (cubit) => cubit.animationDuration,
-  );
+  return context.watch<SettingsCubit>().animationDuration;
 }
 
 List<Effect<dynamic>> fadeScaleEffectsFor(BuildContext context) {

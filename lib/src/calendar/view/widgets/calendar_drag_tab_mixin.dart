@@ -6,9 +6,10 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/services.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -188,8 +189,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final scheme = context.colorScheme;
     final bool scheduleCueActive = _showScheduleTabCue && _isAnyDragActive;
     final bool tasksCueActive = _showTasksTabCue && _isAnyDragActive;
-    final bool lowMotion =
-        maybeSettingsCubit(context)?.state.lowMotion ?? false;
+    final bool lowMotion = context.watch<SettingsCubit>().state.lowMotion;
     final bool scheduleSelected = mobileTabController.index == 0;
     final bool tasksSelected = mobileTabController.index == 1;
     final bool scheduleSwitchHintActive =
@@ -925,8 +925,7 @@ class _DragTabLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final duration = maybeSettingsCubit(context)?.animationDuration ??
-        calendarTaskSplitPreviewAnimationDuration;
+    final duration = context.watch<SettingsCubit>().animationDuration;
     final Color cueColor =
         showCue ? scheme.primary.withValues(alpha: 0.55) : Colors.transparent;
     final double width =

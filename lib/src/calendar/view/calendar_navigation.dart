@@ -4,7 +4,9 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -610,6 +612,8 @@ class CalendarViewModeToggle extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final shadTheme = ShadTheme.of(context);
+    final Duration animationDuration =
+        context.watch<SettingsCubit>().animationDuration;
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
     final EdgeInsets padding = EdgeInsets.symmetric(
@@ -689,7 +693,7 @@ class CalendarViewModeToggle extends StatelessWidget {
                 return Stack(
                   children: [
                     AnimatedPositionedDirectional(
-                      duration: baseAnimationDuration,
+                      duration: animationDuration,
                       curve: Curves.easeInOutCubic,
                       start: (tabWidth * safeSelectedIndex) +
                           horizontalIndicatorInset,

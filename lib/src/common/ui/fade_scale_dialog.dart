@@ -2,12 +2,12 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:animations/animations.dart';
-import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 const Color _defaultDialogBarrierColor = Color(0xcc000000);
-const Duration _fallbackDialogAnimationDuration = Duration(milliseconds: 300);
 
 Future<T?> showFadeScaleDialog<T>({
   required BuildContext context,
@@ -26,9 +26,8 @@ Future<T?> showFadeScaleDialog<T>({
       barrierColor ?? themeBarrierColor ?? _defaultDialogBarrierColor;
   final String resolvedBarrierLabel = barrierLabel ??
       MaterialLocalizations.of(context).modalBarrierDismissLabel;
-  final Duration resolvedDuration = transitionDuration ??
-      maybeSettingsCubit(context)?.animationDuration ??
-      _fallbackDialogAnimationDuration;
+  final Duration resolvedDuration =
+      transitionDuration ?? context.read<SettingsCubit>().animationDuration;
 
   return showGeneralDialog<T>(
     context: context,

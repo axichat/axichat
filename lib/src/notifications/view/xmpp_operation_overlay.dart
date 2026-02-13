@@ -5,7 +5,7 @@ import 'dart:async';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
@@ -277,8 +277,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   }
 
   Duration _resolveAnimationDuration() {
-    return maybeSettingsCubit(context)?.animationDuration ??
-        context.motion.statusBannerSuccessDuration;
+    return context.read<SettingsCubit>().animationDuration;
   }
 
   @override

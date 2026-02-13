@@ -266,6 +266,7 @@ class _NexusHeader extends StatelessWidget {
           trailing: AppBarActions(
             actions: headerActions,
             spacing: spacing.s,
+            forceCollapsed: false,
           ),
         ),
         _HomeSearchPanel(tabs: tabs),
@@ -576,7 +577,7 @@ class _HomeBottomTabBar extends StatelessWidget {
                           pressedBackgroundColor: Colors.transparent,
                           shadows: const <BoxShadow>[],
                           selectedShadows: const <BoxShadow>[],
-                          foregroundColor: colors.mutedForeground,
+                          foregroundColor: colors.foreground,
                           selectedForegroundColor: colors.foreground,
                           child: _HomeBottomTabItem(
                             label: tab.label,
@@ -852,7 +853,10 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
       }
       final selectedIndex = _clampBottomNavIndex(widget.bottomNavIndex.value);
       final openCalendar = selectedIndex == 1 || selectedIndex == 2;
-      if (!widget.calendarAvailable || !openCalendar) {
+      final chatsState = context.read<ChatsCubit>().state;
+      final chatCalendarActive =
+          chatsState.openJid != null && chatsState.openChatRoute.isCalendar;
+      if (!widget.calendarAvailable || (!openCalendar && !chatCalendarActive)) {
         return;
       }
       _setBottomNavIndex(_calendarTargetToBottomNavIndex(targetTab));
@@ -872,13 +876,17 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     final int selectedIndex = _clampBottomNavIndex(widget.bottomNavIndex.value);
     final int? sourceTab = dragSession == null
         ? null
-        : _normalizeCalendarTabIndex(selectedIndex == 2 ? 1 : selectedIndex);
+        : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
+            _normalizeCalendarTabIndex(selectedIndex == 2 ? 1 : selectedIndex);
     if (sourceTab == null) {
       _setCalendarDragCleared();
       return;
     }
     final bool openCalendar = selectedIndex == 1 || selectedIndex == 2;
-    if (!widget.calendarAvailable || !openCalendar) {
+    final chatsState = context.read<ChatsCubit>().state;
+    final chatCalendarActive =
+        chatsState.openJid != null && chatsState.openChatRoute.isCalendar;
+    if (!widget.calendarAvailable || (!openCalendar && !chatCalendarActive)) {
       _setHoveredCalendarTargetTab(null);
       return;
     }
@@ -961,6 +969,8 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
               final int safeSelectedIndex = _clampBottomNavIndex(selectedIndex);
               final bool openCalendar =
                   safeSelectedIndex == 1 || safeSelectedIndex == 2;
+              final bool chatCalendarActive = chatsState.openJid != null &&
+                  chatsState.openChatRoute.isCalendar;
               final int safeCalendarTab = safeSelectedIndex == 2
                   ? 1
                   : safeSelectedIndex == 1
@@ -985,10 +995,13 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
               final int? dragSourceTab =
                   widget.calendarBottomDragSession.value == null
                       ? null
-                      : safeCalendarTab;
+                      : _normalizeCalendarTabIndex(
+                            widget.calendarBottomDragSession.value?.sourceTab,
+                          ) ??
+                          safeCalendarTab;
               final bool dragHintActive = !lowMotion &&
                   widget.calendarAvailable &&
-                  openCalendar &&
+                  (openCalendar || chatCalendarActive) &&
                   dragSourceTab != null;
               final bool shakeSchedule = dragHintActive && dragSourceTab == 1;
               final bool shakeTasks = dragHintActive && dragSourceTab == 0;
@@ -1112,14 +1125,15 @@ class _BottomNavShake extends StatefulWidget {
 
 class _BottomNavShakeState extends State<_BottomNavShake>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: baseAnimationDuration,
-  );
+  late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: baseAnimationDuration,
+    );
     if (widget.enabled) {
       _controller.repeat();
     }

@@ -1353,47 +1353,16 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: context.spacing.m,
-            vertical: context.spacing.m,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Task actions',
-                style: context.textTheme.sectionLabelM,
-              ),
-              SizedBox(height: context.spacing.xxs),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final double? width = constraints.maxWidth.isFinite
-                      ? constraints.maxWidth
-                      : null;
-                  final chipWrap = Wrap(
-                    spacing: 12,
-                    runSpacing: 10,
-                    children: inlineActions
-                        .map(
-                          (action) => _EditTaskInlineActionChip(action: action),
-                        )
-                        .toList(growable: false),
-                  );
-                  if (width == null) {
-                    return chipWrap;
-                  }
-                  return SizedBox(width: width, child: chipWrap);
-                },
-              ),
-            ],
-          ),
-        ),
-        ShadSeparator.horizontal(
-          color: context.borderSide.color,
-          thickness: context.borderSide.width,
-        ),
+        TaskSectionHeader(title: context.l10n.chatTaskViewActionsLabel),
         SizedBox(height: context.spacing.s),
+        Wrap(
+          spacing: context.spacing.s,
+          runSpacing: context.spacing.s,
+          children: inlineActions
+              .map((action) => _EditTaskInlineActionChip(action: action))
+              .toList(growable: false),
+        ),
+        TaskSectionDivider(verticalPadding: context.spacing.m),
       ],
     );
   }
@@ -1406,27 +1375,32 @@ class _EditTaskInlineActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ShadColorScheme colorScheme = context.colorScheme;
-    final Color baseColor =
-        action.destructive ? colorScheme.destructive : calendarPrimaryColor;
-    final Color highlightBackground = baseColor.withValues(alpha: 0.12);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: highlightBackground,
-        borderRadius: context.radius,
-      ),
-      child: AxiButton.ghost(
-        widthBehavior: AxiButtonWidth.fit,
-        size: AxiButtonSize.sm,
-        onPressed: action.onSelected,
-        leading: Icon(
-          action.icon,
-          size: context.sizing.iconButtonIconSize,
-          color: baseColor,
-        ),
-        child: Text(action.label),
-      ),
-    );
+    final Color actionColor = action.destructive
+        ? context.colorScheme.destructive
+        : calendarPrimaryColor;
+    final Widget button = action.destructive
+        ? AxiButton.destructive(
+            widthBehavior: AxiButtonWidth.fit,
+            size: AxiButtonSize.sm,
+            onPressed: action.onSelected,
+            leading: Icon(
+              action.icon,
+              size: context.sizing.menuItemIconSize,
+            ),
+            child: Text(action.label),
+          )
+        : AxiButton.outline(
+            widthBehavior: AxiButtonWidth.fit,
+            size: AxiButtonSize.sm,
+            onPressed: action.onSelected,
+            leading: Icon(
+              action.icon,
+              size: context.sizing.menuItemIconSize,
+              color: actionColor,
+            ),
+            child: Text(action.label),
+          );
+    return button;
   }
 }
 

@@ -2,14 +2,12 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:animations/animations.dart';
-import 'package:axichat/src/common/ui/settings_cubit_lookup.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 const double _fadeScaleAnimationStart = 0.0;
 const double _fadeScaleAnimationEnd = 1.0;
-const Duration _fallbackFadeScaleDuration = Duration(milliseconds: 300);
 
 class InBoundsFadeScale extends StatelessWidget {
   const InBoundsFadeScale({super.key, required this.child, this.duration});
@@ -19,12 +17,8 @@ class InBoundsFadeScale extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Duration resolvedDuration = duration ??
-        (maybeSettingsCubit(context) == null
-            ? _fallbackFadeScaleDuration
-            : context.select<SettingsCubit, Duration>(
-                (cubit) => cubit.animationDuration,
-              ));
+    final Duration resolvedDuration =
+        duration ?? context.watch<SettingsCubit>().animationDuration;
     return _FadeScaleTransitionPlayer(duration: resolvedDuration, child: child);
   }
 }

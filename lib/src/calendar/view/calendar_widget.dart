@@ -27,9 +27,10 @@ import 'widgets/calendar_mobile_tab_shell.dart';
 
 @immutable
 class CalendarBottomDragSession {
-  const CalendarBottomDragSession({this.pointer});
+  const CalendarBottomDragSession({this.pointer, this.sourceTab});
 
   final Offset? pointer;
+  final int? sourceTab;
 }
 
 class CalendarWidget extends StatefulWidget {
@@ -164,7 +165,9 @@ class _CalendarWidgetState
   void onCalendarDragSessionStarted() {
     final notifier = widget.bottomDragSession;
     if (notifier != null) {
-      notifier.value = const CalendarBottomDragSession();
+      notifier.value = CalendarBottomDragSession(
+        sourceTab: _resolvedBottomDragSourceTab(),
+      );
     }
   }
 
@@ -172,13 +175,20 @@ class _CalendarWidgetState
   void onCalendarDragPositionChanged(Offset globalPosition) {
     final notifier = widget.bottomDragSession;
     if (notifier != null) {
-      notifier.value = CalendarBottomDragSession(pointer: globalPosition);
+      notifier.value = CalendarBottomDragSession(
+        pointer: globalPosition,
+        sourceTab: _resolvedBottomDragSourceTab(),
+      );
     }
   }
 
   @override
   void onCalendarDragSessionEnded() {
     _clearHomeBottomDragState();
+  }
+
+  int _resolvedBottomDragSourceTab() {
+    return mobileTabController.index.clamp(0, 1);
   }
 
   @override
@@ -412,7 +422,7 @@ class CalendarSurfaceNavigator extends StatelessWidget {
           if (navigator == null || !navigator.canPop()) {
             return;
           }
-          navigator.pop();
+          navigator.maybePop();
         },
         child: Navigator(
           key: navigatorKey,

@@ -113,7 +113,7 @@ enum AxiButtonSize {
     return switch (this) {
       AxiButtonSize.sm => EdgeInsets.symmetric(
           horizontal: spacing.xs,
-          vertical: spacing.xxs,
+          vertical: spacing.xs,
         ),
       AxiButtonSize.regular => EdgeInsets.symmetric(
           horizontal: spacing.m,

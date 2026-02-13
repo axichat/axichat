@@ -3980,21 +3980,23 @@ class _CalendarDayHeaderRow extends StatelessWidget {
               }).toList(),
             ),
           ),
+        if (trailingNav != null)
+          Container(
+            width: _headerNavButtonExtent,
+            height: double.infinity,
+            decoration: BoxDecoration(
+              color: calendarBackgroundColor,
+              border: Border(
+                left: BorderSide(
+                  color: calendarBorderDarkColor,
+                  width: calendarBorderStroke,
+                ),
+              ),
+            ),
+            child: trailingNav,
+          ),
       ],
     );
-    final Widget rowContent = trailingNav == null
-        ? headerRow
-        : Stack(
-            children: [
-              Positioned.fill(child: headerRow),
-              Positioned(
-                right: 0,
-                top: 0,
-                bottom: 0,
-                child: trailingNav,
-              ),
-            ],
-          );
     return Container(
       height: calendarWeekHeaderHeight,
       decoration: BoxDecoration(
@@ -4007,7 +4009,7 @@ class _CalendarDayHeaderRow extends StatelessWidget {
         ),
         borderRadius: BorderRadius.zero,
       ),
-      child: rowContent,
+      child: headerRow,
     );
   }
 }
