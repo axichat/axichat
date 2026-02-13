@@ -1198,7 +1198,7 @@ class _DraftFormState extends State<DraftForm> {
           return DraftXmppTarget(
             jid: jid,
             encryptionProtocol:
-                chat?.encryptionProtocol ?? EncryptionProtocol.omemo,
+                chat?.encryptionProtocol ?? EncryptionProtocol.none,
             chatType: chat?.type ?? ChatType.chat,
           );
         })

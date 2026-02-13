@@ -531,15 +531,29 @@ mixin AvatarService on XmppBase, MucService {
     }
   }
 
+  bool _isSameDomainAvatarJid(String bareJid) {
+    final normalized = bareJid.trim();
+    if (normalized.isEmpty) return false;
+    final myBareJid = _myJid?.toBare().toString();
+    if (myBareJid == null || myBareJid.isEmpty) return false;
+    if (sameBareAddress(normalized, myBareJid)) return true;
+    final targetJid = parseJid(normalized);
+    final selfJid = parseJid(myBareJid);
+    if (targetJid == null || selfJid == null) return false;
+    return targetJid.domain == selfJid.domain;
+  }
+
   bool _shouldSkipUserAvatarJid(mox.JID jid) {
     final bareJid = jid.toBare().toString().trim();
     if (bareJid.isEmpty) return _avatarSkipDefault;
+    if (!_isSameDomainAvatarJid(bareJid)) return true;
     return _isMucAvatarJid(bareJid);
   }
 
   Future<bool> _shouldSkipAvatarForBareJid(String bareJid) async {
     final normalized = bareJid.trim();
     if (normalized.isEmpty) return _avatarSkipDefault;
+    if (!_isSameDomainAvatarJid(normalized)) return true;
     if (_isMucAvatarJid(normalized)) return true;
     try {
       final chat = await _dbOpReturning<XmppDatabase, Chat?>(

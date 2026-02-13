@@ -626,7 +626,7 @@ AccessibilityContact _contactForJid(
       displayName: jid,
       subtitle: jid,
       source: AccessibilityContactSource.manual,
-      encryptionProtocol: EncryptionProtocol.omemo,
+      encryptionProtocol: EncryptionProtocol.none,
       chatType: ChatType.chat,
       unreadCount: 0,
       transport: MessageTransport.xmpp,
