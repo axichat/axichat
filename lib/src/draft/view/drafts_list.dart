@@ -48,7 +48,9 @@ class _DraftsListState extends State<DraftsList> {
         buildWhen: (_, current) => current is DraftsAvailable,
         builder: (context, state) {
           final l10n = context.l10n;
-          final List<Draft>? items = state.items;
+          final cachedItems =
+              context.watch<DraftCubit>()['items'] as List<Draft>?;
+          final List<Draft>? items = state.items ?? cachedItems;
 
           if (items == null) {
             return Center(

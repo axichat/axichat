@@ -46,7 +46,9 @@ class _BlocklistListState extends State<BlocklistList> {
       listener: _syncSearchState,
       child: BlocBuilder<BlocklistCubit, BlocklistState>(
         builder: (context, state) {
-          final items = state.items;
+          final cachedItems = context.watch<BlocklistCubit>()[
+              BlocklistCubit.blocklistItemsCacheKey] as List<BlocklistEntry>?;
+          final items = state.items ?? cachedItems;
           if (items == null) {
             return Center(
               child: AxiProgressIndicator(
