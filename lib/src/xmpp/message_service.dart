@@ -2762,10 +2762,18 @@ mixin MessageService
     _outboundGroupchatStanzaRooms.remove(oldestKey);
   }
 
+  EncryptionProtocol _resolveOutboundEncryptionProtocol(
+    EncryptionProtocol protocol,
+  ) {
+    if (protocol != EncryptionProtocol.omemo) return protocol;
+    if (this is OmemoService) return protocol;
+    return EncryptionProtocol.none;
+  }
+
   Future<void> sendMessage({
     required String jid,
     required String text,
-    EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     String? htmlBody,
     Message? quotedMessage,
     CalendarFragment? calendarFragment,
@@ -2783,6 +2791,8 @@ mixin MessageService
       _log.warning('Attempted to send a message before a JID was bound.');
       throw XmppMessageException();
     }
+    final resolvedEncryptionProtocol =
+        _resolveOutboundEncryptionProtocol(encryptionProtocol);
     final offlineDemo = demoOfflineMode;
     final isGroupChat = chatType == ChatType.groupChat;
     if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
@@ -2859,7 +2869,7 @@ mixin MessageService
       chatJid: jid,
       body: resolvedText,
       htmlBody: normalizedHtml,
-      encryptionProtocol: encryptionProtocol,
+      encryptionProtocol: resolvedEncryptionProtocol,
       noStore: noStore,
       quoting: quotedMessage?.stanzaID,
       timestamp: timestamp,
@@ -2877,7 +2887,7 @@ mixin MessageService
       await _storeMessage(message, chatType: chatType);
       onLocalMessageStored?.call(message.stanzaID);
     }
-    if (encryptionProtocol == EncryptionProtocol.omemo &&
+    if (resolvedEncryptionProtocol == EncryptionProtocol.omemo &&
         chatType == ChatType.chat &&
         !_isMucChatJid(jid)) {
       final decision = await _omemoDecision(jid: jid);
@@ -3063,7 +3073,7 @@ mixin MessageService
   Future<XmppAttachmentUpload> sendAttachment({
     required String jid,
     required EmailAttachment attachment,
-    EncryptionProtocol encryptionProtocol = EncryptionProtocol.omemo,
+    EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     String? htmlCaption,
     String? transportGroupId,
     int? attachmentOrder,
@@ -3077,6 +3087,8 @@ mixin MessageService
       _log.warning('Attempted to send an attachment before a JID was bound.');
       throw XmppMessageException();
     }
+    final resolvedEncryptionProtocol =
+        _resolveOutboundEncryptionProtocol(encryptionProtocol);
     final isGroupChat = chatType == ChatType.groupChat;
     final senderJid = isGroupChat
         ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
@@ -3113,7 +3125,7 @@ mixin MessageService
       chatJid: jid,
       body: body,
       htmlBody: normalizedHtmlCaption,
-      encryptionProtocol: encryptionProtocol,
+      encryptionProtocol: resolvedEncryptionProtocol,
       timestamp: timestamp,
       fileMetadataID: metadata.id,
       quoting: quotedMessage?.stanzaID,
@@ -3121,7 +3133,7 @@ mixin MessageService
     const shouldStore = true;
     await _storeMessage(message, chatType: chatType);
     onLocalMessageStored?.call(message.stanzaID);
-    if (encryptionProtocol == EncryptionProtocol.omemo &&
+    if (resolvedEncryptionProtocol == EncryptionProtocol.omemo &&
         chatType == ChatType.chat &&
         !_isMucChatJid(jid)) {
       final decision = await _omemoDecision(jid: jid);

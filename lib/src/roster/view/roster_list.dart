@@ -33,7 +33,9 @@ class RosterList extends StatelessWidget {
         buildWhen: (previous, current) =>
             previous.visibleItems != current.visibleItems,
         builder: (context, state) {
-          final items = state.visibleItems;
+          final cachedItems =
+              context.watch<RosterCubit>()['items'] as List<RosterItem>?;
+          final items = state.visibleItems ?? state.items ?? cachedItems;
 
           if (items == null) {
             return Center(

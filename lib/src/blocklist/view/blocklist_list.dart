@@ -10,6 +10,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -45,7 +46,9 @@ class _BlocklistListState extends State<BlocklistList> {
       listener: _syncSearchState,
       child: BlocBuilder<BlocklistCubit, BlocklistState>(
         builder: (context, state) {
-          final items = state.items;
+          final cachedItems = context.watch<BlocklistCubit>()[
+              BlocklistCubit.blocklistItemsCacheKey] as List<BlocklistEntry>?;
+          final items = state.items ?? cachedItems;
           if (items == null) {
             return Center(
               child: AxiProgressIndicator(
@@ -57,7 +60,8 @@ class _BlocklistListState extends State<BlocklistList> {
           return BlocBuilder<RosterCubit, RosterState>(
             buildWhen: (previous, current) => previous.items != current.items,
             builder: (context, rosterState) {
-              final cachedRosterItems = rosterState.items;
+              final cachedRosterItems = rosterState.items ??
+                  (context.watch<RosterCubit>()['items'] as List<RosterItem>?);
               final avatarPathsByJid = <String, String>{};
               if (cachedRosterItems != null) {
                 for (final item in cachedRosterItems) {

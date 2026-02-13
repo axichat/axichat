@@ -216,7 +216,9 @@ class _DraftFormState extends State<DraftForm> {
         return BlocBuilder<RosterCubit, RosterState>(
           bloc: locate<RosterCubit>(),
           builder: (context, rosterState) {
-            final rosterItems = rosterState.items ?? const <RosterItem>[];
+            final rosterItems = rosterState.items ??
+                (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+                const <RosterItem>[];
             return BlocBuilder<ChatsCubit, ChatsState>(
               bloc: locate<ChatsCubit>(),
               builder: (context, chatsState) {
@@ -1198,7 +1200,7 @@ class _DraftFormState extends State<DraftForm> {
           return DraftXmppTarget(
             jid: jid,
             encryptionProtocol:
-                chat?.encryptionProtocol ?? EncryptionProtocol.omemo,
+                chat?.encryptionProtocol ?? EncryptionProtocol.none,
             chatType: chat?.type ?? ChatType.chat,
           );
         })

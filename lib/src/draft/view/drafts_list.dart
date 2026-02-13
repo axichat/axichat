@@ -48,7 +48,9 @@ class _DraftsListState extends State<DraftsList> {
         buildWhen: (_, current) => current is DraftsAvailable,
         builder: (context, state) {
           final l10n = context.l10n;
-          final List<Draft>? items = state.items;
+          final cachedItems =
+              context.watch<DraftCubit>()['items'] as List<Draft>?;
+          final List<Draft>? items = state.items ?? cachedItems;
 
           if (items == null) {
             return Center(
@@ -61,7 +63,10 @@ class _DraftsListState extends State<DraftsList> {
           return BlocBuilder<RosterCubit, RosterState>(
             buildWhen: (previous, current) => previous.items != current.items,
             builder: (context, rosterState) {
-              final rosterItems = rosterState.items ?? const <RosterItem>[];
+              final rosterItems = rosterState.items ??
+                  (context.watch<RosterCubit>()['items']
+                      as List<RosterItem>?) ??
+                  const <RosterItem>[];
               final avatarByJid = <String, String?>{
                 for (final item in rosterItems)
                   item.jid.normalizedJidKey ?? item.jid.toLowerCase():
