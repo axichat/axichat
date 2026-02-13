@@ -524,7 +524,9 @@ class _UnknownSenderBanner extends StatelessWidget {
         return BlocBuilder<RosterCubit, RosterState>(
           buildWhen: (previous, current) => previous.items != current.items,
           builder: (context, rosterState) {
-            final rosterItems = rosterState.items ?? const <RosterItem>[];
+            final rosterItems = rosterState.items ??
+                (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+                const <RosterItem>[];
             final rosterEntry = rosterItems
                 .where((entry) => entry.jid == chat.remoteJid)
                 .singleOrNull;
@@ -3655,6 +3657,8 @@ class _ChatState extends State<Chat> {
               final showAttachmentWarning =
                   warningEntry?.value.attachmentWarning ?? false;
               final rosterItems = context.watch<RosterCubit>().state.items ??
+                  (context.watch<RosterCubit>()['items']
+                      as List<RosterItem>?) ??
                   const <RosterItem>[];
               final chatItems =
                   chatsState()?.items ?? const <chat_models.Chat>[];
@@ -3957,8 +3961,10 @@ class _ChatState extends State<Chat> {
                               buildWhen: (previous, current) =>
                                   previous.items != current.items,
                               builder: (context, rosterState) {
-                                final rosterItems =
-                                    rosterState.items ?? const <RosterItem>[];
+                                final rosterItems = rosterState.items ??
+                                    (context.watch<RosterCubit>()['items']
+                                        as List<RosterItem>?) ??
+                                    const <RosterItem>[];
                                 final item = rosterItems
                                     .where((entry) => entry.jid == jid)
                                     .singleOrNull;
@@ -4763,24 +4769,14 @@ class _ChatState extends State<Chat> {
                                       alignment: Alignment.topCenter,
                                       child: quoteSection,
                                     );
-                                    final remoteTyping =
-                                        state.chat?.chatState?.name ==
-                                            'composing';
                                     final demoTypingAvatars =
                                         _demoTypingParticipants(state);
-                                    final fallbackTypingJid =
-                                        state.chat?.contactJid ??
-                                            state.chat?.jid;
                                     final typingAvatars = demoTypingAvatars
                                             .isNotEmpty
                                         ? demoTypingAvatars
                                         : state.typingParticipants.isNotEmpty
                                             ? state.typingParticipants
-                                            : remoteTyping &&
-                                                    fallbackTypingJid != null &&
-                                                    fallbackTypingJid.isNotEmpty
-                                                ? [fallbackTypingJid]
-                                                : const <String>[];
+                                            : const <String>[];
                                     final typingAvatarPaths =
                                         <String, String>{};
                                     for (final participant in typingAvatars) {
@@ -4795,9 +4791,7 @@ class _ChatState extends State<Chat> {
                                     }
                                     final typingVisible =
                                         state.typing == true ||
-                                            remoteTyping ||
-                                            typingAvatars.isNotEmpty ||
-                                            demoTypingAvatars.isNotEmpty;
+                                            typingAvatars.isNotEmpty;
                                     final bottomSection = _SizeReportingWidget(
                                       onSizeChange: _updateBottomSectionHeight,
                                       child: Column(
@@ -11430,24 +11424,28 @@ class _ChatComposerSection extends StatelessWidget {
       BlocSelector<ChatsCubit, ChatsState, List<String>>(
         bloc: locate<ChatsCubit>(),
         selector: (state) => state.recipientAddressSuggestions,
-        builder: (context, recipientAddressSuggestions) => RecipientChipsBar(
-          recipients: recipients,
-          availableChats: availableChats,
-          rosterItems:
-              context.watch<RosterCubit>().state.items ?? const <RosterItem>[],
-          databaseSuggestionAddresses: recipientAddressSuggestions,
-          selfJid: locate<ChatsCubit>().selfJid,
-          selfIdentity: selfIdentity,
-          latestStatuses: latestStatuses,
-          collapsedByDefault: true,
-          suggestionAddresses: suggestionAddresses,
-          suggestionDomains: suggestionDomains,
-          onRecipientAdded: onRecipientAdded,
-          onRecipientRemoved: onRecipientRemoved,
-          onRecipientToggled: onRecipientToggled,
-          visibilityLabel: visibilityLabel,
-          tapRegionGroup: tapRegionGroup,
-        ),
+        builder: (context, recipientAddressSuggestions) {
+          final rosterItems = context.watch<RosterCubit>().state.items ??
+              (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+              const <RosterItem>[];
+          return RecipientChipsBar(
+            recipients: recipients,
+            availableChats: availableChats,
+            rosterItems: rosterItems,
+            databaseSuggestionAddresses: recipientAddressSuggestions,
+            selfJid: locate<ChatsCubit>().selfJid,
+            selfIdentity: selfIdentity,
+            latestStatuses: latestStatuses,
+            collapsedByDefault: true,
+            suggestionAddresses: suggestionAddresses,
+            suggestionDomains: suggestionDomains,
+            onRecipientAdded: onRecipientAdded,
+            onRecipientRemoved: onRecipientRemoved,
+            onRecipientToggled: onRecipientToggled,
+            visibilityLabel: visibilityLabel,
+            tapRegionGroup: tapRegionGroup,
+          );
+        },
       ),
     );
     children.add(composer);
@@ -14700,23 +14698,27 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
         BlocSelector<ChatsCubit, ChatsState, List<String>>(
           bloc: locate<ChatsCubit>(),
           selector: (state) => state.recipientAddressSuggestions,
-          builder: (context, recipientAddressSuggestions) => RecipientChipsBar(
-            recipients: _recipients,
-            availableChats: widget.availableChats,
-            rosterItems: context.watch<RosterCubit>().state.items ??
-                const <RosterItem>[],
-            databaseSuggestionAddresses: recipientAddressSuggestions,
-            selfJid: locate<ChatsCubit>().selfJid,
-            selfIdentity: selfIdentity,
-            latestStatuses: const {},
-            collapsedByDefault: false,
-            allowAddressTargets: false,
-            showSuggestionsWhenEmpty: true,
-            horizontalPadding: 0,
-            onRecipientAdded: _handleRecipientAdded,
-            onRecipientRemoved: _handleRecipientRemoved,
-            onRecipientToggled: _handleRecipientToggled,
-          ),
+          builder: (context, recipientAddressSuggestions) {
+            final rosterItems = context.watch<RosterCubit>().state.items ??
+                (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+                const <RosterItem>[];
+            return RecipientChipsBar(
+              recipients: _recipients,
+              availableChats: widget.availableChats,
+              rosterItems: rosterItems,
+              databaseSuggestionAddresses: recipientAddressSuggestions,
+              selfJid: locate<ChatsCubit>().selfJid,
+              selfIdentity: selfIdentity,
+              latestStatuses: const {},
+              collapsedByDefault: false,
+              allowAddressTargets: false,
+              showSuggestionsWhenEmpty: true,
+              horizontalPadding: 0,
+              onRecipientAdded: _handleRecipientAdded,
+              onRecipientRemoved: _handleRecipientRemoved,
+              onRecipientToggled: _handleRecipientToggled,
+            );
+          },
         ),
         SizedBox(height: sectionSpacing),
         Padding(

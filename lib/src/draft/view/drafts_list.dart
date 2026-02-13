@@ -61,7 +61,10 @@ class _DraftsListState extends State<DraftsList> {
           return BlocBuilder<RosterCubit, RosterState>(
             buildWhen: (previous, current) => previous.items != current.items,
             builder: (context, rosterState) {
-              final rosterItems = rosterState.items ?? const <RosterItem>[];
+              final rosterItems = rosterState.items ??
+                  (context.watch<RosterCubit>()['items']
+                      as List<RosterItem>?) ??
+                  const <RosterItem>[];
               final avatarByJid = <String, String?>{
                 for (final item in rosterItems)
                   item.jid.normalizedJidKey ?? item.jid.toLowerCase():
