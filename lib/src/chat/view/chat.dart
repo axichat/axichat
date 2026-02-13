@@ -50,6 +50,7 @@ import 'package:axichat/src/chat/view/widgets/calendar_availability_request_shee
 import 'package:axichat/src/chat/view/widgets/calendar_availability_viewer.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
+import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
@@ -5018,6 +5019,8 @@ class _ChatState extends State<Chat> {
                                               state.pinnedMessagesHydrating,
                                           onClose: _closePinnedMessages,
                                           canTogglePins: canTogglePins,
+                                          canShowCalendarTasks:
+                                              chatCalendarAvailable,
                                           canAddToPersonalCalendar:
                                               personalCalendarAvailable,
                                           canAddToChatCalendar:
@@ -5468,6 +5471,12 @@ class _ChatState extends State<Chat> {
                                                               message.customProperties?[
                                                                       _calendarTaskIcsPropertyKey]
                                                                   as CalendarTask?;
+                                                          final bool
+                                                              calendarTaskIcsReadOnly =
+                                                              (message.customProperties?[
+                                                                          _calendarTaskIcsReadOnlyPropertyKey]
+                                                                      as bool?) ??
+                                                                  _calendarTaskIcsReadOnlyFallback;
                                                           final CalendarAvailabilityMessage?
                                                               availabilityMessage =
                                                               message.customProperties?[
@@ -6421,15 +6430,34 @@ class _ChatState extends State<Chat> {
                                                             } else if (calendarTaskIcs !=
                                                                 null) {
                                                               addExtra(
-                                                                CalendarFragmentCard(
-                                                                  fragment:
-                                                                      CalendarFragment.task(
-                                                                    task:
-                                                                        calendarTaskIcs,
-                                                                  ),
-                                                                  footerDetails:
-                                                                      taskFooterDetails,
-                                                                ),
+                                                                !chatCalendarAvailable
+                                                                    ? CalendarFragmentCard(
+                                                                        fragment:
+                                                                            CalendarFragment.task(
+                                                                          task:
+                                                                              calendarTaskIcs,
+                                                                        ),
+                                                                        footerDetails:
+                                                                            taskFooterDetails,
+                                                                      )
+                                                                    : ChatCalendarTaskCard(
+                                                                        task:
+                                                                            calendarTaskIcs,
+                                                                        readOnly:
+                                                                            (calendarTaskIcsReadOnly && !self) ||
+                                                                                demoEmailCalendarEnabled,
+                                                                        requireImportConfirmation:
+                                                                            !self,
+                                                                        allowChatCopy:
+                                                                            !demoEmailCalendarEnabled,
+                                                                        demoQuickAdd:
+                                                                            demoEmailCalendarEnabled &&
+                                                                                !self,
+                                                                        footerDetails:
+                                                                            taskFooterDetails,
+                                                                        isShareFragment:
+                                                                            true,
+                                                                      ),
                                                                 shape:
                                                                     calendarMessageCardShape,
                                                               );
@@ -9074,6 +9102,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.pinnedMessagesHydrating,
     required this.onClose,
     required this.canTogglePins,
+    required this.canShowCalendarTasks,
     required this.canAddToPersonalCalendar,
     required this.canAddToChatCalendar,
     required this.locate,
@@ -9095,6 +9124,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final bool pinnedMessagesHydrating;
   final VoidCallback onClose;
   final bool canTogglePins;
+  final bool canShowCalendarTasks;
   final bool canAddToPersonalCalendar;
   final bool canAddToChatCalendar;
   final T Function<T>() locate;
@@ -9209,6 +9239,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                     chat: resolvedChat,
                     roomState: widget.roomState,
                     canTogglePins: widget.canTogglePins,
+                    canShowCalendarTasks: widget.canShowCalendarTasks,
                     canAddToPersonalCalendar: widget.canAddToPersonalCalendar,
                     canAddToChatCalendar: widget.canAddToChatCalendar,
                     locate: widget.locate,
@@ -9278,6 +9309,7 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.chat,
     required this.roomState,
     required this.canTogglePins,
+    required this.canShowCalendarTasks,
     required this.canAddToPersonalCalendar,
     required this.canAddToChatCalendar,
     required this.locate,
@@ -9295,6 +9327,7 @@ class _PinnedMessageTile extends StatelessWidget {
   final chat_models.Chat chat;
   final RoomState? roomState;
   final bool canTogglePins;
+  final bool canShowCalendarTasks;
   final bool canAddToPersonalCalendar;
   final bool canAddToChatCalendar;
   final T Function<T>() locate;
@@ -9549,12 +9582,25 @@ class _PinnedMessageTile extends StatelessWidget {
       ],
     ];
     if (hasCalendarTask) {
+      final bool taskReadOnly =
+          message?.calendarTaskIcsReadOnly ?? _calendarTaskIcsReadOnlyFallback;
       contentChildren.add(SizedBox(height: spacing.s));
       contentChildren.add(
-        CalendarFragmentCard(
-          fragment: CalendarFragment.task(task: calendarTask),
-          footerDetails: _emptyInlineSpans,
-        ),
+        canShowCalendarTasks
+            ? ChatCalendarTaskCard(
+                task: calendarTask,
+                readOnly: taskReadOnly,
+                requireImportConfirmation: !isSelf,
+                demoQuickAdd: kEnableDemoChats &&
+                    chat.defaultTransport.isEmail &&
+                    !isSelf,
+                footerDetails: _emptyInlineSpans,
+                isShareFragment: true,
+              )
+            : CalendarFragmentCard(
+                fragment: CalendarFragment.task(task: calendarTask),
+                footerDetails: _emptyInlineSpans,
+              ),
       );
     }
     final resolvedCriticalPath = criticalPathFragment;

@@ -11,7 +11,6 @@ import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -61,16 +60,6 @@ class CalendarFragmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final bool isTaskFragment =
-        fragment.maybeMap(task: (_) => true, orElse: () => false);
-    if (isTaskFragment) {
-      return _TaskFragmentCard(
-        fragment: fragment,
-        accentColor: colors.primary,
-        footerDetails: footerDetails,
-        onTap: onTap,
-      );
-    }
     const double cardRadius = _fragmentCardRadius;
     const double accentRadius = _fragmentAccentRadius;
     final card = DecoratedBox(
@@ -117,72 +106,6 @@ class CalendarFragmentCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(cardRadius),
         child: card,
-      ),
-    );
-  }
-}
-
-class _TaskFragmentCard extends StatelessWidget {
-  const _TaskFragmentCard({
-    required this.fragment,
-    required this.accentColor,
-    required this.footerDetails,
-    this.onTap,
-  });
-
-  final CalendarFragment fragment;
-  final Color accentColor;
-  final List<InlineSpan> footerDetails;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const double accentWidth = _fragmentAccentWidth;
-    const double cardRadius = calendarEventRadius;
-    return Container(
-      decoration: BoxDecoration(
-        color: calendarContainerColor,
-        borderRadius: BorderRadius.circular(cardRadius),
-        boxShadow: calendarLightShadow,
-        border: Border.all(color: calendarBorderColor, width: 1),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(cardRadius),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Container(
-                width: accentWidth,
-                decoration: BoxDecoration(
-                  color: accentColor,
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(calendarEventRadius),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.all(context.spacing.m),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    spacing: _fragmentContentSpacing,
-                    children: [
-                      _CalendarFragmentBody(fragment: fragment),
-                      if (footerDetails.isNotEmpty)
-                        Padding(
-                          padding: _fragmentFooterPadding,
-                          child: ChatInlineDetails(details: footerDetails),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

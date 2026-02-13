@@ -179,78 +179,88 @@ class _ProfileBodyState extends State<_ProfileBody> {
         final profileSidebarColor = colors.background;
         final showLeadingBack =
             _profileRoute != _ProfileRoute.main || _canPopRoute(context);
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(l10n.profileTitle),
-            centerTitle: false,
-            backgroundColor: profileSidebarColor,
-            surfaceTintColor: Colors.transparent,
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            shape: Border(bottom: context.borderSide),
-            actions: [
-              if (kEnableDemoChats && demoOffline)
-                Padding(
-                  padding: const EdgeInsets.only(right: 12),
-                  child: AxiIconButton.ghost(
-                    iconData: LucideIcons.refreshCcw,
-                    tooltip: l10n.commonRetry,
-                    onPressed: () async => await context
-                        .read<XmppService>()
-                        .resetDemoInteractivePhase(),
+        final canPop = _profileRoute == _ProfileRoute.main;
+        return PopScope(
+          canPop: canPop,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop || canPop) {
+              return;
+            }
+            _setRoute(_ProfileRoute.main);
+          },
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(l10n.profileTitle),
+              centerTitle: false,
+              backgroundColor: profileSidebarColor,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              shape: Border(bottom: context.borderSide),
+              actions: [
+                if (kEnableDemoChats && demoOffline)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: AxiIconButton.ghost(
+                      iconData: LucideIcons.refreshCcw,
+                      tooltip: l10n.commonRetry,
+                      onPressed: () async => await context
+                          .read<XmppService>()
+                          .resetDemoInteractivePhase(),
+                    ),
                   ),
-                ),
-            ],
-            leadingWidth:
-                showLeadingBack ? AxiIconButton.kDefaultSize + 24 : null,
-            leading: showLeadingBack
-                ? Padding(
-                    padding: const EdgeInsets.only(left: 12),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: SizedBox(
-                        width: AxiIconButton.kDefaultSize,
-                        height: AxiIconButton.kDefaultSize,
-                        child: AxiIconButton.ghost(
-                          iconData: LucideIcons.arrowLeft,
-                          tooltip: l10n.commonBack,
-                          onPressed: () => _handleLeadingBackPressed(context),
+              ],
+              leadingWidth:
+                  showLeadingBack ? AxiIconButton.kDefaultSize + 24 : null,
+              leading: showLeadingBack
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 12),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: AxiIconButton.kDefaultSize,
+                          height: AxiIconButton.kDefaultSize,
+                          child: AxiIconButton.ghost(
+                            iconData: LucideIcons.arrowLeft,
+                            tooltip: l10n.commonBack,
+                            onPressed: () => _handleLeadingBackPressed(context),
+                          ),
                         ),
                       ),
-                    ),
-                  )
-                : null,
-          ),
-          body: SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWideLayout =
-                    constraints.maxWidth >= _profileWideLayoutMinWidth;
-                final Duration animationDuration =
-                    context.watch<SettingsCubit>().animationDuration;
-                return AxiFadeIndexedStack(
-                  index: _profileRoute.index,
-                  duration: animationDuration,
-                  curve: _profileFadeCurve,
-                  children: [
-                    _ProfileMainView(
-                      isWideLayout: isWideLayout,
-                      connectivityState: connectivityState,
-                      demoOffline: demoOffline,
-                      applicationVersion: _applicationVersion,
-                      sidebarColor: profileSidebarColor,
-                      settingsAnchors: _settingsAnchors,
-                      settingsScrollController: _settingsScrollController,
-                      profileScrollController: _profileScrollController,
-                      settingsScrollOffset: _settingsScrollOffset,
-                      locate: widget.locate,
-                      onNavigate: _setRoute,
-                    ),
-                    const _ProfileFormPage(child: ChangePasswordForm()),
-                    const _ProfileFormPage(child: UnregisterForm()),
-                  ],
-                );
-              },
+                    )
+                  : null,
+            ),
+            body: SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWideLayout =
+                      constraints.maxWidth >= _profileWideLayoutMinWidth;
+                  final Duration animationDuration =
+                      context.watch<SettingsCubit>().animationDuration;
+                  return AxiFadeIndexedStack(
+                    index: _profileRoute.index,
+                    duration: animationDuration,
+                    curve: _profileFadeCurve,
+                    children: [
+                      _ProfileMainView(
+                        isWideLayout: isWideLayout,
+                        connectivityState: connectivityState,
+                        demoOffline: demoOffline,
+                        applicationVersion: _applicationVersion,
+                        sidebarColor: profileSidebarColor,
+                        settingsAnchors: _settingsAnchors,
+                        settingsScrollController: _settingsScrollController,
+                        profileScrollController: _profileScrollController,
+                        settingsScrollOffset: _settingsScrollOffset,
+                        locate: widget.locate,
+                        onNavigate: _setRoute,
+                      ),
+                      const _ProfileFormPage(child: ChangePasswordForm()),
+                      const _ProfileFormPage(child: UnregisterForm()),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
         );

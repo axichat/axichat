@@ -61,7 +61,7 @@ class AxiPopover extends StatelessWidget {
       );
     }
 
-    return ShadPopover(
+    final popover = ShadPopover(
       popover: resolvedPopoverBuilder,
       controller: controller,
       visible: visible,
@@ -77,6 +77,26 @@ class AxiPopover extends StatelessWidget {
       areaGroupId: areaGroupId,
       useSameGroupIdForChild: useSameGroupIdForChild,
       child: child,
+    );
+    final popoverController = controller;
+    if (popoverController == null) {
+      return popover;
+    }
+    return ListenableBuilder(
+      listenable: popoverController,
+      builder: (context, _) {
+        final canPop = !popoverController.isOpen;
+        return PopScope(
+          canPop: canPop,
+          onPopInvokedWithResult: (didPop, __) {
+            if (didPop || canPop) {
+              return;
+            }
+            popoverController.hide();
+          },
+          child: popover,
+        );
+      },
     );
   }
 }

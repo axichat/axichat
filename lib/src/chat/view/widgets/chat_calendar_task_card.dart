@@ -9,27 +9,25 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_collection.dart';
+import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
-import 'package:axichat/src/calendar/utils/responsive_helper.dart';
-import 'package:axichat/src/calendar/view/base_task_tile.dart';
 import 'package:axichat/src/calendar/view/edit_task_dropdown.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/models/task_context_action.dart';
 import 'package:axichat/src/calendar/view/task_edit_session_tracker.dart';
+import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/calendar_task_copy_sheet.dart';
-import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-const double _taskFooterPaddingTop = 4.0;
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 
 class ChatCalendarTaskCard extends StatefulWidget {
@@ -66,7 +64,6 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
         final bool taskInCalendar = state.model.tasks.containsKey(
           widget.task.id,
         );
-        final bool tileReadOnly = widget.readOnly || !taskInCalendar;
         final TaskEditMode editMode =
             widget.readOnly ? TaskEditMode.readOnly : TaskEditMode.full;
         final VoidCallback tapAction = widget.readOnly
@@ -77,23 +74,10 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
                   taskInCalendar: taskInCalendar,
                   editMode: editMode,
                 );
-        final bool shareFragment = widget.isShareFragment;
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ChatCalendarTaskTile(
-              task: resolvedTask,
-              readOnly: tileReadOnly,
-              onTap: tapAction,
-              marginOverride: shareFragment ? _shareMargin() : null,
-              hideActionMenu: shareFragment,
-            ),
-            if (widget.footerDetails.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: _taskFooterPaddingTop),
-                child: ChatInlineDetails(details: widget.footerDetails),
-              ),
-          ],
+        return CalendarFragmentCard(
+          fragment: CalendarFragment.task(task: resolvedTask),
+          footerDetails: widget.footerDetails,
+          onTap: tapAction,
         );
       },
     );
@@ -438,38 +422,5 @@ class _ChatCalendarTaskCardState extends State<ChatCalendarTaskCard> {
     context.read<ChatCalendarBloc>().add(
           CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
         );
-  }
-
-  EdgeInsets _shareMargin() {
-    final CalendarResponsiveSpec spec =
-        ResponsiveHelper.specForSizeClass(context, CalendarSizeClass.compact);
-    final double vertical = spec.contentPadding.vertical / 2;
-    return EdgeInsets.only(top: vertical);
-  }
-}
-
-class ChatCalendarTaskTile extends BaseTaskTile<ChatCalendarBloc> {
-  const ChatCalendarTaskTile({
-    super.key,
-    required super.task,
-    super.onTap,
-    bool readOnly = false,
-    super.marginOverride,
-    super.hideActionMenu,
-  }) : super(
-          isGuestMode: false,
-          compact: true,
-          isReadOnly: readOnly,
-        );
-
-  @override
-  State<ChatCalendarTaskTile> createState() => _ChatCalendarTaskTileState();
-}
-
-class _ChatCalendarTaskTileState
-    extends BaseTaskTileState<ChatCalendarTaskTile, ChatCalendarBloc> {
-  @override
-  void showEditTaskInput(BuildContext context, CalendarTask task) {
-    widget.onTap?.call();
   }
 }
