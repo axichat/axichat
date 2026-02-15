@@ -132,14 +132,13 @@ class HomeShellCalendarScope extends StatelessWidget {
       key: ValueKey(storage),
       create: (context) {
         final reminderController = locate<CalendarReminderController>();
-        final xmppService = locate<XmppService>();
         const seedDemoCalendar = kEnableDemoChats;
         final emailService =
             locate<SettingsCubit>().state.endpointConfig.smtpEnabled
                 ? locate<EmailService>()
                 : null;
         final calendarBloc = CalendarBloc(
-          xmppService: xmppService,
+          xmppService: locate<XmppService>(),
           emailService: emailService,
           reminderController: reminderController,
           syncManagerBuilder: buildPersonalCalendarSyncManager,
@@ -257,11 +256,14 @@ class _HomeShellState extends State<HomeShell> {
 
     Widget buildShellChild(Widget child) {
       return BlocProvider(
-        create: (context) => AccessibilityActionBloc(
-          chatsService: context.read<XmppService>(),
-          messageService: context.read<XmppService>(),
-          rosterService: context.read<XmppService>() as RosterService,
-        ),
+        create: (context) {
+          final locate = context.read;
+          return AccessibilityActionBloc(
+            chatsService: locate<XmppService>(),
+            messageService: locate<XmppService>(),
+            rosterService: locate<XmppService>() as RosterService,
+          );
+        },
         child: HomeShellScope(
           calendarBottomDragSession: _calendarBottomDragSession,
           bottomNavIndex: _bottomNavIndex,
@@ -367,12 +369,13 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
     FocusManager.instance.primaryFocus?.unfocus();
-    final chatsState = context.read<ChatsCubit>().state;
+    final locate = context.read;
+    final chatsState = locate<ChatsCubit>().state;
     if (chatsState.openStack.skip(1).isNotEmpty) {
-      context.read<ChatsCubit>().popChat();
+      locate<ChatsCubit>().popChat();
       return;
     }
-    context.read<ChatsCubit>().closeAllChats();
+    locate<ChatsCubit>().closeAllChats();
   }
 
   void _clearOpenChatHistoryEntry() {
@@ -447,7 +450,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
-    _syncHomeHistoryEntries(context.read<ChatsCubit>().state);
+    final locate = context.read;
+    _syncHomeHistoryEntries(locate<ChatsCubit>().state);
   }
 
   void _syncHomeHistoryEntries(ChatsState state) {
@@ -464,15 +468,17 @@ class _HomeScreenState extends State<HomeScreen> {
       _bottomNavIndexNotifier = nextBottomNav;
       _bottomNavIndexNotifier?.addListener(_handleBottomNavIndexChanged);
     }
-    final chatsState = context.read<ChatsCubit>().state;
+    final locate = context.read;
+    final chatsState = locate<ChatsCubit>().state;
     _syncHomeHistoryEntries(chatsState);
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
     if (!_isFindActionEvent(event)) return KeyEventResult.ignored;
-    context.read<AccessibilityActionBloc>().add(
-          const AccessibilityMenuOpened(),
-        );
+    final locate = context.read;
+    locate<AccessibilityActionBloc>().add(
+      const AccessibilityMenuOpened(),
+    );
     return KeyEventResult.handled;
   }
 
@@ -607,7 +613,8 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
       return;
     }
     _storage = storage;
-    context.read<CalendarBloc>().configureHomeCoordinators(storage: storage);
+    final locate = context.read;
+    locate<CalendarBloc>().configureHomeCoordinators(storage: storage);
   }
 
   @override
@@ -931,6 +938,7 @@ class _HomeContent extends StatelessWidget {
       providers: [
         BlocProvider(
           create: (context) {
+            final locate = context.read;
             final settingsSnapshot = ChatSettingsSnapshot(
               language: settings.language,
               chatReadReceipts: settings.chatReadReceipts,
@@ -941,25 +949,27 @@ class _HomeContent extends StatelessWidget {
               autoDownloadDocuments: settings.autoDownloadDocuments,
               autoDownloadArchives: settings.autoDownloadArchives,
             );
-            final emailService =
-                emailEnabled ? context.read<EmailService>() : null;
+            final emailService = emailEnabled ? locate<EmailService>() : null;
             return ChatBloc(
               jid: resolvedJid,
-              messageService: context.read<XmppService>(),
-              chatsService: context.read<XmppService>(),
-              mucService: context.read<XmppService>(),
-              notificationService: context.read<NotificationService>(),
+              messageService: locate<XmppService>(),
+              chatsService: locate<XmppService>(),
+              mucService: locate<XmppService>(),
+              notificationService: locate<NotificationService>(),
               emailService: emailService,
               settings: settingsSnapshot,
             );
           },
         ),
         BlocProvider(
-          create: (context) => ChatSearchCubit(
-            jid: resolvedJid,
-            messageService: context.read<XmppService>(),
-            emailService: emailEnabled ? context.read<EmailService>() : null,
-          ),
+          create: (context) {
+            final locate = context.read;
+            return ChatSearchCubit(
+              jid: resolvedJid,
+              messageService: locate<XmppService>(),
+              emailService: emailEnabled ? locate<EmailService>() : null,
+            );
+          },
         ),
       ],
       child: Builder(
@@ -1141,9 +1151,8 @@ class _HomeGlobalShortcutHandlerState
 
   bool _handleGlobalShortcut(KeyEvent event) {
     if (!_isFindActionEvent(event)) return false;
-    context
-        .read<AccessibilityActionBloc>()
-        .add(const AccessibilityMenuOpened());
+    final locate = context.read;
+    locate<AccessibilityActionBloc>().add(const AccessibilityMenuOpened());
     return true;
   }
 

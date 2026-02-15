@@ -8095,6 +8095,8 @@ class _ChatState extends State<Chat> {
                                                                     senderLabel,
                                                                 bubble:
                                                                     bubbleWithSlack,
+                                                                previewMaxWidth:
+                                                                    bubbleMaxWidth,
                                                                 spacing: context
                                                                     .spacing.s,
                                                                 alignEnd: self,
@@ -13438,11 +13440,18 @@ class _ReplyingToPreviewText extends StatelessWidget {
       builder: (context, constraints) {
         final textScaler =
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+        final maxPreviewWidth =
+            constraints.maxWidth.isFinite && constraints.maxWidth > 0
+                ? constraints.maxWidth
+                : double.infinity;
         final headerPainter = TextPainter(
           text: headerWithNameSpan,
           textDirection: Directionality.of(context),
           textScaler: textScaler,
-        )..layout(maxWidth: constraints.maxWidth);
+        )..layout(maxWidth: maxPreviewWidth);
+        final headerLineWidth = headerPainter.size.width <= 0
+            ? maxPreviewWidth
+            : math.min(maxPreviewWidth, headerPainter.size.width);
         final headerFits = headerPainter.computeLineMetrics().length <= 1;
         if (!headerFits) {
           return Column(
@@ -13455,12 +13464,19 @@ class _ReplyingToPreviewText extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 textAlign: textAlign,
               ),
-              Text(
-                quotedPreview,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: textAlign,
-                style: baseStyle,
+              Align(
+                alignment:
+                    isSelf ? Alignment.centerRight : Alignment.centerLeft,
+                child: SizedBox(
+                  width: headerLineWidth,
+                  child: Text(
+                    quotedPreview,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: textAlign,
+                    style: baseStyle,
+                  ),
+                ),
               ),
             ],
           );
@@ -13475,7 +13491,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
           ),
           textDirection: Directionality.of(context),
           textScaler: textScaler,
-        )..layout(maxWidth: constraints.maxWidth);
+        )..layout(maxWidth: maxPreviewWidth);
         final canInline = inlinePainter.computeLineMetrics().length <= 1;
         if (canInline) {
           return Text.rich(
@@ -13501,12 +13517,18 @@ class _ReplyingToPreviewText extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: textAlign,
             ),
-            Text(
-              quotedPreview,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              textAlign: textAlign,
-              style: baseStyle,
+            Align(
+              alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
+              child: SizedBox(
+                width: headerLineWidth,
+                child: Text(
+                  quotedPreview,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: textAlign,
+                  style: baseStyle,
+                ),
+              ),
             ),
           ],
         );
@@ -13554,6 +13576,7 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
     required this.preview,
     required this.senderLabel,
     required this.bubble,
+    required this.previewMaxWidth,
     required this.spacing,
     required this.alignEnd,
   });
@@ -13561,12 +13584,14 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
   final Widget? preview;
   final Widget? senderLabel;
   final Widget bubble;
+  final double previewMaxWidth;
   final double spacing;
   final bool alignEnd;
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
       _RenderReplyPreviewBubbleColumn(
+        previewMaxWidth: previewMaxWidth,
         spacing: spacing,
         hasPreview: preview != null,
         hasSenderLabel: senderLabel != null,
@@ -13579,6 +13604,7 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
     _RenderReplyPreviewBubbleColumn renderObject,
   ) {
     renderObject
+      ..previewMaxWidth = previewMaxWidth
       ..spacing = spacing
       ..hasPreview = preview != null
       ..hasSenderLabel = senderLabel != null
@@ -13601,19 +13627,30 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
         RenderBoxContainerDefaultsMixin<RenderBox,
             _ReplyPreviewBubbleParentData> {
   _RenderReplyPreviewBubbleColumn({
+    required double previewMaxWidth,
     required double spacing,
     required bool hasPreview,
     required bool hasSenderLabel,
     required bool alignEnd,
-  })  : _spacing = spacing,
+  })  : _previewMaxWidth = previewMaxWidth,
+        _spacing = spacing,
         _hasPreview = hasPreview,
         _hasSenderLabel = hasSenderLabel,
         _alignEnd = alignEnd;
 
+  double _previewMaxWidth;
   double _spacing;
   bool _hasPreview;
   bool _hasSenderLabel;
   bool _alignEnd;
+
+  double get previewMaxWidth => _previewMaxWidth;
+
+  set previewMaxWidth(double value) {
+    if (_previewMaxWidth == value) return;
+    _previewMaxWidth = value;
+    markNeedsLayout();
+  }
 
   double get spacing => _spacing;
 
@@ -13690,8 +13727,15 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       );
     }
     if (previewChild != null) {
+      final constrainedPreviewMaxWidth =
+          constraints.constrainWidth(previewMaxWidth);
       previewChild.layout(
-        constraints.loosen(),
+        BoxConstraints(
+          minWidth: 0,
+          maxWidth: constrainedPreviewMaxWidth,
+          minHeight: 0,
+          maxHeight: constraints.maxHeight,
+        ),
         parentUsesSize: true,
       );
       previewWidth = previewChild.size.width;

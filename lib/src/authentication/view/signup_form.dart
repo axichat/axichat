@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
@@ -75,7 +76,8 @@ class _SignupFormState extends State<SignupForm>
   bool _showBreachedError = false;
   String _lastPasswordValue = '';
   int _allowInsecureResetTick = 0;
-  int _captchaImageFailureReloads = 0;
+  Timer? _captchaRetryTimer;
+  bool _captchaImageLoaded = false;
   String? _lastCaptchaServer;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
@@ -123,6 +125,7 @@ class _SignupFormState extends State<SignupForm>
     _captchaTextController
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
+    _captchaRetryTimer?.cancel();
     super.dispose();
   }
 
@@ -270,29 +273,38 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _reloadCaptcha() {
-    _captchaImageFailureReloads = 0;
+    _captchaRetryTimer?.cancel();
+    _captchaRetryTimer = null;
     _captchaTextController.clear();
     if (!mounted) return;
     setState(() {
+      _captchaImageLoaded = false;
       _captchaSrc = _loadCaptchaSrc();
     });
   }
 
-  void _reloadCaptchaForAutoRetry() {
-    _captchaTextController.clear();
-    if (!mounted) return;
-    setState(() {
-      _captchaSrc = _loadCaptchaSrc();
-    });
-  }
-
-  void _retryCaptchaAfterImageFailure() {
-    const maxAutoReloads = 1;
-    if (_captchaImageFailureReloads >= maxAutoReloads) {
+  void _scheduleInitialCaptchaRetry() {
+    if (_captchaRetryTimer != null) {
       return;
     }
-    _captchaImageFailureReloads++;
-    _reloadCaptchaForAutoRetry();
+    _captchaRetryTimer = Timer(Duration.zero, () {
+      if (!mounted) {
+        _captchaRetryTimer?.cancel();
+        _captchaRetryTimer = null;
+        return;
+      }
+      _captchaRetryTimer = null;
+      _reloadCaptcha();
+    });
+  }
+
+  void _markCaptchaImageLoaded() {
+    if (_captchaImageLoaded || !mounted) {
+      return;
+    }
+    setState(() {
+      _captchaImageLoaded = true;
+    });
   }
 
   void _openAvatarEditor() {
@@ -862,26 +874,37 @@ class _SignupFormState extends State<SignupForm>
                                       future: _captchaSrc,
                                       builder: (context, snapshot) {
                                         Widget captchaSurface;
-                                        if (snapshot.hasData) {
-                                          final url =
-                                              snapshot.requireData.trim();
-                                          captchaSurface = url.isEmpty
-                                              ? const _CaptchaErrorMessage()
-                                              : _CaptchaImage(
-                                                  url: url,
-                                                  animationDuration:
-                                                      animationDuration,
-                                                  showErrorMessageOnError: true,
-                                                  onRetry:
-                                                      _retryCaptchaAfterImageFailure,
-                                                );
-                                        } else if (snapshot.hasError) {
-                                          captchaSurface =
-                                              const _CaptchaErrorMessage();
-                                        } else {
+                                        final hasValidUrl = snapshot.hasData &&
+                                            (snapshot.data?.trim().isNotEmpty ??
+                                                false);
+                                        final encounteredError = snapshot
+                                                .hasError ||
+                                            (snapshot.hasData && !hasValidUrl);
+                                        final captchaLoading =
+                                            encounteredError ||
+                                                !snapshot.hasData ||
+                                                !_captchaImageLoaded;
+                                        if (encounteredError) {
+                                          _scheduleInitialCaptchaRetry();
                                           captchaSurface = _CaptchaSkeleton(
                                             animationDuration:
                                                 animationDuration,
+                                          );
+                                        } else if (!snapshot.hasData) {
+                                          captchaSurface = _CaptchaSkeleton(
+                                            animationDuration:
+                                                animationDuration,
+                                          );
+                                        } else {
+                                          final url =
+                                              snapshot.requireData.trim();
+                                          captchaSurface = _CaptchaImage(
+                                            url: url,
+                                            animationDuration:
+                                                animationDuration,
+                                            onLoaded: _markCaptchaImageLoaded,
+                                            onRetry:
+                                                _scheduleInitialCaptchaRetry,
                                           );
                                         }
                                         return Align(
@@ -909,7 +932,8 @@ class _SignupFormState extends State<SignupForm>
                                               SizedBox(width: spacing.s),
                                               Semantics(
                                                 button: true,
-                                                enabled: !isBusy,
+                                                enabled:
+                                                    !isBusy && !captchaLoading,
                                                 label: context
                                                     .l10n.signupCaptchaReload,
                                                 hint: context.l10n
@@ -919,7 +943,10 @@ class _SignupFormState extends State<SignupForm>
                                                       LucideIcons.refreshCw,
                                                   tooltip: context
                                                       .l10n.signupCaptchaReload,
-                                                  onPressed: isBusy
+                                                  tapTargetSize:
+                                                      sizing.appBarHeight,
+                                                  onPressed: isBusy ||
+                                                          captchaLoading
                                                       ? null
                                                       : () => _reloadCaptcha(),
                                                 ),
@@ -1383,10 +1410,7 @@ class _CaptchaFrame extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: radius,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: child,
-          ),
+          child: SizedBox.expand(child: child),
         ),
       ),
     );
@@ -1397,71 +1421,82 @@ class _CaptchaImage extends StatefulWidget {
   const _CaptchaImage({
     required this.url,
     required this.animationDuration,
+    required this.onLoaded,
     required this.onRetry,
-    required this.showErrorMessageOnError,
   });
 
   final String url;
   final Duration animationDuration;
+  final VoidCallback onLoaded;
   final VoidCallback onRetry;
-  final bool showErrorMessageOnError;
 
   @override
   State<_CaptchaImage> createState() => _CaptchaImageState();
 }
 
 class _CaptchaImageState extends State<_CaptchaImage> {
-  int _retryCount = 0;
-  bool _retryScheduled = false;
+  bool _isReady = false;
+  bool _readyNotified = false;
 
   @override
   void didUpdateWidget(covariant _CaptchaImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
-      _retryCount = 0;
-      _retryScheduled = false;
+      _isReady = false;
+      _readyNotified = false;
     }
+  }
+
+  void _handleImageReady() {
+    if (_readyNotified) return;
+    _readyNotified = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _isReady = true;
+      });
+      widget.onLoaded();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Image.network(
+    final image = Image.network(
       widget.url,
       fit: BoxFit.cover,
       excludeFromSemantics: true,
+      frameBuilder: (context, child, frame, _) {
+        if (frame != null) {
+          _handleImageReady();
+        }
+        return child;
+      },
       loadingBuilder: (context, child, loadingProgress) {
-        final ready = loadingProgress == null;
-        return AnimatedSwitcher(
-          duration: widget.animationDuration,
-          child: ready
-              ? child
-              : _CaptchaSkeleton(animationDuration: widget.animationDuration),
-        );
+        if (loadingProgress == null) {
+          return child;
+        }
+        return child;
       },
       errorBuilder: (context, error, stackTrace) {
-        const maxAttempts = 2;
-        if (_retryCount < maxAttempts - 1) {
-          _retryCount++;
-          imageCache.evict(NetworkImage(widget.url));
-          return _CaptchaSkeleton(animationDuration: widget.animationDuration);
-        }
-        if (_retryCount == maxAttempts - 1) {
-          _retryCount++;
-          if (!_retryScheduled) {
-            _retryScheduled = true;
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              _retryScheduled = false;
-              widget.onRetry();
-            });
-          }
-          return _CaptchaSkeleton(animationDuration: widget.animationDuration);
-        }
-        if (widget.showErrorMessageOnError) {
-          return const _CaptchaErrorMessage();
-        }
+        widget.onRetry();
         return _CaptchaSkeleton(animationDuration: widget.animationDuration);
       },
+    );
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedOpacity(
+          opacity: _isReady ? 0 : 1,
+          duration: widget.animationDuration,
+          child: _CaptchaSkeleton(animationDuration: widget.animationDuration),
+        ),
+        AnimatedOpacity(
+          opacity: _isReady ? 1 : 0,
+          duration: widget.animationDuration,
+          child: image,
+        ),
+      ],
     );
   }
 }
@@ -1477,15 +1512,27 @@ class _CaptchaSkeleton extends StatefulWidget {
 
 class _CaptchaSkeletonState extends State<_CaptchaSkeleton>
     with SingleTickerProviderStateMixin {
+  static const Duration _minShimmerDuration = Duration(milliseconds: 1200);
+
+  Duration get _effectiveDuration {
+    if (widget.animationDuration == Duration.zero) {
+      return Duration.zero;
+    }
+    if (widget.animationDuration < _minShimmerDuration) {
+      return _minShimmerDuration;
+    }
+    return widget.animationDuration;
+  }
+
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: widget.animationDuration,
+    duration: _effectiveDuration,
   );
 
   @override
   void initState() {
     super.initState();
-    if (widget.animationDuration != Duration.zero) {
+    if (_effectiveDuration != Duration.zero) {
       _controller.repeat();
     }
   }
@@ -1496,8 +1543,8 @@ class _CaptchaSkeletonState extends State<_CaptchaSkeleton>
     if (oldWidget.animationDuration == widget.animationDuration) {
       return;
     }
-    _controller.duration = widget.animationDuration;
-    if (widget.animationDuration == Duration.zero) {
+    _controller.duration = _effectiveDuration;
+    if (_effectiveDuration == Duration.zero) {
       _controller.stop();
       _controller.value = 0;
     } else {
@@ -1514,10 +1561,13 @@ class _CaptchaSkeletonState extends State<_CaptchaSkeleton>
   @override
   Widget build(BuildContext context) {
     final motion = context.motion;
-    final base =
-        context.colorScheme.border.withValues(alpha: motion.tapHoverAlpha);
+    final baseAlpha =
+        (motion.tapHoverAlpha + motion.tapSplashAlpha).clamp(0.0, 1.0);
+    final highlightAlpha =
+        (motion.tapFocusAlpha + motion.tapSplashAlpha).clamp(0.0, 1.0);
+    final base = context.colorScheme.border.withValues(alpha: baseAlpha);
     final highlight =
-        context.colorScheme.card.withValues(alpha: motion.tapFocusAlpha);
+        context.colorScheme.card.withValues(alpha: highlightAlpha);
     return ExcludeSemantics(
       child: AnimatedBuilder(
         animation: _controller,
@@ -1539,23 +1589,6 @@ class _CaptchaSkeletonState extends State<_CaptchaSkeleton>
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-class _CaptchaErrorMessage extends StatelessWidget {
-  const _CaptchaErrorMessage();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox.expand(
-      child: Center(
-        child: Text(
-          context.l10n.signupCaptchaErrorMessage,
-          textAlign: TextAlign.center,
-          style: context.textTheme.muted,
-        ),
       ),
     );
   }

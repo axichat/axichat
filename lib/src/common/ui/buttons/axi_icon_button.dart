@@ -3,10 +3,11 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/buttons/axi_button_haptics.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum AxiIconButtonVariant {
   primary,
@@ -261,6 +262,10 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         final bool enabled =
             (widget.onPressed != null || widget.onLongPress != null) &&
                 !widget.loading;
+        final VoidCallback? onTap =
+            enabled ? withSelectionHaptic(widget.onPressed) : null;
+        final VoidCallback? onLongPress =
+            enabled ? withSelectionHaptic(widget.onLongPress) : null;
         final bool pressed = states.contains(WidgetState.pressed);
         final double resolvedIconSize =
             widget.resolvedIconSize ?? context.sizing.iconButtonIconSize;
@@ -321,8 +326,8 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                   onHoverChange: enabled
                       ? (value) => _updateState(WidgetState.hovered, value)
                       : null,
-                  onTap: enabled ? widget.onPressed : null,
-                  onLongPress: enabled ? widget.onLongPress : null,
+                  onTap: onTap,
+                  onLongPress: onLongPress,
                   onTapDown: enabled
                       ? (details) {
                           _updateState(WidgetState.pressed, true);
@@ -402,8 +407,8 @@ class _AxiIconButtonState extends State<AxiIconButton> {
           enabled: enabled,
           selected: widget.selected,
           label: widget.semanticLabel ?? widget.tooltip,
-          onTap: enabled ? widget.onPressed : null,
-          onLongPress: enabled ? widget.onLongPress : null,
+          onTap: onTap,
+          onLongPress: onLongPress,
           child: tappable,
         );
       },

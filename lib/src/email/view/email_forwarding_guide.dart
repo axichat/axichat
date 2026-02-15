@@ -442,7 +442,6 @@ class EmailForwardingWelcomeGate extends StatefulWidget {
 
 class _EmailForwardingWelcomeGateState
     extends State<EmailForwardingWelcomeGate> {
-  static const bool _forceShowEmailForwardingWelcome = true;
   bool _dialogShown = false;
   bool _dialogScheduled = false;
 
@@ -485,14 +484,10 @@ class _EmailForwardingWelcomeGateState
       return;
     }
     final authState = context.read<AuthenticationCubit>().state;
-    if (!_forceShowEmailForwardingWelcome) {
-      if (authState is! AuthenticationCompleteFromSignup) {
-        return;
-      }
-      if (context.read<SettingsCubit>().state.emailForwardingGuideSeen) {
-        return;
-      }
-    } else if (authState is! AuthenticationComplete) {
+    if (authState is! AuthenticationCompleteFromSignup) {
+      return;
+    }
+    if (context.read<SettingsCubit>().state.emailForwardingGuideSeen) {
       return;
     }
     _dialogShown = true;
