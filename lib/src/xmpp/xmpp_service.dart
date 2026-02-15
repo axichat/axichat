@@ -264,7 +264,7 @@ class StoredAvatar {
 // server. The `domain` parameter is still passed through for TLS/SASL SNI.
 final serverLookup = <String, IOEndpoint>{
   'nz.axichat.com': const IOEndpoint('167.160.14.12', 5222),
-  'axi.im': const IOEndpoint('167.160.14.12', 5222),
+  'axi.im': const IOEndpoint('152.53.171.135', 5222),
   'hookipa.net': const IOEndpoint('31.172.31.205', 5222),
   'xmpp.social': const IOEndpoint('31.172.31.205', 5222),
   'trashserver.net': const IOEndpoint('5.1.72.136', 5222),
@@ -1619,12 +1619,22 @@ class XmppService extends XmppBase
         for (final script in scripts) {
           final existingChat = await db.getChat(script.chat.jid);
           if (existingChat != null) {
+            var updated = existingChat;
             if (existingChat.jid == 'eliot@gmail.com') {
-              final updated = existingChat.copyWith(
+              updated = updated.copyWith(
                 title: script.chat.title,
                 contactDisplayName: script.chat.contactDisplayName,
                 emailAddress: script.chat.emailAddress,
               );
+            }
+            if (script.chat.defaultTransport.isEmail &&
+                !updated.defaultTransport.isEmail) {
+              updated = updated.copyWith(
+                transport: MessageTransport.email,
+                emailAddress: script.chat.emailAddress,
+              );
+            }
+            if (updated != existingChat) {
               await db.updateChat(updated);
             }
             continue;
@@ -3256,6 +3266,34 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
     }
   }
 
+  Future<bool> _axiImDnsARecordFallback({
+    required int port,
+    required String failedHost,
+  }) async {
+    try {
+      final records = await InternetAddress.lookup(
+        'axi.im',
+        type: InternetAddressType.IPv4,
+      );
+      final seenHosts = <String>{};
+      for (final record in records) {
+        final host = record.address;
+        if (host == failedHost || !seenHosts.add(host)) {
+          continue;
+        }
+        _log.fine('Attempting axi.im DNS A fallback endpoint $host:$port...');
+        if (await _hostPortConnect(host, port)) {
+          return true;
+        }
+      }
+    } on SocketException catch (error) {
+      _log.warning('axi.im DNS A fallback lookup failed: $error');
+    } on Exception catch (error) {
+      _log.warning('axi.im DNS A fallback failed: $error');
+    }
+    return false;
+  }
+
   @override
   Future<bool> connect(String domain, {String? host, int? port}) async {
     _dropSocket(expectClosure: true);
@@ -3290,7 +3328,23 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
       return true;
     }
 
-    _log.warning('Socket connection failed. DNS/SRV fallbacks are disabled.');
+    if (domain == 'axi.im') {
+      _log.warning(
+        'Direct axi.im endpoint failed. Trying DNS A record fallback...',
+      );
+      final fallbackConnected = await _axiImDnsARecordFallback(
+        port: resolvedPort,
+        failedHost: resolvedHost,
+      );
+      if (fallbackConnected) {
+        _setupStreams();
+        return true;
+      }
+    }
+
+    _log.warning(
+      'Socket connection failed. DNS/SRV fallbacks are disabled for all domains except axi.im A fallback.',
+    );
     return false;
   }
 

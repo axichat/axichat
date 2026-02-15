@@ -113,7 +113,13 @@ class ChatCutoutComposer extends StatelessWidget {
       ),
     };
 
-    final textStyle = context.textTheme.p;
+    final textStyle = context.textTheme.p.copyWith(height: 1.2);
+    final textStrutStyle = StrutStyle.fromTextStyle(
+      textStyle,
+      forceStrutHeight: true,
+      height: textStyle.height,
+      leading: 0,
+    );
     final cutoutGap = spacing.xxs;
     final iconButtonSize = sizing.iconButtonSize;
     final defaultCutoutThickness = iconButtonSize + (cutoutGap * 2);
@@ -175,6 +181,7 @@ class ChatCutoutComposer extends StatelessWidget {
                     keyboardType: TextInputType.multiline,
                     textInputAction: TextInputAction.newline,
                     style: textStyle,
+                    strutStyle: textStrutStyle,
                     cursorHeight: textStyle.fontSize,
                     decoration: InputDecoration(
                       border: InputBorder.none,

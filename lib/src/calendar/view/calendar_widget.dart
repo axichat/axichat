@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -36,12 +35,14 @@ class CalendarBottomDragSession {
 class CalendarWidget extends StatefulWidget {
   const CalendarWidget({
     super.key,
-    this.mobileTabIndex = 0,
+    this.mobileTabIndex,
+    this.surfacePopEnabled = true,
     this.onMobileTabIndexChanged,
     this.bottomDragSession,
   });
 
-  final int mobileTabIndex;
+  final int? mobileTabIndex;
+  final bool surfacePopEnabled;
   final ValueChanged<int>? onMobileTabIndexChanged;
   final ValueNotifier<CalendarBottomDragSession?>? bottomDragSession;
 
@@ -76,11 +77,6 @@ const ValueKey<String> _calendarSurfacePageKey = ValueKey<String>(
   _calendarSurfacePageId,
 );
 const bool _calendarSurfacePopEnabledDefault = true;
-
-bool _resolveCalendarSurfacePopEnabled(BuildContext context) {
-  return context.watch<ChatsCubit>().state.openCalendar ||
-      _calendarSurfacePopEnabledDefault;
-}
 
 class _CalendarWidgetState
     extends CalendarExperienceState<CalendarWidget, CalendarBloc> {
@@ -126,8 +122,11 @@ class _CalendarWidgetState
   }
 
   void _syncMobileTabController({required bool animate}) {
-    final int resolved =
-        widget.mobileTabIndex.clamp(0, mobileTabController.length - 1);
+    final targetIndex = widget.mobileTabIndex;
+    if (targetIndex == null) {
+      return;
+    }
+    final int resolved = targetIndex.clamp(0, mobileTabController.length - 1);
     if (mobileTabController.index == resolved) {
       return;
     }
@@ -310,7 +309,7 @@ class _CalendarWidgetState
     );
     return CalendarSurfaceNavigator(
       navigatorKey: _calendarNavigatorKey,
-      enablePop: _resolveCalendarSurfacePopEnabled(context),
+      enablePop: widget.surfacePopEnabled,
       child: calendarBody,
     );
   }

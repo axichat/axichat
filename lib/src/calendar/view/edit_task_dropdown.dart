@@ -1385,7 +1385,7 @@ class _EditTaskInlineActionChip extends StatelessWidget {
             onPressed: action.onSelected,
             leading: Icon(
               action.icon,
-              size: context.sizing.menuItemIconSize,
+              size: context.sizing.iconButtonIconSize,
             ),
             child: Text(action.label),
           )
@@ -1395,7 +1395,7 @@ class _EditTaskInlineActionChip extends StatelessWidget {
             onPressed: action.onSelected,
             leading: Icon(
               action.icon,
-              size: context.sizing.menuItemIconSize,
+              size: context.sizing.iconButtonIconSize,
               color: actionColor,
             ),
             child: Text(action.label),

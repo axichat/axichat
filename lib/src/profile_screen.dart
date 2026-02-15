@@ -9,6 +9,7 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
@@ -177,8 +178,10 @@ class _ProfileBodyState extends State<_ProfileBody> {
         final colors = context.colorScheme;
         final demoOffline = context.read<XmppService>().demoOfflineMode;
         final profileSidebarColor = colors.background;
-        final showLeadingBack =
-            _profileRoute != _ProfileRoute.main || _canPopRoute(context);
+        final bottomNavVisible =
+            EnvScope.of(context).navPlacement == NavPlacement.bottom;
+        final showLeadingBack = !bottomNavVisible &&
+            (_profileRoute != _ProfileRoute.main || _canPopRoute(context));
         final canPop = _profileRoute == _ProfileRoute.main;
         return PopScope(
           canPop: canPop,
@@ -190,6 +193,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
           },
           child: Scaffold(
             appBar: AppBar(
+              automaticallyImplyLeading: false,
               title: Text(l10n.profileTitle),
               centerTitle: false,
               backgroundColor: profileSidebarColor,

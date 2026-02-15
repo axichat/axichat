@@ -421,6 +421,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     final chatsState = context.read<ChatsCubit>().state;
     if (chatsState.openStack.skip(1).isNotEmpty) {
       context.read<ChatsCubit>().popChat();
@@ -660,7 +661,12 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
   }
 
   void _ensureCoordinators() {
+    if (!mounted) {
+      return;
+    }
     final locate = context.read;
+    final calendarBloc = locate<CalendarBloc>();
+    final xmppService = locate<XmppService>();
     final storage = widget.storage;
     if (storage == null) {
       _chatCalendarCoordinator = null;
@@ -671,10 +677,10 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
     if (_storage == storage &&
         _chatCalendarCoordinator != null &&
         _availabilityCoordinator != null) {
-      locate<CalendarBloc>().attachAvailabilityCoordinator(
+      calendarBloc.attachAvailabilityCoordinator(
         _availabilityCoordinator!,
       );
-      _ensureChatCalendarSyncSubscription();
+      _ensureChatCalendarSyncSubscription(xmppService);
       return;
     }
     _storage = storage;
@@ -686,14 +692,13 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
         required CalendarSyncOutbound outbound,
         required m.ChatType chatType,
       }) {
-        return locate<CalendarBloc>().sendCalendarSyncMessage(
+        return calendarBloc.sendCalendarSyncMessage(
           jid: jid,
           outbound: outbound,
           chatType: chatType,
         );
       },
-      sendSnapshotFile: (file) =>
-          locate<CalendarBloc>().uploadCalendarSnapshot(file),
+      sendSnapshotFile: (file) => calendarBloc.uploadCalendarSnapshot(file),
     );
     _availabilityCoordinator = CalendarAvailabilityShareCoordinator(
       store: CalendarAvailabilityShareStore(),
@@ -702,20 +707,20 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
         required CalendarAvailabilityMessage message,
         required m.ChatType chatType,
       }) {
-        return locate<CalendarBloc>().sendAvailabilityMessage(
+        return calendarBloc.sendAvailabilityMessage(
           jid: jid,
           message: message,
           chatType: chatType,
         );
       },
     );
-    locate<CalendarBloc>().attachAvailabilityCoordinator(
+    calendarBloc.attachAvailabilityCoordinator(
       _availabilityCoordinator!,
     );
-    _ensureChatCalendarSyncSubscription();
+    _ensureChatCalendarSyncSubscription(xmppService);
   }
 
-  void _ensureChatCalendarSyncSubscription() {
+  void _ensureChatCalendarSyncSubscription(XmppService xmppService) {
     final coordinator = _chatCalendarCoordinator;
     if (coordinator == null) {
       _detachChatCalendarSyncSubscription();
@@ -724,11 +729,9 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
     if (_chatCalendarSyncSubscription != null) {
       return;
     }
-    final locate = context.read;
-    final xmppService = locate<XmppService>();
     if (xmppService.lastStreamReady == null) {
       _streamReadySubscription ??= xmppService.streamReadyStream.listen((_) {
-        _ensureChatCalendarSyncSubscription();
+        _ensureChatCalendarSyncSubscription(xmppService);
       });
       return;
     }
@@ -933,13 +936,17 @@ class _HomeContent extends StatelessWidget {
                         return content;
                       }
 
-                      Widget calendarLayout(int calendarTabIndex) {
+                      Widget calendarLayout({
+                        required int? calendarTabIndex,
+                        required bool surfacePopEnabled,
+                      }) {
                         return Row(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Expanded(
                               child: CalendarWidget(
                                 mobileTabIndex: calendarTabIndex,
+                                surfacePopEnabled: surfacePopEnabled,
                                 onMobileTabIndexChanged: (tabIndex) {
                                   final safeTab = tabIndex.clamp(0, 1).toInt();
                                   final scope = HomeShellScope.maybeOf(context);
@@ -956,23 +963,35 @@ class _HomeContent extends StatelessWidget {
                       }
 
                       Widget contentForBottomIndex(int selectedBottomIndex) {
-                        final bool openCalendar = hasCalendarBloc &&
-                            (selectedBottomIndex == 1 ||
-                                selectedBottomIndex == 2);
-                        final int calendarTabIndex =
-                            selectedBottomIndex == 2 ? 1 : 0;
+                        final bool openCalendar = (selectedBottomIndex == 1 ||
+                            selectedBottomIndex == 2);
+                        final int? calendarTabIndex = openCalendar
+                            ? (selectedBottomIndex == 2 ? 1 : 0)
+                            : null;
                         final bool demoOffline =
                             context.watch<XmppService>().demoOfflineMode;
                         final bool showChatCalendar =
                             openJid != null && chatRoute.isCalendar;
+                        final Widget body;
+                        if (!hasCalendarBloc) {
+                          body = chatLayout(showChatCalendar: showChatCalendar);
+                        } else {
+                          body = AxiFadeIndexedStack(
+                            index: openCalendar ? 1 : 0,
+                            duration: Duration.zero,
+                            children: [
+                              chatLayout(showChatCalendar: showChatCalendar),
+                              calendarLayout(
+                                calendarTabIndex: calendarTabIndex,
+                                surfacePopEnabled: openCalendar,
+                              ),
+                            ],
+                          );
+                        }
                         return SafeArea(
                           top: state is ConnectivityConnected || demoOffline,
                           bottom: navPlacement != NavPlacement.bottom,
-                          child: openCalendar
-                              ? calendarLayout(calendarTabIndex)
-                              : chatLayout(
-                                  showChatCalendar: showChatCalendar,
-                                ),
+                          child: body,
                         );
                       }
 

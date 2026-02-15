@@ -529,78 +529,92 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
   }
 
   void _updateDisplayedItems(List<Chat> newItems) {
-    final listState = _listKey.currentState;
+    final SliverAnimatedListState? listState = _listKey.currentState;
     if (listState == null) {
       setState(() {
         _displayedItems = List<Chat>.from(newItems);
       });
       return;
     }
-    var mutated = false;
-    final newJids = newItems.map((chat) => chat.jid).toSet();
-    for (int i = _displayedItems.length - 1; i >= 0; i--) {
-      final chat = _displayedItems[i];
-      if (!newJids.contains(chat.jid)) {
-        final removedChat = _displayedItems.removeAt(i);
-        listState.removeItem(
-          i,
-          (context, animation) => _AnimatedChatTile(
-            chat: removedChat,
-            animation: animation,
-            entering: false,
-            fromTop: i == 0,
-            archivedContext: false,
-            onArchivedTap: null,
-            selectionActive: widget.selectedJids.isNotEmpty,
-            isSelected: widget.selectedJids.contains(removedChat.jid),
-            isOpen: widget.openJid == removedChat.jid,
-            timestampNowListenable: widget.timestampNowListenable,
-            selfIdentity: widget.selfIdentity,
-          ),
-          duration: widget.animationDuration,
-        );
-        mutated = true;
-      }
+
+    Widget removedBuilder(
+      Chat removedChat,
+      int removedIndex,
+      Animation<double> animation,
+    ) {
+      return _AnimatedChatTile(
+        chat: removedChat,
+        animation: animation,
+        entering: false,
+        fromTop: removedIndex == 0,
+        archivedContext: false,
+        onArchivedTap: null,
+        selectionActive: widget.selectedJids.isNotEmpty,
+        isSelected: widget.selectedJids.contains(removedChat.jid),
+        isOpen: widget.openJid == removedChat.jid,
+        timestampNowListenable: widget.timestampNowListenable,
+        selfIdentity: widget.selfIdentity,
+      );
     }
 
-    final existingJids = _displayedItems.map((chat) => chat.jid).toSet();
-    for (int targetIndex = 0; targetIndex < newItems.length; targetIndex++) {
-      final chat = newItems[targetIndex];
-      if (existingJids.contains(chat.jid)) {
+    bool mutated = false;
+    bool metadataChanged = false;
+    final Set<String> newJids = newItems.map((chat) => chat.jid).toSet();
+
+    for (int i = _displayedItems.length - 1; i >= 0; i--) {
+      final Chat chat = _displayedItems[i];
+      if (newJids.contains(chat.jid)) {
         continue;
       }
-      _displayedItems.insert(targetIndex, chat);
-      existingJids.add(chat.jid);
-      listState.insertItem(
-        targetIndex,
+      final Chat removedChat = _displayedItems.removeAt(i);
+      listState.removeItem(
+        i,
+        (context, animation) => removedBuilder(removedChat, i, animation),
         duration: widget.animationDuration,
       );
       mutated = true;
     }
 
-    if (!_hasSameJidOrder(newItems)) {
-      setState(() {
-        _displayedItems = List<Chat>.from(newItems);
-      });
-      return;
-    }
+    for (int targetIndex = 0; targetIndex < newItems.length; targetIndex++) {
+      final Chat nextChat = newItems[targetIndex];
+      final int currentIndex = _displayedItems.indexWhere(
+        (chat) => chat.jid == nextChat.jid,
+      );
+      if (currentIndex == -1) {
+        _displayedItems.insert(targetIndex, nextChat);
+        listState.insertItem(
+          targetIndex,
+          duration: widget.animationDuration,
+        );
+        mutated = true;
+        continue;
+      }
 
-    for (var i = 0; i < _displayedItems.length; i++) {
-      _displayedItems[i] = newItems[i];
-    }
-    if (mutated) {
-      setState(() {});
-    }
-  }
+      if (currentIndex != targetIndex) {
+        final Chat movedChat = _displayedItems.removeAt(currentIndex);
+        listState.removeItem(
+          currentIndex,
+          (context, animation) =>
+              removedBuilder(movedChat, currentIndex, animation),
+          duration: widget.animationDuration,
+        );
+        _displayedItems.insert(targetIndex, movedChat);
+        listState.insertItem(
+          targetIndex,
+          duration: widget.animationDuration,
+        );
+        mutated = true;
+      }
 
-  bool _hasSameJidOrder(List<Chat> newItems) {
-    if (_displayedItems.length != newItems.length) return false;
-    for (var i = 0; i < newItems.length; i++) {
-      if (_displayedItems[i].jid != newItems[i].jid) {
-        return false;
+      if (_displayedItems[targetIndex] != nextChat) {
+        _displayedItems[targetIndex] = nextChat;
+        metadataChanged = true;
       }
     }
-    return true;
+
+    if (mutated || metadataChanged) {
+      setState(() {});
+    }
   }
 
   @override

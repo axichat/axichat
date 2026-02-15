@@ -2945,7 +2945,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       subject: subject,
     );
     final hasXmppBody = xmppBody.isNotEmpty;
-    final shouldSendXmppBody = hasXmppBody && !rawAttachmentsViaXmpp;
     final CalendarTask? taskForXmpp =
         hasQueuedAttachments ? null : effectiveTaskForXmpp;
     final Chat? soleRecipientChat =
@@ -2987,7 +2986,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final attachmentsViaXmpp = rawAttachmentsViaXmpp && !xmppAlreadySent;
     final requiresEmail = rawRequiresEmail && !emailAlreadySent;
     final requiresXmpp = rawRequiresXmpp && !xmppAlreadySent;
-    final shouldAttemptXmppBody = shouldSendXmppBody && !xmppAlreadySent;
+    final shouldAttemptXmppFanOut = !xmppAlreadySent &&
+        !rawAttachmentsViaXmpp &&
+        xmppRecipients.isNotEmpty &&
+        (hasXmppBody || fanOutTask != null);
+    final shouldAttemptXmppDirect = !xmppAlreadySent &&
+        !rawAttachmentsViaXmpp &&
+        !requiresEmail &&
+        xmppRecipients.isEmpty &&
+        (hasXmppBody || taskForXmpp != null);
     final service = _emailService;
     if (requiresEmail && service == null) {
       emit(
@@ -3213,7 +3220,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
       var xmppAttachmentsSent = !attachmentsViaXmpp;
-      var xmppBodySent = !shouldAttemptXmppBody;
+      var xmppBodySent = !(shouldAttemptXmppFanOut || shouldAttemptXmppDirect);
+      var xmppCalendarTaskSent = false;
       if (attachmentsViaXmpp) {
         final sent = await _sendXmppAttachments(
           attachments: queuedAttachments,
@@ -3234,7 +3242,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           chatJid: chat.jid,
         );
       }
-      if (xmppRecipients.isNotEmpty && shouldAttemptXmppBody) {
+      if (shouldAttemptXmppFanOut) {
         await _sendXmppFanOut(
           recipients: xmppRecipients,
           body: xmppBody,
@@ -3244,7 +3252,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           onLocalMessageStored: storedStanzaIds.add,
         );
         xmppBodySent = true;
-      } else if (!requiresEmail && shouldAttemptXmppBody) {
+        if (fanOutTask != null) {
+          xmppCalendarTaskSent = true;
+        }
+      } else if (shouldAttemptXmppDirect) {
         final sameChatQuote =
             quotedDraft != null && quotedDraft.chatJid == chat.jid
                 ? quotedDraft
@@ -3260,6 +3271,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           onLocalMessageStored: storedStanzaIds.add,
         );
         xmppBodySent = true;
+        if (taskForXmpp != null) {
+          xmppCalendarTaskSent = true;
+        }
+      }
+      if (xmppCalendarTaskSent) {
+        _messageService.notifyDemoOutboundAttachmentMessage(
+          chatJid: chat.jid,
+        );
+        if (kEnableDemoChats) {
+          final preview = event.calendarTaskShareText?.trim().isNotEmpty == true
+              ? event.calendarTaskShareText!.trim()
+              : event.attachmentFallbackLabel;
+          await _messageService.updateDemoChatSummary(
+            chatJid: chat.jid,
+            lastMessage: preview,
+          );
+        }
       }
       xmppSendSucceeded = xmppAttachmentsSent && xmppBodySent;
       if (xmppSendSucceeded && xmppSignature != null) {

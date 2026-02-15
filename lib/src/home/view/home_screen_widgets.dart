@@ -963,147 +963,152 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
             top: spacing.s,
             bottom: spacing.s,
           ),
-          child: ValueListenableBuilder<int>(
-            valueListenable: widget.bottomNavIndex,
-            builder: (context, selectedIndex, _) {
-              final int safeSelectedIndex = _clampBottomNavIndex(selectedIndex);
-              final bool openCalendar =
-                  safeSelectedIndex == 1 || safeSelectedIndex == 2;
-              final bool chatCalendarActive = chatsState.openJid != null &&
-                  chatsState.openChatRoute.isCalendar;
-              final int safeCalendarTab = safeSelectedIndex == 2
-                  ? 1
-                  : safeSelectedIndex == 1
-                      ? 0
-                      : 0;
-              final bool calendarDisabled = !widget.calendarAvailable;
-              final Color disabledColor =
-                  colors.mutedForeground.withValues(alpha: 0.45);
-              final homeColor = safeSelectedIndex == 0
-                  ? colors.foreground
-                  : colors.mutedForeground;
-              final scheduleColor = calendarDisabled
-                  ? disabledColor
-                  : safeSelectedIndex == 1
+          child: ValueListenableBuilder<CalendarBottomDragSession?>(
+            valueListenable: widget.calendarBottomDragSession,
+            builder: (context, dragSession, __) {
+              return ValueListenableBuilder<int>(
+                valueListenable: widget.bottomNavIndex,
+                builder: (context, selectedIndex, _) {
+                  final int safeSelectedIndex =
+                      _clampBottomNavIndex(selectedIndex);
+                  final bool openCalendar =
+                      safeSelectedIndex == 1 || safeSelectedIndex == 2;
+                  final bool chatCalendarActive = chatsState.openJid != null &&
+                      chatsState.openChatRoute.isCalendar;
+                  final int safeCalendarTab = safeSelectedIndex == 2
+                      ? 1
+                      : safeSelectedIndex == 1
+                          ? 0
+                          : 0;
+                  final bool calendarDisabled = !widget.calendarAvailable;
+                  final Color disabledColor =
+                      colors.mutedForeground.withValues(alpha: 0.45);
+                  final homeColor = safeSelectedIndex == 0
                       ? colors.foreground
                       : colors.mutedForeground;
-              final tasksColor = calendarDisabled
-                  ? disabledColor
-                  : safeSelectedIndex == 2
-                      ? colors.foreground
-                      : colors.mutedForeground;
-              final int? dragSourceTab =
-                  widget.calendarBottomDragSession.value == null
+                  final scheduleColor = calendarDisabled
+                      ? disabledColor
+                      : safeSelectedIndex == 1
+                          ? colors.foreground
+                          : colors.mutedForeground;
+                  final tasksColor = calendarDisabled
+                      ? disabledColor
+                      : safeSelectedIndex == 2
+                          ? colors.foreground
+                          : colors.mutedForeground;
+                  final int? dragSourceTab = dragSession == null
                       ? null
-                      : _normalizeCalendarTabIndex(
-                            widget.calendarBottomDragSession.value?.sourceTab,
-                          ) ??
+                      : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
                           safeCalendarTab;
-              final bool dragHintActive = !lowMotion &&
-                  widget.calendarAvailable &&
-                  (openCalendar || chatCalendarActive) &&
-                  dragSourceTab != null;
-              final bool shakeSchedule = dragHintActive && dragSourceTab == 1;
-              final bool shakeTasks = dragHintActive && dragSourceTab == 0;
-              final avatar = AxiAvatar(
-                jid: profile.jid,
-                subscription: m.Subscription.both,
-                avatarPath: profile.avatarPath,
-                presence: null,
-                status: null,
-                active: false,
-                size: sizing.iconButtonIconSize + spacing.xxs,
-              );
-              return GNav(
-                selectedIndex: safeSelectedIndex,
-                duration: context.watch<SettingsCubit>().animationDuration,
-                haptic: true,
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
-                tabBorderRadius: context.radii.squircle,
-                curve: Curves.easeInOutCubic,
-                gap: spacing.s,
-                iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                color: colors.mutedForeground,
-                activeColor: colors.foreground,
-                textStyle: context.textTheme.small.strong,
-                tabBackgroundColor: colors.secondary.withValues(
-                  alpha: context.motion.tapHoverAlpha,
-                ),
-                padding: EdgeInsets.symmetric(
-                  horizontal: spacing.s,
-                  vertical: spacing.s,
-                ),
-                onTabChange: (index) {
-                  final int safeIndex = _clampBottomNavIndex(index);
-                  if (safeIndex == safeSelectedIndex) {
-                    return;
-                  }
-                  if (!widget.calendarAvailable &&
-                      (safeIndex == 1 || safeIndex == 2)) {
-                    return;
-                  }
-                  _setBottomNavIndex(safeIndex);
+                  final bool dragHintActive = !lowMotion &&
+                      widget.calendarAvailable &&
+                      (openCalendar || chatCalendarActive) &&
+                      dragSourceTab != null;
+                  final bool shakeSchedule = dragHintActive;
+                  final bool shakeTasks = dragHintActive;
+                  final avatar = AxiAvatar(
+                    jid: profile.jid,
+                    subscription: m.Subscription.both,
+                    avatarPath: profile.avatarPath,
+                    presence: null,
+                    status: null,
+                    active: false,
+                    size: sizing.iconButtonIconSize + spacing.xxs,
+                  );
+                  return GNav(
+                    selectedIndex: safeSelectedIndex,
+                    duration: context.watch<SettingsCubit>().animationDuration,
+                    haptic: true,
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
+                    tabBorderRadius: context.radii.squircle,
+                    curve: Curves.easeInOutCubic,
+                    gap: spacing.s,
+                    iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                    color: colors.mutedForeground,
+                    activeColor: colors.foreground,
+                    textStyle: context.textTheme.small.strong,
+                    tabBackgroundColor: colors.secondary.withValues(
+                      alpha: context.motion.tapHoverAlpha,
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: spacing.s,
+                      vertical: spacing.s,
+                    ),
+                    onTabChange: (index) {
+                      final int safeIndex = _clampBottomNavIndex(index);
+                      if (safeIndex == safeSelectedIndex) {
+                        return;
+                      }
+                      if (!widget.calendarAvailable &&
+                          (safeIndex == 1 || safeIndex == 2)) {
+                        return;
+                      }
+                      _setBottomNavIndex(safeIndex);
+                    },
+                    tabs: [
+                      GButton(
+                        icon: LucideIcons.house,
+                        text: l10n.homeBottomNavHome,
+                        leading: _HomeBottomNavBadgeIcon(
+                          iconData: LucideIcons.house,
+                          badgeCount: chatsBadgeCount,
+                          color: homeColor,
+                          iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                        ),
+                        iconColor: colors.mutedForeground,
+                        iconActiveColor: colors.foreground,
+                      ),
+                      GButton(
+                        icon: LucideIcons.calendarClock,
+                        key: _scheduleTabKey,
+                        text: l10n.calendarScheduleLabel,
+                        leading: _BottomNavShake(
+                          enabled: shakeSchedule,
+                          child: _HomeBottomNavBadgeIcon(
+                            iconData: LucideIcons.calendarClock,
+                            badgeCount: scheduledAlertsCount,
+                            color: scheduleColor,
+                            iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                          ),
+                        ),
+                        iconColor: calendarDisabled
+                            ? disabledColor
+                            : colors.mutedForeground,
+                        iconActiveColor: calendarDisabled
+                            ? disabledColor
+                            : colors.foreground,
+                      ),
+                      GButton(
+                        icon: LucideIcons.squareCheck,
+                        key: _tasksTabKey,
+                        text: l10n.calendarFragmentTaskLabel,
+                        leading: _BottomNavShake(
+                          enabled: shakeTasks,
+                          child: _HomeBottomNavBadgeIcon(
+                            iconData: LucideIcons.squareCheck,
+                            badgeCount: unscheduledAlertsCount,
+                            color: tasksColor,
+                            iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                          ),
+                        ),
+                        iconColor: calendarDisabled
+                            ? disabledColor
+                            : colors.mutedForeground,
+                        iconActiveColor: calendarDisabled
+                            ? disabledColor
+                            : colors.foreground,
+                      ),
+                      GButton(
+                        icon: LucideIcons.user,
+                        text: l10n.settingsButtonLabel,
+                        leading: avatar,
+                        iconColor: colors.mutedForeground,
+                        iconActiveColor: colors.foreground,
+                      ),
+                    ],
+                  );
                 },
-                tabs: [
-                  GButton(
-                    icon: LucideIcons.house,
-                    text: l10n.homeBottomNavHome,
-                    leading: _HomeBottomNavBadgeIcon(
-                      iconData: LucideIcons.house,
-                      badgeCount: chatsBadgeCount,
-                      color: homeColor,
-                      iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                    ),
-                    iconColor: colors.mutedForeground,
-                    iconActiveColor: colors.foreground,
-                  ),
-                  GButton(
-                    icon: LucideIcons.calendarClock,
-                    key: _scheduleTabKey,
-                    text: l10n.calendarScheduleLabel,
-                    leading: _BottomNavShake(
-                      enabled: shakeSchedule,
-                      child: _HomeBottomNavBadgeIcon(
-                        iconData: LucideIcons.calendarClock,
-                        badgeCount: scheduledAlertsCount,
-                        color: scheduleColor,
-                        iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                      ),
-                    ),
-                    iconColor: calendarDisabled
-                        ? disabledColor
-                        : colors.mutedForeground,
-                    iconActiveColor:
-                        calendarDisabled ? disabledColor : colors.foreground,
-                  ),
-                  GButton(
-                    icon: LucideIcons.squareCheck,
-                    key: _tasksTabKey,
-                    text: l10n.calendarFragmentTaskLabel,
-                    leading: _BottomNavShake(
-                      enabled: shakeTasks,
-                      child: _HomeBottomNavBadgeIcon(
-                        iconData: LucideIcons.squareCheck,
-                        badgeCount: unscheduledAlertsCount,
-                        color: tasksColor,
-                        iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                      ),
-                    ),
-                    iconColor: calendarDisabled
-                        ? disabledColor
-                        : colors.mutedForeground,
-                    iconActiveColor:
-                        calendarDisabled ? disabledColor : colors.foreground,
-                  ),
-                  GButton(
-                    icon: LucideIcons.user,
-                    text: l10n.settingsButtonLabel,
-                    leading: avatar,
-                    iconColor: colors.mutedForeground,
-                    iconActiveColor: colors.foreground,
-                  ),
-                ],
               );
             },
           ),
@@ -1165,7 +1170,7 @@ class _BottomNavShakeState extends State<_BottomNavShake>
       return widget.child;
     }
     final maxAngle =
-        (context.spacing.xxs / context.sizing.iconButtonSize) * 0.6;
+        (context.spacing.xxs / context.sizing.iconButtonSize) * 2.0;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {

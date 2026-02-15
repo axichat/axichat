@@ -1,5 +1,5 @@
 import 'package:axichat/src/email/models/email_attachment.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('EmailAttachment', () {

@@ -2,7 +2,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 final DateTime _selectedDate = DateTime(2024, 1, 1);
 const CalendarView _selectedView = CalendarView.month;

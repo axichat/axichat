@@ -1,5 +1,5 @@
 import 'package:axichat/src/common/transport.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('hintTransportForAddress', () {

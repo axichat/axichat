@@ -112,7 +112,7 @@ enum AxiButtonSize {
   EdgeInsets padding(AxiSpacing spacing) {
     return switch (this) {
       AxiButtonSize.sm => EdgeInsets.symmetric(
-          horizontal: spacing.xs,
+          horizontal: spacing.s,
           vertical: spacing.xs,
         ),
       AxiButtonSize.regular => EdgeInsets.symmetric(
@@ -136,9 +136,17 @@ enum AxiButtonSize {
 
   double gap(AxiSpacing spacing) {
     return switch (this) {
-      AxiButtonSize.sm => spacing.xs,
+      AxiButtonSize.sm => spacing.s,
       AxiButtonSize.regular => spacing.s,
       AxiButtonSize.lg => spacing.m,
+    };
+  }
+
+  double cornerRadius(AxiRadii radii) {
+    return switch (this) {
+      AxiButtonSize.sm => radii.squircleSm,
+      AxiButtonSize.regular => radii.squircle,
+      AxiButtonSize.lg => radii.squircle,
     };
   }
 }
@@ -329,11 +337,13 @@ class _AxiButtonState extends State<AxiButton> {
                   )
                 : null;
         final shape = RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.circular(context.radii.squircle),
+          borderRadius: BorderRadius.circular(
+            widget.size.cornerRadius(context.radii),
+          ),
           side: borderSide ?? BorderSide.none,
         );
         final TextStyle baseTextStyle = switch (widget.size) {
-          AxiButtonSize.sm => context.textTheme.labelSm,
+          AxiButtonSize.sm => context.textTheme.label,
           AxiButtonSize.regular => context.textTheme.small,
           AxiButtonSize.lg => context.textTheme.label,
         };

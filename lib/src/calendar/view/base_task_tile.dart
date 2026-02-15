@@ -35,6 +35,7 @@ abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
     this.compact = false,
     this.marginOverride,
     this.hideActionMenu = false,
+    this.compactShareFragment = false,
   });
 
   final CalendarTask task;
@@ -44,11 +45,13 @@ abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
   final bool compact;
   final EdgeInsets? marginOverride;
   final bool hideActionMenu;
+  final bool compactShareFragment;
 }
 
 abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
     T extends BaseCalendarBloc> extends State<W> {
   bool _isUpdating = false;
+  bool? _pendingCompletionValue;
 
   void showEditTaskInput(BuildContext context, CalendarTask task);
 
@@ -59,12 +62,14 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
       listener: (context, state) {
         if (!state.isLoading && _isUpdating) {
           setState(() => _isUpdating = false);
+          final pendingCompletionValue = _pendingCompletionValue;
+          _pendingCompletionValue = null;
           if (state.error == null) {
             FeedbackSystem.showSuccess(
               context,
-              widget.task.isCompleted
+              pendingCompletionValue == true
                   ? l10n.calendarTaskCompletedMessage
-                  : l10n.calendarTaskUpdatedMessage,
+                  : l10n.calendarTaskMarkIncomplete,
             );
           }
         }
@@ -125,6 +130,7 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                   margin: margin,
                   onTap: widget.onTap,
                   taskColor: taskColor,
+                  compactShareFragment: widget.compactShareFragment,
                   isUpdating: _isUpdating,
                   onToggleCompletion: toggleAction,
                   timeLabel: timeLabel,
@@ -212,7 +218,10 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
     if (_isUpdating) {
       return;
     }
-    setState(() => _isUpdating = true);
+    setState(() {
+      _isUpdating = true;
+      _pendingCompletionValue = completed;
+    });
     final String baseId = widget.task.baseId;
     context.read<T>().add(
           CalendarEvent.taskCompleted(taskId: baseId, completed: completed),
@@ -272,6 +281,7 @@ class _CompactTaskTile extends StatelessWidget {
     required this.margin,
     required this.onTap,
     required this.taskColor,
+    required this.compactShareFragment,
     required this.isUpdating,
     required this.onToggleCompletion,
     required this.timeLabel,
@@ -285,6 +295,7 @@ class _CompactTaskTile extends StatelessWidget {
   final EdgeInsets margin;
   final VoidCallback? onTap;
   final Color taskColor;
+  final bool compactShareFragment;
   final bool isUpdating;
   final ValueChanged<bool>? onToggleCompletion;
   final String? timeLabel;
@@ -299,6 +310,8 @@ class _CompactTaskTile extends StatelessWidget {
         task.isCompleted ? taskCompletedColor : taskColor;
     final bool showActions = onEdit != null || onDelete != null;
     final double stripWidth = context.spacing.xs;
+    final double leadingInset =
+        compactShareFragment ? context.spacing.xxs : context.spacing.m;
     final l10n = context.l10n;
     final String? scheduleLabel = _compactTaskScheduleLabel(
       l10n,
@@ -320,7 +333,7 @@ class _CompactTaskTile extends StatelessWidget {
       child: IntrinsicHeight(
         child: Padding(
           padding: EdgeInsets.only(
-            left: context.spacing.m,
+            left: leadingInset,
           ),
           child: CalendarTaskListTile(
             task: task,

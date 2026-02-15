@@ -399,8 +399,10 @@ class ChatsCubit extends Cubit<ChatsState> {
     final retainedForward = state.forwardStack
         .where((jid) => availableJids.contains(jid))
         .toList(growable: false);
-    final fallbackOpen =
-        items.where((chat) => chat.open).firstOrNull?.jid ?? state.openJid;
+    final fallbackOpen = state.openJid ??
+        (state.items == null
+            ? items.where((chat) => chat.open).firstOrNull?.jid
+            : null);
     final seededStack = retainedStack.isNotEmpty
         ? retainedStack
         : [

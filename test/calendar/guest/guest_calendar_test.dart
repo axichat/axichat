@@ -7,7 +7,7 @@ import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:bloc_test/bloc_test.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class _InMemoryStorage implements Storage {
   final Map<String, dynamic> _store = {};

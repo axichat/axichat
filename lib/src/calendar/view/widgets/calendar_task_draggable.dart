@@ -418,7 +418,6 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         final DragUpdateDetails syntheticDetails = DragUpdateDetails(
           sourceTimeStamp: event.timeStamp,
           delta: event.delta,
-          primaryDelta: event.delta.dy,
           globalPosition: event.position,
         );
         _handleDragUpdate(syntheticDetails);

@@ -1,6 +1,6 @@
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final baseChat = Chat(

@@ -133,6 +133,9 @@ mixin DemoScriptService on XmppBase, MessageService {
   }) {
     if (chatJid != DemoChats.contact1Jid) return;
     if (body.trim().isEmpty) return;
+    if (_demoInteractivePhase == _DemoInteractivePhase.idle) {
+      _demoInteractivePhase = _DemoInteractivePhase.waitingForFirstReply;
+    }
     const responseDelay = Duration(milliseconds: 1500);
     switch (_demoInteractivePhase) {
       case _DemoInteractivePhase.waitingForFirstReply:
@@ -167,6 +170,14 @@ mixin DemoScriptService on XmppBase, MessageService {
   }) {
     if (!kEnableDemoChats || !demoOfflineMode) return;
     if (chatJid != DemoChats.contact1Jid) return;
+    if (_demoInteractivePhase != _DemoInteractivePhase.overlaysRunning &&
+        _demoInteractivePhase != _DemoInteractivePhase.completed) {
+      _handleDemoOutboundTextMessageValues(
+        chatJid: chatJid,
+        body: 'attachment',
+      );
+      return;
+    }
     const responseDelay = Duration(milliseconds: 1500);
     _scheduleDemoTimer(responseDelay, () async {
       await _sendDemoContact1Message(body: 'Copied');

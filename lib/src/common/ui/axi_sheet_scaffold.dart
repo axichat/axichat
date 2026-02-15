@@ -106,12 +106,18 @@ class AxiSheetScaffold extends StatelessWidget {
     final List<Widget>? scrollChildren = _scrollChildren;
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     if (fixedBody != null) {
+      final Widget insetBody = Padding(
+        padding: footer == null
+            ? EdgeInsets.only(bottom: keyboardInset)
+            : EdgeInsets.zero,
+        child: fixedBody,
+      );
       return Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           header,
-          Flexible(fit: FlexFit.loose, child: fixedBody),
+          Flexible(fit: FlexFit.loose, child: insetBody),
           if (footer != null)
             Padding(
               padding: EdgeInsets.only(bottom: keyboardInset),
@@ -190,6 +196,7 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
     final double scrollExtent = _scrollExtent;
     const double scrollExtentThreshold = 0;
     final double footerSpacing = context.spacing.s;
+    final Widget? footer = widget.footer;
 
     if (scrollExtent > scrollExtentThreshold) {
       final double bottomPadding = resolvedPadding.bottom + keyboardInset;
@@ -216,19 +223,24 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
       );
     }
 
+    final double listBottomPadding = footer == null
+        ? resolvedPadding.bottom + keyboardInset
+        : resolvedPadding.bottom;
+    final EdgeInsets listPadding = resolvedPadding.copyWith(
+      bottom: listBottomPadding,
+    );
     final Widget list = Scrollbar(
       controller: _scrollController,
       thumbVisibility: true,
       child: ListView(
         controller: _scrollController,
-        padding: resolvedPadding,
+        padding: listPadding,
         shrinkWrap: true,
         physics: widget.scrollPhysics,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.manual,
         children: widget.children,
       ),
     );
-    final Widget? footer = widget.footer;
     if (footer == null) {
       return list;
     }

@@ -1,7 +1,7 @@
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 final DateTime _lastChangeTimestamp = DateTime(2024, 1, 1);
 const String _axiJid = 'user@axi.im';
