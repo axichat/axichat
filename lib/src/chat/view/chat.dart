@@ -1826,6 +1826,45 @@ class _ChatState extends State<Chat> {
     return bareAddress(quotedMessage.senderJid) == bareAddress(currentUserId);
   }
 
+  String _forwardedSenderLabel({
+    required String? forwardedFromJid,
+    required String fallbackSenderJid,
+    required bool fallbackIsSelf,
+    required bool isGroupChat,
+    required RoomState? roomState,
+    required String? currentUserId,
+    required AppLocalizations l10n,
+  }) {
+    final source = forwardedFromJid?.trim();
+    if (source == null || source.isEmpty) {
+      if (fallbackIsSelf) {
+        return l10n.chatSenderYou;
+      }
+      final fallbackNick = _nickFromSender(fallbackSenderJid)?.trim();
+      if (fallbackNick != null && fallbackNick.isNotEmpty) {
+        return fallbackNick;
+      }
+      final fallbackResolved = fallbackSenderJid.trim();
+      return fallbackResolved.isNotEmpty
+          ? fallbackResolved
+          : l10n.commonUnknownLabel;
+    }
+    if (bareAddress(source) == bareAddress(currentUserId)) {
+      return l10n.chatSenderYou;
+    }
+    if (isGroupChat) {
+      final occupant = _resolveOccupantForSender(
+        senderJid: source,
+        roomState: roomState,
+      );
+      final nick = occupant?.nick.trim() ?? _nickFromSender(source)?.trim();
+      if (nick != null && nick.isNotEmpty) {
+        return nick;
+      }
+    }
+    return source;
+  }
+
   void _toggleSettingsPanel() {
     if (!mounted) return;
     if (_chatRoute.isSettings) {
@@ -4723,6 +4762,8 @@ class _ChatState extends State<Chat> {
                                             'showSubject': showSubjectHeader,
                                             'subjectLabel': subjectLabel,
                                             'forwarded': isForwardedMessage,
+                                            'forwardedFromJid':
+                                                e.forwardedFromJid,
                                             'isEmailMessage': isEmailMessage,
                                             'inviteRoom': inviteRoom,
                                             'inviteRoomName': inviteRoomName,
@@ -5658,6 +5699,10 @@ class _ChatState extends State<Chat> {
                                                                               'forwarded']
                                                                           as bool?) ??
                                                                       false;
+                                                              final forwardedFromJid =
+                                                                  message.customProperties?[
+                                                                          'forwardedFromJid']
+                                                                      as String?;
                                                               final attachmentIds = (message
                                                                               .customProperties?[
                                                                           'attachmentIds']
@@ -7862,6 +7907,23 @@ class _ChatState extends State<Chat> {
                                                                   forwardedPreview =
                                                                   isForwarded
                                                                       ? _ForwardedPreviewText(
+                                                                          senderLabel:
+                                                                              _forwardedSenderLabel(
+                                                                            forwardedFromJid:
+                                                                                forwardedFromJid,
+                                                                            fallbackSenderJid:
+                                                                                messageModel.senderJid,
+                                                                            fallbackIsSelf:
+                                                                                self,
+                                                                            isGroupChat:
+                                                                                isGroupChat,
+                                                                            roomState:
+                                                                                state.roomState,
+                                                                            currentUserId:
+                                                                                currentUserId,
+                                                                            l10n:
+                                                                                l10n,
+                                                                          ),
                                                                           isSelf:
                                                                               self,
                                                                         )
@@ -13383,29 +13445,22 @@ class _ReplyingToPreviewText extends StatelessWidget {
         )..layout(maxWidth: constraints.maxWidth);
         final headerFits = headerPainter.computeLineMetrics().length <= 1;
         if (!headerFits) {
-          final inlineQuoteSpan = TextSpan(
-            children: [
-              senderSpan,
-              const TextSpan(text: ' '),
-              quoteSpan,
-            ],
-          );
           return Column(
             crossAxisAlignment: crossAxisAlignment,
             spacing: 2,
             children: [
-              Text(
-                replyPrefix,
+              Text.rich(
+                headerWithNameSpan,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: textAlign,
-                style: mutedStyle,
               ),
-              Text.rich(
-                inlineQuoteSpan,
+              Text(
+                quotedPreview,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 textAlign: textAlign,
+                style: baseStyle,
               ),
             ],
           );
@@ -13461,19 +13516,35 @@ class _ReplyingToPreviewText extends StatelessWidget {
 }
 
 class _ForwardedPreviewText extends StatelessWidget {
-  const _ForwardedPreviewText({required this.isSelf});
+  const _ForwardedPreviewText({
+    required this.senderLabel,
+    required this.isSelf,
+  });
 
+  final String senderLabel;
   final bool isSelf;
 
   @override
   Widget build(BuildContext context) {
     final textAlign = isSelf ? TextAlign.end : TextAlign.start;
-    return Text(
-      context.l10n.chatForwardPrefix,
+    final colors = context.colorScheme;
+    final baseStyle = context.textTheme.small;
+    final prefixStyle = context.textTheme.sectionLabelM;
+    final senderStyle = baseStyle.copyWith(
+      color: colors.mutedForeground,
+      fontWeight: FontWeight.w600,
+    );
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: context.l10n.chatForwardPrefix, style: prefixStyle),
+          const TextSpan(text: ' '),
+          TextSpan(text: senderLabel, style: senderStyle),
+        ],
+      ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       textAlign: textAlign,
-      style: context.textTheme.sectionLabelM,
     );
   }
 }
@@ -13598,6 +13669,7 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
     final bubbleSize = bubbleChild.size;
     final double bubbleWidth = bubbleSize.width;
     var previewHeight = 0.0;
+    var previewWidth = 0.0;
     var senderLabelHeight = 0.0;
     var senderLabelWidth = 0.0;
     if (senderLabelChild != null) {
@@ -13608,7 +13680,7 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       senderLabelHeight = senderLabelChild.size.height;
       senderLabelWidth = senderLabelChild.size.width;
     }
-    final layoutWidth = math.max(bubbleWidth, senderLabelWidth);
+    var layoutWidth = math.max(bubbleWidth, senderLabelWidth);
     if (senderLabelChild != null) {
       final senderLabelParentData =
           senderLabelChild.parentData as _ReplyPreviewBubbleParentData;
@@ -13619,14 +13691,16 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
     }
     if (previewChild != null) {
       previewChild.layout(
-        BoxConstraints.tightFor(width: bubbleWidth),
+        constraints.loosen(),
         parentUsesSize: true,
       );
+      previewWidth = previewChild.size.width;
       previewHeight = previewChild.size.height + spacing;
+      layoutWidth = math.max(layoutWidth, previewWidth);
       final previewParentData =
           previewChild.parentData as _ReplyPreviewBubbleParentData;
       previewParentData.offset = Offset(
-        alignEnd ? layoutWidth - bubbleWidth : 0,
+        alignEnd ? layoutWidth - previewWidth : 0,
         senderLabelHeight,
       );
     }

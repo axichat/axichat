@@ -138,14 +138,15 @@ class HomeShellCalendarScope extends StatelessWidget {
             locate<SettingsCubit>().state.endpointConfig.smtpEnabled
                 ? locate<EmailService>()
                 : null;
+        final calendarBloc = CalendarBloc(
+          xmppService: xmppService,
+          emailService: emailService,
+          reminderController: reminderController,
+          syncManagerBuilder: buildPersonalCalendarSyncManager,
+          storage: storage,
+        );
         if (seedDemoCalendar) {
-          return CalendarBloc(
-            xmppService: xmppService,
-            emailService: emailService,
-            reminderController: reminderController,
-            syncManagerBuilder: buildPersonalCalendarSyncManager,
-            storage: storage,
-          )
+          return calendarBloc
             ..add(const CalendarEvent.started())
             ..add(
               CalendarEvent.remoteModelApplied(
@@ -153,13 +154,7 @@ class HomeShellCalendarScope extends StatelessWidget {
               ),
             );
         }
-        return CalendarBloc(
-          xmppService: xmppService,
-          emailService: emailService,
-          reminderController: reminderController,
-          syncManagerBuilder: buildPersonalCalendarSyncManager,
-          storage: storage,
-        )..add(const CalendarEvent.started());
+        return calendarBloc..add(const CalendarEvent.started());
       },
       child: BlocListener<SettingsCubit, SettingsState>(
         listenWhen: (previous, current) =>
@@ -727,9 +722,11 @@ class _HomeContent extends StatelessWidget {
     final settings = context.watch<SettingsCubit>().state;
     final endpointConfig = settings.endpointConfig;
     final bool emailEnabled = endpointConfig.smtpEnabled;
-
-    final xmppService = context.watch<XmppService>();
-    final isOmemo = xmppService is OmemoService;
+    final bool demoOffline = kEnableDemoChats &&
+        context.select<ProfileCubit, String>(
+              (stateOwner) => stateOwner.state.jid,
+            ) ==
+            kDemoSelfJid;
     final env = EnvScope.of(context);
     final navPlacement = env.navPlacement;
     final Storage? calendarStorage = storageManager.authStorage;
@@ -829,8 +826,6 @@ class _HomeContent extends StatelessWidget {
                         final int? calendarTabIndex = openCalendar
                             ? (selectedBottomIndex == 2 ? 1 : 0)
                             : null;
-                        final bool demoOffline =
-                            context.watch<XmppService>().demoOfflineMode;
                         final bool showChatCalendar =
                             openJid != null && chatRoute.isCalendar;
                         final Widget body;
@@ -936,6 +931,16 @@ class _HomeContent extends StatelessWidget {
       providers: [
         BlocProvider(
           create: (context) {
+            final settingsSnapshot = ChatSettingsSnapshot(
+              language: settings.language,
+              chatReadReceipts: settings.chatReadReceipts,
+              emailReadReceipts: settings.emailReadReceipts,
+              shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
+              autoDownloadImages: settings.autoDownloadImages,
+              autoDownloadVideos: settings.autoDownloadVideos,
+              autoDownloadDocuments: settings.autoDownloadDocuments,
+              autoDownloadArchives: settings.autoDownloadArchives,
+            );
             final emailService =
                 emailEnabled ? context.read<EmailService>() : null;
             return ChatBloc(
@@ -945,18 +950,7 @@ class _HomeContent extends StatelessWidget {
               mucService: context.read<XmppService>(),
               notificationService: context.read<NotificationService>(),
               emailService: emailService,
-              omemoService:
-                  isOmemo ? context.read<XmppService>() as OmemoService : null,
-              settings: ChatSettingsSnapshot(
-                language: settings.language,
-                chatReadReceipts: settings.chatReadReceipts,
-                emailReadReceipts: settings.emailReadReceipts,
-                shareTokenSignatureEnabled: settings.shareTokenSignatureEnabled,
-                autoDownloadImages: settings.autoDownloadImages,
-                autoDownloadVideos: settings.autoDownloadVideos,
-                autoDownloadDocuments: settings.autoDownloadDocuments,
-                autoDownloadArchives: settings.autoDownloadArchives,
-              ),
+              settings: settingsSnapshot,
             );
           },
         ),
@@ -967,15 +961,6 @@ class _HomeContent extends StatelessWidget {
             emailService: emailEnabled ? context.read<EmailService>() : null,
           ),
         ),
-        /* Verification flow temporarily disabled
-        if (isOmemo)
-          BlocProvider(
-            create: (context) => VerificationCubit(
-              jid: openJid,
-              omemoService: context.read<XmppService>() as OmemoService,
-            ),
-          ),
-        */
       ],
       child: Builder(
         builder: (context) => _HomeActionLayer(

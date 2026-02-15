@@ -44,6 +44,8 @@ enum _InsecurePasswordReason { weak, breached }
 
 class _SignupFormState extends State<SignupForm>
     with AutomaticKeepAliveClientMixin {
+  static const Size _captchaFrameSize = Size(180, 70);
+
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   late TextEditingController _password2TextController;
@@ -522,9 +524,8 @@ class _SignupFormState extends State<SignupForm>
               spacing.m,
             );
             final fieldSpacing = EdgeInsets.symmetric(vertical: spacing.s);
-            final captchaMaxWidth = sizing.menuMaxWidth;
-            final captchaHeight =
-                sizing.buttonHeightRegular + sizing.buttonHeightSm;
+            final captchaWidth = _captchaFrameSize.width;
+            final captchaHeight = _captchaFrameSize.height;
             final animationDuration =
                 context.watch<SettingsCubit>().animationDuration;
             final usernameDescriptionHeight = _usernameDescriptionHeight;
@@ -900,7 +901,8 @@ class _SignupFormState extends State<SignupForm>
                                                     constraints: BoxConstraints(
                                                       minHeight: captchaHeight,
                                                       maxHeight: captchaHeight,
-                                                      maxWidth: captchaMaxWidth,
+                                                      minWidth: captchaWidth,
+                                                      maxWidth: captchaWidth,
                                                     ),
                                                     child: captchaSurface,
                                                   )),
@@ -931,7 +933,7 @@ class _SignupFormState extends State<SignupForm>
                                   Padding(
                                     padding: fieldSpacing,
                                     child: SizedBox(
-                                      width: captchaMaxWidth,
+                                      width: captchaWidth,
                                       child: AxiTextFormField(
                                         autocorrect: false,
                                         keyboardType: TextInputType.number,
@@ -1425,7 +1427,7 @@ class _CaptchaImageState extends State<_CaptchaImage> {
   Widget build(BuildContext context) {
     return Image.network(
       widget.url,
-      fit: BoxFit.contain,
+      fit: BoxFit.cover,
       excludeFromSemantics: true,
       loadingBuilder: (context, child, loadingProgress) {
         final ready = loadingProgress == null;

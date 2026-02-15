@@ -280,7 +280,11 @@ class _TransportStatusChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final demoOffline = context.watch<XmppService>().demoOfflineMode;
+    final demoOffline = kEnableDemoChats &&
+        context.select<ProfileCubit, String>(
+              (stateOwner) => stateOwner.state.jid,
+            ) ==
+            kDemoSelfJid;
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, connectivityState) {
         final connectionState = _xmppStateForHome(
@@ -523,7 +527,7 @@ class _HomeBottomTabBar extends StatelessWidget {
                     child: DecoratedBox(
                       decoration: BoxDecoration(
                         color: colors.primary.withValues(
-                          alpha: motion.tapHoverAlpha,
+                          alpha: motion.tapSplashAlpha,
                         ),
                         borderRadius:
                             BorderRadius.circular(context.radii.container),
@@ -549,9 +553,6 @@ class _HomeBottomTabBar extends StatelessWidget {
                       tabsGap: 0,
                       gap: 0,
                       padding: EdgeInsets.zero,
-                      contentConstraints: const BoxConstraints.tightFor(
-                        height: 0,
-                      ),
                       decoration: const ShadDecoration(
                         color: Colors.transparent,
                         border: ShadBorder.none,
@@ -582,7 +583,6 @@ class _HomeBottomTabBar extends StatelessWidget {
                           selectedShadows: const <BoxShadow>[],
                           foregroundColor: colors.foreground,
                           selectedForegroundColor: colors.foreground,
-                          content: const SizedBox.shrink(),
                           child: _HomeBottomTabItem(
                             label: tab.label,
                             badgeCount: badgeCounts[tab.id] ?? 0,
@@ -619,23 +619,23 @@ class _HomeBottomTabItem extends StatelessWidget {
     final sizing = context.sizing;
     final Duration animationDuration =
         context.watch<SettingsCubit>().animationDuration;
-    final badgeDiameter = sizing.iconButtonIconSize - spacing.xxs;
-    final endPadding = badgeCount > 0 ? spacing.l : spacing.xs;
+    final badgeDiameter = sizing.iconButtonIconSize;
+    final endPadding = badgeCount > 0 ? spacing.s : spacing.xs;
     return SizedBox(
-      height: sizing.buttonHeightRegular,
+      height: sizing.iconButtonSize,
       child: Stack(
         clipBehavior: Clip.none,
         children: [
           Center(
-            child: Padding(
-              padding: EdgeInsetsDirectional.only(
-                start: spacing.xs,
-                end: endPadding,
-              ),
-              child: AnimatedScale(
-                duration: animationDuration,
-                curve: Curves.easeInOutCubic,
-                scale: selected ? 1.04 : 1,
+            child: AnimatedScale(
+              duration: animationDuration,
+              curve: Curves.easeInOutCubic,
+              scale: selected ? 1.04 : 1,
+              child: Padding(
+                padding: EdgeInsetsDirectional.only(
+                  start: spacing.xs,
+                  end: endPadding,
+                ),
                 child: Text(
                   label,
                   maxLines: 1,
@@ -648,8 +648,8 @@ class _HomeBottomTabItem extends StatelessWidget {
           ),
           if (badgeCount > 0)
             PositionedDirectional(
-              top: -spacing.s,
-              end: -spacing.s,
+              top: -spacing.xs,
+              end: -spacing.xs,
               child: AxiCountBadge(
                 count: badgeCount,
                 diameter: badgeDiameter,
@@ -1017,7 +1017,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                     presence: null,
                     status: null,
                     active: false,
-                    size: sizing.iconButtonIconSize,
+                    size: sizing.iconButtonIconSize + spacing.xxs,
                   );
                   return GNav(
                     selectedIndex: safeSelectedIndex,
@@ -1027,13 +1027,17 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                     tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
                     tabBorderRadius: context.radii.squircle,
                     curve: Curves.easeInOutCubic,
-                    gap: spacing.m,
-                    iconSize: sizing.iconButtonIconSize,
+                    gap: spacing.s,
+                    iconSize: sizing.iconButtonIconSize + spacing.xxs,
                     color: colors.mutedForeground,
                     activeColor: colors.foreground,
                     textStyle: context.textTheme.small.strong,
                     tabBackgroundColor: colors.secondary.withValues(
                       alpha: context.motion.tapHoverAlpha,
+                    ),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: spacing.s,
+                      vertical: spacing.s,
                     ),
                     onTabChange: (index) {
                       final int safeIndex = _clampBottomNavIndex(index);
@@ -1054,7 +1058,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                           iconData: LucideIcons.house,
                           badgeCount: chatsBadgeCount,
                           color: homeColor,
-                          iconSize: sizing.iconButtonIconSize,
+                          iconSize: sizing.iconButtonIconSize + spacing.xxs,
                         ),
                         iconColor: colors.mutedForeground,
                         iconActiveColor: colors.foreground,
@@ -1069,7 +1073,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                             iconData: LucideIcons.calendarClock,
                             badgeCount: scheduledAlertsCount,
                             color: scheduleColor,
-                            iconSize: sizing.iconButtonIconSize,
+                            iconSize: sizing.iconButtonIconSize + spacing.xxs,
                           ),
                         ),
                         iconColor: calendarDisabled
@@ -1089,7 +1093,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                             iconData: LucideIcons.squareCheck,
                             badgeCount: unscheduledAlertsCount,
                             color: tasksColor,
-                            iconSize: sizing.iconButtonIconSize,
+                            iconSize: sizing.iconButtonIconSize + spacing.xxs,
                           ),
                         ),
                         iconColor: calendarDisabled
@@ -1199,7 +1203,7 @@ class _HomeBottomNavBadgeIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final badgeDiameter = context.sizing.iconButtonIconSize - spacing.xxs;
+    final badgeDiameter = context.sizing.iconButtonIconSize;
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -1210,8 +1214,8 @@ class _HomeBottomNavBadgeIcon extends StatelessWidget {
         ),
         if (badgeCount > 0)
           PositionedDirectional(
-            top: -spacing.m,
-            end: -spacing.m,
+            top: -spacing.s,
+            end: -spacing.s,
             child: AxiCountBadge(
               count: badgeCount,
               diameter: badgeDiameter,

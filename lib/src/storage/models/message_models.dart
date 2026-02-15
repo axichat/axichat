@@ -564,10 +564,31 @@ extension MessageForwardingX on Message {
     return payload['forwarded'] == true;
   }
 
-  Map<String, dynamic> get pseudoMessageDataWithForwarded {
+  String? get forwardedFromJid {
+    final payload = pseudoMessageData;
+    if (payload == null || payload.isEmpty) {
+      return null;
+    }
+    final raw = payload['forwardedFromJid'];
+    if (raw is! String) {
+      return null;
+    }
+    final resolved = raw.trim();
+    if (resolved.isEmpty) {
+      return null;
+    }
+    return resolved;
+  }
+
+  Map<String, dynamic> pseudoMessageDataWithForwarded({
+    String? forwardedFromJid,
+  }) {
+    final resolvedForwardedFrom = forwardedFromJid?.trim();
     return <String, dynamic>{
       ...(pseudoMessageData ?? const <String, dynamic>{}),
       'forwarded': true,
+      if (resolvedForwardedFrom != null && resolvedForwardedFrom.isNotEmpty)
+        'forwardedFromJid': resolvedForwardedFrom,
     };
   }
 }

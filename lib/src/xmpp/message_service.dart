@@ -2776,6 +2776,7 @@ mixin MessageService
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     String? htmlBody,
     bool forwarded = false,
+    String? forwardedFromJid,
     Message? quotedMessage,
     CalendarFragment? calendarFragment,
     CalendarTask? calendarTaskIcs,
@@ -2860,10 +2861,14 @@ mixin MessageService
                 : PseudoMessageType.calendarTaskIcs);
     final Map<String, dynamic>? pseudoMessageData =
         availabilityData ?? taskData ?? fragmentData;
+    final String? resolvedForwardedFrom = forwardedFromJid?.trim();
     final Map<String, dynamic>? resolvedPseudoData = forwarded
         ? <String, dynamic>{
             ...(pseudoMessageData ?? const <String, dynamic>{}),
             'forwarded': true,
+            if (resolvedForwardedFrom != null &&
+                resolvedForwardedFrom.isNotEmpty)
+              'forwardedFromJid': resolvedForwardedFrom,
           }
         : pseudoMessageData;
     final DateTime timestamp = offlineDemo
@@ -3083,6 +3088,7 @@ mixin MessageService
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     String? htmlCaption,
     bool forwarded = false,
+    String? forwardedFromJid,
     String? transportGroupId,
     int? attachmentOrder,
     Message? quotedMessage,
@@ -3123,6 +3129,7 @@ mixin MessageService
     final body = resolvedCaption.isNotEmpty
         ? resolvedCaption
         : _attachmentLabel(filename, size);
+    final String? resolvedForwardedFrom = forwardedFromJid?.trim();
     final DateTime timestamp = demoOfflineMode
         ? await _resolveDemoTimestampForChat(jid, demoNow())
         : DateTime.timestamp();
@@ -3137,8 +3144,14 @@ mixin MessageService
       timestamp: timestamp,
       fileMetadataID: metadata.id,
       quoting: quotedMessage?.stanzaID,
-      pseudoMessageData:
-          forwarded ? const <String, dynamic>{'forwarded': true} : null,
+      pseudoMessageData: forwarded
+          ? <String, dynamic>{
+              'forwarded': true,
+              if (resolvedForwardedFrom != null &&
+                  resolvedForwardedFrom.isNotEmpty)
+                'forwardedFromJid': resolvedForwardedFrom,
+            }
+          : null,
     );
     const shouldStore = true;
     await _storeMessage(message, chatType: chatType);
