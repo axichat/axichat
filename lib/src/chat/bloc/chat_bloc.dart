@@ -3854,6 +3854,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               chat: target,
               attachment: captionedAttachment,
               htmlCaption: index == 0 ? htmlCaption : null,
+              forwarded: true,
             );
           }
           if (shouldBundle && bundled.isNotEmpty) {
@@ -3875,6 +3876,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             encryptionProtocol: target.encryptionProtocol,
             chatType: target.type,
             htmlCaption: shouldApplyCaption ? resolvedHtmlBody : null,
+            forwarded: true,
             transportGroupId: attachmentGroupId,
             attachmentOrder: index,
           );
@@ -3895,12 +3897,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           chat: target,
           body: plainText,
           htmlBody: resolvedHtmlBody,
+          forwarded: true,
         );
       } else {
         await _messageService.sendMessage(
           jid: target.jid,
           text: plainText,
           htmlBody: resolvedHtmlBody,
+          forwarded: true,
           encryptionProtocol: target.encryptionProtocol,
           chatType: target.type,
         );

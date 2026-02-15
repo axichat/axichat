@@ -2153,6 +2153,25 @@ class _ChatState extends State<Chat> {
     return _hasIncludedEmailRecipient(recipients ?? _recipients);
   }
 
+  bool _looksForwardedMessage({
+    required Message message,
+    required String bodyText,
+    String? subjectLabel,
+  }) {
+    if (message.isForwarded) {
+      return true;
+    }
+    final normalizedSubject = subjectLabel?.trim().toLowerCase() ?? _emptyText;
+    if (normalizedSubject.startsWith('fwd:') ||
+        normalizedSubject.startsWith('fw:')) {
+      return true;
+    }
+    final normalizedBody = bodyText.trimLeft().toLowerCase();
+    return normalizedBody.startsWith('fwd:') ||
+        normalizedBody.startsWith('fw:') ||
+        normalizedBody.startsWith('-------- forwarded message --------');
+  }
+
   String _emailComposerWatermarkLabel() {
     return context.l10n.chatComposerEmailWatermark;
   }
@@ -3577,9 +3596,6 @@ class _ChatState extends State<Chat> {
                   );
                 _lastSubjectValue = subject;
                 _subjectChangeSuppressed = false;
-                if (subject.isNotEmpty && !_subjectFocusNode.hasFocus) {
-                  _subjectFocusNode.requestFocus();
-                }
               },
             ),
             BlocListener<ChatBloc, ChatState>(
@@ -4579,6 +4595,12 @@ class _ChatState extends State<Chat> {
                                       final subjectText =
                                           subjectLabel?.trim() ?? '';
                                       final bodyTextTrimmed = bodyText.trim();
+                                      final isForwardedMessage =
+                                          _looksForwardedMessage(
+                                        message: e,
+                                        bodyText: bodyText,
+                                        subjectLabel: subjectLabel,
+                                      );
                                       final isSubjectOnlyBody =
                                           showSubjectHeader &&
                                               subjectText.isNotEmpty &&
@@ -4700,6 +4722,7 @@ class _ChatState extends State<Chat> {
                                                 shareReplies[e.stanzaID],
                                             'showSubject': showSubjectHeader,
                                             'subjectLabel': subjectLabel,
+                                            'forwarded': isForwardedMessage,
                                             'isEmailMessage': isEmailMessage,
                                             'inviteRoom': inviteRoom,
                                             'inviteRoomName': inviteRoomName,
@@ -5630,6 +5653,11 @@ class _ChatState extends State<Chat> {
                                                                           .Chat>?) ??
                                                                   const <chat_models
                                                                       .Chat>[];
+                                                              final isForwarded =
+                                                                  (message.customProperties?[
+                                                                              'forwarded']
+                                                                          as bool?) ??
+                                                                      false;
                                                               final attachmentIds = (message
                                                                               .customProperties?[
                                                                           'attachmentIds']
@@ -7830,6 +7858,30 @@ class _ChatState extends State<Chat> {
                                                                                 self,
                                                                           );
                                                                         }();
+                                                              final Widget?
+                                                                  forwardedPreview =
+                                                                  isForwarded
+                                                                      ? _ForwardedPreviewText(
+                                                                          isSelf:
+                                                                              self,
+                                                                        )
+                                                                      : null;
+                                                              final Widget?
+                                                                  messagePreview =
+                                                                  forwardedPreview ==
+                                                                          null
+                                                                      ? replyPreview
+                                                                      : (replyPreview ==
+                                                                              null
+                                                                          ? forwardedPreview
+                                                                          : Column(
+                                                                              crossAxisAlignment: self ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                                                                              spacing: context.spacing.xxs,
+                                                                              children: [
+                                                                                forwardedPreview,
+                                                                                replyPreview,
+                                                                              ],
+                                                                            ));
                                                               final attachmentsAligned =
                                                                   attachments;
                                                               final extraShadows =
@@ -7976,7 +8028,7 @@ class _ChatState extends State<Chat> {
                                                                   bubbleStackWithReply =
                                                                   _ReplyPreviewBubbleColumn(
                                                                 preview:
-                                                                    replyPreview,
+                                                                    messagePreview,
                                                                 senderLabel:
                                                                     senderLabel,
                                                                 bubble:
@@ -11608,30 +11660,37 @@ class _SubjectTextField extends StatelessWidget {
       fontWeight: FontWeight.w600,
       color: colors.foreground,
     );
+    final subjectLabelStyle = subjectStyle.copyWith(
+      color: colors.mutedForeground.withValues(alpha: 0.9),
+    );
     return SizedBox(
       height: context.sizing.buttonHeightSm,
       child: Semantics(
         label: l10n.chatSubjectSemantics,
         textField: true,
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               '${l10n.chatSubjectHint}:',
-              style: context.textTheme.muted.copyWith(
-                color: colors.mutedForeground.withValues(alpha: 0.9),
-              ),
+              style: subjectLabelStyle,
             ),
             SizedBox(width: spacing.xs),
             Expanded(
               child: AxiTextField(
                 controller: controller,
                 focusNode: focusNode,
+                selectAllOnFocus: false,
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.sentences,
                 onSubmitted: (_) => onSubmitted(),
                 onEditingComplete: onSubmitted,
                 style: subjectStyle,
-                cursorHeight: subjectStyle.fontSize,
+                strutStyle: StrutStyle.fromTextStyle(
+                  subjectStyle,
+                  forceStrutHeight: true,
+                ),
+                textAlignVertical: TextAlignVertical.center,
                 decoration: const InputDecoration(
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
@@ -13397,6 +13456,24 @@ class _ReplyingToPreviewText extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _ForwardedPreviewText extends StatelessWidget {
+  const _ForwardedPreviewText({required this.isSelf});
+
+  final bool isSelf;
+
+  @override
+  Widget build(BuildContext context) {
+    final textAlign = isSelf ? TextAlign.end : TextAlign.start;
+    return Text(
+      context.l10n.chatForwardPrefix,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: textAlign,
+      style: context.textTheme.sectionLabelM,
     );
   }
 }

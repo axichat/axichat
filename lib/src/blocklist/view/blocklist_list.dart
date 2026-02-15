@@ -100,6 +100,7 @@ class _BlocklistListBody extends StatelessWidget {
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView.builder(
+        padding: EdgeInsets.only(top: context.spacing.m),
         itemCount: (items.length) + 1,
         itemBuilder: (context, index) {
           if (index == 0) {

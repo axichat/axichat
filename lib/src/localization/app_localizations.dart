@@ -1627,8 +1627,14 @@ abstract class AppLocalizations {
   /// No description provided for @chatReplyingTo.
   ///
   /// In en, this message translates to:
-  /// **'Replying to...'**
+  /// **'RE:'**
   String get chatReplyingTo;
+
+  /// No description provided for @chatForwardPrefix.
+  ///
+  /// In en, this message translates to:
+  /// **'FWD:'**
+  String get chatForwardPrefix;
 
   /// No description provided for @chatCancelReply.
   ///

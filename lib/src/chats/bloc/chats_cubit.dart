@@ -399,16 +399,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     final retainedForward = state.forwardStack
         .where((jid) => availableJids.contains(jid))
         .toList(growable: false);
-    final fallbackOpen = state.openJid ??
-        (state.items == null
-            ? items.where((chat) => chat.open).firstOrNull?.jid
-            : null);
-    final seededStack = retainedStack.isNotEmpty
-        ? retainedStack
-        : [
-            if (fallbackOpen != null && availableJids.contains(fallbackOpen))
-              fallbackOpen,
-          ];
+    final seededStack = retainedStack;
     final shouldKeepChatCalendar =
         state.openChatCalendar && seededStack.isNotEmpty;
     final nextChatRoute = seededStack.isEmpty

@@ -135,6 +135,7 @@ class _SpamListBody extends StatelessWidget {
           return ColoredBox(
             color: context.colorScheme.background,
             child: ListView.builder(
+              padding: EdgeInsets.only(top: context.spacing.m),
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final chat = items[index];

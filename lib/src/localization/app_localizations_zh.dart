@@ -831,7 +831,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatQuotedNoContent => '（无内容）';
 
   @override
-  String get chatReplyingTo => '正在回复…';
+  String get chatReplyingTo => 'RE:';
+
+  @override
+  String get chatForwardPrefix => 'FWD:';
 
   @override
   String get chatCancelReply => '取消回复';
@@ -6609,7 +6612,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatQuotedNoContent => '（無內容）';
 
   @override
-  String get chatReplyingTo => '回覆中...';
+  String get chatReplyingTo => 'RE:';
+
+  @override
+  String get chatForwardPrefix => 'FWD:';
 
   @override
   String get chatCancelReply => '取消回覆';

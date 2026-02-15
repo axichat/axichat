@@ -152,6 +152,19 @@ class EmailForwardingWelcomeScreen extends StatelessWidget {
 
   final String forwardingAddress;
 
+  void _dismissWelcomeScreen(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) {
+        return;
+      }
+      final route = ModalRoute.of(context);
+      if (route?.isCurrent != true) {
+        return;
+      }
+      Navigator.of(context).maybePop();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
@@ -159,15 +172,12 @@ class EmailForwardingWelcomeScreen extends StatelessWidget {
     final spacing = context.spacing;
     final EdgeInsets headerPadding = EdgeInsets.fromLTRB(
       spacing.l,
+      spacing.xl,
       spacing.l,
-      spacing.l,
-      spacing.s,
+      spacing.m,
     );
-    final EdgeInsets contentPadding = EdgeInsets.fromLTRB(
-      spacing.l,
-      spacing.xxs,
-      spacing.l,
-      spacing.l,
+    final EdgeInsets contentPadding = EdgeInsets.symmetric(
+      vertical: spacing.l,
     );
     return Scaffold(
       backgroundColor: colors.background,
@@ -186,12 +196,13 @@ class EmailForwardingWelcomeScreen extends StatelessWidget {
               padding: contentPadding,
               child: EmailForwardingGuideContent(
                 forwardingAddress: forwardingAddress,
+                edgeToEdgeDivider: true,
               ),
             ),
             footer: EmailForwardingWelcomeFooter(
               hint: l10n.emailForwardingGuideSettingsHint,
               actionLabel: l10n.emailForwardingGuideSkipLabel,
-              onPressed: () => Navigator.of(context).maybePop(),
+              onPressed: () => _dismissWelcomeScreen(context),
             ),
           ),
         ),
@@ -227,7 +238,6 @@ class EmailForwardingWelcomeLayout extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               header,
-              const EmailForwardingSectionDivider(),
               Expanded(child: content),
               footer,
             ],
@@ -255,7 +265,7 @@ class EmailForwardingWelcomeFooter extends StatelessWidget {
     final spacing = context.spacing;
     final EdgeInsets padding = EdgeInsets.fromLTRB(
       spacing.l,
-      spacing.s,
+      spacing.m,
       spacing.l,
       spacing.l,
     );
@@ -280,52 +290,75 @@ class EmailForwardingGuideContent extends StatelessWidget {
   const EmailForwardingGuideContent({
     super.key,
     required this.forwardingAddress,
+    this.edgeToEdgeDivider = false,
   });
 
   final String forwardingAddress;
+  final bool edgeToEdgeDivider;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final smallStyle = context.textTheme.small;
+    final paragraphStyle = context.textTheme.muted;
     final subheaderStyle = context.textTheme.large;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    final topSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        SizedBox(height: spacing.m),
         Text(
           l10n.emailForwardingGuideLinkExistingEmailTitle,
           style: subheaderStyle,
         ),
         SizedBox(height: spacing.s),
-        Text(l10n.emailForwardingGuideAddressHint, style: smallStyle),
+        Text(l10n.emailForwardingGuideAddressHint, style: paragraphStyle),
         SizedBox(height: spacing.s),
         EmailForwardingAddressCard(forwardingAddress: forwardingAddress),
         SizedBox(height: spacing.s),
-        Text(l10n.emailForwardingGuideLinksTitle, style: smallStyle),
+        Text(l10n.emailForwardingGuideLinksTitle, style: paragraphStyle),
         SizedBox(height: spacing.s),
         const EmailForwardingLinkRow(),
-        const EmailForwardingSectionDivider(),
-        Text(l10n.emailForwardingGuideNotificationsTitle,
-            style: subheaderStyle),
+      ],
+    );
+    final notificationSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(height: spacing.m),
+        Text(
+          l10n.emailForwardingGuideNotificationsTitle,
+          style: subheaderStyle,
+        ),
         SizedBox(height: spacing.s),
         const NotificationRequest(
           displayMode: NotificationRequestDisplayMode.always,
         ),
       ],
     );
-  }
-}
-
-class EmailForwardingSectionDivider extends StatelessWidget {
-  const EmailForwardingSectionDivider({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: context.spacing.l),
-      child: const AxiListDivider(),
+    if (edgeToEdgeDivider) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: spacing.l),
+            child: topSection,
+          ),
+          SizedBox(height: spacing.xl),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: spacing.l),
+            child: notificationSection,
+          ),
+        ],
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        topSection,
+        SizedBox(height: spacing.xl),
+        notificationSection,
+      ],
     );
   }
 }
@@ -358,10 +391,16 @@ class EmailForwardingAddressCard extends StatelessWidget {
       tooltip: l10n.chatActionCopy,
       onPressed: hasAddress ? () => _copyForwardingAddress(resolved) : null,
       color: hasAddress ? colors.foreground : colors.mutedForeground,
+      buttonSize: context.sizing.inputSuffixButtonSize,
+      iconSize: context.sizing.inputSuffixIconSize,
+      tapTargetSize: context.sizing.iconButtonSize,
     );
     return AxiModalSurface(
       backgroundColor: colors.muted,
-      padding: EdgeInsets.all(spacing.m),
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.xs,
+      ),
       child: Row(
         children: [
           Expanded(child: SelectableText(addressLabel, style: textStyle)),
@@ -403,13 +442,14 @@ class EmailForwardingWelcomeGate extends StatefulWidget {
 
 class _EmailForwardingWelcomeGateState
     extends State<EmailForwardingWelcomeGate> {
-  static const bool _forceShowEmailForwardingWelcome = false;
+  static const bool _forceShowEmailForwardingWelcome = true;
   bool _dialogShown = false;
+  bool _dialogScheduled = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _showWelcomeDialog();
+    _scheduleWelcomeDialog();
   }
 
   @override
@@ -418,9 +458,23 @@ class _EmailForwardingWelcomeGateState
       listenWhen: (previous, current) =>
           current is AuthenticationCompleteFromSignup &&
           previous is! AuthenticationCompleteFromSignup,
-      listener: (context, state) => _showWelcomeDialog(),
+      listener: (context, state) => _scheduleWelcomeDialog(),
       child: widget.child,
     );
+  }
+
+  void _scheduleWelcomeDialog() {
+    if (_dialogScheduled || !mounted) {
+      return;
+    }
+    _dialogScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _dialogScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _showWelcomeDialog();
+    });
   }
 
   Future<void> _showWelcomeDialog() async {

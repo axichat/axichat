@@ -523,8 +523,8 @@ class _SignupFormState extends State<SignupForm>
             );
             final fieldSpacing = EdgeInsets.symmetric(vertical: spacing.s);
             final captchaMaxWidth = sizing.menuMaxWidth;
-            final captchaMinHeight = sizing.buttonHeightRegular * 2;
-            final captchaMaxHeight = sizing.buttonHeightLg * 3;
+            final captchaHeight =
+                sizing.buttonHeightRegular + sizing.buttonHeightSm;
             final animationDuration =
                 context.watch<SettingsCubit>().animationDuration;
             final usernameDescriptionHeight = _usernameDescriptionHeight;
@@ -898,10 +898,8 @@ class _SignupFormState extends State<SignupForm>
                                                   image: true,
                                                   child: _CaptchaFrame(
                                                     constraints: BoxConstraints(
-                                                      minHeight:
-                                                          captchaMinHeight,
-                                                      maxHeight:
-                                                          captchaMaxHeight,
+                                                      minHeight: captchaHeight,
+                                                      maxHeight: captchaHeight,
                                                       maxWidth: captchaMaxWidth,
                                                     ),
                                                     child: captchaSurface,
@@ -1383,7 +1381,10 @@ class _CaptchaFrame extends StatelessWidget {
         ),
         child: ClipRRect(
           borderRadius: radius,
-          child: SizedBox.expand(child: child),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: child,
+          ),
         ),
       ),
     );
@@ -1452,6 +1453,7 @@ class _CaptchaImageState extends State<_CaptchaImage> {
               widget.onRetry();
             });
           }
+          return _CaptchaSkeleton(animationDuration: widget.animationDuration);
         }
         if (widget.showErrorMessageOnError) {
           return const _CaptchaErrorMessage();

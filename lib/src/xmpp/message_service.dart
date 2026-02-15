@@ -2775,6 +2775,7 @@ mixin MessageService
     required String text,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     String? htmlBody,
+    bool forwarded = false,
     Message? quotedMessage,
     CalendarFragment? calendarFragment,
     CalendarTask? calendarTaskIcs,
@@ -2859,6 +2860,12 @@ mixin MessageService
                 : PseudoMessageType.calendarTaskIcs);
     final Map<String, dynamic>? pseudoMessageData =
         availabilityData ?? taskData ?? fragmentData;
+    final Map<String, dynamic>? resolvedPseudoData = forwarded
+        ? <String, dynamic>{
+            ...(pseudoMessageData ?? const <String, dynamic>{}),
+            'forwarded': true,
+          }
+        : pseudoMessageData;
     final DateTime timestamp = offlineDemo
         ? await _resolveDemoTimestampForChat(jid, demoNow())
         : DateTime.timestamp();
@@ -2877,7 +2884,7 @@ mixin MessageService
       received: false,
       displayed: false,
       pseudoMessageType: resolvedPseudoType,
-      pseudoMessageData: pseudoMessageData,
+      pseudoMessageData: resolvedPseudoData,
     );
     _log.info(
       'Sending message ${message.stanzaID} (length=${resolvedText.length} chars)',
@@ -3075,6 +3082,7 @@ mixin MessageService
     required EmailAttachment attachment,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     String? htmlCaption,
+    bool forwarded = false,
     String? transportGroupId,
     int? attachmentOrder,
     Message? quotedMessage,
@@ -3129,6 +3137,8 @@ mixin MessageService
       timestamp: timestamp,
       fileMetadataID: metadata.id,
       quoting: quotedMessage?.stanzaID,
+      pseudoMessageData:
+          forwarded ? const <String, dynamic>{'forwarded': true} : null,
     );
     const shouldStore = true;
     await _storeMessage(message, chatType: chatType);

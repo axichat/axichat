@@ -1180,6 +1180,7 @@ class EmailService {
     required String body,
     String? subject,
     String? htmlBody,
+    bool forwarded = false,
   }) async {
     if (kEnableDemoChats) {
       return _sendDemoEmailMessage(
@@ -1187,6 +1188,7 @@ class EmailService {
         body: body,
         subject: subject,
         htmlBody: htmlBody,
+        forwarded: forwarded,
       );
     }
     final context = await _ensureEmailChatContext(chat);
@@ -1261,6 +1263,20 @@ class EmailService {
         originatorDcMsgId: msgId,
       );
     }
+    if (forwarded) {
+      final db = await _databaseBuilder();
+      final message = await db.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: context.account.deltaAccountId,
+      );
+      if (message != null && !message.isForwarded) {
+        await db.updateMessage(
+          message.copyWith(
+            pseudoMessageData: message.pseudoMessageDataWithForwarded,
+          ),
+        );
+      }
+    }
     return msgId;
   }
 
@@ -1269,6 +1285,7 @@ class EmailService {
     required EmailAttachment attachment,
     String? subject,
     String? htmlCaption,
+    bool forwarded = false,
   }) async {
     if (kEnableDemoChats) {
       return _sendDemoEmailAttachment(
@@ -1276,6 +1293,7 @@ class EmailService {
         attachment: attachment,
         subject: subject,
         htmlCaption: htmlCaption,
+        forwarded: forwarded,
       );
     }
     final context = await _ensureEmailChatContext(chat);
@@ -1335,6 +1353,20 @@ class EmailService {
         shareId: shareId,
         originatorDcMsgId: msgId,
       );
+    }
+    if (forwarded) {
+      final db = await _databaseBuilder();
+      final message = await db.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: context.account.deltaAccountId,
+      );
+      if (message != null && !message.isForwarded) {
+        await db.updateMessage(
+          message.copyWith(
+            pseudoMessageData: message.pseudoMessageDataWithForwarded,
+          ),
+        );
+      }
     }
     return msgId;
   }
@@ -3350,6 +3382,7 @@ class EmailService {
     required String body,
     String? subject,
     String? htmlBody,
+    bool forwarded = false,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -3375,6 +3408,8 @@ class EmailService {
       acked: false,
       received: false,
       displayed: false,
+      pseudoMessageData:
+          forwarded ? const <String, dynamic>{'forwarded': true} : null,
     );
     final db = await _databaseBuilder();
     await db.saveMessage(message);
@@ -3392,6 +3427,7 @@ class EmailService {
     required EmailAttachment attachment,
     String? subject,
     String? htmlCaption,
+    bool forwarded = false,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlCaption);
@@ -3431,6 +3467,8 @@ class EmailService {
       received: false,
       displayed: false,
       fileMetadataID: metadataId,
+      pseudoMessageData:
+          forwarded ? const <String, dynamic>{'forwarded': true} : null,
     );
     final db = await _databaseBuilder();
     await db.saveFileMetadata(metadata);

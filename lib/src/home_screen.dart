@@ -14,17 +14,11 @@ import 'package:axichat/src/blocklist/view/blocklist_list.dart';
 import 'package:axichat/src/blocklist/view/blocklist_notice_l10n.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
-import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
-import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
-import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
-import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
-import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
-import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
@@ -149,29 +143,7 @@ class HomeShellCalendarScope extends StatelessWidget {
             xmppService: xmppService,
             emailService: emailService,
             reminderController: reminderController,
-            syncManagerBuilder: (bloc) {
-              final manager = CalendarSyncManager(
-                readModel: () => bloc.currentModel,
-                applyModel: (model) async {
-                  bloc.add(
-                    CalendarEvent.remoteModelApplied(
-                      model: model,
-                    ),
-                  );
-                },
-                sendCalendarMessage: (outbound) async {
-                  final jid = xmppService.myJid;
-                  if (jid != null) {
-                    await xmppService.sendCalendarSyncMessage(
-                      jid: jid,
-                      outbound: outbound,
-                    );
-                  }
-                },
-                sendSnapshotFile: xmppService.uploadCalendarSnapshot,
-              );
-              return manager;
-            },
+            syncManagerBuilder: buildPersonalCalendarSyncManager,
             storage: storage,
           )
             ..add(const CalendarEvent.started())
@@ -185,29 +157,7 @@ class HomeShellCalendarScope extends StatelessWidget {
           xmppService: xmppService,
           emailService: emailService,
           reminderController: reminderController,
-          syncManagerBuilder: (bloc) {
-            final manager = CalendarSyncManager(
-              readModel: () => bloc.currentModel,
-              applyModel: (model) async {
-                bloc.add(
-                  CalendarEvent.remoteModelApplied(
-                    model: model,
-                  ),
-                );
-              },
-              sendCalendarMessage: (outbound) async {
-                final jid = xmppService.myJid;
-                if (jid != null) {
-                  await xmppService.sendCalendarSyncMessage(
-                    jid: jid,
-                    outbound: outbound,
-                  );
-                }
-              },
-              sendSnapshotFile: xmppService.uploadCalendarSnapshot,
-            );
-            return manager;
-          },
+          syncManagerBuilder: buildPersonalCalendarSyncManager,
           storage: storage,
         )..add(const CalendarEvent.started());
       },
@@ -636,16 +586,12 @@ class _HomeCoordinatorBridge extends StatefulWidget {
 }
 
 class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
-  ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
-  CalendarAvailabilityShareCoordinator? _availabilityCoordinator;
   Storage? _storage;
-  StreamSubscription<ChatCalendarSyncDispatch>? _chatCalendarSyncSubscription;
-  StreamSubscription<XmppStreamReady>? _streamReadySubscription;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _ensureCoordinators();
+    _configureCoordinators();
   }
 
   @override
@@ -653,120 +599,35 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.storage != widget.storage) {
       _storage = null;
-      _chatCalendarCoordinator = null;
-      _availabilityCoordinator = null;
-      _detachChatCalendarSyncSubscription();
     }
-    _ensureCoordinators();
+    _configureCoordinators();
   }
 
-  void _ensureCoordinators() {
-    if (!mounted) {
-      return;
-    }
-    final locate = context.read;
-    final calendarBloc = locate<CalendarBloc>();
-    final xmppService = locate<XmppService>();
+  void _configureCoordinators() {
     final storage = widget.storage;
     if (storage == null) {
-      _chatCalendarCoordinator = null;
-      _availabilityCoordinator = null;
-      _detachChatCalendarSyncSubscription();
       return;
     }
-    if (_storage == storage &&
-        _chatCalendarCoordinator != null &&
-        _availabilityCoordinator != null) {
-      calendarBloc.attachAvailabilityCoordinator(
-        _availabilityCoordinator!,
-      );
-      _ensureChatCalendarSyncSubscription(xmppService);
+    if (_storage == storage) {
       return;
     }
     _storage = storage;
-    final chatStorage = ChatCalendarStorage(storage: storage);
-    _chatCalendarCoordinator = ChatCalendarSyncCoordinator(
-      storage: chatStorage,
-      sendMessage: ({
-        required String jid,
-        required CalendarSyncOutbound outbound,
-        required m.ChatType chatType,
-      }) {
-        return calendarBloc.sendCalendarSyncMessage(
-          jid: jid,
-          outbound: outbound,
-          chatType: chatType,
-        );
-      },
-      sendSnapshotFile: (file) => calendarBloc.uploadCalendarSnapshot(file),
-    );
-    _availabilityCoordinator = CalendarAvailabilityShareCoordinator(
-      store: CalendarAvailabilityShareStore(),
-      sendMessage: ({
-        required String jid,
-        required CalendarAvailabilityMessage message,
-        required m.ChatType chatType,
-      }) {
-        return calendarBloc.sendAvailabilityMessage(
-          jid: jid,
-          message: message,
-          chatType: chatType,
-        );
-      },
-    );
-    calendarBloc.attachAvailabilityCoordinator(
-      _availabilityCoordinator!,
-    );
-    _ensureChatCalendarSyncSubscription(xmppService);
-  }
-
-  void _ensureChatCalendarSyncSubscription(XmppService xmppService) {
-    final coordinator = _chatCalendarCoordinator;
-    if (coordinator == null) {
-      _detachChatCalendarSyncSubscription();
-      return;
-    }
-    if (_chatCalendarSyncSubscription != null) {
-      return;
-    }
-    if (xmppService.lastStreamReady == null) {
-      _streamReadySubscription ??= xmppService.streamReadyStream.listen((_) {
-        _ensureChatCalendarSyncSubscription(xmppService);
-      });
-      return;
-    }
-    _chatCalendarSyncSubscription =
-        xmppService.chatCalendarSyncDispatchStream.listen(
-      (dispatch) async {
-        try {
-          await coordinator.handleInbound(dispatch.envelope);
-          dispatch.complete();
-        } catch (error, stackTrace) {
-          dispatch.completeError(error, stackTrace);
-        }
-      },
-    );
-    _streamReadySubscription?.cancel();
-    _streamReadySubscription = null;
-  }
-
-  void _detachChatCalendarSyncSubscription() {
-    _chatCalendarSyncSubscription?.cancel();
-    _chatCalendarSyncSubscription = null;
-    _streamReadySubscription?.cancel();
-    _streamReadySubscription = null;
-  }
-
-  @override
-  void dispose() {
-    _detachChatCalendarSyncSubscription();
-    super.dispose();
+    context.read<CalendarBloc>().configureHomeCoordinators(storage: storage);
   }
 
   @override
   Widget build(BuildContext context) {
-    final chatCoordinator = _chatCalendarCoordinator;
-    final availabilityCoordinator = _availabilityCoordinator;
+    if (widget.storage == null) {
+      return widget.child;
+    }
+    final chatCoordinator =
+        context.select<CalendarBloc, ChatCalendarSyncCoordinator?>(
+      (stateOwner) => stateOwner.chatCalendarCoordinator,
+    );
+    final availabilityCoordinator =
+        context.select<CalendarBloc, CalendarAvailabilityShareCoordinator?>(
+      (stateOwner) => stateOwner.availabilityCoordinator,
+    );
     return MultiRepositoryProvider(
       providers: [
         if (chatCoordinator != null)
@@ -1024,7 +885,7 @@ class _HomeContent extends StatelessWidget {
               final locate = context.read;
               final initialTasks =
                   context.select<CalendarBloc, Map<String, CalendarTask>>(
-                (bloc) => bloc.state.model.tasks,
+                (stateOwner) => stateOwner.state.model.tasks,
               );
               return CalendarTaskFeedbackObserver<CalendarBloc>(
                 initialTasks: initialTasks,
