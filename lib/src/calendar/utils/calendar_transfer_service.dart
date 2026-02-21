@@ -24,14 +24,14 @@ enum CalendarExportFormat { ics, json }
 
 extension CalendarExportFormatX on CalendarExportFormat {
   String get label => switch (this) {
-        CalendarExportFormat.ics => 'ICS (iCalendar)',
-        CalendarExportFormat.json => 'JSON (Axichat)',
-      };
+    CalendarExportFormat.ics => 'ICS (iCalendar)',
+    CalendarExportFormat.json => 'JSON (Axichat)',
+  };
 
   String get extension => switch (this) {
-        CalendarExportFormat.ics => 'ics',
-        CalendarExportFormat.json => 'json',
-      };
+    CalendarExportFormat.ics => 'ics',
+    CalendarExportFormat.json => 'json',
+  };
 }
 
 /// Result of importing a calendar file.
@@ -89,10 +89,10 @@ class CalendarTransferService {
     final String contents = switch (format) {
       CalendarExportFormat.ics => _icsCodec.encode(_modelFromTasks(tasks)),
       CalendarExportFormat.json => jsonEncode({
-          'version': 1,
-          'generatedAt': DateTime.now().toIso8601String(),
-          'tasks': tasks.map((task) => task.toJson()).toList(),
-        }),
+        'version': 1,
+        'generatedAt': DateTime.now().toIso8601String(),
+        'tasks': tasks.map((task) => task.toJson()).toList(),
+      }),
     };
     final file = File(path);
     await file.writeAsString(contents, flush: true);
@@ -103,12 +103,9 @@ class CalendarTransferService {
     if (file.path.trim().isEmpty) {
       return;
     }
-    Timer(
-      _exportCleanupDelay,
-      () async {
-        await _cleanupExportFile(file);
-      },
-    );
+    Timer(_exportCleanupDelay, () async {
+      await _cleanupExportFile(file);
+    });
   }
 
   Future<File> exportTaskIcs({
@@ -155,8 +152,8 @@ class CalendarTransferService {
   CalendarModel _modelFromTasks(Iterable<CalendarTask> tasks) {
     final Map<String, CalendarTask> mapped =
         Map<String, CalendarTask>.fromEntries(
-      tasks.map((task) => MapEntry(task.id, task)),
-    );
+          tasks.map((task) => MapEntry(task.id, task)),
+        );
     final DateTime now = DateTime.now();
     final CalendarModel model = CalendarModel(
       tasks: mapped,

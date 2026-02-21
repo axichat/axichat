@@ -38,20 +38,20 @@ enum OccupantAffiliation {
   bool get canManagePins => isOwner || isAdmin || isMember;
 
   String get xmlValue => switch (this) {
-        OccupantAffiliation.owner => 'owner',
-        OccupantAffiliation.admin => 'admin',
-        OccupantAffiliation.member => 'member',
-        OccupantAffiliation.outcast => 'outcast',
-        OccupantAffiliation.none => 'none',
-      };
+    OccupantAffiliation.owner => 'owner',
+    OccupantAffiliation.admin => 'admin',
+    OccupantAffiliation.member => 'member',
+    OccupantAffiliation.outcast => 'outcast',
+    OccupantAffiliation.none => 'none',
+  };
 
   static OccupantAffiliation fromString(String? value) => switch (value) {
-        'owner' => owner,
-        'admin' => admin,
-        'member' => member,
-        'outcast' => outcast,
-        _ => none,
-      };
+    'owner' => owner,
+    'admin' => admin,
+    'member' => member,
+    'outcast' => outcast,
+    _ => none,
+  };
 }
 
 enum OccupantRole {
@@ -69,18 +69,18 @@ enum OccupantRole {
   bool get isNone => this == none;
 
   String get xmlValue => switch (this) {
-        OccupantRole.moderator => 'moderator',
-        OccupantRole.participant => 'participant',
-        OccupantRole.visitor => 'visitor',
-        OccupantRole.none => 'none',
-      };
+    OccupantRole.moderator => 'moderator',
+    OccupantRole.participant => 'participant',
+    OccupantRole.visitor => 'visitor',
+    OccupantRole.none => 'none',
+  };
 
   static OccupantRole fromString(String? value) => switch (value) {
-        'moderator' => moderator,
-        'participant' => participant,
-        'visitor' => visitor,
-        _ => none,
-      };
+    'moderator' => moderator,
+    'participant' => participant,
+    'visitor' => visitor,
+    _ => none,
+  };
 }
 
 class Occupant {
@@ -113,16 +113,15 @@ class Occupant {
     OccupantRole? role,
     ChatType? chatType,
     bool? isPresent,
-  }) =>
-      Occupant(
-        occupantId: occupantId ?? this.occupantId,
-        nick: nick ?? this.nick,
-        realJid: realJid ?? this.realJid,
-        affiliation: affiliation ?? this.affiliation,
-        role: role ?? this.role,
-        chatType: chatType ?? this.chatType,
-        isPresent: isPresent ?? this.isPresent,
-      );
+  }) => Occupant(
+    occupantId: occupantId ?? this.occupantId,
+    nick: nick ?? this.nick,
+    realJid: realJid ?? this.realJid,
+    affiliation: affiliation ?? this.affiliation,
+    role: role ?? this.role,
+    chatType: chatType ?? this.chatType,
+    isPresent: isPresent ?? this.isPresent,
+  );
 }
 
 class RoomState {
@@ -132,12 +131,12 @@ class RoomState {
     this.myOccupantId,
     Set<String>? selfPresenceStatusCodes,
     this.selfPresenceReason,
-  })  : occupants = Map.unmodifiable(
-          Map<String, Occupant>.of(occupants ?? <String, Occupant>{}),
-        ),
-        selfPresenceStatusCodes = Set.unmodifiable(
-          Set<String>.of(selfPresenceStatusCodes ?? const <String>{}),
-        );
+  }) : occupants = Map.unmodifiable(
+         Map<String, Occupant>.of(occupants ?? <String, Occupant>{}),
+       ),
+       selfPresenceStatusCodes = Set.unmodifiable(
+         Set<String>.of(selfPresenceStatusCodes ?? const <String>{}),
+       );
 
   final String roomJid;
   final Map<String, Occupant> occupants;
@@ -225,15 +224,14 @@ class RoomState {
     String? myOccupantId,
     Set<String>? selfPresenceStatusCodes,
     String? selfPresenceReason,
-  }) =>
-      RoomState(
-        roomJid: roomJid,
-        occupants: occupants ?? this.occupants,
-        myOccupantId: myOccupantId ?? this.myOccupantId,
-        selfPresenceStatusCodes:
-            selfPresenceStatusCodes ?? this.selfPresenceStatusCodes,
-        selfPresenceReason: selfPresenceReason ?? this.selfPresenceReason,
-      );
+  }) => RoomState(
+    roomJid: roomJid,
+    occupants: occupants ?? this.occupants,
+    myOccupantId: myOccupantId ?? this.myOccupantId,
+    selfPresenceStatusCodes:
+        selfPresenceStatusCodes ?? this.selfPresenceStatusCodes,
+    selfPresenceReason: selfPresenceReason ?? this.selfPresenceReason,
+  );
 }
 
 extension RoomStateAvatarPermissions on RoomState {
@@ -264,13 +262,7 @@ enum MucModerationAction {
   bool get isRoleChange => this == moderator || this == participant;
 }
 
-enum RoomMemberSectionKind {
-  owners,
-  admins,
-  moderators,
-  members,
-  visitors;
-}
+enum RoomMemberSectionKind { owners, admins, moderators, members, visitors }
 
 class RoomMemberEntry {
   const RoomMemberEntry({
@@ -285,10 +277,7 @@ class RoomMemberEntry {
 }
 
 class RoomMemberSection {
-  const RoomMemberSection({
-    required this.kind,
-    required this.members,
-  });
+  const RoomMemberSection({required this.kind, required this.members});
 
   final RoomMemberSectionKind kind;
   final List<RoomMemberEntry> members;

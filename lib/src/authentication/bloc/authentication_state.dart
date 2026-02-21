@@ -108,8 +108,7 @@ final class AuthenticationPasswordChangeInProgress
   @override
   AuthenticationPasswordChangeInProgress copyWithConfig(
     EndpointConfig config,
-  ) =>
-      AuthenticationPasswordChangeInProgress(config: config);
+  ) => AuthenticationPasswordChangeInProgress(config: config);
 
   @override
   List<Object?> get props => [config];

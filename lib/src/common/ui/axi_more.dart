@@ -119,10 +119,12 @@ class _AxiMoreState extends State<AxiMore> {
           ),
         )
         .toList(growable: false);
-    final void Function()? sheetAction =
-        widget.enabled ? () => _showSheetActions(actions) : null;
-    final void Function()? popoverAction =
-        widget.enabled ? popoverController.toggle : null;
+    final void Function()? sheetAction = widget.enabled
+        ? () => _showSheetActions(actions)
+        : null;
+    final void Function()? popoverAction = widget.enabled
+        ? popoverController.toggle
+        : null;
     if (commandSurface == CommandSurface.sheet) {
       return AxiIconButton.outline(
         iconData: LucideIcons.ellipsisVertical,

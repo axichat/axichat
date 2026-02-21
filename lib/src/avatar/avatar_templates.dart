@@ -8,8 +8,8 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum AvatarTemplateCategory { abstract, stem, sports, music, misc }
 
-typedef AvatarTemplateBuilder = Future<GeneratedAvatar> Function(
-    Color background, ShadColorScheme colors);
+typedef AvatarTemplateBuilder =
+    Future<GeneratedAvatar> Function(Color background, ShadColorScheme colors);
 
 class AvatarTemplate {
   const AvatarTemplate({
@@ -440,7 +440,8 @@ Future<GeneratedAvatar> _loadAssetAvatar({
   final cachedMeta = _avatarAssetMetaCache[assetPath];
   if (!applyBackground && _avatarPngCache.containsKey(assetPath)) {
     final cachedBytes = _avatarPngCache[assetPath]!;
-    final meta = cachedMeta ??
+    final meta =
+        cachedMeta ??
         const _AvatarAssetMeta(width: 0, height: 0, hasAlpha: true);
     return GeneratedAvatar(
       bytes: cachedBytes,
@@ -472,17 +473,18 @@ Future<GeneratedAvatar> _loadAssetAvatar({
     mimeType: 'image/png',
     width: result.width,
     height: result.height,
-    hasAlpha:
-        applyBackground ? result.compositedHasAlpha : result.originalHasAlpha,
+    hasAlpha: applyBackground
+        ? result.compositedHasAlpha
+        : result.originalHasAlpha,
   );
 }
 
 img.Color _imgColor(int argb) => img.ColorUint8.rgba(
-      (argb >> 16) & 0xFF,
-      (argb >> 8) & 0xFF,
-      argb & 0xFF,
-      (argb >> 24) & 0xFF,
-    );
+  (argb >> 16) & 0xFF,
+  (argb >> 8) & 0xFF,
+  argb & 0xFF,
+  (argb >> 24) & 0xFF,
+);
 
 Future<Uint8List> _loadAvatarBytes(String assetPath) async {
   final cached = _avatarAssetBytesCache[assetPath];

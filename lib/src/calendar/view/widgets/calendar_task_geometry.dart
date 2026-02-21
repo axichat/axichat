@@ -25,11 +25,11 @@ class CalendarTaskGeometry {
 
   @override
   int get hashCode => Object.hash(
-        rect,
-        narrowedWidth,
-        splitWidthFactor,
-        columnDate?.millisecondsSinceEpoch,
-      );
+    rect,
+    narrowedWidth,
+    splitWidthFactor,
+    columnDate?.millisecondsSinceEpoch,
+  );
 
   @override
   bool operator ==(Object other) {

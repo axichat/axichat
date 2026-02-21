@@ -70,18 +70,15 @@ void main() {
     when(
       () => mockEmailService.authFailureStream,
     ).thenAnswer((_) => const Stream.empty());
-    when(() => mockEmailService.syncState)
-        .thenReturn(const EmailSyncState.ready());
+    when(
+      () => mockEmailService.syncState,
+    ).thenReturn(const EmailSyncState.ready());
     when(
       () => mockEmailService.syncStateStream,
     ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
     when(() => mockEmailService.hasActiveSession).thenReturn(false);
-    when(
-      () => mockEmailService.hasInMemoryReconnectContext,
-    ).thenReturn(true);
-    when(
-      () => mockXmppService.hasInMemoryReconnectContext,
-    ).thenReturn(true);
+    when(() => mockEmailService.hasInMemoryReconnectContext).thenReturn(true);
+    when(() => mockXmppService.hasInMemoryReconnectContext).thenReturn(true);
     when(
       () => mockXmppService.streamReadyStream,
     ).thenAnswer((_) => const Stream<XmppStreamReady>.empty());
@@ -320,7 +317,8 @@ void main() {
       expect: () => [
         const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+        ),
       ],
       verify: (bloc) {
         verifyNever(
@@ -346,7 +344,8 @@ void main() {
       expect: () => [
         const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+        ),
       ],
       verify: (bloc) {
         verifyNever(
@@ -372,7 +371,8 @@ void main() {
       expect: () => [
         const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+        ),
       ],
       verify: (bloc) {
         verifyNever(
@@ -553,7 +553,8 @@ void main() {
       expect: () => const [
         AuthenticationLogInInProgress(),
         AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+        ),
       ],
       verify: (_) {
         expect(
@@ -659,7 +660,8 @@ void main() {
       expect: () => [
         const AuthenticationLogInInProgress(),
         const AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+        ),
       ],
       verify: (bloc) {
         verifyNever(
@@ -848,7 +850,8 @@ void main() {
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
         AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+        ),
       ],
       verify: (bloc) {
         verify(
@@ -907,7 +910,8 @@ void main() {
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
         AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+        ),
       ],
       verify: (bloc) {
         verify(
@@ -962,7 +966,8 @@ void main() {
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
         AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+        ),
       ],
       verify: (_) {
         verifyNever(
@@ -1059,7 +1064,8 @@ void main() {
         AuthenticationSignUpInProgress(),
         AuthenticationLogInInProgress(fromSignup: true),
         AuthenticationFailure(
-            AuthKeyMessage(AuthMessageKey.invalidCredentials)),
+          AuthKeyMessage(AuthMessageKey.invalidCredentials),
+        ),
       ],
       verify: (bloc) {
         final payload = credentialStorage['pending_signup_rollbacks'];

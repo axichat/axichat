@@ -54,8 +54,8 @@ class _CalendarTileState extends State<CalendarTile> {
     final String subtitleText = widget.currentTask != null
         ? l10n.calendarTileNow(widget.currentTask!.title)
         : widget.nextTask != null
-            ? l10n.calendarTileNext(widget.nextTask!.title)
-            : l10n.calendarTileNone;
+        ? l10n.calendarTileNext(widget.nextTask!.title)
+        : l10n.calendarTileNone;
 
     final scheduledTime = displayTask?.scheduledTime;
     final List<Widget>? trailingActions = scheduledTime == null
@@ -121,10 +121,7 @@ class _CalendarAvatar extends StatelessWidget {
         color: background,
         shape: SquircleBorder(
           cornerRadius: context.radii.squircle,
-          side: BorderSide(
-            color: borderColor,
-            width: context.borderSide.width,
-          ),
+          side: BorderSide(color: borderColor, width: context.borderSide.width),
         ),
       ),
       child: SizedBox(

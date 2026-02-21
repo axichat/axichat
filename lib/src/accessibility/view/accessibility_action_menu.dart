@@ -39,14 +39,16 @@ String _stepLabelFor(BuildContext context, AccessibilityStepEntry entry) {
     case AccessibilityStepKind.newContact:
       return l10n.accessibilityStartNewAddress;
     case AccessibilityStepKind.chatMessages:
-      final name =
-          entry.recipients.isNotEmpty ? entry.recipients.first.displayName : '';
+      final name = entry.recipients.isNotEmpty
+          ? entry.recipients.first.displayName
+          : '';
       return name.isNotEmpty
           ? l10n.accessibilityMessagesWithContact(name)
           : l10n.accessibilityMessagesTitle;
     case AccessibilityStepKind.conversation:
-      final conversationName =
-          entry.recipients.isNotEmpty ? entry.recipients.first.displayName : '';
+      final conversationName = entry.recipients.isNotEmpty
+          ? entry.recipients.first.displayName
+          : '';
       return conversationName.isNotEmpty
           ? l10n.accessibilityConversationWith(conversationName)
           : l10n.accessibilityConversationLabel;
@@ -91,25 +93,19 @@ String? _contactSubtitleFor(
 String? _actionStatusLabel(
   BuildContext context,
   AccessibilityActionStatus? status,
-) =>
-    status?.label(context.l10n);
+) => status?.label(context.l10n);
 
 String? _actionErrorLabel(
   BuildContext context,
   AccessibilityActionError? error,
-) =>
-    error?.label(context.l10n);
+) => error?.label(context.l10n);
 
 String? _chatStatusLabel(
   BuildContext context,
   AccessibilityChatStatus? status,
-) =>
-    status?.label(context.l10n);
+) => status?.label(context.l10n);
 
-String? _chatErrorLabel(
-  BuildContext context,
-  AccessibilityChatError? error,
-) {
+String? _chatErrorLabel(BuildContext context, AccessibilityChatError? error) {
   final label = error?.label(context.l10n);
   return label == null || label.isEmpty ? null : label;
 }
@@ -131,16 +127,28 @@ List<AccessibilityMenuSection> _sectionsFor(
     case AccessibilityStepKind.invites:
       return _inviteSectionsFor(context, state);
     case AccessibilityStepKind.composer:
-      return _conversationSectionsFor(context, state, entry,
-          chatState: chatState);
+      return _conversationSectionsFor(
+        context,
+        state,
+        entry,
+        chatState: chatState,
+      );
     case AccessibilityStepKind.newContact:
       return _newContactSectionsFor(context, state);
     case AccessibilityStepKind.chatMessages:
-      return _conversationSectionsFor(context, state, entry,
-          chatState: chatState);
+      return _conversationSectionsFor(
+        context,
+        state,
+        entry,
+        chatState: chatState,
+      );
     case AccessibilityStepKind.conversation:
-      return _conversationSectionsFor(context, state, entry,
-          chatState: chatState);
+      return _conversationSectionsFor(
+        context,
+        state,
+        entry,
+        chatState: chatState,
+      );
   }
 }
 
@@ -184,7 +192,8 @@ List<AccessibilityMenuSection> _rootSectionsFor(
           ),
           icon: Icons.mark_chat_unread_outlined,
           badge: totalUnread > 0 ? totalUnread.toString() : null,
-          highlight: totalUnread > 0 &&
+          highlight:
+              totalUnread > 0 &&
               !state.dismissedHighlights.contains(summaryDismissId),
           dismissId: totalUnread > 0 ? summaryDismissId : null,
         ),
@@ -211,8 +220,9 @@ List<AccessibilityMenuSection> _rootSectionsFor(
           icon: contact.isGroup
               ? Icons.groups_2_outlined
               : Icons.chat_bubble_outline,
-          badge:
-              contact.unreadCount > 0 ? contact.unreadCount.toString() : null,
+          badge: contact.unreadCount > 0
+              ? contact.unreadCount.toString()
+              : null,
         ),
       )
       .toList();
@@ -323,8 +333,9 @@ List<AccessibilityMenuSection> _contactSectionsFor(
                   contact: contact,
                 ),
           icon: contact.isGroup ? Icons.groups_outlined : Icons.person_outline,
-          badge:
-              contact.unreadCount > 0 ? contact.unreadCount.toString() : null,
+          badge: contact.unreadCount > 0
+              ? contact.unreadCount.toString()
+              : null,
         ),
       )
       .toList();
@@ -344,11 +355,7 @@ List<AccessibilityMenuSection> _contactSectionsFor(
     );
   }
   return [
-    AccessibilityMenuSection(
-      id: 'contacts',
-      title: description,
-      items: items,
-    ),
+    AccessibilityMenuSection(id: 'contacts', title: description, items: items),
   ];
 }
 
@@ -357,8 +364,9 @@ List<AccessibilityMenuSection> _unreadSectionsFor(
   AccessibilityActionState state,
 ) {
   final l10n = context.l10n;
-  final items =
-      state.contacts.where((contact) => contact.unreadCount > 0).map((contact) {
+  final items = state.contacts.where((contact) => contact.unreadCount > 0).map((
+    contact,
+  ) {
     final dismissId = 'unread-${contact.jid}-${contact.unreadCount}';
     return AccessibilityMenuItem(
       id: 'unread-${contact.jid}',
@@ -413,10 +421,7 @@ List<AccessibilityMenuSection> _inviteSectionsFor(
         label: l10n.accessibilityAcceptInvite,
         description: invite.jid,
         kind: AccessibilityMenuItemKind.inviteDecision,
-        action: AccessibilityInviteDecisionAction(
-          invite: invite,
-          accept: true,
-        ),
+        action: AccessibilityInviteDecisionAction(invite: invite, accept: true),
         icon: Icons.person_add_alt,
         highlight: !state.dismissedHighlights.contains(dismissId),
         dismissId: dismissId,
@@ -477,8 +482,9 @@ AccessibilityMenuSection _messageSectionFor(
   AccessibilityChatState? chatState,
 }) {
   final l10n = context.l10n;
-  final targetJid =
-      entry.recipients.isNotEmpty ? entry.recipients.first.jid : chatState?.jid;
+  final targetJid = entry.recipients.isNotEmpty
+      ? entry.recipients.first.jid
+      : chatState?.jid;
   if (targetJid == null) {
     return AccessibilityMenuSection(
       id: 'chat-messages',
@@ -515,11 +521,7 @@ AccessibilityMenuSection _messageSectionFor(
         : (attachmentNote ?? l10n.accessibilityMessageNoContent);
     final showSender = senderLabel != lastSender;
     final label = showSender
-        ? l10n.accessibilityMessageLabel(
-            senderLabel,
-            timestampLabel,
-            fullBody,
-          )
+        ? l10n.accessibilityMessageLabel(senderLabel, timestampLabel, fullBody)
         : fullBody;
     items.add(
       AccessibilityMenuItem(
@@ -578,8 +580,9 @@ List<AccessibilityMenuSection> _newContactSectionsFor(
             command: AccessibilityCommand.confirmNewContact,
           ),
           icon: Icons.check,
-          disabled:
-              !AddressStringExtensions(state.newContactInput.trim()).isValidJid,
+          disabled: !AddressStringExtensions(
+            state.newContactInput.trim(),
+          ).isValidJid,
         ),
       ],
     ),
@@ -589,8 +592,7 @@ List<AccessibilityMenuSection> _newContactSectionsFor(
 String _unreadDescriptionFor(
   BuildContext context,
   AccessibilityContact contact,
-) =>
-    context.l10n.chatsUnreadLabel(contact.unreadCount);
+) => context.l10n.chatsUnreadLabel(contact.unreadCount);
 
 AccessibilityContact _contactFor(
   AccessibilityActionState state,
@@ -673,8 +675,9 @@ String? _attachmentLabelFor(
   List<FileMetadataData>? metadata,
 }) {
   final l10n = context.l10n;
-  final resolvedMetadata =
-      metadata == null || metadata.isEmpty ? null : metadata.first;
+  final resolvedMetadata = metadata == null || metadata.isEmpty
+      ? null
+      : metadata.first;
   final filename = resolvedMetadata?.filename.trim();
   if (filename != null && filename.isNotEmpty) {
     return l10n.accessibilityAttachmentWithName(filename);
@@ -726,10 +729,12 @@ class _AccessibilityActionMenuState extends State<AccessibilityActionMenu> {
     if (event is! KeyDownEvent) return false;
     if (event.logicalKey != LogicalKeyboardKey.keyK) return false;
     final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final hasMeta = pressed.contains(LogicalKeyboardKey.metaLeft) ||
+    final hasMeta =
+        pressed.contains(LogicalKeyboardKey.metaLeft) ||
         pressed.contains(LogicalKeyboardKey.metaRight) ||
         pressed.contains(LogicalKeyboardKey.meta);
-    final hasControl = pressed.contains(LogicalKeyboardKey.controlLeft) ||
+    final hasControl =
+        pressed.contains(LogicalKeyboardKey.controlLeft) ||
         pressed.contains(LogicalKeyboardKey.controlRight) ||
         pressed.contains(LogicalKeyboardKey.control);
     if (!hasMeta && !hasControl) return false;
@@ -856,7 +861,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
         widget.state.visible) {
       _scheduleInitialFocus();
     }
-    final addedMessageSection = !_hasMessageSection(oldWidget.state) &&
+    final addedMessageSection =
+        !_hasMessageSection(oldWidget.state) &&
         _hasMessageSection(widget.state);
     if (widget.state.visible && addedMessageSection) {
       _scheduleInitialFocus();
@@ -893,9 +899,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
 
   @override
   Widget build(BuildContext context) {
-    const escapeActivator = SingleActivator(
-      LogicalKeyboardKey.escape,
-    );
+    const escapeActivator = SingleActivator(LogicalKeyboardKey.escape);
     const nextGroupActivator = SingleActivator(
       LogicalKeyboardKey.arrowDown,
       shift: true,
@@ -912,21 +916,11 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       LogicalKeyboardKey.shift,
       LogicalKeyboardKey.arrowUp,
     );
-    const nextItemActivator = SingleActivator(
-      LogicalKeyboardKey.arrowDown,
-    );
-    const previousItemActivator = SingleActivator(
-      LogicalKeyboardKey.arrowUp,
-    );
-    const firstItemActivator = SingleActivator(
-      LogicalKeyboardKey.home,
-    );
-    const lastItemActivator = SingleActivator(
-      LogicalKeyboardKey.end,
-    );
-    const activateItemActivator = SingleActivator(
-      LogicalKeyboardKey.enter,
-    );
+    const nextItemActivator = SingleActivator(LogicalKeyboardKey.arrowDown);
+    const previousItemActivator = SingleActivator(LogicalKeyboardKey.arrowUp);
+    const firstItemActivator = SingleActivator(LogicalKeyboardKey.home);
+    const lastItemActivator = SingleActivator(LogicalKeyboardKey.end);
+    const activateItemActivator = SingleActivator(LogicalKeyboardKey.enter);
     final shortcuts = <ShortcutActivator, Intent>{
       escapeActivator: const _AccessibilityDismissIntent(),
       nextGroupActivator: const _NextGroupIntent(),
@@ -948,8 +942,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
         Positioned.fill(
           child: GestureDetector(
             onTap: () => context.read<AccessibilityActionBloc>().add(
-                  const AccessibilityMenuClosed(),
-                ),
+              const AccessibilityMenuClosed(),
+            ),
             child: ColoredBox(color: scrimColor),
           ),
         ),
@@ -960,26 +954,26 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
               actions: {
                 _AccessibilityDismissIntent:
                     CallbackAction<_AccessibilityDismissIntent>(
-                  onInvoke: (_) {
-                    final shouldWarn = _shouldWarnOnExit(widget.state);
-                    if (shouldWarn && !widget.state.discardWarningActive) {
-                      context.read<AccessibilityActionBloc>().add(
+                      onInvoke: (_) {
+                        final shouldWarn = _shouldWarnOnExit(widget.state);
+                        if (shouldWarn && !widget.state.discardWarningActive) {
+                          context.read<AccessibilityActionBloc>().add(
                             const AccessibilityDiscardWarningRequested(),
                           );
-                      return null;
-                    }
-                    if (widget.state.stack.length > 1) {
-                      context.read<AccessibilityActionBloc>().add(
+                          return null;
+                        }
+                        if (widget.state.stack.length > 1) {
+                          context.read<AccessibilityActionBloc>().add(
                             const AccessibilityMenuBack(),
                           );
-                    } else {
-                      context.read<AccessibilityActionBloc>().add(
+                        } else {
+                          context.read<AccessibilityActionBloc>().add(
                             const AccessibilityMenuClosed(),
                           );
-                    }
-                    return null;
-                  },
-                ),
+                        }
+                        return null;
+                      },
+                    ),
                 _NextItemIntent: CallbackAction<_NextItemIntent>(
                   onInvoke: (_) => _handleDirectionalMove(forward: true),
                 ),
@@ -1043,9 +1037,7 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                         .clamp(modalMinHeight, viewSize.height)
                         .toDouble();
                     return ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: modalMaxWidthValue,
-                      ),
+                      constraints: BoxConstraints(maxWidth: modalMaxWidthValue),
                       child: SizedBox(
                         height: modalHeight,
                         child: AxiModalSurface(
@@ -1078,39 +1070,44 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
                                             state: widget.state,
                                             builder: (context, chatState) =>
                                                 _AccessibilityActionContent(
-                                              state: widget.state,
-                                              chatState: chatState,
-                                              sectionsListKey: _sectionsListKey,
-                                              actionsListKey: _actionsListKey,
-                                              enableActivationShortcut:
-                                                  !_isEditingText,
-                                              legendFocusNode:
-                                                  _shortcutLegendFocusNode,
-                                              messageFocusNode:
-                                                  _messageFocusNode,
-                                              composerFocusNode:
-                                                  _composerFocusNode,
-                                              newContactFocusNode:
-                                                  _newContactFocusNode,
-                                              legendGroupKey: _legendGroupKey,
-                                              messageCarouselKey:
-                                                  _messageCarouselKey,
-                                              composerGroupKey:
-                                                  _composerGroupKey,
-                                              actionsGroupKey: _actionsGroupKey,
-                                              actionsFocusNode:
-                                                  _actionsFocusNode,
-                                              newContactGroupKey:
-                                                  _newContactGroupKey,
-                                              viewportHeight: viewportHeight,
-                                              activateItemActivator:
-                                                  activateItemActivator,
-                                              nextGroupActivator:
-                                                  nextGroupActivator,
-                                              previousGroupActivator:
-                                                  previousGroupActivator,
-                                              chatLocate: widget.chatLocate,
-                                            ),
+                                                  state: widget.state,
+                                                  chatState: chatState,
+                                                  sectionsListKey:
+                                                      _sectionsListKey,
+                                                  actionsListKey:
+                                                      _actionsListKey,
+                                                  enableActivationShortcut:
+                                                      !_isEditingText,
+                                                  legendFocusNode:
+                                                      _shortcutLegendFocusNode,
+                                                  messageFocusNode:
+                                                      _messageFocusNode,
+                                                  composerFocusNode:
+                                                      _composerFocusNode,
+                                                  newContactFocusNode:
+                                                      _newContactFocusNode,
+                                                  legendGroupKey:
+                                                      _legendGroupKey,
+                                                  messageCarouselKey:
+                                                      _messageCarouselKey,
+                                                  composerGroupKey:
+                                                      _composerGroupKey,
+                                                  actionsGroupKey:
+                                                      _actionsGroupKey,
+                                                  actionsFocusNode:
+                                                      _actionsFocusNode,
+                                                  newContactGroupKey:
+                                                      _newContactGroupKey,
+                                                  viewportHeight:
+                                                      viewportHeight,
+                                                  activateItemActivator:
+                                                      activateItemActivator,
+                                                  nextGroupActivator:
+                                                      nextGroupActivator,
+                                                  previousGroupActivator:
+                                                      previousGroupActivator,
+                                                  chatLocate: widget.chatLocate,
+                                                ),
                                           ),
                                         ),
                                       ),
@@ -1198,13 +1195,14 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
 
   List<Object> _groupOrderForState(AccessibilityActionState state) {
     final sections = _sectionsFor(context, state);
-    final messageSections =
-        sections.where((section) => section.id == 'chat-messages').toList();
+    final messageSections = sections
+        .where((section) => section.id == 'chat-messages')
+        .toList();
     final hasMessages = messageSections.isNotEmpty;
     final isConversation =
         state.currentEntry.kind == AccessibilityStepKind.composer ||
-            state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
-            state.currentEntry.kind == AccessibilityStepKind.conversation;
+        state.currentEntry.kind == AccessibilityStepKind.chatMessages ||
+        state.currentEntry.kind == AccessibilityStepKind.conversation;
     final hasComposer = isConversation;
     final hasNewContact =
         state.currentEntry.kind == AccessibilityStepKind.newContact;
@@ -1239,8 +1237,9 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     final order = _groupOrder();
     if (order.isEmpty) return;
     final current = _currentGroup();
-    final currentIndex =
-        current == null ? -1 : order.indexOf(current).clamp(0, order.length);
+    final currentIndex = current == null
+        ? -1
+        : order.indexOf(current).clamp(0, order.length);
     final nextIndex = (currentIndex + 1).clamp(0, order.length - 1).toInt();
     _focusGroup(order[nextIndex]);
   }
@@ -1249,8 +1248,9 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     final order = _groupOrder();
     if (order.isEmpty) return;
     final current = _currentGroup();
-    final currentIndex =
-        current == null ? order.length : order.indexOf(current);
+    final currentIndex = current == null
+        ? order.length
+        : order.indexOf(current);
     final previousIndex = (currentIndex - 1).clamp(0, order.length - 1).toInt();
     _focusGroup(order[previousIndex]);
   }
@@ -1298,9 +1298,10 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
     return _AccessibilityGroupMarker.maybeOf(focusContext);
   }
 
-  bool _hasMessageSection(AccessibilityActionState state) =>
-      _sectionsFor(context, state)
-          .any((section) => section.id == 'chat-messages');
+  bool _hasMessageSection(AccessibilityActionState state) => _sectionsFor(
+    context,
+    state,
+  ).any((section) => section.id == 'chat-messages');
 
   bool _shouldWarnOnExit(AccessibilityActionState state) {
     final entry = state.currentEntry;
@@ -1322,8 +1323,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       final groups = _groupOrder();
       Object? target =
           _lastFocusedGroup != null && groups.contains(_lastFocusedGroup)
-              ? _lastFocusedGroup
-              : null;
+          ? _lastFocusedGroup
+          : null;
       target ??= groups.firstWhere(
         (group) => group != _legendGroupKey,
         orElse: () => _legendGroupKey,
@@ -1360,7 +1361,8 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
       return false;
     }
     final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final hasShift = pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+    final hasShift =
+        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
         pressed.contains(LogicalKeyboardKey.shiftRight) ||
         pressed.contains(LogicalKeyboardKey.shift);
     if (hasShift && event.logicalKey == LogicalKeyboardKey.arrowDown) {
@@ -1433,14 +1435,11 @@ class _AccessibilityGroupMarker extends InheritedWidget {
 }
 
 class _AccessibilityChatScope extends StatelessWidget {
-  const _AccessibilityChatScope({
-    required this.state,
-    required this.builder,
-  });
+  const _AccessibilityChatScope({required this.state, required this.builder});
 
   final AccessibilityActionState state;
   final Widget Function(BuildContext, AccessibilityChatState? chatState)
-      builder;
+  builder;
 
   @override
   Widget build(BuildContext context) {
@@ -1453,10 +1452,13 @@ class _AccessibilityChatScope extends StatelessWidget {
     return BlocProvider(
       key: ValueKey(chatJid),
       create: (context) {
-        final endpointConfig =
-            context.read<SettingsCubit>().state.endpointConfig;
-        final emailService =
-            endpointConfig.smtpEnabled ? context.read<EmailService>() : null;
+        final endpointConfig = context
+            .read<SettingsCubit>()
+            .state
+            .endpointConfig;
+        final emailService = endpointConfig.smtpEnabled
+            ? context.read<EmailService>()
+            : null;
         return AccessibilityChatBloc(
           jid: chatJid,
           messageService: context.read<XmppService>(),
@@ -1474,9 +1476,9 @@ class _AccessibilityChatScope extends StatelessWidget {
           final emailService = settings.endpointConfig.smtpEnabled
               ? context.read<EmailService>()
               : null;
-          context
-              .read<AccessibilityChatBloc>()
-              .updateEmailService(emailService);
+          context.read<AccessibilityChatBloc>().updateEmailService(
+            emailService,
+          );
         },
         child: _AccessibilityChatSync(
           state: state,
@@ -1498,7 +1500,7 @@ class _AccessibilityChatSync extends StatefulWidget {
   final AccessibilityActionState state;
   final int unreadCount;
   final Widget Function(BuildContext, AccessibilityChatState? chatState)
-      builder;
+  builder;
 
   @override
   State<_AccessibilityChatSync> createState() => _AccessibilityChatSyncState();
@@ -1527,24 +1529,24 @@ class _AccessibilityChatSyncState extends State<_AccessibilityChatSync> {
       _contacts = widget.state.contacts;
       _myJid = widget.state.myJid;
       context.read<AccessibilityChatBloc>().add(
-            AccessibilityChatContactsUpdated(
-              contacts: widget.state.contacts,
-              myJid: widget.state.myJid,
-            ),
-          );
+        AccessibilityChatContactsUpdated(
+          contacts: widget.state.contacts,
+          myJid: widget.state.myJid,
+        ),
+      );
     }
     if (_unreadCount != widget.unreadCount) {
       _unreadCount = widget.unreadCount;
-      context
-          .read<AccessibilityChatBloc>()
-          .add(AccessibilityChatUnreadUpdated(widget.unreadCount));
+      context.read<AccessibilityChatBloc>().add(
+        AccessibilityChatUnreadUpdated(widget.unreadCount),
+      );
     }
     final draftId = widget.state.currentEntry.draftId;
     if (_draftId != draftId) {
       _draftId = draftId;
-      context
-          .read<AccessibilityChatBloc>()
-          .add(AccessibilityChatDraftIdUpdated(draftId));
+      context.read<AccessibilityChatBloc>().add(
+        AccessibilityChatDraftIdUpdated(draftId),
+      );
     }
   }
 
@@ -1556,18 +1558,18 @@ class _AccessibilityChatSyncState extends State<_AccessibilityChatSync> {
           listenWhen: (previous, current) =>
               previous.sendCount != current.sendCount,
           listener: (context, state) {
-            context
-                .read<AccessibilityActionBloc>()
-                .add(const AccessibilityComposerChanged(''));
+            context.read<AccessibilityActionBloc>().add(
+              const AccessibilityComposerChanged(''),
+            );
           },
         ),
         BlocListener<AccessibilityChatBloc, AccessibilityChatState>(
           listenWhen: (previous, current) =>
               previous.draftSaveCount != current.draftSaveCount,
           listener: (context, state) {
-            context
-                .read<AccessibilityActionBloc>()
-                .add(AccessibilityDraftIdUpdated(state.draftId));
+            context.read<AccessibilityActionBloc>().add(
+              AccessibilityDraftIdUpdated(state.draftId),
+            );
           },
         ),
       ],
@@ -1637,10 +1639,12 @@ class _AccessibilityActionContent extends StatelessWidget {
     final hasNewContact =
         state.currentEntry.kind == AccessibilityStepKind.newContact;
     final sections = _sectionsFor(context, state, chatState: chatState);
-    final messageSections =
-        sections.where((section) => section.id == 'chat-messages').toList();
-    final messageSection =
-        messageSections.isNotEmpty ? messageSections.first : null;
+    final messageSections = sections
+        .where((section) => section.id == 'chat-messages')
+        .toList();
+    final messageSection = messageSections.isNotEmpty
+        ? messageSections.first
+        : null;
     int activeUnreadCount(
       String? activeJid,
       List<AccessibilityContact> recipients,
@@ -1679,8 +1683,10 @@ class _AccessibilityActionContent extends StatelessWidget {
         : sections.where((section) => section.id != 'chat-messages').toList();
     final hasMessages = messageSections.isNotEmpty;
     final hasSections = actionSections.isNotEmpty;
-    final conversationListHeight =
-        _conversationListHeight(viewportHeight, context.sizing);
+    final conversationListHeight = _conversationListHeight(
+      viewportHeight,
+      context.sizing,
+    );
     final rootListHeight = _rootListHeight(viewportHeight, context.sizing);
     const headerOrder = NumericFocusOrder(0);
     const statusOrder = NumericFocusOrder(1);
@@ -1693,16 +1699,21 @@ class _AccessibilityActionContent extends StatelessWidget {
     const sectionsOrder = NumericFocusOrder(4);
     final actionStatus = state.statusMessage;
     final actionError = state.errorMessage;
-    final chatStatus =
-        isConversation && hasChatState ? chatState?.statusMessage : null;
-    final chatError =
-        isConversation && hasChatState ? chatState?.errorMessage : null;
-    final bannerStatus = _chatStatusLabel(context, chatStatus) ??
+    final chatStatus = isConversation && hasChatState
+        ? chatState?.statusMessage
+        : null;
+    final chatError = isConversation && hasChatState
+        ? chatState?.errorMessage
+        : null;
+    final bannerStatus =
+        _chatStatusLabel(context, chatStatus) ??
         _actionStatusLabel(context, actionStatus);
-    final bannerError = _chatErrorLabel(context, chatError) ??
+    final bannerError =
+        _chatErrorLabel(context, chatError) ??
         _actionErrorLabel(context, actionError);
-    final busy =
-        isConversation && hasChatState ? chatState?.busy ?? false : state.busy;
+    final busy = isConversation && hasChatState
+        ? chatState?.busy ?? false
+        : state.busy;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1718,12 +1729,12 @@ class _AccessibilityActionContent extends StatelessWidget {
                 .add(AccessibilityMenuJumpedTo(index)),
             onBack: state.stack.length > 1
                 ? () => context.read<AccessibilityActionBloc>().add(
-                      const AccessibilityMenuBack(),
-                    )
+                    const AccessibilityMenuBack(),
+                  )
                 : null,
             onClose: () => context.read<AccessibilityActionBloc>().add(
-                  const AccessibilityMenuClosed(),
-                ),
+              const AccessibilityMenuClosed(),
+            ),
           ),
         ),
         SizedBox(height: spacing.s),
@@ -1811,7 +1822,8 @@ class _AccessibilityActionContent extends StatelessWidget {
                 groupKey: actionsGroupKey,
                 saveEnabled:
                     hasChatState && currentRecipients.isNotEmpty && !busy,
-                sendEnabled: state.composerText.trim().isNotEmpty &&
+                sendEnabled:
+                    state.composerText.trim().isNotEmpty &&
                     currentRecipients.isNotEmpty &&
                     !busy &&
                     hasChatState,
@@ -1819,19 +1831,18 @@ class _AccessibilityActionContent extends StatelessWidget {
                   LogicalKeyboardKey.enter,
                 ),
                 onSave: () => context.read<AccessibilityChatBloc>().add(
-                      AccessibilityChatSaveDraftRequested(
-                        body: state.composerText,
-                        recipients: currentRecipients,
-                        draftId:
-                            chatState?.draftId ?? state.currentEntry.draftId,
-                      ),
-                    ),
+                  AccessibilityChatSaveDraftRequested(
+                    body: state.composerText,
+                    recipients: currentRecipients,
+                    draftId: chatState?.draftId ?? state.currentEntry.draftId,
+                  ),
+                ),
                 onSend: () => context.read<AccessibilityChatBloc>().add(
-                      AccessibilityChatSendRequested(
-                        body: state.composerText,
-                        recipients: currentRecipients,
-                      ),
-                    ),
+                  AccessibilityChatSendRequested(
+                    body: state.composerText,
+                    recipients: currentRecipients,
+                  ),
+                ),
               ),
             ),
           ),
@@ -1932,8 +1943,7 @@ class _AccessibilityActionContent extends StatelessWidget {
   List<String> _breadcrumbLabels(
     AccessibilityActionState state,
     BuildContext context,
-  ) =>
-      state.stack.map((entry) => _entryLabel(entry, context)).toList();
+  ) => state.stack.map((entry) => _entryLabel(entry, context)).toList();
 }
 
 class _AccessibilityMenuHeader extends StatelessWidget {
@@ -2087,10 +2097,7 @@ class _BreadcrumbChip extends StatelessWidget {
                       horizontal: spacing.s,
                       vertical: spacing.xs,
                     ),
-                    child: Text(
-                      label,
-                      style: context.textTheme.small,
-                    ),
+                    child: Text(label, style: context.textTheme.small),
                   ),
                 ),
               ),
@@ -2121,10 +2128,7 @@ class _AccessibilityBanner extends StatelessWidget {
     return Semantics(
       liveRegion: true,
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: context.radius,
-        ),
+        decoration: BoxDecoration(color: color, borderRadius: context.radius),
         child: Padding(
           padding: EdgeInsets.symmetric(
             horizontal: spacing.s,
@@ -2132,15 +2136,13 @@ class _AccessibilityBanner extends StatelessWidget {
           ),
           child: Row(
             children: [
-              Icon(icon,
-                  color: foreground, size: context.sizing.menuItemIconSize),
-              SizedBox(width: spacing.s),
-              Expanded(
-                child: Text(
-                  message,
-                  style: context.textTheme.small,
-                ),
+              Icon(
+                icon,
+                color: foreground,
+                size: context.sizing.menuItemIconSize,
               ),
+              SizedBox(width: spacing.s),
+              Expanded(child: Text(message, style: context.textTheme.small)),
             ],
           ),
         ),
@@ -2163,22 +2165,14 @@ class _KeyboardShortcutLegend extends StatelessWidget {
     final l10n = context.l10n;
     final platformShortcut = findActionShortcut(EnvScope.of(context).platform);
     final escapeShortcutValue = escapeShortcut();
-    const nextFocusShortcut = SingleActivator(
-      LogicalKeyboardKey.tab,
-    );
+    const nextFocusShortcut = SingleActivator(LogicalKeyboardKey.tab);
     const previousFocusShortcut = SingleActivator(
       LogicalKeyboardKey.tab,
       shift: true,
     );
-    const activateShortcut = SingleActivator(
-      LogicalKeyboardKey.enter,
-    );
-    const nextItemShortcut = SingleActivator(
-      LogicalKeyboardKey.arrowDown,
-    );
-    const previousItemShortcut = SingleActivator(
-      LogicalKeyboardKey.arrowUp,
-    );
+    const activateShortcut = SingleActivator(LogicalKeyboardKey.enter);
+    const nextItemShortcut = SingleActivator(LogicalKeyboardKey.arrowDown);
+    const previousItemShortcut = SingleActivator(LogicalKeyboardKey.arrowUp);
     const nextGroupShortcut = SingleActivator(
       LogicalKeyboardKey.arrowDown,
       shift: true,
@@ -2187,12 +2181,8 @@ class _KeyboardShortcutLegend extends StatelessWidget {
       LogicalKeyboardKey.arrowUp,
       shift: true,
     );
-    const firstItemShortcut = SingleActivator(
-      LogicalKeyboardKey.home,
-    );
-    const lastItemShortcut = SingleActivator(
-      LogicalKeyboardKey.end,
-    );
+    const firstItemShortcut = SingleActivator(LogicalKeyboardKey.home);
+    const lastItemShortcut = SingleActivator(LogicalKeyboardKey.end);
     final entries = [
       _ShortcutLegendEntry(
         label: l10n.accessibilityShortcutOpenMenu,
@@ -2424,9 +2414,8 @@ class _ComposerSection extends StatelessWidget {
                           hint: context.l10n.accessibilityRecipientRemoveHint,
                           child: InputChip(
                             label: Text(recipient.displayName),
-                            onDeleted: () => context
-                                .read<AccessibilityActionBloc>()
-                                .add(
+                            onDeleted: () =>
+                                context.read<AccessibilityActionBloc>().add(
                                   AccessibilityRecipientRemoved(recipient.jid),
                                 ),
                           ),
@@ -2479,7 +2468,8 @@ class _ActionButtonsGroup extends StatelessWidget {
             final borderWidth = hasFocus
                 ? context.sizing.progressIndicatorStrokeWidth * 2
                 : context.sizing.progressIndicatorStrokeWidth;
-            final isNarrow = MediaQuery.sizeOf(context).width <
+            final isNarrow =
+                MediaQuery.sizeOf(context).width <
                 context.sizing.dialogMaxWidth;
             final saveButton = ShadButton.outline(
               onPressed: saveEnabled ? onSave : null,
@@ -2552,8 +2542,9 @@ class _NewContactSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final canSubmit =
-        AddressStringExtensions(state.newContactInput.trim()).isValidJid;
+    final canSubmit = AddressStringExtensions(
+      state.newContactInput.trim(),
+    ).isValidJid;
     final locate = context.read;
     return FocusTraversalGroup(
       key: groupKey,
@@ -2625,8 +2616,11 @@ class _NewContactSection extends StatelessWidget {
 }
 
 Future<void> _confirmNewContact(BuildContext context) async {
-  final address =
-      context.read<AccessibilityActionBloc>().state.newContactInput.trim();
+  final address = context
+      .read<AccessibilityActionBloc>()
+      .state
+      .newContactInput
+      .trim();
   if (address.isEmpty) return;
   final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
   final supportsEmail = endpointConfig.smtpEnabled;
@@ -2646,13 +2640,13 @@ Future<void> _confirmNewContact(BuildContext context) async {
   }
   if (!context.mounted || resolved == null) return;
   context.read<AccessibilityActionBloc>().add(
-        AccessibilityMenuActionTriggered(
-          AccessibilityCommandAction(
-            command: AccessibilityCommand.confirmNewContact,
-            transport: resolved,
-          ),
-        ),
-      );
+    AccessibilityMenuActionTriggered(
+      AccessibilityCommandAction(
+        command: AccessibilityCommand.confirmNewContact,
+        transport: resolved,
+      ),
+    ),
+  );
 }
 
 Future<void> _handleMenuAction(
@@ -2664,9 +2658,9 @@ Future<void> _handleMenuAction(
     await _confirmNewContact(context);
     return;
   }
-  context
-      .read<AccessibilityActionBloc>()
-      .add(AccessibilityMenuActionTriggered(action));
+  context.read<AccessibilityActionBloc>().add(
+    AccessibilityMenuActionTriggered(action),
+  );
 }
 
 class _AccessibilityTextField extends StatefulWidget {
@@ -2705,7 +2699,8 @@ class _AccessibilityTextFieldState extends State<_AccessibilityTextField> {
   late final TextEditingController _controller = TextEditingController(
     text: widget.text,
   );
-  late FocusNode _focusNode = widget.focusNode ??
+  late FocusNode _focusNode =
+      widget.focusNode ??
       FocusNode(debugLabel: 'accessibility-text-${widget.label}');
   late bool _ownsFocusNode = widget.focusNode == null;
   bool _didAutofocus = false;
@@ -2912,7 +2907,8 @@ class _MessageCarouselState extends State<_MessageCarousel> {
     if (event is! KeyDownEvent) return KeyEventResult.ignored;
     final logicalKey = event.logicalKey;
     final pressed = HardwareKeyboard.instance.logicalKeysPressed;
-    final hasShift = pressed.contains(LogicalKeyboardKey.shiftLeft) ||
+    final hasShift =
+        pressed.contains(LogicalKeyboardKey.shiftLeft) ||
         pressed.contains(LogicalKeyboardKey.shiftRight) ||
         pressed.contains(LogicalKeyboardKey.shift);
     if (hasShift &&
@@ -2966,14 +2962,15 @@ class _MessageCarouselState extends State<_MessageCarousel> {
         : context.l10n.accessibilityNoMessages;
     final metadataValue = showMetadata && senderLabel.isNotEmpty
         ? (timestampLabel.isNotEmpty
-            ? context.l10n.accessibilityMessageMetadata(
-                senderLabel,
-                timestampLabel,
-              )
-            : context.l10n.accessibilityMessageFrom(senderLabel))
+              ? context.l10n.accessibilityMessageMetadata(
+                  senderLabel,
+                  timestampLabel,
+                )
+              : context.l10n.accessibilityMessageFrom(senderLabel))
         : null;
-    final borderColor =
-        hasFocus ? context.colorScheme.primary : context.colorScheme.border;
+    final borderColor = hasFocus
+        ? context.colorScheme.primary
+        : context.colorScheme.border;
     final borderWidth = hasFocus
         ? context.sizing.progressIndicatorStrokeWidth * 2
         : context.sizing.progressIndicatorStrokeWidth;
@@ -3006,7 +3003,8 @@ class _MessageCarouselState extends State<_MessageCarousel> {
             decoration: BoxDecoration(
               color: hasFocus
                   ? context.colorScheme.primary.withValues(
-                      alpha: context.motion.tapHoverAlpha -
+                      alpha:
+                          context.motion.tapHoverAlpha -
                           (context.motion.tapHoverAlpha / 4),
                     )
                   : context.colorScheme.card,
@@ -3022,10 +3020,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    positionLabel,
-                    style: context.textTheme.muted,
-                  ),
+                  Text(positionLabel, style: context.textTheme.muted),
                   SizedBox(height: spacing.s),
                   if (showMetadata && senderLabel.isNotEmpty)
                     Padding(
@@ -3039,14 +3034,12 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                   if (rawBody.isNotEmpty)
                     Padding(
                       padding: EdgeInsets.only(bottom: spacing.xs),
-                      child: Text(
-                        rawBody,
-                        style: context.textTheme.p,
-                      ),
+                      child: Text(rawBody, style: context.textTheme.p),
                     ),
                   if (attachment != null)
                     Semantics(
-                      label: attachmentLabel ??
+                      label:
+                          attachmentLabel ??
                           context.l10n.accessibilityAttachmentGeneric,
                       child: ChatAttachmentPreview(
                         stanzaId: currentMessage?.stanzaID ?? '',
@@ -3057,9 +3050,9 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                             : AttachmentDownloadDelegate(
                                 () => chatLocate<ChatBloc>()
                                     .downloadInboundAttachment(
-                                  metadataId: attachment.id,
-                                  stanzaId: currentMessage?.stanzaID ?? '',
-                                ),
+                                      metadataId: attachment.id,
+                                      stanzaId: currentMessage?.stanzaID ?? '',
+                                    ),
                               ),
                         metadataReloadDelegate: chatLocate == null
                             ? null
@@ -3071,10 +3064,7 @@ class _MessageCarouselState extends State<_MessageCarousel> {
                       ),
                     )
                   else if (attachmentLabel != null && rawBody.isEmpty)
-                    Text(
-                      attachmentLabel,
-                      style: context.textTheme.p,
-                    ),
+                    Text(attachmentLabel, style: context.textTheme.p),
                   if (rawBody.isEmpty &&
                       attachment == null &&
                       (attachmentLabel == null || attachmentLabel.isEmpty))
@@ -3170,9 +3160,11 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
     final children = <Widget>[];
     var nodeIndex = 0;
     final spacing = context.spacing;
-    for (var sectionIndex = 0;
-        sectionIndex < widget.sections.length;
-        sectionIndex++) {
+    for (
+      var sectionIndex = 0;
+      sectionIndex < widget.sections.length;
+      sectionIndex++
+    ) {
       final section = widget.sections[sectionIndex];
       final sectionLabel =
           section.title ?? context.l10n.accessibilityActionsTitle;
@@ -3200,8 +3192,9 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
         ),
       );
       for (final item in section.items) {
-        final focusNode =
-            nodeIndex < _itemNodes.length ? _itemNodes[nodeIndex] : null;
+        final focusNode = nodeIndex < _itemNodes.length
+            ? _itemNodes[nodeIndex]
+            : null;
         children.add(
           Padding(
             padding: EdgeInsets.only(bottom: spacing.s),
@@ -3219,12 +3212,12 @@ class _AccessibilitySectionListState extends State<_AccessibilitySectionList> {
               onDismiss: item.dismissId == null
                   ? null
                   : () => context.read<AccessibilityActionBloc>().add(
-                        AccessibilityMenuActionTriggered(
-                          AccessibilityDismissHighlightAction(
-                            highlightId: item.dismissId!,
-                          ),
+                      AccessibilityMenuActionTriggered(
+                        AccessibilityDismissHighlightAction(
+                          highlightId: item.dismissId!,
                         ),
                       ),
+                    ),
             ),
           ),
         );
@@ -3473,8 +3466,8 @@ class _AccessibilityActionTile extends StatelessWidget {
             hint: isReadOnly
                 ? context.l10n.accessibilityActionReadOnlyHint
                 : item.disabled
-                    ? null
-                    : context.l10n.accessibilityActionActivateHint,
+                ? null
+                : context.l10n.accessibilityActionActivateHint,
             child: AnimatedContainer(
               duration: baseAnimationDuration,
               decoration: BoxDecoration(
@@ -3485,7 +3478,8 @@ class _AccessibilityActionTile extends StatelessWidget {
                   if (hasFocus)
                     BoxShadow(
                       color: context.colorScheme.primary.withValues(
-                        alpha: context.motion.tapSplashAlpha +
+                        alpha:
+                            context.motion.tapSplashAlpha +
                             (context.motion.tapHoverAlpha / 4),
                       ),
                       blurRadius: context.sizing.modalShadowBlur / 4,
@@ -3500,7 +3494,8 @@ class _AccessibilityActionTile extends StatelessWidget {
                   onTap: isReadOnly || item.disabled ? null : onTap,
                   borderRadius: context.radius,
                   focusColor: context.colorScheme.primary.withValues(
-                    alpha: context.motion.tapHoverAlpha +
+                    alpha:
+                        context.motion.tapHoverAlpha +
                         (context.motion.tapHoverAlpha / 4),
                   ),
                   child: Padding(
@@ -3519,10 +3514,7 @@ class _AccessibilityActionTile extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                item.label,
-                                style: context.textTheme.p,
-                              ),
+                              Text(item.label, style: context.textTheme.p),
                               if (item.description != null)
                                 Text(
                                   item.description!,
@@ -3535,7 +3527,8 @@ class _AccessibilityActionTile extends StatelessWidget {
                           Container(
                             decoration: BoxDecoration(
                               color: context.colorScheme.secondary.withValues(
-                                alpha: context.motion.tapSplashAlpha +
+                                alpha:
+                                    context.motion.tapSplashAlpha +
                                     (context.motion.tapHoverAlpha / 4),
                               ),
                               borderRadius: context.radius,

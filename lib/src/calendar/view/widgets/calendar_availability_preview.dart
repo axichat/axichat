@@ -172,7 +172,8 @@ List<_AvailabilityPreviewInterval> _intervalPreviewFor(
       continue;
     }
     final _AvailabilityPreviewInterval last = merged.last;
-    final bool shouldMerge = last.type == interval.type &&
+    final bool shouldMerge =
+        last.type == interval.type &&
         !start.isAfter(last.end) &&
         end.isAfter(last.start);
     if (shouldMerge) {
@@ -192,10 +193,14 @@ List<_AvailabilityPreviewInterval> _intervalPreviewFor(
 }
 
 String _formatRange(BuildContext context, DateTime start, DateTime end) {
-  final String startLabel =
-      TimeFormatter.formatFriendlyDateTime(context.l10n, start);
-  final String endLabel =
-      TimeFormatter.formatFriendlyDateTime(context.l10n, end);
+  final String startLabel = TimeFormatter.formatFriendlyDateTime(
+    context.l10n,
+    start,
+  );
+  final String endLabel = TimeFormatter.formatFriendlyDateTime(
+    context.l10n,
+    end,
+  );
   if (startLabel == endLabel) {
     return startLabel;
   }

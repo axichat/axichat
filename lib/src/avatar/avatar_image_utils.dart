@@ -16,8 +16,7 @@ Future<ProcessedAvatar> processAvatar(AvatarProcessRequest request) =>
 
 Future<AvatarPreparedSource> prepareAvatarSource(
   AvatarSourcePrepareRequest request,
-) =>
-    compute(_prepareAvatarSource, request);
+) => compute(_prepareAvatarSource, request);
 
 ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
   const pngCompressionLevel = 6;
@@ -31,13 +30,13 @@ ProcessedAvatar _processAvatar(AvatarProcessRequest request) {
   }
 
   final left = request.cropLeft.round().clamp(
-        0,
-        image.width > 0 ? image.width - 1 : 0,
-      );
+    0,
+    image.width > 0 ? image.width - 1 : 0,
+  );
   final top = request.cropTop.round().clamp(
-        0,
-        image.height > 0 ? image.height - 1 : 0,
-      );
+    0,
+    image.height > 0 ? image.height - 1 : 0,
+  );
   final maxCropWidth = image.width - left;
   final maxCropHeight = image.height - top;
   final maxSide = maxCropWidth < maxCropHeight ? maxCropWidth : maxCropHeight;
@@ -198,11 +197,11 @@ AvatarPreparedSource _prepareAvatarSource(AvatarSourcePrepareRequest request) {
 }
 
 img.Color _imgColor(int argb) => img.ColorUint8.rgba(
-      (argb >> 16) & 0xFF,
-      (argb >> 8) & 0xFF,
-      argb & 0xFF,
-      (argb >> 24) & 0xFF,
-    );
+  (argb >> 16) & 0xFF,
+  (argb >> 8) & 0xFF,
+  argb & 0xFF,
+  (argb >> 24) & 0xFF,
+);
 
 class AvatarSourcePrepareRequest {
   const AvatarSourcePrepareRequest({

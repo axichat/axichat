@@ -93,10 +93,13 @@ class AttachmentGalleryPanel extends StatelessWidget {
     }
     return BlocProvider(
       create: (context) {
-        final endpointConfig =
-            context.read<SettingsCubit>().state.endpointConfig;
-        final emailService =
-            endpointConfig.smtpEnabled ? context.read<EmailService>() : null;
+        final endpointConfig = context
+            .read<SettingsCubit>()
+            .state
+            .endpointConfig;
+        final emailService = endpointConfig.smtpEnabled
+            ? context.read<EmailService>()
+            : null;
         return AttachmentGalleryBloc(
           xmppService: context.read<XmppService>(),
           emailService: emailService,
@@ -111,10 +114,7 @@ class AttachmentGalleryPanel extends StatelessWidget {
           subtitle: Text(chat!.displayName),
           onClose: onClose,
         ),
-        body: AttachmentGalleryView(
-          chatOverride: chat!,
-          showChatLabel: false,
-        ),
+        body: AttachmentGalleryView(chatOverride: chat!, showChatLabel: false),
       ),
     );
   }
@@ -149,8 +149,8 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
 
   void _handleLayoutChanged(AttachmentGalleryLayout nextLayout) {
     context.read<AttachmentGalleryBloc>().add(
-          AttachmentGalleryLayoutChanged(layout: nextLayout),
-        );
+      AttachmentGalleryLayoutChanged(layout: nextLayout),
+    );
   }
 
   Future<void> _approveAttachment({
@@ -163,8 +163,9 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
   }) async {
     if (!mounted) return;
     final senderEmail = chat?.emailAddress;
-    final displaySender =
-        senderEmail?.trim().isNotEmpty == true ? senderEmail! : senderJid;
+    final displaySender = senderEmail?.trim().isNotEmpty == true
+        ? senderEmail!
+        : senderJid;
     final decision = await showFadeScaleDialog<AttachmentApprovalDecision>(
       context: context,
       barrierDismissible: true,
@@ -184,23 +185,21 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
     if (decision == null || !decision.approved) return;
 
     context.read<AttachmentGalleryBloc>().add(
-          AttachmentGalleryApprovalGranted(
-            message: message,
-            chat: chat,
-            alwaysAllow: decision.alwaysAllow,
-            isEmailChat: isEmailChat,
-            stanzaId: stanzaId,
-          ),
-        );
+      AttachmentGalleryApprovalGranted(
+        message: message,
+        chat: chat,
+        alwaysAllow: decision.alwaysAllow,
+        isEmailChat: isEmailChat,
+        stanzaId: stanzaId,
+      ),
+    );
   }
 
   void _handleSearchChanged() {
     if (!mounted) return;
     context.read<AttachmentGalleryBloc>().add(
-          AttachmentGalleryQueryChanged(
-            query: _searchController.text,
-          ),
-        );
+      AttachmentGalleryQueryChanged(query: _searchController.text),
+    );
   }
 
   @override
@@ -223,10 +222,8 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
             ? context.read<EmailService>()
             : null;
         context.read<AttachmentGalleryBloc>().add(
-              AttachmentGalleryEmailServiceUpdated(
-                emailService: emailService,
-              ),
-            );
+          AttachmentGalleryEmailServiceUpdated(emailService: emailService),
+        );
       },
       child: BlocBuilder<AttachmentGalleryBloc, AttachmentGalleryState>(
         builder: (context, state) {
@@ -277,22 +274,20 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                   sortOption: state.sortOption,
                   onSortChanged: (value) {
                     context.read<AttachmentGalleryBloc>().add(
-                          AttachmentGallerySortChanged(sortOption: value),
-                        );
+                      AttachmentGallerySortChanged(sortOption: value),
+                    );
                   },
                   typeFilter: state.typeFilter,
                   onTypeFilterChanged: (value) {
                     context.read<AttachmentGalleryBloc>().add(
-                          AttachmentGalleryTypeFilterChanged(typeFilter: value),
-                        );
+                      AttachmentGalleryTypeFilterChanged(typeFilter: value),
+                    );
                   },
                   sourceFilter: state.sourceFilter,
                   onSourceFilterChanged: (value) {
                     context.read<AttachmentGalleryBloc>().add(
-                          AttachmentGallerySourceFilterChanged(
-                            sourceFilter: value,
-                          ),
-                        );
+                      AttachmentGallerySourceFilterChanged(sourceFilter: value),
+                    );
                   },
                   layout: layout,
                   onLayoutChanged: _handleLayoutChanged,
@@ -316,89 +311,90 @@ class _AttachmentGalleryViewState extends State<AttachmentGalleryView> {
                         ),
                       )
                     : layout == AttachmentGalleryLayout.list
-                        ? ListView.separated(
+                    ? ListView.separated(
+                        padding: EdgeInsets.fromLTRB(
+                          context.spacing.m,
+                          0,
+                          context.spacing.m,
+                          context.spacing.m,
+                        ),
+                        itemCount: state.entries.length,
+                        separatorBuilder: (_, _) =>
+                            SizedBox(height: context.spacing.m),
+                        itemBuilder: (context, index) => AttachmentGalleryEntry(
+                          entry: state.entries[index],
+                          showChatLabel: widget.showChatLabel,
+                          layout: layout,
+                          onApproveAttachment: _approveAttachment,
+                          metaSeparator:
+                              context.l10n.attachmentGalleryMetaSeparator,
+                        ),
+                      )
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final gridMetrics = _resolveGridMetrics(
+                            maxWidth: constraints.maxWidth,
+                            horizontalPadding: gridHorizontalPadding,
+                            minTileWidth: context.sizing.menuItemHeight * 3,
+                            gridSpacing: context.spacing.s,
+                            minColumns: gridMinColumns,
+                            maxColumns: gridMaxColumns,
+                            minAvailableWidth: gridMinAvailableWidth,
+                          );
+                          final rowCount =
+                              (state.entries.length /
+                                      gridMetrics.crossAxisCount)
+                                  .ceil();
+                          return ListView.separated(
                             padding: EdgeInsets.fromLTRB(
                               context.spacing.m,
                               0,
                               context.spacing.m,
                               context.spacing.m,
                             ),
-                            itemCount: state.entries.length,
-                            separatorBuilder: (_, __) =>
-                                SizedBox(height: context.spacing.m),
-                            itemBuilder: (context, index) =>
-                                AttachmentGalleryEntry(
-                              entry: state.entries[index],
-                              showChatLabel: widget.showChatLabel,
-                              layout: layout,
-                              onApproveAttachment: _approveAttachment,
-                              metaSeparator:
-                                  context.l10n.attachmentGalleryMetaSeparator,
-                            ),
-                          )
-                        : LayoutBuilder(
-                            builder: (context, constraints) {
-                              final gridMetrics = _resolveGridMetrics(
-                                maxWidth: constraints.maxWidth,
-                                horizontalPadding: gridHorizontalPadding,
-                                minTileWidth: context.sizing.menuItemHeight * 3,
-                                gridSpacing: context.spacing.s,
-                                minColumns: gridMinColumns,
-                                maxColumns: gridMaxColumns,
-                                minAvailableWidth: gridMinAvailableWidth,
+                            itemCount: rowCount,
+                            separatorBuilder: (_, _) =>
+                                SizedBox(height: context.spacing.s),
+                            itemBuilder: (context, rowIndex) {
+                              final rowStart =
+                                  rowIndex * gridMetrics.crossAxisCount;
+                              final rowEnd = math.min(
+                                rowStart + gridMetrics.crossAxisCount,
+                                state.entries.length,
                               );
-                              final rowCount = (state.entries.length /
-                                      gridMetrics.crossAxisCount)
-                                  .ceil();
-                              return ListView.separated(
-                                padding: EdgeInsets.fromLTRB(
-                                  context.spacing.m,
-                                  0,
-                                  context.spacing.m,
-                                  context.spacing.m,
-                                ),
-                                itemCount: rowCount,
-                                separatorBuilder: (_, __) =>
-                                    SizedBox(height: context.spacing.s),
-                                itemBuilder: (context, rowIndex) {
-                                  final rowStart =
-                                      rowIndex * gridMetrics.crossAxisCount;
-                                  final rowEnd = math.min(
-                                    rowStart + gridMetrics.crossAxisCount,
-                                    state.entries.length,
-                                  );
-                                  final rowItems = state.entries.sublist(
-                                    rowStart,
-                                    rowEnd,
-                                  );
-                                  return Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      for (var index = 0;
-                                          index < rowItems.length;
-                                          index += 1) ...[
-                                        SizedBox(
-                                          width: gridMetrics.tileWidth,
-                                          child: AttachmentGalleryEntry(
-                                            entry: rowItems[index],
-                                            showChatLabel: widget.showChatLabel,
-                                            layout: layout,
-                                            onApproveAttachment:
-                                                _approveAttachment,
-                                            metaSeparator: context.l10n
-                                                .attachmentGalleryMetaSeparator,
-                                          ),
-                                        ),
-                                        if (index < rowItems.length - 1)
-                                          SizedBox(width: context.spacing.s),
-                                      ],
-                                    ],
-                                  );
-                                },
+                              final rowItems = state.entries.sublist(
+                                rowStart,
+                                rowEnd,
+                              );
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  for (
+                                    var index = 0;
+                                    index < rowItems.length;
+                                    index += 1
+                                  ) ...[
+                                    SizedBox(
+                                      width: gridMetrics.tileWidth,
+                                      child: AttachmentGalleryEntry(
+                                        entry: rowItems[index],
+                                        showChatLabel: widget.showChatLabel,
+                                        layout: layout,
+                                        onApproveAttachment: _approveAttachment,
+                                        metaSeparator: context
+                                            .l10n
+                                            .attachmentGalleryMetaSeparator,
+                                      ),
+                                    ),
+                                    if (index < rowItems.length - 1)
+                                      SizedBox(width: context.spacing.s),
+                                  ],
+                                ],
                               );
                             },
-                          ),
+                          );
+                        },
+                      ),
               ),
             ],
           );
@@ -555,10 +551,14 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
     final spacing = context.spacing;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final double minSelectWidth =
-            math.min(context.sizing.menuMaxWidth / 2, constraints.maxWidth);
-        final double maxSelectWidth =
-            math.min(context.sizing.menuMaxWidth, constraints.maxWidth);
+        final double minSelectWidth = math.min(
+          context.sizing.menuMaxWidth / 2,
+          constraints.maxWidth,
+        );
+        final double maxSelectWidth = math.min(
+          context.sizing.menuMaxWidth,
+          constraints.maxWidth,
+        );
         final BoxConstraints selectConstraints = BoxConstraints(
           minWidth: minSelectWidth,
           maxWidth: maxSelectWidth,
@@ -577,11 +577,11 @@ class AttachmentGalleryFilterRow extends StatelessWidget {
         );
         final sourceSelect =
             AttachmentGallerySelect<AttachmentGallerySourceFilter>(
-          value: sourceFilter,
-          onChanged: onSourceFilterChanged,
-          labelBuilder: (value) => value.label(context.l10n),
-          options: AttachmentGallerySourceFilter.values,
-        );
+              value: sourceFilter,
+              onChanged: onSourceFilterChanged,
+              labelBuilder: (value) => value.label(context.l10n),
+              options: AttachmentGallerySourceFilter.values,
+            );
         return Wrap(
           spacing: spacing.s,
           runSpacing: spacing.m,
@@ -650,7 +650,8 @@ class AttachmentGalleryEntry extends StatelessWidget {
     required Chat? chat,
     required bool isEmailChat,
     required bool isSelf,
-  }) onApproveAttachment;
+  })
+  onApproveAttachment;
   final String metaSeparator;
 
   @override
@@ -658,8 +659,11 @@ class AttachmentGalleryEntry extends StatelessWidget {
     final message = entry.item.message;
     final initialMetadata = entry.item.metadata;
     final metadataId = initialMetadata.id;
-    return BlocSelector<AttachmentGalleryBloc, AttachmentGalleryState,
-        ({FileMetadataData? metadata, bool metadataPending})>(
+    return BlocSelector<
+      AttachmentGalleryBloc,
+      AttachmentGalleryState,
+      ({FileMetadataData? metadata, bool metadataPending})
+    >(
       selector: (state) => (
         metadata: state.fileMetadataById.containsKey(metadataId)
             ? state.fileMetadataById[metadataId]
@@ -670,23 +674,22 @@ class AttachmentGalleryEntry extends StatelessWidget {
         final metadata = metadataState.metadata;
         final metadataPending = metadataState.metadataPending;
         final chat = entry.chat;
-        final isEmailChat = (chat?.defaultTransport.isEmail ?? false) ||
+        final isEmailChat =
+            (chat?.defaultTransport.isEmail ?? false) ||
             message.deltaMsgId != null ||
             message.deltaChatId != null;
         final allowAttachment = entry.allowByTrust || entry.allowOnce;
         final downloadDelegate = isEmailChat
-            ? AttachmentDownloadDelegate(
-                () {
-                  final completer = Completer<bool>();
-                  context.read<AttachmentGalleryBloc>().add(
-                        AttachmentGalleryEmailDownloadRequested(
-                          message: message,
-                          completer: completer,
-                        ),
-                      );
-                  return completer.future;
-                },
-              )
+            ? AttachmentDownloadDelegate(() {
+                final completer = Completer<bool>();
+                context.read<AttachmentGalleryBloc>().add(
+                  AttachmentGalleryEmailDownloadRequested(
+                    message: message,
+                    completer: completer,
+                  ),
+                );
+                return completer.future;
+              })
             : AttachmentDownloadDelegate(
                 () => context
                     .read<AttachmentGalleryBloc>()
@@ -696,9 +699,9 @@ class AttachmentGalleryEntry extends StatelessWidget {
                     ),
               );
         final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
-          () => context
-              .read<AttachmentGalleryBloc>()
-              .reloadFileMetadata(initialMetadata.id),
+          () => context.read<AttachmentGalleryBloc>().reloadFileMetadata(
+            initialMetadata.id,
+          ),
         );
         final metaText = _resolveMetaText(
           chat: chat,
@@ -708,13 +711,13 @@ class AttachmentGalleryEntry extends StatelessWidget {
         final allowPressed = allowAttachment
             ? null
             : () => onApproveAttachment(
-                  message: message,
-                  senderJid: message.senderJid,
-                  stanzaId: message.stanzaID,
-                  chat: chat,
-                  isEmailChat: isEmailChat,
-                  isSelf: entry.isSelf,
-                );
+                message: message,
+                senderJid: message.senderJid,
+                stanzaId: message.stanzaID,
+                chat: chat,
+                isEmailChat: isEmailChat,
+                isSelf: entry.isSelf,
+              );
         return layout == AttachmentGalleryLayout.list
             ? AttachmentGalleryListItem(
                 metadata: metadata,

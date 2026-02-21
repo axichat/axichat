@@ -13,10 +13,10 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
     required XmppBase xmppBase,
     Duration completedRetention = const Duration(seconds: 2),
     Duration failedRetention = const Duration(seconds: 6),
-  })  : _xmppBase = xmppBase,
-        _completedRetention = completedRetention,
-        _failedRetention = failedRetention,
-        super(const OmemoActivityState()) {
+  }) : _xmppBase = xmppBase,
+       _completedRetention = completedRetention,
+       _failedRetention = failedRetention,
+       super(const OmemoActivityState()) {
     _subscription = _xmppBase.omemoActivityStream.listen(
       _handleEvent,
       onError: (error, stackTrace) {
@@ -303,8 +303,8 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
         message ?? friendlyError ?? 'Operation failed${_forTarget(target)}';
     final detailError = (rawError != null && rawError != resolvedMessage)
         ? rawError.startsWith('Instance of ')
-            ? null
-            : rawError
+              ? null
+              : rawError
         : null;
     _updateOperation(
       id,
@@ -418,48 +418,48 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
       case mox.OmemoActivityOperation.initializeRuntime:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.initializing,
-          successMessageBuilder: (_, __) => 'Encryption ready',
-          failureMessageBuilder: (_, __) => 'Initialization failed',
+          successMessageBuilder: (_, _) => 'Encryption ready',
+          failureMessageBuilder: (_, _) => 'Initialization failed',
         );
       case mox.OmemoActivityOperation.generateDevice:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.publishingDevice,
-          startMessageBuilder: (_, __) => 'Generating encryption keys...',
-          successMessageBuilder: (_, __) => 'Generated encryption keys',
-          failureMessageBuilder: (_, __) => 'Key generation failed',
+          startMessageBuilder: (_, _) => 'Generating encryption keys...',
+          successMessageBuilder: (_, _) => 'Generated encryption keys',
+          failureMessageBuilder: (_, _) => 'Key generation failed',
         );
       case mox.OmemoActivityOperation.publishDeviceBundle:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.publishingDevice,
-          startMessageBuilder: (_, __) => 'Publishing encryption keys...',
-          successMessageBuilder: (_, __) => 'Encryption keys published',
-          failureMessageBuilder: (_, __) => 'Failed to publish encryption keys',
+          startMessageBuilder: (_, _) => 'Publishing encryption keys...',
+          successMessageBuilder: (_, _) => 'Encryption keys published',
+          failureMessageBuilder: (_, _) => 'Failed to publish encryption keys',
         );
       case mox.OmemoActivityOperation.regenerateDevice:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.publishingDevice,
-          startMessageBuilder: (_, __) => 'Regenerating encryption device...',
-          successMessageBuilder: (_, __) => 'Encryption device regenerated',
-          failureMessageBuilder: (_, __) => 'Device regeneration failed',
+          startMessageBuilder: (_, _) => 'Regenerating encryption device...',
+          successMessageBuilder: (_, _) => 'Encryption device regenerated',
+          failureMessageBuilder: (_, _) => 'Device regeneration failed',
         );
       case mox.OmemoActivityOperation.fetchDeviceList:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.refreshingDeviceList,
-          startMessageBuilder: (target, __) =>
+          startMessageBuilder: (target, _) =>
               'Fetching device list${_forTarget(target)}...',
-          successMessageBuilder: (target, __) =>
+          successMessageBuilder: (target, _) =>
               'Device list updated${_forTarget(target)}',
-          failureMessageBuilder: (target, __) =>
+          failureMessageBuilder: (target, _) =>
               'Failed to fetch device list${_forTarget(target)}',
         );
       case mox.OmemoActivityOperation.fetchBundlesBatch:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.refreshingDeviceList,
-          startMessageBuilder: (target, __) =>
+          startMessageBuilder: (target, _) =>
               'Fetching device bundles${_forTarget(target)}...',
-          successMessageBuilder: (target, __) =>
+          successMessageBuilder: (target, _) =>
               'Device bundles refreshed${_forTarget(target)}',
-          failureMessageBuilder: (target, __) =>
+          failureMessageBuilder: (target, _) =>
               'Failed to fetch device bundles${_forTarget(target)}',
         );
       case mox.OmemoActivityOperation.fetchDeviceBundle:
@@ -475,29 +475,29 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
       case mox.OmemoActivityOperation.retrieveAllBundles:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.refreshingDeviceList,
-          startMessageBuilder: (_, __) => 'Loading cached device bundles...',
-          successMessageBuilder: (_, __) => 'Device bundles loaded',
-          failureMessageBuilder: (_, __) =>
+          startMessageBuilder: (_, _) => 'Loading cached device bundles...',
+          successMessageBuilder: (_, _) => 'Device bundles loaded',
+          failureMessageBuilder: (_, _) =>
               'Failed to load cached device bundles',
         );
       case mox.OmemoActivityOperation.persistRatchets:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.buildingRatchet,
-          startMessageBuilder: (target, __) =>
+          startMessageBuilder: (target, _) =>
               'Building ratchets${_forTarget(target)}...',
-          successMessageBuilder: (target, __) =>
+          successMessageBuilder: (target, _) =>
               'Ratchets ready${_forTarget(target)}',
-          failureMessageBuilder: (target, __) =>
+          failureMessageBuilder: (target, _) =>
               'Failed to build ratchets${_forTarget(target)}',
         );
       case mox.OmemoActivityOperation.removeRatchets:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.buildingRatchet,
-          startMessageBuilder: (target, __) =>
+          startMessageBuilder: (target, _) =>
               'Removing secure session data${_forTarget(target)}...',
-          successMessageBuilder: (target, __) =>
+          successMessageBuilder: (target, _) =>
               'Secure session removed${_forTarget(target)}',
-          failureMessageBuilder: (target, __) =>
+          failureMessageBuilder: (target, _) =>
               'Failed to remove secure session${_forTarget(target)}',
         );
       case mox.OmemoActivityOperation.resetSession:
@@ -513,29 +513,29 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
       case mox.OmemoActivityOperation.resetAllSessions:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.buildingRatchet,
-          startMessageBuilder: (target, __) =>
+          startMessageBuilder: (target, _) =>
               'Resetting secure sessions${_forTarget(target)}...',
-          successMessageBuilder: (target, __) =>
+          successMessageBuilder: (target, _) =>
               'Secure sessions reset${_forTarget(target)}',
-          failureMessageBuilder: (target, __) =>
+          failureMessageBuilder: (target, _) =>
               'Failed to reset secure sessions${_forTarget(target)}',
         );
       case mox.OmemoActivityOperation.sendEmptyMessage:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.buildingRatchet,
-          startMessageBuilder: (target, __) =>
+          startMessageBuilder: (target, _) =>
               'Finalizing secure session${_forTarget(target)}...',
-          successMessageBuilder: (target, __) =>
+          successMessageBuilder: (target, _) =>
               'Secure session finalized${_forTarget(target)}',
-          failureMessageBuilder: (target, __) =>
+          failureMessageBuilder: (target, _) =>
               'Failed to finalize secure session${_forTarget(target)}',
         );
       case mox.OmemoActivityOperation.rotatePreKeys:
         return _OmemoOperationDescriptor(
           type: OmemoOperationType.rotatingPreKeys,
-          startMessageBuilder: (_, __) => 'Rotating pre-keys...',
-          successMessageBuilder: (_, __) => 'Pre-keys rotated',
-          failureMessageBuilder: (_, __) => 'Failed to rotate pre-keys',
+          startMessageBuilder: (_, _) => 'Rotating pre-keys...',
+          successMessageBuilder: (_, _) => 'Pre-keys rotated',
+          failureMessageBuilder: (_, _) => 'Failed to rotate pre-keys',
         );
     }
   }
@@ -626,8 +626,9 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
   }) {
     if (error == null) return null;
 
-    final suffix =
-        deviceId != null ? _forDevice(target, deviceId) : _forTarget(target);
+    final suffix = deviceId != null
+        ? _forDevice(target, deviceId)
+        : _forTarget(target);
 
     switch (error) {
       case mox.UnknownOmemoError():
@@ -702,11 +703,11 @@ class OmemoOperation {
   static final OmemoOperation empty = OmemoOperation._empty();
 
   OmemoOperation._empty()
-      : this(
-          id: '__empty__',
-          type: OmemoOperationType.initializing,
-          startedAt: DateTime.fromMillisecondsSinceEpoch(0),
-        );
+    : this(
+        id: '__empty__',
+        type: OmemoOperationType.initializing,
+        startedAt: DateTime.fromMillisecondsSinceEpoch(0),
+      );
 
   bool get isEmpty => identical(this, empty);
 
@@ -714,17 +715,16 @@ class OmemoOperation {
     OmemoOperationStatus? status,
     String? messageOverride,
     String? error,
-  }) =>
-      OmemoOperation(
-        id: id,
-        type: type,
-        startedAt: startedAt,
-        jid: jid,
-        displayName: displayName,
-        status: status ?? this.status,
-        messageOverride: messageOverride ?? this.messageOverride,
-        error: error ?? this.error,
-      );
+  }) => OmemoOperation(
+    id: id,
+    type: type,
+    startedAt: startedAt,
+    jid: jid,
+    displayName: displayName,
+    status: status ?? this.status,
+    messageOverride: messageOverride ?? this.messageOverride,
+    error: error ?? this.error,
+  );
 
   String get description =>
       messageOverride ??
@@ -742,12 +742,12 @@ class OmemoOperation {
       };
 
   String statusLabel() => switch (status) {
-        OmemoOperationStatus.inProgress => description,
-        OmemoOperationStatus.success =>
-          messageOverride ?? 'Done${_targetSuffix(includeOn: false)}',
-        OmemoOperationStatus.failure =>
-          messageOverride ?? 'Failed${_targetSuffix(includeOn: false)}',
-      };
+    OmemoOperationStatus.inProgress => description,
+    OmemoOperationStatus.success =>
+      messageOverride ?? 'Done${_targetSuffix(includeOn: false)}',
+    OmemoOperationStatus.failure =>
+      messageOverride ?? 'Failed${_targetSuffix(includeOn: false)}',
+  };
 
   String _targetSuffix({bool includeOn = true}) {
     final target = displayName ?? jid;

@@ -44,12 +44,7 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     final shouldHide = !allHidden;
 
     return SelectionPanelShell(
-      padding: EdgeInsets.fromLTRB(
-        spacing.m,
-        spacing.m,
-        spacing.m,
-        spacing.s,
-      ),
+      padding: EdgeInsets.fromLTRB(spacing.m, spacing.m, spacing.m, spacing.s),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
@@ -73,9 +68,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                     ? l10n.commonFavorite
                     : l10n.commonUnfavorite,
                 onPressed: () async {
-                  await context
-                      .read<ChatsCubit>()
-                      .bulkToggleFavorited(favorited: shouldFavorite);
+                  await context.read<ChatsCubit>().bulkToggleFavorited(
+                    favorited: shouldFavorite,
+                  );
                 },
               ),
               ContextActionButton(
@@ -83,12 +78,13 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                   shouldArchive ? LucideIcons.archive : LucideIcons.undo2,
                   size: sizing.menuItemIconSize,
                 ),
-                label:
-                    shouldArchive ? l10n.commonArchive : l10n.commonUnarchive,
+                label: shouldArchive
+                    ? l10n.commonArchive
+                    : l10n.commonUnarchive,
                 onPressed: () async {
-                  await context
-                      .read<ChatsCubit>()
-                      .bulkToggleArchived(archived: shouldArchive);
+                  await context.read<ChatsCubit>().bulkToggleArchived(
+                    archived: shouldArchive,
+                  );
                 },
               ),
               ContextActionButton(
@@ -98,9 +94,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
                 ),
                 label: shouldHide ? l10n.commonHide : l10n.commonShow,
                 onPressed: () async {
-                  await context
-                      .read<ChatsCubit>()
-                      .bulkToggleHidden(hidden: shouldHide);
+                  await context.read<ChatsCubit>().bulkToggleHidden(
+                    hidden: shouldHide,
+                  );
                 },
               ),
               ChatExportActionButton(
@@ -127,13 +123,16 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
     final l10n = context.l10n;
     final showToast = ShadToaster.maybeOf(context)?.show;
     final loadChatHistory = context.read<ChatsCubit>().loadChatHistory;
-    final countChatHistory =
-        context.read<ChatsCubit>().countChatHistoryMessages;
+    final countChatHistory = context
+        .read<ChatsCubit>()
+        .countChatHistoryMessages;
     final loadChatHistoryPage = context.read<ChatsCubit>().loadChatHistoryPage;
-    final scheduleExportCleanup =
-        context.read<ChatsCubit>().scheduleExportCleanup;
-    final String? fileLabel =
-        widget.selectedChats.length == 1 ? null : l10n.chatsExportFileLabel;
+    final scheduleExportCleanup = context
+        .read<ChatsCubit>()
+        .scheduleExportCleanup;
+    final String? fileLabel = widget.selectedChats.length == 1
+        ? null
+        : l10n.chatsExportFileLabel;
     final confirmed = await _confirmChatExport();
     if (!mounted || !confirmed) return;
     setState(() {
@@ -194,8 +193,9 @@ class _ChatSelectionActionBarState extends State<ChatSelectionActionBar> {
 
   Future<void> _confirmDelete() async {
     final l10n = context.l10n;
-    final deleteSelectedChats =
-        context.read<ChatsCubit>().bulkDeleteSelectedChats;
+    final deleteSelectedChats = context
+        .read<ChatsCubit>()
+        .bulkDeleteSelectedChats;
     final confirmed = await confirm(
       context,
       title: l10n.chatSelectionDeleteConfirmTitle,

@@ -24,7 +24,8 @@ class VerificationSelector extends StatelessWidget {
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
         final colors = context.colorScheme;
-        final self = state.fingerprint?.deviceID == fingerprint.deviceID &&
+        final self =
+            state.fingerprint?.deviceID == fingerprint.deviceID &&
             state.fingerprint?.jid == fingerprint.jid;
         return ShadCard(
           columnMainAxisSize: MainAxisSize.min,
@@ -57,10 +58,10 @@ class VerificationSelector extends StatelessWidget {
                     placeholder: Text(l10n.verificationAddLabelPlaceholder),
                     onSubmitted: (value) =>
                         context.read<VerificationCubit>().labelFingerprint(
-                              jid: fingerprint.jid,
-                              device: fingerprint.deviceID,
-                              label: value,
-                            ),
+                          jid: fingerprint.jid,
+                          device: fingerprint.deviceID,
+                          label: value,
+                        ),
                   ),
                 ),
               const SizedBox.square(dimension: 8),
@@ -100,10 +101,10 @@ class VerificationSelector extends StatelessWidget {
                       initialValue: fingerprint.trust,
                       onChanged: (trust) =>
                           context.read<VerificationCubit>().setDeviceTrust(
-                                jid: fingerprint.jid,
-                                device: fingerprint.deviceID,
-                                trust: trust!,
-                              ),
+                            jid: fingerprint.jid,
+                            device: fingerprint.deviceID,
+                            trust: trust!,
+                          ),
                       options: BTBVTrustState.values
                           .map(
                             (trust) => ShadOption<BTBVTrustState>(
@@ -148,20 +149,20 @@ class VerificationSelector extends StatelessWidget {
 
 extension _TrustStateLocalization on BTBVTrustState {
   String label(AppLocalizations l10n) => switch (this) {
-        BTBVTrustState.notTrusted => l10n.verificationTrustNone,
-        BTBVTrustState.blindTrust => l10n.verificationTrustBlind,
-        BTBVTrustState.verified => l10n.verificationTrustVerified,
-      };
+    BTBVTrustState.notTrusted => l10n.verificationTrustNone,
+    BTBVTrustState.blindTrust => l10n.verificationTrustBlind,
+    BTBVTrustState.verified => l10n.verificationTrustVerified,
+  };
 
   IconData iconData() => switch (this) {
-        BTBVTrustState.notTrusted => LucideIcons.shieldX,
-        BTBVTrustState.blindTrust => LucideIcons.shieldQuestionMark,
-        BTBVTrustState.verified => LucideIcons.shieldCheck,
-      };
+    BTBVTrustState.notTrusted => LucideIcons.shieldX,
+    BTBVTrustState.blindTrust => LucideIcons.shieldQuestionMark,
+    BTBVTrustState.verified => LucideIcons.shieldCheck,
+  };
 
   Color color(ShadColorScheme colors) => switch (this) {
-        BTBVTrustState.notTrusted => colors.destructive,
-        BTBVTrustState.blindTrust => colors.warning,
-        BTBVTrustState.verified => colors.green,
-      };
+    BTBVTrustState.notTrusted => colors.destructive,
+    BTBVTrustState.blindTrust => colors.warning,
+    BTBVTrustState.verified => colors.green,
+  };
 }

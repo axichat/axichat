@@ -73,35 +73,33 @@ enum CalendarFreeBusyType {
   bool get isBusyTentative => this == CalendarFreeBusyType.busyTentative;
 
   String label(AppLocalizations l10n) => switch (this) {
-        CalendarFreeBusyType.free => l10n.calendarFreeBusyFree,
-        CalendarFreeBusyType.busy => l10n.calendarFreeBusyBusy,
-        CalendarFreeBusyType.busyUnavailable => l10n.calendarFreeBusyBusy,
-        CalendarFreeBusyType.busyTentative => l10n.calendarFreeBusyTentative,
-      };
+    CalendarFreeBusyType.free => l10n.calendarFreeBusyFree,
+    CalendarFreeBusyType.busy => l10n.calendarFreeBusyBusy,
+    CalendarFreeBusyType.busyUnavailable => l10n.calendarFreeBusyBusy,
+    CalendarFreeBusyType.busyTentative => l10n.calendarFreeBusyTentative,
+  };
 
   String get icsValue => switch (this) {
-        CalendarFreeBusyType.free => _calendarFreeBusyTypeFreeIcs,
-        CalendarFreeBusyType.busy => _calendarFreeBusyTypeBusyIcs,
-        CalendarFreeBusyType.busyUnavailable =>
-          _calendarFreeBusyTypeBusyUnavailableIcs,
-        CalendarFreeBusyType.busyTentative =>
-          _calendarFreeBusyTypeBusyTentativeIcs,
-      };
+    CalendarFreeBusyType.free => _calendarFreeBusyTypeFreeIcs,
+    CalendarFreeBusyType.busy => _calendarFreeBusyTypeBusyIcs,
+    CalendarFreeBusyType.busyUnavailable =>
+      _calendarFreeBusyTypeBusyUnavailableIcs,
+    CalendarFreeBusyType.busyTentative => _calendarFreeBusyTypeBusyTentativeIcs,
+  };
 
   static CalendarFreeBusyType? fromIcsValue(String? value) => switch (value) {
-        _calendarFreeBusyTypeFreeIcs => CalendarFreeBusyType.free,
-        _calendarFreeBusyTypeBusyIcs => CalendarFreeBusyType.busy,
-        _calendarFreeBusyTypeBusyUnavailableIcs =>
-          CalendarFreeBusyType.busyUnavailable,
-        _calendarFreeBusyTypeBusyTentativeIcs =>
-          CalendarFreeBusyType.busyTentative,
-        _ => null,
-      };
+    _calendarFreeBusyTypeFreeIcs => CalendarFreeBusyType.free,
+    _calendarFreeBusyTypeBusyIcs => CalendarFreeBusyType.busy,
+    _calendarFreeBusyTypeBusyUnavailableIcs =>
+      CalendarFreeBusyType.busyUnavailable,
+    _calendarFreeBusyTypeBusyTentativeIcs => CalendarFreeBusyType.busyTentative,
+    _ => null,
+  };
 }
 
 @freezed
 @HiveType(typeId: _calendarFreeBusyIntervalTypeId)
-class CalendarFreeBusyInterval with _$CalendarFreeBusyInterval {
+abstract class CalendarFreeBusyInterval with _$CalendarFreeBusyInterval {
   const factory CalendarFreeBusyInterval({
     @HiveField(_calendarFreeBusyIntervalStartField)
     required CalendarDateTime start,
@@ -116,7 +114,7 @@ class CalendarFreeBusyInterval with _$CalendarFreeBusyInterval {
 
 @freezed
 @HiveType(typeId: _calendarAvailabilityWindowTypeId)
-class CalendarAvailabilityWindow with _$CalendarAvailabilityWindow {
+abstract class CalendarAvailabilityWindow with _$CalendarAvailabilityWindow {
   const factory CalendarAvailabilityWindow({
     @HiveField(_calendarAvailabilityWindowStartField)
     required CalendarDateTime start,
@@ -132,7 +130,7 @@ class CalendarAvailabilityWindow with _$CalendarAvailabilityWindow {
 
 @freezed
 @HiveType(typeId: _calendarAvailabilityTypeId)
-class CalendarAvailability with _$CalendarAvailability {
+abstract class CalendarAvailability with _$CalendarAvailability {
   const factory CalendarAvailability({
     @HiveField(_calendarAvailabilityIdField) required String id,
     @HiveField(_calendarAvailabilityStartField) required CalendarDateTime start,
@@ -151,7 +149,7 @@ class CalendarAvailability with _$CalendarAvailability {
 
 @freezed
 @HiveType(typeId: _calendarAvailabilityOverlayTypeId)
-class CalendarAvailabilityOverlay with _$CalendarAvailabilityOverlay {
+abstract class CalendarAvailabilityOverlay with _$CalendarAvailabilityOverlay {
   const factory CalendarAvailabilityOverlay({
     @HiveField(_calendarAvailabilityOverlayOwnerField) required String owner,
     @HiveField(_calendarAvailabilityOverlayRangeStartField)

@@ -14,9 +14,9 @@ extension ContactExportFormatMetadata on ContactExportFormat {
   bool get isVcard => this == ContactExportFormat.vcard;
 
   String get fileExtension => switch (this) {
-        ContactExportFormat.csv => 'csv',
-        ContactExportFormat.vcard => 'vcf',
-      };
+    ContactExportFormat.csv => 'csv',
+    ContactExportFormat.vcard => 'vcf',
+  };
 }
 
 class ContactExportEntry {
@@ -52,16 +52,21 @@ class ContactExporter {
     required String fileLabel,
     required ContactExportLabels labels,
   }) async {
-    final String exportBody =
-        format.isCsv ? _buildCsv(contacts, labels) : _buildVcard(contacts);
-    final String sanitizedLabel =
-        _sanitizeLabel(fileLabel, labels.fallbackLabel);
+    final String exportBody = format.isCsv
+        ? _buildCsv(contacts, labels)
+        : _buildVcard(contacts);
+    final String sanitizedLabel = _sanitizeLabel(
+      fileLabel,
+      labels.fallbackLabel,
+    );
     return _writeExportFile(exportBody, sanitizedLabel, format.fileExtension);
   }
 }
 
 String _buildCsv(
-    List<ContactExportEntry> contacts, ContactExportLabels labels) {
+  List<ContactExportEntry> contacts,
+  ContactExportLabels labels,
+) {
   final String csvHeaderLine =
       '${_escapeCsvField(labels.csvHeaderName)},${_escapeCsvField(labels.csvHeaderAddress)}';
   final StringBuffer buffer = StringBuffer()..writeln(csvHeaderLine);

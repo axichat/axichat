@@ -18,12 +18,12 @@ class CalendarSidebarController extends ChangeNotifier {
     required double width,
     required double minWidth,
     required double maxWidth,
-  })  : assert(minWidth <= maxWidth, 'minWidth must be <= maxWidth'),
-        _state = CalendarSidebarState(
-          width: width.clamp(minWidth, maxWidth),
-          minWidth: minWidth,
-          maxWidth: maxWidth,
-        );
+  }) : assert(minWidth <= maxWidth, 'minWidth must be <= maxWidth'),
+       _state = CalendarSidebarState(
+         width: width.clamp(minWidth, maxWidth),
+         minWidth: minWidth,
+         maxWidth: maxWidth,
+       );
 
   CalendarSidebarState _state;
   CalendarSidebarState get state => _state;
@@ -84,8 +84,9 @@ class CalendarSidebarController extends ChangeNotifier {
   }
 
   void toggleSection(CalendarSidebarSection section) {
-    final CalendarSidebarSection? next =
-        _state.expandedSection == section ? null : section;
+    final CalendarSidebarSection? next = _state.expandedSection == section
+        ? null
+        : section;
     if (next != _state.expandedSection) {
       _updateState(
         _state.copyWith(expandedSection: next, expandedSectionSpecified: true),
@@ -106,8 +107,9 @@ class CalendarSidebarController extends ChangeNotifier {
     String? taskId, {
     TaskPopoverAnchorToken? anchorToken,
   }) {
-    final TaskPopoverAnchorToken? resolvedAnchor =
-        taskId == null ? null : anchorToken;
+    final TaskPopoverAnchorToken? resolvedAnchor = taskId == null
+        ? null
+        : anchorToken;
     if (taskId != _state.activePopoverTaskId ||
         resolvedAnchor != _state.activePopoverAnchorToken) {
       _updateState(
@@ -122,8 +124,9 @@ class CalendarSidebarController extends ChangeNotifier {
   }
 
   void resetForm({bool preserveAdvancedVisibility = true}) {
-    final bool nextShowAdvanced =
-        preserveAdvancedVisibility ? _state.showAdvancedOptions : false;
+    final bool nextShowAdvanced = preserveAdvancedVisibility
+        ? _state.showAdvancedOptions
+        : false;
     if (nextShowAdvanced != _state.showAdvancedOptions) {
       _updateState(_state.copyWith(showAdvancedOptions: nextShowAdvanced));
     }
@@ -196,14 +199,14 @@ class CalendarSidebarState extends Equatable {
 
   @override
   List<Object?> get props => [
-        width,
-        minWidth,
-        maxWidth,
-        hasUserResized,
-        isResizing,
-        showAdvancedOptions,
-        expandedSection,
-        activePopoverTaskId,
-        activePopoverAnchorToken,
-      ];
+    width,
+    minWidth,
+    maxWidth,
+    hasUserResized,
+    isResizing,
+    showAdvancedOptions,
+    expandedSection,
+    activePopoverTaskId,
+    activePopoverAnchorToken,
+  ];
 }

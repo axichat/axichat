@@ -20,8 +20,9 @@ String sanitizeAttachmentFileName({
   );
   final sanitizedCandidate = _sanitizeBaseName(candidate);
   final sanitizedFallback = _sanitizeBaseName(fallbackName);
-  final resolved =
-      sanitizedCandidate.isNotEmpty ? sanitizedCandidate : sanitizedFallback;
+  final resolved = sanitizedCandidate.isNotEmpty
+      ? sanitizedCandidate
+      : sanitizedFallback;
   final safeName = resolved.isNotEmpty ? resolved : fallbackName;
   return _truncateFileName(name: safeName, maxLength: maxLength);
 }
@@ -47,8 +48,9 @@ String _normalizePathSeparators(String name) =>
     name.replaceAll(_windowsPathSeparator, _posixPathSeparator);
 
 String _truncateFileName({required String name, required int maxLength}) {
-  final safeMaxLength =
-      maxLength < _minFileNameLength ? _minFileNameLength : maxLength;
+  final safeMaxLength = maxLength < _minFileNameLength
+      ? _minFileNameLength
+      : maxLength;
   if (name.length <= safeMaxLength) {
     return name;
   }

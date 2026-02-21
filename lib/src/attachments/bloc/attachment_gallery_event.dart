@@ -4,18 +4,16 @@
 part of 'attachment_gallery_bloc.dart';
 
 @freezed
-class AttachmentGalleryEvent with _$AttachmentGalleryEvent {
+abstract class AttachmentGalleryEvent with _$AttachmentGalleryEvent {
   const factory AttachmentGalleryEvent.itemsUpdated({
     required List<AttachmentGalleryItem> items,
   }) = AttachmentGalleryItemsUpdated;
 
-  const factory AttachmentGalleryEvent.loadFailed({
-    required String error,
-  }) = AttachmentGalleryLoadFailed;
+  const factory AttachmentGalleryEvent.loadFailed({required String error}) =
+      AttachmentGalleryLoadFailed;
 
-  const factory AttachmentGalleryEvent.queryChanged({
-    required String query,
-  }) = AttachmentGalleryQueryChanged;
+  const factory AttachmentGalleryEvent.queryChanged({required String query}) =
+      AttachmentGalleryQueryChanged;
 
   const factory AttachmentGalleryEvent.sortChanged({
     required AttachmentGallerySortOption sortOption,

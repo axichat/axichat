@@ -28,14 +28,15 @@ import 'widgets/calendar_sheet_header.dart';
 import 'widgets/calendar_task_title_hover_reporter.dart';
 import 'widgets/task_text_field.dart';
 
-typedef CalendarSearchTileBuilder = Widget Function(
-  CalendarTask task, {
-  Widget? trailing,
-  bool requiresLongPress,
-  VoidCallback? onTap,
-  VoidCallback? onDragStart,
-  bool allowContextMenu,
-});
+typedef CalendarSearchTileBuilder =
+    Widget Function(
+      CalendarTask task, {
+      Widget? trailing,
+      bool requiresLongPress,
+      VoidCallback? onTap,
+      VoidCallback? onDragStart,
+      bool allowContextMenu,
+    });
 
 const int _taskSearchSingleCount = 1;
 const String _queryKeyCategory = 'category';
@@ -92,8 +93,9 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
       if (effectivePath.taskIds.contains(task.baseId)) {
         FeedbackSystem.showError(
           context,
-          context.l10n
-              .calendarCriticalPathAlreadyContainsTasks(_taskSearchSingleCount),
+          context.l10n.calendarCriticalPathAlreadyContainsTasks(
+            _taskSearchSingleCount,
+          ),
         );
         return;
       }
@@ -153,8 +155,8 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
       final String? occurrenceKey = occurrenceKeyFrom(task.id);
       final CalendarTask? occurrenceTask =
           storedTask == null && occurrenceKey != null
-              ? latestTask.occurrenceForId(task.id)
-              : null;
+          ? latestTask.occurrenceForId(task.id)
+          : null;
       final CalendarTask displayTask =
           storedTask ?? occurrenceTask ?? latestTask;
       final bool shouldUpdateOccurrence =
@@ -195,9 +197,9 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
                   scaffoldMessenger: scaffoldMessenger,
                   locationHelper: locationHelper,
                   onTaskUpdated: (updatedTask) {
-                    context
-                        .read<B>()
-                        .add(CalendarEvent.taskUpdated(task: updatedTask));
+                    context.read<B>().add(
+                      CalendarEvent.taskUpdated(task: updatedTask),
+                    );
                   },
                   onOccurrenceUpdated: shouldUpdateOccurrence
                       ? (
@@ -208,31 +210,31 @@ Future<void> showCalendarTaskSearch<B extends BaseCalendarBloc>({
                         }) {
                           if (scheduleTouched || checklistTouched) {
                             context.read<B>().add(
-                                  CalendarEvent.taskOccurrenceUpdated(
-                                    taskId: baseId,
-                                    occurrenceId: task.id,
-                                    scheduledTime: scheduleTouched
-                                        ? updatedTask.scheduledTime
-                                        : null,
-                                    duration: scheduleTouched
-                                        ? updatedTask.duration
-                                        : null,
-                                    endDate: scheduleTouched
-                                        ? updatedTask.endDate
-                                        : null,
-                                    checklist: checklistTouched
-                                        ? updatedTask.checklist
-                                        : null,
-                                    range: scope.range,
-                                  ),
-                                );
+                              CalendarEvent.taskOccurrenceUpdated(
+                                taskId: baseId,
+                                occurrenceId: task.id,
+                                scheduledTime: scheduleTouched
+                                    ? updatedTask.scheduledTime
+                                    : null,
+                                duration: scheduleTouched
+                                    ? updatedTask.duration
+                                    : null,
+                                endDate: scheduleTouched
+                                    ? updatedTask.endDate
+                                    : null,
+                                checklist: checklistTouched
+                                    ? updatedTask.checklist
+                                    : null,
+                                range: scope.range,
+                              ),
+                            );
                           }
                         }
                       : null,
                   onTaskDeleted: (taskId) {
-                    context
-                        .read<B>()
-                        .add(CalendarEvent.taskDeleted(taskId: taskId));
+                    context.read<B>().add(
+                      CalendarEvent.taskDeleted(taskId: taskId),
+                    );
                     closeSheet();
                   },
                 ),
@@ -388,10 +390,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                         bottom: spacing.xs + keyboardInset,
                       ),
                       sliver: SliverList(
-                        delegate: SliverChildBuilderDelegate((
-                          context,
-                          index,
-                        ) {
+                        delegate: SliverChildBuilderDelegate((context, index) {
                           if (index.isOdd) {
                             return SizedBox(height: spacing.xxs);
                           }
@@ -452,8 +451,9 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
       queryText,
       targetPath: targetPath,
     );
-    final Set<String> excludedBaseIds =
-        widget.excludedTaskIds.map((id) => baseTaskIdFrom(id)).toSet();
+    final Set<String> excludedBaseIds = widget.excludedTaskIds
+        .map((id) => baseTaskIdFrom(id))
+        .toSet();
     if (targetPath != null) {
       excludedBaseIds.addAll(targetPath.taskIds.map(baseTaskIdFrom));
     }
@@ -497,23 +497,27 @@ class _FilterRow extends StatelessWidget {
       runSpacing: spacing.xxs,
       children: _QuickFilter.values.map((filter) {
         final bool active = filters.contains(filter);
-        final Color background =
-            active ? colors.primary.withValues(alpha: 0.12) : colors.card;
-        final Color border =
-            active ? colors.primary : colors.muted.withValues(alpha: 0.25);
-        final Color textColor =
-            active ? colors.primary : colors.mutedForeground;
+        final Color background = active
+            ? colors.primary.withValues(alpha: 0.12)
+            : colors.card;
+        final Color border = active
+            ? colors.primary
+            : colors.muted.withValues(alpha: 0.25);
+        final Color textColor = active
+            ? colors.primary
+            : colors.mutedForeground;
         final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
-            borderRadius: BorderRadius.circular(context.radii.squircle));
+          borderRadius: BorderRadius.circular(context.radii.squircle),
+        );
         final RoundedSuperellipseBorder decoratedShape =
             RoundedSuperellipseBorder(
-          borderRadius: BorderRadius.circular(context.radii.squircle),
-          side: BorderSide(color: border, width: context.borderSide.width),
-        );
+              borderRadius: BorderRadius.circular(context.radii.squircle),
+              side: BorderSide(color: border, width: context.borderSide.width),
+            );
         return AxiTapBounce(
           child: ShadFocusable(
             canRequestFocus: true,
-            builder: (context, _, __) {
+            builder: (context, _, _) {
               return Material(
                 type: MaterialType.transparency,
                 shape: shape,
@@ -582,10 +586,7 @@ class _ResultMetadata extends StatelessWidget {
       tags.add(
         _MetadataTag(
           icon: Icons.schedule,
-          label: TimeFormatter.formatFriendlyDateTime(
-            context.l10n,
-            scheduled,
-          ),
+          label: TimeFormatter.formatFriendlyDateTime(context.l10n, scheduled),
         ),
       );
     }
@@ -639,8 +640,9 @@ class _MetadataTag extends StatelessWidget {
           SizedBox(width: spacing.xxs),
           Text(
             label,
-            style: context.textTheme.label.strong
-                .copyWith(color: colors.mutedForeground),
+            style: context.textTheme.label.strong.copyWith(
+              color: colors.mutedForeground,
+            ),
           ),
         ],
       ),
@@ -714,9 +716,10 @@ class _SearchResultTile extends StatelessWidget {
       child: AxiTapBounce(
         child: ShadFocusable(
           canRequestFocus: true,
-          builder: (context, _, __) {
+          builder: (context, _, _) {
             final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
-                borderRadius: BorderRadius.circular(context.radii.squircle));
+              borderRadius: BorderRadius.circular(context.radii.squircle),
+            );
             return Material(
               type: MaterialType.transparency,
               shape: shape,
@@ -731,10 +734,7 @@ class _SearchResultTile extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          task.title,
-                          style: context.textTheme.small.strong,
-                        ),
+                        Text(task.title, style: context.textTheme.small.strong),
                         if (subtitle != null) ...[
                           SizedBox(height: context.spacing.xxs),
                           Text(subtitle, style: context.textTheme.muted),
@@ -779,16 +779,13 @@ enum _QuickFilter {
 
 extension _QuickFilterLabelX on _QuickFilter {
   String label(BuildContext context) => switch (this) {
-        _QuickFilter.scheduled =>
-          context.l10n.calendarTaskSearchFilterScheduled,
-        _QuickFilter.unscheduled =>
-          context.l10n.calendarTaskSearchFilterUnscheduled,
-        _QuickFilter.reminders =>
-          context.l10n.calendarTaskSearchFilterReminders,
-        _QuickFilter.open => context.l10n.calendarTaskSearchFilterOpen,
-        _QuickFilter.completed =>
-          context.l10n.calendarTaskSearchFilterCompleted,
-      };
+    _QuickFilter.scheduled => context.l10n.calendarTaskSearchFilterScheduled,
+    _QuickFilter.unscheduled =>
+      context.l10n.calendarTaskSearchFilterUnscheduled,
+    _QuickFilter.reminders => context.l10n.calendarTaskSearchFilterReminders,
+    _QuickFilter.open => context.l10n.calendarTaskSearchFilterOpen,
+    _QuickFilter.completed => context.l10n.calendarTaskSearchFilterCompleted,
+  };
 }
 
 class _QuickFilterEvaluator {
@@ -1015,7 +1012,8 @@ class _QueryMatcher {
       return false;
     }
 
-    final bool hasScopedTextTerms = query.titleTerms.isNotEmpty ||
+    final bool hasScopedTextTerms =
+        query.titleTerms.isNotEmpty ||
         query.descriptionTerms.isNotEmpty ||
         query.locationTerms.isNotEmpty ||
         query.categoryTerms.isNotEmpty;
@@ -1181,8 +1179,9 @@ class _QueryMatcher {
     if (matchingPaths.isEmpty) {
       return false;
     }
-    final String names =
-        matchingPaths.map((path) => path.name.toLowerCase()).join(' ');
+    final String names = matchingPaths
+        .map((path) => path.name.toLowerCase())
+        .join(' ');
     return terms.every((term) => names.contains(term));
   }
 

@@ -21,14 +21,14 @@ class BlocklistCubit extends Cubit<BlocklistState>
   static const String blocklistItemsCacheKey = 'items';
 
   BlocklistCubit({required XmppService xmppService})
-      : _xmppService = xmppService,
-        super(const BlocklistAvailable(items: null, visibleItems: null)) {
+    : _xmppService = xmppService,
+      super(const BlocklistAvailable(items: null, visibleItems: null)) {
     _xmppBlocklistSubscription = _xmppService.blocklistStream().listen(
-          _handleXmppBlocklist,
-        );
+      _handleXmppBlocklist,
+    );
     _emailBlocklistSubscription = _xmppService.emailBlocklistStream().listen(
-          _handleEmailBlocklist,
-        );
+      _handleEmailBlocklist,
+    );
   }
 
   final XmppService _xmppService;
@@ -39,7 +39,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
 
   late final StreamSubscription<List<BlocklistData>> _xmppBlocklistSubscription;
   late final StreamSubscription<List<EmailBlocklistEntry>>
-      _emailBlocklistSubscription;
+  _emailBlocklistSubscription;
 
   @override
   void onChange(Change<BlocklistState> change) {
@@ -74,24 +74,15 @@ class BlocklistCubit extends Cubit<BlocklistState>
         return;
       }
       try {
-        await _xmppService.setBlockStatus(
-          address: normalized,
-          blocked: true,
-        );
+        await _xmppService.setBlockStatus(address: normalized, blocked: true);
       } on XmppException {
         _emitFailure(
-          BlocklistNotice(
-            BlocklistNoticeType.blockFailed,
-            address: normalized,
-          ),
+          BlocklistNotice(BlocklistNoticeType.blockFailed, address: normalized),
         );
         return;
       }
       _emitSuccess(
-        BlocklistNotice(
-          BlocklistNoticeType.blocked,
-          address: normalized,
-        ),
+        BlocklistNotice(BlocklistNoticeType.blocked, address: normalized),
       );
       return;
     }
@@ -102,24 +93,16 @@ class BlocklistCubit extends Cubit<BlocklistState>
     try {
       await _blockXmpp(address: normalized, reportReason: reportReason);
     } on XmppBlockUnsupportedException catch (_) {
-      _emitFailure(
-        const BlocklistNotice(BlocklistNoticeType.blockUnsupported),
-      );
+      _emitFailure(const BlocklistNotice(BlocklistNoticeType.blockUnsupported));
       return;
     } on XmppBlocklistException catch (_) {
       _emitFailure(
-        BlocklistNotice(
-          BlocklistNoticeType.blockFailed,
-          address: normalized,
-        ),
+        BlocklistNotice(BlocklistNoticeType.blockFailed, address: normalized),
       );
       return;
     }
     _emitSuccess(
-      BlocklistNotice(
-        BlocklistNoticeType.blocked,
-        address: normalized,
-      ),
+      BlocklistNotice(BlocklistNoticeType.blocked, address: normalized),
     );
   }
 
@@ -148,10 +131,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
     _emitLoading(jid: normalized);
     if (entry.transport.isEmail) {
       try {
-        await _xmppService.setBlockStatus(
-          address: normalized,
-          blocked: false,
-        );
+        await _xmppService.setBlockStatus(address: normalized, blocked: false);
       } on XmppException {
         _emitFailure(
           BlocklistNotice(
@@ -162,10 +142,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
         return;
       }
       _emitSuccess(
-        BlocklistNotice(
-          BlocklistNoticeType.unblocked,
-          address: normalized,
-        ),
+        BlocklistNotice(BlocklistNoticeType.unblocked, address: normalized),
       );
       return;
     }
@@ -178,18 +155,12 @@ class BlocklistCubit extends Cubit<BlocklistState>
       return;
     } on XmppBlocklistException catch (_) {
       _emitFailure(
-        BlocklistNotice(
-          BlocklistNoticeType.unblockFailed,
-          address: normalized,
-        ),
+        BlocklistNotice(BlocklistNoticeType.unblockFailed, address: normalized),
       );
       return;
     }
     _emitSuccess(
-      BlocklistNotice(
-        BlocklistNoticeType.unblocked,
-        address: normalized,
-      ),
+      BlocklistNotice(BlocklistNoticeType.unblocked, address: normalized),
     );
   }
 
@@ -209,14 +180,10 @@ class BlocklistCubit extends Cubit<BlocklistState>
       failed = true;
     }
     if (failed) {
-      _emitFailure(
-        const BlocklistNotice(BlocklistNoticeType.unblockAllFailed),
-      );
+      _emitFailure(const BlocklistNotice(BlocklistNoticeType.unblockAllFailed));
       return;
     }
-    _emitSuccess(
-      const BlocklistNotice(BlocklistNoticeType.unblockAllSuccess),
-    );
+    _emitSuccess(const BlocklistNotice(BlocklistNoticeType.unblockAllSuccess));
   }
 
   void updateFilter({
@@ -279,24 +246,24 @@ class BlocklistCubit extends Cubit<BlocklistState>
     final items = current.items;
     return switch (current) {
       BlocklistAvailable() => BlocklistAvailable(
-          items: items,
-          visibleItems: visibleItems,
-        ),
+        items: items,
+        visibleItems: visibleItems,
+      ),
       BlocklistLoading() => BlocklistLoading(
-          jid: current.jid,
-          items: items,
-          visibleItems: visibleItems,
-        ),
+        jid: current.jid,
+        items: items,
+        visibleItems: visibleItems,
+      ),
       BlocklistSuccess() => BlocklistSuccess(
-          current.notice,
-          items: items,
-          visibleItems: visibleItems,
-        ),
+        current.notice,
+        items: items,
+        visibleItems: visibleItems,
+      ),
       BlocklistFailure() => BlocklistFailure(
-          current.notice,
-          items: items,
-          visibleItems: visibleItems,
-        ),
+        current.notice,
+        items: items,
+        visibleItems: visibleItems,
+      ),
     };
   }
 

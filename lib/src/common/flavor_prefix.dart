@@ -4,6 +4,6 @@
 import 'package:flutter/services.dart';
 
 String getFlavorPrefix() => switch (appFlavor) {
-      'development' => '[DEV]',
-      _ => '',
-    };
+  'development' => '[DEV]',
+  _ => '',
+};

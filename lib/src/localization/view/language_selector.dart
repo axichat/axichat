@@ -28,27 +28,27 @@ class LanguageSelector extends StatelessWidget {
       selector: (state) => state.language,
       builder: (context, language) {
         final maxWidth = compact ? 200.0 : 280.0;
-        return Align(
-          alignment: Alignment.centerLeft,
-          widthFactor: 1,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: maxWidth),
-            child: AxiSelect<AppLanguage>(
-              initialValue: language,
-              onChanged: (value) {
-                if (value == null) return;
-                context.read<SettingsCubit>().updateLanguage(value);
-              },
-              options: AppLanguage.values
-                  .map(
-                    (entry) => ShadOption<AppLanguage>(
-                      value: entry,
-                      child: _LanguageLabel(language: entry, style: labelStyle),
-                    ),
-                  )
-                  .toList(),
-              selectedOptionBuilder: (context, value) =>
-                  _LanguageLabel(language: value, style: labelStyle),
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxWidth),
+          child: AxiSelect<AppLanguage>(
+            initialValue: language,
+            shrinkWrap: true,
+            onChanged: (value) {
+              if (value == null) return;
+              context.read<SettingsCubit>().updateLanguage(value);
+            },
+            options: AppLanguage.values
+                .map(
+                  (entry) => ShadOption<AppLanguage>(
+                    value: entry,
+                    child: _LanguageLabel(language: entry, style: labelStyle),
+                  ),
+                )
+                .toList(),
+            selectedOptionBuilder: (context, value) => _LanguageLabel(
+              language: value,
+              style: labelStyle,
+              resolveSystemLanguage: true,
             ),
           ),
         );
@@ -58,27 +58,70 @@ class LanguageSelector extends StatelessWidget {
 }
 
 class _LanguageLabel extends StatelessWidget {
-  const _LanguageLabel({required this.language, required this.style});
+  const _LanguageLabel({
+    required this.language,
+    required this.style,
+    this.resolveSystemLanguage = false,
+  });
 
   final AppLanguage language;
   final LanguageLabelStyle style;
+  final bool resolveSystemLanguage;
+
+  AppLanguage _resolveCompactSystemLanguage(BuildContext context) {
+    if (!resolveSystemLanguage ||
+        style != LanguageLabelStyle.compact ||
+        language != AppLanguage.system) {
+      return language;
+    }
+    final locale = Localizations.maybeLocaleOf(context);
+    if (locale == null) {
+      return language;
+    }
+    for (final entry in AppLanguage.values) {
+      final entryLocale = entry.locale;
+      if (entryLocale == null) {
+        continue;
+      }
+      final sameLanguage = entryLocale.languageCode == locale.languageCode;
+      final sameCountry =
+          (entryLocale.countryCode ?? '') == (locale.countryCode ?? '');
+      if (sameLanguage && sameCountry) {
+        return entry;
+      }
+    }
+    for (final entry in AppLanguage.values) {
+      final entryLocale = entry.locale;
+      if (entryLocale == null) {
+        continue;
+      }
+      if (entryLocale.languageCode == locale.languageCode) {
+        return entry;
+      }
+    }
+    return language;
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final resolvedLanguage = _resolveCompactSystemLanguage(context);
     final textStyle = context.textTheme.small.copyWith(
       color: context.colorScheme.foreground,
     );
-    final text = style == LanguageLabelStyle.compact
-        ? language.abbreviation(l10n)
-        : language.label(l10n);
+    final bool showCompactAbbreviation =
+        style == LanguageLabelStyle.compact &&
+        !(resolveSystemLanguage && language == AppLanguage.system);
+    final text = showCompactAbbreviation
+        ? resolvedLanguage.abbreviation(l10n)
+        : resolvedLanguage.label(l10n);
     return DefaultTextStyle.merge(
       style: textStyle,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(language.flag(l10n)),
-          const SizedBox(width: 8),
+          Text(resolvedLanguage.flag(l10n)),
+          SizedBox(width: context.spacing.xs),
           Text(text),
         ],
       ),

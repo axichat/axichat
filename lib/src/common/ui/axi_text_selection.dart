@@ -131,7 +131,7 @@ class AxiTextSelectionGestureDetectorBuilder {
     final TextSelection selection = fromSelection ?? renderEditable.selection!;
     final bool baseIsCloser =
         (tappedPosition.offset - selection.baseOffset).abs() <
-            (tappedPosition.offset - selection.extentOffset).abs();
+        (tappedPosition.offset - selection.extentOffset).abs();
     final TextSelection nextSelection = selection.copyWith(
       baseOffset: baseIsCloser ? selection.extentOffset : selection.baseOffset,
       extentOffset: tappedPosition.offset,
@@ -193,16 +193,16 @@ class AxiTextSelectionGestureDetectorBuilder {
   double get _scrollPosition {
     final ScrollableState? scrollableState =
         delegate.editableTextKey.currentContext == null
-            ? null
-            : Scrollable.maybeOf(delegate.editableTextKey.currentContext!);
+        ? null
+        : Scrollable.maybeOf(delegate.editableTextKey.currentContext!);
     return scrollableState == null ? 0.0 : scrollableState.position.pixels;
   }
 
   AxisDirection? get _scrollDirection {
     final ScrollableState? scrollableState =
         delegate.editableTextKey.currentContext == null
-            ? null
-            : Scrollable.maybeOf(delegate.editableTextKey.currentContext!);
+        ? null
+        : Scrollable.maybeOf(delegate.editableTextKey.currentContext!);
     return scrollableState?.axisDirection;
   }
 
@@ -257,7 +257,8 @@ class AxiTextSelectionGestureDetectorBuilder {
     // TODO(justinmc): Should a desktop platform show its selection toolbar when
     // receiving a tap event?  Say a Windows device with a touchscreen.
     // https://github.com/flutter/flutter/issues/106586
-    _shouldShowSelectionToolbar = kind == null ||
+    _shouldShowSelectionToolbar =
+        kind == null ||
         kind == PointerDeviceKind.touch ||
         kind == PointerDeviceKind.stylus;
     _shouldShowSelectionHandles = _shouldShowSelectionToolbar;
@@ -270,8 +271,7 @@ class AxiTextSelectionGestureDetectorBuilder {
       case TargetPlatform.android:
         if (editableText.widget.stylusHandwritingEnabled) {
           final bool stylusEnabled = switch (kind) {
-            PointerDeviceKind.stylus ||
-            PointerDeviceKind.invertedStylus =>
+            PointerDeviceKind.stylus || PointerDeviceKind.invertedStylus =>
               editableText.widget.stylusHandwritingEnabled,
             _ => false,
           };
@@ -433,17 +433,18 @@ class AxiTextSelectionGestureDetectorBuilder {
             // Selects the word edge closest to the tap when the editable is not focused, or if the tap was neither exclusively
             // or inclusively on `previousSelection`. If the selection remains the same after selecting the word edge, then we
             // toggle the toolbar, if the editable field is not read only. If the selection changes then we hide the toolbar.
-            final TextSelection previousSelection = renderEditable.selection ??
+            final TextSelection previousSelection =
+                renderEditable.selection ??
                 editableText.textEditingValue.selection;
-            final TextPosition textPosition =
-                renderEditable.getPositionForPoint(details.globalPosition);
+            final TextPosition textPosition = renderEditable
+                .getPositionForPoint(details.globalPosition);
             final bool isAffinityTheSame =
                 textPosition.affinity == previousSelection.affinity;
             final bool wordAtCursorIndexIsMisspelled =
                 editableText.findSuggestionSpanAtCursorIndex(
-                      textPosition.offset,
-                    ) !=
-                    null;
+                  textPosition.offset,
+                ) !=
+                null;
 
             if (wordAtCursorIndexIsMisspelled) {
               renderEditable.selectWord(cause: SelectionChangedCause.tap);
@@ -553,7 +554,8 @@ class AxiTextSelectionGestureDetectorBuilder {
       case TargetPlatform.macOS:
         if (_longPressStartedWithoutFocus || renderEditable.readOnly) {
           renderEditable.selectWordsInRange(
-            from: details.globalPosition -
+            from:
+                details.globalPosition -
                 details.offsetFromOrigin -
                 editableOffset -
                 scrollableOffset,
@@ -577,7 +579,8 @@ class AxiTextSelectionGestureDetectorBuilder {
       case TargetPlatform.linux:
       case TargetPlatform.windows:
         renderEditable.selectWordsInRange(
-          from: details.globalPosition -
+          from:
+              details.globalPosition -
               details.offsetFromOrigin -
               editableOffset -
               scrollableOffset,
@@ -640,7 +643,8 @@ class AxiTextSelectionGestureDetectorBuilder {
       TapDownDetails(globalPosition: details.globalPosition),
     );
     _shouldShowSelectionToolbar = true;
-    _shouldShowSelectionHandles = details.kind == null ||
+    _shouldShowSelectionHandles =
+        details.kind == null ||
         details.kind == PointerDeviceKind.touch ||
         details.kind == PointerDeviceKind.stylus;
   }
@@ -715,13 +719,15 @@ class AxiTextSelectionGestureDetectorBuilder {
     assert(extent.offset >= 0);
     // Use extent.offset - 1 when `extent` is at the end of the text to retrieve
     // the previous text boundary's location.
-    final int start = textBoundary.getLeadingTextBoundaryAt(
+    final int start =
+        textBoundary.getLeadingTextBoundaryAt(
           extent.offset == editableText.textEditingValue.text.length
               ? extent.offset - 1
               : extent.offset,
         ) ??
         0;
-    final int end = textBoundary.getTrailingTextBoundaryAt(extent.offset) ??
+    final int end =
+        textBoundary.getTrailingTextBoundaryAt(extent.offset) ??
         editableText.textEditingValue.text.length;
     return TextRange(start: start, end: end);
   }
@@ -742,8 +748,9 @@ class AxiTextSelectionGestureDetectorBuilder {
   }) {
     final TextPosition fromPosition = renderEditable.getPositionForPoint(from);
     final TextRange fromRange = _moveToTextBoundary(fromPosition, boundary);
-    final TextPosition toPosition =
-        to == null ? fromPosition : renderEditable.getPositionForPoint(to);
+    final TextPosition toPosition = to == null
+        ? fromPosition
+        : renderEditable.getPositionForPoint(to);
     final TextRange toRange = toPosition == fromPosition
         ? fromRange
         : _moveToTextBoundary(toPosition, boundary);
@@ -795,7 +802,8 @@ class AxiTextSelectionGestureDetectorBuilder {
       return;
     }
     final PointerDeviceKind? kind = details.kind;
-    _shouldShowSelectionToolbar = kind == null ||
+    _shouldShowSelectionToolbar =
+        kind == null ||
         kind == PointerDeviceKind.touch ||
         kind == PointerDeviceKind.stylus;
     _shouldShowSelectionHandles = _shouldShowSelectionToolbar;
@@ -891,9 +899,9 @@ class AxiTextSelectionGestureDetectorBuilder {
         _scrollDirection ?? AxisDirection.left,
       )) {
         Axis.horizontal => Offset(
-            _scrollPosition - _dragStartScrollOffset,
-            0.0,
-          ),
+          _scrollPosition - _dragStartScrollOffset,
+          0.0,
+        ),
         Axis.vertical => Offset(0.0, _scrollPosition - _dragStartScrollOffset),
       };
       final Offset dragStartGlobalPosition =
@@ -930,7 +938,8 @@ class AxiTextSelectionGestureDetectorBuilder {
               case PointerDeviceKind.mouse:
               case PointerDeviceKind.trackpad:
                 return _selectParagraphsInRange(
-                  from: dragStartGlobalPosition -
+                  from:
+                      dragStartGlobalPosition -
                       editableOffset -
                       scrollableOffset,
                   to: details.globalPosition,

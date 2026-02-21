@@ -15,12 +15,12 @@ part 'roster_state.dart';
 
 class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   RosterCubit({required RosterService rosterService})
-      : _rosterService = rosterService,
-        super(const RosterState()) {
+    : _rosterService = rosterService,
+      super(const RosterState()) {
     _rosterSubscription = _rosterService.rosterStream().listen(_handleRoster);
     _invitesSubscription = _rosterService.invitesStream().listen(
-          _handleInvites,
-        );
+      _handleInvites,
+    );
   }
 
   final RosterService _rosterService;
@@ -241,8 +241,9 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   ) {
     Iterable<Invite> filtered = invites;
     if (criteria.query.isNotEmpty) {
-      filtered =
-          filtered.where((invite) => _matchesInviteQuery(invite, criteria));
+      filtered = filtered.where(
+        (invite) => _matchesInviteQuery(invite, criteria),
+      );
     }
     final sorted = filtered.toList();
     sorted.sort(

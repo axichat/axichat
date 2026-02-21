@@ -126,8 +126,8 @@ void main() {
       );
       final DateTime priorDate = DateTime(baseYear, baseMonth, priorDay);
       final DateTime futureDate = DateTime(baseYear, baseMonth, futureDay);
-      final String overrideKey =
-          overrideOriginalStart.microsecondsSinceEpoch.toString();
+      final String overrideKey = overrideOriginalStart.microsecondsSinceEpoch
+          .toString();
 
       final CalendarTask task = CalendarTask(
         id: taskId,

@@ -49,14 +49,14 @@ final class XhtmlImManager extends mox.XmppManagerBase {
 
   @override
   List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
-        mox.StanzaHandler(
-          stanzaTag: 'message',
-          tagName: _xhtmlImTag,
-          tagXmlns: _xhtmlImXmlns,
-          callback: _onMessage,
-          priority: -99,
-        ),
-      ];
+    mox.StanzaHandler(
+      stanzaTag: 'message',
+      tagName: _xhtmlImTag,
+      tagXmlns: _xhtmlImXmlns,
+      callback: _onMessage,
+      priority: -99,
+    ),
+  ];
 
   @override
   Future<bool> isSupported() async => true;
@@ -67,7 +67,8 @@ final class XhtmlImManager extends mox.XmppManagerBase {
   ) async {
     final htmlNode = message.firstTag(_xhtmlImTag, xmlns: _xhtmlImXmlns);
     if (htmlNode == null) return state;
-    final bodyNode = htmlNode.firstTag(_xhtmlImBodyTag, xmlns: _xhtmlXmlns) ??
+    final bodyNode =
+        htmlNode.firstTag(_xhtmlImBodyTag, xmlns: _xhtmlXmlns) ??
         htmlNode.firstTag(_xhtmlImBodyTag);
     if (bodyNode == null) return state;
     final markup = _xhtmlBodyMarkup(bodyNode);
@@ -78,7 +79,8 @@ final class XhtmlImManager extends mox.XmppManagerBase {
         ? markup
         : HtmlContentCodec.fromPlainText(fallbackPlain);
     if (resolvedPlain.isEmpty && resolvedMarkup.isEmpty) return state;
-    final lang = bodyNode.attributes[_xmlLangAttr]?.toString() ??
+    final lang =
+        bodyNode.attributes[_xmlLangAttr]?.toString() ??
         bodyNode.attributes[_langAttr]?.toString();
     return state
       ..extensions.set(

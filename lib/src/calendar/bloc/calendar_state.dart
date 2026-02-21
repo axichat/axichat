@@ -29,7 +29,7 @@ class TaskFocusRequest {
 }
 
 @freezed
-class CalendarState with _$CalendarState {
+abstract class CalendarState with _$CalendarState {
   const factory CalendarState({
     required CalendarModel model,
     @Default(false) bool isSyncing,
@@ -51,10 +51,8 @@ class CalendarState with _$CalendarState {
     String? focusedCriticalPathId,
   }) = _CalendarState;
 
-  factory CalendarState.initial() => CalendarState(
-        model: CalendarModel.empty(),
-        selectedDate: demoNow(),
-      );
+  factory CalendarState.initial() =>
+      CalendarState(model: CalendarModel.empty(), selectedDate: demoNow());
 }
 
 extension CalendarStateExtensions on CalendarState {

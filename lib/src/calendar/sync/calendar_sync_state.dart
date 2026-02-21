@@ -132,9 +132,9 @@ class CalendarSyncState {
 
   @override
   int get hashCode => Object.hash(
-        updatesSinceSnapshot,
-        lastAppliedTimestamp,
-        lastAppliedStanzaId,
-        lastSnapshotChecksum,
-      );
+    updatesSinceSnapshot,
+    lastAppliedTimestamp,
+    lastAppliedStanzaId,
+    lastSnapshotChecksum,
+  );
 }

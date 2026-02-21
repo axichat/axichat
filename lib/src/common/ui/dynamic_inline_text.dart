@@ -75,13 +75,13 @@ class DynamicInlineTextRenderObject extends RenderBox {
     List<DynamicTextLink> links = const [],
     LinkTapCallback? onLinkTap,
     LinkTapCallback? onLinkLongPress,
-  })  : _text = text,
-        _details = details,
-        _textDirection = textDirection,
-        _textScaler = textScaler,
-        _links = List.unmodifiable(links),
-        _onLinkTap = onLinkTap,
-        _onLinkLongPress = onLinkLongPress;
+  }) : _text = text,
+       _details = details,
+       _textDirection = textDirection,
+       _textScaler = textScaler,
+       _links = List.unmodifiable(links),
+       _onLinkTap = onLinkTap,
+       _onLinkLongPress = onLinkLongPress;
 
   TextSpan get text => _text;
   TextSpan _text;
@@ -351,9 +351,11 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
     _finalLineWidth = textLines.isEmpty ? 0.0 : textLines.last.width;
 
-    final combinedWidth =
-        _detailsWidth == 0 ? _finalLineWidth : _finalLineWidth + _detailsWidth;
-    _canInlineDetails = hasBodyText &&
+    final combinedWidth = _detailsWidth == 0
+        ? _finalLineWidth
+        : _finalLineWidth + _detailsWidth;
+    _canInlineDetails =
+        hasBodyText &&
         _detailsWidth > 0 &&
         combinedWidth <
             (textLines.length <= 1 ? maxWidth : min(_maxLineWidth, maxWidth));
@@ -389,8 +391,9 @@ class DynamicInlineTextRenderObject extends RenderBox {
         : offset.dx + size.width - _detailsWidth;
     for (var i = 0; i < _detailPainters.length; i++) {
       final painter = _detailPainters[i];
-      final metrics =
-          _detailLineMetrics.length > i ? _detailLineMetrics[i] : null;
+      final metrics = _detailLineMetrics.length > i
+          ? _detailLineMetrics[i]
+          : null;
       final detailBaseline =
           metrics?.baseline ?? painter.computeLineMetrics().first.baseline;
       final dy = _canInlineDetails && lastLine != null

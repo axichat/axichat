@@ -96,8 +96,8 @@ class _AxiAvatarState extends State<AxiAvatar> {
   Future<void> _refreshAvatarBytes({bool clearStaleBytes = false}) async {
     final providedBytes =
         widget.avatarBytes != null && widget.avatarBytes!.isNotEmpty
-            ? widget.avatarBytes
-            : null;
+        ? widget.avatarBytes
+        : null;
     if (providedBytes != null) {
       final safeBytes = await _sanitizeAvatarBytes(providedBytes);
       if (!mounted) return;
@@ -112,9 +112,9 @@ class _AxiAvatarState extends State<AxiAvatar> {
       final resolvedPath = widget.avatarPath?.trim();
       if (resolvedPath != null && resolvedPath.isNotEmpty) {
         context.read<XmppService>().cacheSafeAvatarBytes(
-              resolvedPath,
-              safeBytes,
-            );
+          resolvedPath,
+          safeBytes,
+        );
       }
       setState(() {
         _resolvedAvatarBytes = safeBytes;
@@ -220,9 +220,10 @@ class _AxiAvatarState extends State<AxiAvatar> {
     final clampedProgress = sizeSpan <= 0
         ? 1.0
         : ((widget.size - sizing.iconButtonIconSize) / sizeSpan)
-            .clamp(0.0, 1.0)
-            .toDouble();
-    final squircleCornerRadius = radii.squircleSm +
+              .clamp(0.0, 1.0)
+              .toDouble();
+    final squircleCornerRadius =
+        radii.squircleSm +
         ((radii.squircle - radii.squircleSm) * clampedProgress);
     final ShapeBorder avatarShape = widget.shape == AxiAvatarShape.circle
         ? const CircleBorder()
@@ -237,7 +238,8 @@ class _AxiAvatarState extends State<AxiAvatar> {
           BlocBuilder<SettingsCubit, SettingsState>(
             builder: (context, state) {
               final path = widget.avatarPath?.trim();
-              final isLoadingAvatar = avatarBytes == null &&
+              final isLoadingAvatar =
+                  avatarBytes == null &&
                   path != null &&
                   path.isNotEmpty &&
                   _loadingPath == path;
@@ -245,8 +247,9 @@ class _AxiAvatarState extends State<AxiAvatar> {
               final initial = displayLabel.isNotEmpty
                   ? displayLabel.substring(0, 1).toUpperCase()
                   : '?';
-              final colorSeed =
-                  displayLabel.isNotEmpty ? displayLabel : widget.jid;
+              final colorSeed = displayLabel.isNotEmpty
+                  ? displayLabel
+                  : widget.jid;
               final backgroundColor = state.colorfulAvatars
                   ? stringToColor(colorSeed)
                   : context.colorScheme.secondary;
@@ -267,7 +270,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
                         child: Image.memory(
                           avatarBytes,
                           fit: BoxFit.contain,
-                          errorBuilder: (_, __, ___) => ColoredBox(
+                          errorBuilder: (_, _, _) => ColoredBox(
                             color: backgroundColor,
                             child: Center(
                               child: FittedBox(
@@ -298,9 +301,11 @@ class _AxiAvatarState extends State<AxiAvatar> {
               ? const SizedBox()
               : Positioned.fill(
                   child: FractionallySizedBox(
-                    widthFactor: context.sizing.iconButtonIconSize /
+                    widthFactor:
+                        context.sizing.iconButtonIconSize /
                         context.sizing.iconButtonTapTarget,
-                    heightFactor: context.sizing.iconButtonIconSize /
+                    heightFactor:
+                        context.sizing.iconButtonIconSize /
                         context.sizing.iconButtonTapTarget,
                     alignment: Alignment.bottomRight,
                     child: PresenceIndicator(
@@ -337,9 +342,9 @@ class _AxiAvatarState extends State<AxiAvatar> {
                         selectedTileColor: context.colorScheme.accent,
                         onTap: () {
                           context.read<ProfileCubit>().updatePresence(
-                                presence: value,
-                                status: widget.status,
-                              );
+                            presence: value,
+                            status: widget.status,
+                          );
                           popoverController.toggle();
                         },
                       ),

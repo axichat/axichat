@@ -35,8 +35,8 @@ void main() {
 
     xmppService = XmppService(
       buildConnection: () => mockConnection,
-      buildStateStore: (_, __) => mockStateStore,
-      buildDatabase: (_, __) => database,
+      buildStateStore: (_, _) => mockStateStore,
+      buildDatabase: (_, _) => database,
       notificationService: mockNotificationService,
     );
   });
@@ -54,8 +54,9 @@ void main() {
     when(() => mockConnection.registerFeatureNegotiators(any())).thenAnswer((
       invocation,
     ) async {
-      final negotiators = invocation.positionalArguments.first
-          as List<mox.XmppFeatureNegotiatorBase>;
+      final negotiators =
+          invocation.positionalArguments.first
+              as List<mox.XmppFeatureNegotiatorBase>;
       captured
         ..clear()
         ..addAll(negotiators);

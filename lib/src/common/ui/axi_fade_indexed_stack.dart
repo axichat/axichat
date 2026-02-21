@@ -36,8 +36,8 @@ class AxiFadeIndexedStack extends StatelessWidget {
     final int resolvedIndex = index < 0
         ? 0
         : index >= children.length
-            ? children.length - 1
-            : index;
+        ? children.length - 1
+        : index;
     if (transitionMode == AxiFadeIndexedStackTransition.fadeOutIn) {
       return _AxiFadeIndexedStackFadeOutIn(
         index: resolvedIndex,
@@ -234,8 +234,9 @@ class _AxiFadeIndexedStackChildState extends State<_AxiFadeIndexedStackChild> {
 
   @override
   Widget build(BuildContext context) {
-    final double resolvedOpacity =
-        widget.visible ? _fadeVisibleOpacity : _fadeHiddenOpacity;
+    final double resolvedOpacity = widget.visible
+        ? _fadeVisibleOpacity
+        : _fadeHiddenOpacity;
     final animatedChild = TickerMode(
       enabled: _shouldTick,
       child: IgnorePointer(

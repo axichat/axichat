@@ -23,8 +23,9 @@ bool hasInvitationStatusData({
   required int? sequence,
   required List<CalendarRawProperty> rawProperties,
 }) {
-  final CalendarMethod? effectiveMethod =
-      method != null && method.isPublish ? null : method;
+  final CalendarMethod? effectiveMethod = method != null && method.isPublish
+      ? null
+      : method;
   if (effectiveMethod != null || sequence != null) {
     return true;
   }
@@ -47,8 +48,9 @@ class CalendarInvitationStatusField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final CalendarMethod? effectiveMethod =
-        method != null && method!.isPublish ? null : method;
+    final CalendarMethod? effectiveMethod = method != null && method!.isPublish
+        ? null
+        : method;
     final List<CalendarRequestStatusEntry> entries = _parseRequestStatus(
       rawProperties,
     );
@@ -127,8 +129,9 @@ List<CalendarRequestStatusEntry> _parseRequestStatus(
         .map((part) => part.trim())
         .toList();
     final String code = parts.isNotEmpty ? parts.first : '';
-    final String? description =
-        parts.length > 1 && parts[1].isNotEmpty ? parts[1] : null;
+    final String? description = parts.length > 1 && parts[1].isNotEmpty
+        ? parts[1]
+        : null;
     final String? extra = parts.length > 2
         ? parts.sublist(2).join(_invitationRequestStatusSeparator).trim()
         : null;
@@ -178,8 +181,9 @@ class _RequestStatusTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle titleStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle titleStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final TextStyle subtitleStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );

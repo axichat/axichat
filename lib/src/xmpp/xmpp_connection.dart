@@ -21,13 +21,13 @@ class XmppConnection extends mox.XmppConnection {
     XmppClientNegotiator? negotiationsHandler,
     XmppSocketWrapper? socketWrapper,
   }) : this._internal(
-          reconnectionPolicy:
-              reconnectionPolicy ?? XmppReconnectionPolicy.exponential(),
-          connectivityManager: connectivityManager,
-          negotiationsHandler: negotiationsHandler ?? XmppClientNegotiator(),
-          socketWrapper: socketWrapper ?? XmppSocketWrapper(),
-          domainProvider: _ConnectionDomainProvider(),
-        );
+         reconnectionPolicy:
+             reconnectionPolicy ?? XmppReconnectionPolicy.exponential(),
+         connectivityManager: connectivityManager,
+         negotiationsHandler: negotiationsHandler ?? XmppClientNegotiator(),
+         socketWrapper: socketWrapper ?? XmppSocketWrapper(),
+         domainProvider: _ConnectionDomainProvider(),
+       );
 
   XmppConnection._internal({
     required XmppReconnectionPolicy reconnectionPolicy,
@@ -35,19 +35,20 @@ class XmppConnection extends mox.XmppConnection {
     required XmppClientNegotiator negotiationsHandler,
     required this.socketWrapper,
     required _ConnectionDomainProvider domainProvider,
-  })  : _domainProvider = domainProvider,
-        _reconnectionPolicy = reconnectionPolicy,
-        super(
-          reconnectionPolicy: reconnectionPolicy,
-          connectivityManager: connectivityManager ??
-              XmppConnectivityManager.forXmppConnection(
-                domainProvider: domainProvider.provide,
-                shouldContinue: reconnectionPolicy.getShouldReconnect,
-                networkAvailability: NetworkAvailabilityService.instance,
-              ),
-          negotiationsHandler: negotiationsHandler,
-          socket: socketWrapper,
-        );
+  }) : _domainProvider = domainProvider,
+       _reconnectionPolicy = reconnectionPolicy,
+       super(
+         reconnectionPolicy: reconnectionPolicy,
+         connectivityManager:
+             connectivityManager ??
+             XmppConnectivityManager.forXmppConnection(
+               domainProvider: domainProvider.provide,
+               shouldContinue: reconnectionPolicy.getShouldReconnect,
+               networkAvailability: NetworkAvailabilityService.instance,
+             ),
+         negotiationsHandler: negotiationsHandler,
+         socket: socketWrapper,
+       );
 
   final _ConnectionDomainProvider _domainProvider;
   final XmppSocketWrapper socketWrapper;
@@ -157,8 +158,7 @@ class XmppConnection extends mox.XmppConnection {
 
   Future<moxlib.Result<mox.StanzaError, mox.DiscoInfo>>? discoInfoQuery(
     String jid,
-  ) =>
-      getManager<mox.DiscoManager>()?.discoInfoQuery(mox.JID.fromString(jid));
+  ) => getManager<mox.DiscoManager>()?.discoInfoQuery(mox.JID.fromString(jid));
 
   bool? get carbonsEnabled => getManager<mox.CarbonsManager>()?.isEnabled;
 
@@ -228,7 +228,7 @@ class XmppConnection extends mox.XmppConnection {
   }
 
   Future<moxlib.Result<mox.RosterRequestResult, mox.RosterError>?>
-      requestRoster() async => await getRosterManager()?.requestRoster();
+  requestRoster() async => await getRosterManager()?.requestRoster();
 
   Future<bool> addToRoster(String jid, {String? title}) async {
     if (getRosterManager() case final rm?) {
@@ -346,20 +346,20 @@ enum ReconnectTrigger {
 
 extension ReconnectTriggerBehavior on ReconnectTrigger {
   bool get shouldBypassBackoff => switch (this) {
-        ReconnectTrigger.resume => true,
-        ReconnectTrigger.userAction => true,
-        ReconnectTrigger.foregroundMigration => true,
-        ReconnectTrigger.networkAvailable => true,
-        ReconnectTrigger.autoFailure => false,
-      };
+    ReconnectTrigger.resume => true,
+    ReconnectTrigger.userAction => true,
+    ReconnectTrigger.foregroundMigration => true,
+    ReconnectTrigger.networkAvailable => true,
+    ReconnectTrigger.autoFailure => false,
+  };
 
   bool get shouldResetAttemptCounter => switch (this) {
-        ReconnectTrigger.resume => true,
-        ReconnectTrigger.userAction => true,
-        ReconnectTrigger.foregroundMigration => true,
-        ReconnectTrigger.networkAvailable => true,
-        ReconnectTrigger.autoFailure => false,
-      };
+    ReconnectTrigger.resume => true,
+    ReconnectTrigger.userAction => true,
+    ReconnectTrigger.foregroundMigration => true,
+    ReconnectTrigger.networkAvailable => true,
+    ReconnectTrigger.autoFailure => false,
+  };
 }
 
 class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
@@ -420,12 +420,9 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   Future<void> onFailure() async {
     if (!await getIsReconnecting()) return;
     _cancelBackoff();
-    _backoffTimer = Timer(
-      strategy.delay(_reconnectionAttempts),
-      () async {
-        await _fireBackoffReconnect();
-      },
-    );
+    _backoffTimer = Timer(strategy.delay(_reconnectionAttempts), () async {
+      await _fireBackoffReconnect();
+    });
   }
 
   Future<void> requestReconnect(ReconnectTrigger trigger) async {
@@ -534,10 +531,10 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     Duration? pollInterval,
     Duration? waitTimeout,
     this.shouldContinue,
-  })  : _domainProvider = domainProvider,
-        _networkAvailability = networkAvailability,
-        _pollInterval = pollInterval ?? _defaultPollInterval,
-        _waitTimeout = waitTimeout ?? const Duration(minutes: 1);
+  }) : _domainProvider = domainProvider,
+       _networkAvailability = networkAvailability,
+       _pollInterval = pollInterval ?? _defaultPollInterval,
+       _waitTimeout = waitTimeout ?? const Duration(minutes: 1);
 
   final List<IOEndpoint> _endpoints;
   final String? Function() _domainProvider;
@@ -557,13 +554,13 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     Duration? pollInterval,
     Duration? waitTimeout,
   }) : this._(
-          const [],
-          domainProvider: domainProvider,
-          networkAvailability: networkAvailability,
-          pollInterval: pollInterval,
-          waitTimeout: waitTimeout,
-          shouldContinue: shouldContinue,
-        );
+         const [],
+         domainProvider: domainProvider,
+         networkAvailability: networkAvailability,
+         pollInterval: pollInterval,
+         waitTimeout: waitTimeout,
+         shouldContinue: shouldContinue,
+       );
 
   static const timeoutDuration = Duration(seconds: 5);
   static const _offlineErrnos = <int>{

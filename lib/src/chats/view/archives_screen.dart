@@ -44,8 +44,9 @@ class _ArchivesView extends StatelessWidget {
             final sizing = context.sizing;
             final profileJid = profileState.jid;
             final resolvedProfileJid = profileJid.trim();
-            final String? selfJid =
-                resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+            final String? selfJid = resolvedProfileJid.isNotEmpty
+                ? resolvedProfileJid
+                : null;
             final selfIdentity = SelfIdentitySnapshot(
               selfJid: selfJid,
               avatarPath: profileState.avatarPath,
@@ -80,42 +81,45 @@ class _ArchivesView extends StatelessWidget {
                       ),
                     )
                   : archivedItems.isEmpty
-                      ? Center(
-                          child: Text(
-                            l10n.chatsArchiveEmpty,
-                            style: context.textTheme.muted,
-                          ),
-                        )
-                      : AxiNowTicker(
-                          builder: (context, nowListenable) =>
-                              ValueListenableBuilder<DateTime>(
+                  ? Center(
+                      child: Text(
+                        l10n.chatsArchiveEmpty,
+                        style: context.textTheme.muted,
+                      ),
+                    )
+                  : AxiNowTicker(
+                      builder: (context, nowListenable) =>
+                          ValueListenableBuilder<DateTime>(
                             valueListenable: nowListenable,
                             builder: (context, timestampNow, _) {
                               return ListView.builder(
                                 itemCount: archivedItems.length,
                                 itemBuilder: (context, index) =>
                                     ListItemPadding(
-                                  child: ChatListTile(
-                                    item: archivedItems[index],
-                                    selectionActive: selectionActive,
-                                    isSelected: chatsState.selectedJids
-                                        .contains(archivedItems[index].jid),
-                                    isOpen: chatsState.openJid ==
-                                        archivedItems[index].jid,
-                                    timestampNow: timestampNow,
-                                    selfIdentity: selfIdentity,
-                                    archivedContext: true,
-                                    onArchivedTap: (chat) =>
-                                        GoRouter.of(context).push(
-                                      ArchivedChatRoute(jid: chat.jid).location,
-                                      extra: locate,
+                                      child: ChatListTile(
+                                        item: archivedItems[index],
+                                        selectionActive: selectionActive,
+                                        isSelected: chatsState.selectedJids
+                                            .contains(archivedItems[index].jid),
+                                        isOpen:
+                                            chatsState.openJid ==
+                                            archivedItems[index].jid,
+                                        timestampNow: timestampNow,
+                                        selfIdentity: selfIdentity,
+                                        archivedContext: true,
+                                        onArchivedTap: (chat) =>
+                                            GoRouter.of(context).push(
+                                              ArchivedChatRoute(
+                                                jid: chat.jid,
+                                              ).location,
+                                              extra: locate,
+                                            ),
+                                      ),
                                     ),
-                                  ),
-                                ),
                               );
                             },
                           ),
-                        ),
+                    ),
               bottomNavigationBar: selectionActive
                   ? ChatSelectionActionBar(selectedChats: selectedChats)
                   : null,

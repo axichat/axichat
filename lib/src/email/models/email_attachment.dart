@@ -33,17 +33,16 @@ class EmailAttachment {
     int? height,
     String? caption,
     String? metadataId,
-  }) =>
-      EmailAttachment(
-        path: path ?? this.path,
-        fileName: fileName ?? this.fileName,
-        sizeBytes: sizeBytes ?? this.sizeBytes,
-        mimeType: mimeType ?? this.mimeType,
-        width: width ?? this.width,
-        height: height ?? this.height,
-        caption: caption ?? this.caption,
-        metadataId: metadataId ?? this.metadataId,
-      );
+  }) => EmailAttachment(
+    path: path ?? this.path,
+    fileName: fileName ?? this.fileName,
+    sizeBytes: sizeBytes ?? this.sizeBytes,
+    mimeType: mimeType ?? this.mimeType,
+    width: width ?? this.width,
+    height: height ?? this.height,
+    caption: caption ?? this.caption,
+    metadataId: metadataId ?? this.metadataId,
+  );
 
   static const _imageExtensions = <String>{
     '.jpg',

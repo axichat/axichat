@@ -80,12 +80,12 @@ export 'package:flutter/services.dart'
 
 /// Signature for the callback that reports when the user changes the selection
 /// (including the cursor location).
-typedef SelectionChangedCallback = void Function(
-    TextSelection selection, SelectionChangedCause? cause);
+typedef SelectionChangedCallback =
+    void Function(TextSelection selection, SelectionChangedCause? cause);
 
 /// Signature for the callback that reports the app private command results.
-typedef AppPrivateCommandCallback = void Function(
-    String action, Map<String, dynamic> data);
+typedef AppPrivateCommandCallback =
+    void Function(String action, Map<String, dynamic> data);
 
 /// Signature for a widget builder that builds a context menu for the given
 /// [EditableTextState].
@@ -94,13 +94,13 @@ typedef AppPrivateCommandCallback = void Function(
 ///
 ///  * [SelectableRegionContextMenuBuilder], which performs the same role for
 ///    [SelectableRegion].
-typedef EditableTextContextMenuBuilder = Widget Function(
-    BuildContext context, EditableTextState editableTextState);
+typedef EditableTextContextMenuBuilder =
+    Widget Function(BuildContext context, EditableTextState editableTextState);
 
 // Signature for a function that determines the target location of the given
 // [TextPosition] after applying the given [TextBoundary].
-typedef _ApplyTextBoundary = TextPosition Function(
-    TextPosition, bool, TextBoundary);
+typedef _ApplyTextBoundary =
+    TextPosition Function(TextPosition, bool, TextBoundary);
 
 // The time it takes for the cursor to fade from fully opaque to fully
 // transparent and vice versa. A full cursor blink, from transparent to opaque
@@ -270,18 +270,18 @@ class _KeyFrame {
 
 class _DiscreteKeyFrameSimulation extends Simulation {
   _DiscreteKeyFrameSimulation.iOSBlinkingCaret()
-      : this._(_KeyFrame.iOSBlinkingCaretKeyFrames, 1);
+    : this._(_KeyFrame.iOSBlinkingCaretKeyFrames, 1);
   _DiscreteKeyFrameSimulation._(this._keyFrames, this.maxDuration)
-      : assert(_keyFrames.isNotEmpty),
-        assert(_keyFrames.last.time <= maxDuration),
-        assert(() {
-          for (int i = 0; i < _keyFrames.length - 1; i += 1) {
-            if (_keyFrames[i].time > _keyFrames[i + 1].time) {
-              return false;
-            }
+    : assert(_keyFrames.isNotEmpty),
+      assert(_keyFrames.last.time <= maxDuration),
+      assert(() {
+        for (int i = 0; i < _keyFrames.length - 1; i += 1) {
+          if (_keyFrames[i].time > _keyFrames[i + 1].time) {
+            return false;
           }
-          return true;
-        }(), 'The key frame sequence must be sorted by time.');
+        }
+        return true;
+      }(), 'The key frame sequence must be sorted by time.');
 
   final double maxDuration;
 
@@ -643,51 +643,52 @@ class EditableText extends StatefulWidget {
     this.magnifierConfiguration = TextMagnifierConfiguration.disabled,
     this.undoController,
     this.hintLocales,
-  })  : assert(obscuringCharacter.length == 1),
-        autocorrect =
-            autocorrect ?? _inferAutocorrect(autofillHints: autofillHints),
-        smartDashesType = smartDashesType ??
-            (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
-        smartQuotesType = smartQuotesType ??
-            (obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled),
-        assert(minLines == null || minLines > 0),
-        assert(
-          (maxLines == null) || (minLines == null) || (maxLines >= minLines),
-          "minLines can't be greater than maxLines",
-        ),
-        assert(
-          !expands || (maxLines == null && minLines == null),
-          'minLines and maxLines must be null when expands is true.',
-        ),
-        assert(
-          !obscureText || maxLines == 1,
-          'Obscured fields cannot be multiline.',
-        ),
-        enableInteractiveSelection =
-            enableInteractiveSelection ?? (!readOnly || !obscureText),
-        selectAllOnFocus = selectAllOnFocus ?? _defaultSelectAllOnFocus,
-        assert(
-          spellCheckConfiguration == null ||
-              spellCheckConfiguration ==
-                  const SpellCheckConfiguration.disabled() ||
-              spellCheckConfiguration.misspelledTextStyle != null,
-          'spellCheckConfiguration must specify a misspelledTextStyle if spell check behavior is desired',
-        ),
-        _strutStyle = strutStyle,
-        keyboardType = keyboardType ??
-            _inferKeyboardType(
-                autofillHints: autofillHints, maxLines: maxLines),
-        inputFormatters = maxLines == 1
-            ? <TextInputFormatter>[
-                FilteringTextInputFormatter.singleLineFormatter,
-                ...inputFormatters ??
-                    const Iterable<TextInputFormatter>.empty(),
-              ]
-            : inputFormatters,
-        showCursor = showCursor ?? !readOnly,
-        selectionHeightStyle =
-            selectionHeightStyle ?? defaultSelectionHeightStyle,
-        selectionWidthStyle = selectionWidthStyle ?? defaultSelectionWidthStyle;
+  }) : assert(obscuringCharacter.length == 1),
+       autocorrect =
+           autocorrect ?? _inferAutocorrect(autofillHints: autofillHints),
+       smartDashesType =
+           smartDashesType ??
+           (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
+       smartQuotesType =
+           smartQuotesType ??
+           (obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled),
+       assert(minLines == null || minLines > 0),
+       assert(
+         (maxLines == null) || (minLines == null) || (maxLines >= minLines),
+         "minLines can't be greater than maxLines",
+       ),
+       assert(
+         !expands || (maxLines == null && minLines == null),
+         'minLines and maxLines must be null when expands is true.',
+       ),
+       assert(
+         !obscureText || maxLines == 1,
+         'Obscured fields cannot be multiline.',
+       ),
+       enableInteractiveSelection =
+           enableInteractiveSelection ?? (!readOnly || !obscureText),
+       selectAllOnFocus = selectAllOnFocus ?? _defaultSelectAllOnFocus,
+       assert(
+         spellCheckConfiguration == null ||
+             spellCheckConfiguration ==
+                 const SpellCheckConfiguration.disabled() ||
+             spellCheckConfiguration.misspelledTextStyle != null,
+         'spellCheckConfiguration must specify a misspelledTextStyle if spell check behavior is desired',
+       ),
+       _strutStyle = strutStyle,
+       keyboardType =
+           keyboardType ??
+           _inferKeyboardType(autofillHints: autofillHints, maxLines: maxLines),
+       inputFormatters = maxLines == 1
+           ? <TextInputFormatter>[
+               FilteringTextInputFormatter.singleLineFormatter,
+               ...inputFormatters ?? const Iterable<TextInputFormatter>.empty(),
+             ]
+           : inputFormatters,
+       showCursor = showCursor ?? !readOnly,
+       selectionHeightStyle =
+           selectionHeightStyle ?? defaultSelectionHeightStyle,
+       selectionWidthStyle = selectionWidthStyle ?? defaultSelectionWidthStyle;
 
   /// Controls the text being edited.
   final TextEditingController controller;
@@ -1963,8 +1964,8 @@ class EditableText extends StatefulWidget {
       switch (defaultTargetPlatform) {
         case TargetPlatform.iOS:
         case TargetPlatform.macOS:
-          const Map<String, TextInputType> iOSKeyboardType =
-              <String, TextInputType>{
+          const Map<String, TextInputType>
+          iOSKeyboardType = <String, TextInputType>{
             AutofillHints.addressCity: TextInputType.name,
             AutofillHints.addressCityAndState:
                 TextInputType.name, // Autofill not working.
@@ -2021,75 +2022,75 @@ class EditableText extends StatefulWidget {
 
     const Map<String, TextInputType> inferKeyboardType =
         <String, TextInputType>{
-      AutofillHints.addressCity: TextInputType.streetAddress,
-      AutofillHints.addressCityAndState: TextInputType.streetAddress,
-      AutofillHints.addressState: TextInputType.streetAddress,
-      AutofillHints.birthday: TextInputType.datetime,
-      AutofillHints.birthdayDay: TextInputType.datetime,
-      AutofillHints.birthdayMonth: TextInputType.datetime,
-      AutofillHints.birthdayYear: TextInputType.datetime,
-      AutofillHints.countryCode: TextInputType.number,
-      AutofillHints.countryName: TextInputType.text,
-      AutofillHints.creditCardExpirationDate: TextInputType.datetime,
-      AutofillHints.creditCardExpirationDay: TextInputType.datetime,
-      AutofillHints.creditCardExpirationMonth: TextInputType.datetime,
-      AutofillHints.creditCardExpirationYear: TextInputType.datetime,
-      AutofillHints.creditCardFamilyName: TextInputType.name,
-      AutofillHints.creditCardGivenName: TextInputType.name,
-      AutofillHints.creditCardMiddleName: TextInputType.name,
-      AutofillHints.creditCardName: TextInputType.name,
-      AutofillHints.creditCardNumber: TextInputType.number,
-      AutofillHints.creditCardSecurityCode: TextInputType.number,
-      AutofillHints.creditCardType: TextInputType.text,
-      AutofillHints.email: TextInputType.emailAddress,
-      AutofillHints.familyName: TextInputType.name,
-      AutofillHints.fullStreetAddress: TextInputType.streetAddress,
-      AutofillHints.gender: TextInputType.text,
-      AutofillHints.givenName: TextInputType.name,
-      AutofillHints.impp: TextInputType.url,
-      AutofillHints.jobTitle: TextInputType.text,
-      AutofillHints.language: TextInputType.text,
-      AutofillHints.location: TextInputType.streetAddress,
-      AutofillHints.middleInitial: TextInputType.name,
-      AutofillHints.middleName: TextInputType.name,
-      AutofillHints.name: TextInputType.name,
-      AutofillHints.namePrefix: TextInputType.name,
-      AutofillHints.nameSuffix: TextInputType.name,
-      AutofillHints.newPassword: TextInputType.text,
-      AutofillHints.newUsername: TextInputType.text,
-      AutofillHints.nickname: TextInputType.text,
-      AutofillHints.oneTimeCode: TextInputType.text,
-      AutofillHints.organizationName: TextInputType.text,
-      AutofillHints.password: TextInputType.text,
-      AutofillHints.photo: TextInputType.text,
-      AutofillHints.postalAddress: TextInputType.streetAddress,
-      AutofillHints.postalAddressExtended: TextInputType.streetAddress,
-      AutofillHints.postalAddressExtendedPostalCode: TextInputType.number,
-      AutofillHints.postalCode: TextInputType.number,
-      AutofillHints.streetAddressLevel1: TextInputType.streetAddress,
-      AutofillHints.streetAddressLevel2: TextInputType.streetAddress,
-      AutofillHints.streetAddressLevel3: TextInputType.streetAddress,
-      AutofillHints.streetAddressLevel4: TextInputType.streetAddress,
-      AutofillHints.streetAddressLine1: TextInputType.streetAddress,
-      AutofillHints.streetAddressLine2: TextInputType.streetAddress,
-      AutofillHints.streetAddressLine3: TextInputType.streetAddress,
-      AutofillHints.sublocality: TextInputType.streetAddress,
-      AutofillHints.telephoneNumber: TextInputType.phone,
-      AutofillHints.telephoneNumberAreaCode: TextInputType.phone,
-      AutofillHints.telephoneNumberCountryCode: TextInputType.phone,
-      AutofillHints.telephoneNumberDevice: TextInputType.phone,
-      AutofillHints.telephoneNumberExtension: TextInputType.phone,
-      AutofillHints.telephoneNumberLocal: TextInputType.phone,
-      AutofillHints.telephoneNumberLocalPrefix: TextInputType.phone,
-      AutofillHints.telephoneNumberLocalSuffix: TextInputType.phone,
-      AutofillHints.telephoneNumberNational: TextInputType.phone,
-      AutofillHints.transactionAmount: TextInputType.numberWithOptions(
-        decimal: true,
-      ),
-      AutofillHints.transactionCurrency: TextInputType.text,
-      AutofillHints.url: TextInputType.url,
-      AutofillHints.username: TextInputType.text,
-    };
+          AutofillHints.addressCity: TextInputType.streetAddress,
+          AutofillHints.addressCityAndState: TextInputType.streetAddress,
+          AutofillHints.addressState: TextInputType.streetAddress,
+          AutofillHints.birthday: TextInputType.datetime,
+          AutofillHints.birthdayDay: TextInputType.datetime,
+          AutofillHints.birthdayMonth: TextInputType.datetime,
+          AutofillHints.birthdayYear: TextInputType.datetime,
+          AutofillHints.countryCode: TextInputType.number,
+          AutofillHints.countryName: TextInputType.text,
+          AutofillHints.creditCardExpirationDate: TextInputType.datetime,
+          AutofillHints.creditCardExpirationDay: TextInputType.datetime,
+          AutofillHints.creditCardExpirationMonth: TextInputType.datetime,
+          AutofillHints.creditCardExpirationYear: TextInputType.datetime,
+          AutofillHints.creditCardFamilyName: TextInputType.name,
+          AutofillHints.creditCardGivenName: TextInputType.name,
+          AutofillHints.creditCardMiddleName: TextInputType.name,
+          AutofillHints.creditCardName: TextInputType.name,
+          AutofillHints.creditCardNumber: TextInputType.number,
+          AutofillHints.creditCardSecurityCode: TextInputType.number,
+          AutofillHints.creditCardType: TextInputType.text,
+          AutofillHints.email: TextInputType.emailAddress,
+          AutofillHints.familyName: TextInputType.name,
+          AutofillHints.fullStreetAddress: TextInputType.streetAddress,
+          AutofillHints.gender: TextInputType.text,
+          AutofillHints.givenName: TextInputType.name,
+          AutofillHints.impp: TextInputType.url,
+          AutofillHints.jobTitle: TextInputType.text,
+          AutofillHints.language: TextInputType.text,
+          AutofillHints.location: TextInputType.streetAddress,
+          AutofillHints.middleInitial: TextInputType.name,
+          AutofillHints.middleName: TextInputType.name,
+          AutofillHints.name: TextInputType.name,
+          AutofillHints.namePrefix: TextInputType.name,
+          AutofillHints.nameSuffix: TextInputType.name,
+          AutofillHints.newPassword: TextInputType.text,
+          AutofillHints.newUsername: TextInputType.text,
+          AutofillHints.nickname: TextInputType.text,
+          AutofillHints.oneTimeCode: TextInputType.text,
+          AutofillHints.organizationName: TextInputType.text,
+          AutofillHints.password: TextInputType.text,
+          AutofillHints.photo: TextInputType.text,
+          AutofillHints.postalAddress: TextInputType.streetAddress,
+          AutofillHints.postalAddressExtended: TextInputType.streetAddress,
+          AutofillHints.postalAddressExtendedPostalCode: TextInputType.number,
+          AutofillHints.postalCode: TextInputType.number,
+          AutofillHints.streetAddressLevel1: TextInputType.streetAddress,
+          AutofillHints.streetAddressLevel2: TextInputType.streetAddress,
+          AutofillHints.streetAddressLevel3: TextInputType.streetAddress,
+          AutofillHints.streetAddressLevel4: TextInputType.streetAddress,
+          AutofillHints.streetAddressLine1: TextInputType.streetAddress,
+          AutofillHints.streetAddressLine2: TextInputType.streetAddress,
+          AutofillHints.streetAddressLine3: TextInputType.streetAddress,
+          AutofillHints.sublocality: TextInputType.streetAddress,
+          AutofillHints.telephoneNumber: TextInputType.phone,
+          AutofillHints.telephoneNumberAreaCode: TextInputType.phone,
+          AutofillHints.telephoneNumberCountryCode: TextInputType.phone,
+          AutofillHints.telephoneNumberDevice: TextInputType.phone,
+          AutofillHints.telephoneNumberExtension: TextInputType.phone,
+          AutofillHints.telephoneNumberLocal: TextInputType.phone,
+          AutofillHints.telephoneNumberLocalPrefix: TextInputType.phone,
+          AutofillHints.telephoneNumberLocalSuffix: TextInputType.phone,
+          AutofillHints.telephoneNumberNational: TextInputType.phone,
+          AutofillHints.transactionAmount: TextInputType.numberWithOptions(
+            decimal: true,
+          ),
+          AutofillHints.transactionCurrency: TextInputType.text,
+          AutofillHints.url: TextInputType.url,
+          AutofillHints.username: TextInputType.text,
+        };
 
     return inferKeyboardType[effectiveHint] ?? TextInputType.text;
   }
@@ -2128,16 +2129,18 @@ class EditableText extends StatefulWidget {
       EnumProperty<SmartDashesType>(
         'smartDashesType',
         smartDashesType,
-        defaultValue:
-            obscureText ? SmartDashesType.disabled : SmartDashesType.enabled,
+        defaultValue: obscureText
+            ? SmartDashesType.disabled
+            : SmartDashesType.enabled,
       ),
     );
     properties.add(
       EnumProperty<SmartQuotesType>(
         'smartQuotesType',
         smartQuotesType,
-        defaultValue:
-            obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled,
+        defaultValue: obscureText
+            ? SmartQuotesType.disabled
+            : SmartQuotesType.enabled,
       ),
     );
     properties.add(
@@ -2334,18 +2337,17 @@ class EditableTextState extends State<EditableText>
   ///
   /// See also:
   ///  * [LiveText], where the availability of Live Text input can be obtained.
-  final LiveTextInputStatusNotifier? _liveTextInputStatus =
-      kIsWeb ? null : LiveTextInputStatusNotifier();
+  final LiveTextInputStatusNotifier? _liveTextInputStatus = kIsWeb
+      ? null
+      : LiveTextInputStatusNotifier();
 
   TextInputConnection? _textInputConnection;
   bool get _hasInputConnection => _textInputConnection?.attached ?? false;
 
   TextSelectionOverlay? _selectionOverlay;
   ScrollNotificationObserverState? _scrollNotificationObserver;
-  ({
-    TextEditingValue value,
-    Rect selectionBounds
-  })? _dataWhenToolbarShowScheduled;
+  ({TextEditingValue value, Rect selectionBounds})?
+  _dataWhenToolbarShowScheduled;
   bool _listeningToScrollNotificationObserver = false;
 
   bool get _webContextMenuEnabled => kIsWeb && BrowserContextMenu.enabled;
@@ -2667,10 +2669,10 @@ class EditableTextState extends State<EditableText>
       selection.baseOffset,
       selection.extentOffset,
     );
-    final TextEditingValue collapsedTextEditingValue =
-        textEditingValue.copyWith(
-      selection: TextSelection.collapsed(offset: lastSelectionIndex),
-    );
+    final TextEditingValue collapsedTextEditingValue = textEditingValue
+        .copyWith(
+          selection: TextSelection.collapsed(offset: lastSelectionIndex),
+        );
 
     userUpdateTextEditingValue(
       collapsedTextEditingValue.replaced(selection, text),
@@ -2848,11 +2850,15 @@ class EditableTextState extends State<EditableText>
   ) {
     final SpellCheckService? spellCheckService =
         configuration?.spellCheckService;
-    final bool spellCheckAutomaticallyDisabled = configuration == null ||
+    final bool spellCheckAutomaticallyDisabled =
+        configuration == null ||
         configuration == const SpellCheckConfiguration.disabled();
-    final bool spellCheckServiceIsConfigured = spellCheckService != null ||
+    final bool spellCheckServiceIsConfigured =
+        spellCheckService != null ||
         WidgetsBinding
-            .instance.platformDispatcher.nativeSpellCheckServiceDefined;
+            .instance
+            .platformDispatcher
+            .nativeSpellCheckServiceDefined;
     if (spellCheckAutomaticallyDisabled || !spellCheckServiceIsConfigured) {
       // Only enable spell check if a non-disabled configuration is provided
       // and if that configuration does not specify a spell check service,
@@ -2956,8 +2962,8 @@ class EditableTextState extends State<EditableText>
       endGlyphHeight: double endGlyphHeight,
     ) = getGlyphHeights();
     final TextSelection selection = textEditingValue.selection;
-    final List<TextSelectionPoint> points =
-        renderEditable.getEndpointsForSelection(selection);
+    final List<TextSelectionPoint> points = renderEditable
+        .getEndpointsForSelection(selection);
     return TextSelectionToolbarAnchors.fromSelection(
       renderBox: renderEditable,
       startGlyphHeight: startGlyphHeight,
@@ -2990,10 +2996,12 @@ class EditableTextState extends State<EditableText>
       onCopy: copyEnabled
           ? () => copySelection(SelectionChangedCause.toolbar)
           : null,
-      onCut:
-          cutEnabled ? () => cutSelection(SelectionChangedCause.toolbar) : null,
-      onPaste:
-          pasteEnabled ? () => pasteText(SelectionChangedCause.toolbar) : null,
+      onCut: cutEnabled
+          ? () => cutSelection(SelectionChangedCause.toolbar)
+          : null,
+      onPaste: pasteEnabled
+          ? () => pasteText(SelectionChangedCause.toolbar)
+          : null,
       onSelectAll: selectAllEnabled
           ? () => selectAll(SelectionChangedCause.toolbar)
           : null,
@@ -3284,8 +3292,8 @@ class EditableTextState extends State<EditableText>
     }
     final bool canPaste =
         widget.selectionControls is TextSelectionHandleControls
-            ? pasteEnabled
-            : widget.selectionControls?.canPaste(this) ?? false;
+        ? pasteEnabled
+        : widget.selectionControls?.canPaste(this) ?? false;
     if (widget.selectionEnabled && pasteEnabled && canPaste) {
       clipboardStatus.update();
     }
@@ -3409,15 +3417,18 @@ class EditableTextState extends State<EditableText>
       }
       _currentPromptRectRange = null;
 
-      final bool revealObscuredInput = _hasInputConnection &&
+      final bool revealObscuredInput =
+          _hasInputConnection &&
           widget.obscureText &&
           WidgetsBinding.instance.platformDispatcher.brieflyShowPassword &&
           value.text.length == _value.text.length + 1;
 
-      _obscureShowCharTicksPending =
-          revealObscuredInput ? _kObscureShowLatestCharCursorTicks : 0;
-      _obscureLatestCharIndex =
-          revealObscuredInput ? _value.selection.baseOffset : null;
+      _obscureShowCharTicksPending = revealObscuredInput
+          ? _kObscureShowLatestCharCursorTicks
+          : 0;
+      _obscureLatestCharIndex = revealObscuredInput
+          ? _value.selection.baseOffset
+          : null;
       _formatAndSetValue(value, SelectionChangedCause.keyboard);
     }
 
@@ -3536,16 +3547,17 @@ class EditableTextState extends State<EditableText>
             offset: renderEditable.selection!.baseOffset,
             affinity: renderEditable.selection!.affinity,
           );
-          startCaretCenter =
-              renderEditable.getLocalRectForCaret(currentTextPosition).center;
+          startCaretCenter = renderEditable
+              .getLocalRectForCaret(currentTextPosition)
+              .center;
         }
 
         _startCaretCenter = startCaretCenter;
-        _lastBoundedOffset =
-            renderEditable.calculateBoundedFloatingCursorOffset(
-          _startCaretCenter! - _floatingCursorOffset,
-          shouldResetOrigin: shouldResetOrigin,
-        );
+        _lastBoundedOffset = renderEditable
+            .calculateBoundedFloatingCursorOffset(
+              _startCaretCenter! - _floatingCursorOffset,
+              shouldResetOrigin: shouldResetOrigin,
+            );
         _lastTextPosition = currentTextPosition;
         renderEditable.setFloatingCursor(
           point.state,
@@ -3589,7 +3601,7 @@ class EditableTextState extends State<EditableText>
   void _onFloatingCursorResetTick() {
     final Offset finalPosition =
         renderEditable.getLocalRectForCaret(_lastTextPosition!).centerLeft -
-            _floatingCursorOffset;
+        _floatingCursorOffset;
     if (_floatingCursorResetController!.isCompleted) {
       renderEditable.setFloatingCursor(
         FloatingCursorDragState.End,
@@ -3842,7 +3854,9 @@ class EditableTextState extends State<EditableText>
   /// Whether to send the autofill information to the autofill service. True by
   /// default.
   bool get _needsAutofill => _effectiveAutofillClient
-      .textInputConfiguration.autofillConfiguration.enabled;
+      .textInputConfiguration
+      .autofillConfiguration
+      .enabled;
 
   // Must be called after layout.
   // See https://github.com/flutter/flutter/issues/126312
@@ -3935,10 +3949,11 @@ class EditableTextState extends State<EditableText>
     _textInputConnection = null;
     _lastKnownRemoteTextEditingValue = null;
 
-    final AutofillScope? currentAutofillScope =
-        _needsAutofill ? this.currentAutofillScope : null;
-    final TextInputConnection newConnection = currentAutofillScope?.attach(
-            this, textInputConfiguration) ??
+    final AutofillScope? currentAutofillScope = _needsAutofill
+        ? this.currentAutofillScope
+        : null;
+    final TextInputConnection newConnection =
+        currentAutofillScope?.attach(this, textInputConfiguration) ??
         TextInput.attach(this, _effectiveAutofillClient.textInputConfiguration);
     _textInputConnection = newConnection;
 
@@ -4026,13 +4041,12 @@ class EditableTextState extends State<EditableText>
     TargetPlatform.fuchsia ||
     TargetPlatform.linux ||
     TargetPlatform.macOS ||
-    TargetPlatform.windows =>
-      false,
+    TargetPlatform.windows => false,
   };
 
   bool _isInternalScrollableNotification(BuildContext? notificationContext) {
-    final ScrollableState? scrollableState =
-        notificationContext?.findAncestorStateOfType<ScrollableState>();
+    final ScrollableState? scrollableState = notificationContext
+        ?.findAncestorStateOfType<ScrollableState>();
     return _scrollableKey.currentContext == scrollableState?.context;
   }
 
@@ -4046,14 +4060,14 @@ class EditableTextState extends State<EditableText>
     // The notification context of a ScrollNotification points to the RawGestureDetector
     // of the Scrollable. We get the ScrollableState associated with this notification
     // by looking up the tree.
-    final ScrollableState? notificationScrollableState =
-        notificationContext.findAncestorStateOfType<ScrollableState>();
+    final ScrollableState? notificationScrollableState = notificationContext
+        .findAncestorStateOfType<ScrollableState>();
     if (notificationScrollableState == null) {
       return false;
     }
     while (currentContext != null) {
-      final ScrollableState? scrollableState =
-          currentContext.findAncestorStateOfType<ScrollableState>();
+      final ScrollableState? scrollableState = currentContext
+          .findAncestorStateOfType<ScrollableState>();
       if (scrollableState == notificationScrollableState) {
         return true;
       }
@@ -4088,7 +4102,7 @@ class EditableTextState extends State<EditableText>
     final ui.FlutterView view = View.of(context);
     final double obscuredVertical =
         (view.padding.top + view.padding.bottom + view.viewInsets.bottom) /
-            view.devicePixelRatio;
+        view.devicePixelRatio;
     final double obscuredHorizontal =
         (view.padding.left + view.padding.right) / view.devicePixelRatio;
     final Size visibleScreenSize = Size(
@@ -4123,7 +4137,8 @@ class EditableTextState extends State<EditableText>
       if (_dataWhenToolbarShowScheduled != null) {
         return;
       }
-      final bool toolbarIsVisible = _selectionOverlay != null &&
+      final bool toolbarIsVisible =
+          _selectionOverlay != null &&
           _selectionOverlay!.toolbarIsVisible &&
           !_selectionOverlay!.spellCheckToolbarIsVisible;
       if (!toolbarIsVisible) {
@@ -4134,10 +4149,12 @@ class EditableTextState extends State<EditableText>
       );
       final Rect selectionBounds =
           _value.selection.isCollapsed || selectionBoxes.isEmpty
-              ? renderEditable.getLocalRectForCaret(_value.selection.extent)
-              : selectionBoxes.map((TextBox box) => box.toRect()).reduce(
-                    (Rect result, Rect rect) => result.expandToInclude(rect),
-                  );
+          ? renderEditable.getLocalRectForCaret(_value.selection.extent)
+          : selectionBoxes
+                .map((TextBox box) => box.toRect())
+                .reduce(
+                  (Rect result, Rect rect) => result.expandToInclude(rect),
+                );
       _dataWhenToolbarShowScheduled = (
         value: _value,
         selectionBounds: selectionBounds,
@@ -4166,7 +4183,7 @@ class EditableTextState extends State<EditableText>
         final Rect deviceRect = _calculateDeviceRect();
         final bool selectionVisibleInEditable =
             renderEditable.selectionStartInViewport.value ||
-                renderEditable.selectionEndInViewport.value;
+            renderEditable.selectionEndInViewport.value;
         final Rect selectionBounds = MatrixUtils.transformRect(
           renderEditable.getTransformTo(null),
           _dataWhenToolbarShowScheduled!.selectionBounds,
@@ -4362,8 +4379,8 @@ class EditableTextState extends State<EditableText>
       if (selection.isCollapsed) {
         rectToReveal = targetOffset.rect;
       } else {
-        final List<TextBox> selectionBoxes =
-            renderEditable.getBoxesForSelection(selection);
+        final List<TextBox> selectionBoxes = renderEditable
+            .getBoxesForSelection(selection);
         // selectionBoxes may be empty if, for example, the selection does not
         // encompass a full character, like if it only contained part of an
         // extended grapheme cluster.
@@ -4472,7 +4489,8 @@ class EditableTextState extends State<EditableText>
       // will keep trying to modify the composing region while Gboard will keep
       // trying to restore the original composing region.
       try {
-        value = widget.inputFormatters?.fold<TextEditingValue>(
+        value =
+            widget.inputFormatters?.fold<TextEditingValue>(
               value,
               (TextEditingValue newValue, TextInputFormatter formatter) =>
                   formatter.formatEditUpdate(_value, newValue),
@@ -4567,7 +4585,8 @@ class EditableTextState extends State<EditableText>
       alpha: effectiveOpacity,
     );
     _typingCaretPainter?.caretColor = _typingCaretColor;
-    _cursorVisibilityNotifier.value = widget.showCursor &&
+    _cursorVisibilityNotifier.value =
+        widget.showCursor &&
         (EditableText.debugDeterministicCursor ||
             _cursorBlinkOpacityController.value > 0);
   }
@@ -4628,8 +4647,8 @@ class EditableTextState extends State<EditableText>
     if (_obscureShowCharTicksPending > 0) {
       _obscureShowCharTicksPending =
           WidgetsBinding.instance.platformDispatcher.brieflyShowPassword
-              ? _obscureShowCharTicksPending - 1
-              : 0;
+          ? _obscureShowCharTicksPending - 1
+          : 0;
       if (_obscureShowCharTicksPending == 0) {
         setState(() {});
       }
@@ -4659,8 +4678,9 @@ class EditableTextState extends State<EditableText>
   void _stopCursorBlink({bool resetCharTicks = true}) {
     // If the cursor is animating, stop the animation, and we always
     // want the cursor to be visible when the floating cursor is enabled.
-    _cursorBlinkOpacityController.value =
-        renderEditable.floatingCursorOn ? 1.0 : 0.0;
+    _cursorBlinkOpacityController.value = renderEditable.floatingCursorOn
+        ? 1.0
+        : 0.0;
     _cursorTimer?.cancel();
     _cursorTimer = null;
     if (resetCharTicks) {
@@ -4700,8 +4720,8 @@ class EditableTextState extends State<EditableText>
 
   TypingTextEditingController? get _typingController =>
       widget.controller is TypingTextEditingController
-          ? widget.controller as TypingTextEditingController
-          : null;
+      ? widget.controller as TypingTextEditingController
+      : null;
 
   AxiRenderEditable? get _typingRenderEditable =>
       _editableKey.currentContext?.findRenderObject() as AxiRenderEditable?;
@@ -4748,17 +4768,19 @@ class EditableTextState extends State<EditableText>
     if (change.kind == TypingTextChangeKind.none) {
       return;
     }
-    final TypingTextChange? lastPending =
-        _pendingTypingChanges.isNotEmpty ? _pendingTypingChanges.last : null;
+    final TypingTextChange? lastPending = _pendingTypingChanges.isNotEmpty
+        ? _pendingTypingChanges.last
+        : null;
     final bool hasPendingInsertion =
         lastPending?.isSingleCharacterInsertion ?? false;
     final bool isSelectionOnlyUpdate =
         change.kind == TypingTextChangeKind.selection;
-    final bool preservesPendingText = lastPending != null &&
+    final bool preservesPendingText =
+        lastPending != null &&
         lastPending.currentValue.text == change.currentValue.text;
     if (hasPendingInsertion && isSelectionOnlyUpdate && preservesPendingText) {
-      _pendingTypingChanges[_pendingTypingChanges.length - 1] =
-          TypingTextChange(
+      _pendingTypingChanges[_pendingTypingChanges.length -
+          1] = TypingTextChange(
         kind: lastPending.kind,
         previousValue: lastPending.previousValue,
         currentValue: change.currentValue,
@@ -5200,7 +5222,8 @@ class EditableTextState extends State<EditableText>
     if (caretOffset == null) {
       return;
     }
-    final bool shouldAnimate = animate &&
+    final bool shouldAnimate =
+        animate &&
         _hasFocus &&
         !widget.readOnly &&
         _cursorVisibilityNotifier.value &&
@@ -5365,8 +5388,8 @@ class EditableTextState extends State<EditableText>
     final TextStyle? resolvedStyle = resolvedSpan is TextSpan
         ? resolvedSpan.style
         : span is TextSpan
-            ? span.style
-            : null;
+        ? span.style
+        : null;
     return DefaultTextStyle.of(context).style.merge(resolvedStyle);
   }
 
@@ -5396,7 +5419,8 @@ class EditableTextState extends State<EditableText>
 
   TextSelection? _adjustedSelectionWhenFocused() {
     TextSelection? selection;
-    final bool shouldSelectAll = widget.selectAllOnFocus &&
+    final bool shouldSelectAll =
+        widget.selectAllOnFocus &&
         widget.selectionEnabled &&
         !_isMultiline &&
         !_nextFocusChangeIsInternal &&
@@ -5470,8 +5494,8 @@ class EditableTextState extends State<EditableText>
     )) {
       (final TextScaler textScaler, _) => textScaler,
       (null, final double textScaleFactor) => TextScaler.linear(
-          textScaleFactor,
-        ),
+        textScaleFactor,
+      ),
       (null, null) => MediaQuery.textScalerOf(context),
     };
 
@@ -5480,7 +5504,8 @@ class EditableTextState extends State<EditableText>
       textAlign: widget.textAlign,
       textDirection: _textDirection,
       textScaler: effectiveTextScaler,
-      textHeightBehavior: widget.textHeightBehavior ??
+      textHeightBehavior:
+          widget.textHeightBehavior ??
           DefaultTextHeightBehavior.maybeOf(context),
       locale: widget.locale,
       structStyle: widget.strutStyle,
@@ -5608,8 +5633,9 @@ class EditableTextState extends State<EditableText>
   ) {
     // Compare the current TextEditingValue with the pre-format new
     // TextEditingValue value, in case the formatter would reject the change.
-    final bool shouldShowCaret =
-        widget.readOnly ? _value.selection != value.selection : _value != value;
+    final bool shouldShowCaret = widget.readOnly
+        ? _value.selection != value.selection
+        : _value != value;
     if (shouldShowCaret) {
       _scheduleShowCaretOnScreen(withAnimation: true);
     }
@@ -5692,8 +5718,8 @@ class EditableTextState extends State<EditableText>
 
   /// Toggles the visibility of the toolbar.
   void toggleToolbar([bool hideHandles = true]) {
-    final TextSelectionOverlay selectionOverlay =
-        _selectionOverlay ??= _createSelectionOverlay();
+    final TextSelectionOverlay selectionOverlay = _selectionOverlay ??=
+        _createSelectionOverlay();
     if (selectionOverlay.toolbarIsVisible) {
       hideToolbar(hideHandles);
     } else {
@@ -5842,7 +5868,8 @@ class EditableTextState extends State<EditableText>
       smartQuotesType: widget.smartQuotesType,
       enableSuggestions: widget.enableSuggestions,
       enableInteractiveSelection: widget._userSelectionEnabled,
-      inputAction: widget.textInputAction ??
+      inputAction:
+          widget.textInputAction ??
           (widget.keyboardType == TextInputType.multiline
               ? TextInputAction.newline
               : TextInputAction.done),
@@ -5876,7 +5903,7 @@ class EditableTextState extends State<EditableText>
             (widget.selectionControls is TextSelectionHandleControls
                 ? copyEnabled
                 : copyEnabled &&
-                    (widget.selectionControls?.canCopy(this) ?? false))
+                      (widget.selectionControls?.canCopy(this) ?? false))
         ? () {
             controls?.handleCopy(this);
             copySelection(SelectionChangedCause.toolbar);
@@ -5890,7 +5917,7 @@ class EditableTextState extends State<EditableText>
             (widget.selectionControls is TextSelectionHandleControls
                 ? cutEnabled
                 : cutEnabled &&
-                    (widget.selectionControls?.canCut(this) ?? false))
+                      (widget.selectionControls?.canCut(this) ?? false))
         ? () {
             controls?.handleCut(this);
             cutSelection(SelectionChangedCause.toolbar);
@@ -5904,7 +5931,7 @@ class EditableTextState extends State<EditableText>
             (widget.selectionControls is TextSelectionHandleControls
                 ? pasteEnabled
                 : pasteEnabled &&
-                    (widget.selectionControls?.canPaste(this) ?? false)) &&
+                      (widget.selectionControls?.canPaste(this) ?? false)) &&
             (clipboardStatus.value == ClipboardStatus.pasteable)
         ? () {
             controls?.handlePaste(this);
@@ -5924,7 +5951,7 @@ class EditableTextState extends State<EditableText>
     assert(extent.offset >= 0);
     final int newOffset = forward
         ? textBoundary.getTrailingTextBoundaryAt(extent.offset) ??
-            _value.text.length
+              _value.text.length
         // if x is a boundary defined by `textBoundary`, most textBoundaries (except
         // LineBreaker) guarantees `x == textBoundary.getLeadingTextBoundaryAt(x)`.
         // Use x - 1 here to make sure we don't get stuck at the fixed point x.
@@ -5970,7 +5997,8 @@ class EditableTextState extends State<EditableText>
     // processing needed since the LineBoundary class does exactly that.
     return forward
         ? TextPosition(
-            offset: textBoundary.getTrailingTextBoundaryAt(caretOffset) ??
+            offset:
+                textBoundary.getTrailingTextBoundaryAt(caretOffset) ??
                 _value.text.length,
             affinity: TextAffinity.upstream,
           )
@@ -6031,7 +6059,8 @@ class EditableTextState extends State<EditableText>
 
     userUpdateTextEditingValue(
       TextEditingValue(
-        text: transposing.stringBefore +
+        text:
+            transposing.stringBefore +
             transposing.currentCharacters.last +
             transposing.currentCharacters.first +
             transposing.stringAfter,
@@ -6145,10 +6174,10 @@ class EditableTextState extends State<EditableText>
           position.maxScrollExtent + renderEditable.size.height;
       final TextPosition nextExtent =
           nextExtentOffset.dy + position.pixels >= height
-              ? TextPosition(offset: _value.text.length)
-              : renderEditable.getPositionForPoint(
-                  renderEditable.localToGlobal(nextExtentOffset),
-                );
+          ? TextPosition(offset: _value.text.length)
+          : renderEditable.getPositionForPoint(
+              renderEditable.localToGlobal(nextExtentOffset),
+            );
       nextSelection = _value.selection.copyWith(
         extentOffset: nextExtent.offset,
       );
@@ -6198,10 +6227,12 @@ class EditableTextState extends State<EditableText>
       CallbackAction<UpdateSelectionIntent>(onInvoke: _updateSelection);
 
   late final _UpdateTextSelectionVerticallyAction<
-          DirectionalCaretMovementIntent> _verticalSelectionUpdateAction =
+    DirectionalCaretMovementIntent
+  >
+  _verticalSelectionUpdateAction =
       _UpdateTextSelectionVerticallyAction<DirectionalCaretMovementIntent>(
-    this,
-  );
+        this,
+      );
 
   Object? _hideToolbarIfVisible(DismissIntent intent) {
     if (_selectionOverlay?.toolbarIsVisible ?? false) {
@@ -6340,14 +6371,15 @@ class EditableTextState extends State<EditableText>
     ),
     ExtendSelectionToNextParagraphBoundaryOrCaretLocationIntent:
         _makeOverridable(
-      _UpdateTextSelectionAction<
-          ExtendSelectionToNextParagraphBoundaryOrCaretLocationIntent>(
-        this,
-        _paragraphBoundary,
-        _moveBeyondTextBoundary,
-        ignoreNonCollapsedSelection: true,
-      ),
-    ),
+          _UpdateTextSelectionAction<
+            ExtendSelectionToNextParagraphBoundaryOrCaretLocationIntent
+          >(
+            this,
+            _paragraphBoundary,
+            _moveBeyondTextBoundary,
+            ignoreNonCollapsedSelection: true,
+          ),
+        ),
     ExtendSelectionToDocumentBoundaryIntent: _makeOverridable(
       _UpdateTextSelectionAction<ExtendSelectionToDocumentBoundaryIntent>(
         this,
@@ -6358,7 +6390,8 @@ class EditableTextState extends State<EditableText>
     ),
     ExtendSelectionToNextWordBoundaryOrCaretLocationIntent: _makeOverridable(
       _UpdateTextSelectionAction<
-          ExtendSelectionToNextWordBoundaryOrCaretLocationIntent>(
+        ExtendSelectionToNextWordBoundaryOrCaretLocationIntent
+      >(
         this,
         _nextWordBoundary,
         _moveBeyondTextBoundary,
@@ -6421,8 +6454,8 @@ class EditableTextState extends State<EditableText>
     )) {
       (final TextScaler textScaler, _) => textScaler,
       (null, final double textScaleFactor) => TextScaler.linear(
-          textScaleFactor,
-        ),
+        textScaleFactor,
+      ),
       (null, null) => MediaQuery.textScalerOf(context),
     };
     final ui.SemanticsInputType inputType;
@@ -6464,34 +6497,38 @@ class EditableTextState extends State<EditableText>
                   },
                   shouldChangeUndoStack:
                       (TextEditingValue? oldValue, TextEditingValue newValue) {
-                    if (!newValue.selection.isValid) {
-                      return false;
-                    }
-
-                    if (oldValue == null) {
-                      return true;
-                    }
-
-                    switch (defaultTargetPlatform) {
-                      case TargetPlatform.iOS:
-                      case TargetPlatform.macOS:
-                      case TargetPlatform.fuchsia:
-                      case TargetPlatform.linux:
-                      case TargetPlatform.windows:
-                        // Composing text is not counted in history coalescing.
-                        if (!widget.controller.value.composing.isCollapsed) {
+                        if (!newValue.selection.isValid) {
                           return false;
                         }
-                      case TargetPlatform.android:
-                        // Gboard on Android puts non-CJK words in composing regions. Coalesce
-                        // composing text in order to allow the saving of partial words in that
-                        // case.
-                        break;
-                    }
 
-                    return oldValue.text != newValue.text ||
-                        oldValue.composing != newValue.composing;
-                  },
+                        if (oldValue == null) {
+                          return true;
+                        }
+
+                        switch (defaultTargetPlatform) {
+                          case TargetPlatform.iOS:
+                          case TargetPlatform.macOS:
+                          case TargetPlatform.fuchsia:
+                          case TargetPlatform.linux:
+                          case TargetPlatform.windows:
+                            // Composing text is not counted in history coalescing.
+                            if (!widget
+                                .controller
+                                .value
+                                .composing
+                                .isCollapsed) {
+                              return false;
+                            }
+                          case TargetPlatform.android:
+                            // Gboard on Android puts non-CJK words in composing regions. Coalesce
+                            // composing text in order to allow the saving of partial words in that
+                            // case.
+                            break;
+                        }
+
+                        return oldValue.text != newValue.text ||
+                            oldValue.composing != newValue.composing;
+                      },
                   undoStackModifier: (TextEditingValue value) {
                     // On Android we should discard the composing region when pushing
                     // a new entry to the undo stack. This prevents the TextInputPlugin
@@ -6521,7 +6558,8 @@ class EditableTextState extends State<EditableText>
                             : AxisDirection.right,
                         controller: _scrollController,
                         // On iOS a single-line TextField should not scroll.
-                        physics: widget.scrollPhysics ??
+                        physics:
+                            widget.scrollPhysics ??
                             (!_isMultiline &&
                                     defaultTargetPlatform == TargetPlatform.iOS
                                 ? const _NeverUserScrollableScrollPhysics()
@@ -6531,96 +6569,100 @@ class EditableTextState extends State<EditableText>
                         // If a ScrollBehavior is not provided, only apply scrollbars when
                         // multiline. The overscroll indicator should not be applied in
                         // either case, glowing or stretching.
-                        scrollBehavior: widget.scrollBehavior ??
+                        scrollBehavior:
+                            widget.scrollBehavior ??
                             ScrollConfiguration.of(context).copyWith(
                               scrollbars: _isMultiline,
                               overscroll: false,
                             ),
                         viewportBuilder:
                             (BuildContext context, ViewportOffset offset) {
-                          return CompositedTransformTarget(
-                            link: _toolbarLayerLink,
-                            child: Semantics(
-                              inputType: inputType,
-                              onCopy: _semanticsOnCopy(controls),
-                              onCut: _semanticsOnCut(controls),
-                              onPaste: _semanticsOnPaste(controls),
-                              child: _ScribbleFocusable(
-                                editableKey: _editableKey,
-                                enabled: _stylusHandwritingEnabled,
-                                focusNode: widget.focusNode,
-                                updateSelectionRects: () {
-                                  _openInputConnection();
-                                  _updateSelectionRects(force: true);
-                                },
-                                child: SizeChangedLayoutNotifier(
-                                  child: _Editable(
-                                    key: _editableKey,
-                                    startHandleLayerLink: _startHandleLayerLink,
-                                    endHandleLayerLink: _endHandleLayerLink,
-                                    inlineSpan: buildTextSpan(),
-                                    value: _value,
-                                    cursorColor: _cursorColor,
-                                    backgroundCursorColor:
-                                        widget.backgroundCursorColor,
-                                    showCursor: _cursorVisibilityNotifier,
-                                    forceLine: widget.forceLine,
-                                    readOnly: widget.readOnly,
-                                    hasFocus: _hasFocus,
-                                    maxLines: widget.maxLines,
-                                    minLines: widget.minLines,
-                                    expands: widget.expands,
-                                    strutStyle: widget.strutStyle,
-                                    selectionColor: _selectionOverlay
-                                                ?.spellCheckToolbarIsVisible ??
-                                            false
-                                        ? _spellCheckConfiguration
-                                                .misspelledSelectionColor ??
-                                            widget.selectionColor
-                                        : widget.selectionColor,
-                                    textScaler: effectiveTextScaler,
-                                    textAlign: widget.textAlign,
-                                    textDirection: _textDirection,
-                                    locale: widget.locale,
-                                    textHeightBehavior:
-                                        widget.textHeightBehavior ??
+                              return CompositedTransformTarget(
+                                link: _toolbarLayerLink,
+                                child: Semantics(
+                                  inputType: inputType,
+                                  onCopy: _semanticsOnCopy(controls),
+                                  onCut: _semanticsOnCut(controls),
+                                  onPaste: _semanticsOnPaste(controls),
+                                  child: _ScribbleFocusable(
+                                    editableKey: _editableKey,
+                                    enabled: _stylusHandwritingEnabled,
+                                    focusNode: widget.focusNode,
+                                    updateSelectionRects: () {
+                                      _openInputConnection();
+                                      _updateSelectionRects(force: true);
+                                    },
+                                    child: SizeChangedLayoutNotifier(
+                                      child: _Editable(
+                                        key: _editableKey,
+                                        startHandleLayerLink:
+                                            _startHandleLayerLink,
+                                        endHandleLayerLink: _endHandleLayerLink,
+                                        inlineSpan: buildTextSpan(),
+                                        value: _value,
+                                        cursorColor: _cursorColor,
+                                        backgroundCursorColor:
+                                            widget.backgroundCursorColor,
+                                        showCursor: _cursorVisibilityNotifier,
+                                        forceLine: widget.forceLine,
+                                        readOnly: widget.readOnly,
+                                        hasFocus: _hasFocus,
+                                        maxLines: widget.maxLines,
+                                        minLines: widget.minLines,
+                                        expands: widget.expands,
+                                        strutStyle: widget.strutStyle,
+                                        selectionColor:
+                                            _selectionOverlay
+                                                    ?.spellCheckToolbarIsVisible ??
+                                                false
+                                            ? _spellCheckConfiguration
+                                                      .misspelledSelectionColor ??
+                                                  widget.selectionColor
+                                            : widget.selectionColor,
+                                        textScaler: effectiveTextScaler,
+                                        textAlign: widget.textAlign,
+                                        textDirection: _textDirection,
+                                        locale: widget.locale,
+                                        textHeightBehavior:
+                                            widget.textHeightBehavior ??
                                             DefaultTextHeightBehavior.maybeOf(
                                               context,
                                             ),
-                                    textWidthBasis: widget.textWidthBasis,
-                                    obscuringCharacter:
-                                        widget.obscuringCharacter,
-                                    obscureText: widget.obscureText,
-                                    offset: offset,
-                                    rendererIgnoresPointer:
-                                        widget.rendererIgnoresPointer,
-                                    cursorWidth: widget.cursorWidth,
-                                    cursorHeight: widget.cursorHeight,
-                                    cursorRadius: widget.cursorRadius,
-                                    cursorOffset:
-                                        widget.cursorOffset ?? Offset.zero,
-                                    selectionHeightStyle:
-                                        widget.selectionHeightStyle,
-                                    selectionWidthStyle:
-                                        widget.selectionWidthStyle,
-                                    paintCursorAboveText:
-                                        widget.paintCursorAboveText,
-                                    enableInteractiveSelection:
-                                        widget._userSelectionEnabled,
-                                    textSelectionDelegate: this,
-                                    devicePixelRatio: _devicePixelRatio,
-                                    promptRectRange: _currentPromptRectRange,
-                                    promptRectColor:
-                                        widget.autocorrectionTextRectColor,
-                                    foregroundPainter: _typingCaretPainter,
-                                    onLayout: _handleTypingLayout,
-                                    clipBehavior: widget.clipBehavior,
+                                        textWidthBasis: widget.textWidthBasis,
+                                        obscuringCharacter:
+                                            widget.obscuringCharacter,
+                                        obscureText: widget.obscureText,
+                                        offset: offset,
+                                        rendererIgnoresPointer:
+                                            widget.rendererIgnoresPointer,
+                                        cursorWidth: widget.cursorWidth,
+                                        cursorHeight: widget.cursorHeight,
+                                        cursorRadius: widget.cursorRadius,
+                                        cursorOffset:
+                                            widget.cursorOffset ?? Offset.zero,
+                                        selectionHeightStyle:
+                                            widget.selectionHeightStyle,
+                                        selectionWidthStyle:
+                                            widget.selectionWidthStyle,
+                                        paintCursorAboveText:
+                                            widget.paintCursorAboveText,
+                                        enableInteractiveSelection:
+                                            widget._userSelectionEnabled,
+                                        textSelectionDelegate: this,
+                                        devicePixelRatio: _devicePixelRatio,
+                                        promptRectRange:
+                                            _currentPromptRectRange,
+                                        promptRectColor:
+                                            widget.autocorrectionTextRectColor,
+                                        foregroundPainter: _typingCaretPainter,
+                                        onLayout: _handleTypingLayout,
+                                        clipBehavior: widget.clipBehavior,
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          );
-                        },
+                              );
+                            },
                       ),
                     ),
                   ),
@@ -6649,10 +6691,11 @@ class EditableTextState extends State<EditableText>
       };
       final bool brieflyShowPassword =
           WidgetsBinding.instance.platformDispatcher.brieflyShowPassword &&
-              mobilePlatforms.contains(defaultTargetPlatform);
+          mobilePlatforms.contains(defaultTargetPlatform);
       if (brieflyShowPassword) {
-        final int? o =
-            _obscureShowCharTicksPending > 0 ? _obscureLatestCharIndex : null;
+        final int? o = _obscureShowCharTicksPending > 0
+            ? _obscureLatestCharIndex
+            : null;
         if (o != null && o >= 0 && o < text.length) {
           text = text.replaceRange(o, o + 1, _value.text.substring(o, o + 1));
         }
@@ -6766,13 +6809,13 @@ class _Editable extends MultiChildRenderObjectWidget {
     this.foregroundPainter,
     this.onLayout,
     required this.clipBehavior,
-  })  : selectionHeightStyle =
-            selectionHeightStyle ?? EditableText.defaultSelectionHeightStyle,
-        selectionWidthStyle =
-            selectionWidthStyle ?? EditableText.defaultSelectionWidthStyle,
-        super(
-          children: WidgetSpan.extractFromInlineSpan(inlineSpan, textScaler),
-        );
+  }) : selectionHeightStyle =
+           selectionHeightStyle ?? EditableText.defaultSelectionHeightStyle,
+       selectionWidthStyle =
+           selectionWidthStyle ?? EditableText.defaultSelectionWidthStyle,
+       super(
+         children: WidgetSpan.extractFromInlineSpan(inlineSpan, textScaler),
+       );
 
   final InlineSpan inlineSpan;
   final TextEditingValue value;
@@ -7008,7 +7051,8 @@ class _ScribbleCacheKey {
     if (identical(other, this)) {
       return RenderComparison.identical;
     }
-    final bool needsLayout = textAlign != other.textAlign ||
+    final bool needsLayout =
+        textAlign != other.textAlign ||
         textDirection != other.textDirection ||
         textScaler != other.textScaler ||
         (textHeightBehavior ?? const TextHeightBehavior()) !=
@@ -7046,7 +7090,7 @@ class _ScribbleFocusable extends StatefulWidget {
 class _ScribbleFocusableState extends State<_ScribbleFocusable>
     implements ScribbleClient {
   _ScribbleFocusableState()
-      : _elementIdentifier = (_nextElementIdentifier++).toString();
+    : _elementIdentifier = (_nextElementIdentifier++).toString();
 
   @override
   void initState() {
@@ -7267,7 +7311,8 @@ class _DeleteTextAction<T extends DirectionalTextEditingIntent>
     if (!selection.isCollapsed) {
       // Expands the selection to ensure the range covers full graphemes.
       final TextRange range = TextRange(
-        start: atomicBoundary.getLeadingTextBoundaryAt(selection.start) ??
+        start:
+            atomicBoundary.getLeadingTextBoundaryAt(selection.start) ??
             state._value.text.length,
         end: atomicBoundary.getTrailingTextBoundaryAt(selection.end - 1) ?? 0,
       );
@@ -7290,11 +7335,11 @@ class _DeleteTextAction<T extends DirectionalTextEditingIntent>
     final TextRange rangeToDelete = TextSelection(
       baseOffset: intent.forward
           ? atomicBoundary.getLeadingTextBoundaryAt(selection.baseOffset) ??
-              state._value.text.length
+                state._value.text.length
           : atomicBoundary.getTrailingTextBoundaryAt(
-                selection.baseOffset - 1,
-              ) ??
-              0,
+                  selection.baseOffset - 1,
+                ) ??
+                0,
       extentOffset: target,
     );
     final ReplaceTextIntent replaceTextIntent = ReplaceTextIntent(
@@ -7393,7 +7438,8 @@ class _UpdateTextSelectionAction<T extends DirectionalCaretMovementIntent>
       }
     }
 
-    final bool shouldTargetBase = isExpand &&
+    final bool shouldTargetBase =
+        isExpand &&
         (intent.forward
             ? selection.baseOffset > selection.extentOffset
             : selection.baseOffset < selection.extentOffset);
@@ -7402,15 +7448,16 @@ class _UpdateTextSelectionAction<T extends DirectionalCaretMovementIntent>
       intent.forward,
       getTextBoundary(),
     );
-    final TextSelection newSelection = collapseSelection ||
+    final TextSelection newSelection =
+        collapseSelection ||
             (!isExpand && newExtent.offset == selection.baseOffset)
         ? TextSelection.fromPosition(newExtent)
         : isExpand
-            ? selection.expandTo(
-                newExtent, extentAtIndex || selection.isCollapsed)
-            : selection.extendTo(newExtent);
+        ? selection.expandTo(newExtent, extentAtIndex || selection.isCollapsed)
+        : selection.extendTo(newExtent);
 
-    final bool shouldCollapseToBase = intent.collapseAtReversal &&
+    final bool shouldCollapseToBase =
+        intent.collapseAtReversal &&
         (selection.baseOffset - selection.extentOffset) *
                 (selection.baseOffset - newSelection.extentOffset) <
             0;
@@ -7440,7 +7487,9 @@ class _UpdateTextSelectionAction<T extends DirectionalCaretMovementIntent>
 }
 
 class _UpdateTextSelectionVerticallyAction<
-    T extends DirectionalCaretMovementIntent> extends ContextAction<T> {
+  T extends DirectionalCaretMovementIntent
+>
+    extends ContextAction<T> {
   _UpdateTextSelectionVerticallyAction(this.state);
 
   final EditableTextState state;
@@ -7456,7 +7505,8 @@ class _UpdateTextSelectionVerticallyAction<
     }
     _runSelection = state._value.selection;
     final TextSelection currentSelection = state.widget.controller.selection;
-    final bool continueCurrentRun = currentSelection.isValid &&
+    final bool continueCurrentRun =
+        currentSelection.isValid &&
         currentSelection.isCollapsed &&
         currentSelection.baseOffset == runSelection.baseOffset &&
         currentSelection.extentOffset == runSelection.extentOffset;
@@ -7482,24 +7532,25 @@ class _UpdateTextSelectionVerticallyAction<
       _runSelection = null;
     }
 
-    final VerticalCaretMovementRun currentRun = _verticalMovementRun ??
+    final VerticalCaretMovementRun currentRun =
+        _verticalMovementRun ??
         state.renderEditable.startVerticalCaretMovement(
           state.renderEditable.selection!.extent,
         );
 
-    final bool shouldMove = intent
-            is ExtendSelectionVerticallyToAdjacentPageIntent
+    final bool shouldMove =
+        intent is ExtendSelectionVerticallyToAdjacentPageIntent
         ? currentRun.moveByOffset(
             (intent.forward ? 1.0 : -1.0) * state.renderEditable.size.height,
           )
         : intent.forward
-            ? currentRun.moveNext()
-            : currentRun.movePrevious();
+        ? currentRun.moveNext()
+        : currentRun.movePrevious();
     final TextPosition newExtent = shouldMove
         ? currentRun.current
         : intent.forward
-            ? TextPosition(offset: value.text.length)
-            : const TextPosition(offset: 0);
+        ? TextPosition(offset: value.text.length)
+        : const TextPosition(offset: 0);
     final TextSelection newSelection = collapseSelection
         ? TextSelection.fromPosition(newExtent)
         : value.selection.extendTo(newExtent);

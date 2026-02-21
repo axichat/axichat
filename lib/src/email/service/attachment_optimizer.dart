@@ -74,7 +74,8 @@ class EmailAttachmentOptimizer {
       _scheduleOptimizedCleanup(optimizedPath);
       final String optimizedFileName =
           result?[_resultFileNameKey] as String? ?? attachment.fileName;
-      final String optimizedMimeType = result?[_resultMimeTypeKey] as String? ??
+      final String optimizedMimeType =
+          result?[_resultMimeTypeKey] as String? ??
           attachment.mimeType ??
           _pngMimeType;
       final int optimizedSizeBytes =
@@ -237,18 +238,15 @@ void _scheduleOptimizedCleanup(String path) {
   if (!_isOptimizedAttachmentFile(file)) {
     return;
   }
-  Timer(
-    EmailAttachmentOptimizer._optimizedCleanupDelay,
-    () async {
-      try {
-        if (await file.exists()) {
-          await file.delete();
-        }
-      } on Exception {
-        return;
+  Timer(EmailAttachmentOptimizer._optimizedCleanupDelay, () async {
+    try {
+      if (await file.exists()) {
+        await file.delete();
       }
-    },
-  );
+    } on Exception {
+      return;
+    }
+  });
 }
 
 bool _isOptimizedAttachmentFile(File file) {

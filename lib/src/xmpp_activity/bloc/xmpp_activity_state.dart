@@ -26,81 +26,65 @@ class XmppOperation {
   final XmppOperationStatus status;
 
   XmppOperationLabelKey get labelKey => switch (status) {
-        XmppOperationStatus.inProgress => switch (kind) {
-            XmppOperationKind.pubSubBookmarks =>
-              XmppOperationLabelKey.pubSubBookmarksStart,
-            XmppOperationKind.pubSubConversations =>
-              XmppOperationLabelKey.pubSubConversationsStart,
-            XmppOperationKind.pubSubDrafts =>
-              XmppOperationLabelKey.pubSubDraftsStart,
-            XmppOperationKind.pubSubSpam =>
-              XmppOperationLabelKey.pubSubSpamStart,
-            XmppOperationKind.pubSubEmailBlocklist =>
-              XmppOperationLabelKey.pubSubEmailBlocklistStart,
-            XmppOperationKind.pubSubAvatarMetadata =>
-              XmppOperationLabelKey.pubSubAvatarMetadataStart,
-            XmppOperationKind.pubSubFetch =>
-              XmppOperationLabelKey.pubSubFetchStart,
-            XmppOperationKind.mamLoginSync =>
-              XmppOperationLabelKey.mamLoginStart,
-            XmppOperationKind.mamGlobalSync =>
-              XmppOperationLabelKey.mamGlobalStart,
-            XmppOperationKind.mamMucSync => XmppOperationLabelKey.mamMucStart,
-            XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchStart,
-            XmppOperationKind.mucJoin => XmppOperationLabelKey.mucJoinStart,
-          },
-        XmppOperationStatus.success => switch (kind) {
-            XmppOperationKind.pubSubBookmarks =>
-              XmppOperationLabelKey.pubSubBookmarksSuccess,
-            XmppOperationKind.pubSubConversations =>
-              XmppOperationLabelKey.pubSubConversationsSuccess,
-            XmppOperationKind.pubSubDrafts =>
-              XmppOperationLabelKey.pubSubDraftsSuccess,
-            XmppOperationKind.pubSubSpam =>
-              XmppOperationLabelKey.pubSubSpamSuccess,
-            XmppOperationKind.pubSubEmailBlocklist =>
-              XmppOperationLabelKey.pubSubEmailBlocklistSuccess,
-            XmppOperationKind.pubSubAvatarMetadata =>
-              XmppOperationLabelKey.pubSubAvatarMetadataSuccess,
-            XmppOperationKind.pubSubFetch =>
-              XmppOperationLabelKey.pubSubFetchSuccess,
-            XmppOperationKind.mamLoginSync =>
-              XmppOperationLabelKey.mamLoginSuccess,
-            XmppOperationKind.mamGlobalSync =>
-              XmppOperationLabelKey.mamGlobalSuccess,
-            XmppOperationKind.mamMucSync => XmppOperationLabelKey.mamMucSuccess,
-            XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchSuccess,
-            XmppOperationKind.mucJoin => XmppOperationLabelKey.mucJoinSuccess,
-          },
-        XmppOperationStatus.failure => switch (kind) {
-            XmppOperationKind.pubSubBookmarks =>
-              XmppOperationLabelKey.pubSubBookmarksFailure,
-            XmppOperationKind.pubSubConversations =>
-              XmppOperationLabelKey.pubSubConversationsFailure,
-            XmppOperationKind.pubSubDrafts =>
-              XmppOperationLabelKey.pubSubDraftsFailure,
-            XmppOperationKind.pubSubSpam =>
-              XmppOperationLabelKey.pubSubSpamFailure,
-            XmppOperationKind.pubSubEmailBlocklist =>
-              XmppOperationLabelKey.pubSubEmailBlocklistFailure,
-            XmppOperationKind.pubSubAvatarMetadata =>
-              XmppOperationLabelKey.pubSubAvatarMetadataFailure,
-            XmppOperationKind.pubSubFetch =>
-              XmppOperationLabelKey.pubSubFetchFailure,
-            XmppOperationKind.mamLoginSync =>
-              XmppOperationLabelKey.mamLoginFailure,
-            XmppOperationKind.mamGlobalSync =>
-              XmppOperationLabelKey.mamGlobalFailure,
-            XmppOperationKind.mamMucSync => XmppOperationLabelKey.mamMucFailure,
-            XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchFailure,
-            XmppOperationKind.mucJoin => XmppOperationLabelKey.mucJoinFailure,
-          },
-      };
+    XmppOperationStatus.inProgress => switch (kind) {
+      XmppOperationKind.pubSubBookmarks =>
+        XmppOperationLabelKey.pubSubBookmarksStart,
+      XmppOperationKind.pubSubConversations =>
+        XmppOperationLabelKey.pubSubConversationsStart,
+      XmppOperationKind.pubSubDrafts => XmppOperationLabelKey.pubSubDraftsStart,
+      XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamStart,
+      XmppOperationKind.pubSubEmailBlocklist =>
+        XmppOperationLabelKey.pubSubEmailBlocklistStart,
+      XmppOperationKind.pubSubAvatarMetadata =>
+        XmppOperationLabelKey.pubSubAvatarMetadataStart,
+      XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchStart,
+      XmppOperationKind.mamLoginSync => XmppOperationLabelKey.mamLoginStart,
+      XmppOperationKind.mamGlobalSync => XmppOperationLabelKey.mamGlobalStart,
+      XmppOperationKind.mamMucSync => XmppOperationLabelKey.mamMucStart,
+      XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchStart,
+      XmppOperationKind.mucJoin => XmppOperationLabelKey.mucJoinStart,
+    },
+    XmppOperationStatus.success => switch (kind) {
+      XmppOperationKind.pubSubBookmarks =>
+        XmppOperationLabelKey.pubSubBookmarksSuccess,
+      XmppOperationKind.pubSubConversations =>
+        XmppOperationLabelKey.pubSubConversationsSuccess,
+      XmppOperationKind.pubSubDrafts =>
+        XmppOperationLabelKey.pubSubDraftsSuccess,
+      XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamSuccess,
+      XmppOperationKind.pubSubEmailBlocklist =>
+        XmppOperationLabelKey.pubSubEmailBlocklistSuccess,
+      XmppOperationKind.pubSubAvatarMetadata =>
+        XmppOperationLabelKey.pubSubAvatarMetadataSuccess,
+      XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchSuccess,
+      XmppOperationKind.mamLoginSync => XmppOperationLabelKey.mamLoginSuccess,
+      XmppOperationKind.mamGlobalSync => XmppOperationLabelKey.mamGlobalSuccess,
+      XmppOperationKind.mamMucSync => XmppOperationLabelKey.mamMucSuccess,
+      XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchSuccess,
+      XmppOperationKind.mucJoin => XmppOperationLabelKey.mucJoinSuccess,
+    },
+    XmppOperationStatus.failure => switch (kind) {
+      XmppOperationKind.pubSubBookmarks =>
+        XmppOperationLabelKey.pubSubBookmarksFailure,
+      XmppOperationKind.pubSubConversations =>
+        XmppOperationLabelKey.pubSubConversationsFailure,
+      XmppOperationKind.pubSubDrafts =>
+        XmppOperationLabelKey.pubSubDraftsFailure,
+      XmppOperationKind.pubSubSpam => XmppOperationLabelKey.pubSubSpamFailure,
+      XmppOperationKind.pubSubEmailBlocklist =>
+        XmppOperationLabelKey.pubSubEmailBlocklistFailure,
+      XmppOperationKind.pubSubAvatarMetadata =>
+        XmppOperationLabelKey.pubSubAvatarMetadataFailure,
+      XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchFailure,
+      XmppOperationKind.mamLoginSync => XmppOperationLabelKey.mamLoginFailure,
+      XmppOperationKind.mamGlobalSync => XmppOperationLabelKey.mamGlobalFailure,
+      XmppOperationKind.mamMucSync => XmppOperationLabelKey.mamMucFailure,
+      XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchFailure,
+      XmppOperationKind.mucJoin => XmppOperationLabelKey.mucJoinFailure,
+    },
+  };
 
-  XmppOperation copyWith({
-    XmppOperationStatus? status,
-    DateTime? startedAt,
-  }) =>
+  XmppOperation copyWith({XmppOperationStatus? status, DateTime? startedAt}) =>
       XmppOperation(
         id: id,
         kind: kind,

@@ -50,7 +50,8 @@ class RoomMembersSheet extends StatelessWidget {
     String occupantId,
     MucModerationAction action,
     String actionLabel,
-  ) onAction;
+  )
+  onAction;
   final String? roomAvatarPath;
   final ValueChanged<String>? onChangeNickname;
   final VoidCallback? onLeaveRoom;
@@ -78,9 +79,7 @@ class RoomMembersSheet extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          decoration: BoxDecoration(
-            border: Border(bottom: context.borderSide),
-          ),
+          decoration: BoxDecoration(border: Border(bottom: context.borderSide)),
           padding: EdgeInsets.fromLTRB(
             spacing.m,
             spacing.m,
@@ -109,12 +108,7 @@ class RoomMembersSheet extends StatelessWidget {
           ),
         if (onChangeNickname != null || onLeaveRoom != null)
           Padding(
-            padding: EdgeInsets.fromLTRB(
-              spacing.m,
-              0,
-              spacing.m,
-              spacing.s,
-            ),
+            padding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.s),
             child: Wrap(
               spacing: spacing.s,
               runSpacing: spacing.s,
@@ -144,12 +138,7 @@ class RoomMembersSheet extends StatelessWidget {
         SizedBox(height: spacing.s),
         Expanded(
           child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              spacing.m,
-              0,
-              spacing.m,
-              spacing.m,
-            ),
+            padding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.m),
             child: memberSections.isEmpty
                 ? Center(
                     child: Text(
@@ -172,7 +161,7 @@ class RoomMembersSheet extends StatelessWidget {
                         animationDuration: animationDuration,
                       );
                     },
-                    separatorBuilder: (_, __) => SizedBox(height: spacing.s),
+                    separatorBuilder: (_, _) => SizedBox(height: spacing.s),
                     itemCount: memberSections.length,
                   ),
           ),
@@ -291,16 +280,13 @@ class _RoomAvatarSection extends StatelessWidget {
       avatarPath: avatarPath,
     );
     final editButton = canEdit
-        ? AxiButton.outline(
-            onPressed: onEdit,
-            child: Text(l10n.mucEditAvatar),
-          )
+        ? AxiButton.outline(onPressed: onEdit, child: Text(l10n.mucEditAvatar))
         : null;
     return Row(
       children: [
         avatar,
         SizedBox(width: avatarSpacing),
-        if (editButton != null) editButton,
+        ?editButton,
       ],
     );
   }
@@ -322,7 +308,8 @@ class _MemberSection extends StatelessWidget {
     String occupantId,
     MucModerationAction action,
     String actionLabel,
-  ) onAction;
+  )
+  onAction;
   final String? myOccupantId;
   final AppLocalizations l10n;
   final Duration animationDuration;
@@ -409,7 +396,8 @@ class _MemberTile extends StatefulWidget {
     String occupantId,
     MucModerationAction action,
     String actionLabel,
-  ) onAction;
+  )
+  onAction;
   final bool isSelf;
   final AppLocalizations l10n;
   final Duration animationDuration;
@@ -491,7 +479,8 @@ class _MemberActionPanel extends StatelessWidget {
     String occupantId,
     MucModerationAction action,
     String actionLabel,
-  ) onAction;
+  )
+  onAction;
   final VoidCallback onClose;
   final AppLocalizations l10n;
 
@@ -505,8 +494,9 @@ class _MemberActionPanel extends StatelessWidget {
       alignment: WrapAlignment.start,
       children: actions.map((action) {
         final descriptor = _MemberActionDescriptor.forAction(action, l10n);
-        final builder =
-            descriptor.destructive ? AxiButton.destructive : AxiButton.outline;
+        final builder = descriptor.destructive
+            ? AxiButton.destructive
+            : AxiButton.outline;
         return builder(
           onPressed: () {
             onClose();
@@ -615,13 +605,14 @@ class RoomAvatarEditorSheet extends StatefulWidget {
         final pop = Navigator.of(sheetContext).pop;
         final colors = sheetContext.colorScheme;
         return BlocProvider(
-          create: (_) => AvatarEditorCubit(
-            xmppService: sheetContext.read<XmppService>(),
-            templates: buildDefaultAvatarTemplates(),
-          )
-            ..initialize(colors)
-            ..setCarouselEnabled(true, colors)
-            ..seedFromAvatarPath(avatarPath),
+          create: (_) =>
+              AvatarEditorCubit(
+                  xmppService: sheetContext.read<XmppService>(),
+                  templates: buildDefaultAvatarTemplates(),
+                )
+                ..initialize(colors)
+                ..setCarouselEnabled(true, colors)
+                ..seedFromAvatarPath(avatarPath),
           child: RoomAvatarEditorSheet(
             avatarPath: avatarPath,
             onCancel: () => pop(),
@@ -637,8 +628,9 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
   Future<void> _handleSave() async {
     if (context.read<AvatarEditorCubit>().state.isBusy) return;
     context.read<AvatarEditorCubit>().pauseCarousel();
-    final payload =
-        await context.read<AvatarEditorCubit>().buildSelectedAvatarPayload();
+    final payload = await context
+        .read<AvatarEditorCubit>()
+        .buildSelectedAvatarPayload();
     if (payload == null) return;
     widget.onSave(payload);
   }
@@ -666,7 +658,8 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
     return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, avatarState) {
         final errorText = avatarState.errorType?.resolve(l10n);
-        final hasAvatar = avatarState.draftAvatar != null ||
+        final hasAvatar =
+            avatarState.draftAvatar != null ||
             avatarState.carouselAvatar != null;
         final saveEnabled = !avatarState.isBusy && hasAvatar;
         final useActionEnabled = avatarState.canUseCarouselAvatar;
@@ -730,7 +723,8 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                 imageWidth: avatarState.draftAvatar?.sourceWidth
                                     ?.toDouble(),
                                 imageHeight: avatarState
-                                    .draftAvatar?.sourceHeight
+                                    .draftAvatar
+                                    ?.sourceHeight
                                     ?.toDouble(),
                                 onCropChanged: (rect) => context
                                     .read<AvatarEditorCubit>()
@@ -755,16 +749,16 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                                     avatarState.hasUserSelectedAvatar,
                                 canShuffleBackground:
                                     avatarState.hasCarouselPreview &&
-                                        avatarState.canShuffleBackground,
+                                    avatarState.canShuffleBackground,
                                 onShuffleBackground:
                                     avatarState.hasCarouselPreview &&
-                                            avatarState.canShuffleBackground
-                                        ? () => context
-                                            .read<AvatarEditorCubit>()
-                                            .shuffleCarouselBackground(
-                                              context.colorScheme,
-                                            )
-                                        : null,
+                                        avatarState.canShuffleBackground
+                                    ? () => context
+                                          .read<AvatarEditorCubit>()
+                                          .shuffleCarouselBackground(
+                                            context.colorScheme,
+                                          )
+                                    : null,
                                 descriptionText: l10n.mucAvatarMenuDescription,
                               ),
                               if (errorText != null) ...[
@@ -787,10 +781,7 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
                 SafeArea(
                   top: false,
                   bottom: true,
-                  child: Padding(
-                    padding: actionsPadding,
-                    child: actions,
-                  ),
+                  child: Padding(padding: actionsPadding, child: actions),
                 ),
               ],
             ),
@@ -834,14 +825,16 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final rosterItems = context.watch<RosterCubit>().state.items ??
+    final rosterItems =
+        context.watch<RosterCubit>().state.items ??
         (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
         const <RosterItem>[];
     final locate = context.read;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
-    final String? selfJid =
-        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final String? selfJid = resolvedProfileJid.isNotEmpty
+        ? resolvedProfileJid
+        : null;
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
@@ -895,18 +888,18 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
               selector: (state) => state.recipientAddressSuggestions,
               builder: (context, recipientAddressSuggestions) =>
                   RecipientChipsBar(
-                recipients: _recipients,
-                availableChats: const <chat_models.Chat>[],
-                rosterItems: rosterItems,
-                databaseSuggestionAddresses: recipientAddressSuggestions,
-                selfJid: locate<ChatsCubit>().selfJid,
-                selfIdentity: selfIdentity,
-                latestStatuses: const {},
-                onRecipientAdded: _addRecipient,
-                onRecipientRemoved: _removeRecipient,
-                onRecipientToggled: _toggleRecipient,
-                collapsedByDefault: false,
-              ),
+                    recipients: _recipients,
+                    availableChats: const <chat_models.Chat>[],
+                    rosterItems: rosterItems,
+                    databaseSuggestionAddresses: recipientAddressSuggestions,
+                    selfJid: locate<ChatsCubit>().selfJid,
+                    selfIdentity: selfIdentity,
+                    latestStatuses: const {},
+                    onRecipientAdded: _addRecipient,
+                    onRecipientRemoved: _removeRecipient,
+                    onRecipientToggled: _toggleRecipient,
+                    collapsedByDefault: false,
+                  ),
             ),
             SizedBox(height: spacing.s),
           ],
@@ -972,10 +965,7 @@ class _NicknameSheet extends StatelessWidget {
     final Widget actions = Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        AxiButton.outline(
-          onPressed: onCancel,
-          child: Text(l10n.commonCancel),
-        ),
+        AxiButton.outline(onPressed: onCancel, child: Text(l10n.commonCancel)),
         SizedBox(width: spacing.s),
         AxiButton.primary(
           onPressed: () => onSubmit(controller.text.trim()),
@@ -997,10 +987,7 @@ class _NicknameSheet extends StatelessWidget {
           onSubmitted: onSubmit,
         ),
       ),
-      footer: Padding(
-        padding: contentPadding,
-        child: actions,
-      ),
+      footer: Padding(padding: contentPadding, child: actions),
     );
   }
 }

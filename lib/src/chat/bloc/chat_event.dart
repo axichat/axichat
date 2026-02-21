@@ -50,9 +50,7 @@ final class _PinnedMessagesUpdated extends ChatEvent {
 }
 
 final class _FileMetadataBatchUpdated extends ChatEvent {
-  const _FileMetadataBatchUpdated({
-    required this.metadataById,
-  });
+  const _FileMetadataBatchUpdated({required this.metadataById});
 
   final Map<String, FileMetadataData?> metadataById;
 
@@ -233,20 +231,20 @@ final class ChatMessageSent extends ChatEvent {
 
   @override
   List<Object?> get props => [
-        chat,
-        text,
-        recipients,
-        pendingAttachments,
-        settings,
-        supportsHttpFileUpload,
-        attachmentFallbackLabel,
-        subject,
-        quotedDraft,
-        roomState,
-        calendarTaskIcs,
-        calendarTaskIcsReadOnly,
-        calendarTaskShareText,
-      ];
+    chat,
+    text,
+    recipients,
+    pendingAttachments,
+    settings,
+    supportsHttpFileUpload,
+    attachmentFallbackLabel,
+    subject,
+    quotedDraft,
+    roomState,
+    calendarTaskIcs,
+    calendarTaskIcsReadOnly,
+    calendarTaskShareText,
+  ];
 }
 
 final class ChatAvailabilityMessageSent extends ChatEvent {
@@ -340,10 +338,7 @@ final class ChatResponsivityChanged extends ChatEvent {
 }
 
 final class ChatEncryptionChanged extends ChatEvent {
-  const ChatEncryptionChanged({
-    required this.chatJid,
-    required this.protocol,
-  });
+  const ChatEncryptionChanged({required this.chatJid, required this.protocol});
 
   final String chatJid;
   final EncryptionProtocol protocol;
@@ -397,12 +392,12 @@ final class ChatSpamStatusRequested extends ChatEvent {
 
   @override
   List<Object?> get props => [
-        chat,
-        sendToSpam,
-        successTitle,
-        successMessage,
-        failureMessage,
-      ];
+    chat,
+    sendToSpam,
+    successTitle,
+    successMessage,
+    failureMessage,
+  ];
 }
 
 final class ChatContactAddRequested extends ChatEvent {
@@ -563,14 +558,14 @@ final class ChatAttachmentRetryRequested extends ChatEvent {
 
   @override
   List<Object?> get props => [
-        attachmentId,
-        recipients,
-        chat,
-        quotedDraft,
-        subject,
-        settings,
-        supportsHttpFileUpload,
-      ];
+    attachmentId,
+    recipients,
+    chat,
+    quotedDraft,
+    subject,
+    settings,
+    supportsHttpFileUpload,
+  ];
 }
 
 final class ChatPendingAttachmentRemoved extends ChatEvent {
@@ -618,13 +613,13 @@ final class ChatModerationActionRequested extends ChatEvent {
 
   @override
   List<Object?> get props => [
-        occupantId,
-        action,
-        actionLabel,
-        chat,
-        roomState,
-        reason,
-      ];
+    occupantId,
+    action,
+    actionLabel,
+    chat,
+    roomState,
+    reason,
+  ];
 }
 
 final class ChatViewFilterChanged extends ChatEvent {
@@ -745,9 +740,9 @@ final class ChatContactRenameRequested extends ChatEvent {
 
   @override
   List<Object?> get props => [
-        displayName,
-        chat,
-        successMessage,
-        failureMessage,
-      ];
+    displayName,
+    chat,
+    successMessage,
+    failureMessage,
+  ];
 }

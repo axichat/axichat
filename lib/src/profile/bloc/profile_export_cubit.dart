@@ -44,25 +44,17 @@ class ProfileExportResult {
     required File file,
     required int itemCount,
   }) : this._(
-          kind: kind,
-          outcome: ProfileExportOutcome.success,
-          file: file,
-          itemCount: itemCount,
-        );
+         kind: kind,
+         outcome: ProfileExportOutcome.success,
+         file: file,
+         itemCount: itemCount,
+       );
 
   const ProfileExportResult.empty({required ProfileExportKind kind})
-      : this._(
-          kind: kind,
-          outcome: ProfileExportOutcome.empty,
-          itemCount: 0,
-        );
+    : this._(kind: kind, outcome: ProfileExportOutcome.empty, itemCount: 0);
 
   const ProfileExportResult.failure({required ProfileExportKind kind})
-      : this._(
-          kind: kind,
-          outcome: ProfileExportOutcome.failure,
-          itemCount: 0,
-        );
+    : this._(kind: kind, outcome: ProfileExportOutcome.failure, itemCount: 0);
 
   final ProfileExportKind kind;
   final ProfileExportOutcome outcome;
@@ -102,22 +94,22 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
   ProfileExportCubit({
     required XmppService xmppService,
     EmailService? emailService,
-  })  : _xmppService = xmppService,
-        _emailService = emailService,
-        super(const ProfileExportState());
+  }) : _xmppService = xmppService,
+       _emailService = emailService,
+       super(const ProfileExportState());
 
   final XmppService _xmppService;
   final EmailService? _emailService;
 
   Future<ProfileExportResult> exportXmppMessages() => _runExport(
-        kind: ProfileExportKind.xmppMessages,
-        operation: () => _exportMessages(
-          kind: ProfileExportKind.xmppMessages,
-          transport: MessageTransport.xmpp,
-          fileLabel: 'xmpp-messages',
-          lineFormatter: null,
-        ),
-      );
+    kind: ProfileExportKind.xmppMessages,
+    operation: () => _exportMessages(
+      kind: ProfileExportKind.xmppMessages,
+      transport: MessageTransport.xmpp,
+      fileLabel: 'xmpp-messages',
+      lineFormatter: null,
+    ),
+  );
 
   Future<ProfileExportResult> exportEmailMessages(
     EmailMessageLineLabels labels,
@@ -133,17 +125,17 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
         kind: ProfileExportKind.emailMessages,
         transport: MessageTransport.email,
         fileLabel: 'email-messages',
-        lineFormatter: ({
-          required Chat chat,
-          required Message message,
-          required intl.DateFormat format,
-        }) =>
-            _formatEmailMessageLine(
-          chat: chat,
-          message: message,
-          format: format,
-          labels: labels,
-        ),
+        lineFormatter:
+            ({
+              required Chat chat,
+              required Message message,
+              required intl.DateFormat format,
+            }) => _formatEmailMessageLine(
+              chat: chat,
+              message: message,
+              format: format,
+              labels: labels,
+            ),
       ),
     );
   }
@@ -151,11 +143,10 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
   Future<ProfileExportResult> exportXmppContacts(
     ContactExportFormat format,
     ContactExportLabels labels,
-  ) =>
-      _runExport(
-        kind: ProfileExportKind.xmppContacts,
-        operation: () => _exportXmppContacts(format, labels),
-      );
+  ) => _runExport(
+    kind: ProfileExportKind.xmppContacts,
+    operation: () => _exportXmppContacts(format, labels),
+  );
 
   Future<ProfileExportResult> exportEmailContacts(
     ContactExportFormat format,
@@ -198,15 +189,13 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
       required Chat chat,
       required Message message,
       required intl.DateFormat format,
-    })? lineFormatter,
+    })?
+    lineFormatter,
   }) async {
     const int chatExportStart = 0;
     const int chatExportEnd = 0;
     final db = await _xmppService.database;
-    final chats = await db.getChats(
-      start: chatExportStart,
-      end: chatExportEnd,
-    );
+    final chats = await db.getChats(start: chatExportStart, end: chatExportEnd);
     final selectedChats = chats
         .where((chat) => chat.transport == transport)
         .toList(growable: false);
@@ -276,9 +265,7 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
       );
     }
     const flags = DeltaContactListFlags.addSelf | DeltaContactListFlags.address;
-    final emailContacts = await emailService.getContacts(
-      flags: flags,
-    );
+    final emailContacts = await emailService.getContacts(flags: flags);
     final contacts = _sortedContacts(
       emailContacts
           .map(
@@ -310,16 +297,15 @@ class ProfileExportCubit extends Cubit<ProfileExportState> {
   }
 
   List<ContactExportEntry> _sortedContacts(List<ContactExportEntry> contacts) =>
-      contacts.toList()
-        ..sort((a, b) {
-          final aKey = (a.displayName?.isNotEmpty == true)
-              ? a.displayName!.toLowerCase()
-              : a.address.toLowerCase();
-          final bKey = (b.displayName?.isNotEmpty == true)
-              ? b.displayName!.toLowerCase()
-              : b.address.toLowerCase();
-          return aKey.compareTo(bKey);
-        });
+      contacts.toList()..sort((a, b) {
+        final aKey = (a.displayName?.isNotEmpty == true)
+            ? a.displayName!.toLowerCase()
+            : a.address.toLowerCase();
+        final bKey = (b.displayName?.isNotEmpty == true)
+            ? b.displayName!.toLowerCase()
+            : b.address.toLowerCase();
+        return aKey.compareTo(bKey);
+      });
 }
 
 String? _formatEmailMessageLine({

@@ -16,8 +16,8 @@ import 'calendar_task_geometry.dart';
 import 'calendar_task_draggable.dart';
 // Completion checkbox intentionally omitted on scheduled grid items.
 
-typedef CalendarTaskContextMenuBuilderFactory = TaskContextMenuBuilder?
-    Function(ShadPopoverController controller);
+typedef CalendarTaskContextMenuBuilderFactory =
+    TaskContextMenuBuilder? Function(ShadPopoverController controller);
 
 class CalendarTaskTileCallbacks {
   const CalendarTaskTileCallbacks({
@@ -233,8 +233,8 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     final CalendarTask task = widget.task;
     final CalendarTaskEntryBindings bindings = widget.bindings;
 
-    final TaskContextMenuBuilder? contextMenuBuilder =
-        bindings.contextMenuBuilderFactory(_menuController);
+    final TaskContextMenuBuilder? contextMenuBuilder = bindings
+        .contextMenuBuilderFactory(_menuController);
 
     final CalendarTaskGeometry geometry = _resolveGeometry();
     if (geometry.rect.width <= 0 || geometry.rect.height <= 0) {
@@ -246,10 +246,10 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
       builder: (context, preview, _) {
         return ValueListenableBuilder<String?>(
           valueListenable: _interactionController.dropHoverTaskId,
-          builder: (context, dropHoverTaskId, __) {
+          builder: (context, dropHoverTaskId, _) {
             final bool isDraggingTask =
                 _interactionController.draggingTaskId != null &&
-                    task.id == _interactionController.draggingTaskId;
+                task.id == _interactionController.draggingTaskId;
             final bool isHoverTarget = dropHoverTaskId == task.id;
             final CalendarTask? previewTaskCandidate = _previewTaskCandidate(
               preview: preview,
@@ -257,7 +257,8 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
               isHoverTarget: isHoverTarget,
             );
             final bool showSplitPreview = previewTaskCandidate != null;
-            final bool allowNarrowing = _interactionController.dragHasMoved &&
+            final bool allowNarrowing =
+                _interactionController.dragHasMoved &&
                 !_interactionController.isWidthDebounceActive;
 
             final double width = geometry.rect.width;
@@ -271,11 +272,13 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 key: ValueKey(task.id),
                 interactionController: _interactionController,
                 task: task,
-                onResizePreview:
-                    enableInteractions ? _callbacks.onResizePreview : null,
+                onResizePreview: enableInteractions
+                    ? _callbacks.onResizePreview
+                    : null,
                 onResizeEnd: enableInteractions ? _callbacks.onResizeEnd : null,
-                onResizePointerMove:
-                    enableInteractions ? _callbacks.onResizePointerMove : null,
+                onResizePointerMove: enableInteractions
+                    ? _callbacks.onResizePointerMove
+                    : null,
                 hourHeight: bindings.hourHeight,
                 stepHeight: bindings.stepHeight,
                 minutesPerStep: bindings.minutesPerStep,
@@ -293,8 +296,9 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 contextMenuLongPressEnabled:
                     bindings.enableContextMenuLongPress,
                 resizeHandleExtent: bindings.resizeHandleExtent,
-                onDragPointerDown:
-                    enableInteractions ? _callbacks.onDragPointerDown : null,
+                onDragPointerDown: enableInteractions
+                    ? _callbacks.onDragPointerDown
+                    : null,
                 onToggleSelection: enableInteractions
                     ? () {
                         if (bindings.isSelectionMode &&
@@ -323,13 +327,13 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 snapshotBuilder: () => task.copyWith(),
                 feedbackBuilder: (context, dragTask, dragGeometry) =>
                     _CalendarTaskDragFeedback(
-                  interactionController: _interactionController,
-                  task: dragTask,
-                  geometry: dragGeometry,
-                  bindings: bindings,
-                  baseHeight: height,
-                  isDayView: widget.isDayView,
-                ),
+                      interactionController: _interactionController,
+                      task: dragTask,
+                      geometry: dragGeometry,
+                      bindings: bindings,
+                      baseHeight: height,
+                      isDayView: widget.isDayView,
+                    ),
                 enabled: enableInteractions,
                 childWhenDragging: const SizedBox.shrink(),
                 requiresLongPress: bindings.requiresLongPressToDrag,
@@ -356,8 +360,9 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
               );
               final bool widthAllowsSplit =
                   ghostWidth >= _minSideBySideGhostWidth &&
-                      occupantWidth >= _minSideBySideGhostWidth;
-              final bool useSideBySide = widthAllowsSplit &&
+                  occupantWidth >= _minSideBySideGhostWidth;
+              final bool useSideBySide =
+                  widthAllowsSplit &&
                   geometry.splitWidthFactor < _splitOverlayFallbackThreshold;
 
               final Widget previewGhost = _CalendarTaskPreviewGhost(

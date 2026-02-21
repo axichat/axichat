@@ -89,10 +89,7 @@ class TasksTabLabel extends StatelessWidget {
     final spacing = context.spacing;
     final TextStyle resolvedStyle = textStyle ?? context.textTheme.small.strong;
     if (!highlight || animation == null) {
-      return Text(
-        text,
-        style: resolvedStyle,
-      );
+      return Text(text, style: resolvedStyle);
     }
 
     return AnimatedBuilder(
@@ -115,10 +112,7 @@ class TasksTabLabel extends StatelessWidget {
                 horizontal: spacing.xs,
                 vertical: spacing.xxs,
               ),
-              child: Text(
-                text,
-                style: resolvedStyle,
-              ),
+              child: Text(text, style: resolvedStyle),
             ),
             Positioned(
               top: -6,

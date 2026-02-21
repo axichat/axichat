@@ -55,8 +55,9 @@ class CalendarHoverTitleBubble extends StatelessWidget {
                         maxLines: 1,
                         softWrap: false,
                         overflow: TextOverflow.ellipsis,
-                        style: context.textTheme.label
-                            .copyWith(color: colors.mutedForeground),
+                        style: context.textTheme.label.copyWith(
+                          color: colors.mutedForeground,
+                        ),
                       ),
                     ),
                   ),

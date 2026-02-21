@@ -22,9 +22,7 @@ extension AttachmentGalleryQueries on XmppDrift {
       ),
       innerJoin(
         fileMetadataTable,
-        fileMetadataTable.id.equalsExp(
-              messageAttachmentsTable.fileMetadataId,
-            ) |
+        fileMetadataTable.id.equalsExp(messageAttachmentsTable.fileMetadataId) |
             (messageAttachmentsTable.id.isNull() &
                 fileMetadataTable.id.equalsExp(messagesTable.fileMetadataID)),
       ),

@@ -227,8 +227,9 @@ class SafeLogging {
         : _xmppTrafficOutPrefix;
 
     final stanzaStartIndex = input.indexOf('<');
-    final headerStart =
-        stanzaStartIndex == _notFoundIndex ? 0 : stanzaStartIndex;
+    final headerStart = stanzaStartIndex == _notFoundIndex
+        ? 0
+        : stanzaStartIndex;
     final headerEnd = input.indexOf('>', headerStart);
     final headerLimit = headerEnd == _notFoundIndex
         ? (headerStart + 256).clamp(0, totalLength)
@@ -252,8 +253,9 @@ class SafeLogging {
     final renderedTag = tag == null ? '' : ' <$tag>';
     final renderedType = type == null ? '' : ' type=$type';
     final renderedFlags = flags.isEmpty ? '' : ' flags=${flags.join(',')}';
-    final errorSummary =
-        type == _xmppErrorTypeValue ? _summarizeXmppError(input) : null;
+    final errorSummary = type == _xmppErrorTypeValue
+        ? _summarizeXmppError(input)
+        : null;
     final renderedError = errorSummary == null ? '' : ' error=$errorSummary';
 
     return '$direction ($totalLength chars)$renderedTag$renderedType'
@@ -288,10 +290,12 @@ class SafeLogging {
         ? errorLimit
         : errorEnd.clamp(0, input.length);
     final errorSegment = input.substring(errorStart, segmentEnd);
-    final errorType =
-        _xmppErrorTypeAttrPattern.firstMatch(errorSegment)?.group(1);
-    final errorCode =
-        _xmppErrorCodeAttrPattern.firstMatch(errorSegment)?.group(1);
+    final errorType = _xmppErrorTypeAttrPattern
+        .firstMatch(errorSegment)
+        ?.group(1);
+    final errorCode = _xmppErrorCodeAttrPattern
+        .firstMatch(errorSegment)
+        ?.group(1);
     final errorCondition = _firstXmppErrorCondition(errorSegment);
     final parts = <String>[
       if (errorType != null && errorType.isNotEmpty) errorType,

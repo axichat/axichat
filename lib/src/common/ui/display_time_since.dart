@@ -55,15 +55,17 @@ String formatTimeSinceLabel(
   final difference = now.difference(timestamp);
   return switch (difference) {
     < const Duration(minutes: 1) => l10n.commonTimeJustNow,
-    < const Duration(hours: 1) =>
-      l10n.commonTimeMinutesAgo(difference.inMinutes),
+    < const Duration(hours: 1) => l10n.commonTimeMinutesAgo(
+      difference.inMinutes,
+    ),
     < const Duration(hours: 2) => l10n.commonTimeHoursAgo(1),
     < const Duration(days: 1) => l10n.commonTimeHoursAgo(difference.inHours),
     < const Duration(days: 2) => l10n.commonTimeDaysAgo(1),
     < const Duration(days: 7) => l10n.commonTimeDaysAgo(difference.inDays),
     < const Duration(days: 14) => l10n.commonTimeWeeksAgo(1),
-    < const Duration(days: 31) =>
-      l10n.commonTimeWeeksAgo(difference.inDays ~/ 7),
+    < const Duration(days: 31) => l10n.commonTimeWeeksAgo(
+      difference.inDays ~/ 7,
+    ),
     _ => l10n.commonTimeMonthsAgo,
   };
 }

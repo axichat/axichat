@@ -5,10 +5,7 @@ import 'package:axichat/src/common/ui/focus_extensions.dart';
 import 'package:flutter/material.dart';
 
 class KeyboardPopScope extends StatelessWidget {
-  const KeyboardPopScope({
-    super.key,
-    required this.child,
-  });
+  const KeyboardPopScope({super.key, required this.child});
 
   final Widget child;
 
@@ -20,7 +17,7 @@ class KeyboardPopScope extends StatelessWidget {
         final hasTextInputFocus = FocusManager.instance.isTextInputFocused;
         return PopScope(
           canPop: !hasTextInputFocus,
-          onPopInvokedWithResult: (didPop, __) {
+          onPopInvokedWithResult: (didPop, _) {
             if (didPop) {
               return;
             }

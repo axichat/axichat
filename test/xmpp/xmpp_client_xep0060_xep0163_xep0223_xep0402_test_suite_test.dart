@@ -50,14 +50,16 @@ void main() {
     });
 
     test(_planUniqueIdsTestName, () {
-      final Set<String> planIds =
-          planCases.map((planCase) => planCase.id).toSet();
+      final Set<String> planIds = planCases
+          .map((planCase) => planCase.id)
+          .toSet();
       expect(planIds.length, equals(planCases.length));
     });
 
     test(_planCoverageTestName, () {
-      final Set<String> planIds =
-          planCases.map((planCase) => planCase.id).toSet();
+      final Set<String> planIds = planCases
+          .map((planCase) => planCase.id)
+          .toSet();
       expect(_implementedCases.keys, everyElement(isIn(planIds)));
     });
   });

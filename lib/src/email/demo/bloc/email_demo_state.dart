@@ -14,18 +14,18 @@ enum EmailDemoStatus {
   provisionFirst,
   sending,
   sent,
-  sendFailed;
+  sendFailed,
 }
 
 enum EmailDemoFailure {
   missingProfile,
   missingPrefix,
   missingPassphrase,
-  unexpected;
+  unexpected,
 }
 
 @freezed
-class EmailDemoState with _$EmailDemoState {
+abstract class EmailDemoState with _$EmailDemoState {
   const factory EmailDemoState({
     required EmailDemoStatus status,
     required EmailAccount? account,

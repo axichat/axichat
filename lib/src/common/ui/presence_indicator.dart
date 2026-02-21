@@ -30,8 +30,9 @@ class PresenceCircle extends StatelessWidget {
     final sizing = context.sizing;
     final spacing = context.spacing;
     final indicatorSize = sizing.progressIndicatorSize;
-    final double iconSize =
-        (indicatorSize - spacing.xs).clamp(0.0, indicatorSize).toDouble();
+    final double iconSize = (indicatorSize - spacing.xs)
+        .clamp(0.0, indicatorSize)
+        .toDouble();
     final presenceColor = _presenceColor(colors);
     return Container(
       height: indicatorSize,
@@ -46,27 +47,23 @@ class PresenceCircle extends StatelessWidget {
         color: presenceColor,
       ),
       child: presence.isDnd
+          ? Icon(LucideIcons.minus, color: colors.background, size: iconSize)
+          : presence.isUnknown
           ? Icon(
-              LucideIcons.minus,
-              color: colors.background,
+              Icons.question_mark,
+              color: colors.mutedForeground,
               size: iconSize,
             )
-          : presence.isUnknown
-              ? Icon(
-                  Icons.question_mark,
-                  color: colors.mutedForeground,
-                  size: iconSize,
-                )
-              : null,
+          : null,
     );
   }
 
   Color _presenceColor(ShadColorScheme colors) => switch (presence) {
-        Presence.unavailable => colors.muted,
-        Presence.xa => colors.warning,
-        Presence.away => colors.warning,
-        Presence.dnd => colors.destructive,
-        Presence.chat => colors.green,
-        Presence.unknown => colors.muted,
-      };
+    Presence.unavailable => colors.muted,
+    Presence.xa => colors.warning,
+    Presence.away => colors.warning,
+    Presence.dnd => colors.destructive,
+    Presence.chat => colors.green,
+    Presence.unknown => colors.muted,
+  };
 }

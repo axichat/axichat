@@ -233,8 +233,9 @@ class _IcsMetaRow extends StatelessWidget {
       color: calendarSubtitleColor,
       letterSpacing: _icsDiagnosticsLabelLetterSpacing,
     );
-    final TextStyle valueStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle valueStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,8 +280,9 @@ class _RawPropertyTile extends StatelessWidget {
     final String name = _resolvePropertyName(property.name);
     final String value = _resolvePropertyValue(property.value);
     final List<CalendarPropertyParameter> parameters = property.parameters;
-    final TextStyle titleStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle titleStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final TextStyle valueStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );
@@ -343,8 +345,9 @@ class _ParameterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle labelStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.xs,
@@ -393,8 +396,9 @@ class _RawComponentTile extends StatelessWidget {
     final String name = _resolveComponentName(component.name);
     final List<CalendarRawProperty> properties = component.properties;
     final List<CalendarRawComponent> children = component.components;
-    final EdgeInsets padding =
-        EdgeInsets.only(left: context.spacing.xs * depth);
+    final EdgeInsets padding = EdgeInsets.only(
+      left: context.spacing.xs * depth,
+    );
 
     return Padding(
       padding: padding,
@@ -457,8 +461,9 @@ class _RawComponentHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle titleStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle titleStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final TextStyle subtitleStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );

@@ -16,7 +16,7 @@ const int _dayEventIcsMetaField = 8;
 
 @freezed
 @HiveType(typeId: 40)
-class DayEvent with _$DayEvent implements CalendarItemBase {
+abstract class DayEvent with _$DayEvent implements CalendarItemBase {
   const factory DayEvent({
     @HiveField(0) required String id,
     @HiveField(1) required String title,
@@ -48,8 +48,8 @@ class DayEvent with _$DayEvent implements CalendarItemBase {
     final DateTime normalizedStart = _midnight(startDate);
     final DateTime normalizedEnd =
         _midnight(endDate ?? startDate).isBefore(normalizedStart)
-            ? normalizedStart
-            : _midnight(endDate ?? startDate);
+        ? normalizedStart
+        : _midnight(endDate ?? startDate);
     final DateTime now = DateTime.now();
     return DayEvent(
       id: const Uuid().v4(),
@@ -95,12 +95,13 @@ class DayEvent with _$DayEvent implements CalendarItemBase {
     final DateTime resolvedEnd = _midnight(
       endDate ?? this.endDate ?? startDate ?? this.startDate,
     );
-    final DateTime normalizedEnd =
-        resolvedEnd.isBefore(resolvedStart) ? resolvedStart : resolvedEnd;
+    final DateTime normalizedEnd = resolvedEnd.isBefore(resolvedStart)
+        ? resolvedStart
+        : resolvedEnd;
 
     final ReminderPreferences effectiveReminders =
         (reminders ?? this.reminders)?.normalized() ??
-            ReminderPreferences.defaults();
+        ReminderPreferences.defaults();
 
     return copyWith(
       title: title ?? this.title,

@@ -178,11 +178,14 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
           return;
         }
         if (!mounted) return;
-        final CalendarModel mergedModel =
-            context.read<CalendarBloc>().state.model.mergeWith(importedModel);
-        context
+        final CalendarModel mergedModel = context
             .read<CalendarBloc>()
-            .add(CalendarEvent.modelImported(model: importedModel));
+            .state
+            .model
+            .mergeWith(importedModel);
+        context.read<CalendarBloc>().add(
+          CalendarEvent.modelImported(model: importedModel),
+        );
         final bool imported = await waitForCalendarChecksum(
           bloc: context.read<CalendarBloc>(),
           checksum: mergedModel.checksum,
@@ -206,9 +209,9 @@ class _CalendarTransferMenuState extends State<CalendarTransferMenu> {
       if (!mounted) return;
       final Set<String> taskIds = <String>{}
         ..addAll(tasks.map((task) => task.id));
-      context
-          .read<CalendarBloc>()
-          .add(CalendarEvent.tasksImported(tasks: tasks));
+      context.read<CalendarBloc>().add(
+        CalendarEvent.tasksImported(tasks: tasks),
+      );
       final bool imported = await waitForTasksInCalendar(
         bloc: context.read<CalendarBloc>(),
         taskIds: taskIds,
@@ -252,10 +255,7 @@ class SyncStatusIndicator extends StatelessWidget {
     final l10n = context.l10n;
     final sizing = context.sizing;
     if (state.isSyncing) {
-      return (
-        l10n.calendarSyncStatusSyncing,
-        const AxiProgressIndicator(),
-      );
+      return (l10n.calendarSyncStatusSyncing, const AxiProgressIndicator());
     }
     if (state.syncError != null) {
       return (
@@ -280,8 +280,11 @@ class SyncStatusIndicator extends StatelessWidget {
     final Color fallbackColor = context.colorScheme.mutedForeground;
     return (
       l10n.calendarSyncStatusIdle,
-      Icon(LucideIcons.cloud,
-          size: sizing.menuItemIconSize, color: fallbackColor),
+      Icon(
+        LucideIcons.cloud,
+        size: sizing.menuItemIconSize,
+        color: fallbackColor,
+      ),
     );
   }
 }
@@ -304,14 +307,11 @@ class _InlineSyncControls extends StatelessWidget {
     final lastSyncTime = state.lastSyncTime;
     final statusColor = _statusColorFor(context, state);
     final List<Widget> children = [
-      if (transferMenu != null) transferMenu!,
+      ?transferMenu,
       Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            statusText,
-            style: statusStyle.copyWith(color: statusColor),
-          ),
+          Text(statusText, style: statusStyle.copyWith(color: statusColor)),
           if (lastSyncTime != null && !state.isSyncing) ...[
             SizedBox(width: spacing.xs),
             Text(
@@ -343,7 +343,7 @@ class _CompactSyncControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<Widget> children = [
-      if (transferMenu != null) transferMenu!,
+      ?transferMenu,
       SyncStatusIndicator(state: state),
     ];
 

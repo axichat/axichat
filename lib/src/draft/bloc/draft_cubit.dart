@@ -72,9 +72,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   DraftCubit({
     required MessageService messageService,
     EmailService? emailService,
-  })  : _messageService = messageService,
-        _emailService = emailService,
-        super(const DraftsAvailable(items: null, visibleItems: null)) {
+  }) : _messageService = messageService,
+       _emailService = emailService,
+       super(const DraftsAvailable(items: null, visibleItems: null)) {
     _draftsSubscription = _messageService.draftsStream().listen((items) {
       _items = items;
       emit(_stateForItems(items));
@@ -166,11 +166,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       }
     } on DraftSendValidationException catch (error) {
       emit(
-        DraftFailure(
-          error.type,
-          items: _items,
-          visibleItems: _visibleItems,
-        ),
+        DraftFailure(error.type, items: _items, visibleItems: _visibleItems),
       );
       return false;
     } on FanOutValidationException {
@@ -365,7 +361,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final htmlBody = trimmedBody.isNotEmpty
         ? HtmlContentCodec.fromPlainText(trimmedBody)
         : null;
-    final includeSignatureToken = shareTokenSignatureEnabled &&
+    final includeSignatureToken =
+        shareTokenSignatureEnabled &&
         targets.every((target) => target.shareSignatureEnabled);
     final shareId = ShareTokenCodec.generateShareId();
     final shouldSendBodyOnly =
@@ -434,8 +431,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         DraftSendFailureType.noRecipients,
       );
     }
-    final attachmentGroupId =
-        hasAttachments && attachments.length > 1 ? uuid.v4() : null;
+    final attachmentGroupId = hasAttachments && attachments.length > 1
+        ? uuid.v4()
+        : null;
     final uploads = List<XmppAttachmentUpload?>.filled(
       attachments.length,
       null,

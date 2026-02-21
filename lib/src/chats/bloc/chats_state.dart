@@ -4,7 +4,7 @@
 part of 'chats_cubit.dart';
 
 @Freezed(toJson: false, fromJson: false)
-class ChatsState with _$ChatsState {
+abstract class ChatsState with _$ChatsState {
   const factory ChatsState({
     required String? openJid,
     @Default(<String>[]) List<String> openStack,

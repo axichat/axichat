@@ -14,13 +14,13 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
   NotificationRequestCubit({
     required NotificationService notificationService,
     required XmppService xmppService,
-  })  : _notificationService = notificationService,
-        _xmppService = xmppService,
-        super(
-          NotificationRequestState(
-            foregroundServiceActive: foregroundServiceActive.value,
-          ),
-        ) {
+  }) : _notificationService = notificationService,
+       _xmppService = xmppService,
+       super(
+         NotificationRequestState(
+           foregroundServiceActive: foregroundServiceActive.value,
+         ),
+       ) {
     foregroundServiceActive.addListener(_handleForegroundServiceChanged);
   }
 
@@ -118,9 +118,7 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
 
   void _handleForegroundServiceChanged() {
     emit(
-      state.copyWith(
-        foregroundServiceActive: foregroundServiceActive.value,
-      ),
+      state.copyWith(foregroundServiceActive: foregroundServiceActive.value),
     );
   }
 
@@ -137,8 +135,8 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
     _enableForegroundOperation = null;
     await Future.wait(
       operations.whereType<CancelableOperation<bool>>().map(
-            (operation) => operation.cancel(),
-          ),
+        (operation) => operation.cancel(),
+      ),
     );
     return super.close();
   }

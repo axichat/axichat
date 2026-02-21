@@ -18,12 +18,7 @@ final class RosterViewCriteria extends Equatable {
 
 enum RosterActionType { add, remove, reject }
 
-enum RosterFailureReason {
-  invalidJid,
-  addFailed,
-  removeFailed,
-  rejectFailed,
-}
+enum RosterFailureReason { invalidJid, addFailed, removeFailed, rejectFailed }
 
 sealed class RosterActionState extends Equatable {
   const RosterActionState();
@@ -112,12 +107,12 @@ final class RosterState extends Equatable {
 
   @override
   List<Object?> get props => [
-        items,
-        invites,
-        visibleItems,
-        visibleInvites,
-        contactsCriteria,
-        invitesCriteria,
-        actionState,
-      ];
+    items,
+    invites,
+    visibleItems,
+    visibleInvites,
+    contactsCriteria,
+    invitesCriteria,
+    actionState,
+  ];
 }

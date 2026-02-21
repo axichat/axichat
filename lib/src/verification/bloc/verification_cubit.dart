@@ -11,8 +11,8 @@ part 'verification_state.dart';
 
 class VerificationCubit extends Cubit<VerificationState> {
   VerificationCubit({required this.jid, required OmemoService omemoService})
-      : _omemoService = omemoService,
-        super(const VerificationState(loading: true)) {
+    : _omemoService = omemoService,
+      super(const VerificationState(loading: true)) {
     _initialize();
   }
 

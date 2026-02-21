@@ -42,7 +42,7 @@ enum MessageNotificationChannel { chat, email }
 ///Call [init].
 class NotificationService {
   NotificationService([FlutterLocalNotificationsPlugin? plugin])
-      : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+    : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
@@ -58,9 +58,9 @@ class NotificationService {
   );
   final KeyedWindowRateLimiter _messageNotificationPerThreadLimiter =
       KeyedWindowRateLimiter(
-    limit: _messageNotificationPerThreadRateLimit,
-    cleanupInterval: _messageNotificationRateLimitCleanupInterval,
-  );
+        limit: _messageNotificationPerThreadRateLimit,
+        cleanupInterval: _messageNotificationRateLimitCleanupInterval,
+      );
   final Logger _log = Logger('NotificationService');
   PackageInfo? _packageInfo;
   Future<PackageInfo>? _packageInfoFuture;
@@ -96,7 +96,7 @@ class NotificationService {
   Future<void> init() => _ensureInitialized();
 
   Future<NotificationAppLaunchDetails?>
-      getAppNotificationAppLaunchDetails() async {
+  getAppNotificationAppLaunchDetails() async {
     await _ensureInitialized();
     return _plugin.getNotificationAppLaunchDetails();
   }
@@ -120,24 +120,22 @@ class NotificationService {
       const DarwinInitializationSettings initializationSettingsDarwin =
           DarwinInitializationSettings();
       final LinuxInitializationSettings initializationSettingsLinux =
-          LinuxInitializationSettings(
-        defaultActionName: _l10n.openAction,
-      );
+          LinuxInitializationSettings(defaultActionName: _l10n.openAction);
       final WindowsInitializationSettings initializationSettingsWindows =
           WindowsInitializationSettings(
-        appName: _l10n.appTitle,
-        appUserModelId: 'Im.Axi.Axichat',
-        guid: '24d51912-a1fd-4f78-a72a-fd3333feb675',
-      );
+            appName: _l10n.appTitle,
+            appUserModelId: 'Im.Axi.Axichat',
+            guid: '24d51912-a1fd-4f78-a72a-fd3333feb675',
+          );
 
       final InitializationSettings initializationSettings =
           InitializationSettings(
-        android: initializationSettingsAndroid,
-        iOS: initializationSettingsDarwin,
-        macOS: initializationSettingsDarwin,
-        linux: initializationSettingsLinux,
-        windows: initializationSettingsWindows,
-      );
+            android: initializationSettingsAndroid,
+            iOS: initializationSettingsDarwin,
+            macOS: initializationSettingsDarwin,
+            linux: initializationSettingsLinux,
+            windows: initializationSettingsWindows,
+          );
 
       await _plugin.initialize(
         settings: initializationSettings,
@@ -413,11 +411,7 @@ class NotificationService {
       return;
     }
     _schedulingUnsupported = true;
-    _log.warning(
-      _unsupportedSchedulingMessage,
-      error,
-      stackTrace,
-    );
+    _log.warning(_unsupportedSchedulingMessage, error, stackTrace);
   }
 
   Future<void> _scheduleInAppTimer({
@@ -435,12 +429,7 @@ class NotificationService {
     }
     _inAppTimers[id] = Timer(delay, () async {
       _inAppTimers.remove(id);
-      await _fireImmediate(
-        id: id,
-        title: title,
-        body: body,
-        payload: payload,
-      );
+      await _fireImmediate(id: id, title: title, body: body, payload: payload);
     });
   }
 

@@ -28,8 +28,9 @@ enum AttachmentGallerySortOption {
     const fallbackEpochMs = 0;
     const sortBefore = -1;
     const sortAfter = 1;
-    final fallbackTimestamp =
-        DateTime.fromMillisecondsSinceEpoch(fallbackEpochMs);
+    final fallbackTimestamp = DateTime.fromMillisecondsSinceEpoch(
+      fallbackEpochMs,
+    );
     int compareByTimestamp({required bool descending}) {
       final aTimestamp = a.message.timestamp ?? fallbackTimestamp;
       final bTimestamp = b.message.timestamp ?? fallbackTimestamp;
@@ -64,18 +65,24 @@ enum AttachmentGallerySortOption {
     }
 
     return switch (this) {
-      AttachmentGallerySortOption.newestFirst =>
-        compareByTimestamp(descending: true),
-      AttachmentGallerySortOption.oldestFirst =>
-        compareByTimestamp(descending: false),
-      AttachmentGallerySortOption.nameAscending =>
-        compareByName(descending: false),
-      AttachmentGallerySortOption.nameDescending =>
-        compareByName(descending: true),
-      AttachmentGallerySortOption.sizeAscending =>
-        compareBySize(descending: false),
-      AttachmentGallerySortOption.sizeDescending =>
-        compareBySize(descending: true),
+      AttachmentGallerySortOption.newestFirst => compareByTimestamp(
+        descending: true,
+      ),
+      AttachmentGallerySortOption.oldestFirst => compareByTimestamp(
+        descending: false,
+      ),
+      AttachmentGallerySortOption.nameAscending => compareByName(
+        descending: false,
+      ),
+      AttachmentGallerySortOption.nameDescending => compareByName(
+        descending: true,
+      ),
+      AttachmentGallerySortOption.sizeAscending => compareBySize(
+        descending: false,
+      ),
+      AttachmentGallerySortOption.sizeDescending => compareBySize(
+        descending: true,
+      ),
     };
   }
 }
@@ -121,11 +128,11 @@ class AttachmentGalleryBloc
     String? chatJid,
     Chat? chatOverride,
     required bool showChatLabel,
-  })  : _xmppService = xmppService,
-        _emailService = emailService,
-        _chatOverride = chatOverride,
-        _showChatLabel = showChatLabel,
-        super(const AttachmentGalleryState(status: RequestStatus.loading)) {
+  }) : _xmppService = xmppService,
+       _emailService = emailService,
+       _chatOverride = chatOverride,
+       _showChatLabel = showChatLabel,
+       super(const AttachmentGalleryState(status: RequestStatus.loading)) {
     on<AttachmentGalleryItemsUpdated>(_onItemsUpdated);
     on<AttachmentGalleryLoadFailed>(_onLoadFailed);
     on<AttachmentGalleryQueryChanged>(_onQueryChanged);
@@ -137,15 +144,13 @@ class AttachmentGalleryBloc
     on<AttachmentGalleryEmailDownloadRequested>(_onEmailDownloadRequested);
     on<AttachmentGalleryEmailServiceUpdated>(_onEmailServiceUpdated);
     on<AttachmentGalleryFileMetadataBatchUpdated>(_onFileMetadataBatchUpdated);
-    _itemsSubscription =
-        _xmppService.attachmentGalleryStream(chatJid: chatJid).listen(
-              (items) => add(AttachmentGalleryItemsUpdated(items: items)),
-              onError: (Object error, StackTrace stackTrace) => add(
-                AttachmentGalleryLoadFailed(
-                  error: error.toString(),
-                ),
-              ),
-            );
+    _itemsSubscription = _xmppService
+        .attachmentGalleryStream(chatJid: chatJid)
+        .listen(
+          (items) => add(AttachmentGalleryItemsUpdated(items: items)),
+          onError: (Object error, StackTrace stackTrace) =>
+              add(AttachmentGalleryLoadFailed(error: error.toString())),
+        );
   }
 
   final XmppService _xmppService;
@@ -222,12 +227,7 @@ class AttachmentGalleryBloc
     AttachmentGalleryLoadFailed event,
     Emitter<AttachmentGalleryState> emit,
   ) {
-    emit(
-      state.copyWith(
-        status: RequestStatus.failure,
-        error: event.error,
-      ),
-    );
+    emit(state.copyWith(status: RequestStatus.failure, error: event.error));
   }
 
   void _onFileMetadataBatchUpdated(
@@ -442,14 +442,13 @@ class AttachmentGalleryBloc
           allowOnce: allowedOnceStanzaIds.contains(
             _normalizeStanzaId(item.message.stanzaID),
           ),
-          allowByTrust: isSelf ||
+          allowByTrust:
+              isSelf ||
               (chat?.attachmentAutoDownload ?? defaultAutoDownload).isAllowed,
         ),
       );
     }
-    filtered.sort(
-      (a, b) => sortOption.compare(a.item, b.item),
-    );
+    filtered.sort((a, b) => sortOption.compare(a.item, b.item));
     return List.unmodifiable(filtered);
   }
 
@@ -484,7 +483,8 @@ class AttachmentGalleryBloc
       for (final item in items)
         if (_metadataIdForItem(item).isNotEmpty) _metadataIdForItem(item),
     };
-    final sameIds = requiredIds.length == _trackedFileMetadataIds.length &&
+    final sameIds =
+        requiredIds.length == _trackedFileMetadataIds.length &&
         requiredIds.containsAll(_trackedFileMetadataIds);
     if (sameIds && _fileMetadataSubscription != null) {
       return;
@@ -506,22 +506,23 @@ class AttachmentGalleryBloc
     if (requiredIds.isEmpty) {
       return;
     }
-    _fileMetadataSubscription =
-        _xmppService.fileMetadataByIdsStream(requiredIds).listen(
-      (metadataById) => add(
-        AttachmentGalleryFileMetadataBatchUpdated(
-          metadataById: metadataById,
-        ),
-      ),
-      onError: (Object error, StackTrace stackTrace) {
-        _fileMetadataSubscription = null;
-        _retryFileMetadataSubscription();
-      },
-      onDone: () {
-        _fileMetadataSubscription = null;
-        _retryFileMetadataSubscription();
-      },
-    );
+    _fileMetadataSubscription = _xmppService
+        .fileMetadataByIdsStream(requiredIds)
+        .listen(
+          (metadataById) => add(
+            AttachmentGalleryFileMetadataBatchUpdated(
+              metadataById: metadataById,
+            ),
+          ),
+          onError: (Object error, StackTrace stackTrace) {
+            _fileMetadataSubscription = null;
+            _retryFileMetadataSubscription();
+          },
+          onDone: () {
+            _fileMetadataSubscription = null;
+            _retryFileMetadataSubscription();
+          },
+        );
   }
 
   void _retryFileMetadataSubscription() {

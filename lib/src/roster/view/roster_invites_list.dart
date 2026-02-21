@@ -23,9 +23,9 @@ class RosterInvitesList extends StatelessWidget {
         final tabState = searchState.stateFor(HomeTab.invites);
         final query = searchState.active ? tabState.query : '';
         context.read<RosterCubit>().updateInvitesCriteria(
-              query: query,
-              sort: tabState.sort,
-            );
+          query: query,
+          sort: tabState.sort,
+        );
       },
       child: BlocBuilder<RosterCubit, RosterState>(
         buildWhen: (previous, current) =>
@@ -38,8 +38,9 @@ class RosterInvitesList extends StatelessWidget {
 
           if (invites == null) {
             return Center(
-              child:
-                  AxiProgressIndicator(color: context.colorScheme.foreground),
+              child: AxiProgressIndicator(
+                color: context.colorScheme.foreground,
+              ),
             );
           }
 
@@ -93,8 +94,8 @@ class _RosterInvitesBody extends StatelessWidget {
                                 true &&
                             context.mounted) {
                           context.read<RosterCubit>().rejectContact(
-                                jid: invite.jid,
-                              );
+                            jid: invite.jid,
+                          );
                         }
                       },
                     ),
@@ -119,9 +120,9 @@ class _RosterInvitesBody extends StatelessWidget {
                           ? null
                           : () {
                               context.read<RosterCubit>().addContact(
-                                    jid: invite.jid,
-                                    title: invite.title,
-                                  );
+                                jid: invite.jid,
+                                title: invite.title,
+                              );
                             },
                     ),
                   ],

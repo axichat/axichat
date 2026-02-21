@@ -531,8 +531,10 @@ void main() {
     final recurring = base.model.tasks['task-recurring-standup']!;
     final rangeStart = base.weekStart;
     final rangeEnd = rangeStart.add(const Duration(days: 7));
-    final occurrences =
-        recurring.occurrencesWithin(rangeStart, rangeEnd).take(3).toList();
+    final occurrences = recurring
+        .occurrencesWithin(rangeStart, rangeEnd)
+        .take(3)
+        .toList();
     final Set<String> firstTwoIds = {occurrences[0].id, occurrences[1].id};
 
     final initialState = base.copyWith(
@@ -567,7 +569,8 @@ Future<Finder> _pumpContextMenuSurface(WidgetTester tester) async {
   final bindings = _buildTestBindings(
     controller: interactionController,
     groupId: const ValueKey('test-task-menu'),
-    builderFactory: (controller) => (context, request) => [
+    builderFactory: (controller) =>
+        (context, request) => [
           ShadContextMenuItem(
             onPressed: () => controller.hide(),
             child: const Text('Copy Task'),
@@ -615,17 +618,17 @@ Future<Finder> _pumpContextMenuSurface(WidgetTester tester) async {
 }
 
 CalendarTaskTileCallbacks _testTileCallbacks() => CalendarTaskTileCallbacks(
-      onResizePreview: (_) {},
-      onResizeEnd: (_) {},
-      onResizePointerMove: (_) {},
-      onDragStarted: (_, __) {},
-      onDragUpdate: (_) {},
-      onDragEnded: (_) {},
-      onDragPointerDown: (_) {},
-      onEnterSelectionMode: () {},
-      onToggleSelection: () {},
-      onTap: (_, __) {},
-    );
+  onResizePreview: (_) {},
+  onResizeEnd: (_) {},
+  onResizePointerMove: (_) {},
+  onDragStarted: (_, _) {},
+  onDragUpdate: (_) {},
+  onDragEnded: (_) {},
+  onDragPointerDown: (_) {},
+  onEnterSelectionMode: () {},
+  onToggleSelection: () {},
+  onTap: (_, _) {},
+);
 
 CalendarTaskEntryBindings _buildTestBindings({
   required TaskInteractionController controller,
@@ -673,11 +676,11 @@ Future<Map<String, Finder>> _pumpNestedContextMenuSurfaces(
     ShadPopoverController controller,
   ) {
     return (BuildContext context, TaskContextMenuRequest request) => [
-          ShadContextMenuItem(
-            onPressed: () => controller.hide(),
-            child: const Text('Copy Task'),
-          ),
-        ];
+      ShadContextMenuItem(
+        onPressed: () => controller.hide(),
+        child: const Text('Copy Task'),
+      ),
+    ];
   }
 
   final CalendarTaskContextMenuBuilderFactory builderFactory =

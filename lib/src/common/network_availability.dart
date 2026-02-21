@@ -17,7 +17,7 @@ enum NetworkAvailability {
 
 class NetworkAvailabilityService {
   NetworkAvailabilityService._({Connectivity? connectivity})
-      : _connectivity = connectivity ?? Connectivity();
+    : _connectivity = connectivity ?? Connectivity();
 
   static final NetworkAvailabilityService instance =
       NetworkAvailabilityService._();
@@ -38,9 +38,9 @@ class NetworkAvailabilityService {
     _updateAvailability(
       await _resolveAvailability(await _connectivity.checkConnectivity()),
     );
-    _subscription = _connectivity.onConnectivityChanged
-        .cast<Object?>()
-        .listen(_handleConnectivityChange);
+    _subscription = _connectivity.onConnectivityChanged.cast<Object?>().listen(
+      _handleConnectivityChange,
+    );
   }
 
   Future<void> stop() async {
@@ -51,8 +51,9 @@ class NetworkAvailabilityService {
 
   Future<void> waitForAvailable({Duration? timeout}) async {
     if (_current.isAvailable) return;
-    final waitFuture =
-        stream.firstWhere((availability) => availability.isAvailable);
+    final waitFuture = stream.firstWhere(
+      (availability) => availability.isAvailable,
+    );
     if (timeout == null) {
       await waitFuture;
       return;

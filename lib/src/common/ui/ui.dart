@@ -106,27 +106,21 @@ extension ModalTypography on BuildContext {
 }
 
 extension AxiTextThemeTokens on ShadTextTheme {
-  TextStyle get labelSm => muted.copyWith(
-        fontSize: 10,
-        height: 1,
-      );
+  TextStyle get labelSm => muted.copyWith(fontSize: 10, height: 1);
 
-  TextStyle get label => muted.copyWith(
-        fontSize: 12,
-        height: 1,
-      );
+  TextStyle get label => muted.copyWith(fontSize: 12, height: 1);
 
   TextStyle get sectionLabelM => muted.copyWith(
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.4,
-      );
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.4,
+  );
 
   TextStyle get sectionLabelLg => muted.copyWith(
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.4,
-      );
+    fontSize: 14,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.4,
+  );
 }
 
 extension AxiTextStyleStrength on TextStyle {
@@ -484,47 +478,47 @@ const calendarZoomLabelTextStyle = TextStyle(
 
 // Typography constants - Complete hierarchy system
 TextStyle get calendarTitleTextStyle => TextStyle(
-      fontSize: 22,
-      fontWeight: FontWeight.w600,
-      color: calendarTitleColor,
-    );
+  fontSize: 22,
+  fontWeight: FontWeight.w600,
+  color: calendarTitleColor,
+);
 
 TextStyle get calendarSubtitleTextStyle => TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w400,
-      color: calendarSubtitleColor,
-    );
+  fontSize: 14,
+  fontWeight: FontWeight.w400,
+  color: calendarSubtitleColor,
+);
 
 TextStyle get calendarTimeLabelTextStyle => TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w400,
-      color: calendarTimeLabelColor,
-    );
+  fontSize: 12,
+  fontWeight: FontWeight.w400,
+  color: calendarTimeLabelColor,
+);
 
 TextStyle get calendarMinorTimeLabelTextStyle => TextStyle(
-      fontSize: 10,
-      fontWeight: FontWeight.w400,
-      color: calendarTimeLabelColor,
-    );
+  fontSize: 10,
+  fontWeight: FontWeight.w400,
+  color: calendarTimeLabelColor,
+);
 
 // Additional typography hierarchy
 TextStyle get calendarHeaderTextStyle => TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.w600,
-      color: calendarTitleColor,
-    );
+  fontSize: 16,
+  fontWeight: FontWeight.w600,
+  color: calendarTitleColor,
+);
 
 TextStyle get calendarBodyTextStyle => TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w400,
-      color: calendarTitleColor,
-    );
+  fontSize: 14,
+  fontWeight: FontWeight.w400,
+  color: calendarTitleColor,
+);
 
 TextStyle get calendarCaptionTextStyle => TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w400,
-      color: calendarSubtitleColor,
-    );
+  fontSize: 12,
+  fontWeight: FontWeight.w400,
+  color: calendarSubtitleColor,
+);
 
 // Task-specific typography - updated to match target design
 const taskTitleTextStyle = TextStyle(
@@ -540,23 +534,23 @@ const taskTitleCompactTextStyle = TextStyle(
 );
 
 TextStyle get taskDescriptionTextStyle => TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w400,
-      color: calendarSubtitleColor,
-    );
+  fontSize: 14,
+  fontWeight: FontWeight.w400,
+  color: calendarSubtitleColor,
+);
 
 TextStyle get taskMetadataTextStyle => TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w400,
-      color: calendarTimeLabelColor,
-    );
+  fontSize: 12,
+  fontWeight: FontWeight.w400,
+  color: calendarTimeLabelColor,
+);
 
 // Section headers - uppercase with proper letter-spacing
 TextStyle get sectionHeaderTextStyle => TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.w600,
-      color: calendarTitleColor,
-    );
+  fontSize: 14,
+  fontWeight: FontWeight.w600,
+  color: calendarTitleColor,
+);
 
 // Legacy gradient definitions (to be removed in favor of clean design)
 const calendarPrimaryGradient = LinearGradient(

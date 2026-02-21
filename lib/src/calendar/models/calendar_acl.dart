@@ -45,32 +45,32 @@ enum CalendarChatRole {
   bool get isNone => this == CalendarChatRole.none;
 
   String get mucValue => switch (this) {
-        CalendarChatRole.visitor => _calendarChatRoleVisitorValue,
-        CalendarChatRole.participant => _calendarChatRoleParticipantValue,
-        CalendarChatRole.moderator => _calendarChatRoleModeratorValue,
-        CalendarChatRole.none => _calendarChatRoleNoneValue,
-      };
+    CalendarChatRole.visitor => _calendarChatRoleVisitorValue,
+    CalendarChatRole.participant => _calendarChatRoleParticipantValue,
+    CalendarChatRole.moderator => _calendarChatRoleModeratorValue,
+    CalendarChatRole.none => _calendarChatRoleNoneValue,
+  };
 
   static CalendarChatRole fromMucValue(String? value) => switch (value) {
-        _calendarChatRoleVisitorValue => CalendarChatRole.visitor,
-        _calendarChatRoleParticipantValue => CalendarChatRole.participant,
-        _calendarChatRoleModeratorValue => CalendarChatRole.moderator,
-        _ => CalendarChatRole.none,
-      };
+    _calendarChatRoleVisitorValue => CalendarChatRole.visitor,
+    _calendarChatRoleParticipantValue => CalendarChatRole.participant,
+    _calendarChatRoleModeratorValue => CalendarChatRole.moderator,
+    _ => CalendarChatRole.none,
+  };
 }
 
 extension CalendarChatRoleLabelX on CalendarChatRole {
   String get label => switch (this) {
-        CalendarChatRole.visitor => _calendarChatRoleVisitorLabel,
-        CalendarChatRole.participant => _calendarChatRoleParticipantLabel,
-        CalendarChatRole.moderator => _calendarChatRoleModeratorLabel,
-        CalendarChatRole.none => _calendarChatRoleNoneLabel,
-      };
+    CalendarChatRole.visitor => _calendarChatRoleVisitorLabel,
+    CalendarChatRole.participant => _calendarChatRoleParticipantLabel,
+    CalendarChatRole.moderator => _calendarChatRoleModeratorLabel,
+    CalendarChatRole.none => _calendarChatRoleNoneLabel,
+  };
 }
 
 @freezed
 @HiveType(typeId: _calendarChatAclTypeId)
-class CalendarChatAcl with _$CalendarChatAcl {
+abstract class CalendarChatAcl with _$CalendarChatAcl {
   const factory CalendarChatAcl({
     @HiveField(_calendarChatAclReadField) required CalendarChatRole read,
     @HiveField(_calendarChatAclWriteField) required CalendarChatRole write,

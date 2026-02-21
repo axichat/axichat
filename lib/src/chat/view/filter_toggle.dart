@@ -30,11 +30,9 @@ class FilterToggle extends StatelessWidget {
       (MessageTimelineFilter.allWithContact, l10n.chatFilterAllLabel),
     ];
     return Padding(
-      padding: padding ??
-          EdgeInsets.symmetric(
-            horizontal: spacing.m,
-            vertical: spacing.s,
-          ),
+      padding:
+          padding ??
+          EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.s),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

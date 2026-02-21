@@ -50,10 +50,10 @@ void main() {
     late String undoBaseTaskId;
     late String undoOccurrenceId;
     CalendarBloc buildBloc() => CalendarBloc(
-          syncManagerBuilder: (_) => syncManager,
-          xmppService: xmppService,
-          storage: storage,
-        );
+      syncManagerBuilder: (_) => syncManager,
+      xmppService: xmppService,
+      storage: storage,
+    );
 
     setUpAll(() {
       registerFallbackValue(CalendarTask.create(title: 'fallback'));
@@ -346,8 +346,8 @@ void main() {
         final DateTime occurrenceStart = start.add(
           const Duration(days: oneDay),
         );
-        final String occurrenceKey =
-            occurrenceStart.microsecondsSinceEpoch.toString();
+        final String occurrenceKey = occurrenceStart.microsecondsSinceEpoch
+            .toString();
         final String occurrenceId =
             '$baseTaskId$occurrenceSeparator$occurrenceKey';
         const CalendarRawProperty rawProperty = CalendarRawProperty(
@@ -413,8 +413,8 @@ void main() {
           final DateTime occurrenceStart = baseStart.add(
             const Duration(days: oneDay),
           );
-          final String occurrenceKey =
-              occurrenceStart.microsecondsSinceEpoch.toString();
+          final String occurrenceKey = occurrenceStart.microsecondsSinceEpoch
+              .toString();
           final TaskOccurrenceOverride? override =
               base.occurrenceOverrides[occurrenceKey];
           return override != null &&
@@ -758,7 +758,8 @@ void main() {
           final DateTime occurrenceStart = seededTask.scheduledTime!.add(
             const Duration(days: 1),
           );
-          final String occurrenceKey = occurrenceKeyFrom(
+          final String occurrenceKey =
+              occurrenceKeyFrom(
                 '${seededTask.id}::${occurrenceStart.microsecondsSinceEpoch}',
               ) ??
               '';
@@ -925,7 +926,8 @@ void main() {
       expect: () => [
         predicate<CalendarState>((state) {
           final scheduled = state.model.tasks[seededTask.id]!;
-          final double expectedHour = scheduled.scheduledTime!.hour +
+          final double expectedHour =
+              scheduled.scheduledTime!.hour +
               (scheduled.scheduledTime!.minute / 60.0);
           return scheduled.scheduledTime == DateTime(2024, 6, 12, 10, 15) &&
               scheduled.duration == const Duration(minutes: 45) &&

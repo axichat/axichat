@@ -19,8 +19,9 @@ class TransportGlyph extends StatelessWidget {
     final foreground = transport.isEmail
         ? colors.destructiveForeground
         : colors.primaryForeground;
-    final icon =
-        transport.isEmail ? LucideIcons.mail : LucideIcons.messageCircle;
+    final icon = transport.isEmail
+        ? LucideIcons.mail
+        : LucideIcons.messageCircle;
     return Container(
       width: sizing.iconButtonIconSize,
       height: sizing.iconButtonIconSize,

@@ -67,17 +67,17 @@ class ChatSearchState extends Equatable {
 
   @override
   List<Object?> get props => [
-        active,
-        query,
-        sort,
-        filter,
-        status,
-        results,
-        error,
-        subjectFilter,
-        excludeSubject,
-        subjects,
-      ];
+    active,
+    query,
+    sort,
+    filter,
+    status,
+    results,
+    error,
+    subjectFilter,
+    excludeSubject,
+    subjects,
+  ];
 }
 
 class ChatSearchCubit extends Cubit<ChatSearchState> {
@@ -86,9 +86,9 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     required MessageService messageService,
     EmailService? emailService,
     this.resultLimit = 200,
-  })  : _messageService = messageService,
-        _emailService = emailService,
-        super(const ChatSearchState());
+  }) : _messageService = messageService,
+       _emailService = emailService,
+       super(const ChatSearchState());
 
   final String jid;
   final MessageService _messageService;
@@ -234,7 +234,8 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     try {
       final chat = await _chatForSearch();
       final emailService = _emailService;
-      final shouldUseEmailSearch = emailService != null &&
+      final shouldUseEmailSearch =
+          emailService != null &&
           chat?.defaultTransport.isEmail == true &&
           (subject == null || subject.isEmpty) &&
           !state.excludeSubject;

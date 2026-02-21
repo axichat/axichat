@@ -18,7 +18,7 @@ enum ReminderAnchor {
 
 @freezed
 @HiveType(typeId: 39)
-class ReminderPreferences with _$ReminderPreferences {
+abstract class ReminderPreferences with _$ReminderPreferences {
   const factory ReminderPreferences({
     @HiveField(0) @Default(true) bool enabled,
     @HiveField(1) @Default(<Duration>[]) List<Duration> startOffsets,
@@ -28,10 +28,10 @@ class ReminderPreferences with _$ReminderPreferences {
   const ReminderPreferences._();
 
   factory ReminderPreferences.defaults() => const ReminderPreferences(
-        enabled: false,
-        startOffsets: <Duration>[],
-        deadlineOffsets: <Duration>[],
-      );
+    enabled: false,
+    startOffsets: <Duration>[],
+    deadlineOffsets: <Duration>[],
+  );
 
   ReminderPreferences alignedTo(ReminderAnchor anchor) {
     final List<Duration> activeOffsets = anchor.isDeadline
@@ -42,8 +42,9 @@ class ReminderPreferences with _$ReminderPreferences {
     return copyWith(
       enabled: enabled && normalizedActive.isNotEmpty,
       startOffsets: anchor.isDeadline ? const <Duration>[] : normalizedActive,
-      deadlineOffsets:
-          anchor.isDeadline ? normalizedActive : const <Duration>[],
+      deadlineOffsets: anchor.isDeadline
+          ? normalizedActive
+          : const <Duration>[],
     );
   }
 

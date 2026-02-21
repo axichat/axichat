@@ -109,7 +109,8 @@ void main() {
     const String metaAttachmentFmtType = 'application/pdf';
     const String metaAttachmentEncoding = 'BASE64';
     const String metaAttachmentLabel = 'Agenda';
-    const String metaAttachmentLine = 'ATTACH;FMTTYPE=$metaAttachmentFmtType;'
+    const String metaAttachmentLine =
+        'ATTACH;FMTTYPE=$metaAttachmentFmtType;'
         'ENCODING=$metaAttachmentEncoding;'
         'LABEL=$metaAttachmentLabel:$metaAttachmentValue';
     const int singleItemCount = 1;
@@ -533,7 +534,8 @@ void main() {
     const String metaAttachmentFmtType = 'application/pdf';
     const String metaAttachmentEncoding = 'BASE64';
     const String metaAttachmentLabel = 'Agenda';
-    const String metaAttachmentPrefix = 'ATTACH;FMTTYPE=$metaAttachmentFmtType;'
+    const String metaAttachmentPrefix =
+        'ATTACH;FMTTYPE=$metaAttachmentFmtType;'
         'ENCODING=$metaAttachmentEncoding;'
         'LABEL=$metaAttachmentLabel:';
     const String icsFoldedLinePattern = r'\r?\n[ \t]';
@@ -550,8 +552,8 @@ void main() {
       final DateTime cancelledStart = scheduledStart.add(
         const Duration(days: oneDay),
       );
-      final String occurrenceKey =
-          cancelledStart.microsecondsSinceEpoch.toString();
+      final String occurrenceKey = cancelledStart.microsecondsSinceEpoch
+          .toString();
       const TaskOccurrenceOverride override = TaskOccurrenceOverride(
         isCancelled: true,
       );
@@ -601,8 +603,8 @@ void main() {
       final DateTime overrideStart = scheduledStart.add(
         const Duration(days: oneDay),
       );
-      final String occurrenceKey =
-          overrideStart.microsecondsSinceEpoch.toString();
+      final String occurrenceKey = overrideStart.microsecondsSinceEpoch
+          .toString();
       const TaskOccurrenceOverride override = TaskOccurrenceOverride(
         title: overrideTitle,
       );
@@ -658,8 +660,8 @@ void main() {
       final DateTime overrideStart = scheduledStart.add(
         const Duration(days: oneDay),
       );
-      final String occurrenceKey =
-          overrideStart.microsecondsSinceEpoch.toString();
+      final String occurrenceKey = overrideStart.microsecondsSinceEpoch
+          .toString();
       const TaskOccurrenceOverride override = TaskOccurrenceOverride(
         title: overrideTitle,
       );
@@ -710,8 +712,8 @@ void main() {
       final DateTime overrideStart = scheduledStart.add(
         const Duration(days: oneDay),
       );
-      final String occurrenceKey =
-          overrideStart.microsecondsSinceEpoch.toString();
+      final String occurrenceKey = overrideStart.microsecondsSinceEpoch
+          .toString();
       const TaskOccurrenceOverride override = TaskOccurrenceOverride(
         title: overrideTitle,
       );
@@ -923,10 +925,12 @@ void main() {
         createdAt: baseTime,
         modifiedAt: baseTime,
       );
-      final CalendarModel model =
-          CalendarModel.empty().addTask(firstTask).addTask(secondTask).copyWith(
-        criticalPaths: <String, CalendarCriticalPath>{criticalPathId: path},
-      );
+      final CalendarModel model = CalendarModel.empty()
+          .addTask(firstTask)
+          .addTask(secondTask)
+          .copyWith(
+            criticalPaths: <String, CalendarCriticalPath>{criticalPathId: path},
+          );
 
       final String encoded = const CalendarIcsCodec().encode(model);
 

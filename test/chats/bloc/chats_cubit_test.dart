@@ -37,8 +37,9 @@ void main() {
     homeRefreshSyncService = MockHomeRefreshSyncService();
     chatsStreamController = StreamController<List<Chat>>.broadcast();
 
-    when(() => xmppService.chatsStream())
-        .thenAnswer((_) => chatsStreamController.stream);
+    when(
+      () => xmppService.chatsStream(),
+    ).thenAnswer((_) => chatsStreamController.stream);
     when(() => xmppService.cachedChatList).thenReturn(const <Chat>[]);
   });
 
@@ -55,12 +56,7 @@ void main() {
         timestamp: now,
         spam: true,
       ),
-      _chat(
-        jid: 'xmpp@axi.im',
-        title: 'Spam Xmpp',
-        timestamp: now,
-        spam: true,
-      ),
+      _chat(jid: 'xmpp@axi.im', title: 'Spam Xmpp', timestamp: now, spam: true),
       _chat(
         jid: 'notspam@axi.im',
         title: 'Not Spam',

@@ -67,19 +67,19 @@ class CalendarFreeBusyEditor extends StatefulWidget {
     String? tzid,
     ValueChanged<CalendarFreeBusyInterval>? onIntervalTapped,
     String Function(CalendarFreeBusyType type, DateTime start, DateTime end)?
-        segmentTitleBuilder,
+    segmentTitleBuilder,
   }) : this(
-          key: key,
-          rangeStart: rangeStart,
-          rangeEnd: rangeEnd,
-          intervals: intervals,
-          tzid: tzid,
-          onIntervalsChanged: _noopIntervalsChanged,
-          viewportHeight: _freeBusyPreviewViewportHeight,
-          isReadOnly: true,
-          onIntervalTapped: onIntervalTapped,
-          segmentTitleBuilder: segmentTitleBuilder,
-        );
+         key: key,
+         rangeStart: rangeStart,
+         rangeEnd: rangeEnd,
+         intervals: intervals,
+         tzid: tzid,
+         onIntervalsChanged: _noopIntervalsChanged,
+         viewportHeight: _freeBusyPreviewViewportHeight,
+         isReadOnly: true,
+         onIntervalTapped: onIntervalTapped,
+         segmentTitleBuilder: segmentTitleBuilder,
+       );
 
   final DateTime rangeStart;
   final DateTime rangeEnd;
@@ -93,7 +93,8 @@ class CalendarFreeBusyEditor extends StatefulWidget {
     CalendarFreeBusyType type,
     DateTime start,
     DateTime end,
-  )? segmentTitleBuilder;
+  )?
+  segmentTitleBuilder;
 
   static void _noopIntervalsChanged(List<CalendarFreeBusyInterval> _) {}
 
@@ -134,7 +135,8 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
   @override
   void didUpdateWidget(covariant CalendarFreeBusyEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final bool rangeChanged = oldWidget.rangeStart != widget.rangeStart ||
+    final bool rangeChanged =
+        oldWidget.rangeStart != widget.rangeStart ||
         oldWidget.rangeEnd != widget.rangeEnd;
     if (rangeChanged || oldWidget.intervals != widget.intervals) {
       _segments = _normalizeSegments(
@@ -157,8 +159,9 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final CalendarLayoutTheme layoutTheme =
-        CalendarLayoutTheme.fromContext(context);
+    final CalendarLayoutTheme layoutTheme = CalendarLayoutTheme.fromContext(
+      context,
+    );
     final DateTime rangeStart = widget.rangeStart;
     final DateTime rangeEnd = widget.rangeEnd;
     final List<DateTime> columns = _resolveColumns(rangeStart, rangeEnd);
@@ -525,7 +528,8 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
     required List<DateTime> columns,
     required CalendarLayoutMetrics metrics,
   }) {
-    final bool shouldInsert = _tapCandidate &&
+    final bool shouldInsert =
+        _tapCandidate &&
         _pointerDownPrimary &&
         event.pointer == _activePointerId &&
         _interactionController.activeResizeInteraction == null &&
@@ -601,7 +605,7 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
         (y / metrics.slotHeight) * metrics.minutesPerSlot;
     final int snappedMinutes =
         (minutesFromStart / _freeBusyMinutesPerStep).round() *
-            _freeBusyMinutesPerStep;
+        _freeBusyMinutesPerStep;
     final DateTime base = DateTime(dayStart.year, dayStart.month, dayStart.day);
     final DateTime slot = base.add(Duration(minutes: snappedMinutes));
     final DateTime rangeStart = widget.rangeStart;
@@ -750,8 +754,9 @@ class _CalendarFreeBusyEditorState extends State<CalendarFreeBusyEditor> {
               _handleSplitSegmentAt(segment, splitTime);
             },
             child: Text(
-              context.l10n
-                  .calendarSplitTaskAtTime(TimeFormatter.formatTime(splitTime)),
+              context.l10n.calendarSplitTaskAtTime(
+                TimeFormatter.formatTime(splitTime),
+              ),
             ),
           ),
         );
@@ -983,8 +988,10 @@ class _FreeBusyGridSurface extends StatelessWidget {
                           timeLabelInset: context.spacing.xs,
                           timeTickInset: context.spacing.xxs,
                           interactionController: interactionController,
-                          availabilityWindows: const <CalendarAvailabilityWindow>[],
-                          availabilityOverlays: const <CalendarAvailabilityOverlay>[],
+                          availabilityWindows:
+                              const <CalendarAvailabilityWindow>[],
+                          availabilityOverlays:
+                              const <CalendarAvailabilityOverlay>[],
                           children: const <Widget>[],
                         ),
                       ),
@@ -1041,13 +1048,14 @@ class _FreeBusyTileStack extends StatelessWidget {
   final ShadPopoverController contextMenuController;
   final ValueKey<String> contextMenuGroupId;
   final TaskContextMenuBuilder? Function(_FreeBusySegment segment)
-      contextMenuBuilderFactory;
+  contextMenuBuilderFactory;
   final bool enableContextMenuLongPress;
   final String Function(
     CalendarFreeBusyType type,
     DateTime start,
     DateTime end,
-  )? segmentTitleBuilder;
+  )?
+  segmentTitleBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -1144,7 +1152,8 @@ class _FreeBusyTaskTile extends StatelessWidget {
     CalendarFreeBusyType type,
     DateTime start,
     DateTime end,
-  )? segmentTitleBuilder;
+  )?
+  segmentTitleBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -1181,14 +1190,15 @@ class _FreeBusyTaskTile extends StatelessWidget {
       enableInteractions: !isReadOnly,
       isSelectionMode: false,
       isSelected: isActive,
-      onTap: (_, __) => onSelect(),
+      onTap: (_, _) => onSelect(),
       contextMenuController: isReadOnly ? null : contextMenuController,
       contextMenuGroupId: isReadOnly ? null : contextMenuGroupId,
       contextMenuBuilder: isReadOnly ? null : contextMenuBuilder,
       onDragPointerDown: null,
       onResizePointerMove: null,
-      contextMenuLongPressEnabled:
-          isReadOnly ? false : enableContextMenuLongPress,
+      contextMenuLongPressEnabled: isReadOnly
+          ? false
+          : enableContextMenuLongPress,
       resizeHandleExtent: _freeBusyResizeHandleExtent,
       accentColorOverride: accentColor,
       overlay: overlay,
@@ -1287,8 +1297,9 @@ class _FreeBusyPopoverContent extends StatelessWidget {
         padding: _freeBusyPopoverPadding(context),
         child: Text(
           label,
-          style: context.textTheme.small.strong
-              .copyWith(color: calendarTitleColor),
+          style: context.textTheme.small.strong.copyWith(
+            color: calendarTitleColor,
+          ),
         ),
       ),
     );
@@ -1391,11 +1402,11 @@ extension _FreeBusyTypeLabelX on CalendarFreeBusyType {
       isFree ? CalendarFreeBusyType.busy : CalendarFreeBusyType.free;
 
   Color get tileColor => switch (this) {
-        CalendarFreeBusyType.free => calendarSuccessColor,
-        CalendarFreeBusyType.busy => calendarDangerColor,
-        CalendarFreeBusyType.busyUnavailable => calendarDangerColor,
-        CalendarFreeBusyType.busyTentative => calendarPrimaryColor,
-      };
+    CalendarFreeBusyType.free => calendarSuccessColor,
+    CalendarFreeBusyType.busy => calendarDangerColor,
+    CalendarFreeBusyType.busyUnavailable => calendarDangerColor,
+    CalendarFreeBusyType.busyTentative => calendarPrimaryColor,
+  };
 }
 
 extension _FreeBusySegmentTaskX on _FreeBusySegment {
@@ -1751,8 +1762,9 @@ class _FreeBusySheetActions extends StatelessWidget {
                 children: [
                   Text(
                     context.l10n.calendarFreeBusyToggleLabel,
-                    style: context.textTheme.small.strong
-                        .copyWith(color: context.colorScheme.mutedForeground),
+                    style: context.textTheme.small.strong.copyWith(
+                      color: context.colorScheme.mutedForeground,
+                    ),
                   ),
                   ShadSwitch(value: isFree, onChanged: (_) => onToggle()),
                 ],
@@ -1779,10 +1791,7 @@ class _FreeBusySheetSectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(bottom: context.spacing.s),
-      child: Text(
-        text,
-        style: context.textTheme.sectionLabelM,
-      ),
+      child: Text(text, style: context.textTheme.sectionLabelM),
     );
   }
 }
@@ -1811,8 +1820,9 @@ List<DateTime> _resolveColumns(DateTime rangeStart, DateTime rangeEnd) {
 }
 
 String _dayLabel(BuildContext context, DateTime date) {
-  final List<String> weekdays =
-      MaterialLocalizations.of(context).narrowWeekdays;
+  final List<String> weekdays = MaterialLocalizations.of(
+    context,
+  ).narrowWeekdays;
   final String dayName = weekdays[date.weekday % weekdays.length];
   final String shortName = dayName.length > _freeBusyDayLabelLength
       ? dayName.substring(0, _freeBusyDayLabelLength)

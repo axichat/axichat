@@ -7,8 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
-  testWidgets('system back closes popover before popping route',
-      (tester) async {
+  testWidgets('system back closes popover before popping route', (
+    tester,
+  ) async {
     await tester.pumpWidget(const _AxiPopoverBackTestApp());
 
     await tester.tap(find.byKey(const Key('open-popover-route')));

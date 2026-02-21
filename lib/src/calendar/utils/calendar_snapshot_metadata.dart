@@ -10,8 +10,8 @@ extension CalendarSnapshotMetadata on FileMetadataData {
     if (normalizedMimeType == CalendarSnapshotCodec.mimeType) {
       return true;
     }
-    final String snapshotExtension =
-        CalendarSnapshotCodec.fileExtension.toLowerCase();
+    final String snapshotExtension = CalendarSnapshotCodec.fileExtension
+        .toLowerCase();
     if (_matchesSnapshotExtension(filename, snapshotExtension)) {
       return true;
     }

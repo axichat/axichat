@@ -32,7 +32,8 @@ class _NexusState extends State<Nexus> {
   void _triggerDemoInteractivePhase() {
     if (_demoPhase != _HomeDemoPhase.idle) return;
     setState(() => _demoPhase = _HomeDemoPhase.triggered);
-    context.read<ChatsCubit>().startDemoInteractivePhase();
+    final locate = context.read;
+    locate<ChatsCubit>().startDemoInteractivePhase();
   }
 
   @override
@@ -55,7 +56,8 @@ class _NexusState extends State<Nexus> {
 
   void _notifyTabIndex(int index) {
     if (index < 0 || index >= widget.tabs.length) return;
-    context.read<HomeSearchCubit>().setActiveTab(widget.tabs[index].id);
+    final locate = context.read;
+    locate<HomeSearchCubit>().setActiveTab(widget.tabs[index].id);
     HomeShellScope.maybeOf(context)?.homeTabIndex.value = index;
   }
 
@@ -75,7 +77,7 @@ class _NexusState extends State<Nexus> {
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
           previous.demoResetRevision != current.demoResetRevision,
-      listener: (_, __) => _handleDemoResetRevisionChanged(),
+      listener: (_, _) => _handleDemoResetRevisionChanged(),
       child: BlocBuilder<HomeSearchCubit, HomeSearchState>(
         builder: (context, searchState) {
           return BlocBuilder<ChatsCubit, ChatsState>(
@@ -138,13 +140,14 @@ class _NexusScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final locate = context.read;
     final showToast = ShadToaster.maybeOf(context)?.show;
     final chatItems = chatsState.items ?? const <m.Chat>[];
     final selectedChats = chatsState.selectedJids.isEmpty
         ? const <m.Chat>[]
         : chatItems
-            .where((chat) => chatsState.selectedJids.contains(chat.jid))
-            .toList();
+              .where((chat) => chatsState.selectedJids.contains(chat.jid))
+              .toList();
     final badgeCounts = <HomeTab, int>{
       HomeTab.invites: context.watch<RosterCubit>().inviteCount,
       HomeTab.chats: chatItems
@@ -154,8 +157,9 @@ class _NexusScaffold extends StatelessWidget {
             (sum, chat) => sum + (chat.unreadCount > 0 ? chat.unreadCount : 0),
           ),
       HomeTab.drafts: context.watch<DraftCubit>().state.items?.length ?? 0,
-      HomeTab.spam:
-          chatItems.where((chat) => chat.spam && !chat.archived).length,
+      HomeTab.spam: chatItems
+          .where((chat) => chat.spam && !chat.archived)
+          .length,
     };
     final headerActions = <AppBarActionItem>[
       if (kEnableDemoChats && demoPhase == _HomeDemoPhase.idle)
@@ -169,38 +173,35 @@ class _NexusScaffold extends StatelessWidget {
           label: l10n.accessibilityActionsLabel,
           iconData: LucideIcons.lifeBuoy,
           inline: const _FindActionIconButton(),
-          onPressed: () => context.read<AccessibilityActionBloc>().add(
-                const AccessibilityMenuOpened(),
-              ),
+          onPressed: () => locate<AccessibilityActionBloc>().add(
+            const AccessibilityMenuOpened(),
+          ),
         ),
       if (EnvScope.of(context).isDesktopPlatform)
         AppBarActionItem(
           label: l10n.homeSyncTooltip,
           iconData: LucideIcons.refreshCw,
           inline: const _DesktopHomeRefreshButton(),
-          onPressed: () => context.read<ChatsCubit>().refreshHomeSync(),
+          onPressed: () => locate<ChatsCubit>().refreshHomeSync(),
         ),
       AppBarActionItem(
         label: searchState.active ? l10n.chatSearchClose : l10n.commonSearch,
         iconData: LucideIcons.search,
         inline: _SearchToggleButton(
           active: searchState.active,
-          onPressed: () => context.read<HomeSearchCubit>().toggleSearch(),
+          onPressed: () => locate<HomeSearchCubit>().toggleSearch(),
         ),
-        onPressed: () => context.read<HomeSearchCubit>().toggleSearch(),
+        onPressed: () => locate<HomeSearchCubit>().toggleSearch(),
       ),
     ];
-    final header = _NexusHeader(
-      tabs: tabs,
-      headerActions: headerActions,
-    );
+    final header = _NexusHeader(tabs: tabs, headerActions: headerActions);
     final tabViews = _NexusTabViews(
       tabs: tabs,
       tabViewPhysics: navPlacement == NavPlacement.bottom
           ? const NeverScrollableScrollPhysics()
           : defaultTargetPlatform.isMobile
-              ? null
-              : const NeverScrollableScrollPhysics(),
+          ? null
+          : const NeverScrollableScrollPhysics(),
       selectedChats: selectedChats,
       showToast: showToast,
     );
@@ -233,8 +234,9 @@ class _NexusScaffold extends StatelessWidget {
             calendarActive: false,
             onCalendarSelected: () {},
             badgeCounts: badgeCounts,
-            onCollapsedChanged:
-                onToggleNavRail == null ? null : (_) => onToggleNavRail!(),
+            onCollapsedChanged: onToggleNavRail == null
+                ? null
+                : (_) => onToggleNavRail!(),
           ),
           Expanded(child: column),
         ],
@@ -246,10 +248,7 @@ class _NexusScaffold extends StatelessWidget {
 }
 
 class _NexusHeader extends StatelessWidget {
-  const _NexusHeader({
-    required this.tabs,
-    required this.headerActions,
-  });
+  const _NexusHeader({required this.tabs, required this.headerActions});
 
   final List<HomeTabEntry> tabs;
   final List<AppBarActionItem> headerActions;
@@ -280,7 +279,8 @@ class _TransportStatusChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final demoOffline = kEnableDemoChats &&
+    final demoOffline =
+        kEnableDemoChats &&
         context.select<ProfileCubit, String>(
               (stateOwner) => stateOwner.state.jid,
             ) ==
@@ -294,8 +294,9 @@ class _TransportStatusChips extends StatelessWidget {
         final sessionEmailState = demoOffline
             ? const EmailSyncState.ready()
             : connectivityState.emailState;
-        final emailEnabled =
-            demoOffline ? true : connectivityState.emailEnabled;
+        final emailEnabled = demoOffline
+            ? true
+            : connectivityState.emailEnabled;
         final indicator = Align(
           alignment: Alignment.centerLeft,
           child: SessionCapabilityIndicators(
@@ -372,8 +373,9 @@ class _NexusTabViews extends StatelessWidget {
       child: TabBarView(
         physics: tabViewPhysics,
         children: tabs.map((tab) {
-          final floatingActionButton =
-              selectedChats.isNotEmpty ? null : tab.fab;
+          final floatingActionButton = selectedChats.isNotEmpty
+              ? null
+              : tab.fab;
           return Scaffold(
             resizeToAvoidBottomInset: false,
             extendBodyBehindAppBar: true,
@@ -484,15 +486,11 @@ class _HomeBottomTabBar extends StatelessWidget {
       disableSecondaryBorder: true,
     );
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    final int safeSelectedIndex =
-        selectedIndex.clamp(0, tabs.length - 1).toInt();
+    final int safeSelectedIndex = selectedIndex
+        .clamp(0, tabs.length - 1)
+        .toInt();
     return Padding(
-      padding: EdgeInsetsDirectional.fromSTEB(
-        spacing.m,
-        0,
-        spacing.m,
-        0,
-      ),
+      padding: EdgeInsetsDirectional.fromSTEB(spacing.m, 0, spacing.m, 0),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.card,
@@ -506,8 +504,9 @@ class _HomeBottomTabBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(context.radii.container),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final tabWidth =
-                  tabs.isEmpty ? 0.0 : constraints.maxWidth / tabs.length;
+              final tabWidth = tabs.isEmpty
+                  ? 0.0
+                  : constraints.maxWidth / tabs.length;
               final horizontalIndicatorInset = spacing.xs;
               final verticalIndicatorInset = spacing.xs;
               final indicatorWidth = math.max(
@@ -519,7 +518,8 @@ class _HomeBottomTabBar extends StatelessWidget {
                   AnimatedPositionedDirectional(
                     duration: animationDuration,
                     curve: Curves.easeInOutCubic,
-                    start: (tabWidth * safeSelectedIndex) +
+                    start:
+                        (tabWidth * safeSelectedIndex) +
                         horizontalIndicatorInset,
                     top: verticalIndicatorInset,
                     bottom: verticalIndicatorInset,
@@ -529,8 +529,9 @@ class _HomeBottomTabBar extends StatelessWidget {
                         color: colors.primary.withValues(
                           alpha: motion.tapSplashAlpha,
                         ),
-                        borderRadius:
-                            BorderRadius.circular(context.radii.container),
+                        borderRadius: BorderRadius.circular(
+                          context.radii.container,
+                        ),
                       ),
                     ),
                   ),
@@ -617,8 +618,9 @@ class _HomeBottomTabItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final Duration animationDuration =
-        context.watch<SettingsCubit>().animationDuration;
+    final Duration animationDuration = context
+        .watch<SettingsCubit>()
+        .animationDuration;
     final badgeDiameter = sizing.iconButtonIconSize;
     final endPadding = badgeCount > 0 ? spacing.s : spacing.xs;
     return SizedBox(
@@ -650,10 +652,7 @@ class _HomeBottomTabItem extends StatelessWidget {
             PositionedDirectional(
               top: -spacing.xs,
               end: -spacing.xs,
-              child: AxiCountBadge(
-                count: badgeCount,
-                diameter: badgeDiameter,
-              ),
+              child: AxiCountBadge(count: badgeCount, diameter: badgeDiameter),
             ),
         ],
       ),
@@ -748,7 +747,15 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
   int _calendarTargetToBottomNavIndex(int calendarTabIndex) =>
       calendarTabIndex == 0 ? 1 : 2;
 
+  void _ensureHomeRoute() {
+    final String currentPath = GoRouterState.of(context).uri.path;
+    if (currentPath != HomeRoute.path) {
+      const HomeRoute().go(context);
+    }
+  }
+
   void _setBottomNavIndex(int index) {
+    final locate = context.read;
     final int safeIndex = _clampBottomNavIndex(index);
     final int previousIndex = _clampBottomNavIndex(widget.bottomNavIndex.value);
     if (widget.bottomNavIndex.value != safeIndex) {
@@ -757,17 +764,17 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
 
     if (safeIndex == 0) {
       HomeShellScope.maybeOf(context)?.homeTabIndex.value = 0;
-      const HomeRoute().go(context);
-      context.read<ChatsCubit>().closeAllChats();
+      _ensureHomeRoute();
+      locate<ChatsCubit>().closeAllChats();
       return;
     }
 
     if (safeIndex == 1 || safeIndex == 2) {
-      const HomeRoute().go(context);
+      _ensureHomeRoute();
       return;
     }
 
-    context.push(const ProfileRoute().location, extra: context.read).then((_) {
+    context.push(const ProfileRoute().location).then((_) {
       if (!mounted || widget.bottomNavIndex.value != 3) {
         return;
       }
@@ -844,7 +851,8 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     if (_calendarDragSwitchTimer?.isActive == true) {
       return;
     }
-    final duration = context.read<SettingsCubit>().animationDuration;
+    final locate = context.read;
+    final duration = locate<SettingsCubit>().animationDuration;
     _calendarDragSwitchTimer = Timer(duration, () {
       if (!mounted) {
         return;
@@ -857,7 +865,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
       }
       final selectedIndex = _clampBottomNavIndex(widget.bottomNavIndex.value);
       final openCalendar = selectedIndex == 1 || selectedIndex == 2;
-      final chatsState = context.read<ChatsCubit>().state;
+      final chatsState = locate<ChatsCubit>().state;
       final chatCalendarActive =
           chatsState.openJid != null && chatsState.openChatRoute.isCalendar;
       if (!widget.calendarAvailable || (!openCalendar && !chatCalendarActive)) {
@@ -881,13 +889,16 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     final int? sourceTab = dragSession == null
         ? null
         : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
-            _normalizeCalendarTabIndex(selectedIndex == 2 ? 1 : selectedIndex);
+              _normalizeCalendarTabIndex(
+                selectedIndex == 2 ? 1 : selectedIndex,
+              );
     if (sourceTab == null) {
       _setCalendarDragCleared();
       return;
     }
     final bool openCalendar = selectedIndex == 1 || selectedIndex == 2;
-    final chatsState = context.read<ChatsCubit>().state;
+    final locate = context.read;
+    final chatsState = locate<ChatsCubit>().state;
     final chatCalendarActive =
         chatsState.openJid != null && chatsState.openChatRoute.isCalendar;
     if (!widget.calendarAvailable || (!openCalendar && !chatCalendarActive)) {
@@ -927,8 +938,9 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
         .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
     final invitesCount = context.watch<RosterCubit>().inviteCount;
     final draftsCount = context.watch<DraftCubit>().state.items?.length ?? 0;
-    final spamCount =
-        chatItems.where((chat) => chat.spam && !chat.archived).length;
+    final spamCount = chatItems
+        .where((chat) => chat.spam && !chat.archived)
+        .length;
     final chatsBadgeCount =
         unreadChatsCount + invitesCount + draftsCount + spamCount;
     int scheduledAlertsCount = 0;
@@ -969,42 +981,46 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
           ),
           child: ValueListenableBuilder<CalendarBottomDragSession?>(
             valueListenable: widget.calendarBottomDragSession,
-            builder: (context, dragSession, __) {
+            builder: (context, dragSession, _) {
               return ValueListenableBuilder<int>(
                 valueListenable: widget.bottomNavIndex,
                 builder: (context, selectedIndex, _) {
-                  final int safeSelectedIndex =
-                      _clampBottomNavIndex(selectedIndex);
+                  final int safeSelectedIndex = _clampBottomNavIndex(
+                    selectedIndex,
+                  );
                   final bool openCalendar =
                       safeSelectedIndex == 1 || safeSelectedIndex == 2;
-                  final bool chatCalendarActive = chatsState.openJid != null &&
+                  final bool chatCalendarActive =
+                      chatsState.openJid != null &&
                       chatsState.openChatRoute.isCalendar;
                   final int safeCalendarTab = safeSelectedIndex == 2
                       ? 1
                       : safeSelectedIndex == 1
-                          ? 0
-                          : 0;
+                      ? 0
+                      : 0;
                   final bool calendarDisabled = !widget.calendarAvailable;
-                  final Color disabledColor =
-                      colors.mutedForeground.withValues(alpha: 0.45);
+                  final Color disabledColor = colors.mutedForeground.withValues(
+                    alpha: 0.45,
+                  );
                   final homeColor = safeSelectedIndex == 0
                       ? colors.foreground
                       : colors.mutedForeground;
                   final scheduleColor = calendarDisabled
                       ? disabledColor
                       : safeSelectedIndex == 1
-                          ? colors.foreground
-                          : colors.mutedForeground;
+                      ? colors.foreground
+                      : colors.mutedForeground;
                   final tasksColor = calendarDisabled
                       ? disabledColor
                       : safeSelectedIndex == 2
-                          ? colors.foreground
-                          : colors.mutedForeground;
+                      ? colors.foreground
+                      : colors.mutedForeground;
                   final int? dragSourceTab = dragSession == null
                       ? null
                       : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
-                          safeCalendarTab;
-                  final bool dragHintActive = !lowMotion &&
+                            safeCalendarTab;
+                  final bool dragHintActive =
+                      !lowMotion &&
                       widget.calendarAvailable &&
                       (openCalendar || chatCalendarActive) &&
                       dragSourceTab != null;
@@ -1207,19 +1223,12 @@ class _HomeBottomNavBadgeIcon extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        Icon(
-          iconData,
-          color: color,
-          size: iconSize,
-        ),
+        Icon(iconData, color: color, size: iconSize),
         if (badgeCount > 0)
           PositionedDirectional(
             top: -spacing.s,
             end: -spacing.s,
-            child: AxiCountBadge(
-              count: badgeCount,
-              diameter: badgeDiameter,
-            ),
+            child: AxiCountBadge(count: badgeCount, diameter: badgeDiameter),
           ),
       ],
     );
@@ -1308,14 +1317,23 @@ class _HomeShellNavigationRail extends StatelessWidget {
   final ValueChanged<bool> onCollapsedChanged;
   final Map<HomeTab, int> badgeCounts;
 
+  void _ensureHomeRoute(BuildContext context) {
+    final String currentPath = GoRouterState.of(context).uri.path;
+    if (currentPath != HomeRoute.path) {
+      const HomeRoute().go(context);
+    }
+  }
+
   void _openCalendar(BuildContext context) {
     final currentIndex = bottomNavIndex.value.clamp(0, 3).toInt();
     bottomNavIndex.value = currentIndex == 2 ? 2 : 1;
+    _ensureHomeRoute(context);
   }
 
   void _selectHomeTab(BuildContext context, int index) {
     bottomNavIndex.value = 0;
     homeTabIndex.value = index;
+    _ensureHomeRoute(context);
   }
 
   @override
@@ -1370,6 +1388,7 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locate = context.read;
     final shortcut = findActionShortcut(EnvScope.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
@@ -1377,9 +1396,9 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
       return AxiIconButton.ghost(
         iconData: LucideIcons.lifeBuoy,
         tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
-        onPressed: () => context.read<AccessibilityActionBloc>().add(
-              const AccessibilityMenuOpened(),
-            ),
+        onPressed: () => locate<AccessibilityActionBloc>().add(
+          const AccessibilityMenuOpened(),
+        ),
       );
     }
     final label = l10n.accessibilityActionsLabel;
@@ -1390,9 +1409,9 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
       collapsedSemanticLabel: label,
       leading: const Icon(LucideIcons.lifeBuoy),
       child: Text(label, overflow: TextOverflow.ellipsis),
-      onPressed: () => context.read<AccessibilityActionBloc>().add(
-            const AccessibilityMenuOpened(),
-          ),
+      onPressed: () => locate<AccessibilityActionBloc>().add(
+        const AccessibilityMenuOpened(),
+      ),
     );
   }
 }
@@ -1420,7 +1439,7 @@ class _ProfileRailItem extends StatelessWidget {
   final bool collapsed;
 
   void _openSettings(BuildContext context) {
-    context.push(const ProfileRoute().location, extra: context.read);
+    context.push(const ProfileRoute().location);
   }
 
   @override
@@ -1486,15 +1505,16 @@ class _FindActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locate = context.read;
     final shortcut = findActionShortcut(EnvScope.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final l10n = context.l10n;
     return AxiIconButton.outline(
       iconData: LucideIcons.lifeBuoy,
       tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
-      onPressed: () => context.read<AccessibilityActionBloc>().add(
-            const AccessibilityMenuOpened(),
-          ),
+      onPressed: () => locate<AccessibilityActionBloc>().add(
+        const AccessibilityMenuOpened(),
+      ),
     );
   }
 }
@@ -1524,6 +1544,7 @@ class _DesktopHomeRefreshButton extends StatelessWidget {
     return BlocSelector<ChatsCubit, ChatsState, RequestStatus>(
       selector: (state) => state.refreshStatus,
       builder: (context, status) {
+        final locate = context.read;
         final isLoading = status.isLoading;
         final l10n = context.l10n;
         return AxiIconButton.outline(
@@ -1532,7 +1553,7 @@ class _DesktopHomeRefreshButton extends StatelessWidget {
           loading: isLoading,
           onPressed: isLoading
               ? null
-              : () => context.read<ChatsCubit>().refreshHomeSync(),
+              : () => locate<ChatsCubit>().refreshHomeSync(),
         );
       },
     );
@@ -1659,10 +1680,11 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
     final safeTabIndex = selectedIndex.clamp(0, widget.tabs.length - 1).toInt();
     final selectedRailIndex =
         widget.calendarActive && calendarDestinationIndex != null
-            ? calendarDestinationIndex
-            : _destinationIndexForTab(safeTabIndex, calendarDestinationIndex);
-    final effectiveSelectedIndex =
-        selectedRailIndex.clamp(0, destinations.length - 1).toInt();
+        ? calendarDestinationIndex
+        : _destinationIndexForTab(safeTabIndex, calendarDestinationIndex);
+    final effectiveSelectedIndex = selectedRailIndex
+        .clamp(0, destinations.length - 1)
+        .toInt();
     return SafeArea(
       left: false,
       right: false,
@@ -1762,8 +1784,7 @@ String _rosterFailureToastMessage(
     RosterFailureReason.invalidJid => l10n.jidInputInvalid,
     RosterFailureReason.addFailed ||
     RosterFailureReason.removeFailed ||
-    RosterFailureReason.rejectFailed =>
-      l10n.authGenericError,
+    RosterFailureReason.rejectFailed => l10n.authGenericError,
   };
 }
 
@@ -1807,7 +1828,8 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
 
   void _handleTextChanged() {
     if (_programmaticChange) return;
-    context.read<HomeSearchCubit>().updateQuery(_controller.text);
+    final locate = context.read;
+    locate<HomeSearchCubit>().updateQuery(_controller.text);
     setState(() {});
   }
 
@@ -1843,6 +1865,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
         }
       },
       builder: (context, state) {
+        final locate = context.read;
         final l10n = context.l10n;
         final spacing = context.spacing;
         final active = state.active;
@@ -1857,16 +1880,19 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
         final currentTabState = tab == null ? null : state.stateFor(tab);
         final sortValue = currentTabState?.sort ?? SearchSortOrder.newestFirst;
         final selectedFilterId = currentTabState?.filterId;
-        final effectiveFilterId =
-            filters.isEmpty ? null : (selectedFilterId ?? filters.first.id);
+        final effectiveFilterId = filters.isEmpty
+            ? null
+            : (selectedFilterId ?? filters.first.id);
         final placeholder = entry == null
             ? l10n.homeSearchPlaceholderTabs
             : l10n.homeSearchPlaceholderForTab(entry.label);
-        final filterLabel =
-            filters.isEmpty ? null : _filterLabel(filters, effectiveFilterId);
+        final filterLabel = filters.isEmpty
+            ? null
+            : _filterLabel(filters, effectiveFilterId);
         return AnimatedCrossFade(
-          crossFadeState:
-              active ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          crossFadeState: active
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
           duration: context.watch<SettingsCubit>().animationDuration,
           reverseDuration: context.watch<SettingsCubit>().animationDuration,
           sizeCurve: Curves.easeInOutCubic,
@@ -1879,9 +1905,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
             ),
             decoration: BoxDecoration(
               color: context.colorScheme.card,
-              border: Border(
-                bottom: context.borderSide,
-              ),
+              border: Border(bottom: context.borderSide),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -1895,16 +1919,13 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         placeholder: Text(placeholder),
                         clearTooltip: l10n.commonClear,
                         onClear: () =>
-                            context.read<HomeSearchCubit>().clearQuery(
-                                  tab: tab,
-                                ),
+                            locate<HomeSearchCubit>().clearQuery(tab: tab),
                       ),
                     ),
                     SizedBox(width: spacing.s),
                     AxiButton.ghost(
-                      onPressed: () => context
-                          .read<HomeSearchCubit>()
-                          .setSearchActive(false),
+                      onPressed: () =>
+                          locate<HomeSearchCubit>().setSearchActive(false),
                       child: Text(l10n.commonCancel),
                     ),
                   ],
@@ -1917,10 +1938,7 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         initialValue: sortValue,
                         onChanged: (value) {
                           if (value == null) return;
-                          context.read<HomeSearchCubit>().updateSort(
-                                value,
-                                tab: tab,
-                              );
+                          locate<HomeSearchCubit>().updateSort(value, tab: tab);
                         },
                         options: SearchSortOrder.values
                             .map(
@@ -1940,10 +1958,10 @@ class _HomeSearchPanelState extends State<_HomeSearchPanel> {
                         child: AxiSelect<SearchFilterId>(
                           initialValue: effectiveFilterId,
                           onChanged: (value) {
-                            context.read<HomeSearchCubit>().updateFilter(
-                                  value,
-                                  tab: tab,
-                                );
+                            locate<HomeSearchCubit>().updateFilter(
+                              value,
+                              tab: tab,
+                            );
                           },
                           options: filters
                               .map(

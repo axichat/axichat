@@ -13,16 +13,16 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 Future<bool?> showNotificationDialog(
   BuildContext context,
   T Function<T>() locate,
-) =>
-    showFadeScaleDialog<bool>(
-      context: context,
-      builder: (context) =>
-          BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
+) => showFadeScaleDialog<bool>(
+  context: context,
+  builder: (context) =>
+      BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
         bloc: locate<NotificationRequestCubit>(),
         builder: (context, state) {
           return ShadDialog(
-            constraints:
-                BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
+            constraints: BoxConstraints(
+              maxWidth: context.sizing.dialogMaxWidth,
+            ),
             title: Text(
               context.l10n.notificationsDialogTitle,
               style: context.modalHeaderTextStyle,
@@ -51,4 +51,4 @@ Future<bool?> showNotificationDialog(
           );
         },
       ),
-    );
+);

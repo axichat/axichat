@@ -94,8 +94,8 @@ void main() {
     registerFallbackValue(FakeUserAgent());
     registerFallbackValue(FakeStanzaDetails());
     registerFallbackValue(FakeMessageEvent());
-    registerFallbackValue(FakeMessage());
-    registerFallbackValue(FakeChat());
+    registerFallbackValue(fallbackMessage);
+    registerFallbackValue(fallbackChat);
     registerFallbackValue(FakeJid());
     registerFallbackValue(_fallbackChatType);
     registerFallbackValue(_emptyXmlNodeList);
@@ -137,8 +137,8 @@ void main() {
 
     xmppService = XmppService(
       buildConnection: () => mockConnection,
-      buildStateStore: (_, __) => mockStateStore,
-      buildDatabase: (_, __) => mockDatabase,
+      buildStateStore: (_, _) => mockStateStore,
+      buildDatabase: (_, _) => mockDatabase,
       notificationService: mockNotificationService,
     );
 
@@ -534,9 +534,11 @@ void main() {
           password: _invitePasswordRaw,
         );
 
-        final captured = verify(
-          () => mockConnection.sendMessage(captureAny()),
-        ).captured.single as mox.MessageEvent;
+        final captured =
+            verify(
+                  () => mockConnection.sendMessage(captureAny()),
+                ).captured.single
+                as mox.MessageEvent;
         final directInvite = captured.get<DirectMucInviteData>();
         final axiInvite = captured.get<AxiMucInvitePayload>();
 
@@ -680,12 +682,14 @@ void main() {
         reason: _inviteReasonRaw,
       );
 
-      final captured = verify(
-        () => mucManager.sendAdminIq(
-          roomJid: _roomJid,
-          items: captureAny(named: 'items'),
-        ),
-      ).captured.single as List<mox.XMLNode>;
+      final captured =
+          verify(
+                () => mucManager.sendAdminIq(
+                  roomJid: _roomJid,
+                  items: captureAny(named: 'items'),
+                ),
+              ).captured.single
+              as List<mox.XMLNode>;
 
       final item = captured.single;
       expect(item.attributes[_nickAttr], equals(_roomNickTrimmed));
@@ -709,12 +713,14 @@ void main() {
           reason: _inviteReasonRaw,
         );
 
-        final captured = verify(
-          () => mucManager.sendAdminIq(
-            roomJid: _roomJid,
-            items: captureAny(named: 'items'),
-          ),
-        ).captured.single as List<mox.XMLNode>;
+        final captured =
+            verify(
+                  () => mucManager.sendAdminIq(
+                    roomJid: _roomJid,
+                    items: captureAny(named: 'items'),
+                  ),
+                ).captured.single
+                as List<mox.XMLNode>;
 
         final item = captured.single;
         expect(item.attributes[_jidAttr], equals(_inviteeJid));
@@ -743,12 +749,14 @@ void main() {
         role: OccupantRole.moderator,
       );
 
-      final captured = verify(
-        () => mucManager.sendAdminIq(
-          roomJid: _roomJid,
-          items: captureAny(named: 'items'),
-        ),
-      ).captured.single as List<mox.XMLNode>;
+      final captured =
+          verify(
+                () => mucManager.sendAdminIq(
+                  roomJid: _roomJid,
+                  items: captureAny(named: 'items'),
+                ),
+              ).captured.single
+              as List<mox.XMLNode>;
 
       final item = captured.single;
       expect(item.attributes[_nickAttr], equals(_roomNickTrimmed));
@@ -774,12 +782,14 @@ void main() {
           affiliation: OccupantAffiliation.member,
         );
 
-        final captured = verify(
-          () => mucManager.sendAdminIq(
-            roomJid: _roomJid,
-            items: captureAny(named: 'items'),
-          ),
-        ).captured.single as List<mox.XMLNode>;
+        final captured =
+            verify(
+                  () => mucManager.sendAdminIq(
+                    roomJid: _roomJid,
+                    items: captureAny(named: 'items'),
+                  ),
+                ).captured.single
+                as List<mox.XMLNode>;
 
         final item = captured.single;
         expect(item.attributes[_jidAttr], equals(_inviteeJid));

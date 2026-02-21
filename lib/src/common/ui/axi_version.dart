@@ -22,8 +22,9 @@ class AxiVersion extends StatelessWidget {
           onTap: () => showFadeScaleDialog(
             context: context,
             builder: (context) => ShadDialog(
-              constraints:
-                  BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
+              constraints: BoxConstraints(
+                maxWidth: context.sizing.dialogMaxWidth,
+              ),
               title: Text(
                 l10n.axiVersionWelcomeTitle,
                 style: context.modalHeaderTextStyle,

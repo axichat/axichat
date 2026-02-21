@@ -28,21 +28,20 @@ class PriorityCheckboxTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final bool isEnabled = onChanged != null;
     final bool isActive = value || isIndeterminate;
-    final backgroundColor =
-        isActive ? color.withValues(alpha: 0.08) : calendarContainerColor;
+    final backgroundColor = isActive
+        ? color.withValues(alpha: 0.08)
+        : calendarContainerColor;
     final borderColor = isActive ? color : calendarBorderColor;
     final Color textColor = isActive ? color : calendarTitleColor;
     final bool showShadow = isActive;
     final double baseBorderWidth = context.borderSide.width;
-    final double borderWidth =
-        isIndeterminate || value ? baseBorderWidth * 2 : baseBorderWidth;
+    final double borderWidth = isIndeterminate || value
+        ? baseBorderWidth * 2
+        : baseBorderWidth;
     final bool? checkboxValue = isIndeterminate ? null : value;
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
       borderRadius: BorderRadius.circular(context.radii.squircle),
-      side: BorderSide(
-        color: borderColor,
-        width: borderWidth,
-      ),
+      side: BorderSide(color: borderColor, width: borderWidth),
     );
 
     return Semantics(
@@ -56,7 +55,7 @@ class PriorityCheckboxTile extends StatelessWidget {
         enabled: isEnabled,
         child: ShadFocusable(
           canRequestFocus: isEnabled,
-          builder: (context, _, __) {
+          builder: (context, _, _) {
             return Material(
               type: MaterialType.transparency,
               shape: decoratedShape,

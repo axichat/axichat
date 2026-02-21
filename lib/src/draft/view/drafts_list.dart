@@ -32,12 +32,12 @@ class _DraftsListState extends State<DraftsList> {
       _ => DraftSortOrder.newestFirst,
     };
     context.read<DraftCubit>().updateSearchSnapshot(
-          DraftSearchSnapshot(
-            query: query,
-            filterAttachmentsOnly: filterAttachmentsOnly,
-            sortOrder: sortOrder,
-          ),
-        );
+      DraftSearchSnapshot(
+        query: query,
+        filterAttachmentsOnly: filterAttachmentsOnly,
+        sortOrder: sortOrder,
+      ),
+    );
   }
 
   @override
@@ -63,7 +63,8 @@ class _DraftsListState extends State<DraftsList> {
           return BlocBuilder<RosterCubit, RosterState>(
             buildWhen: (previous, current) => previous.items != current.items,
             builder: (context, rosterState) {
-              final rosterItems = rosterState.items ??
+              final rosterItems =
+                  rosterState.items ??
                   (context.watch<RosterCubit>()['items']
                       as List<RosterItem>?) ??
                   const <RosterItem>[];

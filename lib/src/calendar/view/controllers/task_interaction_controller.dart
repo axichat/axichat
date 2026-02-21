@@ -82,20 +82,19 @@ class TaskResizeInteraction {
 
 class TaskInteractionController extends ChangeNotifier {
   TaskInteractionController()
-      : preview = ValueNotifier<DragPreview?>(null),
-        clipboard =
-            ValueNotifier<TaskClipboardState>(const TaskClipboardState()),
-        feedbackHint = ValueNotifier<DragFeedbackHint>(
-          const DragFeedbackHint(
-            width: 0,
-            pointerOffset: 0,
-            anchorDx: 0,
-            anchorDy: 0,
-          ),
+    : preview = ValueNotifier<DragPreview?>(null),
+      clipboard = ValueNotifier<TaskClipboardState>(const TaskClipboardState()),
+      feedbackHint = ValueNotifier<DragFeedbackHint>(
+        const DragFeedbackHint(
+          width: 0,
+          pointerOffset: 0,
+          anchorDx: 0,
+          anchorDy: 0,
         ),
-        hoveredTaskId = ValueNotifier<String?>(null),
-        dropHoverTaskId = ValueNotifier<String?>(null),
-        resizeInteraction = ValueNotifier<TaskResizeInteraction?>(null);
+      ),
+      hoveredTaskId = ValueNotifier<String?>(null),
+      dropHoverTaskId = ValueNotifier<String?>(null),
+      resizeInteraction = ValueNotifier<TaskResizeInteraction?>(null);
 
   final ValueNotifier<DragPreview?> preview;
   final ValueNotifier<TaskClipboardState> clipboard;
@@ -255,8 +254,9 @@ class TaskInteractionController extends ChangeNotifier {
     _draggingTaskBaseId = task.baseId;
     _draggingTaskSnapshot = snapshot;
     _dragStartScheduledTime = task.scheduledTime;
-    final double resolvedHeight =
-        bounds.height.isFinite && bounds.height > 0 ? bounds.height : 0.0;
+    final double resolvedHeight = bounds.height.isFinite && bounds.height > 0
+        ? bounds.height
+        : 0.0;
     final double? pointerOffsetFraction = consumePendingPointerOffsetFraction(
       taskId: task.id,
     );
@@ -274,8 +274,8 @@ class TaskInteractionController extends ChangeNotifier {
       pointerOffset = 0.0;
     }
     if (resolvedHeight > 0) {
-      pointerOffset =
-          (pointerOffset.clamp(0.0, resolvedHeight) as num).toDouble();
+      pointerOffset = (pointerOffset.clamp(0.0, resolvedHeight) as num)
+          .toDouble();
     } else if (pointerOffset < 0) {
       pointerOffset = 0.0;
     }
@@ -283,8 +283,9 @@ class TaskInteractionController extends ChangeNotifier {
     draggingTaskHeight = bounds.height;
     setDragPointerOffsetFromTop(pointerOffset, notify: false);
     final double width = bounds.width.isFinite ? bounds.width : 0.0;
-    final double pointerLeftOffset =
-        width > 0 ? width * normalizedPointer : 0.0;
+    final double pointerLeftOffset = width > 0
+        ? width * normalizedPointer
+        : 0.0;
     dragStartGlobalLeft = pointerGlobalX - pointerLeftOffset;
     draggingTaskWidth = bounds.width;
     activeDragWidth = bounds.width;
@@ -394,8 +395,8 @@ class TaskInteractionController extends ChangeNotifier {
       }
       return;
     }
-    _pendingPointerOffsetFraction =
-        (fraction.clamp(0.0, 1.0) as num).toDouble();
+    _pendingPointerOffsetFraction = (fraction.clamp(0.0, 1.0) as num)
+        .toDouble();
     if (taskId != null) {
       _pendingPointerTaskId = taskId;
     }

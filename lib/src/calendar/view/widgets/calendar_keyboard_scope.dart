@@ -122,10 +122,10 @@ class _CalendarKeyboardScopeState extends State<CalendarKeyboardScope> {
 
   static const Map<ShortcutActivator, Intent> _cancelShortcuts =
       <ShortcutActivator, Intent>{
-    SingleActivator(LogicalKeyboardKey.space): CalendarCancelDragIntent(),
-    SingleActivator(LogicalKeyboardKey.enter): CalendarCancelDragIntent(),
-    SingleActivator(LogicalKeyboardKey.escape): CalendarCancelDragIntent(),
-  };
+        SingleActivator(LogicalKeyboardKey.space): CalendarCancelDragIntent(),
+        SingleActivator(LogicalKeyboardKey.enter): CalendarCancelDragIntent(),
+        SingleActivator(LogicalKeyboardKey.escape): CalendarCancelDragIntent(),
+      };
 
   bool _shouldHandleShortcuts() {
     final ModalRoute<dynamic>? route = ModalRoute.of(context);
@@ -186,37 +186,37 @@ class _CalendarKeyboardScopeState extends State<CalendarKeyboardScope> {
           ),
           CalendarNavigatePreviousIntent:
               CallbackAction<CalendarNavigatePreviousIntent>(
-            onInvoke: (_) {
-              if (widget.onNavigatePrevious == null ||
-                  CalendarKeyboardScope._isEditableFocused()) {
-                return null;
-              }
-              widget.onNavigatePrevious!.call();
-              return null;
-            },
-          ),
+                onInvoke: (_) {
+                  if (widget.onNavigatePrevious == null ||
+                      CalendarKeyboardScope._isEditableFocused()) {
+                    return null;
+                  }
+                  widget.onNavigatePrevious!.call();
+                  return null;
+                },
+              ),
           CalendarNavigateNextIntent:
               CallbackAction<CalendarNavigateNextIntent>(
-            onInvoke: (_) {
-              if (widget.onNavigateNext == null ||
-                  CalendarKeyboardScope._isEditableFocused()) {
-                return null;
-              }
-              widget.onNavigateNext!.call();
-              return null;
-            },
-          ),
+                onInvoke: (_) {
+                  if (widget.onNavigateNext == null ||
+                      CalendarKeyboardScope._isEditableFocused()) {
+                    return null;
+                  }
+                  widget.onNavigateNext!.call();
+                  return null;
+                },
+              ),
           CalendarNavigateTodayIntent:
               CallbackAction<CalendarNavigateTodayIntent>(
-            onInvoke: (_) {
-              if (widget.onJumpToToday == null ||
-                  CalendarKeyboardScope._isEditableFocused()) {
-                return null;
-              }
-              widget.onJumpToToday!.call();
-              return null;
-            },
-          ),
+                onInvoke: (_) {
+                  if (widget.onJumpToToday == null ||
+                      CalendarKeyboardScope._isEditableFocused()) {
+                    return null;
+                  }
+                  widget.onJumpToToday!.call();
+                  return null;
+                },
+              ),
           CalendarCancelDragIntent: CallbackAction<CalendarCancelDragIntent>(
             onInvoke: (_) {
               if (widget.onCancelDrag == null ||

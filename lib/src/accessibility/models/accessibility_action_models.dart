@@ -41,10 +41,7 @@ enum AccessibilityActionStatus {
   inviteDismissed,
 }
 
-enum AccessibilityActionError {
-  jidInputInvalid,
-  inviteUpdateFailed,
-}
+enum AccessibilityActionError { jidInputInvalid, inviteUpdateFailed }
 
 sealed class AccessibilityChatStatus extends Equatable {
   const AccessibilityChatStatus();
@@ -75,12 +72,7 @@ class AccessibilityChatStatusIncomingMessage extends AccessibilityChatStatus {
   final DateTime? timestamp;
 
   @override
-  List<Object?> get props => [
-        senderJid,
-        senderDisplayName,
-        isSelf,
-        timestamp,
-      ];
+  List<Object?> get props => [senderJid, senderDisplayName, isSelf, timestamp];
 }
 
 sealed class AccessibilityChatError extends Equatable {
@@ -163,23 +155,23 @@ class AccessibilityMenuItem extends Equatable {
 
   @override
   List<Object?> get props => [
-        id,
-        label,
-        kind,
-        description,
-        icon,
-        highlight,
-        destructive,
-        badge,
-        dismissId,
-        disabled,
-        message,
-        attachment,
-        attachmentLabel,
-        senderLabel,
-        timestampLabel,
-        showMetadata,
-      ];
+    id,
+    label,
+    kind,
+    description,
+    icon,
+    highlight,
+    destructive,
+    badge,
+    dismissId,
+    disabled,
+    message,
+    attachment,
+    attachmentLabel,
+    senderLabel,
+    timestampLabel,
+    showMetadata,
+  ];
 }
 
 sealed class AccessibilityMenuAction extends Equatable {
@@ -226,14 +218,14 @@ class AccessibilityCommandAction extends AccessibilityMenuAction {
 
   @override
   List<Object?> get props => [
-        command,
-        body,
-        recipients,
-        contact,
-        highlightId,
-        draft,
-        transport,
-      ];
+    command,
+    body,
+    recipients,
+    contact,
+    highlightId,
+    draft,
+    transport,
+  ];
 }
 
 class AccessibilitySelectContactAction extends AccessibilityMenuAction {
@@ -295,23 +287,22 @@ class AccessibilityStepEntry extends Equatable {
     List<AccessibilityContact>? recipients,
     bool? addingRecipient,
     int? draftId,
-  }) =>
-      AccessibilityStepEntry(
-        kind: kind ?? this.kind,
-        purpose: purpose ?? this.purpose,
-        recipients: recipients ?? this.recipients,
-        addingRecipient: addingRecipient ?? this.addingRecipient,
-        draftId: draftId ?? this.draftId,
-      );
+  }) => AccessibilityStepEntry(
+    kind: kind ?? this.kind,
+    purpose: purpose ?? this.purpose,
+    recipients: recipients ?? this.recipients,
+    addingRecipient: addingRecipient ?? this.addingRecipient,
+    draftId: draftId ?? this.draftId,
+  );
 
   @override
   List<Object?> get props => [
-        kind,
-        purpose,
-        recipients,
-        addingRecipient,
-        draftId,
-      ];
+    kind,
+    purpose,
+    recipients,
+    addingRecipient,
+    draftId,
+  ];
 }
 
 enum AccessibilityContactSource { chat, roster, manual }
@@ -349,29 +340,28 @@ class AccessibilityContact extends Equatable {
     int? unreadCount,
     bool? isGroup,
     MessageTransport? transport,
-  }) =>
-      AccessibilityContact(
-        jid: jid,
-        displayName: displayName ?? this.displayName,
-        subtitle: subtitle ?? this.subtitle,
-        source: source ?? this.source,
-        encryptionProtocol: encryptionProtocol,
-        chatType: chatType ?? this.chatType,
-        unreadCount: unreadCount ?? this.unreadCount,
-        transport: transport ?? this.transport,
-        isGroup: isGroup ?? this.isGroup,
-      );
+  }) => AccessibilityContact(
+    jid: jid,
+    displayName: displayName ?? this.displayName,
+    subtitle: subtitle ?? this.subtitle,
+    source: source ?? this.source,
+    encryptionProtocol: encryptionProtocol,
+    chatType: chatType ?? this.chatType,
+    unreadCount: unreadCount ?? this.unreadCount,
+    transport: transport ?? this.transport,
+    isGroup: isGroup ?? this.isGroup,
+  );
 
   @override
   List<Object?> get props => [
-        jid,
-        displayName,
-        subtitle,
-        source,
-        encryptionProtocol,
-        chatType,
-        unreadCount,
-        transport,
-        isGroup,
-      ];
+    jid,
+    displayName,
+    subtitle,
+    source,
+    encryptionProtocol,
+    chatType,
+    unreadCount,
+    transport,
+    isGroup,
+  ];
 }

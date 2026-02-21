@@ -209,8 +209,9 @@ void main() {
         });
 
         test('can delete all tasks', () {
-          final result =
-              modelWithTasks.deleteTask('task-1').deleteTask('task-2');
+          final result = modelWithTasks
+              .deleteTask('task-1')
+              .deleteTask('task-2');
 
           expect(result.tasks, isEmpty);
           expect(
@@ -288,8 +289,9 @@ void main() {
       });
 
       test('replaceDayEvents merges without dropping tasks', () {
-        final CalendarModel withTask =
-            baseModel.addTask(testTask1).addDayEvent(birthday);
+        final CalendarModel withTask = baseModel
+            .addTask(testTask1)
+            .addDayEvent(birthday);
         final DayEvent holiday = DayEvent.create(
           title: 'Holiday',
           startDate: DateTime(2024, 5, 20),

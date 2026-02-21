@@ -76,8 +76,7 @@ void main() {
   });
 
   group('End-to-end', () {
-    testWidgets(
-        'Critical path: log in, add contact, send message, '
+    testWidgets('Critical path: log in, add contact, send message, '
         'remove contact, log out.', (tester) async {
       await app.main();
 

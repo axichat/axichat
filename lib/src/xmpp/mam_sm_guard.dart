@@ -18,11 +18,11 @@ class MamStreamManagementGuard extends mox.XmppManagerBase {
 
   @override
   List<mox.StanzaHandler> getIncomingPreStanzaHandlers() => [
-        mox.StanzaHandler(
-          priority: 9998, // SM pre-handler uses 9999; run immediately after.
-          callback: _onIncomingPreStanza,
-        ),
-      ];
+    mox.StanzaHandler(
+      priority: 9998, // SM pre-handler uses 9999; run immediately after.
+      callback: _onIncomingPreStanza,
+    ),
+  ];
 
   @override
   Future<bool> isSupported() async => true;

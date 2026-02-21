@@ -34,12 +34,13 @@ class ChatsAddButton extends StatelessWidget {
       dialogBuilder: (context) {
         final colors = context.colorScheme;
         return BlocProvider(
-          create: (_) => AvatarEditorCubit(
-            xmppService: context.read<XmppService>(),
-            templates: buildDefaultAvatarTemplates(),
-          )
-            ..initialize(colors)
-            ..setCarouselEnabled(true, colors),
+          create: (_) =>
+              AvatarEditorCubit(
+                  xmppService: context.read<XmppService>(),
+                  templates: buildDefaultAvatarTemplates(),
+                )
+                ..initialize(colors)
+                ..setCarouselEnabled(true, colors),
           child: const _ChatRoomCreateDialog(),
         );
       },
@@ -79,12 +80,11 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
       _showAvatarEditor = false;
     });
     final colors = context.colorScheme;
-    final hasSelection =
-        context.read<AvatarEditorCubit>().state.hasUserSelectedAvatar;
-    context.read<AvatarEditorCubit>().setCarouselEnabled(
-          !hasSelection,
-          colors,
-        );
+    final hasSelection = context
+        .read<AvatarEditorCubit>()
+        .state
+        .hasUserSelectedAvatar;
+    context.read<AvatarEditorCubit>().setCarouselEnabled(!hasSelection, colors);
   }
 
   Future<void> _submit() async {
@@ -111,13 +111,14 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
       _validationError = null;
     });
     context.read<AvatarEditorCubit>().pauseCarousel();
-    final avatarPayload =
-        await context.read<AvatarEditorCubit>().buildSelectedAvatarPayload();
+    final avatarPayload = await context
+        .read<AvatarEditorCubit>()
+        .buildSelectedAvatarPayload();
     if (!mounted) return;
     context.read<ChatsCubit>().createChatRoom(
-          title: trimmed,
-          avatar: avatarPayload,
-        );
+      title: trimmed,
+      avatar: avatarPayload,
+    );
   }
 
   @override
@@ -142,8 +143,9 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
         final loading = state.creationStatus.isLoading;
         return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
           builder: (context, avatarState) {
-            final animationDuration =
-                context.watch<SettingsCubit>().animationDuration;
+            final animationDuration = context
+                .watch<SettingsCubit>()
+                .animationDuration;
             final avatarErrorText = avatarState.errorType?.resolve(l10n);
             final canSubmit =
                 _title.trim().isNotEmpty && !avatarState.isBusy && !loading;
@@ -152,7 +154,8 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
               MediaQuery.sizeOf(context).width,
               sizing.dialogMaxWidth,
             );
-            final dialogMaxHeight = MediaQuery.sizeOf(context).height *
+            final dialogMaxHeight =
+                MediaQuery.sizeOf(context).height *
                 sizing.dialogMaxHeightFraction;
             final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
             return AxiInputDialog(
@@ -161,9 +164,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
               content: Padding(
                 padding: EdgeInsets.only(bottom: keyboardInset),
                 child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: dialogMaxHeight,
-                  ),
+                  constraints: BoxConstraints(maxHeight: dialogMaxHeight),
                   child: SingleChildScrollView(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
@@ -186,8 +187,9 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                               SizedBox(width: spacing.s),
                               Expanded(
                                 child: AxiTextFormField(
-                                  placeholder:
-                                      Text(l10n.chatsRoomNamePlaceholder),
+                                  placeholder: Text(
+                                    l10n.chatsRoomNamePlaceholder,
+                                  ),
                                   enabled: !loading,
                                   onChanged: _handleTitleChanged,
                                 ),
@@ -238,14 +240,17 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                         avatarBytes: avatarState.displayedBytes,
                                         animationDuration: animationDuration,
                                         cropBytes: avatarState
-                                            .draftAvatar?.sourceBytes,
+                                            .draftAvatar
+                                            ?.sourceBytes,
                                         cropRect:
                                             avatarState.draftAvatar?.cropRect,
                                         imageWidth: avatarState
-                                            .draftAvatar?.sourceWidth
+                                            .draftAvatar
+                                            ?.sourceWidth
                                             ?.toDouble(),
                                         imageHeight: avatarState
-                                            .draftAvatar?.sourceHeight
+                                            .draftAvatar
+                                            ?.sourceHeight
                                             ?.toDouble(),
                                         onCropChanged: (rect) => context
                                             .read<AvatarEditorCubit>()
@@ -270,17 +275,17 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                         useActionEnabled: useActionEnabled,
                                         hasUserSelectedAvatar:
                                             avatarState.hasUserSelectedAvatar,
-                                        canShuffleBackground: avatarState
-                                                .hasCarouselPreview &&
+                                        canShuffleBackground:
+                                            avatarState.hasCarouselPreview &&
                                             avatarState.canShuffleBackground,
-                                        onShuffleBackground: avatarState
-                                                    .hasCarouselPreview &&
+                                        onShuffleBackground:
+                                            avatarState.hasCarouselPreview &&
                                                 avatarState.canShuffleBackground
                                             ? () => context
-                                                .read<AvatarEditorCubit>()
-                                                .shuffleCarouselBackground(
-                                                  context.colorScheme,
-                                                )
+                                                  .read<AvatarEditorCubit>()
+                                                  .shuffleCarouselBackground(
+                                                    context.colorScheme,
+                                                  )
                                             : null,
                                         descriptionText:
                                             l10n.mucAvatarMenuDescription,

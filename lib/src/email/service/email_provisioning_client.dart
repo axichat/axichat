@@ -59,12 +59,12 @@ class EmailProvisioningClient {
     bool requirePublicToken = true,
     http.Client? httpClient,
     Logger? logger,
-  })  : _baseUrl = _normalizeBase(baseUrl),
-        _publicToken = _normalizePublicToken(publicToken),
-        _requirePublicToken = requirePublicToken,
-        _httpClient = httpClient ?? http.Client(),
-        _ownsClient = httpClient == null,
-        _log = logger ?? Logger('EmailProvisioningClient') {
+  }) : _baseUrl = _normalizeBase(baseUrl),
+       _publicToken = _normalizePublicToken(publicToken),
+       _requirePublicToken = requirePublicToken,
+       _httpClient = httpClient ?? http.Client(),
+       _ownsClient = httpClient == null,
+       _log = logger ?? Logger('EmailProvisioningClient') {
     _validateBaseUrl(_baseUrl);
     if (_requirePublicToken && !_publicTokenConfigured) {
       _log.warning('Email provisioning public token missing.');
@@ -86,13 +86,14 @@ class EmailProvisioningClient {
       defaultValue: _publicTokenPlaceholder,
     );
     final overrideBaseUrl = baseUrlOverride;
-    final baseUrl = (overrideBaseUrl != null &&
+    final baseUrl =
+        (overrideBaseUrl != null &&
             overrideBaseUrl.scheme.isNotEmpty &&
             overrideBaseUrl.host.isNotEmpty)
         ? overrideBaseUrl
         : envBaseUrl.isEmpty
-            ? Uri.parse(_defaultProvisioningBaseUrl)
-            : Uri.parse(envBaseUrl);
+        ? Uri.parse(_defaultProvisioningBaseUrl)
+        : Uri.parse(envBaseUrl);
     final defaultHost = Uri.parse(_defaultProvisioningBaseUrl).host;
     final overrideProvided = publicTokenOverride != null;
     final overrideToken = publicTokenOverride?.trim() ?? '';
@@ -388,9 +389,7 @@ class EmailProvisioningClient {
   }
 
   Map<String, String> _headers() {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
     if (_publicToken.isNotEmpty) {
       headers['X-Auth-Token'] = _publicToken;
     }

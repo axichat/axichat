@@ -8,9 +8,9 @@ import 'package:axichat/src/common/ui/ui.dart';
 
 extension CalendarFreeBusyTypeColorX on CalendarFreeBusyType {
   Color get baseColor => switch (this) {
-        CalendarFreeBusyType.free => calendarSuccessColor,
-        CalendarFreeBusyType.busy => calendarDangerColor,
-        CalendarFreeBusyType.busyUnavailable => calendarDangerColor,
-        CalendarFreeBusyType.busyTentative => calendarPrimaryColor,
-      };
+    CalendarFreeBusyType.free => calendarSuccessColor,
+    CalendarFreeBusyType.busy => calendarDangerColor,
+    CalendarFreeBusyType.busyUnavailable => calendarDangerColor,
+    CalendarFreeBusyType.busyTentative => calendarPrimaryColor,
+  };
 }

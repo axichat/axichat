@@ -27,9 +27,9 @@ enum SpamReportReason { spam, abuse }
 
 extension SpamReportReasonExtension on SpamReportReason {
   String get urn => switch (this) {
-        SpamReportReason.spam => _reportingSpamReason,
-        SpamReportReason.abuse => _reportingAbuseReason,
-      };
+    SpamReportReason.spam => _reportingSpamReason,
+    SpamReportReason.abuse => _reportingAbuseReason,
+  };
 }
 
 final class SpamReportStanzaId {
@@ -39,21 +39,20 @@ final class SpamReportStanzaId {
   final String id;
 
   mox.XMLNode toXml() => mox.XMLNode.xmlns(
-        tag: _stanzaIdTag,
-        xmlns: _stanzaIdXmlns,
-        attributes: {_stanzaIdByAttr: by, _stanzaIdIdAttr: id},
-      );
+    tag: _stanzaIdTag,
+    xmlns: _stanzaIdXmlns,
+    attributes: {_stanzaIdByAttr: by, _stanzaIdIdAttr: id},
+  );
 }
 
 mixin BlockingService on XmppBase, BaseStreamService {
   Stream<List<BlocklistData>> blocklistStream({
     int start = 0,
     int end = basePageItemLimit,
-  }) =>
-      createPaginatedStream<BlocklistData, XmppDatabase>(
-        watchFunction: (db) async => db.watchBlocklist(start: start, end: end),
-        getFunction: (db) => db.getBlocklist(start: start, end: end),
-      );
+  }) => createPaginatedStream<BlocklistData, XmppDatabase>(
+    watchFunction: (db) async => db.watchBlocklist(start: start, end: end),
+    getFunction: (db) => db.getBlocklist(start: start, end: end),
+  );
 
   final Logger _blockingLogger = Logger('BlockingService');
   final Set<String> _blockedJids = <String>{};
@@ -72,8 +71,7 @@ mixin BlockingService on XmppBase, BaseStreamService {
   Future<void> _updateBlocklistCache(List<BlocklistData> items) async {
     final previous = Set<String>.from(_blockedJids);
     final next = <String>{
-      for (final entry in items)
-        if (normalizedBareAddressValue(entry.jid) case final jid?) jid,
+      for (final entry in items) ?normalizedBareAddressValue(entry.jid),
     };
     _blockedJids
       ..clear()

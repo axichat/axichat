@@ -32,10 +32,7 @@ class _RailBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return AxiCountBadge(
-      count: count,
-      borderColor: colors.background,
-    );
+    return AxiCountBadge(count: count, borderColor: colors.background);
   }
 }
 
@@ -125,7 +122,7 @@ class AxiNavigationRail extends StatelessWidget {
                       ? Center(child: toggleButton ?? const SizedBox.shrink())
                       : Row(
                           children: [
-                            if (toggleButton != null) toggleButton,
+                            ?toggleButton,
                             if (toggleButton != null) const SizedBox(width: 12),
                             if (showTitle)
                               Expanded(
@@ -209,8 +206,8 @@ class _AxiNavigationRailItem extends StatelessWidget {
     );
     final Color? backgroundColor = selected
         ? (isCollapsed
-            ? selectionOverlay
-            : Color.alphaBlend(selectionOverlay, surfaceColor))
+              ? selectionOverlay
+              : Color.alphaBlend(selectionOverlay, surfaceColor))
         : null;
     return AxiListButton(
       selected: selected,

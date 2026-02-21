@@ -64,7 +64,8 @@ class _CalendarAvailabilityEditorSheetState
   @override
   void initState() {
     super.initState();
-    _baseAvailability = widget.availability ??
+    _baseAvailability =
+        widget.availability ??
         _resolvePrimaryAvailability(widget.model.availability);
     _availabilityId =
         _baseAvailability?.id ?? _availabilityEditorIdGenerator.v4();
@@ -109,9 +110,7 @@ class _CalendarAvailabilityEditorSheetState
             children: [
               for (final _AvailabilityWindowDraft draft in _windowDrafts)
                 Padding(
-                  padding: EdgeInsets.only(
-                    bottom: spacing.m,
-                  ),
+                  padding: EdgeInsets.only(bottom: spacing.m),
                   child: _AvailabilityWindowCard(
                     key: ValueKey<String>(draft.id),
                     draft: draft,
@@ -256,7 +255,8 @@ class _CalendarAvailabilityEditorSheetState
 
   CalendarIcsMeta _updatedAvailabilityMeta(CalendarIcsMeta? meta) {
     final now = DateTime.now();
-    final CalendarIcsMeta base = meta ??
+    final CalendarIcsMeta base =
+        meta ??
         CalendarIcsMeta(
           uid: _availabilityId,
           created: now,
@@ -292,10 +292,7 @@ class _AvailabilityWindowCard extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.m,
-        vertical: spacing.m,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.m),
       decoration: BoxDecoration(
         color: calendarContainerColor,
         borderRadius: BorderRadius.circular(context.radii.container),
@@ -369,10 +366,7 @@ class _AvailabilityEditorAddButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return AxiButton.ghost(
       onPressed: onPressed,
-      leading: Icon(
-        LucideIcons.plus,
-        size: context.sizing.menuItemIconSize,
-      ),
+      leading: Icon(LucideIcons.plus, size: context.sizing.menuItemIconSize),
       child: Text(context.l10n.calendarAvailabilityAddWindow),
     );
   }
@@ -394,10 +388,7 @@ class _AvailabilityEditorActionRow extends StatelessWidget {
       child: AxiButton.primary(
         onPressed: isBusy ? null : onPressed,
         loading: isBusy,
-        leading: Icon(
-          LucideIcons.check,
-          size: context.sizing.menuItemIconSize,
-        ),
+        leading: Icon(LucideIcons.check, size: context.sizing.menuItemIconSize),
         child: Text(context.l10n.calendarAvailabilitySaveWindows),
       ),
     );

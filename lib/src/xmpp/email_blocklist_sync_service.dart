@@ -141,8 +141,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
 
       final localItems =
           await _dbOpReturning<XmppDatabase, List<EmailBlocklistEntry>>(
-        (db) => db.getEmailBlocklist(),
-      );
+            (db) => db.getEmailBlocklist(),
+          );
       final localByAddress = <String, EmailBlocklistEntry>{};
       for (final item in localItems) {
         final normalized = _normalizeEmailBlocklistAddress(item.address);
@@ -610,8 +610,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     await _dbOp<XmppStateStore>(
       (ss) async => ss.writeAll(
         data: {
-          _emailBlocklistPendingPublishesKey:
-              _pendingEmailBlocklistPublishes.toList(growable: false),
+          _emailBlocklistPendingPublishesKey: _pendingEmailBlocklistPublishes
+              .toList(growable: false),
           _emailBlocklistPendingRetractionsKey:
               _pendingEmailBlocklistRetractions.toList(growable: false),
         },
@@ -707,8 +707,8 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     for (final address in pendingPublishes) {
       final localEntry =
           await _dbOpReturning<XmppDatabase, EmailBlocklistEntry?>(
-        (db) => db.getEmailBlocklistEntry(address),
-      );
+            (db) => db.getEmailBlocklistEntry(address),
+          );
       if (localEntry == null) {
         _pendingEmailBlocklistPublishes.remove(address);
         continue;

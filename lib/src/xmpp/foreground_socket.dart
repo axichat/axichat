@@ -196,10 +196,10 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   }
 
   ForegroundServiceConfig _defaultConfig() => buildForegroundServiceConfig(
-        notificationText:
-            toBeginningOfSentenceCase(ConnectionState.connecting.name) ??
-                ConnectionState.connecting.name,
-      );
+    notificationText:
+        toBeginningOfSentenceCase(ConnectionState.connecting.name) ??
+        ConnectionState.connecting.name,
+  );
 
   @override
   Future<void> send(List<Object> parts) async {
@@ -252,14 +252,13 @@ class _LifecycleResumeObserver with WidgetsBindingObserver {
 
 ForegroundServiceConfig buildForegroundServiceConfig({
   required String notificationText,
-}) =>
-    ForegroundServiceConfig(
-      notificationTitle: '${getFlavorPrefix()} Axichat Message Service',
-      notificationText: notificationText,
-      notificationIcon: const NotificationIcon(
-        metaDataName: 'im.axi.axichat.APP_ICON',
-      ),
-    );
+}) => ForegroundServiceConfig(
+  notificationTitle: '${getFlavorPrefix()} Axichat Message Service',
+  notificationText: notificationText,
+  notificationIcon: const NotificationIcon(
+    metaDataName: 'im.axi.axichat.APP_ICON',
+  ),
+);
 
 bool launchedFromNotification = false;
 String? _launchedNotificationChatJid;
@@ -359,10 +358,12 @@ class ForegroundSocket extends TaskHandler {
   @override
   void onReceiveData(covariant String data) async {
     final separatorIndex = data.indexOf(join);
-    final type =
-        separatorIndex == -1 ? data : data.substring(0, separatorIndex);
-    final payloadLength =
-        separatorIndex == -1 ? 0 : data.length - separatorIndex - join.length;
+    final type = separatorIndex == -1
+        ? data
+        : data.substring(0, separatorIndex);
+    final payloadLength = separatorIndex == -1
+        ? 0
+        : data.length - separatorIndex - join.length;
     _log.fine('Received task: type=$type payloadLen=$payloadLength');
     _socket ??= XmppSocketWrapper();
     if (data.startsWith('$connectPrefix$join')) {
@@ -443,7 +444,7 @@ class ForegroundSocket extends TaskHandler {
 
 class ForegroundSocketWrapper implements XmppSocketWrapper {
   ForegroundSocketWrapper({ForegroundTaskBridge? bridge})
-      : _bridge = bridge ?? foregroundTaskBridge;
+    : _bridge = bridge ?? foregroundTaskBridge;
 
   static final _log = Logger('ForegroundSocketWrapper');
   final ForegroundTaskBridge _bridge;
@@ -463,10 +464,12 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
 
   Future<void> _onReceiveTaskData(String data) async {
     final separatorIndex = data.indexOf(join);
-    final type =
-        separatorIndex == -1 ? data : data.substring(0, separatorIndex);
-    final payloadLength =
-        separatorIndex == -1 ? 0 : data.length - separatorIndex - join.length;
+    final type = separatorIndex == -1
+        ? data
+        : data.substring(0, separatorIndex);
+    final payloadLength = separatorIndex == -1
+        ? 0
+        : data.length - separatorIndex - join.length;
     _log.fine('Received main: type=$type payloadLen=$payloadLength');
     if (data.startsWith('$dataPrefix$join')) {
       _recordIncomingTraffic();
@@ -515,12 +518,9 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
       'Sending to task: type=$type parts=${strings.length} '
       'payloadLen=$payloadLength',
     );
-    fireAndForget(
-      () async {
-        await _bridge.send(strings);
-      },
-      operationName: _foregroundSocketSendOperationName,
-    );
+    fireAndForget(() async {
+      await _bridge.send(strings);
+    }, operationName: _foregroundSocketSendOperationName);
   }
 
   @override
@@ -727,23 +727,23 @@ void _configureLogging() {
 }
 
 void initForegroundService() => FlutterForegroundTask.init(
-      androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'foreground_service',
-        channelName: 'Foreground Service Notification',
-        channelDescription:
-            'This notification appears when the foreground service is running.',
-        visibility: NotificationVisibility.VISIBILITY_PRIVATE,
-        priority: NotificationPriority.LOW,
-      ),
-      iosNotificationOptions: const IOSNotificationOptions(
-        showNotification: true,
-        playSound: false,
-      ),
-      foregroundTaskOptions: ForegroundTaskOptions(
-        eventAction: ForegroundTaskEventAction.nothing(),
-        autoRunOnBoot: true,
-        autoRunOnMyPackageReplaced: true,
-        allowWakeLock: true,
-        allowWifiLock: true,
-      ),
-    );
+  androidNotificationOptions: AndroidNotificationOptions(
+    channelId: 'foreground_service',
+    channelName: 'Foreground Service Notification',
+    channelDescription:
+        'This notification appears when the foreground service is running.',
+    visibility: NotificationVisibility.VISIBILITY_PRIVATE,
+    priority: NotificationPriority.LOW,
+  ),
+  iosNotificationOptions: const IOSNotificationOptions(
+    showNotification: true,
+    playSound: false,
+  ),
+  foregroundTaskOptions: ForegroundTaskOptions(
+    eventAction: ForegroundTaskEventAction.nothing(),
+    autoRunOnBoot: true,
+    autoRunOnMyPackageReplaced: true,
+    allowWakeLock: true,
+    allowWifiLock: true,
+  ),
+);

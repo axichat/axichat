@@ -19,13 +19,13 @@ void main() {
       onResizePreview: (_) {},
       onResizeEnd: (_) {},
       onResizePointerMove: (_) {},
-      onDragStarted: (_, __) {},
+      onDragStarted: (_, _) {},
       onDragUpdate: (_) {},
       onDragEnded: (_) {},
       onDragPointerDown: (_) {},
       onEnterSelectionMode: () {},
       onToggleSelection: () {},
-      onTap: (_, __) {},
+      onTap: (_, _) {},
     );
 
     bool isPopoverOpen = false;
@@ -40,29 +40,29 @@ void main() {
     final ValueNotifier<bool> cancelHoverNotifier = ValueNotifier(false);
 
     CalendarTaskEntryBindings buildBindings() => CalendarTaskEntryBindings(
-          isSelectionMode: false,
-          isSelected: false,
-          isPopoverOpen: isPopoverOpen,
-          splitPreviewAnimationDuration: Duration.zero,
-          contextMenuGroupId: const ValueKey<String>('calendar-menu'),
-          contextMenuBuilderFactory: (_) =>
-              (context, request) => const <Widget>[],
-          enableContextMenuLongPress: false,
-          resizeHandleExtent: 12,
-          interactionController: interactionController,
-          dragFeedbackHint: interactionController.feedbackHint,
-          cancelBucketHoverNotifier: cancelHoverNotifier,
-          callbacks: callbacks,
-          geometryProvider: (_) => geometry,
-          globalRectProvider: (_) => geometry.rect,
-          stepHeight: 16,
-          minutesPerStep: 15,
-          hourHeight: 48,
-          addGeometryListener: (_) {},
-          removeGeometryListener: (_) {},
-          requiresLongPressToDrag: false,
-          longPressToDragDelay: Duration.zero,
-        );
+      isSelectionMode: false,
+      isSelected: false,
+      isPopoverOpen: isPopoverOpen,
+      splitPreviewAnimationDuration: Duration.zero,
+      contextMenuGroupId: const ValueKey<String>('calendar-menu'),
+      contextMenuBuilderFactory: (_) =>
+          (context, request) => const <Widget>[],
+      enableContextMenuLongPress: false,
+      resizeHandleExtent: 12,
+      interactionController: interactionController,
+      dragFeedbackHint: interactionController.feedbackHint,
+      cancelBucketHoverNotifier: cancelHoverNotifier,
+      callbacks: callbacks,
+      geometryProvider: (_) => geometry,
+      globalRectProvider: (_) => geometry.rect,
+      stepHeight: 16,
+      minutesPerStep: 15,
+      hourHeight: 48,
+      addGeometryListener: (_) {},
+      removeGeometryListener: (_) {},
+      requiresLongPressToDrag: false,
+      longPressToDragDelay: Duration.zero,
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -137,7 +137,7 @@ void main() {
                     splitPreviewAnimationDuration: Duration.zero,
                     contextMenuGroupId: const ValueKey<String>('geometry-menu'),
                     contextMenuBuilderFactory: (_) =>
-                        (_, __) => const <Widget>[],
+                        (_, _) => const <Widget>[],
                     enableContextMenuLongPress: false,
                     resizeHandleExtent: 12,
                     interactionController: interactionController,
@@ -147,13 +147,13 @@ void main() {
                       onResizePreview: (_) {},
                       onResizeEnd: (_) {},
                       onResizePointerMove: (_) {},
-                      onDragStarted: (_, __) {},
+                      onDragStarted: (_, _) {},
                       onDragUpdate: (_) {},
                       onDragEnded: (_) {},
                       onDragPointerDown: (_) {},
                       onEnterSelectionMode: () {},
                       onToggleSelection: () {},
-                      onTap: (_, __) {},
+                      onTap: (_, _) {},
                     ),
                     geometryProvider: (_) => geometry,
                     globalRectProvider: (_) => geometry.rect,

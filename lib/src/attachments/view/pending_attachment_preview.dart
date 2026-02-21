@@ -87,7 +87,8 @@ Future<_PendingAttachmentPreviewData?> _buildPreviewData({
   final useDeclaredFallback = !report.hasReliableDetection;
   final bool isImageKind =
       report.isDetectedImage || (useDeclaredFallback && report.isDeclaredImage);
-  final String? preferredMime = report.preferredMimeType ??
+  final String? preferredMime =
+      report.preferredMimeType ??
       attachment.mimeType?.toLowerCase() ??
       _extensionBasedMime(attachment.fileName, attachment.path);
   if (isImageKind) {
@@ -269,26 +270,24 @@ class _PendingAttachmentPreviewData {
     required EmailAttachment attachment,
     required FileTypeReport report,
     Size? intrinsicSize,
-  }) =>
-      _PendingAttachmentPreviewData._(
-        file: file,
-        attachment: attachment,
-        report: report,
-        kind: _AttachmentPreviewKind.image,
-        intrinsicSize: intrinsicSize,
-      );
+  }) => _PendingAttachmentPreviewData._(
+    file: file,
+    attachment: attachment,
+    report: report,
+    kind: _AttachmentPreviewKind.image,
+    intrinsicSize: intrinsicSize,
+  );
 
   factory _PendingAttachmentPreviewData.pdf({
     required File file,
     required EmailAttachment attachment,
     required FileTypeReport report,
-  }) =>
-      _PendingAttachmentPreviewData._(
-        file: file,
-        attachment: attachment,
-        report: report,
-        kind: _AttachmentPreviewKind.pdf,
-      );
+  }) => _PendingAttachmentPreviewData._(
+    file: file,
+    attachment: attachment,
+    report: report,
+    kind: _AttachmentPreviewKind.pdf,
+  );
 
   factory _PendingAttachmentPreviewData.text({
     required File file,
@@ -296,27 +295,25 @@ class _PendingAttachmentPreviewData {
     required FileTypeReport report,
     required String textContent,
     required bool truncated,
-  }) =>
-      _PendingAttachmentPreviewData._(
-        file: file,
-        attachment: attachment,
-        report: report,
-        kind: _AttachmentPreviewKind.text,
-        textContent: textContent,
-        truncatedText: truncated,
-      );
+  }) => _PendingAttachmentPreviewData._(
+    file: file,
+    attachment: attachment,
+    report: report,
+    kind: _AttachmentPreviewKind.text,
+    textContent: textContent,
+    truncatedText: truncated,
+  );
 
   factory _PendingAttachmentPreviewData.metadata({
     required File file,
     required EmailAttachment attachment,
     required FileTypeReport report,
-  }) =>
-      _PendingAttachmentPreviewData._(
-        file: file,
-        attachment: attachment,
-        report: report,
-        kind: _AttachmentPreviewKind.metadata,
-      );
+  }) => _PendingAttachmentPreviewData._(
+    file: file,
+    attachment: attachment,
+    report: report,
+    kind: _AttachmentPreviewKind.metadata,
+  );
 
   final File file;
   final EmailAttachment attachment;
@@ -330,10 +327,7 @@ class _PendingAttachmentPreviewData {
 enum _AttachmentPreviewKind { image, text, pdf, metadata }
 
 class _TextPreviewResult {
-  const _TextPreviewResult({
-    required this.content,
-    required this.truncated,
-  });
+  const _TextPreviewResult({required this.content, required this.truncated});
 
   final String content;
   final bool truncated;
@@ -458,10 +452,7 @@ class _PendingAttachmentPreviewContent extends StatelessWidget {
       height: targetSize.height,
       child: InteractiveViewer(
         maxScale: sizing.mediaPreviewMaxScale,
-        child: Image.file(
-          data.file,
-          fit: BoxFit.contain,
-        ),
+        child: Image.file(data.file, fit: BoxFit.contain),
       ),
     );
   }
@@ -470,10 +461,7 @@ class _PendingAttachmentPreviewContent extends StatelessWidget {
     return SizedBox(
       width: maxWidth,
       height: maxHeight,
-      child: PdfViewer.file(
-        data.file.path,
-        params: const PdfViewerParams(),
-      ),
+      child: PdfViewer.file(data.file.path, params: const PdfViewerParams()),
     );
   }
 
@@ -499,10 +487,7 @@ class _PendingAttachmentPreviewContent extends StatelessWidget {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final l10n = context.l10n;
-    final sizeLabel = _formatBytes(
-      data.attachment.sizeBytes,
-      l10n,
-    );
+    final sizeLabel = _formatBytes(data.attachment.sizeBytes, l10n);
     return Container(
       padding: EdgeInsets.all(spacing.m),
       decoration: ShapeDecoration(
@@ -516,10 +501,7 @@ class _PendingAttachmentPreviewContent extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            data.attachment.fileName,
-            style: context.textTheme.p,
-          ),
+          Text(data.attachment.fileName, style: context.textTheme.p),
           SizedBox(height: spacing.xs),
           Text(
             sizeLabel,

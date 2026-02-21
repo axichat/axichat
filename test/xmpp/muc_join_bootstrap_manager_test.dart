@@ -218,10 +218,7 @@ void main() {
         expect(event.nick, equals(_roomNick));
         expect(event.isAvailable, isTrue);
         expect(event.isNickChange, isFalse);
-        expect(
-          event.statusCodes,
-          contains(MucStatusCode.selfPresence.code),
-        );
+        expect(event.statusCodes, contains(MucStatusCode.selfPresence.code));
         expect(event.reason, equals(_reasonTrimmed));
         expect(event.newNick, isNull);
       },
@@ -262,10 +259,7 @@ void main() {
         final event = events.single as MucSelfPresenceEvent;
         expect(event.isNickChange, isTrue);
         expect(event.newNick, equals(_roomNickUpdated));
-        expect(
-          event.statusCodes,
-          contains(MucStatusCode.nickChange.code),
-        );
+        expect(event.statusCodes, contains(MucStatusCode.nickChange.code));
       },
     );
   });

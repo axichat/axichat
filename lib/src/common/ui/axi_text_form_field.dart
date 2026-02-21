@@ -21,6 +21,7 @@ class AxiTextFormField extends StatelessWidget {
     this.initialValue,
     this.description,
     this.inputFormatters,
+    this.leading,
     this.trailing,
     this.expands,
     this.minLines,
@@ -49,6 +50,7 @@ class AxiTextFormField extends StatelessWidget {
   final String? initialValue;
   final Widget? description;
   final List<TextInputFormatter>? inputFormatters;
+  final Widget? leading;
   final Widget? trailing;
   final bool? expands;
   final int? minLines;
@@ -79,6 +81,7 @@ class AxiTextFormField extends StatelessWidget {
       initialValue: initialValue,
       description: description,
       inputFormatters: inputFormatters,
+      leading: leading,
       trailing: trailing,
       expands: expands ?? false,
       minLines: minLines,

@@ -710,11 +710,12 @@ class _IcsComponentBuilder {
   final List<_IcsComponentBuilder> children = <_IcsComponentBuilder>[];
 
   CalendarRawComponent build() => CalendarRawComponent(
-        name: name,
-        properties: List<CalendarRawProperty>.unmodifiable(properties),
-        components:
-            children.map((builder) => builder.build()).toList(growable: false),
-      );
+    name: name,
+    properties: List<CalendarRawProperty>.unmodifiable(properties),
+    components: children
+        .map((builder) => builder.build())
+        .toList(growable: false),
+  );
 }
 
 CalendarRawComponent? _findComponent(CalendarRawComponent root, String name) {
@@ -902,8 +903,9 @@ String _encodeParameters(List<CalendarPropertyParameter> parameters) {
       ..write(_icsValueSemicolon)
       ..write(parameter.name)
       ..write('=');
-    final String joined =
-        parameter.values.map(_encodeParamValue).join(_icsValueComma);
+    final String joined = parameter.values
+        .map(_encodeParamValue)
+        .join(_icsValueComma);
     buffer.write(joined);
   }
   return buffer.toString();
@@ -1007,8 +1009,9 @@ CalendarCollection _parseCollection(CalendarRawComponent calendar) {
     properties,
     _icsPropertyCalendarSharing,
   );
-  final CalendarSharingPolicy? sharingPolicy =
-      sharingValue == null ? null : CalendarSharingPolicy(value: sharingValue);
+  final CalendarSharingPolicy? sharingPolicy = sharingValue == null
+      ? null
+      : CalendarSharingPolicy(value: sharingValue);
   final List<CalendarTimeZoneDefinition> timeZones = _parseTimeZones(calendar);
 
   final Set<String> handledProperties = <String>{
@@ -1137,7 +1140,8 @@ _TaskGroupResult? _parseTaskGroup(
     base,
     isEvent: isEvent,
   );
-  final bool isCancelled = (isCalendarCancel && hasBase && !hasOverrides) ||
+  final bool isCancelled =
+      (isCalendarCancel && hasBase && !hasOverrides) ||
       parsedBase.meta.status?.isCancelled == true;
   final DateTime cancelledAt =
       parsedBase.meta.lastModified ?? parsedBase.meta.dtStamp ?? DateTime.now();
@@ -1165,8 +1169,8 @@ _TaskGroupResult? _parseTaskGroup(
     if (override == null || override.recurrenceId == null) {
       continue;
     }
-    final String key =
-        override.recurrenceId!.value.microsecondsSinceEpoch.toString();
+    final String key = override.recurrenceId!.value.microsecondsSinceEpoch
+        .toString();
     overrides[key] = override;
   }
 
@@ -1203,7 +1207,8 @@ _EventGroupResult? _parseEventGroup(
 
   if (useDayEvent) {
     final _ParsedDayEvent parsed = _parseDayEventComponent(base);
-    final bool isCancelled = (isCalendarCancel && hasBase && !hasOverrides) ||
+    final bool isCancelled =
+        (isCalendarCancel && hasBase && !hasOverrides) ||
         parsed.meta.status?.isCancelled == true;
     final DateTime cancelledAt =
         parsed.meta.lastModified ?? parsed.meta.dtStamp ?? DateTime.now();
@@ -1219,7 +1224,8 @@ _EventGroupResult? _parseEventGroup(
   }
 
   final _ParsedComponent parsedTask = _parseTaskComponent(base, isEvent: true);
-  final bool isCancelled = (isCalendarCancel && hasBase && !hasOverrides) ||
+  final bool isCancelled =
+      (isCalendarCancel && hasBase && !hasOverrides) ||
       parsedTask.meta.status?.isCancelled == true;
   final DateTime cancelledAt =
       parsedTask.meta.lastModified ?? parsedTask.meta.dtStamp ?? DateTime.now();
@@ -1248,8 +1254,8 @@ _EventGroupResult? _parseEventGroup(
     if (override == null || override.recurrenceId == null) {
       continue;
     }
-    final String key =
-        override.recurrenceId!.value.microsecondsSinceEpoch.toString();
+    final String key = override.recurrenceId!.value.microsecondsSinceEpoch
+        .toString();
     overrides[key] = override;
   }
 
@@ -1342,10 +1348,12 @@ _ParsedComponent _parseTaskComponent(
 }) {
   final CalendarIcsMeta meta = _parseMeta(component);
   final List<CalendarRawProperty> properties = component.properties;
-  final String id = _firstPropertyValue(properties, _axiTaskIdProperty) ??
+  final String id =
+      _firstPropertyValue(properties, _axiTaskIdProperty) ??
       meta.uid ??
       const Uuid().v4();
-  final String title = _firstPropertyValue(properties, _icsPropertySummary) ??
+  final String title =
+      _firstPropertyValue(properties, _icsPropertySummary) ??
       _taskFallbackTitle;
   final String? description = _firstPropertyValue(
     properties,
@@ -1363,15 +1371,17 @@ _ParsedComponent _parseTaskComponent(
     properties,
     _icsPropertyDtStart,
   );
-  final DateTime? scheduledTime =
-      dtStartProp == null ? null : _parseDateTime(dtStartProp)?.value;
+  final DateTime? scheduledTime = dtStartProp == null
+      ? null
+      : _parseDateTime(dtStartProp)?.value;
 
   final CalendarRawProperty? dueProp = _firstProperty(
     properties,
     _icsPropertyDue,
   );
-  final DateTime? deadline =
-      dueProp == null ? null : _parseDateTime(dueProp)?.value;
+  final DateTime? deadline = dueProp == null
+      ? null
+      : _parseDateTime(dueProp)?.value;
 
   final _ScheduleSpan span = _parseScheduleSpan(
     properties,
@@ -1393,7 +1403,8 @@ _ParsedComponent _parseTaskComponent(
   ).normalized();
 
   final RecurrenceRule? recurrence = _parseRecurrence(properties);
-  final bool hasRecurrenceData = recurrence != null &&
+  final bool hasRecurrenceData =
+      recurrence != null &&
       (!recurrence.isNone ||
           recurrence.rDates.isNotEmpty ||
           recurrence.exDates.isNotEmpty ||
@@ -1456,10 +1467,12 @@ class _ParsedDayEvent {
 _ParsedJournal _parseJournalComponent(CalendarRawComponent component) {
   final CalendarIcsMeta meta = _parseMeta(component);
   final List<CalendarRawProperty> properties = component.properties;
-  final String id = _firstPropertyValue(properties, _axiTaskIdProperty) ??
+  final String id =
+      _firstPropertyValue(properties, _axiTaskIdProperty) ??
       meta.uid ??
       const Uuid().v4();
-  final String title = _firstPropertyValue(properties, _icsPropertySummary) ??
+  final String title =
+      _firstPropertyValue(properties, _icsPropertySummary) ??
       _journalFallbackTitle;
   final String? description = _firstPropertyValue(
     properties,
@@ -1469,8 +1482,9 @@ _ParsedJournal _parseJournalComponent(CalendarRawComponent component) {
     properties,
     _icsPropertyDtStart,
   );
-  final CalendarDateTime? parsedEntry =
-      dtStartProp == null ? null : _parseDateTime(dtStartProp);
+  final CalendarDateTime? parsedEntry = dtStartProp == null
+      ? null
+      : _parseDateTime(dtStartProp);
   final CalendarDateTime entryDate =
       parsedEntry ?? _fallbackJournalEntryDate(meta);
   final List<CalendarAlarm> alarms = _parseAlarms(component.components);
@@ -1503,10 +1517,12 @@ CalendarDateTime _fallbackJournalEntryDate(CalendarIcsMeta meta) {
 _ParsedDayEvent _parseDayEventComponent(CalendarRawComponent component) {
   final CalendarIcsMeta meta = _parseMeta(component);
   final List<CalendarRawProperty> properties = component.properties;
-  final String id = _firstPropertyValue(properties, _axiTaskIdProperty) ??
+  final String id =
+      _firstPropertyValue(properties, _axiTaskIdProperty) ??
       meta.uid ??
       const Uuid().v4();
-  final String title = _firstPropertyValue(properties, _icsPropertySummary) ??
+  final String title =
+      _firstPropertyValue(properties, _icsPropertySummary) ??
       _eventFallbackTitle;
   final String? description = _firstPropertyValue(
     properties,
@@ -1516,8 +1532,9 @@ _ParsedDayEvent _parseDayEventComponent(CalendarRawComponent component) {
     properties,
     _icsPropertyDtStart,
   );
-  final CalendarDateTime? startDateTime =
-      dtStartProp == null ? null : _parseDateTime(dtStartProp);
+  final CalendarDateTime? startDateTime = dtStartProp == null
+      ? null
+      : _parseDateTime(dtStartProp);
   final DateTime startDate = startDateTime?.value ?? DateTime.now().toLocal();
   final DateTime? endDate = _parseEventEndDate(properties, startDate);
 
@@ -1566,8 +1583,9 @@ TaskOccurrenceOverride? _parseTaskOverride(
     properties,
     _icsPropertyDtStart,
   );
-  final DateTime? scheduledTime =
-      dtStartProp == null ? null : _parseDateTime(dtStartProp)?.value;
+  final DateTime? scheduledTime = dtStartProp == null
+      ? null
+      : _parseDateTime(dtStartProp)?.value;
 
   final _ScheduleSpan span = _parseScheduleSpan(
     properties,
@@ -1594,8 +1612,9 @@ TaskOccurrenceOverride? _parseTaskOverride(
   final String? rangeValue = recurrenceProp.parameters.firstValue(
     _icsParamRange,
   );
-  final RecurrenceRange? range =
-      rangeValue == null ? null : RecurrenceRange.fromIcsValue(rangeValue);
+  final RecurrenceRange? range = rangeValue == null
+      ? null
+      : RecurrenceRange.fromIcsValue(rangeValue);
   final List<CalendarRawProperty> rawProperties = meta.rawProperties;
   final List<CalendarRawComponent> rawComponents = meta.rawComponents;
 
@@ -1667,8 +1686,9 @@ _ScheduleSpan _parseScheduleSpan(
       properties,
       _icsPropertyDtEnd,
     );
-    final DateTime? end =
-        dtEndProp == null ? null : _parseDateTime(dtEndProp)?.value;
+    final DateTime? end = dtEndProp == null
+        ? null
+        : _parseDateTime(dtEndProp)?.value;
     return _ScheduleSpan(
       duration: start != null && end != null ? end.difference(start) : null,
       endDate: end,
@@ -1810,7 +1830,7 @@ CalendarDateTime? _parseDateTime(CalendarRawProperty property) {
   }
   final bool isDateOnly =
       property.parameters.firstValue(_icsParamValue) == _icsParamValueDate ||
-          value.length == _icsDateLength;
+      value.length == _icsDateLength;
   if (isDateOnly) {
     final DateTime? date = _parseDate(value);
     if (date == null) {
@@ -2313,8 +2333,8 @@ CalendarAlarmTrigger? _parseAlarmTrigger(CalendarRawProperty triggerProp) {
         : CalendarAlarmOffsetDirection.after;
     final CalendarAlarmRelativeTo relativeTo =
         triggerProp.parameters.firstValue(_icsParamRelated) == _icsValueEnd
-            ? CalendarAlarmRelativeTo.end
-            : CalendarAlarmRelativeTo.start;
+        ? CalendarAlarmRelativeTo.end
+        : CalendarAlarmRelativeTo.start;
     return CalendarAlarmTrigger(
       type: CalendarAlarmTriggerType.relative,
       absolute: null,
@@ -2538,8 +2558,9 @@ List<RecurrenceWeekday>? _parseRecurrenceWeekdays(String? value) {
     if (match == null) {
       continue;
     }
-    final int? position =
-        match.group(1) == null ? null : int.tryParse(match.group(1)!);
+    final int? position = match.group(1) == null
+        ? null
+        : int.tryParse(match.group(1)!);
     final CalendarWeekday? weekday = CalendarWeekday.fromIcsValue(
       match.group(2),
     );
@@ -2664,8 +2685,9 @@ Map<String, CalendarCriticalPath> _buildCriticalPaths(
       }
       return left.compareTo(right);
     });
-    final List<String> taskIds =
-        items.map((item) => item.taskId).toList(growable: false);
+    final List<String> taskIds = items
+        .map((item) => item.taskId)
+        .toList(growable: false);
     paths[entry.key] = CalendarCriticalPath(
       id: entry.key,
       name: entry.key,
@@ -2690,10 +2712,12 @@ _FreeBusyParseResult _parseFreeBusyComponent(CalendarRawComponent component) {
     properties,
     _icsPropertyDtEnd,
   );
-  final CalendarDateTime? start =
-      dtStartProp == null ? null : _parseDateTime(dtStartProp);
-  final CalendarDateTime? end =
-      dtEndProp == null ? null : _parseDateTime(dtEndProp);
+  final CalendarDateTime? start = dtStartProp == null
+      ? null
+      : _parseDateTime(dtStartProp);
+  final CalendarDateTime? end = dtEndProp == null
+      ? null
+      : _parseDateTime(dtEndProp);
   final List<CalendarFreeBusyInterval> intervals = _parseFreeBusyIntervals(
     _propertiesByName(properties, _icsPropertyFreeBusy),
   );
@@ -2717,7 +2741,8 @@ List<CalendarFreeBusyInterval> _parseFreeBusyIntervals(
 ) {
   final List<CalendarFreeBusyInterval> intervals = <CalendarFreeBusyInterval>[];
   for (final CalendarRawProperty property in properties) {
-    final CalendarFreeBusyType type = CalendarFreeBusyType.fromIcsValue(
+    final CalendarFreeBusyType type =
+        CalendarFreeBusyType.fromIcsValue(
           property.parameters.firstValue(_icsParamFbType),
         ) ??
         CalendarFreeBusyType.busy;
@@ -2801,10 +2826,12 @@ CalendarAvailability? _parseAvailabilityComponent(
     properties,
     _icsPropertyDtEnd,
   );
-  final CalendarDateTime? start =
-      dtStartProp == null ? null : _parseDateTime(dtStartProp);
-  final CalendarDateTime? end =
-      dtEndProp == null ? null : _parseDateTime(dtEndProp);
+  final CalendarDateTime? start = dtStartProp == null
+      ? null
+      : _parseDateTime(dtStartProp);
+  final CalendarDateTime? end = dtEndProp == null
+      ? null
+      : _parseDateTime(dtEndProp);
   if (start == null || end == null) {
     return null;
   }
@@ -2844,10 +2871,12 @@ List<CalendarAvailabilityWindow> _parseAvailabilityWindows(
       component.properties,
       _icsPropertyDtEnd,
     );
-    final CalendarDateTime? start =
-        dtStartProp == null ? null : _parseDateTime(dtStartProp);
-    final CalendarDateTime? end =
-        dtEndProp == null ? null : _parseDateTime(dtEndProp);
+    final CalendarDateTime? start = dtStartProp == null
+        ? null
+        : _parseDateTime(dtStartProp);
+    final CalendarDateTime? end = dtEndProp == null
+        ? null
+        : _parseDateTime(dtEndProp);
     if (start == null || end == null) {
       continue;
     }
@@ -2921,8 +2950,9 @@ void _writeTaskComponent(
     meta,
   );
   final bool isEventComponent = componentType.isEvent;
-  final String componentName =
-      isEventComponent ? _icsComponentVevent : _icsComponentVtodo;
+  final String componentName = isEventComponent
+      ? _icsComponentVevent
+      : _icsComponentVtodo;
   final String uid = meta?.uid ?? '${task.id}$_icsUidSuffix';
   writer.beginComponent(componentName);
   writer.writeProperty(_icsPropertyUid, uid, escapeText: false);
@@ -3008,8 +3038,9 @@ void _writeTaskComponent(
         );
       } else if (task.duration != null) {
         final String durationValue = _formatDuration(task.duration!);
-        final String propertyName =
-            hasDeadline ? _axiScheduleDurationProperty : _icsPropertyDuration;
+        final String propertyName = hasDeadline
+            ? _axiScheduleDurationProperty
+            : _icsPropertyDuration;
         writer.writeProperty(propertyName, durationValue, escapeText: false);
       }
     }
@@ -3054,7 +3085,8 @@ void _writeTaskComponent(
   }
 
   final RecurrenceRule recurrence = task.effectiveRecurrence;
-  final bool hasRecurrenceData = !recurrence.isNone ||
+  final bool hasRecurrenceData =
+      !recurrence.isNone ||
       recurrence.rDates.isNotEmpty ||
       recurrence.exDates.isNotEmpty ||
       recurrence.rawProperties.isNotEmpty;
@@ -3115,8 +3147,9 @@ void _writeTaskComponent(
   }
 
   _writeParticipants(writer, meta);
-  final Set<String> rawPropertySkips =
-      isEventComponent ? _eventTaskRawPropertySkips : _taskRawPropertySkips;
+  final Set<String> rawPropertySkips = isEventComponent
+      ? _eventTaskRawPropertySkips
+      : _taskRawPropertySkips;
   _writeMetaRawProperties(writer, meta, rawPropertySkips);
   _writeMetaRawComponents(writer, meta);
   writer.endComponent(componentName);
@@ -3157,8 +3190,9 @@ void _writeOverrides(
     return;
   }
   final bool isEventComponent = componentType.isEvent;
-  final String componentName =
-      isEventComponent ? _icsComponentVevent : _icsComponentVtodo;
+  final String componentName = isEventComponent
+      ? _icsComponentVevent
+      : _icsComponentVtodo;
   for (final MapEntry<String, TaskOccurrenceOverride> entry
       in task.occurrenceOverrides.entries) {
     final TaskOccurrenceOverride override = entry.value;
@@ -3429,7 +3463,7 @@ void _writeFreeBusyComponent(
   _writeCalendarDateTime(writer, _icsPropertyDtStart, overlay.rangeStart);
   _writeCalendarDateTime(writer, _icsPropertyDtEnd, overlay.rangeEnd);
   final Map<CalendarFreeBusyType, Map<String?, List<CalendarFreeBusyInterval>>>
-      grouped =
+  grouped =
       <CalendarFreeBusyType, Map<String?, List<CalendarFreeBusyInterval>>>{};
   for (final CalendarFreeBusyInterval interval in overlay.intervals) {
     final String? tzid = _freeBusyGroupTzid(interval);
@@ -3441,8 +3475,12 @@ void _writeFreeBusyComponent(
         .putIfAbsent(tzid, () => <CalendarFreeBusyInterval>[])
         .add(interval);
   }
-  for (final MapEntry<CalendarFreeBusyType,
-      Map<String?, List<CalendarFreeBusyInterval>>> entry in grouped.entries) {
+  for (final MapEntry<
+        CalendarFreeBusyType,
+        Map<String?, List<CalendarFreeBusyInterval>>
+      >
+      entry
+      in grouped.entries) {
     final CalendarFreeBusyType type = entry.key;
     final Map<String?, List<CalendarFreeBusyInterval>> intervalsByTzid =
         entry.value;
@@ -3458,16 +3496,16 @@ void _writeFreeBusyComponent(
           .toList(growable: false);
       final List<CalendarPropertyParameter> parameters =
           <CalendarPropertyParameter>[
-        CalendarPropertyParameter(
-          name: _icsParamFbType,
-          values: <String>[type.icsValue],
-        ),
-        if (tzid != null && tzid.isNotEmpty)
-          CalendarPropertyParameter(
-            name: _icsParamTzid,
-            values: <String>[tzid],
-          ),
-      ];
+            CalendarPropertyParameter(
+              name: _icsParamFbType,
+              values: <String>[type.icsValue],
+            ),
+            if (tzid != null && tzid.isNotEmpty)
+              CalendarPropertyParameter(
+                name: _icsParamTzid,
+                values: <String>[tzid],
+              ),
+          ];
       writer.writeProperty(
         _icsPropertyFreeBusy,
         ranges.join(_icsValueComma),
@@ -3558,8 +3596,9 @@ void _writeMeta(
     );
   }
   if (meta?.categories.isNotEmpty == true) {
-    final String categoriesValue =
-        meta!.categories.map(_escapeText).join(_icsValueComma);
+    final String categoriesValue = meta!.categories
+        .map(_escapeText)
+        .join(_icsValueComma);
     writer.writeProperty(
       _icsPropertyCategories,
       categoriesValue,
@@ -3875,11 +3914,13 @@ void _writeDateTimeProperty(
     isFloatingOverride: isFloatingOverride,
     rangeOverride: rangeOverride,
   );
-  final bool isUtc = tzidOverride == null &&
+  final bool isUtc =
+      tzidOverride == null &&
       (isFloatingOverride == null || isFloatingOverride == false) &&
       value.isUtc;
-  final String formatted =
-      isAllDay ? _formatDate(value) : _formatDateTime(value, isUtc: isUtc);
+  final String formatted = isAllDay
+      ? _formatDate(value)
+      : _formatDateTime(value, isUtc: isUtc);
   writer.writeProperty(name, formatted, parameters: merged, escapeText: false);
 }
 
@@ -3920,8 +3961,9 @@ List<CalendarPropertyParameter> _mergeDateTimeParameters(
   bool? isFloatingOverride,
   RecurrenceRange? rangeOverride,
 }) {
-  final List<CalendarPropertyParameter> merged =
-      base.map((param) => param).toList();
+  final List<CalendarPropertyParameter> merged = base
+      .map((param) => param)
+      .toList();
   if (isAllDay) {
     merged.removeWhere((param) => param.name == _icsParamValue);
     merged.add(
@@ -4128,8 +4170,9 @@ void _writeDateList(
       isFloatingOverride: key.isFloating,
       rangeOverride: null,
     );
-    final String joined =
-        values.map(_formatCalendarDateTime).join(_icsValueComma);
+    final String joined = values
+        .map(_formatCalendarDateTime)
+        .join(_icsValueComma);
     writer.writeProperty(
       name,
       joined,
@@ -4184,7 +4227,8 @@ CalendarDateTime? _recurrenceIdFromOverrideKey(String key, CalendarTask task) {
     return null;
   }
   final CalendarDateTime? template = _recurrenceIdTemplate(task);
-  final bool isUtc = template?.value.isUtc ??
+  final bool isUtc =
+      template?.value.isUtc ??
       task.scheduledTime?.isUtc ??
       _recurrenceIdDefaultUtc;
   final DateTime value = DateTime.fromMicrosecondsSinceEpoch(
@@ -4263,13 +4307,13 @@ void _writeAlarm(_IcsWriter writer, CalendarAlarm alarm) {
     for (final CalendarAlarmRecipient recipient in alarm.recipients) {
       final List<CalendarPropertyParameter> parameters =
           recipient.commonName == null
-              ? const <CalendarPropertyParameter>[]
-              : <CalendarPropertyParameter>[
-                  CalendarPropertyParameter(
-                    name: _icsParamCn,
-                    values: <String>[recipient.commonName!],
-                  ),
-                ];
+          ? const <CalendarPropertyParameter>[]
+          : <CalendarPropertyParameter>[
+              CalendarPropertyParameter(
+                name: _icsParamCn,
+                values: <String>[recipient.commonName!],
+              ),
+            ];
       writer.writeProperty(
         _icsPropertyAttendee,
         _formatAddress(recipient.address),
@@ -4293,8 +4337,8 @@ void _writeAlarmTrigger(_IcsWriter writer, CalendarAlarmTrigger trigger) {
   final Duration baseOffset = trigger.offset!;
   final Duration resolvedOffset =
       trigger.offsetDirection == CalendarAlarmOffsetDirection.before
-          ? Duration(microseconds: baseOffset.inMicroseconds * -1)
-          : baseOffset;
+      ? Duration(microseconds: baseOffset.inMicroseconds * -1)
+      : baseOffset;
   final String durationValue = _formatDuration(resolvedOffset);
   final CalendarAlarmRelativeTo relativeTo =
       trigger.relativeTo ?? CalendarAlarmRelativeTo.start;

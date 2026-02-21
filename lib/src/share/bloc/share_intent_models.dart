@@ -17,11 +17,11 @@ extension SharedAttachmentTypeExtensions on SharedAttachmentType {
   bool get isFile => this == SharedAttachmentType.file;
 
   String get mimeTypeFallback => switch (this) {
-        SharedAttachmentType.image => 'image/*',
-        SharedAttachmentType.video => 'video/*',
-        SharedAttachmentType.audio => 'audio/*',
-        SharedAttachmentType.file => 'application/octet-stream',
-      };
+    SharedAttachmentType.image => 'image/*',
+    SharedAttachmentType.video => 'video/*',
+    SharedAttachmentType.audio => 'audio/*',
+    SharedAttachmentType.file => 'application/octet-stream',
+  };
 }
 
 class SharePayload {

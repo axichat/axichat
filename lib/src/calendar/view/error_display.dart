@@ -30,10 +30,10 @@ class ErrorDisplay extends StatelessWidget {
     const double errorBorderMix = 0.35;
     final Color background =
         Color.lerp(scheme.background, scheme.destructive, errorBackgroundMix) ??
-            scheme.background;
+        scheme.background;
     final Color border =
         Color.lerp(scheme.border, scheme.destructive, errorBorderMix) ??
-            scheme.border;
+        scheme.border;
     return Container(
       margin: EdgeInsets.all(spacing.m),
       padding: EdgeInsets.all(spacing.m),
@@ -56,8 +56,9 @@ class ErrorDisplay extends StatelessWidget {
               SizedBox(width: spacing.s),
               Text(
                 l10n.calendarErrorTitle,
-                style: context.textTheme.small.strong
-                    .copyWith(color: scheme.destructive),
+                style: context.textTheme.small.strong.copyWith(
+                  color: scheme.destructive,
+                ),
               ),
               const Spacer(),
               if (onDismiss != null)
@@ -146,8 +147,9 @@ class ErrorSnackBar {
             Expanded(
               child: Text(
                 ErrorDisplay._getFriendlyErrorMessage(context.l10n, error),
-                style: context.textTheme.small
-                    .copyWith(color: scheme.destructiveForeground),
+                style: context.textTheme.small.copyWith(
+                  color: scheme.destructiveForeground,
+                ),
               ),
             ),
           ],

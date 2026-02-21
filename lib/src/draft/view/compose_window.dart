@@ -90,8 +90,10 @@ class _ComposeWindowHeader extends StatelessWidget {
     final gapSm = spacing.s;
     final gapMd = spacing.s;
     final subject = seed.subject.trim();
-    final recipients =
-        seed.jids.where((jid) => jid.trim().isNotEmpty).take(3).join(', ');
+    final recipients = seed.jids
+        .where((jid) => jid.trim().isNotEmpty)
+        .take(3)
+        .join(', ');
     final detailLabel = subject.isNotEmpty
         ? subject
         : (recipients.isNotEmpty ? recipients : l10n.draftNewMessage);
@@ -131,9 +133,7 @@ class _ComposeWindowHeader extends StatelessWidget {
                   Text(
                     l10n.composeTitle,
                     overflow: TextOverflow.ellipsis,
-                    style: textTheme.small.copyWith(
-                      color: colors.foreground,
-                    ),
+                    style: textTheme.small.copyWith(color: colors.foreground),
                   ),
                   SizedBox(height: spacing.xxs),
                   Text(
@@ -293,10 +293,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       0,
     );
     final double targetWidth = math.max(
-      math.min(
-        isExpanded ? expandedWidth : baseWidth,
-        availableWidth,
-      ),
+      math.min(isExpanded ? expandedWidth : baseWidth, availableWidth),
       math.min(availableWidth, minWidth),
     );
 
@@ -308,10 +305,7 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       0,
     );
     final double normalHeight = math.max(
-      math.min(
-        isExpanded ? expandedHeight : baseHeight,
-        availableHeight,
-      ),
+      math.min(isExpanded ? expandedHeight : baseHeight, availableHeight),
       math.min(availableHeight, minHeight),
     );
     final double targetHeight = isMinimized ? headerHeight : normalHeight;
@@ -439,9 +433,9 @@ class _ComposeWindowShellState extends State<_ComposeWindowShell> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         context.read<ComposeWindowCubit>().initializeOffset(
-              entry.id,
-              clampedOffset,
-            );
+          entry.id,
+          clampedOffset,
+        );
       });
     }
     return clampedOffset;

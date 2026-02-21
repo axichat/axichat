@@ -46,9 +46,9 @@ class BlockButtonInline extends StatelessWidget {
             ? null
             : () {
                 context.read<BlocklistCubit>().block(
-                      address: jid,
-                      transport: MessageTransport.xmpp,
-                    );
+                  address: jid,
+                  transport: MessageTransport.xmpp,
+                );
                 if (callback != null) {
                   callback!();
                 }
@@ -101,9 +101,9 @@ class _EmailBlockButton extends StatelessWidget {
             ? null
             : () {
                 context.read<BlocklistCubit>().block(
-                      address: address,
-                      transport: MessageTransport.email,
-                    );
+                  address: address,
+                  transport: MessageTransport.email,
+                );
                 callback?.call();
               };
         return ShadButton.ghost(

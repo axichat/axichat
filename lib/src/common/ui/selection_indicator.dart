@@ -24,22 +24,22 @@ class SelectionIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final iconColor =
-        selected ? colors.primaryForeground : colors.mutedForeground;
-    final background =
-        selected ? colors.primary : colors.card.withValues(alpha: 0.96);
-    final borderColor =
-        selected ? colors.primary : colors.border.withValues(alpha: 0.9);
+    final iconColor = selected
+        ? colors.primaryForeground
+        : colors.mutedForeground;
+    final background = selected
+        ? colors.primary
+        : colors.card.withValues(alpha: 0.96);
+    final borderColor = selected
+        ? colors.primary
+        : colors.border.withValues(alpha: 0.9);
 
     Widget child = DecoratedBox(
       decoration: ShapeDecoration(
         color: background,
         shape: RoundedSuperellipseBorder(
           borderRadius: BorderRadius.circular(context.radii.squircle),
-          side: BorderSide(
-            color: borderColor,
-            width: context.borderSide.width,
-          ),
+          side: BorderSide(color: borderColor, width: context.borderSide.width),
         ),
       ),
       child: Center(

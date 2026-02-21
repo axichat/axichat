@@ -76,7 +76,8 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
         }
         continue;
       }
-      final statusChanged = updated.status != entry.operation.status ||
+      final statusChanged =
+          updated.status != entry.operation.status ||
           updated.startedAt != entry.operation.startedAt;
       if (statusChanged) {
         entry.operation = updated;
@@ -148,8 +149,9 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     if (_entries.any((entry) => entry.operation.id == operation.id)) {
       return;
     }
-    final int pendingIndex =
-        _pendingInsertions.indexWhere((entry) => entry.id == operation.id);
+    final int pendingIndex = _pendingInsertions.indexWhere(
+      (entry) => entry.id == operation.id,
+    );
     if (pendingIndex != -1) {
       _pendingInsertions[pendingIndex] = operation;
       return;
@@ -376,8 +378,9 @@ class _XmppOperationToast extends StatelessWidget {
     final statusLabel = _resolveOperationLabel(l10n, operation.labelKey);
     final isFailure = operation.status == XmppOperationStatus.failure;
     final surfaceColor = isFailure ? colorScheme.destructive : colorScheme.card;
-    final textColor =
-        isFailure ? colorScheme.destructiveForeground : colorScheme.foreground;
+    final textColor = isFailure
+        ? colorScheme.destructiveForeground
+        : colorScheme.foreground;
 
     return AxiModalSurface(
       backgroundColor: surfaceColor,
@@ -394,9 +397,7 @@ class _XmppOperationToast extends StatelessWidget {
             Flexible(
               child: Text(
                 statusLabel,
-                style: context.textTheme.p.copyWith(
-                  color: textColor,
-                ),
+                style: context.textTheme.p.copyWith(color: textColor),
               ),
             ),
           ],
@@ -416,18 +417,18 @@ class _OperationStatusIcon extends StatelessWidget {
     final colorScheme = context.colorScheme;
     return switch (status) {
       XmppOperationStatus.inProgress => AxiProgressIndicator(
-          color: colorScheme.primary,
-        ),
+        color: colorScheme.primary,
+      ),
       XmppOperationStatus.success => Icon(
-          Icons.check_circle_rounded,
-          size: context.sizing.iconButtonIconSize,
-          color: colorScheme.primary,
-        ),
+        Icons.check_circle_rounded,
+        size: context.sizing.iconButtonIconSize,
+        color: colorScheme.primary,
+      ),
       XmppOperationStatus.failure => Icon(
-          Icons.error_rounded,
-          size: context.sizing.iconButtonIconSize,
-          color: colorScheme.destructiveForeground,
-        ),
+        Icons.error_rounded,
+        size: context.sizing.iconButtonIconSize,
+        color: colorScheme.destructiveForeground,
+      ),
     };
   }
 }
@@ -459,15 +460,9 @@ class _AnimatedToastListItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (removing) {
-      return _RemovingToastListItem(
-        operation: operation,
-        animation: animation,
-      );
+      return _RemovingToastListItem(operation: operation, animation: animation);
     }
-    return _EnteringToastListItem(
-      operation: operation,
-      animation: animation,
-    );
+    return _EnteringToastListItem(operation: operation, animation: animation);
   }
 }
 
@@ -505,14 +500,12 @@ class _EnteringToastListItem extends StatelessWidget {
           builder: (context, child) {
             return Align(
               alignment: Alignment.bottomLeft,
-              heightFactor: _AnimatedToastListItem._entrySize +
+              heightFactor:
+                  _AnimatedToastListItem._entrySize +
                   (1.0 - _AnimatedToastListItem._entrySize) * curve.value,
               child: FadeTransition(
                 opacity: fadeAnimation,
-                child: SlideTransition(
-                  position: slideAnimation,
-                  child: child,
-                ),
+                child: SlideTransition(position: slideAnimation, child: child),
               ),
             );
           },
@@ -575,10 +568,7 @@ class _RemovingToastListItem extends StatelessWidget {
               heightFactor: 1.0 - collapseCurve.value,
               child: FadeTransition(
                 opacity: fadeAnimation,
-                child: SlideTransition(
-                  position: slideAnimation,
-                  child: child,
-                ),
+                child: SlideTransition(position: slideAnimation, child: child),
               ),
             );
           },

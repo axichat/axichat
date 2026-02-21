@@ -22,7 +22,9 @@ const int _calendarJournalIcsMetaField = 6;
 
 @freezed
 @HiveType(typeId: _calendarJournalTypeId)
-class CalendarJournal with _$CalendarJournal implements CalendarItemBase {
+sealed class CalendarJournal
+    with _$CalendarJournal
+    implements CalendarItemBase {
   const factory CalendarJournal({
     @HiveField(_calendarJournalIdField) required String id,
     @HiveField(_calendarJournalTitleField) required String title,

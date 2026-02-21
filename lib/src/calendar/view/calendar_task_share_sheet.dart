@@ -35,8 +35,9 @@ Future<void> showCalendarTaskShareSheet({
   final BuildContext modalContext = context.calendarModalContext;
   final locate = modalContext.read;
   final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
-  final List<Chat> available =
-      chats.where((chat) => chat.type != ChatType.note).toList(growable: false);
+  final List<Chat> available = chats
+      .where((chat) => chat.type != ChatType.note)
+      .toList(growable: false);
   if (available.isEmpty) {
     FeedbackSystem.showInfo(context, l10n.calendarTaskShareMissingChats);
     return;
@@ -93,14 +94,16 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final rosterItems = context.watch<RosterCubit>().state.items ??
+    final rosterItems =
+        context.watch<RosterCubit>().state.items ??
         (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
         const <RosterItem>[];
     final chatsSelfJid = widget.locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
-    final String? selfJid =
-        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final String? selfJid = resolvedProfileJid.isNotEmpty
+        ? resolvedProfileJid
+        : null;
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
@@ -139,21 +142,21 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
             selector: (state) => state.recipientAddressSuggestions,
             builder: (context, recipientAddressSuggestions) =>
                 RecipientChipsBar(
-              recipients: _recipients,
-              availableChats: widget.availableChats,
-              rosterItems: rosterItems,
-              databaseSuggestionAddresses: recipientAddressSuggestions,
-              selfJid: chatsSelfJid,
-              selfIdentity: selfIdentity,
-              latestStatuses: const {},
-              collapsedByDefault: false,
-              allowAddressTargets: true,
-              showSuggestionsWhenEmpty: true,
-              horizontalPadding: 0,
-              onRecipientAdded: _handleRecipientAdded,
-              onRecipientRemoved: _handleRecipientRemoved,
-              onRecipientToggled: _handleRecipientToggled,
-            ),
+                  recipients: _recipients,
+                  availableChats: widget.availableChats,
+                  rosterItems: rosterItems,
+                  databaseSuggestionAddresses: recipientAddressSuggestions,
+                  selfJid: chatsSelfJid,
+                  selfIdentity: selfIdentity,
+                  latestStatuses: const {},
+                  collapsedByDefault: false,
+                  allowAddressTargets: true,
+                  showSuggestionsWhenEmpty: true,
+                  horizontalPadding: 0,
+                  onRecipientAdded: _handleRecipientAdded,
+                  onRecipientRemoved: _handleRecipientRemoved,
+                  onRecipientToggled: _handleRecipientToggled,
+                ),
           ),
           SizedBox(height: spacing.m),
           Padding(
@@ -252,14 +255,14 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
         .toList(growable: false);
     final completer = Completer<CalendarShareResult>();
     context.read<CalendarBloc>().add(
-          CalendarEvent.taskShareRequested(
-            task: widget.task,
-            recipients: targets,
-            shareText: shareText,
-            readOnly: readOnly,
-            completer: completer,
-          ),
-        );
+      CalendarEvent.taskShareRequested(
+        task: widget.task,
+        recipients: targets,
+        shareText: shareText,
+        readOnly: readOnly,
+        completer: completer,
+      ),
+    );
     try {
       final CalendarShareResult result = await completer.future;
       if (!mounted) {

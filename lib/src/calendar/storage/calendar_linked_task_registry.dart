@@ -28,8 +28,8 @@ class CalendarLinkedTaskRegistry {
   CalendarLinkedTaskRegistry({
     Storage? storage,
     String storageKey = _linkedTaskRegistryStorageKey,
-  })  : _storage = storage ?? HydratedBloc.storage,
-        _storageKey = storageKey;
+  }) : _storage = storage ?? HydratedBloc.storage,
+       _storageKey = storageKey;
 
   static final CalendarLinkedTaskRegistry instance =
       CalendarLinkedTaskRegistry();
@@ -137,12 +137,13 @@ class CalendarLinkedTaskRegistry {
       if (key.isEmpty) {
         continue;
       }
-      final List<String> values = entry.value
-          .map((value) => value.trim())
-          .where((value) => value.isNotEmpty)
-          .toSet()
-          .toList()
-        ..sort();
+      final List<String> values =
+          entry.value
+              .map((value) => value.trim())
+              .where((value) => value.isNotEmpty)
+              .toSet()
+              .toList()
+            ..sort();
       if (values.isEmpty) {
         continue;
       }

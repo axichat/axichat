@@ -12,11 +12,11 @@ const int _calendarChatRoleRankModerator = 3;
 
 const Map<CalendarChatRole, int> _calendarChatRoleRank =
     <CalendarChatRole, int>{
-  CalendarChatRole.none: _calendarChatRoleRankNone,
-  CalendarChatRole.visitor: _calendarChatRoleRankVisitor,
-  CalendarChatRole.participant: _calendarChatRoleRankParticipant,
-  CalendarChatRole.moderator: _calendarChatRoleRankModerator,
-};
+      CalendarChatRole.none: _calendarChatRoleRankNone,
+      CalendarChatRole.visitor: _calendarChatRoleRankVisitor,
+      CalendarChatRole.participant: _calendarChatRoleRankParticipant,
+      CalendarChatRole.moderator: _calendarChatRoleRankModerator,
+    };
 
 const CalendarChatAcl _calendarAclForDirectChat = CalendarChatAcl(
   read: CalendarChatRole.participant,
@@ -34,10 +34,10 @@ const CalendarChatAcl _calendarAclForGroupChat = CalendarChatAcl(
 
 extension ChatTypeCalendarAclX on ChatType {
   CalendarChatAcl get calendarDefaultAcl => switch (this) {
-        ChatType.groupChat => _calendarAclForGroupChat,
-        ChatType.chat => _calendarAclForDirectChat,
-        ChatType.note => _calendarAclForDirectChat,
-      };
+    ChatType.groupChat => _calendarAclForGroupChat,
+    ChatType.chat => _calendarAclForDirectChat,
+    ChatType.note => _calendarAclForDirectChat,
+  };
 }
 
 extension CalendarChatRoleAccessX on CalendarChatRole {
@@ -48,9 +48,9 @@ extension CalendarChatRoleAccessX on CalendarChatRole {
 
 extension OccupantRoleCalendarChatRoleX on OccupantRole {
   CalendarChatRole get calendarChatRole => switch (this) {
-        OccupantRole.moderator => CalendarChatRole.moderator,
-        OccupantRole.participant => CalendarChatRole.participant,
-        OccupantRole.visitor => CalendarChatRole.visitor,
-        OccupantRole.none => CalendarChatRole.none,
-      };
+    OccupantRole.moderator => CalendarChatRole.moderator,
+    OccupantRole.participant => CalendarChatRole.participant,
+    OccupantRole.visitor => CalendarChatRole.visitor,
+    OccupantRole.none => CalendarChatRole.none,
+  };
 }

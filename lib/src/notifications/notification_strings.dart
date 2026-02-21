@@ -12,12 +12,12 @@ class NotificationStrings {
   });
 
   const NotificationStrings.empty()
-      : channelMessages = '',
-        newMessageTitle = '',
-        openAction = '',
-        appTitle = '',
-        backgroundConnectionDisabledTitle = '',
-        backgroundConnectionDisabledBody = '';
+    : channelMessages = '',
+      newMessageTitle = '',
+      openAction = '',
+      appTitle = '',
+      backgroundConnectionDisabledTitle = '',
+      backgroundConnectionDisabledBody = '';
 
   final String channelMessages;
   final String newMessageTitle;

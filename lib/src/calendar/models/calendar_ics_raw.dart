@@ -35,7 +35,7 @@ const List<CalendarRawComponent> _emptyCalendarRawComponents =
 
 @freezed
 @HiveType(typeId: _calendarPropertyParameterTypeId)
-class CalendarPropertyParameter with _$CalendarPropertyParameter {
+abstract class CalendarPropertyParameter with _$CalendarPropertyParameter {
   const factory CalendarPropertyParameter({
     @HiveField(_calendarPropertyParameterNameField) required String name,
     @HiveField(_calendarPropertyParameterValuesField)
@@ -49,7 +49,7 @@ class CalendarPropertyParameter with _$CalendarPropertyParameter {
 
 @freezed
 @HiveType(typeId: _calendarRawPropertyTypeId)
-class CalendarRawProperty with _$CalendarRawProperty {
+abstract class CalendarRawProperty with _$CalendarRawProperty {
   const factory CalendarRawProperty({
     @HiveField(_calendarRawPropertyNameField) required String name,
     @HiveField(_calendarRawPropertyValueField) required String value,
@@ -64,7 +64,7 @@ class CalendarRawProperty with _$CalendarRawProperty {
 
 @freezed
 @HiveType(typeId: _calendarRawComponentTypeId)
-class CalendarRawComponent with _$CalendarRawComponent {
+abstract class CalendarRawComponent with _$CalendarRawComponent {
   const factory CalendarRawComponent({
     @HiveField(_calendarRawComponentNameField) required String name,
     @HiveField(_calendarRawComponentPropertiesField)
@@ -81,7 +81,7 @@ class CalendarRawComponent with _$CalendarRawComponent {
 
 @freezed
 @HiveType(typeId: _calendarTimeZoneDefinitionTypeId)
-class CalendarTimeZoneDefinition with _$CalendarTimeZoneDefinition {
+abstract class CalendarTimeZoneDefinition with _$CalendarTimeZoneDefinition {
   const factory CalendarTimeZoneDefinition({
     @HiveField(_calendarTimeZoneDefinitionTzidField) required String tzid,
     @HiveField(_calendarTimeZoneDefinitionComponentField)

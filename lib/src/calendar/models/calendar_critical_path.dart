@@ -10,7 +10,7 @@ part 'calendar_critical_path.g.dart';
 
 @freezed
 @HiveType(typeId: 37)
-class CalendarCriticalPath with _$CalendarCriticalPath {
+abstract class CalendarCriticalPath with _$CalendarCriticalPath {
   const factory CalendarCriticalPath({
     @HiveField(0) required String id,
     @HiveField(1) required String name,
@@ -46,8 +46,9 @@ extension CalendarCriticalPathX on CalendarCriticalPath {
       return this;
     }
     final existing = List<String>.from(taskIds);
-    final insertionIndex =
-        index != null ? index.clamp(0, existing.length) : existing.length;
+    final insertionIndex = index != null
+        ? index.clamp(0, existing.length)
+        : existing.length;
     existing.insert(insertionIndex, sanitizedId);
     return copyWith(
       taskIds: existing,

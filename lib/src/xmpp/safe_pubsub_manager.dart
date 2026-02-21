@@ -80,12 +80,11 @@ class SafePubSubManager extends mox.PubSubManager {
   XmppOperationEvent _operationEndEvent(
     XmppOperationKind kind, {
     required bool isSuccess,
-  }) =>
-      XmppOperationEvent(
-        kind: kind,
-        stage: XmppOperationStage.end,
-        isSuccess: isSuccess,
-      );
+  }) => XmppOperationEvent(
+    kind: kind,
+    stage: XmppOperationStage.end,
+    isSuccess: isSuccess,
+  );
 
   String _safeNodeLabel(String? node) {
     final trimmed = node?.trim();
@@ -204,13 +203,12 @@ class SafePubSubManager extends mox.PubSubManager {
             type: _iqSet,
             to: jid.toString(),
             children: [
-              (mox.XmlBuilder.withNamespace('pubsub', mox.pubsubXmlns)
-                    ..child(
-                      (mox.XmlBuilder('subscribe')
-                            ..attr('jid', subscriberJid)
-                            ..attr('node', node))
-                          .build(),
-                    ))
+              (mox.XmlBuilder.withNamespace('pubsub', mox.pubsubXmlns)..child(
+                    (mox.XmlBuilder('subscribe')
+                          ..attr('jid', subscriberJid)
+                          ..attr('node', node))
+                        .build(),
+                  ))
                   .build(),
             ],
           ),
@@ -238,7 +236,8 @@ class SafePubSubManager extends mox.PubSubManager {
         logger.fine('PubSub subscribe failed: missing subscription element.');
         return moxlib.Result(mox.UnknownPubSubError());
       }
-      final state = mox.SubscriptionState.fromString(
+      final state =
+          mox.SubscriptionState.fromString(
             subscription.attributes['subscription'] as String?,
           ) ??
           mox.SubscriptionState.none;
@@ -293,8 +292,9 @@ class SafePubSubManager extends mox.PubSubManager {
         return result;
       }
       _removeSubscription(jid: subscriberJid, node: node, subId: subId);
-      logger
-          .fine('PubSub unsubscribe succeeded. node=${_safeNodeLabel(node)}.');
+      logger.fine(
+        'PubSub unsubscribe succeeded. node=${_safeNodeLabel(node)}.',
+      );
       success = true;
       return result;
     } finally {
@@ -375,10 +375,7 @@ class SafePubSubManager extends mox.PubSubManager {
     if (inFlight != null) {
       return inFlight;
     }
-    final future = _resolveSendLastPublishedItemForNode(
-      host: host,
-      node: node,
-    );
+    final future = _resolveSendLastPublishedItemForNode(host: host, node: node);
     _sendLastValueInFlight[key] = future;
     try {
       final value = await future;
@@ -438,11 +435,11 @@ class SafePubSubManager extends mox.PubSubManager {
           type: _iqGet,
           to: host.toString(),
           children: [
-            (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)
-                  ..child(
-                    (mox.XmlBuilder(_configureTag)..attr(_nodeAttr, node))
-                        .build(),
-                  ))
+            (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)..child(
+                  (mox.XmlBuilder(
+                    _configureTag,
+                  )..attr(_nodeAttr, node)).build(),
+                ))
                 .build(),
           ],
         ),
@@ -468,9 +465,7 @@ class SafePubSubManager extends mox.PubSubManager {
     final configure = pubsub?.firstTag(_configureTag);
     final form = configure?.firstTag(_dataFormTag, xmlns: _dataFormXmlns);
     if (form == null) {
-      logger.fine(
-        'PubSub config form missing. node=${_safeNodeLabel(node)}.',
-      );
+      logger.fine('PubSub config form missing. node=${_safeNodeLabel(node)}.');
     }
     return form;
   }
@@ -484,9 +479,10 @@ class SafePubSubManager extends mox.PubSubManager {
           type: _iqGet,
           to: host.toString(),
           children: [
-            (mox.XmlBuilder.withNamespace(_pubsubTag, _pubsubOwnerXmlns)
-                  ..child(mox.XmlBuilder(_defaultTag).build()))
-                .build(),
+            (mox.XmlBuilder.withNamespace(
+              _pubsubTag,
+              _pubsubOwnerXmlns,
+            )..child(mox.XmlBuilder(_defaultTag).build())).build(),
           ],
         ),
         shouldEncrypt: false,
@@ -561,8 +557,7 @@ class SafePubSubManager extends mox.PubSubManager {
               (mox.XmlBuilder.withNamespace(
                 _pubsubTag,
                 _pubsubOwnerXmlns,
-              )..child(affiliationsBuilder.build()))
-                  .build(),
+              )..child(affiliationsBuilder.build())).build(),
             ],
           ),
           shouldEncrypt: false,
@@ -651,9 +646,7 @@ class SafePubSubManager extends mox.PubSubManager {
 
   @override
   Future<String?> createNode(mox.JID jid, {String? nodeId}) async {
-    logger.fine(
-      'PubSub createNode start. node=${_safeNodeLabel(nodeId)}.',
-    );
+    logger.fine('PubSub createNode start. node=${_safeNodeLabel(nodeId)}.');
     final operationKind = _operationKindForNode(nodeId);
     final attrs = getAttributes()
       ..sendEvent(_operationStartEvent(operationKind));
@@ -765,7 +758,8 @@ class SafePubSubManager extends mox.PubSubManager {
     if (node == null || node.isEmpty) return;
 
     final subscriberJid = subscription.attributes[_jidAttr]?.toString();
-    final state = mox.SubscriptionState.fromString(
+    final state =
+        mox.SubscriptionState.fromString(
           subscription.attributes[_subscriptionAttr]?.toString(),
         ) ??
         mox.SubscriptionState.subscribed;
@@ -810,9 +804,7 @@ class SafePubSubManager extends mox.PubSubManager {
         dataForm: form,
       ),
     );
-    logger.fine(
-      'PubSub configuration event. node=${_safeNodeLabel(node)}.',
-    );
+    logger.fine('PubSub configuration event. node=${_safeNodeLabel(node)}.');
   }
 
   void _recordSubscription(mox.SubscriptionInfo info) {
@@ -863,10 +855,7 @@ final class _SubscriptionCacheKey {
 }
 
 final class _SendLastCacheKey {
-  const _SendLastCacheKey({
-    required this.host,
-    required this.node,
-  });
+  const _SendLastCacheKey({required this.host, required this.node});
 
   final String host;
   final String node;

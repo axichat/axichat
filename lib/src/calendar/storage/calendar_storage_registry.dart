@@ -8,8 +8,8 @@ import 'package:logging/logging.dart';
 /// on key prefixes while delegating all other keys to a fallback storage.
 class CalendarStorageRegistry implements Storage {
   CalendarStorageRegistry({required Storage fallback})
-      : _fallback = fallback,
-        _log = Logger('CalendarStorageRegistry');
+    : _fallback = fallback,
+      _log = Logger('CalendarStorageRegistry');
 
   final Storage _fallback;
   final Logger _log;

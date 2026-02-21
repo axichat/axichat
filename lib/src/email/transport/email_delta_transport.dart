@@ -124,10 +124,10 @@ class EmailDeltaTransport implements ChatTransport {
     DeltaSafe? deltaSafe,
     Logger? logger,
     AppLocalizations Function()? localizationsProvider,
-  })  : _databaseBuilder = databaseBuilder,
-        _deltaSafe = deltaSafe ?? DeltaSafe(),
-        _log = logger ?? Logger('EmailDeltaTransport'),
-        _localizationsProvider = localizationsProvider;
+  }) : _databaseBuilder = databaseBuilder,
+       _deltaSafe = deltaSafe ?? DeltaSafe(),
+       _log = logger ?? Logger('EmailDeltaTransport'),
+       _localizationsProvider = localizationsProvider;
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaSafe _deltaSafe;
@@ -147,9 +147,7 @@ class EmailDeltaTransport implements ChatTransport {
       _localizationsProvider?.call() ??
       lookupAppLocalizations(const Locale('en'));
 
-  void updateDefaultChatAttachmentAutoDownload(
-    AttachmentAutoDownload value,
-  ) {
+  void updateDefaultChatAttachmentAutoDownload(AttachmentAutoDownload value) {
     if (_defaultChatAttachmentAutoDownload == value) return;
     _defaultChatAttachmentAutoDownload = value;
     for (final session in _accountSessions.values) {
@@ -228,7 +226,8 @@ class EmailDeltaTransport implements ChatTransport {
   }) async {
     final prefixChanged =
         _databasePrefix != null && _databasePrefix != databasePrefix;
-    final passphraseChanged = _databasePassphrase != null &&
+    final passphraseChanged =
+        _databasePassphrase != null &&
         _databasePassphrase != databasePassphrase;
     final needsReplacement =
         _context != null && (prefixChanged || passphraseChanged);
@@ -1071,8 +1070,9 @@ class EmailDeltaTransport implements ChatTransport {
         return false;
       }
       final databaseFile = await _deltaDatabaseFile(prefix);
-      final databasePath =
-          await databaseFile.exists() ? databaseFile.path : null;
+      final databasePath = await databaseFile.exists()
+          ? databaseFile.path
+          : null;
       int accountId;
       try {
         accountId = await _accounts!.ensureAccount(
@@ -1366,7 +1366,8 @@ class EmailDeltaTransport implements ChatTransport {
     final context = session.context;
     final trimmedAddress = address.trim();
     final trimmedDisplayName = displayName?.trim();
-    final contactId = await context.lookupContactIdByAddress(trimmedAddress) ??
+    final contactId =
+        await context.lookupContactIdByAddress(trimmedAddress) ??
         await context.createContact(
           address: trimmedAddress,
           displayName: trimmedDisplayName?.isNotEmpty == true
@@ -1433,7 +1434,8 @@ class EmailDeltaTransport implements ChatTransport {
         chat ?? await _ensureChat(chatId, accountId: accountId);
     final int deltaAccountId = accountId;
     final int? resolvedMsgId = msgId;
-    final String resolvedStanzaId = stanzaId ??
+    final String resolvedStanzaId =
+        stanzaId ??
         (resolvedMsgId == null
             ? throw StateError(_missingOutgoingDeltaIdError)
             : deltaMessageStanzaId(resolvedMsgId));
@@ -1584,8 +1586,9 @@ class EmailDeltaTransport implements ChatTransport {
 
   String _deltaAttachmentLabel(FileMetadataData metadata) {
     final filename = metadata.filename.trim();
-    final label =
-        filename.isEmpty ? _l10n.chatAttachmentFallbackLabel : filename;
+    final label = filename.isEmpty
+        ? _l10n.chatAttachmentFallbackLabel
+        : filename;
     final sizeLabel = _formatAttachmentBytes(metadata.sizeBytes);
     return _l10n.chatAttachmentCaption(label, sizeLabel);
   }
@@ -1823,15 +1826,17 @@ class EmailDeltaTransport implements ChatTransport {
     const attemptStep = _originIdHydrationAttemptStep;
     const lastAttemptIndex = maxAttempts - attemptStep;
     final String? selfJid = _selfJidForAccount(accountId);
-    for (int attempt = _originIdHydrationAttemptStart;
-        attempt < maxAttempts;
-        attempt += attemptStep) {
+    for (
+      int attempt = _originIdHydrationAttemptStart;
+      attempt < maxAttempts;
+      attempt += attemptStep
+    ) {
       final originId = await _resolveMessageOriginId(context, msgId);
       if (originId != null) {
         final db = await _databaseBuilder();
         final existing =
             await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
-                await db.getMessageByStanzaID(stanzaId);
+            await db.getMessageByStanzaID(stanzaId);
         if (existing == null) {
           return;
         }
@@ -1848,8 +1853,9 @@ class EmailDeltaTransport implements ChatTransport {
             selfJid: selfJid,
           );
           final primaryIsExisting = primary.stanzaID == existing.stanzaID;
-          final Message secondary =
-              primaryIsExisting ? duplicateMessage : existing;
+          final Message secondary = primaryIsExisting
+              ? duplicateMessage
+              : existing;
           final merged = mergeOriginMessages(
             primary: primary,
             duplicate: secondary,

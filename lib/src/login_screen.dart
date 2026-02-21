@@ -102,10 +102,7 @@ class _LoginScreenState extends State<LoginScreen>
       );
       return;
     }
-    _authProgressController.start(
-      label: label,
-      rampDuration: rampDuration,
-    );
+    _authProgressController.start(label: label, rampDuration: rampDuration);
   }
 
   void _handleSubmissionRequested(_AuthFlow flow) {
@@ -394,7 +391,8 @@ class _LoginScreenState extends State<LoginScreen>
     final spacing = context.spacing;
     final sizing = context.sizing;
     final size = MediaQuery.sizeOf(context);
-    final allowSplitView = size.shortestSide >= compactDeviceBreakpoint &&
+    final allowSplitView =
+        size.shortestSide >= compactDeviceBreakpoint &&
         size.width >= smallScreen;
     final containerMargin = allowSplitView
         ? EdgeInsets.zero
@@ -435,8 +433,9 @@ class _LoginScreenState extends State<LoginScreen>
                       child: AxiAdaptiveLayout(
                         primaryFlex: 4,
                         secondaryFlex: 6,
-                        primaryPadding:
-                            EdgeInsets.symmetric(horizontal: spacing.m),
+                        primaryPadding: EdgeInsets.symmetric(
+                          horizontal: spacing.m,
+                        ),
                         secondaryPadding: EdgeInsets.zero,
                         centerSecondary: false,
                         secondaryAlignment: Alignment.topLeft,
@@ -451,60 +450,58 @@ class _LoginScreenState extends State<LoginScreen>
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const ShorebirdChecker(),
-                                  AxiModalSurface(
-                                    child: AxiAnimatedSize(
+                                  AxiAnimatedSize(
+                                    duration: context
+                                        .watch<SettingsCubit>()
+                                        .animationDuration,
+                                    curve: Curves.easeInOut,
+                                    child: AnimatedCrossFade(
+                                      firstCurve: Curves.easeInOut,
+                                      secondCurve: Curves.easeInOut,
+                                      sizeCurve: Curves.easeInOut,
                                       duration: context
                                           .watch<SettingsCubit>()
                                           .animationDuration,
-                                      curve: Curves.easeInOut,
-                                      child: AnimatedCrossFade(
-                                        firstCurve: Curves.easeInOut,
-                                        secondCurve: Curves.easeInOut,
-                                        sizeCurve: Curves.easeInOut,
-                                        duration: context
-                                            .watch<SettingsCubit>()
-                                            .animationDuration,
-                                        crossFadeState:
-                                            _selectedFlow == _AuthFlow.login
-                                                ? CrossFadeState.showFirst
-                                                : CrossFadeState.showSecond,
-                                        firstChild: IgnorePointer(
-                                          ignoring: formsDisabled ||
-                                              _selectedFlow != _AuthFlow.login,
-                                          child: Padding(
-                                            padding: EdgeInsets.all(spacing.m),
-                                            child: LoginForm(
+                                      crossFadeState:
+                                          _selectedFlow == _AuthFlow.login
+                                          ? CrossFadeState.showFirst
+                                          : CrossFadeState.showSecond,
+                                      firstChild: IgnorePointer(
+                                        ignoring:
+                                            formsDisabled ||
+                                            _selectedFlow != _AuthFlow.login,
+                                        child: Padding(
+                                          padding: EdgeInsets.all(spacing.m),
+                                          child: LoginForm(
+                                            key: const ValueKey('login-form'),
+                                            busy: formsDisabled,
+                                            onSubmitStart: () =>
+                                                _handleSubmissionRequested(
+                                                  _AuthFlow.login,
+                                                ),
+                                          ),
+                                        ),
+                                      ),
+                                      secondChild: IgnorePointer(
+                                        ignoring:
+                                            formsDisabled ||
+                                            _selectedFlow != _AuthFlow.signup,
+                                        child: Padding(
+                                          padding: EdgeInsets.all(spacing.m),
+                                          child: BlocProvider(
+                                            create: (_) => SignupAvatarCubit(),
+                                            child: SignupForm(
                                               key: const ValueKey(
-                                                'login-form',
+                                                'signup-form',
                                               ),
+                                              visible:
+                                                  _selectedFlow ==
+                                                  _AuthFlow.signup,
                                               busy: formsDisabled,
                                               onSubmitStart: () =>
                                                   _handleSubmissionRequested(
-                                                _AuthFlow.login,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                        secondChild: IgnorePointer(
-                                          ignoring: formsDisabled ||
-                                              _selectedFlow != _AuthFlow.signup,
-                                          child: Padding(
-                                            padding: EdgeInsets.all(spacing.m),
-                                            child: BlocProvider(
-                                              create: (_) =>
-                                                  SignupAvatarCubit(),
-                                              child: SignupForm(
-                                                key: const ValueKey(
-                                                  'signup-form',
-                                                ),
-                                                visible: _selectedFlow ==
                                                     _AuthFlow.signup,
-                                                busy: formsDisabled,
-                                                onSubmitStart: () =>
-                                                    _handleSubmissionRequested(
-                                                  _AuthFlow.signup,
-                                                ),
-                                              ),
+                                                  ),
                                             ),
                                           ),
                                         ),
@@ -551,9 +548,9 @@ class _LoginScreenState extends State<LoginScreen>
                                               onPressed: () {
                                                 final nextLogin =
                                                     _selectedFlow ==
-                                                            _AuthFlow.login
-                                                        ? _AuthFlow.signup
-                                                        : _AuthFlow.login;
+                                                        _AuthFlow.login
+                                                    ? _AuthFlow.signup
+                                                    : _AuthFlow.login;
                                                 setState(() {
                                                   _selectedFlow = nextLogin;
                                                 });
@@ -566,7 +563,7 @@ class _LoginScreenState extends State<LoginScreen>
                                             ),
                                           ),
                                   ),
-                                  SizedBox(height: spacing.m),
+                                  SizedBox(height: spacing.l),
                                   AxiButton.outline(
                                     onPressed: () =>
                                         context.go('/guest-calendar'),

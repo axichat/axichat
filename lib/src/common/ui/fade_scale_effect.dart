@@ -26,11 +26,11 @@ List<Effect<dynamic>> fadeScaleEffectsFor(BuildContext context) {
 
 class FadeScaleTransitionEffect extends Effect<double> {
   const FadeScaleTransitionEffect({super.duration})
-      : super(
-          curve: _fadeScaleEffectCurve,
-          begin: _fadeScaleEffectStart,
-          end: _fadeScaleEffectEnd,
-        );
+    : super(
+        curve: _fadeScaleEffectCurve,
+        begin: _fadeScaleEffectStart,
+        end: _fadeScaleEffectEnd,
+      );
 
   @override
   Widget build(

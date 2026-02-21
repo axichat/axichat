@@ -25,15 +25,15 @@ Future<void> _pumpBloc() async {
 }
 
 ChatSettingsSnapshot _defaultChatSettings() => const ChatSettingsSnapshot(
-      language: AppLanguage.system,
-      chatReadReceipts: true,
-      emailReadReceipts: false,
-      shareTokenSignatureEnabled: true,
-      autoDownloadImages: true,
-      autoDownloadVideos: false,
-      autoDownloadDocuments: false,
-      autoDownloadArchives: false,
-    );
+  language: AppLanguage.system,
+  chatReadReceipts: true,
+  emailReadReceipts: false,
+  shareTokenSignatureEnabled: true,
+  autoDownloadImages: true,
+  autoDownloadVideos: false,
+  autoDownloadDocuments: false,
+  autoDownloadArchives: false,
+);
 
 ChatMessageSent _messageSent({
   required Chat chat,
@@ -46,19 +46,18 @@ ChatMessageSent _messageSent({
   String? subject,
   Message? quotedDraft,
   RoomState? roomState,
-}) =>
-    ChatMessageSent(
-      chat: chat,
-      text: text,
-      recipients: recipients,
-      pendingAttachments: pendingAttachments ?? const <PendingAttachment>[],
-      settings: settings,
-      supportsHttpFileUpload: supportsHttpFileUpload,
-      attachmentFallbackLabel: attachmentFallbackLabel,
-      subject: subject,
-      quotedDraft: quotedDraft,
-      roomState: roomState,
-    );
+}) => ChatMessageSent(
+  chat: chat,
+  text: text,
+  recipients: recipients,
+  pendingAttachments: pendingAttachments ?? const <PendingAttachment>[],
+  settings: settings,
+  supportsHttpFileUpload: supportsHttpFileUpload,
+  attachmentFallbackLabel: attachmentFallbackLabel,
+  subject: subject,
+  quotedDraft: quotedDraft,
+  roomState: roomState,
+);
 
 void _mockEmailSync(MockEmailService service) {
   when(() => service.syncState).thenReturn(const EmailSyncState.ready());
@@ -297,16 +296,10 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: emailChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: extraChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: extraChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -319,15 +312,17 @@ void main() {
     );
     await _pumpBloc();
 
-    final capturedTargets = verify(
-      () => emailService.fanOutSend(
-        targets: captureAny(named: 'targets'),
-        body: 'Team status update',
-        attachment: any(named: 'attachment'),
-        shareId: any(named: 'shareId'),
-        useSubjectToken: any(named: 'useSubjectToken'),
-      ),
-    ).captured.single as List<FanOutTarget>;
+    final capturedTargets =
+        verify(
+              () => emailService.fanOutSend(
+                targets: captureAny(named: 'targets'),
+                body: 'Team status update',
+                attachment: any(named: 'attachment'),
+                shareId: any(named: 'shareId'),
+                useSubjectToken: any(named: 'useSubjectToken'),
+              ),
+            ).captured.single
+            as List<FanOutTarget>;
 
     expect(capturedTargets.map((target) => target.key).toSet(), {
       emailChat.jid,
@@ -396,10 +391,7 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: emailChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
       ComposerRecipient(
         target: FanOutTarget.address(
@@ -418,15 +410,17 @@ void main() {
     );
     await _pumpBloc();
 
-    final capturedTargets = verify(
-      () => emailService.fanOutSend(
-        targets: captureAny(named: 'targets'),
-        body: 'Hello world',
-        attachment: any(named: 'attachment'),
-        shareId: any(named: 'shareId'),
-        useSubjectToken: any(named: 'useSubjectToken'),
-      ),
-    ).captured.single as List<FanOutTarget>;
+    final capturedTargets =
+        verify(
+              () => emailService.fanOutSend(
+                targets: captureAny(named: 'targets'),
+                body: 'Hello world',
+                attachment: any(named: 'attachment'),
+                shareId: any(named: 'shareId'),
+                useSubjectToken: any(named: 'useSubjectToken'),
+              ),
+            ).captured.single
+            as List<FanOutTarget>;
     expect(capturedTargets.map((target) => target.key).toSet(), {
       emailChat.jid,
       'carol@example.com',
@@ -528,16 +522,10 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: emailChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: extraChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: extraChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -636,16 +624,10 @@ void main() {
     await _pumpBloc();
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: emailChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: extraChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: extraChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -661,10 +643,7 @@ void main() {
     final retryDraft = bloc.state.fanOutDrafts[failureReport.shareId]!;
     final retryRecipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: extraChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: extraChat, shareSignatureEnabled: true),
         included: true,
       ),
     ];
@@ -722,10 +701,7 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: emailChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -814,10 +790,7 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: emailChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -947,10 +920,7 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
-          chat: emailChat,
-          shareSignatureEnabled: true,
-        ),
+        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(

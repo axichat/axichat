@@ -13,8 +13,8 @@ part 'email_contact_import_state.dart';
 
 class EmailContactImportCubit extends Cubit<EmailContactImportState> {
   EmailContactImportCubit({required EmailService emailService})
-      : _importService = EmailContactImportService(emailService: emailService),
-        super(const EmailContactImportInitial());
+    : _importService = EmailContactImportService(emailService: emailService),
+      super(const EmailContactImportInitial());
 
   final EmailContactImportService _importService;
 
@@ -24,8 +24,8 @@ class EmailContactImportCubit extends Cubit<EmailContactImportState> {
   }) async {
     emit(const EmailContactImportInProgress());
     try {
-      final EmailContactImportSummary summary =
-          await _importService.importContacts(file: file, format: format);
+      final EmailContactImportSummary summary = await _importService
+          .importContacts(file: file, format: format);
       emit(EmailContactImportSuccess(summary));
     } on EmailContactImportException catch (error) {
       emit(EmailContactImportFailure(error.reason));

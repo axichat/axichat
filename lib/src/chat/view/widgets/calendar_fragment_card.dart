@@ -71,13 +71,12 @@ class CalendarFragmentCard extends StatelessWidget {
         ),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CalendarFragmentAccent(
-            color: colors.primary,
-            radius: accentRadius,
-          ),
-          Expanded(
+          _CalendarFragmentAccent(color: colors.primary, radius: accentRadius),
+          Flexible(
+            fit: FlexFit.loose,
             child: Padding(
               padding: _fragmentCardPadding,
               child: Column(
@@ -227,15 +226,10 @@ class _TaskFragmentBody extends StatelessWidget {
       final scheduleValue = endTime == null
           ? TimeFormatter.formatFriendlyDateTime(l10n, scheduledTime)
           : l10n.commonRangeLabel(
-              TimeFormatter.formatFriendlyDateTime(
-                l10n,
-                scheduledTime,
-              ),
+              TimeFormatter.formatFriendlyDateTime(l10n, scheduledTime),
               TimeFormatter.formatFriendlyDateTime(l10n, endTime),
             );
-      info.add(
-        _FragmentInfo(label: scheduleLabel, value: scheduleValue),
-      );
+      info.add(_FragmentInfo(label: scheduleLabel, value: scheduleValue));
     }
     final deadline = task.deadline;
     if (deadline != null) {
@@ -335,13 +329,15 @@ class _ChecklistItemRow extends StatelessWidget {
         ? context.l10n.calendarFragmentUntitledLabel
         : label;
     return Row(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: _fragmentChecklistBulletPadding,
           child: Text(bullet, style: textStyle),
         ),
-        Expanded(
+        Flexible(
+          fit: FlexFit.loose,
           child: Text(
             resolvedLabel,
             style: textStyle,
@@ -384,10 +380,7 @@ class _CriticalPathFragmentBody extends StatelessWidget {
         if (total > 0)
           _FragmentInfoLine(
             label: l10n.calendarCriticalPathProgressLabel,
-            value: l10n.calendarFragmentCriticalPathProgress(
-              completed,
-              total,
-            ),
+            value: l10n.calendarFragmentCriticalPathProgress(completed, total),
           )
         else
           Text(l10n.calendarCriticalPathEmptyTasks, style: emptyStyle),
@@ -428,8 +421,8 @@ class _CriticalPathTaskList extends StatelessWidget {
     final l10n = context.l10n;
     final List<CalendarTask> visible =
         tasks.length <= _fragmentCriticalPathPreviewLimit
-            ? tasks
-            : tasks.sublist(0, _fragmentCriticalPathPreviewLimit);
+        ? tasks
+        : tasks.sublist(0, _fragmentCriticalPathPreviewLimit);
     final int remaining = tasks.length - visible.length;
     final textTheme = context.textTheme;
     return Column(
@@ -479,13 +472,15 @@ class _CriticalPathTaskRow extends StatelessWidget {
         ? title
         : context.l10n.calendarFragmentUntitledLabel;
     return Row(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
           padding: _fragmentChecklistBulletPadding,
           child: Text(bullet, style: textStyle),
         ),
-        Expanded(
+        Flexible(
+          fit: FlexFit.loose,
           child: Text(
             resolvedTitle,
             style: textStyle,
@@ -523,7 +518,9 @@ class _ReminderFragmentBody extends StatelessWidget {
   }
 
   String _reminderSummary(
-      AppLocalizations l10n, ReminderPreferences reminders) {
+    AppLocalizations l10n,
+    ReminderPreferences reminders,
+  ) {
     if (!reminders.isEnabled) {
       return l10n.calendarRemindersEmptyLabel;
     }
@@ -608,8 +605,11 @@ class _FreeBusyFragmentBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final rangeLabel =
-        _dateTimeRange(l10n, interval.start.value, interval.end.value);
+    final rangeLabel = _dateTimeRange(
+      l10n,
+      interval.start.value,
+      interval.end.value,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,
@@ -649,8 +649,11 @@ class _AvailabilityFragmentBody extends StatelessWidget {
     final l10n = context.l10n;
     final summary = window.summary?.trim();
     final description = window.description?.trim();
-    final rangeLabel =
-        _dateTimeRange(l10n, window.start.value, window.end.value);
+    final rangeLabel = _dateTimeRange(
+      l10n,
+      window.start.value,
+      window.end.value,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       spacing: _fragmentContentSpacing,

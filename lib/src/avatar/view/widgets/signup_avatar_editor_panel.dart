@@ -155,7 +155,8 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     final cropBytes = showCrop ? widget.cropBytes ?? _lastPreviewBytes : null;
     final imageWidth = showCrop ? widget.imageWidth : null;
     final imageHeight = showCrop ? widget.imageHeight : null;
-    final canEditCrop = showCrop &&
+    final canEditCrop =
+        showCrop &&
         cropBytes != null &&
         imageWidth != null &&
         imageHeight != null &&
@@ -199,8 +200,9 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                 cropRect: _localCropRect ?? widget.cropRect ?? cropFallback,
                 onCropChanged: _scheduleCropChange,
                 onCropReset: _handleCropReset,
-                onCropCommitted:
-                    onCropCommitted == null ? null : _handleCropCommit,
+                onCropCommitted: onCropCommitted == null
+                    ? null
+                    : _handleCropCommit,
                 minCropSide: AvatarEditorCubit.minCropSide,
               ),
             ),
@@ -211,8 +213,8 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
               onPressed: onCropCommitted == null
                   ? null
                   : () => _handleCropCommit(
-                        _localCropRect ?? widget.cropRect ?? cropFallback,
-                      ),
+                      _localCropRect ?? widget.cropRect ?? cropFallback,
+                    ),
               child: Text(l10n.commonDone),
             ),
           ),
@@ -230,12 +232,14 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
         widget.canShuffleBackground && widget.onShuffleBackground != null;
     final showBackgroundShuffle = allowBackgroundShuffle;
     final hasUserSelectedAvatar = widget.hasUserSelectedAvatar;
-    final allowUseAction = widget.useActionEnabled &&
+    final allowUseAction =
+        widget.useActionEnabled &&
         !busy &&
         widget.onUseCurrent != null &&
         !hasUserSelectedAvatar;
-    final useLabel =
-        hasUserSelectedAvatar ? l10n.commonDone : l10n.avatarUseThis;
+    final useLabel = hasUserSelectedAvatar
+        ? l10n.commonDone
+        : l10n.avatarUseThis;
     const IconData useIcon = LucideIcons.check;
 
     final previewKey = ValueKey(_previewVersion);
@@ -252,12 +256,12 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           duration: animationDuration,
           transitionBuilder: (child, primaryAnimation, secondaryAnimation) =>
               FadeTransition(
-            opacity: primaryAnimation,
-            child: FadeTransition(
-              opacity: ReverseAnimation(secondaryAnimation),
-              child: child,
-            ),
-          ),
+                opacity: primaryAnimation,
+                child: FadeTransition(
+                  opacity: ReverseAnimation(secondaryAnimation),
+                  child: child,
+                ),
+              ),
           child: hasPreviewBytes
               ? AxiAvatar(
                   key: previewKey,
@@ -312,10 +316,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
             AxiButton.primary(
               loading: _shuffling,
               onPressed: busy ? null : _handleShuffle,
-              leading: Icon(
-                LucideIcons.refreshCw,
-                size: avatarActionIconSize,
-              ),
+              leading: Icon(LucideIcons.refreshCw, size: avatarActionIconSize),
               child: Text(l10n.signupAvatarShuffle),
             ),
             if (showBackgroundShuffle)
@@ -326,10 +327,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                     : () async {
                         await _handleShuffleBackground();
                       },
-                leading: Icon(
-                  LucideIcons.palette,
-                  size: avatarActionIconSize,
-                ),
+                leading: Icon(LucideIcons.palette, size: avatarActionIconSize),
                 child: Text(l10n.signupAvatarBackgroundColor),
               ),
             AxiButton.outline(
@@ -338,10 +336,7 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
                   : () async {
                       await widget.onUpload();
                     },
-              leading: Icon(
-                LucideIcons.upload,
-                size: avatarActionIconSize,
-              ),
+              leading: Icon(LucideIcons.upload, size: avatarActionIconSize),
               child: Text(l10n.signupAvatarUploadImage),
             ),
           ],
@@ -357,9 +352,6 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
           )
         : preview;
 
-    return ShadCard(
-      padding: EdgeInsets.all(spacing.m),
-      child: previewAndCrop,
-    );
+    return ShadCard(padding: EdgeInsets.all(spacing.m), child: previewAndCrop);
   }
 }

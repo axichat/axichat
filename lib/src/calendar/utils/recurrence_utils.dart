@@ -215,8 +215,9 @@ extension CalendarTaskInstanceX on CalendarTask {
     final Duration rangeShift = _futureRangeBackwardShift(overrides);
     final DateTime adjustedRangeEnd = _extendRangeEnd(rangeEnd, rangeShift);
     final DateTime? ruleUntil = _recurrenceUntilLimit(recurrence);
-    final DateTime? inclusiveEnd =
-        hasRule ? _minDateTime(adjustedRangeEnd, ruleUntil) : null;
+    final DateTime? inclusiveEnd = hasRule
+        ? _minDateTime(adjustedRangeEnd, ruleUntil)
+        : null;
 
     if (hasRule && inclusiveEnd != null && inclusiveEnd.isBefore(scheduled)) {
       return const [];
@@ -235,16 +236,16 @@ extension CalendarTaskInstanceX on CalendarTask {
               rangeEnd: rangeLimit,
             )
           : recurrence.usesMonthlyExpansion
-              ? _monthlyOccurrencesWithin(
-                  baseStart: scheduled,
-                  rule: recurrence,
-                  rangeEnd: rangeLimit,
-                )
-              : _simpleOccurrencesWithin(
-                  baseStart: scheduled,
-                  rule: recurrence,
-                  rangeEnd: rangeLimit,
-                );
+          ? _monthlyOccurrencesWithin(
+              baseStart: scheduled,
+              rule: recurrence,
+              rangeEnd: rangeLimit,
+            )
+          : _simpleOccurrencesWithin(
+              baseStart: scheduled,
+              rule: recurrence,
+              rangeEnd: rangeLimit,
+            );
 
       var generatedCount = _baseOccurrenceCount;
       for (final DateTime next in generated) {
@@ -720,8 +721,9 @@ List<int> _resolveYearlyMonths({
   required List<int>? byMonths,
   required int fallbackMonth,
 }) {
-  final List<int> source =
-      _hasRuleValues(byMonths) ? byMonths! : <int>[fallbackMonth];
+  final List<int> source = _hasRuleValues(byMonths)
+      ? byMonths!
+      : <int>[fallbackMonth];
   final Set<int> seen = <int>{};
   for (final int month in source) {
     if (month < _firstMonthIndex || month > _monthsPerYear) {
@@ -842,7 +844,8 @@ int? _resolveYearDay(int day, int year) {
 }
 
 int _daysInYear(int year) {
-  final bool isLeap = (year % 4 == _zeroValue && year % 100 != _zeroValue) ||
+  final bool isLeap =
+      (year % 4 == _zeroValue && year % 100 != _zeroValue) ||
       year % 400 == _zeroValue;
   return isLeap ? _daysInLeapYear : _daysInCommonYear;
 }
@@ -948,8 +951,9 @@ List<DateTime> _applySetPositions(List<DateTime> sorted, List<int> positions) {
     if (position == _zeroValue) {
       continue;
     }
-    final int index =
-        position > _zeroValue ? position - _setPositionBase : length + position;
+    final int index = position > _zeroValue
+        ? position - _setPositionBase
+        : length + position;
     if (index < _zeroValue || index >= length) {
       continue;
     }
@@ -1197,13 +1201,15 @@ DateTime _nextWeeklyOccurrence(
   DateTime baseStart,
 ) {
   final List<int> rawWeekdays = _resolveWeeklyDays(rule, baseStart);
-  final weekdays = rawWeekdays
-      .map((day) => day == DateTime.sunday ? DateTime.sunday : day)
-      .toList()
-    ..sort();
+  final weekdays =
+      rawWeekdays
+          .map((day) => day == DateTime.sunday ? DateTime.sunday : day)
+          .toList()
+        ..sort();
 
-  final currentWeekday =
-      current.weekday == DateTime.sunday ? DateTime.sunday : current.weekday;
+  final currentWeekday = current.weekday == DateTime.sunday
+      ? DateTime.sunday
+      : current.weekday;
   for (final day in weekdays) {
     if (day > currentWeekday) {
       final delta = day - currentWeekday;

@@ -15,15 +15,15 @@ enum ShadColor {
   stone,
   violet,
   yellow,
-  zinc;
+  zinc,
 }
 
 @freezed
-class SettingsState with _$SettingsState {
+abstract class SettingsState with _$SettingsState {
   const factory SettingsState({
     @Default(AppLanguage.system) AppLanguage language,
-    @Default(ThemeMode.dark) ThemeMode themeMode,
-    @Default(ShadColor.blue) ShadColor shadColor,
+    @Default(ThemeMode.light) ThemeMode themeMode,
+    @Default(ShadColor.neutral) ShadColor shadColor,
     @Default(EndpointConfig()) EndpointConfig endpointConfig,
     @Default(false) bool chatNotificationsMuted,
     @Default(false) bool emailNotificationsMuted,
@@ -57,9 +57,9 @@ class SettingsState with _$SettingsState {
 extension SettingsStateAttachmentDefaults on SettingsState {
   AttachmentAutoDownload get defaultChatAttachmentAutoDownload =>
       autoDownloadImages ||
-              autoDownloadVideos ||
-              autoDownloadDocuments ||
-              autoDownloadArchives
-          ? AttachmentAutoDownload.allowed
-          : AttachmentAutoDownload.blocked;
+          autoDownloadVideos ||
+          autoDownloadDocuments ||
+          autoDownloadArchives
+      ? AttachmentAutoDownload.allowed
+      : AttachmentAutoDownload.blocked;
 }

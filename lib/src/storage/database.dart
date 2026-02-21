@@ -185,7 +185,7 @@ abstract interface class XmppDatabase implements Database {
   Future<List<MessageAttachmentData>> getMessageAttachments(String messageId);
 
   Future<Map<String, List<MessageAttachmentData>>>
-      getMessageAttachmentsForMessages(Iterable<String> messageIds);
+  getMessageAttachmentsForMessages(Iterable<String> messageIds);
 
   Future<List<MessageAttachmentData>> getMessageAttachmentsForGroup(
     String transportGroupId,
@@ -637,33 +637,32 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
             ..where((table) => table.chatJid.equals(jid))
             ..orderBy([
               (t) => OrderingTerm(
-                    expression: t.timestamp,
-                    mode: OrderingMode.desc,
-                  ),
+                expression: t.timestamp,
+                mode: OrderingMode.desc,
+              ),
             ])
             ..limit(limit))
           .watch();
 
-  Future<List<Message>> selectChatMessages(String jid) => (select(table)
-        ..where((table) => table.chatJid.equals(jid))
-        ..orderBy([
-          (t) => OrderingTerm(
+  Future<List<Message>> selectChatMessages(String jid) =>
+      (select(table)
+            ..where((table) => table.chatJid.equals(jid))
+            ..orderBy([
+              (t) => OrderingTerm(
                 expression: t.timestamp,
                 mode: OrderingMode.desc,
               ),
-        ]))
-      .get();
+            ]))
+          .get();
 
   @override
   Future<Message?> selectOne(String stanzaID) => (select(
-        table,
-      )..where((table) => table.stanzaID.equals(stanzaID)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.stanzaID.equals(stanzaID))).getSingleOrNull();
 
   Future<Message?> selectOneByOriginID(String originID) => (select(
-        table,
-      )..where((table) => table.originID.equals(originID)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.originID.equals(originID))).getSingleOrNull();
 
   Future<void> updateTrust(int device, BTBVTrustState trust, bool trusted) =>
       (update(table)..where((table) => table.deviceID.equals(device))).write(
@@ -689,18 +688,17 @@ class MessageAttachmentsAccessor
 
   @override
   Future<MessageAttachmentData?> selectOne(Object value) => (select(
-        table,
-      )..where((tbl) => tbl.id.equals(value as int)))
-          .getSingleOrNull();
+    table,
+  )..where((tbl) => tbl.id.equals(value as int))).getSingleOrNull();
 
   Future<List<MessageAttachmentData>> selectForMessage(String messageId) =>
       (select(table)
             ..where((tbl) => tbl.messageId.equals(messageId))
             ..orderBy([
               (tbl) => OrderingTerm(
-                    expression: tbl.sortOrder,
-                    mode: OrderingMode.asc,
-                  ),
+                expression: tbl.sortOrder,
+                mode: OrderingMode.asc,
+              ),
             ]))
           .get();
 
@@ -721,10 +719,7 @@ class MessageAttachmentsAccessor
   Future<void> deleteForMessages(Iterable<String> messageIds) {
     final ids = messageIds.toList(growable: false);
     if (ids.isEmpty) return Future.value();
-    return (delete(
-      table,
-    )..where((tbl) => tbl.messageId.isIn(ids)))
-        .go();
+    return (delete(table)..where((tbl) => tbl.messageId.isIn(ids))).go();
   }
 
   Future<List<MessageAttachmentData>> selectForGroup(String transportGroupId) =>
@@ -732,9 +727,9 @@ class MessageAttachmentsAccessor
             ..where((tbl) => tbl.transportGroupId.equals(transportGroupId))
             ..orderBy([
               (tbl) => OrderingTerm(
-                    expression: tbl.sortOrder,
-                    mode: OrderingMode.asc,
-                  ),
+                expression: tbl.sortOrder,
+                mode: OrderingMode.asc,
+              ),
             ]))
           .get();
 
@@ -766,14 +761,12 @@ class MessageSharesAccessor
 
   @override
   Future<MessageShareData?> selectOne(String shareId) => (select(
-        table,
-      )..where((tbl) => tbl.shareId.equals(shareId)))
-          .getSingleOrNull();
+    table,
+  )..where((tbl) => tbl.shareId.equals(shareId))).getSingleOrNull();
 
   Future<MessageShareData?> selectByToken(String token) => (select(
-        table,
-      )..where((tbl) => tbl.subjectToken.equals(token)))
-          .getSingleOrNull();
+    table,
+  )..where((tbl) => tbl.subjectToken.equals(token))).getSingleOrNull();
 
   Future<void> updateOriginator(String shareId, int originatorDcMsgId) =>
       (update(table)..where((tbl) => tbl.shareId.equals(shareId))).write(
@@ -801,19 +794,17 @@ class MessageParticipantsAccessor
 
   @override
   Future<MessageParticipantData?> selectOne((String, String) key) =>
-      (select(table)
-            ..where(
-              (tbl) =>
-                  tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2),
-            ))
+      (select(table)..where(
+            (tbl) => tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2),
+          ))
           .getSingleOrNull();
 
   @override
-  Future<void> deleteOne((String, String) key) => (delete(table)
-        ..where(
-          (tbl) => tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2),
-        ))
-      .go();
+  Future<void> deleteOne((String, String) key) =>
+      (delete(table)..where(
+            (tbl) => tbl.shareId.equals(key.$1) & tbl.contactJid.equals(key.$2),
+          ))
+          .go();
 
   Future<List<MessageParticipantData>> selectByShare(String shareId) =>
       (select(table)..where((tbl) => tbl.shareId.equals(shareId))).get();
@@ -840,23 +831,20 @@ class MessageCopiesAccessor
     int deltaMsgId, {
     int deltaAccountId = DeltaAccountDefaults.legacyId,
   }) =>
-      (select(table)
-            ..where(
-              (tbl) =>
-                  tbl.dcMsgId.equals(deltaMsgId) &
-                  tbl.dcAccountId.equals(deltaAccountId),
-            ))
+      (select(table)..where(
+            (tbl) =>
+                tbl.dcMsgId.equals(deltaMsgId) &
+                tbl.dcAccountId.equals(deltaAccountId),
+          ))
           .getSingleOrNull();
 
   Future<String?> selectShareIdForDeltaMsg(
     int deltaMsgId, {
     int deltaAccountId = DeltaAccountDefaults.legacyId,
-  }) async =>
-      (await selectByDeltaMsgId(
-        deltaMsgId,
-        deltaAccountId: deltaAccountId,
-      ))
-          ?.shareId;
+  }) async => (await selectByDeltaMsgId(
+    deltaMsgId,
+    deltaAccountId: deltaAccountId,
+  ))?.shareId;
 
   Future<List<MessageCopyData>> selectByShare(String shareId) =>
       (select(table)..where((tbl) => tbl.shareId.equals(shareId))).get();
@@ -870,18 +858,16 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
   Stream<List<Reaction>> watchChat(String jid) {
     final query = select(reactions).join([
       innerJoin(messages, messages.stanzaID.equalsExp(reactions.messageID)),
-    ])
-      ..where(messages.chatJid.equals(jid));
+    ])..where(messages.chatJid.equals(jid));
     return query.watch().map(
-          (rows) => rows.map((row) => row.readTable(reactions)).toList(),
-        );
+      (rows) => rows.map((row) => row.readTable(reactions)).toList(),
+    );
   }
 
   Future<List<Reaction>> selectByChat(String jid) {
     final query = select(reactions).join([
       innerJoin(messages, messages.stanzaID.equalsExp(reactions.messageID)),
-    ])
-      ..where(messages.chatJid.equals(jid));
+    ])..where(messages.chatJid.equals(jid));
     return _mapReactions(query);
   }
 
@@ -896,29 +882,26 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
     required String messageId,
     required String senderJid,
   }) =>
-      (select(reactions)
-            ..where(
-              (table) =>
-                  table.messageID.equals(messageId) &
-                  table.senderJid.equals(senderJid),
-            ))
+      (select(reactions)..where(
+            (table) =>
+                table.messageID.equals(messageId) &
+                table.senderJid.equals(senderJid),
+          ))
           .get();
 
   Future<void> deleteByMessage(String messageId) => (delete(
-        reactions,
-      )..where((table) => table.messageID.equals(messageId)))
-          .go();
+    reactions,
+  )..where((table) => table.messageID.equals(messageId))).go();
 
   Future<void> deleteByMessageAndSender({
     required String messageId,
     required String senderJid,
   }) =>
-      (delete(reactions)
-            ..where(
-              (table) =>
-                  table.messageID.equals(messageId) &
-                  table.senderJid.equals(senderJid),
-            ))
+      (delete(reactions)..where(
+            (table) =>
+                table.messageID.equals(messageId) &
+                table.senderJid.equals(senderJid),
+          ))
           .go();
 }
 
@@ -949,14 +932,12 @@ class OmemoDevicesAccessor extends BaseAccessor<OmemoDevice, $OmemoDevicesTable>
 
   @override
   Future<OmemoDevice?> selectOne(String value) => (select(
-        table,
-      )..where((table) => table.jid.equals(value)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.jid.equals(value))).getSingleOrNull();
 
   Future<OmemoDevice?> selectByID(int value) => (select(
-        table,
-      )..where((table) => table.id.equals(value)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.id.equals(value))).getSingleOrNull();
 
   Future<List<OmemoDevice>> selectByJid(String jid) =>
       (select(table)..where((table) => table.jid.equals(jid))).get();
@@ -997,9 +978,8 @@ class OmemoDeviceListsAccessor
 
   @override
   Future<OmemoDeviceList?> selectOne(String value) => (select(
-        table,
-      )..where((table) => table.jid.equals(value)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.jid.equals(value))).getSingleOrNull();
 
   @override
   Future<void> deleteOne(String value) =>
@@ -1016,21 +996,21 @@ class OmemoRatchetsAccessor
   $OmemoRatchetsTable get table => omemoRatchets;
 
   @override
-  Future<OmemoRatchet?> selectOne((String, int) key) => (select(table)
-        ..where(
-          (table) => table.jid.equals(key.$1) & table.device.equals(key.$2),
-        ))
-      .getSingleOrNull();
+  Future<OmemoRatchet?> selectOne((String, int) key) =>
+      (select(table)..where(
+            (table) => table.jid.equals(key.$1) & table.device.equals(key.$2),
+          ))
+          .getSingleOrNull();
 
   Future<List<OmemoRatchet>> selectByJid(String jid) =>
       (select(table)..where((table) => table.jid.equals(jid))).get();
 
   @override
-  Future<void> deleteOne((String, int) key) => (delete(table)
-        ..where(
-          (table) => table.jid.equals(key.$1) & table.device.equals(key.$2),
-        ))
-      .go();
+  Future<void> deleteOne((String, int) key) =>
+      (delete(table)..where(
+            (table) => table.jid.equals(key.$1) & table.device.equals(key.$2),
+          ))
+          .go();
 }
 
 @DriftAccessor(tables: [OmemoBundleCaches])
@@ -1046,16 +1026,16 @@ class OmemoBundleCachesAccessor
       selectOne((jid, device));
 
   @override
-  Future<OmemoBundleCache?> selectOne((String, int) key) => (select(
-        table,
-      )..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2)))
+  Future<OmemoBundleCache?> selectOne((String, int) key) =>
+      (select(
+            table,
+          )..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2)))
           .getSingleOrNull();
 
   @override
   Future<void> deleteOne((String, int) key) => (delete(
-        table,
-      )..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2)))
-          .go();
+    table,
+  )..where((tbl) => tbl.jid.equals(key.$1) & tbl.device.equals(key.$2))).go();
 
   Future<void> clear() => delete(table).go();
 }
@@ -1071,9 +1051,8 @@ class FileMetadataAccessor
 
   @override
   Future<FileMetadataData?> selectOne(Object value) => (select(
-        table,
-      )..where((table) => table.id.equals(value as String)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.id.equals(value as String))).getSingleOrNull();
 
   Future<List<FileMetadataData>> selectForIds(List<String> ids) {
     final normalizedIds = _normalizedUniqueIds(ids);
@@ -1082,8 +1061,7 @@ class FileMetadataAccessor
     if (normalizedIds.length <= maxInClauseItems) {
       return (select(
         table,
-      )..where((table) => table.id.isIn(normalizedIds)))
-          .get();
+      )..where((table) => table.id.isIn(normalizedIds))).get();
     }
     return _selectForIdsChunked(
       ids: normalizedIds,
@@ -1100,21 +1078,19 @@ class FileMetadataAccessor
     if (normalizedIds.length <= maxInClauseItems) {
       return (select(
         table,
-      )..where((table) => table.id.isIn(normalizedIds)))
-          .watch();
+      )..where((table) => table.id.isIn(normalizedIds))).watch();
     }
     final trackedIds = normalizedIds.toSet();
     return select(table).watch().map(
-          (rows) => rows
-              .where((row) => trackedIds.contains(row.id))
-              .toList(growable: false),
-        );
+      (rows) => rows
+          .where((row) => trackedIds.contains(row.id))
+          .toList(growable: false),
+    );
   }
 
   Stream<FileMetadataData?> watchOne(String id) => (select(
-        table,
-      )..where((table) => table.id.equals(id)))
-          .watchSingleOrNull();
+    table,
+  )..where((table) => table.id.equals(id))).watchSingleOrNull();
 
   Future<FileMetadataData?> selectOneByPlaintextHashes(
     Map<HashFunction, String> hashes,
@@ -1150,13 +1126,13 @@ class FileMetadataAccessor
     final byId = <String, FileMetadataData>{};
     var start = 0;
     while (start < ids.length) {
-      final end =
-          start + chunkSize < ids.length ? start + chunkSize : ids.length;
+      final end = start + chunkSize < ids.length
+          ? start + chunkSize
+          : ids.length;
       final chunk = ids.sublist(start, end);
       final rows = await (select(
         table,
-      )..where((table) => table.id.isIn(chunk)))
-          .get();
+      )..where((table) => table.id.isIn(chunk))).get();
       for (final metadata in rows) {
         byId[metadata.id] = metadata;
       }
@@ -1182,39 +1158,34 @@ class ChatsAccessor extends BaseAccessor<Chat, $ChatsTable>
   $ChatsTable get table => chats;
 
   @override
-  Stream<List<Chat>> watchAll() => (select(table)
-        ..orderBy([
-          (t) => OrderingTerm(expression: t.favorited, mode: OrderingMode.desc),
-          (t) => OrderingTerm(
-                expression: t.lastChangeTimestamp,
-                mode: OrderingMode.desc,
-              ),
-        ]))
-      .watch();
+  Stream<List<Chat>> watchAll() =>
+      (select(table)..orderBy([
+            (t) =>
+                OrderingTerm(expression: t.favorited, mode: OrderingMode.desc),
+            (t) => OrderingTerm(
+              expression: t.lastChangeTimestamp,
+              mode: OrderingMode.desc,
+            ),
+          ]))
+          .watch();
 
   Stream<Chat?> watchOne(String jid) => (select(
-        table,
-      )..where((table) => table.jid.equals(jid)))
-          .watchSingleOrNull();
+    table,
+  )..where((table) => table.jid.equals(jid))).watchSingleOrNull();
 
   @override
   Future<Chat?> selectOne(String value) => (select(
-        table,
-      )..where((table) => table.jid.equals(value)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.jid.equals(value))).getSingleOrNull();
 
   Future<List<Chat>> selectForJids(List<String> jids) {
     if (jids.isEmpty) return Future.value(const []);
-    return (select(
-      table,
-    )..where((table) => table.jid.isIn(jids)))
-        .get();
+    return (select(table)..where((table) => table.jid.isIn(jids))).get();
   }
 
   Future<Chat?> selectOpen() => (select(
-        table,
-      )..where((table) => table.open.equals(true)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.open.equals(true))).getSingleOrNull();
 
   Future<List<Chat>> closeOpen() =>
       (update(table)..where((table) => table.open.equals(true))).writeReturning(
@@ -1239,9 +1210,8 @@ class RosterAccessor extends BaseAccessor<RosterItem, $RosterTable>
 
   @override
   Future<RosterItem?> selectOne(String value) => (select(
-        table,
-      )..where((table) => table.jid.equals(value)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.jid.equals(value))).getSingleOrNull();
 
   @override
   Future<void> deleteOne(String value) =>
@@ -1258,9 +1228,8 @@ class InvitesAccessor extends BaseAccessor<Invite, $InvitesTable>
 
   @override
   Future<Invite?> selectOne(String value) => (select(
-        table,
-      )..where((table) => table.jid.equals(value)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.jid.equals(value))).getSingleOrNull();
 
   @override
   Future<void> deleteOne(String value) =>
@@ -1277,9 +1246,8 @@ class BlocklistAccessor extends BaseAccessor<BlocklistData, $BlocklistTable>
 
   @override
   Future<BlocklistData?> selectOne(String value) => (select(
-        table,
-      )..where((table) => table.jid.equals(value)))
-          .getSingleOrNull();
+    table,
+  )..where((table) => table.jid.equals(value))).getSingleOrNull();
 
   @override
   Future<void> deleteOne(String value) =>
@@ -1299,9 +1267,8 @@ class EmailBlocklistAccessor
 
   @override
   Future<EmailBlocklistEntry?> selectOne(String address) => (select(
-        table,
-      )..where((tbl) => tbl.address.equals(address)))
-          .getSingleOrNull();
+    table,
+  )..where((tbl) => tbl.address.equals(address))).getSingleOrNull();
 
   @override
   Future<void> deleteOne(String address) =>
@@ -1323,9 +1290,8 @@ class EmailSpamlistAccessor
 
   @override
   Future<EmailSpamEntry?> selectOne(String address) => (select(
-        table,
-      )..where((tbl) => tbl.address.equals(address)))
-          .getSingleOrNull();
+    table,
+  )..where((tbl) => tbl.address.equals(address))).getSingleOrNull();
 
   @override
   Future<void> deleteOne(String address) =>
@@ -1390,8 +1356,8 @@ class EmailSpamlistAccessor
 )
 class XmppDrift extends _$XmppDrift implements XmppDatabase {
   XmppDrift._(this._file, super.e, {bool inMemory = false})
-      : _inMemory = inMemory,
-        super();
+    : _inMemory = inMemory,
+      super();
 
   factory XmppDrift.inMemory({QueryExecutor? executor}) =>
       _inMemoryInstance ??= XmppDrift._(
@@ -1407,11 +1373,10 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     required File file,
     required String passphrase,
     QueryExecutor? executor,
-  }) =>
-      _instance ??= XmppDrift._(
-        file,
-        executor ?? _openDatabase(file, passphrase),
-      );
+  }) => _instance ??= XmppDrift._(
+    file,
+    executor ?? _openDatabase(file, passphrase),
+  );
 
   final _log = Logger('XmppDrift');
   final File _file;
@@ -1557,7 +1522,8 @@ WHERE file_metadata_i_d IS NOT NULL
         }
         if (from < 19) {
           const draftSyncIdSql = "lower(hex(randomblob(16)))";
-          const draftSyncIdUpdateSql = '''
+          const draftSyncIdUpdateSql =
+              '''
 UPDATE drafts
 SET draft_sync_id = $draftSyncIdSql
 WHERE draft_sync_id IS NULL OR trim(draft_sync_id) = ''
@@ -1577,10 +1543,9 @@ WHERE draft_source_id IS NULL OR trim(draft_source_id) = ''
           await m.addColumn(drafts, drafts.draftSourceId);
           await customStatement(draftSyncIdUpdateSql);
           await customStatement(draftUpdatedAtUpdateSql);
-          await customStatement(
-            draftSourceIdUpdateSql,
-            [DraftDefaults.sourceLegacyId],
-          );
+          await customStatement(draftSourceIdUpdateSql, [
+            DraftDefaults.sourceLegacyId,
+          ]);
         }
         if (from < 20) {
           await m.addColumn(drafts, drafts.draftRecipients);
@@ -1872,7 +1837,7 @@ WHERE transport IS NULL
           messages,
           messageCopies,
           messageShares,
-          messageParticipants
+          messageParticipants,
         },
       );
       return query.map((row) => messages.map(row.data));
@@ -2000,10 +1965,12 @@ WHERE transport IS NULL
     final ftsQuery = hasQuery ? _escapeFtsQuery(normalizedQuery) : '';
     final filterValue = filter.index;
     final orderClause = ascending ? 'ASC' : 'DESC';
-    final subjectPattern =
-        hasSubject ? '%${_escapeLikePattern(normalizedSubject)}%' : '%';
-    final ftsJoin =
-        hasQuery ? 'JOIN messages_fts fts ON fts.rowid = m.rowid' : '';
+    final subjectPattern = hasSubject
+        ? '%${_escapeLikePattern(normalizedSubject)}%'
+        : '%';
+    final ftsJoin = hasQuery
+        ? 'JOIN messages_fts fts ON fts.rowid = m.rowid'
+        : '';
     final ftsClause = hasQuery ? 'AND fts.body MATCH ?' : '';
     final selectable = customSelect(
       '''
@@ -2141,9 +2108,10 @@ WHERE transport IS NULL
     int? deltaAccountId,
     String? chatJid,
   }) async {
-    final normalized = deltaMsgIds.where((id) => id > 0).toSet().toList(
-          growable: false,
-        );
+    final normalized = deltaMsgIds
+        .where((id) => id > 0)
+        .toSet()
+        .toList(growable: false);
     if (normalized.isEmpty) {
       return const <Message>[];
     }
@@ -2171,8 +2139,7 @@ WHERE transport IS NULL
     }
     return (select(
       messages,
-    )..where((tbl) => tbl.stanzaID.isIn(normalized)))
-        .get();
+    )..where((tbl) => tbl.stanzaID.isIn(normalized))).get();
   }
 
   @override
@@ -2217,11 +2184,10 @@ WHERE transport IS NULL
   Future<List<Reaction>> getReactionsForMessageSender({
     required String messageId,
     required String senderJid,
-  }) =>
-      reactionsAccessor.selectByMessageAndSender(
-        messageId: messageId,
-        senderJid: senderJid,
-      );
+  }) => reactionsAccessor.selectByMessageAndSender(
+    messageId: messageId,
+    senderJid: senderJid,
+  );
 
   @override
   Future<void> replaceReactions({
@@ -2321,7 +2287,8 @@ WHERE transport IS NULL
       fileMetadataId: trimmedMetadataId,
     );
     final bool shouldUpdateChatSummary = !isInternalSync;
-    final bool shouldIncrementUnread = shouldUpdateChatSummary &&
+    final bool shouldIncrementUnread =
+        shouldUpdateChatSummary &&
         (hasBody || hasAttachment) &&
         message.pseudoMessageType == null;
     final int unreadIncrement = shouldIncrementUnread ? 1 : 0;
@@ -2331,7 +2298,7 @@ WHERE transport IS NULL
     final DateTime resolvedLastChangeTimestamp = shouldUpdateChatSummary
         ? messageTimestamp
         : (existingLastChangeTimestamp ??
-            DateTime.fromMillisecondsSinceEpoch(_emptyTimestampMillis));
+              DateTime.fromMillisecondsSinceEpoch(_emptyTimestampMillis));
     final String? lastMessagePreview = shouldUpdateChatSummary
         ? await _messagePreview(
             trimmedBody: trimmedBody,
@@ -2442,8 +2409,7 @@ WHERE transport IS NULL
 
       await (update(
         messages,
-      )..where((tbl) => tbl.stanzaID.equals(message.stanzaID)))
-          .write(
+      )..where((tbl) => tbl.stanzaID.equals(message.stanzaID))).write(
         MessagesCompanion(
           body: shouldMergeBody
               ? Value(messageToSave.body)
@@ -2618,11 +2584,11 @@ WHERE jid = ?
       }
       await (update(
         messages,
-      )..where((tbl) => tbl.stanzaID.equals(stanzaID)))
-          .write(
+      )..where((tbl) => tbl.stanzaID.equals(stanzaID))).write(
         MessagesCompanion(
-          fileMetadataID:
-              metadata != null ? Value(metadata.id) : const Value.absent(),
+          fileMetadataID: metadata != null
+              ? Value(metadata.id)
+              : const Value.absent(),
           body: body != null ? Value(body) : const Value.absent(),
         ),
       );
@@ -2642,8 +2608,7 @@ WHERE jid = ?
     await transaction(() async {
       await (update(
         messages,
-      )..where((messages) => messages.stanzaID.equals(stanzaID)))
-          .write(
+      )..where((messages) => messages.stanzaID.equals(stanzaID))).write(
         const MessagesCompanion(
           retracted: Value(true),
           body: Value(null),
@@ -2664,33 +2629,30 @@ WHERE jid = ?
   @override
   Future<void> markMessageAcked(String stanzaID) async {
     _log.info('Marking message acked');
-    await (update(messages)
-          ..where(
-            (tbl) =>
-                tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
-          ))
+    await (update(messages)..where(
+          (tbl) =>
+              tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
+        ))
         .write(const MessagesCompanion(acked: Value(true)));
   }
 
   @override
   Future<void> markMessageReceived(String stanzaID) async {
     _log.info('Marking message received');
-    await (update(messages)
-          ..where(
-            (tbl) =>
-                tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
-          ))
+    await (update(messages)..where(
+          (tbl) =>
+              tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
+        ))
         .write(const MessagesCompanion(received: Value(true)));
   }
 
   @override
   Future<void> markMessageDisplayed(String stanzaID) async {
     _log.info('Marking message displayed');
-    await (update(messages)
-          ..where(
-            (tbl) =>
-                tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
-          ))
+    await (update(messages)..where(
+          (tbl) =>
+              tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
+        ))
         .write(const MessagesCompanion(displayed: Value(true)));
   }
 
@@ -2728,14 +2690,15 @@ WHERE jid = ?
       final String? trimmedBody = existing.body?.trim();
       final bool hasBody = trimmedBody?.isNotEmpty == true;
       final bool hasAttachment = existing.fileMetadataID?.isNotEmpty == true;
-      final bool shouldDecrementUnread = (hasBody || hasAttachment) &&
+      final bool shouldDecrementUnread =
+          (hasBody || hasAttachment) &&
           !existing.displayed &&
           existing.pseudoMessageType == null;
       final int nextUnreadCount = lastMessage == null
           ? 0
           : shouldDecrementUnread && chat.unreadCount > 0
-              ? chat.unreadCount - 1
-              : chat.unreadCount;
+          ? chat.unreadCount - 1
+          : chat.unreadCount;
       await chatsAccessor.updateOne(
         chat.copyWith(
           lastMessage: lastMessagePreview,
@@ -2775,7 +2738,8 @@ WHERE jid = ?
       sqlPlaceholderToken,
       growable: false,
     ).join(sqlPlaceholderSeparator);
-    final updateMessagesSql = '''
+    final updateMessagesSql =
+        '''
 UPDATE messages
 SET sender_jid = ?
 WHERE delta_account_id = ?
@@ -2786,7 +2750,8 @@ WHERE delta_account_id = ?
       deltaAccountId,
       ...normalizedPlaceholders,
     ]);
-    final updateChatsSql = '''
+    final updateChatsSql =
+        '''
 UPDATE chats
 SET email_from_address = ?
 WHERE email_from_address IN ($placeholderClause)
@@ -2817,14 +2782,14 @@ WHERE email_from_address IN ($placeholderClause)
     if (normalizedPlaceholders.isEmpty) {
       return;
     }
-    final placeholderMessages = await (select(messages)
-          ..where(
-            (tbl) =>
-                tbl.deltaAccountId.equals(deltaAccountId) &
-                tbl.deltaMsgId.isNotNull() &
-                tbl.senderJid.isIn(normalizedPlaceholders),
-          ))
-        .get();
+    final placeholderMessages =
+        await (select(messages)..where(
+              (tbl) =>
+                  tbl.deltaAccountId.equals(deltaAccountId) &
+                  tbl.deltaMsgId.isNotNull() &
+                  tbl.senderJid.isIn(normalizedPlaceholders),
+            ))
+            .get();
     if (placeholderMessages.isEmpty) {
       return;
     }
@@ -2835,13 +2800,13 @@ WHERE email_from_address IN ($placeholderClause)
     if (deltaIds.isEmpty) {
       return;
     }
-    final relatedMessages = await (select(messages)
-          ..where(
-            (tbl) =>
-                tbl.deltaAccountId.equals(deltaAccountId) &
-                tbl.deltaMsgId.isIn(deltaIds),
-          ))
-        .get();
+    final relatedMessages =
+        await (select(messages)..where(
+              (tbl) =>
+                  tbl.deltaAccountId.equals(deltaAccountId) &
+                  tbl.deltaMsgId.isIn(deltaIds),
+            ))
+            .get();
     final messagesByKey = <String, List<Message>>{};
     for (final message in relatedMessages) {
       final deltaMsgId = message.deltaMsgId;
@@ -2889,8 +2854,9 @@ WHERE email_from_address IN ($placeholderClause)
       }
     }
     if (messageIds.isNotEmpty) {
-      final attachments =
-          await messageAttachmentsAccessor.selectForMessages(messageIds);
+      final attachments = await messageAttachmentsAccessor.selectForMessages(
+        messageIds,
+      );
       for (final attachment in attachments) {
         final metadataId = attachment.fileMetadataId;
         if (metadataId.isNotEmpty) {
@@ -2903,7 +2869,8 @@ WHERE email_from_address IN ($placeholderClause)
       final trimmedBody = message.body?.trim();
       final hasBody = trimmedBody?.isNotEmpty == true;
       final hasAttachment = message.fileMetadataID?.trim().isNotEmpty == true;
-      final shouldDecrement = (hasBody || hasAttachment) &&
+      final shouldDecrement =
+          (hasBody || hasAttachment) &&
           !message.displayed &&
           message.pseudoMessageType == null;
       if (!shouldDecrement) {
@@ -2917,11 +2884,12 @@ WHERE email_from_address IN ($placeholderClause)
     }
     await transaction(() async {
       for (final batch in _chunked(stanzaIds, batchSize: 900)) {
-        await (delete(reactions)..where((tbl) => tbl.messageID.isIn(batch)))
-            .go();
-        await (delete(pinnedMessages)
-              ..where((tbl) => tbl.messageStanzaId.isIn(batch)))
-            .go();
+        await (delete(
+          reactions,
+        )..where((tbl) => tbl.messageID.isIn(batch))).go();
+        await (delete(
+          pinnedMessages,
+        )..where((tbl) => tbl.messageStanzaId.isIn(batch))).go();
         await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(batch))).go();
       }
       if (messageIds.isNotEmpty) {
@@ -2941,8 +2909,9 @@ WHERE email_from_address IN ($placeholderClause)
     for (final metadataId in metadataIds) {
       await _deleteFileMetadataIfOrphaned(metadataId);
     }
-    final affectedChats =
-        messagesToDelete.map((message) => message.chatJid).toSet();
+    final affectedChats = messagesToDelete
+        .map((message) => message.chatJid)
+        .toSet();
     for (final chatJid in affectedChats) {
       await _refreshChatSummaryAfterTrim(jid: chatJid);
     }
@@ -3003,8 +2972,9 @@ WHERE email_from_address IN ($placeholderClause)
         : maxMessages;
     final bool refreshSummary = maxMessages <= trimRefreshSummaryLimit;
     final bool filterByAccount = deltaAccountId != null;
-    final String accountClause =
-        filterByAccount ? ' AND delta_account_id = ?' : '';
+    final String accountClause = filterByAccount
+        ? ' AND delta_account_id = ?'
+        : '';
     final pruned = await customSelect(
       '''
       SELECT id AS message_id, stanza_i_d AS stanza_id, delta_msg_id,
@@ -3048,10 +3018,11 @@ WHERE email_from_address IN ($placeholderClause)
     final metadataIds = <String>{};
     if (messageIds.isNotEmpty) {
       for (final batch in chunked(messageIds)) {
-        final rows = await (selectOnly(messageAttachments)
-              ..addColumns([messageAttachments.fileMetadataId])
-              ..where(messageAttachments.messageId.isIn(batch)))
-            .get();
+        final rows =
+            await (selectOnly(messageAttachments)
+                  ..addColumns([messageAttachments.fileMetadataId])
+                  ..where(messageAttachments.messageId.isIn(batch)))
+                .get();
         for (final row in rows) {
           final metadataId = row.read(messageAttachments.fileMetadataId);
           if (metadataId != null && metadataId.isNotEmpty) {
@@ -3062,10 +3033,11 @@ WHERE email_from_address IN ($placeholderClause)
     }
     if (stanzaIds.isNotEmpty) {
       for (final batch in chunked(stanzaIds)) {
-        final rows = await (selectOnly(messages)
-              ..addColumns([messages.fileMetadataID])
-              ..where(messages.stanzaID.isIn(batch)))
-            .get();
+        final rows =
+            await (selectOnly(messages)
+                  ..addColumns([messages.fileMetadataID])
+                  ..where(messages.stanzaID.isIn(batch)))
+                .get();
         for (final row in rows) {
           final metadataId = row.read(messages.fileMetadataID)?.trim();
           if (metadataId != null && metadataId.isNotEmpty) {
@@ -3082,21 +3054,20 @@ WHERE email_from_address IN ($placeholderClause)
           final accountId = entry.key;
           final messageIds = entry.value;
           for (final batch in chunked(messageIds)) {
-            final copies = await (select(messageCopies)
-                  ..where(
-                    (tbl) =>
-                        tbl.dcAccountId.equals(accountId) &
-                        tbl.dcMsgId.isIn(batch),
-                  ))
-                .get();
+            final copies =
+                await (select(messageCopies)..where(
+                      (tbl) =>
+                          tbl.dcAccountId.equals(accountId) &
+                          tbl.dcMsgId.isIn(batch),
+                    ))
+                    .get();
             shareIds.addAll(copies.map((copy) => copy.shareId));
 
-            await (delete(messageCopies)
-                  ..where(
-                    (tbl) =>
-                        tbl.dcAccountId.equals(accountId) &
-                        tbl.dcMsgId.isIn(batch),
-                  ))
+            await (delete(messageCopies)..where(
+                  (tbl) =>
+                      tbl.dcAccountId.equals(accountId) &
+                      tbl.dcMsgId.isIn(batch),
+                ))
                 .go();
           }
         }
@@ -3106,14 +3077,12 @@ WHERE email_from_address IN ($placeholderClause)
         for (final batch in chunked(stanzaIds)) {
           await (delete(
             reactions,
-          )..where((tbl) => tbl.messageID.isIn(batch)))
-              .go();
+          )..where((tbl) => tbl.messageID.isIn(batch))).go();
         }
         for (final batch in chunked(messageIds)) {
           await (delete(
             messageAttachments,
-          )..where((tbl) => tbl.messageId.isIn(batch)))
-              .go();
+          )..where((tbl) => tbl.messageId.isIn(batch))).go();
         }
         for (final batch in chunked(stanzaIds)) {
           await (delete(pinnedMessages)
@@ -3124,8 +3093,7 @@ WHERE email_from_address IN ($placeholderClause)
         for (final batch in chunked(stanzaIds)) {
           await (delete(
             messages,
-          )..where((tbl) => tbl.stanzaID.isIn(batch)))
-              .go();
+          )..where((tbl) => tbl.stanzaID.isIn(batch))).go();
         }
       }
 
@@ -3133,10 +3101,11 @@ WHERE email_from_address IN ($placeholderClause)
         final remainingShareIds = <String>{};
         final shareIdList = shareIds.toList(growable: false);
         for (final batch in chunked(shareIdList)) {
-          final rows = await (selectOnly(messageCopies)
-                ..addColumns([messageCopies.shareId])
-                ..where(messageCopies.shareId.isIn(batch)))
-              .get();
+          final rows =
+              await (selectOnly(messageCopies)
+                    ..addColumns([messageCopies.shareId])
+                    ..where(messageCopies.shareId.isIn(batch)))
+                  .get();
           remainingShareIds.addAll(
             rows
                 .map((row) => row.read(messageCopies.shareId))
@@ -3144,20 +3113,19 @@ WHERE email_from_address IN ($placeholderClause)
           );
         }
 
-        final expiredShares =
-            shareIds.difference(remainingShareIds).toList(growable: false);
+        final expiredShares = shareIds
+            .difference(remainingShareIds)
+            .toList(growable: false);
         if (expiredShares.isNotEmpty) {
           for (final batch in chunked(expiredShares)) {
             await (delete(
               messageParticipants,
-            )..where((tbl) => tbl.shareId.isIn(batch)))
-                .go();
+            )..where((tbl) => tbl.shareId.isIn(batch))).go();
           }
           for (final batch in chunked(expiredShares)) {
             await (delete(
               messageShares,
-            )..where((tbl) => tbl.shareId.isIn(batch)))
-                .go();
+            )..where((tbl) => tbl.shareId.isIn(batch))).go();
           }
         }
       }
@@ -3180,14 +3148,14 @@ WHERE email_from_address IN ($placeholderClause)
     if (chat == null) return;
     final lastMessage = await getLastMessageForChat(jid, filter: summaryFilter);
     final bool hasVisibleMessage = lastMessage != null;
-    final bool hasAnyMessages = hasVisibleMessage ||
+    final bool hasAnyMessages =
+        hasVisibleMessage ||
         (await getChatMessages(
           jid,
           start: summaryStartOffset,
           end: summaryPageSize,
           filter: summaryFilter,
-        ))
-            .isNotEmpty;
+        )).isNotEmpty;
     final String? trimmedBody = lastMessage?.body?.trim();
     final bool hasAttachment = lastMessage?.fileMetadataID?.isNotEmpty == true;
     final String? lastMessagePreview = lastMessage == null
@@ -3203,10 +3171,12 @@ WHERE email_from_address IN ($placeholderClause)
     final DateTime emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(
       _emptyTimestampMillis,
     );
-    final DateTime nextTimestamp = lastMessage?.timestamp ??
+    final DateTime nextTimestamp =
+        lastMessage?.timestamp ??
         (hasAnyMessages ? chat.lastChangeTimestamp : emptyTimestamp);
-    final int nextUnreadCount =
-        lastMessage == null ? emptyUnreadCount : chat.unreadCount;
+    final int nextUnreadCount = lastMessage == null
+        ? emptyUnreadCount
+        : chat.unreadCount;
     final updated = chat.copyWith(
       lastMessage: lastMessagePreview,
       lastChangeTimestamp: nextTimestamp,
@@ -3257,15 +3227,13 @@ WHERE email_from_address IN ($placeholderClause)
   Future<void> assignShareOriginator({
     required String shareId,
     required int originatorDcMsgId,
-  }) =>
-      messageSharesAccessor.updateOriginator(shareId, originatorDcMsgId);
+  }) => messageSharesAccessor.updateOriginator(shareId, originatorDcMsgId);
 
   @override
   Future<void> saveMessageShareSubject({
     required String shareId,
     required String? subject,
-  }) =>
-      messageSharesAccessor.updateSubject(shareId, subject);
+  }) => messageSharesAccessor.updateSubject(shareId, subject);
 
   @override
   Future<MessageShareData?> getMessageShareByToken(String token) =>
@@ -3278,8 +3246,7 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Future<List<MessageParticipantData>> getParticipantsForShare(
     String shareId,
-  ) =>
-      messageParticipantsAccessor.selectByShare(shareId);
+  ) => messageParticipantsAccessor.selectByShare(shareId);
 
   @override
   Future<List<MessageCopyData>> getMessageCopiesForShare(String shareId) =>
@@ -3293,8 +3260,7 @@ WHERE email_from_address IN ($placeholderClause)
         messageCopies.dcMsgId.equalsExp(messages.deltaMsgId) &
             messageCopies.dcAccountId.equalsExp(messages.deltaAccountId),
       ),
-    ])
-      ..where(messageCopies.shareId.equals(shareId));
+    ])..where(messageCopies.shareId.equals(shareId));
     final rows = await query.get();
     return rows.map((row) => row.readTable(messages)).toList();
   }
@@ -3303,11 +3269,10 @@ WHERE email_from_address IN ($placeholderClause)
   Future<String?> getShareIdForDeltaMessage(
     int deltaMsgId, {
     int deltaAccountId = DeltaAccountDefaults.legacyId,
-  }) =>
-      messageCopiesAccessor.selectShareIdForDeltaMsg(
-        deltaMsgId,
-        deltaAccountId: deltaAccountId,
-      );
+  }) => messageCopiesAccessor.selectShareIdForDeltaMsg(
+    deltaMsgId,
+    deltaAccountId: deltaAccountId,
+  );
 
   @override
   Future<void> removeChatMessages(String jid) =>
@@ -3461,8 +3426,7 @@ WHERE email_from_address IN ($placeholderClause)
     await transaction(() async {
       await (delete(
         draftAttachmentRefs,
-      )..where((tbl) => tbl.draftId.equals(id)))
-          .go();
+      )..where((tbl) => tbl.draftId.equals(id))).go();
       await draftsAccessor.deleteOne(id);
     });
   }
@@ -3473,8 +3437,7 @@ WHERE email_from_address IN ($placeholderClause)
   }) async {
     await (delete(
       draftAttachmentRefs,
-    )..where((tbl) => tbl.draftId.equals(draftId)))
-        .go();
+    )..where((tbl) => tbl.draftId.equals(draftId))).go();
     final normalizedIds = attachmentMetadataIds
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
@@ -3562,22 +3525,20 @@ WHERE email_from_address IN ($placeholderClause)
     required String jid,
     required int device,
     required String? label,
-  }) =>
-      omemoTrustsAccessor.updateOne(
-        OmemoTrustsCompanion(
-          device: Value(device),
-          jid: Value(jid),
-          label: Value(label),
-        ),
-      );
+  }) => omemoTrustsAccessor.updateOne(
+    OmemoTrustsCompanion(
+      device: Value(device),
+      jid: Value(jid),
+      label: Value(label),
+    ),
+  );
 
   @override
   Future<void> resetOmemoTrust(String jid) async {
     await transaction(() async {
       final trusts = await (delete(
         omemoTrusts,
-      )..where((table) => table.jid.equals(jid)))
-          .goAndReturn();
+      )..where((table) => table.jid.equals(jid))).goAndReturn();
       for (final trust in trusts) {
         await messagesAccessor.updateTrust(
           trust.device,
@@ -3610,12 +3571,11 @@ WHERE email_from_address IN ($placeholderClause)
   Future<void> removeOmemoRatchets(List<(String, int)> ratchets) async {
     await transaction(() async {
       for (final (jid, deviceID) in ratchets) {
-        await (delete(omemoRatchets)
-              ..where(
-                (omemoRatchets) =>
-                    omemoRatchets.jid.equals(jid) &
-                    omemoRatchets.device.equals(deviceID),
-              ))
+        await (delete(omemoRatchets)..where(
+              (omemoRatchets) =>
+                  omemoRatchets.jid.equals(jid) &
+                  omemoRatchets.device.equals(deviceID),
+            ))
             .go();
       }
     });
@@ -3666,9 +3626,7 @@ WHERE email_from_address IN ($placeholderClause)
       fileMetadataAccessor.selectOne(id);
 
   @override
-  Future<List<FileMetadataData>> getFileMetadataForIds(
-    Iterable<String> ids,
-  ) =>
+  Future<List<FileMetadataData>> getFileMetadataForIds(Iterable<String> ids) =>
       fileMetadataAccessor.selectForIds(ids.toList(growable: false));
 
   @override
@@ -3694,8 +3652,7 @@ WHERE email_from_address IN ($placeholderClause)
     }
     final hasSiblingMetadata = await (select(
       fileMetadata,
-    )..where((tbl) => tbl.path.equals(path)))
-        .get();
+    )..where((tbl) => tbl.path.equals(path))).get();
     if (hasSiblingMetadata.isNotEmpty) {
       return;
     }
@@ -3703,28 +3660,32 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   Future<bool> _isFileMetadataReferenced(String id) async {
-    final messageAttachmentRefs = await (selectOnly(messageAttachments)
-          ..addColumns([messageAttachments.fileMetadataId])
-          ..where(messageAttachments.fileMetadataId.equals(id)))
-        .get();
+    final messageAttachmentRefs =
+        await (selectOnly(messageAttachments)
+              ..addColumns([messageAttachments.fileMetadataId])
+              ..where(messageAttachments.fileMetadataId.equals(id)))
+            .get();
     if (messageAttachmentRefs.isNotEmpty) return true;
 
-    final draftAttachmentRows = await (selectOnly(draftAttachmentRefs)
-          ..addColumns([draftAttachmentRefs.fileMetadataId])
-          ..where(draftAttachmentRefs.fileMetadataId.equals(id)))
-        .get();
+    final draftAttachmentRows =
+        await (selectOnly(draftAttachmentRefs)
+              ..addColumns([draftAttachmentRefs.fileMetadataId])
+              ..where(draftAttachmentRefs.fileMetadataId.equals(id)))
+            .get();
     if (draftAttachmentRows.isNotEmpty) return true;
 
-    final messageRefs = await (selectOnly(messages)
-          ..addColumns([messages.fileMetadataID])
-          ..where(messages.fileMetadataID.equals(id)))
-        .get();
+    final messageRefs =
+        await (selectOnly(messages)
+              ..addColumns([messages.fileMetadataID])
+              ..where(messages.fileMetadataID.equals(id)))
+            .get();
     if (messageRefs.isNotEmpty) return true;
 
-    final stickerRefs = await (selectOnly(stickers)
-          ..addColumns([stickers.fileMetadataID])
-          ..where(stickers.fileMetadataID.equals(id)))
-        .get();
+    final stickerRefs =
+        await (selectOnly(stickers)
+              ..addColumns([stickers.fileMetadataID])
+              ..where(stickers.fileMetadataID.equals(id)))
+            .get();
     if (stickerRefs.isNotEmpty) return true;
 
     return false;
@@ -3819,29 +3780,30 @@ WHERE email_from_address IN ($placeholderClause)
     String? transportGroupId,
     int? sortOrder,
   }) async {
-    final existing = await (select(messageAttachments)
-          ..where(
-            (tbl) =>
-                tbl.messageId.equals(messageId) &
-                tbl.fileMetadataId.equals(fileMetadataId),
-          ))
-        .getSingleOrNull();
+    final existing =
+        await (select(messageAttachments)..where(
+              (tbl) =>
+                  tbl.messageId.equals(messageId) &
+                  tbl.fileMetadataId.equals(fileMetadataId),
+            ))
+            .getSingleOrNull();
     if (existing != null) {
-      final shouldUpdateGroup = transportGroupId != null &&
+      final shouldUpdateGroup =
+          transportGroupId != null &&
           existing.transportGroupId != transportGroupId;
       final shouldUpdateOrder =
           sortOrder != null && existing.sortOrder != sortOrder;
       if (shouldUpdateGroup || shouldUpdateOrder) {
         await (update(
           messageAttachments,
-        )..where((tbl) => tbl.id.equals(existing.id)))
-            .write(
+        )..where((tbl) => tbl.id.equals(existing.id))).write(
           MessageAttachmentsCompanion(
             transportGroupId: shouldUpdateGroup
                 ? Value(transportGroupId)
                 : const Value.absent(),
-            sortOrder:
-                shouldUpdateOrder ? Value(sortOrder) : const Value.absent(),
+            sortOrder: shouldUpdateOrder
+                ? Value(sortOrder)
+                : const Value.absent(),
           ),
         );
       }
@@ -3872,8 +3834,8 @@ WHERE email_from_address IN ($placeholderClause)
   }) async {
     final trimmedIds = fileMetadataIds.length > _messageAttachmentMaxCount
         ? fileMetadataIds
-            .take(_messageAttachmentMaxCount)
-            .toList(growable: false)
+              .take(_messageAttachmentMaxCount)
+              .toList(growable: false)
         : fileMetadataIds;
     if (trimmedIds.length < fileMetadataIds.length) {
       _log.warning('Dropping message attachments beyond max count.');
@@ -3905,7 +3867,7 @@ WHERE email_from_address IN ($placeholderClause)
 
   @override
   Future<Map<String, List<MessageAttachmentData>>>
-      getMessageAttachmentsForMessages(Iterable<String> messageIds) async {
+  getMessageAttachmentsForMessages(Iterable<String> messageIds) async {
     final ids = messageIds.toList(growable: false);
     if (ids.isEmpty) return const {};
     final attachments = await messageAttachmentsAccessor.selectForMessages(ids);
@@ -3919,8 +3881,7 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Future<List<MessageAttachmentData>> getMessageAttachmentsForGroup(
     String transportGroupId,
-  ) =>
-      messageAttachmentsAccessor.selectForGroup(transportGroupId);
+  ) => messageAttachmentsAccessor.selectForGroup(transportGroupId);
 
   @override
   Future<List<String>> deleteMessageAttachments(String messageId) async {
@@ -3940,9 +3901,9 @@ WHERE email_from_address IN ($placeholderClause)
         (tbl) =>
             OrderingTerm(expression: tbl.pinnedAt, mode: OrderingMode.desc),
         (tbl) => OrderingTerm(
-              expression: tbl.messageStanzaId,
-              mode: OrderingMode.desc,
-            ),
+          expression: tbl.messageStanzaId,
+          mode: OrderingMode.desc,
+        ),
       ]);
     return query.watch();
   }
@@ -3955,9 +3916,9 @@ WHERE email_from_address IN ($placeholderClause)
         (tbl) =>
             OrderingTerm(expression: tbl.pinnedAt, mode: OrderingMode.desc),
         (tbl) => OrderingTerm(
-              expression: tbl.messageStanzaId,
-              mode: OrderingMode.desc,
-            ),
+          expression: tbl.messageStanzaId,
+          mode: OrderingMode.desc,
+        ),
       ]);
     return query.get();
   }
@@ -4005,8 +3966,7 @@ WHERE email_from_address IN ($placeholderClause)
     final Map<String, Chat> resolved = <String, Chat>{};
     final legacy = await (select(
       chats,
-    )..where((tbl) => tbl.deltaChatId.isNotNull()))
-        .get();
+    )..where((tbl) => tbl.deltaChatId.isNotNull())).get();
     for (final chat in legacy) {
       resolved[chat.jid] = chat;
     }
@@ -4028,8 +3988,7 @@ WHERE email_from_address IN ($placeholderClause)
     if (accountId == DeltaAccountDefaults.legacyId) {
       final legacy = await (select(
         chats,
-      )..where((tbl) => tbl.deltaChatId.isNotNull()))
-          .get();
+      )..where((tbl) => tbl.deltaChatId.isNotNull())).get();
       for (final chat in legacy) {
         resolved[chat.jid] = chat;
       }
@@ -4039,9 +3998,7 @@ WHERE email_from_address IN ($placeholderClause)
         emailChatAccounts,
         emailChatAccounts.chatJid.equalsExp(chats.jid),
       ),
-    ])
-          ..where(emailChatAccounts.deltaAccountId.equals(accountId)))
-        .get();
+    ])..where(emailChatAccounts.deltaAccountId.equals(accountId))).get();
     for (final row in mapped) {
       final chat = row.readTable(chats);
       resolved[chat.jid] = chat;
@@ -4078,16 +4035,16 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Future<Chat?> getChatByDeltaChatId(int deltaChatId, {int? accountId}) async {
     final resolvedAccountId = accountId ?? DeltaAccountDefaults.legacyId;
-    final query = select(chats).join([
-      innerJoin(
-        emailChatAccounts,
-        emailChatAccounts.chatJid.equalsExp(chats.jid),
-      ),
-    ])
-      ..where(
-        emailChatAccounts.deltaChatId.equals(deltaChatId) &
-            emailChatAccounts.deltaAccountId.equals(resolvedAccountId),
-      );
+    final query =
+        select(chats).join([
+          innerJoin(
+            emailChatAccounts,
+            emailChatAccounts.chatJid.equalsExp(chats.jid),
+          ),
+        ])..where(
+          emailChatAccounts.deltaChatId.equals(deltaChatId) &
+              emailChatAccounts.deltaAccountId.equals(resolvedAccountId),
+        );
     final row = await query.getSingleOrNull();
     if (row != null) {
       return row.readTable(chats);
@@ -4097,26 +4054,25 @@ WHERE email_from_address IN ($placeholderClause)
     }
     return (select(
       chats,
-    )..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
-        .getSingleOrNull();
+    )..where((tbl) => tbl.deltaChatId.equals(deltaChatId))).getSingleOrNull();
   }
 
   @override
   Stream<Chat?> watchChatByDeltaChatId(int deltaChatId, {int? accountId}) {
     final resolvedAccountId = accountId ?? DeltaAccountDefaults.legacyId;
-    final query = select(chats).join([
-      innerJoin(
-        emailChatAccounts,
-        emailChatAccounts.chatJid.equalsExp(chats.jid),
-      ),
-    ])
-      ..where(
-        emailChatAccounts.deltaChatId.equals(deltaChatId) &
-            emailChatAccounts.deltaAccountId.equals(resolvedAccountId),
-      );
-    final mappedStream = query.watchSingleOrNull().map(
-          (row) => row?.readTable(chats),
+    final query =
+        select(chats).join([
+          innerJoin(
+            emailChatAccounts,
+            emailChatAccounts.chatJid.equalsExp(chats.jid),
+          ),
+        ])..where(
+          emailChatAccounts.deltaChatId.equals(deltaChatId) &
+              emailChatAccounts.deltaAccountId.equals(resolvedAccountId),
         );
+    final mappedStream = query.watchSingleOrNull().map(
+      (row) => row?.readTable(chats),
+    );
     if (accountId != null) {
       return mappedStream;
     }
@@ -4126,8 +4082,7 @@ WHERE email_from_address IN ($placeholderClause)
       }
       return (select(
         chats,
-      )..where((tbl) => tbl.deltaChatId.equals(deltaChatId)))
-          .getSingleOrNull();
+      )..where((tbl) => tbl.deltaChatId.equals(deltaChatId))).getSingleOrNull();
     });
   }
 
@@ -4166,12 +4121,11 @@ WHERE email_from_address IN ($placeholderClause)
     required String chatJid,
     required int deltaAccountId,
   }) async {
-    await (delete(emailChatAccounts)
-          ..where(
-            (tbl) =>
-                tbl.chatJid.equals(chatJid) &
-                tbl.deltaAccountId.equals(deltaAccountId),
-          ))
+    await (delete(emailChatAccounts)..where(
+          (tbl) =>
+              tbl.chatJid.equals(chatJid) &
+              tbl.deltaAccountId.equals(deltaAccountId),
+        ))
         .go();
   }
 
@@ -4179,8 +4133,7 @@ WHERE email_from_address IN ($placeholderClause)
   Future<void> deleteEmailChatAccountsForAccount(int deltaAccountId) async {
     await (delete(
       emailChatAccounts,
-    )..where((tbl) => tbl.deltaAccountId.equals(deltaAccountId)))
-        .go();
+    )..where((tbl) => tbl.deltaAccountId.equals(deltaAccountId))).go();
   }
 
   @override
@@ -4416,8 +4369,9 @@ WHERE email_from_address IN ($placeholderClause)
     required bool spam,
     DateTime? spamUpdatedAt,
   }) async {
-    final resolvedUpdatedAt =
-        spam ? (spamUpdatedAt ?? DateTime.timestamp()) : null;
+    final resolvedUpdatedAt = spam
+        ? (spamUpdatedAt ?? DateTime.timestamp())
+        : null;
     await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
       ChatsCompanion(
         spam: Value(spam),
@@ -4434,8 +4388,7 @@ WHERE email_from_address IN ($placeholderClause)
   }) async {
     await (update(
       chats,
-    )..where((tbl) => tbl.jid.equals(jid) | tbl.contactJid.equals(jid)))
-        .write(
+    )..where((tbl) => tbl.jid.equals(jid) | tbl.contactJid.equals(jid))).write(
       ChatsCompanion(
         avatarPath: Value(avatarPath),
         avatarHash: Value(avatarHash),
@@ -4547,11 +4500,7 @@ WHERE email_from_address IN ($placeholderClause)
               .toList(growable: false),
           mode: InsertMode.insertOrIgnore,
         );
-        batch.insertAll(
-          roster,
-          items,
-          mode: InsertMode.insertOrReplace,
-        );
+        batch.insertAll(roster, items, mode: InsertMode.insertOrReplace);
       });
       final jids = items.map((item) => item.jid).toList(growable: false);
       for (final batch in _chunked(jids, batchSize: 900)) {
@@ -4574,11 +4523,7 @@ WHERE email_from_address IN ($placeholderClause)
     if (items.isEmpty) return;
     await transaction(() async {
       await batch((batch) {
-        batch.insertAll(
-          roster,
-          items,
-          mode: InsertMode.insertOrReplace,
-        );
+        batch.insertAll(roster, items, mode: InsertMode.insertOrReplace);
       });
       final jids = items.map((item) => item.jid).toList(growable: false);
       for (final batch in _chunked(jids, batchSize: 900)) {
@@ -4798,8 +4743,7 @@ WHERE email_from_address IN ($placeholderClause)
     final existing = await blocklistAccessor.selectAll();
     final blockedAtByJid = <String, DateTime>{
       for (final entry in existing)
-        if (_normalizeBlocklistJid(entry.jid) case final normalized?)
-          normalized: entry.blockedAt,
+        ?_normalizeBlocklistJid(entry.jid): entry.blockedAt,
     };
     final normalizedBlocks = <String>{};
     for (final blocked in blocks) {
@@ -4813,16 +4757,13 @@ WHERE email_from_address IN ($placeholderClause)
       final toDelete = existingKeys.difference(normalizedBlocks).toList();
       if (toDelete.isNotEmpty) {
         for (final batch in _chunked(toDelete, batchSize: 900)) {
-          await (delete(
-            blocklist,
-          )..where((tbl) => tbl.jid.isIn(batch)))
-              .go();
+          await (delete(blocklist)..where((tbl) => tbl.jid.isIn(batch))).go();
         }
       }
       final toInsert = normalizedBlocks.difference(existingKeys);
       for (final blocked in toInsert) {
-        final blockedAt =
-            (blockedAtByJid[blocked] ?? DateTime.timestamp()).toUtc();
+        final blockedAt = (blockedAtByJid[blocked] ?? DateTime.timestamp())
+            .toUtc();
         await blocklistAccessor.insertOne(
           BlocklistCompanion.insert(jid: blocked, blockedAt: Value(blockedAt)),
         );
@@ -4850,8 +4791,7 @@ WHERE email_from_address IN ($placeholderClause)
         for (final batch in _chunked(toDelete, batchSize: 900)) {
           await (delete(
             contacts,
-          )..where((tbl) => tbl.nativeID.isIn(batch)))
-              .go();
+          )..where((tbl) => tbl.nativeID.isIn(batch))).go();
         }
       }
       final upserts = <ContactsCompanion>[];
@@ -4866,11 +4806,7 @@ WHERE email_from_address IN ($placeholderClause)
       }
       if (upserts.isNotEmpty) {
         await batch((batch) {
-          batch.insertAll(
-            contacts,
-            upserts,
-            mode: InsertMode.insertOrReplace,
-          );
+          batch.insertAll(contacts, upserts, mode: InsertMode.insertOrReplace);
         });
       }
     });
@@ -5188,7 +5124,8 @@ END
   }
 
   Future<void> _createRecipientAddressTriggers() async {
-    const upsertClause = 'ON CONFLICT(address) DO UPDATE SET last_seen = '
+    const upsertClause =
+        'ON CONFLICT(address) DO UPDATE SET last_seen = '
         'CASE WHEN excluded.last_seen > recipient_addresses.last_seen '
         'THEN excluded.last_seen ELSE recipient_addresses.last_seen END';
     await customStatement('''
@@ -5334,8 +5271,7 @@ WHERE value IS NOT NULL AND trim(value) != ''
   Future<void> _mergeEmailChats() async {
     final emailChats = await (select(
       chats,
-    )..where((tbl) => tbl.emailAddress.isNotNull()))
-        .get();
+    )..where((tbl) => tbl.emailAddress.isNotNull())).get();
     final canonical = <String, Chat>{};
     for (final chat in emailChats) {
       final email = chat.emailAddress;

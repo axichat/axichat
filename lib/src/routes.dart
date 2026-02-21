@@ -53,10 +53,7 @@ class TransitionGoRouteData extends GoRouteData {
   Page<void> buildPage(BuildContext context, GoRouterState state) {
     final pageKey = ValueKey<String>(state.uri.toString());
     if (context.watch<SettingsCubit>().state.lowMotion) {
-      return NoTransitionPage(
-        key: pageKey,
-        child: build(context, state),
-      );
+      return NoTransitionPage(key: pageKey, child: build(context, state));
     }
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
     return CustomTransitionPage(
@@ -94,7 +91,8 @@ class HomeShellRoute extends ShellRouteData {
 }
 
 @TypedGoRoute<HomeRoute>(path: HomeRoute.path)
-class HomeRoute extends TransitionGoRouteData with AuthenticationRouteData {
+class HomeRoute extends TransitionGoRouteData
+    with $HomeRoute, AuthenticationRouteData {
   const HomeRoute();
 
   static const String path = '/';
@@ -122,7 +120,8 @@ class HomeRoute extends TransitionGoRouteData with AuthenticationRouteData {
   Widget build(BuildContext context, GoRouterState state) => const HomeScreen();
 }
 
-class ProfileRoute extends TransitionGoRouteData with AuthenticationRouteData {
+class ProfileRoute extends TransitionGoRouteData
+    with $ProfileRoute, AuthenticationRouteData {
   const ProfileRoute();
 
   static const path = '/profile';
@@ -148,12 +147,12 @@ class ProfileRoute extends TransitionGoRouteData with AuthenticationRouteData {
 
   @override
   Widget build(BuildContext context, GoRouterState state) =>
-      ProfileScreen(locate: _resolveLocate(context, state));
+      const ProfileScreen();
 }
 
 @TypedGoRoute<AvatarEditorRoute>(path: AvatarEditorRoute.path)
 class AvatarEditorRoute extends TransitionGoRouteData
-    with AuthenticationRouteData {
+    with $AvatarEditorRoute, AuthenticationRouteData {
   const AvatarEditorRoute();
 
   static const path = '/profile/avatar';
@@ -182,7 +181,8 @@ class AvatarEditorRoute extends TransitionGoRouteData
       AvatarEditorScreen(locate: _resolveLocate(context, state));
 }
 
-class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
+class ArchivesRoute extends TransitionGoRouteData
+    with $ArchivesRoute, AuthenticationRouteData {
   const ArchivesRoute();
 
   static const path = '/profile/archives';
@@ -213,7 +213,7 @@ class ArchivesRoute extends TransitionGoRouteData with AuthenticationRouteData {
 
 @TypedGoRoute<AttachmentGalleryRoute>(path: AttachmentGalleryRoute.path)
 class AttachmentGalleryRoute extends TransitionGoRouteData
-    with AuthenticationRouteData {
+    with $AttachmentGalleryRoute, AuthenticationRouteData {
   const AttachmentGalleryRoute();
 
   static const path = '/profile/attachments';
@@ -243,7 +243,7 @@ class AttachmentGalleryRoute extends TransitionGoRouteData
 }
 
 class ArchivedChatRoute extends TransitionGoRouteData
-    with AuthenticationRouteData {
+    with $ArchivedChatRoute, AuthenticationRouteData {
   const ArchivedChatRoute({required this.jid});
 
   static const path = '/profile/archives/chat/:jid';
@@ -255,7 +255,8 @@ class ArchivedChatRoute extends TransitionGoRouteData
 
   @override
   String get location => GoRouteData.$location(
-      '/profile/archives/chat/${Uri.encodeComponent(jid)}');
+    '/profile/archives/chat/${Uri.encodeComponent(jid)}',
+  );
 
   @override
   void go(BuildContext context) => context.go(location);
@@ -277,7 +278,7 @@ class ArchivedChatRoute extends TransitionGoRouteData
 
 @TypedGoRoute<GuestCalendarRoute>(path: '/guest-calendar')
 class GuestCalendarRoute extends TransitionGoRouteData
-    with AuthenticationRouteData {
+    with $GuestCalendarRoute, AuthenticationRouteData {
   const GuestCalendarRoute();
 
   @override
@@ -306,7 +307,7 @@ class GuestCalendarRoute extends TransitionGoRouteData
 
 @TypedGoRoute<EmailDemoRoute>(path: '/email-demo')
 class EmailDemoRoute extends TransitionGoRouteData
-    with AuthenticationRouteData {
+    with $EmailDemoRoute, AuthenticationRouteData {
   const EmailDemoRoute();
 
   @override
@@ -334,7 +335,8 @@ class EmailDemoRoute extends TransitionGoRouteData
 }
 
 @TypedGoRoute<LoginRoute>(path: '/login')
-class LoginRoute extends TransitionGoRouteData with AuthenticationRouteData {
+class LoginRoute extends TransitionGoRouteData
+    with $LoginRoute, AuthenticationRouteData {
   const LoginRoute();
 
   @override

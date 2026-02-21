@@ -20,8 +20,10 @@ void main() {
           recipients: const [],
           availableChats: const [],
           latestStatuses: const {},
-          selfIdentity:
-              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfIdentitySnapshot(
+            selfJid: null,
+            avatarPath: null,
+          ),
           onRecipientAdded: (target) => added = target,
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},
@@ -51,8 +53,10 @@ void main() {
           recipients: [recipient],
           availableChats: const [],
           latestStatuses: const {},
-          selfIdentity:
-              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfIdentitySnapshot(
+            selfJid: null,
+            avatarPath: null,
+          ),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (key) => toggledKey = key,
@@ -98,8 +102,10 @@ void main() {
           recipients: recipients,
           availableChats: const [],
           latestStatuses: const {},
-          selfIdentity:
-              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfIdentitySnapshot(
+            selfJid: null,
+            avatarPath: null,
+          ),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (key) => removedKey = key,
           onRecipientToggled: (_) {},
@@ -129,8 +135,10 @@ void main() {
           latestStatuses: const {
             'casesensitive@example.com': FanOutRecipientState.failed,
           },
-          selfIdentity:
-              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfIdentitySnapshot(
+            selfJid: null,
+            avatarPath: null,
+          ),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},
@@ -163,8 +171,10 @@ void main() {
             ),
           ],
           latestStatuses: const {},
-          selfIdentity:
-              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfIdentitySnapshot(
+            selfJid: null,
+            avatarPath: null,
+          ),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},
@@ -195,8 +205,10 @@ void main() {
             ),
           ],
           latestStatuses: const {},
-          selfIdentity:
-              const SelfIdentitySnapshot(selfJid: null, avatarPath: null),
+          selfIdentity: const SelfIdentitySnapshot(
+            selfJid: null,
+            avatarPath: null,
+          ),
           onRecipientAdded: (_) {},
           onRecipientRemoved: (_) {},
           onRecipientToggled: (_) {},

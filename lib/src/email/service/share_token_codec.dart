@@ -59,9 +59,9 @@ class ShareTokenCodec {
 
   static String subjectToken(String shareId) {
     final normalized = shareId.toUpperCase().replaceAll(
-          RegExp(r'[^0-9A-Z]'),
-          '',
-        );
+      RegExp(r'[^0-9A-Z]'),
+      '',
+    );
     if (normalized.length < _minCapabilityLength) {
       throw ArgumentError(
         'shareId must contain at least $_minCapabilityLength base32 characters.',
@@ -78,8 +78,7 @@ class ShareTokenCodec {
   static String _decorateFooter({
     required String token,
     required String footerLabel,
-  }) =>
-      '$footerLabel ${decorateToken(token)}';
+  }) => '$footerLabel ${decorateToken(token)}';
 
   static String injectToken({
     required String token,
@@ -91,7 +90,8 @@ class ShareTokenCodec {
       final resolvedFooterLabel = footerLabel?.trim();
       if (resolvedFooterLabel == null || resolvedFooterLabel.isEmpty) {
         throw ArgumentError(
-            'footerLabel is required for share token signatures');
+          'footerLabel is required for share token signatures',
+        );
       }
       final trimmed = body.trimRight();
       final buffer = StringBuffer()..write(trimmed);

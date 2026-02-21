@@ -36,17 +36,20 @@ class ChatHistoryExporter {
       required Chat chat,
       required Message message,
       required intl.DateFormat format,
-    })? lineFormatter,
+    })?
+    lineFormatter,
     Future<int> Function(String jid)? countHistory,
     Future<List<Message>> Function({
       required String jid,
       required int offset,
       required int limit,
-    })? loadHistoryPage,
+    })?
+    loadHistoryPage,
   }) async {
     if (chats.isEmpty) return const ChatExportResult.empty();
     final format = dateFormat ?? intl.DateFormat('y-MM-dd HH:mm');
-    final initialLabel = fileLabel ??
+    final initialLabel =
+        fileLabel ??
         _defaultFileLabel(chats, chats.length == 1 ? chats.first : null);
     final file = await _createExportFile(initialLabel);
     final sink = file.openWrite();
@@ -75,7 +78,8 @@ class ChatHistoryExporter {
       await cleanupExportFile(file);
       return const ChatExportResult.empty();
     }
-    final finalLabel = fileLabel ??
+    final finalLabel =
+        fileLabel ??
         _defaultFileLabel(chats, exportedChats == 1 ? chats.first : null);
     final resolvedFile = finalLabel == initialLabel
         ? file
@@ -131,12 +135,14 @@ class ChatHistoryExporter {
       required String jid,
       required int offset,
       required int limit,
-    })? loadHistoryPage,
+    })?
+    loadHistoryPage,
     String? Function({
       required Chat chat,
       required Message message,
       required intl.DateFormat format,
-    })? lineFormatter,
+    })?
+    lineFormatter,
   }) async {
     if (loadHistoryPage != null && countHistory != null) {
       final total = await countHistory(chat.jid);

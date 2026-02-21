@@ -90,9 +90,9 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
                     label: option.label,
                     onPressed: () {
                       widget.locate<HomeSearchCubit>().updateFilter(
-                            option.id,
-                            tab: HomeTab.chats,
-                          );
+                        option.id,
+                        tab: HomeTab.chats,
+                      );
                       popoverController.hide();
                     },
                   ),

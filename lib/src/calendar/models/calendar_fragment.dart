@@ -20,7 +20,7 @@ const List<CalendarTask> _emptyCriticalPathTasks = <CalendarTask>[];
   unionKey: _calendarFragmentUnionKey,
   unionValueCase: FreezedUnionCase.snake,
 )
-class CalendarFragment with _$CalendarFragment {
+abstract class CalendarFragment with _$CalendarFragment {
   const factory CalendarFragment.task({required CalendarTask task}) =
       CalendarTaskFragment;
 

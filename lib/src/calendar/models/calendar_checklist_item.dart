@@ -15,7 +15,7 @@ const bool _taskChecklistItemDefaultCompleted = false;
 
 @freezed
 @HiveType(typeId: _taskChecklistItemTypeId)
-class TaskChecklistItem with _$TaskChecklistItem {
+abstract class TaskChecklistItem with _$TaskChecklistItem {
   const factory TaskChecklistItem({
     @HiveField(_taskChecklistItemIdField) required String id,
     @HiveField(_taskChecklistItemLabelField) required String label,

@@ -95,10 +95,14 @@ class SettingsControls extends StatelessWidget {
         final canForegroundService = context.select<SettingsCubit, bool>(
           (cubit) => cubit.canForegroundService,
         );
-        final emailEnabled =
-            context.watch<SettingsCubit>().state.endpointConfig.smtpEnabled;
-        final double dividerIndent =
-            fullWidthDividers ? 0.0 : sectionHeaderPadding.horizontal;
+        final emailEnabled = context
+            .watch<SettingsCubit>()
+            .state
+            .endpointConfig
+            .smtpEnabled;
+        final double dividerIndent = fullWidthDividers
+            ? 0.0
+            : sectionHeaderPadding.horizontal;
         return ValueListenableBuilder<bool>(
           valueListenable: foregroundServiceActive,
           builder: (context, foregroundActive, child) {
@@ -160,7 +164,7 @@ class SettingsControls extends StatelessWidget {
                   label: context.l10n.emailForwardingGuideTitle,
                   onPressed: emailEnabled
                       ? () async =>
-                          await showEmailForwardingGuideDialog(context)
+                            await showEmailForwardingGuideDialog(context)
                       : null,
                 ),
                 _SettingsActionButton(
@@ -295,9 +299,9 @@ class SettingsControls extends StatelessWidget {
                               .toList(),
                           selectedOptionBuilder: (BuildContext context, mode) =>
                               Text(
-                            mode.label(context.l10n),
-                            style: context.textTheme.small,
-                          ),
+                                mode.label(context.l10n),
+                                style: context.textTheme.small,
+                              ),
                         ),
                       ),
                     ],
@@ -329,9 +333,11 @@ class SettingsControls extends StatelessWidget {
                                 ),
                               )
                               .toList(),
-                          selectedOptionBuilder: (BuildContext context,
-                                  ShadColor value) =>
-                              Text(value.name, style: context.textTheme.small),
+                          selectedOptionBuilder:
+                              (BuildContext context, ShadColor value) => Text(
+                                value.name,
+                                style: context.textTheme.small,
+                              ),
                         ),
                       ),
                     ],
@@ -343,8 +349,9 @@ class SettingsControls extends StatelessWidget {
                   padding: switchPadding,
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsColorfulAvatars),
-                    sublabel:
-                        Text(context.l10n.settingsColorfulAvatarsDescription),
+                    sublabel: Text(
+                      context.l10n.settingsColorfulAvatarsDescription,
+                    ),
                     value: state.colorfulAvatars,
                     onChanged: (colorfulAvatars) => context
                         .read<SettingsCubit>()
@@ -381,7 +388,8 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsNotificationPreviews),
                     sublabel: Text(
-                        context.l10n.settingsNotificationPreviewsDescription),
+                      context.l10n.settingsNotificationPreviewsDescription,
+                    ),
                     value: state.notificationPreviewsEnabled,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -393,12 +401,13 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsAutoLoadEmailImages),
                     sublabel: Text(
-                        context.l10n.settingsAutoLoadEmailImagesDescription),
+                      context.l10n.settingsAutoLoadEmailImagesDescription,
+                    ),
                     value: state.autoLoadEmailImages,
                     onChanged: emailEnabled
                         ? (enabled) => context
-                            .read<SettingsCubit>()
-                            .toggleAutoLoadEmailImages(enabled)
+                              .read<SettingsCubit>()
+                              .toggleAutoLoadEmailImages(enabled)
                         : null,
                   ),
                 ),
@@ -407,7 +416,8 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsAutoDownloadImages),
                     sublabel: Text(
-                        context.l10n.settingsAutoDownloadImagesDescription),
+                      context.l10n.settingsAutoDownloadImagesDescription,
+                    ),
                     value: state.autoDownloadImages,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -424,7 +434,8 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsAutoDownloadVideos),
                     sublabel: Text(
-                        context.l10n.settingsAutoDownloadVideosDescription),
+                      context.l10n.settingsAutoDownloadVideosDescription,
+                    ),
                     value: state.autoDownloadVideos,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -441,7 +452,8 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsAutoDownloadDocuments),
                     sublabel: Text(
-                        context.l10n.settingsAutoDownloadDocumentsDescription),
+                      context.l10n.settingsAutoDownloadDocumentsDescription,
+                    ),
                     value: state.autoDownloadDocuments,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -458,7 +470,8 @@ class SettingsControls extends StatelessWidget {
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsAutoDownloadArchives),
                     sublabel: Text(
-                        context.l10n.settingsAutoDownloadArchivesDescription),
+                      context.l10n.settingsAutoDownloadArchivesDescription,
+                    ),
                     value: state.autoDownloadArchives,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -488,8 +501,9 @@ class SettingsControls extends StatelessWidget {
                   padding: switchPadding,
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsMuteNotifications),
-                    sublabel:
-                        Text(context.l10n.settingsMuteNotificationsDescription),
+                    sublabel: Text(
+                      context.l10n.settingsMuteNotificationsDescription,
+                    ),
                     value: state.chatNotificationsMuted,
                     onChanged: (muted) => context
                         .read<SettingsCubit>()
@@ -510,8 +524,9 @@ class SettingsControls extends StatelessWidget {
                   padding: switchPadding,
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsTypingIndicators),
-                    sublabel:
-                        Text(context.l10n.settingsTypingIndicatorsDescription),
+                    sublabel: Text(
+                      context.l10n.settingsTypingIndicatorsDescription,
+                    ),
                     value: state.indicateTyping,
                     onChanged: (indicateTyping) => context
                         .read<SettingsCubit>()
@@ -522,8 +537,9 @@ class SettingsControls extends StatelessWidget {
                   padding: switchPadding,
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsChatSendOnEnter),
-                    sublabel:
-                        Text(context.l10n.settingsChatSendOnEnterDescription),
+                    sublabel: Text(
+                      context.l10n.settingsChatSendOnEnterDescription,
+                    ),
                     value: state.chatSendOnEnter,
                     onChanged: (enabled) => context
                         .read<SettingsCubit>()
@@ -548,13 +564,14 @@ class SettingsControls extends StatelessWidget {
                   padding: switchPadding,
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsMuteNotifications),
-                    sublabel:
-                        Text(context.l10n.settingsMuteNotificationsDescription),
+                    sublabel: Text(
+                      context.l10n.settingsMuteNotificationsDescription,
+                    ),
                     value: state.emailNotificationsMuted,
                     onChanged: emailEnabled
                         ? (muted) => context
-                            .read<SettingsCubit>()
-                            .toggleEmailNotificationsMuted(muted)
+                              .read<SettingsCubit>()
+                              .toggleEmailNotificationsMuted(muted)
                         : null,
                   ),
                 ),
@@ -565,8 +582,8 @@ class SettingsControls extends StatelessWidget {
                     value: state.emailReadReceipts,
                     onChanged: emailEnabled
                         ? (enabled) => context
-                            .read<SettingsCubit>()
-                            .toggleEmailReadReceipts(enabled)
+                              .read<SettingsCubit>()
+                              .toggleEmailReadReceipts(enabled)
                         : null,
                   ),
                 ),
@@ -574,13 +591,14 @@ class SettingsControls extends StatelessWidget {
                   padding: switchPadding,
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsShareTokenFooter),
-                    sublabel:
-                        Text(context.l10n.settingsShareTokenFooterDescription),
+                    sublabel: Text(
+                      context.l10n.settingsShareTokenFooterDescription,
+                    ),
                     value: state.shareTokenSignatureEnabled,
                     onChanged: emailEnabled
                         ? (enabled) => context
-                            .read<SettingsCubit>()
-                            .toggleShareTokenSignature(enabled)
+                              .read<SettingsCubit>()
+                              .toggleShareTokenSignature(enabled)
                         : null,
                   ),
                 ),
@@ -594,8 +612,8 @@ class SettingsControls extends StatelessWidget {
                     value: state.emailComposerWatermarkEnabled,
                     onChanged: emailEnabled
                         ? (enabled) => context
-                            .read<SettingsCubit>()
-                            .toggleEmailComposerWatermark(enabled)
+                              .read<SettingsCubit>()
+                              .toggleEmailComposerWatermark(enabled)
                         : null,
                   ),
                 ),
@@ -603,13 +621,14 @@ class SettingsControls extends StatelessWidget {
                   padding: switchPadding,
                   child: ShadSwitch(
                     label: Text(context.l10n.settingsEmailSendOnEnter),
-                    sublabel:
-                        Text(context.l10n.settingsEmailSendOnEnterDescription),
+                    sublabel: Text(
+                      context.l10n.settingsEmailSendOnEnterDescription,
+                    ),
                     value: state.emailSendOnEnter,
                     onChanged: emailEnabled
                         ? (enabled) => context
-                            .read<SettingsCubit>()
-                            .toggleEmailSendOnEnter(enabled)
+                              .read<SettingsCubit>()
+                              .toggleEmailSendOnEnter(enabled)
                         : null,
                   ),
                 ),
@@ -693,8 +712,9 @@ class SettingsControls extends StatelessWidget {
     if (!context.mounted) {
       return;
     }
-    final result =
-        await context.read<ProfileExportCubit>().exportXmppMessages();
+    final result = await context
+        .read<ProfileExportCubit>()
+        .exportXmppMessages();
     if (!context.mounted) {
       return;
     }
@@ -711,8 +731,9 @@ class SettingsControls extends StatelessWidget {
     final labels = EmailMessageLineLabels(
       subjectLabel: context.l10n.chatMessageSubjectLabel,
     );
-    final result =
-        await context.read<ProfileExportCubit>().exportEmailMessages(labels);
+    final result = await context.read<ProfileExportCubit>().exportEmailMessages(
+      labels,
+    );
     if (!context.mounted) {
       return;
     }
@@ -732,9 +753,9 @@ class SettingsControls extends StatelessWidget {
       fallbackLabel: context.l10n.profileExportContactsFilenameFallback,
     );
     final result = await context.read<ProfileExportCubit>().exportXmppContacts(
-          format,
-          labels,
-        );
+      format,
+      labels,
+    );
     if (!context.mounted) {
       return;
     }
@@ -754,9 +775,9 @@ class SettingsControls extends StatelessWidget {
       fallbackLabel: context.l10n.profileExportContactsFilenameFallback,
     );
     final result = await context.read<ProfileExportCubit>().exportEmailContacts(
-          format,
-          labels,
-        );
+      format,
+      labels,
+    );
     if (!context.mounted) {
       return;
     }
@@ -896,10 +917,7 @@ class _SettingsActionButton extends StatelessWidget {
     final sizing = context.sizing;
     final Widget? leading = iconData == null
         ? null
-        : Icon(
-            iconData,
-            size: sizing.menuItemIconSize,
-          );
+        : Icon(iconData, size: sizing.menuItemIconSize);
     final button = destructive
         ? AxiListButton.destructiveGhost(
             leading: leading,
@@ -959,10 +977,7 @@ class _SettingsSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final header = Padding(
       padding: padding,
-      child: Text(
-        label.toUpperCase(),
-        style: context.textTheme.sectionLabelM,
-      ),
+      child: Text(label.toUpperCase(), style: context.textTheme.sectionLabelM),
     );
     if (!showDivider) {
       return header;
@@ -999,9 +1014,9 @@ extension ThemeModeLocalization on ThemeMode {
 
 extension ProfileExportKindLabels on ProfileExportKind {
   String label(AppLocalizations l10n) => switch (this) {
-        ProfileExportKind.xmppMessages => l10n.profileExportXmppMessagesLabel,
-        ProfileExportKind.xmppContacts => l10n.profileExportXmppContactsLabel,
-        ProfileExportKind.emailMessages => l10n.profileExportEmailMessagesLabel,
-        ProfileExportKind.emailContacts => l10n.profileExportEmailContactsLabel,
-      };
+    ProfileExportKind.xmppMessages => l10n.profileExportXmppMessagesLabel,
+    ProfileExportKind.xmppContacts => l10n.profileExportXmppContactsLabel,
+    ProfileExportKind.emailMessages => l10n.profileExportEmailMessagesLabel,
+    ProfileExportKind.emailContacts => l10n.profileExportEmailContactsLabel,
+  };
 }

@@ -56,15 +56,11 @@ class CalendarCheckbox extends StatelessWidget {
         activeColor: activeColor,
         fillColor: fillColor,
         checkColor: checkColor,
-        mouseCursor:
-            isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        side: BorderSide(
-          color: borderColor,
-          width: borderWidth,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: context.radius,
-        ),
+        mouseCursor: isEnabled
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
+        side: BorderSide(color: borderColor, width: borderWidth),
+        shape: RoundedRectangleBorder(borderRadius: context.radius),
       ),
     );
   }

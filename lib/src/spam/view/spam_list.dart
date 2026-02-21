@@ -24,10 +24,8 @@ class SpamList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocSelector<HomeSearchCubit, HomeSearchState, _SpamSearchInputs>(
-      selector: (state) => (
-        active: state.active,
-        tabState: state.stateFor(HomeTab.spam),
-      ),
+      selector: (state) =>
+          (active: state.active, tabState: state.stateFor(HomeTab.spam)),
       builder: (context, searchInputs) => _SpamSearchSync(
         searchInputs: searchInputs,
         child: BlocBuilder<ChatsCubit, ChatsState>(
@@ -55,10 +53,7 @@ class SpamList extends StatelessWidget {
 }
 
 class _SpamSearchSync extends StatefulWidget {
-  const _SpamSearchSync({
-    required this.searchInputs,
-    required this.child,
-  });
+  const _SpamSearchSync({required this.searchInputs, required this.child});
 
   final _SpamSearchInputs searchInputs;
   final Widget child;
@@ -90,11 +85,11 @@ class _SpamSearchSyncState extends State<_SpamSearchSync> {
     }
     _lastInputs = inputs;
     context.read<ChatsCubit>().updateSpamSearchSnapshot(
-          active: inputs.active,
-          query: inputs.tabState.query,
-          filterId: inputs.tabState.filterId,
-          sortOrder: inputs.tabState.sort,
-        );
+      active: inputs.active,
+      query: inputs.tabState.query,
+      filterId: inputs.tabState.filterId,
+      sortOrder: inputs.tabState.sort,
+    );
   }
 
   @override
@@ -102,10 +97,7 @@ class _SpamSearchSyncState extends State<_SpamSearchSync> {
 }
 
 class _SpamListBody extends StatelessWidget {
-  const _SpamListBody({
-    required this.items,
-    required this.updatingJids,
-  });
+  const _SpamListBody({required this.items, required this.updatingJids});
 
   final List<Chat> items;
   final Set<String> updatingJids;
@@ -115,8 +107,9 @@ class _SpamListBody extends StatelessWidget {
     final l10n = context.l10n;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
-    final String? selfJid =
-        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final String? selfJid = resolvedProfileJid.isNotEmpty
+        ? resolvedProfileJid
+        : null;
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,

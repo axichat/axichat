@@ -132,8 +132,8 @@ Future<Uint8List?> _downloadEmailImageBytes(Uri uri) async {
             ..maxRedirects = 0
             ..headers.removeAll(HttpHeaders.cookieHeader);
       final response = await request.close().timeout(
-            _emailImageDownloadTimeout,
-          );
+        _emailImageDownloadTimeout,
+      );
       final statusCode = response.statusCode;
 
       if (_isRedirectStatusCode(statusCode)) {
@@ -205,14 +205,13 @@ Future<Uint8List?> _readResponseBytes(HttpClientResponse response) async {
 }
 
 bool _isRedirectStatusCode(int statusCode) => switch (statusCode) {
-      HttpStatus.movedPermanently ||
-      HttpStatus.found ||
-      HttpStatus.seeOther ||
-      HttpStatus.temporaryRedirect ||
-      HttpStatus.permanentRedirect =>
-        true,
-      _ => false,
-    };
+  HttpStatus.movedPermanently ||
+  HttpStatus.found ||
+  HttpStatus.seeOther ||
+  HttpStatus.temporaryRedirect ||
+  HttpStatus.permanentRedirect => true,
+  _ => false,
+};
 
 /// Placeholder widget shown when external images are blocked.
 class EmailImagePlaceholder extends StatefulWidget {
@@ -241,10 +240,7 @@ class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
       side: context.borderSide,
     );
     final content = DecoratedBox(
-      decoration: ShapeDecoration(
-        color: colors.card,
-        shape: shape,
-      ),
+      decoration: ShapeDecoration(color: colors.card, shape: shape),
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: spacing.s,

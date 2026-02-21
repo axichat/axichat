@@ -106,12 +106,15 @@ final class DirectMucInviteData implements mox.StanzaHandlerExtension {
         roomJid.length > _inviteRoomJidMaxLength) {
       return null;
     }
-    final reasonAttr =
-        invite.attributes[_directInviteReasonAttr]?.toString().trim();
-    final passwordAttr =
-        invite.attributes[_directInvitePasswordAttr]?.toString().trim();
-    final continueAttr =
-        invite.attributes[_directInviteContinueAttr]?.toString().trim();
+    final reasonAttr = invite.attributes[_directInviteReasonAttr]
+        ?.toString()
+        .trim();
+    final passwordAttr = invite.attributes[_directInvitePasswordAttr]
+        ?.toString()
+        .trim();
+    final continueAttr = invite.attributes[_directInviteContinueAttr]
+        ?.toString()
+        .trim();
     final reason = _normalizeInviteText(
       reasonAttr ?? invite.innerText(),
       maxLength: _inviteFieldMaxLength,
@@ -345,8 +348,8 @@ final class CalendarTaskIcsPayload implements mox.StanzaHandlerExtension {
     if (payloadLength > _calendarTaskIcsPayloadMaxLength) {
       return null;
     }
-    final readOnlyAttr =
-        node.attributes[_calendarTaskIcsReadOnlyAttr]?.toString();
+    final readOnlyAttr = node.attributes[_calendarTaskIcsReadOnlyAttr]
+        ?.toString();
     final bool readOnly = _parseReadOnly(readOnlyAttr);
     return CalendarTaskIcsPayload(ics: payloadText, readOnly: readOnly);
   }
@@ -468,21 +471,21 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
 
   @override
   List<mox.StanzaHandler> getIncomingPreStanzaHandlers() => [
-        mox.StanzaHandler(
-          stanzaTag: _messageTag,
-          priority: 9997,
-          callback: _onIncomingMessage,
-        ),
-      ];
+    mox.StanzaHandler(
+      stanzaTag: _messageTag,
+      priority: 9997,
+      callback: _onIncomingMessage,
+    ),
+  ];
 
   @override
   List<mox.StanzaHandler> getOutgoingPreStanzaHandlers() => [
-        mox.StanzaHandler(
-          stanzaTag: _messageTag,
-          priority: _outgoingMessageHandlerPriority,
-          callback: _onOutgoingMessage,
-        ),
-      ];
+    mox.StanzaHandler(
+      stanzaTag: _messageTag,
+      priority: _outgoingMessageHandlerPriority,
+      callback: _onOutgoingMessage,
+    ),
+  ];
 
   @override
   Future<bool> isSupported() async => true;

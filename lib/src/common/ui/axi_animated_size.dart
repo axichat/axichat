@@ -27,7 +27,8 @@ class AxiAnimatedSize extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isInstant = duration == Duration.zero &&
+    final bool isInstant =
+        duration == Duration.zero &&
         (reverseDuration == null || reverseDuration == Duration.zero);
     if (isInstant) {
       return child ?? const SizedBox.shrink();

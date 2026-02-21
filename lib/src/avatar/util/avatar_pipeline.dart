@@ -52,10 +52,7 @@ class AvatarPipeline {
   Rect? initialCropRect(Avatar avatar) =>
       avatar.initialCropRect(minCropSide: _config.minCropSide);
 
-  Rect constrainCropRect({
-    required Avatar avatar,
-    required Rect rect,
-  }) {
+  Rect constrainCropRect({required Avatar avatar, required Rect rect}) {
     return avatar.constrainCropRect(
       rect: rect,
       minCropSide: _config.minCropSide,

@@ -19,11 +19,11 @@ enum Subscription {
   both;
 
   static Subscription fromString(String value) => switch (value) {
-        'to' => to,
-        'from' => from,
-        'both' => both,
-        _ => none,
-      };
+    'to' => to,
+    'from' => from,
+    'both' => both,
+    _ => none,
+  };
 
   bool get isNone => this == none;
 
@@ -39,10 +39,10 @@ enum Ask {
   subscribed;
 
   static Ask? fromString(String? value) => switch (value) {
-        'subscribe' => subscribe,
-        'subscribed' => subscribed,
-        _ => null,
-      };
+    'subscribe' => subscribe,
+    'subscribed' => subscribed,
+    _ => null,
+  };
 
   bool get isSubscribe => this == subscribe;
 
@@ -77,17 +77,17 @@ enum Presence {
   bool get isUnknown => this == unknown;
 
   static Presence fromString(String? value) => switch (value) {
-        'unavailable' => unavailable,
-        'xa' => xa,
-        'away' => away,
-        'dnd' => dnd,
-        'chat' => chat,
-        _ => unknown,
-      };
+    'unavailable' => unavailable,
+    'xa' => xa,
+    'away' => away,
+    'dnd' => dnd,
+    'chat' => chat,
+    _ => unknown,
+  };
 }
 
-@freezed
-class RosterItem with _$RosterItem implements Insertable<RosterItem> {
+@Freezed(toJson: false, fromJson: false)
+abstract class RosterItem with _$RosterItem implements Insertable<RosterItem> {
   const factory RosterItem({
     required String jid,
     required String title,
@@ -118,15 +118,12 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
     @Default(<String>[]) List<String> groups,
   }) = _RosterItemFromDb;
 
-  factory RosterItem.fromJson(Map<String, Object?> json) =>
-      _$RosterItemFromJson(json);
-
   factory RosterItem.fromJid(String jid) => RosterItem(
-        jid: jid.toString(),
-        title: mox.JID.fromString(jid).local,
-        presence: Presence.chat,
-        subscription: Subscription.both,
-      );
+    jid: jid.toString(),
+    title: mox.JID.fromString(jid).local,
+    presence: Presence.chat,
+    subscription: Subscription.both,
+  );
 
   factory RosterItem.fromMox(mox.XmppRosterItem item, {bool isGhost = false}) {
     final subscription = Subscription.fromString(item.subscription);
@@ -151,11 +148,11 @@ class RosterItem with _$RosterItem implements Insertable<RosterItem> {
   const RosterItem._();
 
   mox.XmppRosterItem toMox() => mox.XmppRosterItem(
-        jid: jid,
-        subscription: subscription.name,
-        ask: ask?.name,
-        name: title,
-      );
+    jid: jid,
+    subscription: subscription.name,
+    ask: ask?.name,
+    name: title,
+  );
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -217,16 +214,16 @@ class Roster extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class Invite with _$Invite implements Insertable<Invite> {
+abstract class Invite with _$Invite implements Insertable<Invite> {
   const factory Invite({required String jid, required String title}) = _Invite;
 
   const Invite._();
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) => {
-        'jid': Variable<String>(jid),
-        'title': Variable<String>(title),
-      };
+    'jid': Variable<String>(jid),
+    'title': Variable<String>(title),
+  };
 }
 
 @UseRowClass(Invite)
@@ -258,10 +255,7 @@ enum NotificationPreviewSetting {
 
   bool get isHidden => this == hide;
 
-  String label({
-    required String showLabel,
-    required String hideLabel,
-  }) =>
+  String label({required String showLabel, required String hideLabel}) =>
       isShown ? showLabel : hideLabel;
 
   bool resolvePreview(bool globalSetting) => isShown ? true : false;
@@ -276,7 +270,7 @@ enum NotificationPreviewSetting {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class Chat with _$Chat implements Insertable<Chat> {
+abstract class Chat with _$Chat implements Insertable<Chat> {
   const factory Chat({
     required String jid,
     required String title,
@@ -348,13 +342,13 @@ class Chat with _$Chat implements Insertable<Chat> {
   }) = _ChatFromDb;
 
   factory Chat.fromJid(String jid) => Chat(
-        jid: jid,
-        title: mox.JID.fromString(jid).local,
-        type: ChatType.chat,
-        lastChangeTimestamp: DateTime.now(),
-        transport: MessageTransport.xmpp,
-        contactJid: jid,
-      );
+    jid: jid,
+    title: mox.JID.fromString(jid).local,
+    type: ChatType.chat,
+    lastChangeTimestamp: DateTime.now(),
+    transport: MessageTransport.xmpp,
+    contactJid: jid,
+  );
 
   const Chat._();
 
@@ -375,15 +369,17 @@ class Chat with _$Chat implements Insertable<Chat> {
       'hidden': Variable<bool>(hidden),
       'spam': Variable<bool>(spam),
       if (notificationPreviewSetting != null)
-        'notification_preview_setting':
-            Variable<int>(notificationPreviewSetting!.index),
+        'notification_preview_setting': Variable<int>(
+          notificationPreviewSetting!.index,
+        ),
       if (markerResponsive != null)
         'marker_responsive': Variable<bool>(markerResponsive!),
       if (shareSignatureEnabled != null)
         'share_signature_enabled': Variable<bool>(shareSignatureEnabled!),
       if (attachmentAutoDownload != null)
-        'attachment_auto_download':
-            Variable<int>(attachmentAutoDownload!.index),
+        'attachment_auto_download': Variable<int>(
+          attachmentAutoDownload!.index,
+        ),
       'encryption_protocol': Variable<int>(encryptionProtocol.index),
     };
     if (myNickname != null) {
@@ -441,8 +437,8 @@ class Chats extends Table {
   IntColumn get type => intEnum<ChatType>()();
 
   IntColumn get transport => intEnum<MessageTransport>().withDefault(
-        Constant(MessageTransport.xmpp.index),
-      )();
+    Constant(MessageTransport.xmpp.index),
+  )();
 
   TextColumn get myNickname => text().nullable()();
 
@@ -507,8 +503,8 @@ class Chats extends Table {
   Set<Column> get primaryKey => {jid};
 
   List<Index> get indexes => [
-        Index('idx_chats_last_change', 'last_change_timestamp'),
-      ];
+    Index('idx_chats_last_change', 'last_change_timestamp'),
+  ];
 }
 
 @DataClassName('RecipientAddress')
@@ -521,8 +517,8 @@ class RecipientAddresses extends Table {
   Set<Column> get primaryKey => {address};
 
   List<Index> get indexes => [
-        Index('idx_recipient_addresses_last_seen', 'last_seen'),
-      ];
+    Index('idx_recipient_addresses_last_seen', 'last_seen'),
+  ];
 }
 
 @DataClassName('EmailChatAccountData')
@@ -539,8 +535,8 @@ class EmailChatAccounts extends Table {
 
   @override
   List<String> get customConstraints => const [
-        'UNIQUE(delta_account_id, delta_chat_id)',
-      ];
+    'UNIQUE(delta_account_id, delta_chat_id)',
+  ];
 }
 
 class Contacts extends Table {
@@ -637,7 +633,9 @@ extension ChatLabelExtension on Chat {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class BlocklistData with _$BlocklistData implements Insertable<BlocklistData> {
+sealed class BlocklistData
+    with _$BlocklistData
+    implements Insertable<BlocklistData> {
   const factory BlocklistData({
     required String jid,
     required DateTime blockedAt,
@@ -647,9 +645,9 @@ class BlocklistData with _$BlocklistData implements Insertable<BlocklistData> {
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) => {
-        'jid': Variable<String>(jid),
-        'blocked_at': Variable<DateTime>(blockedAt),
-      };
+    'jid': Variable<String>(jid),
+    'blocked_at': Variable<DateTime>(blockedAt),
+  };
 }
 
 @UseRowClass(BlocklistData)
@@ -664,7 +662,7 @@ class Blocklist extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class EmailBlocklistEntry
+sealed class EmailBlocklistEntry
     with _$EmailBlocklistEntry
     implements Insertable<EmailBlocklistEntry> {
   const factory EmailBlocklistEntry({
@@ -713,7 +711,7 @@ class EmailBlocklist extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class EmailSpamEntry
+sealed class EmailSpamEntry
     with _$EmailSpamEntry
     implements Insertable<EmailSpamEntry> {
   const factory EmailSpamEntry({
@@ -726,10 +724,10 @@ class EmailSpamEntry
 
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) => {
-        'address': Variable<String>(address),
-        'flagged_at': Variable<DateTime>(flaggedAt),
-        if (sourceId != null) 'source_id': Variable<String>(sourceId!),
-      };
+    'address': Variable<String>(address),
+    'flagged_at': Variable<DateTime>(flaggedAt),
+    if (sourceId != null) 'source_id': Variable<String>(sourceId!),
+  };
 }
 
 @UseRowClass(EmailSpamEntry)

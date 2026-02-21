@@ -16,15 +16,16 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     required XmppBase xmppBase,
     Duration completedRetention = const Duration(seconds: 1),
     Duration failedRetention = const Duration(seconds: 1),
-  })  : _xmppBase = xmppBase,
-        _completedRetention = completedRetention,
-        _failedRetention = failedRetention,
-        super(const XmppActivityState()) {
+  }) : _xmppBase = xmppBase,
+       _completedRetention = completedRetention,
+       _failedRetention = failedRetention,
+       super(const XmppActivityState()) {
     _subscription = _xmppBase.xmppOperationStream.listen(_handleEvent);
   }
 
-  static const Duration _minimumInProgressDuration =
-      Duration(milliseconds: 350);
+  static const Duration _minimumInProgressDuration = Duration(
+    milliseconds: 350,
+  );
   static const Duration _idleCompletionDelay = Duration(milliseconds: 300);
 
   final XmppBase _xmppBase;
@@ -131,8 +132,9 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     _cancelCompletion(id);
     final elapsed = DateTime.now().difference(batch.startedAt);
     final remaining = _minimumInProgressDuration - elapsed;
-    final delay =
-        remaining > _idleCompletionDelay ? remaining : _idleCompletionDelay;
+    final delay = remaining > _idleCompletionDelay
+        ? remaining
+        : _idleCompletionDelay;
     final token = batch.bumpCompletionToken();
     _completionTimers[id] = Timer(delay, () {
       _completionTimers.remove(id);
@@ -166,9 +168,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     final index = operations.indexWhere((item) => item.id == id);
     if (index == -1) return;
     _cancelCompletion(id);
-    final updated = operations[index].copyWith(
-      status: status,
-    );
+    final updated = operations[index].copyWith(status: status);
     operations[index] = updated;
     _scheduleTeardown(updated);
     emit(state.copyWith(operations: List.unmodifiable(operations)));
@@ -235,9 +235,9 @@ class _XmppOperationBatch {
     required this.operationId,
     required this.pendingCount,
     required this.startedAt,
-  })  : hadFailure = false,
-        hadSuccess = false,
-        completionToken = 0;
+  }) : hadFailure = false,
+       hadSuccess = false,
+       completionToken = 0;
 
   String operationId;
   int pendingCount;

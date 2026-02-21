@@ -29,10 +29,7 @@ final class DraftRecipientData {
     return DraftRecipientData(jid: jid ?? this.jid, role: role ?? this.role);
   }
 
-  Map<String, dynamic> toJson() => {
-        _jidKey: jid,
-        _roleKey: role,
-      };
+  Map<String, dynamic> toJson() => {_jidKey: jid, _roleKey: role};
 
   static DraftRecipientData? fromJson(Map<String, dynamic>? json) {
     if (json == null) return null;
@@ -70,14 +67,15 @@ class DraftRecipientListConverter
 
   @override
   String toSql(List<DraftRecipientData> value) {
-    final List<Map<String, dynamic>> encoded =
-        value.map((recipient) => recipient.toJson()).toList(growable: false);
+    final List<Map<String, dynamic>> encoded = value
+        .map((recipient) => recipient.toJson())
+        .toList(growable: false);
     return _listConverter.toSql(encoded);
   }
 }
 
 @Freezed(toJson: false, fromJson: false)
-class FileMetadataData
+sealed class FileMetadataData
     with _$FileMetadataData
     implements Insertable<FileMetadataData> {
   const factory FileMetadataData({
@@ -170,7 +168,7 @@ class FileMetadata extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class Sticker with _$Sticker {
+abstract class Sticker with _$Sticker {
   const factory Sticker({
     required String id,
     required String stickerPackID,
@@ -197,7 +195,7 @@ class Stickers extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class StickerPack with _$StickerPack {
+abstract class StickerPack with _$StickerPack {
   const factory StickerPack({
     required String id,
     required String name,
@@ -233,7 +231,7 @@ class StickerPacks extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class Draft with _$Draft implements Insertable<Draft> {
+abstract class Draft with _$Draft implements Insertable<Draft> {
   const factory Draft({
     required int id,
     required List<String> jids,
@@ -303,6 +301,6 @@ class DraftAttachmentRefs extends Table {
   Set<Column> get primaryKey => {draftId, fileMetadataId};
 
   List<Index> get indexes => [
-        Index('idx_draft_attachment_file', 'file_metadata_id'),
-      ];
+    Index('idx_draft_attachment_file', 'file_metadata_id'),
+  ];
 }

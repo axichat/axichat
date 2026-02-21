@@ -58,8 +58,8 @@ const int _availabilityViewerDaysPerWeek = 7;
 const int _availabilityViewerMinutesPerDay =
     _availabilityViewerMinutesPerHour * _availabilityViewerHoursPerDay;
 
-typedef AvailabilityRequestHandler = Future<void> Function(
-    DateTime start, DateTime end);
+typedef AvailabilityRequestHandler =
+    Future<void> Function(DateTime start, DateTime end);
 
 Future<void> showCalendarAvailabilityShareViewer({
   required BuildContext context,
@@ -492,9 +492,9 @@ class _AvailabilityViewerGridContent extends StatelessWidget {
     );
     final List<CalendarFreeBusyInterval> intervals =
         buildAvailabilityDisplayIntervals(
-      rangeOverlay: overlay,
-      comparisonOverlay: comparison,
-    );
+          rangeOverlay: overlay,
+          comparisonOverlay: comparison,
+        );
 
     return LayoutBuilder(
       builder: (context, constraints) {

@@ -216,8 +216,8 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
     final horizontal = leftSpace < snapThreshold
         ? _MenuHorizontal.left
         : rightSpace < snapThreshold
-            ? _MenuHorizontal.right
-            : _MenuHorizontal.center;
+        ? _MenuHorizontal.right
+        : _MenuHorizontal.center;
 
     return ShadAnchorAuto(
       offset: _anchorOffset(preferBelow, horizontal),
@@ -233,7 +233,8 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
     }
 
     final platform = Theme.of(context).platform;
-    final effectiveLongPressEnabled = widget.longPressEnabled ??
+    final effectiveLongPressEnabled =
+        widget.longPressEnabled ??
         (platform == TargetPlatform.android || platform == TargetPlatform.iOS);
 
     final isWindows = platform == TargetPlatform.windows;

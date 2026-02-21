@@ -10,8 +10,8 @@ import 'package:hydrated_bloc/hydrated_bloc.dart';
 
 class ChatCalendarStorage {
   ChatCalendarStorage({Storage? storage, String? storagePrefix})
-      : _storage = storage ?? HydratedBloc.storage,
-        _storagePrefix = storagePrefix ?? authStoragePrefix;
+    : _storage = storage ?? HydratedBloc.storage,
+      _storagePrefix = storagePrefix ?? authStoragePrefix;
 
   final Storage _storage;
   final String _storagePrefix;

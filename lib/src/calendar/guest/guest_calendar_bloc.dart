@@ -9,7 +9,7 @@ import 'package:axichat/src/common/safe_logging.dart';
 
 class GuestCalendarBloc extends BaseCalendarBloc {
   GuestCalendarBloc({required super.storage, super.reminderController})
-      : super(storagePrefix: guestStoragePrefix);
+    : super(storagePrefix: guestStoragePrefix);
 
   @override
   Future<void> onTaskAdded(CalendarTask task) async {

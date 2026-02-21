@@ -49,7 +49,7 @@ const RecurrenceRange _recurrenceRangeFallback = RecurrenceRange.thisAndFuture;
 
 @freezed
 @HiveType(typeId: _calendarDateTimeTypeId)
-class CalendarDateTime with _$CalendarDateTime {
+abstract class CalendarDateTime with _$CalendarDateTime {
   const factory CalendarDateTime({
     @HiveField(_calendarDateTimeValueField) required DateTime value,
     @HiveField(_calendarDateTimeTzidField) String? tzid,
@@ -91,51 +91,51 @@ enum CalendarWeekday {
   bool get isSunday => this == CalendarWeekday.sunday;
 
   int get isoValue => switch (this) {
-        CalendarWeekday.monday => DateTime.monday,
-        CalendarWeekday.tuesday => DateTime.tuesday,
-        CalendarWeekday.wednesday => DateTime.wednesday,
-        CalendarWeekday.thursday => DateTime.thursday,
-        CalendarWeekday.friday => DateTime.friday,
-        CalendarWeekday.saturday => DateTime.saturday,
-        CalendarWeekday.sunday => DateTime.sunday,
-      };
+    CalendarWeekday.monday => DateTime.monday,
+    CalendarWeekday.tuesday => DateTime.tuesday,
+    CalendarWeekday.wednesday => DateTime.wednesday,
+    CalendarWeekday.thursday => DateTime.thursday,
+    CalendarWeekday.friday => DateTime.friday,
+    CalendarWeekday.saturday => DateTime.saturday,
+    CalendarWeekday.sunday => DateTime.sunday,
+  };
 
   String get icsValue => switch (this) {
-        CalendarWeekday.monday => _calendarWeekdayMondayIcs,
-        CalendarWeekday.tuesday => _calendarWeekdayTuesdayIcs,
-        CalendarWeekday.wednesday => _calendarWeekdayWednesdayIcs,
-        CalendarWeekday.thursday => _calendarWeekdayThursdayIcs,
-        CalendarWeekday.friday => _calendarWeekdayFridayIcs,
-        CalendarWeekday.saturday => _calendarWeekdaySaturdayIcs,
-        CalendarWeekday.sunday => _calendarWeekdaySundayIcs,
-      };
+    CalendarWeekday.monday => _calendarWeekdayMondayIcs,
+    CalendarWeekday.tuesday => _calendarWeekdayTuesdayIcs,
+    CalendarWeekday.wednesday => _calendarWeekdayWednesdayIcs,
+    CalendarWeekday.thursday => _calendarWeekdayThursdayIcs,
+    CalendarWeekday.friday => _calendarWeekdayFridayIcs,
+    CalendarWeekday.saturday => _calendarWeekdaySaturdayIcs,
+    CalendarWeekday.sunday => _calendarWeekdaySundayIcs,
+  };
 
   static CalendarWeekday fromIsoValue(int value) => switch (value) {
-        DateTime.monday => CalendarWeekday.monday,
-        DateTime.tuesday => CalendarWeekday.tuesday,
-        DateTime.wednesday => CalendarWeekday.wednesday,
-        DateTime.thursday => CalendarWeekday.thursday,
-        DateTime.friday => CalendarWeekday.friday,
-        DateTime.saturday => CalendarWeekday.saturday,
-        DateTime.sunday => CalendarWeekday.sunday,
-        _ => _calendarWeekdayFallback,
-      };
+    DateTime.monday => CalendarWeekday.monday,
+    DateTime.tuesday => CalendarWeekday.tuesday,
+    DateTime.wednesday => CalendarWeekday.wednesday,
+    DateTime.thursday => CalendarWeekday.thursday,
+    DateTime.friday => CalendarWeekday.friday,
+    DateTime.saturday => CalendarWeekday.saturday,
+    DateTime.sunday => CalendarWeekday.sunday,
+    _ => _calendarWeekdayFallback,
+  };
 
   static CalendarWeekday? fromIcsValue(String? value) => switch (value) {
-        _calendarWeekdayMondayIcs => CalendarWeekday.monday,
-        _calendarWeekdayTuesdayIcs => CalendarWeekday.tuesday,
-        _calendarWeekdayWednesdayIcs => CalendarWeekday.wednesday,
-        _calendarWeekdayThursdayIcs => CalendarWeekday.thursday,
-        _calendarWeekdayFridayIcs => CalendarWeekday.friday,
-        _calendarWeekdaySaturdayIcs => CalendarWeekday.saturday,
-        _calendarWeekdaySundayIcs => CalendarWeekday.sunday,
-        _ => null,
-      };
+    _calendarWeekdayMondayIcs => CalendarWeekday.monday,
+    _calendarWeekdayTuesdayIcs => CalendarWeekday.tuesday,
+    _calendarWeekdayWednesdayIcs => CalendarWeekday.wednesday,
+    _calendarWeekdayThursdayIcs => CalendarWeekday.thursday,
+    _calendarWeekdayFridayIcs => CalendarWeekday.friday,
+    _calendarWeekdaySaturdayIcs => CalendarWeekday.saturday,
+    _calendarWeekdaySundayIcs => CalendarWeekday.sunday,
+    _ => null,
+  };
 }
 
 @freezed
 @HiveType(typeId: _recurrenceWeekdayTypeId)
-class RecurrenceWeekday with _$RecurrenceWeekday {
+abstract class RecurrenceWeekday with _$RecurrenceWeekday {
   const factory RecurrenceWeekday({
     @HiveField(_recurrenceWeekdayDayField) required CalendarWeekday weekday,
     @HiveField(_recurrenceWeekdayPositionField) int? position,
@@ -156,13 +156,13 @@ enum RecurrenceRange {
   bool get isThisAndPrior => this == RecurrenceRange.thisAndPrior;
 
   String get icsValue => switch (this) {
-        RecurrenceRange.thisAndFuture => _recurrenceRangeThisAndFutureIcs,
-        RecurrenceRange.thisAndPrior => _recurrenceRangeThisAndPriorIcs,
-      };
+    RecurrenceRange.thisAndFuture => _recurrenceRangeThisAndFutureIcs,
+    RecurrenceRange.thisAndPrior => _recurrenceRangeThisAndPriorIcs,
+  };
 
   static RecurrenceRange fromIcsValue(String? value) => switch (value) {
-        _recurrenceRangeThisAndFutureIcs => RecurrenceRange.thisAndFuture,
-        _recurrenceRangeThisAndPriorIcs => RecurrenceRange.thisAndPrior,
-        _ => _recurrenceRangeFallback,
-      };
+    _recurrenceRangeThisAndFutureIcs => RecurrenceRange.thisAndFuture,
+    _recurrenceRangeThisAndPriorIcs => RecurrenceRange.thisAndPrior,
+    _ => _recurrenceRangeFallback,
+  };
 }

@@ -779,7 +779,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String chatFanOutFailureWithSubject(
-      Object subject, int count, Object recipientLabel) {
+    Object subject,
+    int count,
+    Object recipientLabel,
+  ) {
     return '主题“$subject”发送给$count$recipientLabel失败。';
   }
 
@@ -796,6 +799,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatSubjectHint => '主题';
+
+  @override
+  String get chatCollapseLongEmails => 'Collapse long emails';
+
+  @override
+  String get chatExpandLongEmails => 'Expand long emails';
 
   @override
   String get chatAttachmentTooltip => '附件';
@@ -1213,7 +1222,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String signupProgressValue(
-      Object current, Object currentLabel, Object percent, Object total) {
+    Object current,
+    Object currentLabel,
+    Object percent,
+    Object total,
+  ) {
     return '第 $current/$total 步：$currentLabel。已完成 $percent%。';
   }
 
@@ -1495,7 +1508,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String accessibilityMessageLabel(
-      Object sender, Object timestamp, Object body) {
+    Object sender,
+    Object timestamp,
+    Object body,
+  ) {
     return '$sender 于 $timestamp：$body';
   }
 
@@ -1571,7 +1587,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String accessibilityBreadcrumbLabel(
-      Object position, Object total, Object label) {
+    Object position,
+    Object total,
+    Object label,
+  ) {
     return '第 $position/$total 步：$label。激活以跳转到此步骤。';
   }
 
@@ -1677,7 +1696,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String accessibilityActionItemPosition(
-      Object position, Object total, Object section) {
+    Object position,
+    Object total,
+    Object section,
+  ) {
     return '$section 中的第 $position 个项目，共 $total 个';
   }
 
@@ -3763,7 +3785,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String emailContactsImportSuccess(
-      Object imported, Object duplicates, Object invalid, Object failed) {
+    Object imported,
+    Object duplicates,
+    Object invalid,
+    Object failed,
+  ) {
     return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
   }
 
@@ -3812,6 +3838,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get emailForwardingGuideLinksSubtitle => '请在你的服务商帮助文档中查找，或从这里开始：';
+
+  @override
+  String get emailForwardingWelcomeSetupFrom => 'Setup forwarding from:';
+
+  @override
+  String get emailForwardingWelcomeOtherProviderHint =>
+      'If you use another provider, their website should have instructions as well.';
 
   @override
   String get emailForwardingGuideNotificationsTitle => '消息通知';
@@ -4993,7 +5026,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String taskShareScheduleSameDay(
-      String date, String startTime, String endTime) {
+    String date,
+    String startTime,
+    String endTime,
+  ) {
     return ' 于$date $startTime到$endTime';
   }
 
@@ -5004,7 +5040,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String taskShareScheduleStartDuration(
-      String date, String time, String duration) {
+    String date,
+    String time,
+    String duration,
+  ) {
     return ' 于$date $time持续$duration';
   }
 
@@ -6560,7 +6599,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String chatFanOutFailureWithSubject(
-      Object subject, int count, Object recipientLabel) {
+    Object subject,
+    int count,
+    Object recipientLabel,
+  ) {
     return '主題「$subject」傳送給$count$recipientLabel失敗。';
   }
 
@@ -6994,7 +7036,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String signupProgressValue(
-      Object current, Object currentLabel, Object percent, Object total) {
+    Object current,
+    Object currentLabel,
+    Object percent,
+    Object total,
+  ) {
     return '第 $current/$total 步：$currentLabel。已完成 $percent%。';
   }
 
@@ -7276,7 +7322,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String accessibilityMessageLabel(
-      Object sender, Object timestamp, Object body) {
+    Object sender,
+    Object timestamp,
+    Object body,
+  ) {
     return '$sender 於 $timestamp：$body';
   }
 
@@ -7352,7 +7401,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String accessibilityBreadcrumbLabel(
-      Object position, Object total, Object label) {
+    Object position,
+    Object total,
+    Object label,
+  ) {
     return '第 $position/$total 步：$label。啟用以跳至此步驟。';
   }
 
@@ -7458,7 +7510,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String accessibilityActionItemPosition(
-      Object position, Object total, Object section) {
+    Object position,
+    Object total,
+    Object section,
+  ) {
     return '$section 中的第 $position 個項目，共 $total 個';
   }
 
@@ -9537,7 +9592,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String emailContactsImportSuccess(
-      Object imported, Object duplicates, Object invalid, Object failed) {
+    Object imported,
+    Object duplicates,
+    Object invalid,
+    Object failed,
+  ) {
     return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
   }
 
@@ -10767,7 +10826,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String taskShareScheduleSameDay(
-      String date, String startTime, String endTime) {
+    String date,
+    String startTime,
+    String endTime,
+  ) {
     return ' 於$date $startTime到$endTime';
   }
 
@@ -10778,7 +10840,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String taskShareScheduleStartDuration(
-      String date, String time, String duration) {
+    String date,
+    String time,
+    String duration,
+  ) {
     return ' 於$date $time，持續$duration';
   }
 

@@ -40,17 +40,18 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     required XmppService xmppService,
     required List<AvatarTemplate> templates,
     AvatarPipeline? pipeline,
-  })  : _xmppService = xmppService,
-        _templates = templates,
-        _random = Random(),
-        _pipeline = pipeline ??
-            AvatarPipeline(
-              config: const AvatarPipelineConfig(
-                minCropSide: minCropSide,
-                uploadMaxDimension: 0,
-              ),
-            ),
-        super(const AvatarEditorState()) {
+  }) : _xmppService = xmppService,
+       _templates = templates,
+       _random = Random(),
+       _pipeline =
+           pipeline ??
+           AvatarPipeline(
+             config: const AvatarPipelineConfig(
+               minCropSide: minCropSide,
+               uploadMaxDimension: 0,
+             ),
+           ),
+       super(const AvatarEditorState()) {
     _carouselEngine = AvatarCarouselEngine(
       pipeline: _pipeline,
       templates: _templates,
@@ -221,8 +222,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final background = template.hasAlphaBackground
         ? _randomAvatarBackgroundColor()
         : state.backgroundColor == Colors.transparent
-            ? colors.accent
-            : state.backgroundColor;
+        ? colors.accent
+        : state.backgroundColor;
     await selectTemplate(template, colors, background: background);
   }
 
@@ -256,29 +257,17 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       if (result == null || result.files.isEmpty) return;
       final file = result.files.first;
       if (file.size > _maxUploadBytes) {
-        emit(
-          state.copyWith(
-            errorType: AvatarEditorErrorType.readFailed,
-          ),
-        );
+        emit(state.copyWith(errorType: AvatarEditorErrorType.readFailed));
         return;
       }
       final bytes = await _loadPickedFileBytes(file);
       if (bytes == null || bytes.isEmpty) {
-        emit(
-          state.copyWith(
-            errorType: AvatarEditorErrorType.readFailed,
-          ),
-        );
+        emit(state.copyWith(errorType: AvatarEditorErrorType.readFailed));
         return;
       }
       await _loadFromBytes(bytes, buildDraft: true);
     } on PlatformException {
-      emit(
-        state.copyWith(
-          errorType: AvatarEditorErrorType.openFailed,
-        ),
-      );
+      emit(state.copyWith(errorType: AvatarEditorErrorType.openFailed));
     }
   }
 
@@ -328,7 +317,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Future<void> setBackgroundColor(Color color, ShadColorScheme colors) async {
     emit(state.copyWith(backgroundColor: color));
     final template = state.draftAvatar?.template;
-    final shouldRebuild = template != null &&
+    final shouldRebuild =
+        template != null &&
         template.category != AvatarTemplateCategory.abstract &&
         template.hasAlphaBackground;
     if (!shouldRebuild) return;
@@ -370,8 +360,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final background = template.hasAlphaBackground
         ? _randomAvatarBackgroundColor()
         : state.backgroundColor == Colors.transparent
-            ? colors.accent
-            : state.backgroundColor;
+        ? colors.accent
+        : state.backgroundColor;
     try {
       await selectTemplate(template, colors, background: background);
     } finally {
@@ -504,7 +494,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final clampedFactor = factor.clamp(0.0, 1.0);
     final maxSide = min(imageWidth, imageHeight);
     final side = minCropSide + (maxSide - minCropSide) * clampedFactor;
-    final current = draftAvatar.cropRect ??
+    final current =
+        draftAvatar.cropRect ??
         _pipeline.initialCropRect(draftAvatar) ??
         Rect.fromLTWH(0, 0, maxSide, maxSide);
     final next = Rect.fromCenter(
@@ -512,12 +503,12 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       width: side,
       height: side,
     );
-    final constrained =
-        _pipeline.constrainCropRect(avatar: draftAvatar, rect: next);
+    final constrained = _pipeline.constrainCropRect(
+      avatar: draftAvatar,
+      rect: next,
+    );
     emit(
-      state.copyWith(
-        draftAvatar: draftAvatar.copyWith(cropRect: constrained),
-      ),
+      state.copyWith(draftAvatar: draftAvatar.copyWith(cropRect: constrained)),
     );
   }
 
@@ -539,7 +530,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       return;
     }
     if (state.processing) {
-      _pendingCropRect = rect ??
+      _pendingCropRect =
+          rect ??
           draftAvatar.cropRect ??
           _pipeline.resolveCropRect(draftAvatar);
       return;
@@ -562,19 +554,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     required Color backgroundColor,
   }) async {
     if (draftAvatar == null) {
-      emit(
-        state.copyWith(
-          errorType: AvatarEditorErrorType.missingDraft,
-        ),
-      );
+      emit(state.copyWith(errorType: AvatarEditorErrorType.missingDraft));
       return;
     }
     if (!_xmppService.connected) {
-      emit(
-        state.copyWith(
-          errorType: AvatarEditorErrorType.xmppDisconnected,
-        ),
-      );
+      emit(state.copyWith(errorType: AvatarEditorErrorType.xmppDisconnected));
       return;
     }
     emit(state.copyWith(publishing: true, errorType: null));
@@ -605,12 +589,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
         mox.AvatarError() => AvatarEditorErrorType.publishRejected,
         _ => AvatarEditorErrorType.publishGeneric,
       };
-      emit(
-        state.copyWith(
-          publishing: false,
-          errorType: errorType,
-        ),
-      );
+      emit(state.copyWith(publishing: false, errorType: errorType));
     }
   }
 
@@ -669,8 +648,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final resolvedBackground = template.hasAlphaBackground
         ? _randomAvatarBackgroundColor()
         : context.currentBackground == Colors.transparent
-            ? context.colors.accent
-            : context.currentBackground;
+        ? context.colors.accent
+        : context.currentBackground;
     final useTemplateInset =
         template.category != AvatarTemplateCategory.abstract;
     final insetFraction = useTemplateInset ? avatarInsetFraction : 0.0;
@@ -689,8 +668,8 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     final resolvedBackground = template.hasAlphaBackground
         ? background
         : state.backgroundColor == Colors.transparent
-            ? colors.accent
-            : state.backgroundColor;
+        ? colors.accent
+        : state.backgroundColor;
     final useTemplateInset =
         template.category != AvatarTemplateCategory.abstract;
     final insetFraction = useTemplateInset ? avatarInsetFraction : 0.0;
@@ -708,11 +687,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     required bool buildDraft,
   }) async {
     emit(
-      state.copyWith(
-        processing: true,
-        errorType: null,
-        carouselAvatar: null,
-      ),
+      state.copyWith(processing: true, errorType: null, carouselAvatar: null),
     );
     _pendingCropRect = null;
     try {

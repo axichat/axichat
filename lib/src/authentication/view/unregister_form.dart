@@ -49,10 +49,10 @@ class _UnregisterFormState extends State<UnregisterForm> {
     );
     if (!context.mounted || approved != true) return;
     await context.read<AuthenticationCubit>().unregister(
-          username: context.read<ProfileCubit>().state.username,
-          host: context.read<SettingsCubit>().state.endpointConfig.domain,
-          password: _passwordTextController.value.text,
-        );
+      username: context.read<ProfileCubit>().state.username,
+      host: context.read<SettingsCubit>().state.endpointConfig.domain,
+      password: _passwordTextController.value.text,
+    );
     if (!context.mounted) return;
     _passwordTextController.clear();
   }
@@ -63,12 +63,8 @@ class _UnregisterFormState extends State<UnregisterForm> {
       builder: (context, state) {
         final loading = state is AuthenticationUnregisterInProgress;
         final spacing = context.spacing;
-        final unregisterErrorPadding = EdgeInsets.all(
-          spacing.s,
-        );
-        final unregisterFieldPadding = EdgeInsets.all(
-          spacing.s,
-        );
+        final unregisterErrorPadding = EdgeInsets.all(spacing.s);
+        final unregisterFieldPadding = EdgeInsets.all(spacing.s);
         return Form(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

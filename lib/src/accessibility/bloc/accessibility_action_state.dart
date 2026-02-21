@@ -23,21 +23,19 @@ class AccessibilityActionState extends Equatable {
   });
 
   const AccessibilityActionState.initial()
-      : visible = false,
-        stack = const [
-          AccessibilityStepEntry(kind: AccessibilityStepKind.root)
-        ],
-        contacts = const [],
-        invites = const [],
-        drafts = const [],
-        myJid = null,
-        dismissedHighlights = const <String>{},
-        composerText = '',
-        newContactInput = '',
-        busy = false,
-        statusMessage = null,
-        errorMessage = null,
-        discardWarningActive = false;
+    : visible = false,
+      stack = const [AccessibilityStepEntry(kind: AccessibilityStepKind.root)],
+      contacts = const [],
+      invites = const [],
+      drafts = const [],
+      myJid = null,
+      dismissedHighlights = const <String>{},
+      composerText = '',
+      newContactInput = '',
+      busy = false,
+      statusMessage = null,
+      errorMessage = null,
+      discardWarningActive = false;
 
   final bool visible;
   final List<AccessibilityStepEntry> stack;
@@ -69,41 +67,40 @@ class AccessibilityActionState extends Equatable {
     Object? statusMessage = _unset,
     Object? errorMessage = _unset,
     bool? discardWarningActive,
-  }) =>
-      AccessibilityActionState(
-        visible: visible ?? this.visible,
-        stack: stack ?? this.stack,
-        contacts: contacts ?? this.contacts,
-        invites: invites ?? this.invites,
-        drafts: drafts ?? this.drafts,
-        myJid: myJid == _unset ? this.myJid : myJid as String?,
-        dismissedHighlights: dismissedHighlights ?? this.dismissedHighlights,
-        composerText: composerText ?? this.composerText,
-        newContactInput: newContactInput ?? this.newContactInput,
-        busy: busy ?? this.busy,
-        statusMessage: statusMessage == _unset
-            ? this.statusMessage
-            : statusMessage as AccessibilityActionStatus?,
-        errorMessage: errorMessage == _unset
-            ? this.errorMessage
-            : errorMessage as AccessibilityActionError?,
-        discardWarningActive: discardWarningActive ?? this.discardWarningActive,
-      );
+  }) => AccessibilityActionState(
+    visible: visible ?? this.visible,
+    stack: stack ?? this.stack,
+    contacts: contacts ?? this.contacts,
+    invites: invites ?? this.invites,
+    drafts: drafts ?? this.drafts,
+    myJid: myJid == _unset ? this.myJid : myJid as String?,
+    dismissedHighlights: dismissedHighlights ?? this.dismissedHighlights,
+    composerText: composerText ?? this.composerText,
+    newContactInput: newContactInput ?? this.newContactInput,
+    busy: busy ?? this.busy,
+    statusMessage: statusMessage == _unset
+        ? this.statusMessage
+        : statusMessage as AccessibilityActionStatus?,
+    errorMessage: errorMessage == _unset
+        ? this.errorMessage
+        : errorMessage as AccessibilityActionError?,
+    discardWarningActive: discardWarningActive ?? this.discardWarningActive,
+  );
 
   @override
   List<Object?> get props => [
-        visible,
-        stack,
-        contacts,
-        invites,
-        drafts,
-        myJid,
-        dismissedHighlights,
-        composerText,
-        newContactInput,
-        busy,
-        statusMessage,
-        errorMessage,
-        discardWarningActive,
-      ];
+    visible,
+    stack,
+    contacts,
+    invites,
+    drafts,
+    myJid,
+    dismissedHighlights,
+    composerText,
+    newContactInput,
+    busy,
+    statusMessage,
+    errorMessage,
+    discardWarningActive,
+  ];
 }

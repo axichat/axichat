@@ -15,7 +15,7 @@ const int _calendarAttachmentLabelField = 3;
 
 @freezed
 @HiveType(typeId: _calendarAttachmentTypeId)
-class CalendarAttachment with _$CalendarAttachment {
+abstract class CalendarAttachment with _$CalendarAttachment {
   const factory CalendarAttachment({
     @HiveField(_calendarAttachmentValueField) required String value,
     @HiveField(_calendarAttachmentFormatTypeField) String? formatType,

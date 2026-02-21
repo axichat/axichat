@@ -86,19 +86,19 @@ enum CalendarAlarmAction {
   bool get isProcedure => this == CalendarAlarmAction.procedure;
 
   String get icsValue => switch (this) {
-        CalendarAlarmAction.audio => _calendarAlarmActionAudioIcs,
-        CalendarAlarmAction.display => _calendarAlarmActionDisplayIcs,
-        CalendarAlarmAction.email => _calendarAlarmActionEmailIcs,
-        CalendarAlarmAction.procedure => _calendarAlarmActionProcedureIcs,
-      };
+    CalendarAlarmAction.audio => _calendarAlarmActionAudioIcs,
+    CalendarAlarmAction.display => _calendarAlarmActionDisplayIcs,
+    CalendarAlarmAction.email => _calendarAlarmActionEmailIcs,
+    CalendarAlarmAction.procedure => _calendarAlarmActionProcedureIcs,
+  };
 
   static CalendarAlarmAction? fromIcsValue(String? value) => switch (value) {
-        _calendarAlarmActionAudioIcs => CalendarAlarmAction.audio,
-        _calendarAlarmActionDisplayIcs => CalendarAlarmAction.display,
-        _calendarAlarmActionEmailIcs => CalendarAlarmAction.email,
-        _calendarAlarmActionProcedureIcs => CalendarAlarmAction.procedure,
-        _ => null,
-      };
+    _calendarAlarmActionAudioIcs => CalendarAlarmAction.audio,
+    _calendarAlarmActionDisplayIcs => CalendarAlarmAction.display,
+    _calendarAlarmActionEmailIcs => CalendarAlarmAction.email,
+    _calendarAlarmActionProcedureIcs => CalendarAlarmAction.procedure,
+    _ => null,
+  };
 }
 
 @HiveType(typeId: _calendarAlarmTriggerTypeTypeId)
@@ -112,22 +112,17 @@ enum CalendarAlarmTriggerType {
   bool get isRelative => this == CalendarAlarmTriggerType.relative;
 
   String get icsValue => switch (this) {
-        CalendarAlarmTriggerType.absolute =>
-          _calendarAlarmTriggerTypeAbsoluteIcs,
-        CalendarAlarmTriggerType.relative =>
-          _calendarAlarmTriggerTypeRelativeIcs,
-      };
+    CalendarAlarmTriggerType.absolute => _calendarAlarmTriggerTypeAbsoluteIcs,
+    CalendarAlarmTriggerType.relative => _calendarAlarmTriggerTypeRelativeIcs,
+  };
 
   static CalendarAlarmTriggerType? fromIcsValue(
     String? value,
-  ) =>
-      switch (value) {
-        _calendarAlarmTriggerTypeAbsoluteIcs =>
-          CalendarAlarmTriggerType.absolute,
-        _calendarAlarmTriggerTypeRelativeIcs =>
-          CalendarAlarmTriggerType.relative,
-        _ => null,
-      };
+  ) => switch (value) {
+    _calendarAlarmTriggerTypeAbsoluteIcs => CalendarAlarmTriggerType.absolute,
+    _calendarAlarmTriggerTypeRelativeIcs => CalendarAlarmTriggerType.relative,
+    _ => null,
+  };
 }
 
 @HiveType(typeId: _calendarAlarmRelativeToTypeId)
@@ -141,9 +136,9 @@ enum CalendarAlarmRelativeTo {
   bool get isEnd => this == CalendarAlarmRelativeTo.end;
 
   String get icsValue => switch (this) {
-        CalendarAlarmRelativeTo.start => _calendarAlarmRelativeToStartIcs,
-        CalendarAlarmRelativeTo.end => _calendarAlarmRelativeToEndIcs,
-      };
+    CalendarAlarmRelativeTo.start => _calendarAlarmRelativeToStartIcs,
+    CalendarAlarmRelativeTo.end => _calendarAlarmRelativeToEndIcs,
+  };
 
   static CalendarAlarmRelativeTo? fromIcsValue(String? value) =>
       switch (value) {
@@ -164,11 +159,10 @@ enum CalendarAlarmOffsetDirection {
   bool get isAfter => this == CalendarAlarmOffsetDirection.after;
 
   String get icsValue => switch (this) {
-        CalendarAlarmOffsetDirection.before =>
-          _calendarAlarmOffsetDirectionBeforeIcs,
-        CalendarAlarmOffsetDirection.after =>
-          _calendarAlarmOffsetDirectionAfterIcs,
-      };
+    CalendarAlarmOffsetDirection.before =>
+      _calendarAlarmOffsetDirectionBeforeIcs,
+    CalendarAlarmOffsetDirection.after => _calendarAlarmOffsetDirectionAfterIcs,
+  };
 
   static CalendarAlarmOffsetDirection? fromIcsValue(String? value) =>
       switch (value) {
@@ -182,7 +176,7 @@ enum CalendarAlarmOffsetDirection {
 
 @freezed
 @HiveType(typeId: _calendarAlarmTriggerTypeId)
-class CalendarAlarmTrigger with _$CalendarAlarmTrigger {
+abstract class CalendarAlarmTrigger with _$CalendarAlarmTrigger {
   const factory CalendarAlarmTrigger({
     @HiveField(_calendarAlarmTriggerKindField)
     required CalendarAlarmTriggerType type,
@@ -200,7 +194,7 @@ class CalendarAlarmTrigger with _$CalendarAlarmTrigger {
 
 @freezed
 @HiveType(typeId: _calendarAlarmRecipientTypeId)
-class CalendarAlarmRecipient with _$CalendarAlarmRecipient {
+abstract class CalendarAlarmRecipient with _$CalendarAlarmRecipient {
   const factory CalendarAlarmRecipient({
     @HiveField(_calendarAlarmRecipientAddressField) required String address,
     @HiveField(_calendarAlarmRecipientCommonNameField) String? commonName,
@@ -212,7 +206,7 @@ class CalendarAlarmRecipient with _$CalendarAlarmRecipient {
 
 @freezed
 @HiveType(typeId: _calendarAlarmTypeId)
-class CalendarAlarm with _$CalendarAlarm {
+abstract class CalendarAlarm with _$CalendarAlarm {
   const factory CalendarAlarm({
     @HiveField(_calendarAlarmActionField) required CalendarAlarmAction action,
     @HiveField(_calendarAlarmTriggerField)

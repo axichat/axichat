@@ -71,16 +71,15 @@ CalendarTask _deadlineTask({
   TaskPriority priority = TaskPriority.none,
   ReminderPreferences? reminders,
   List<TaskChecklistItem> checklist = const <TaskChecklistItem>[],
-}) =>
-    CalendarTask.create(
-      title: title,
-      description: description,
-      deadline: deadline,
-      location: location,
-      priority: priority,
-      reminders: reminders,
-      checklist: checklist,
-    );
+}) => CalendarTask.create(
+  title: title,
+  description: description,
+  deadline: deadline,
+  location: location,
+  priority: priority,
+  reminders: reminders,
+  checklist: checklist,
+);
 
 CalendarTask _unscheduledTask({
   required String title,
@@ -88,14 +87,13 @@ CalendarTask _unscheduledTask({
   String? location,
   TaskPriority priority = TaskPriority.none,
   List<TaskChecklistItem> checklist = const <TaskChecklistItem>[],
-}) =>
-    CalendarTask.create(
-      title: title,
-      description: description,
-      location: location,
-      priority: priority,
-      checklist: checklist,
-    );
+}) => CalendarTask.create(
+  title: title,
+  description: description,
+  location: location,
+  priority: priority,
+  checklist: checklist,
+);
 
 DateTime _startOfWeek(DateTime date) {
   final DateTime midnight = DateTime(date.year, date.month, date.day);
@@ -578,7 +576,8 @@ List<CalendarTask> _unscheduledTasks() {
     ),
     _unscheduledTask(title: 'Read: long product briefs (notes for style)'),
     _unscheduledTask(
-        title: 'Repair spare cables & adapters for the next deploy'),
+      title: 'Repair spare cables & adapters for the next deploy',
+    ),
     _unscheduledTask(
       title: 'Write short notes of thanks (customers and favors)',
     ),
@@ -690,9 +689,7 @@ CalendarModel _attachCriticalPaths(CalendarModel model) {
     return null;
   }
 
-  final CalendarTask? correspondence = findByTitle(
-    'Morning inbox & followups',
-  );
+  final CalendarTask? correspondence = findByTitle('Morning inbox & followups');
   final CalendarTask? proofs = findByTitle(
     'Publishing block: newsletter edits & revisions',
   );

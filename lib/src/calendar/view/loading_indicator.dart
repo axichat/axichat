@@ -37,8 +37,10 @@ class LoadingIndicator extends StatelessWidget {
           SizedBox(
             width: resolvedSize,
             height: resolvedSize,
-            child:
-                _CalendarSpinner(size: resolvedSize, semanticsLabel: message),
+            child: _CalendarSpinner(
+              size: resolvedSize,
+              semanticsLabel: message,
+            ),
           ),
           if (showMessage && message != null) ...[
             SizedBox(height: spacing.l),
@@ -88,9 +90,7 @@ class CalendarLoadingIndicator extends StatelessWidget {
           SizedBox(height: spacing.l),
           Text(
             resolvedMessage,
-            style: textTheme.p.copyWith(
-              color: colors.foreground,
-            ),
+            style: textTheme.p.copyWith(color: colors.foreground),
             textAlign: TextAlign.center,
           ),
         ],
@@ -122,7 +122,8 @@ class _CalendarSpinnerState extends State<_CalendarSpinner>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: authCompletionAnimationDuration +
+      duration:
+          authCompletionAnimationDuration +
           calendarTaskSplitPreviewAnimationDuration,
       vsync: this,
     )..repeat();
@@ -206,12 +207,7 @@ class _CalendarSpinnerPainter extends CustomPainter {
 }
 
 class SkeletonLoader extends StatefulWidget {
-  const SkeletonLoader({
-    super.key,
-    this.width,
-    this.height,
-    this.borderRadius,
-  });
+  const SkeletonLoader({super.key, this.width, this.height, this.borderRadius});
 
   final double? width;
   final double? height;
@@ -275,9 +271,9 @@ class TaskSkeletonTile extends StatelessWidget {
         final spec = ResponsiveHelper.spec(context);
         final double availableWidth =
             constraints.maxWidth.isFinite && constraints.maxWidth > 0
-                ? constraints.maxWidth
-                : spec.quickAddMaxWidth ??
-                    ResponsiveHelper.sidebarDimensions(context).defaultWidth;
+            ? constraints.maxWidth
+            : spec.quickAddMaxWidth ??
+                  ResponsiveHelper.sidebarDimensions(context).defaultWidth;
         final double primaryLineWidth = availableWidth * 0.6;
         final double secondaryLineWidth = availableWidth * 0.3;
 
@@ -313,16 +309,17 @@ class TaskSkeletonTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SkeletonLoader(
-                      width: double.infinity,
-                      height: labelHeight,
-                    ),
+                    SkeletonLoader(width: double.infinity, height: labelHeight),
                     SizedBox(height: context.spacing.s),
                     SkeletonLoader(
-                        width: primaryLineWidth, height: labelSmHeight),
+                      width: primaryLineWidth,
+                      height: labelSmHeight,
+                    ),
                     SizedBox(height: context.spacing.xs),
                     SkeletonLoader(
-                        width: secondaryLineWidth, height: labelSmHeight),
+                      width: secondaryLineWidth,
+                      height: labelSmHeight,
+                    ),
                   ],
                 ),
               ),
@@ -341,12 +338,7 @@ class TaskSkeletonTile extends StatelessWidget {
 }
 
 class PulsatingIcon extends StatefulWidget {
-  const PulsatingIcon({
-    super.key,
-    required this.icon,
-    this.color,
-    this.size,
-  });
+  const PulsatingIcon({super.key, required this.icon, this.color, this.size});
 
   final IconData icon;
   final Color? color;

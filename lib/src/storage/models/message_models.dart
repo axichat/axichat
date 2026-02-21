@@ -70,23 +70,23 @@ enum MessageError {
   bool get isNotNone => this != none;
 
   static MessageError fromOmemo(Object? error) => switch (error) {
-        omemo.NotEncryptedForDeviceError _ => notEncryptedForDevice,
-        omemo.MalformedEncryptedKeyError _ => malformedKey,
-        omemo.UnknownSignedPrekeyError _ => unknownSPK,
-        omemo.NoSessionWithDeviceError _ => noDeviceSession,
-        omemo.SkippingTooManyKeysError _ => skippingTooManyKeys,
-        omemo.InvalidMessageHMACError _ => invalidHMAC,
-        omemo.MalformedCiphertextError _ => malformedCiphertext,
-        omemo.NoKeyMaterialAvailableError _ => noKeyMaterial,
-        omemo.InvalidKeyExchangeSignatureError _ => invalidKEX,
-        mox.UnknownOmemoError _ => unknownOmemoError,
-        mox.InvalidAffixElementsException _ => invalidAffixElements,
-        mox.EmptyDeviceListException _ => emptyDeviceList,
-        mox.OmemoNotSupportedForContactException _ => omemoUnsupported,
-        mox.EncryptionFailedException _ => encryptionFailure,
-        mox.InvalidEnvelopePayloadException _ => invalidEnvelope,
-        _ => none,
-      };
+    omemo.NotEncryptedForDeviceError _ => notEncryptedForDevice,
+    omemo.MalformedEncryptedKeyError _ => malformedKey,
+    omemo.UnknownSignedPrekeyError _ => unknownSPK,
+    omemo.NoSessionWithDeviceError _ => noDeviceSession,
+    omemo.SkippingTooManyKeysError _ => skippingTooManyKeys,
+    omemo.InvalidMessageHMACError _ => invalidHMAC,
+    omemo.MalformedCiphertextError _ => malformedCiphertext,
+    omemo.NoKeyMaterialAvailableError _ => noKeyMaterial,
+    omemo.InvalidKeyExchangeSignatureError _ => invalidKEX,
+    mox.UnknownOmemoError _ => unknownOmemoError,
+    mox.InvalidAffixElementsException _ => invalidAffixElements,
+    mox.EmptyDeviceListException _ => emptyDeviceList,
+    mox.OmemoNotSupportedForContactException _ => omemoUnsupported,
+    mox.EncryptionFailedException _ => encryptionFailure,
+    mox.InvalidEnvelopePayloadException _ => invalidEnvelope,
+    _ => none,
+  };
 }
 
 enum MessageWarning {
@@ -201,7 +201,7 @@ class OmemoDeviceData {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class Message with _$Message implements Insertable<Message> {
+abstract class Message with _$Message implements Insertable<Message> {
   const factory Message({
     required String stanzaID,
     required String senderJid,
@@ -284,10 +284,10 @@ class Message with _$Message implements Insertable<Message> {
     final chatJid = isGroupChat
         ? from
         : (accountJid != null &&
-                accountJid.isNotEmpty &&
-                from.toLowerCase() == accountJid.toLowerCase()
-            ? to
-            : from);
+                  accountJid.isNotEmpty &&
+                  from.toLowerCase() == accountJid.toLowerCase()
+              ? to
+              : from);
     final senderJid = isGroupChat ? event.from.toString() : from;
     final invite = _ParsedInvite.fromEvent(event, to: to);
     final fragmentPayload = get<CalendarFragmentPayload>();
@@ -308,14 +308,16 @@ class Message with _$Message implements Insertable<Message> {
     final PseudoMessageType? availabilityType = _availabilityPseudoMessageType(
       availabilityPayload,
     );
-    final PseudoMessageType? pseudoMessageType = invite?.type ??
+    final PseudoMessageType? pseudoMessageType =
+        invite?.type ??
         availabilityType ??
         (calendarTaskIcs == null
             ? (fragmentPayload == null
-                ? null
-                : PseudoMessageType.calendarFragment)
+                  ? null
+                  : PseudoMessageType.calendarFragment)
             : PseudoMessageType.calendarTaskIcs);
-    final Map<String, dynamic>? pseudoMessageData = invite?.data ??
+    final Map<String, dynamic>? pseudoMessageData =
+        invite?.data ??
         availabilityPayload?.message.toJson() ??
         (taskIcsMessage == null
             ? fragmentPayload?.fragment.toJson()
@@ -327,8 +329,8 @@ class Message with _$Message implements Insertable<Message> {
     final fallbackText = htmlPlain.isNotEmpty
         ? htmlPlain
         : (normalizedHtml == null
-            ? ''
-            : HtmlContentCodec.toPlainText(normalizedHtml));
+              ? ''
+              : HtmlContentCodec.toPlainText(normalizedHtml));
     final boundedText = clampMessageText(event.text) ?? '';
     final resolvedText = boundedText.isNotEmpty ? boundedText : fallbackText;
 
@@ -340,16 +342,19 @@ class Message with _$Message implements Insertable<Message> {
       htmlBody: normalizedHtml,
       subject: null,
       timestamp: get<mox.DelayedDeliveryData>()?.timestamp,
-      noStore: get<mox.MessageProcessingHintData>()?.hints.contains(
-                mox.MessageProcessingHint.noStore,
-              ) ??
+      noStore:
+          get<mox.MessageProcessingHintData>()?.hints.contains(
+            mox.MessageProcessingHint.noStore,
+          ) ??
           false,
       quoting: get<mox.ReplyData>()?.id,
       originID: get<mox.StableIdData>()?.originId,
-      occupantID: get<mox.OccupantIdData>()?.id ??
+      occupantID:
+          get<mox.OccupantIdData>()?.id ??
           (isGroupChat ? event.from.toString() : null),
-      encryptionProtocol:
-          event.encrypted ? EncryptionProtocol.omemo : EncryptionProtocol.none,
+      encryptionProtocol: event.encrypted
+          ? EncryptionProtocol.omemo
+          : EncryptionProtocol.none,
       deviceID: get<OmemoDeviceData>()?.id,
       error: MessageError.fromOmemo(event.encryptionError),
       pseudoMessageType: pseudoMessageType,
@@ -767,12 +772,12 @@ class _ParsedInvite {
 
     final payload = <String, dynamic>{
       'roomJid': roomJid,
-      if (inviter != null) 'inviter': inviter,
-      if (invitee != null) 'invitee': invitee,
-      if (roomName != null) 'roomName': roomName,
-      if (reason != null) 'reason': reason,
-      if (password != null) 'password': password,
-      if (token != null) 'token': token,
+      'inviter': ?inviter,
+      'invitee': ?invitee,
+      'roomName': ?roomName,
+      'reason': ?reason,
+      'password': ?password,
+      'token': ?token,
       if (isRevoked) 'revoked': true,
     };
 
@@ -916,8 +921,8 @@ class Messages extends Table {
   Set<Column<Object>>? get primaryKey => {stanzaID};
 
   List<Index> get indexes => [
-        Index('idx_messages_chat_timestamp', 'chat_jid, timestamp'),
-      ];
+    Index('idx_messages_chat_timestamp', 'chat_jid, timestamp'),
+  ];
 }
 
 @DataClassName('MessageAttachmentData')
@@ -934,13 +939,13 @@ class MessageAttachments extends Table {
 
   @override
   List<String> get customConstraints => const [
-        'UNIQUE(message_id, file_metadata_id)',
-      ];
+    'UNIQUE(message_id, file_metadata_id)',
+  ];
 
   List<Index> get indexes => [
-        Index('idx_message_attachments_message', 'message_id'),
-        Index('idx_message_attachments_group', 'transport_group_id'),
-      ];
+    Index('idx_message_attachments_message', 'message_id'),
+    Index('idx_message_attachments_group', 'transport_group_id'),
+  ];
 }
 
 @DataClassName('MessageShareData')
@@ -977,8 +982,8 @@ class MessageParticipants extends Table {
   Set<Column> get primaryKey => {shareId, contactJid};
 
   List<Index> get indexes => [
-        Index('idx_message_participants_contact', 'contact_jid, share_id'),
-      ];
+    Index('idx_message_participants_contact', 'contact_jid, share_id'),
+  ];
 }
 
 @DataClassName('MessageCopyData')
@@ -996,17 +1001,17 @@ class MessageCopies extends Table {
 
   @override
   List<String> get customConstraints => const [
-        'UNIQUE(dc_msg_id, dc_account_id)',
-      ];
+    'UNIQUE(dc_msg_id, dc_account_id)',
+  ];
 
   List<Index> get indexes => [
-        Index('idx_message_copies_share', 'share_id, dc_chat_id'),
-        Index('idx_message_copies_dc_msg', 'dc_msg_id, dc_account_id'),
-      ];
+    Index('idx_message_copies_share', 'share_id, dc_chat_id'),
+    Index('idx_message_copies_dc_msg', 'dc_msg_id, dc_account_id'),
+  ];
 }
 
 @Freezed(toJson: false, fromJson: false)
-class Reaction with _$Reaction {
+abstract class Reaction with _$Reaction {
   const factory Reaction({
     required String messageID,
     required String senderJid,
@@ -1027,7 +1032,7 @@ class Reactions extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class Notification with _$Notification {
+abstract class Notification with _$Notification {
   const factory Notification({
     required int id,
     required String? senderJid,

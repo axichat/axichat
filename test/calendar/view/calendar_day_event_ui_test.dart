@@ -139,8 +139,9 @@ void main() {
       startDate: selected,
     );
 
-    CalendarModel model =
-        CalendarModel.empty().addDayEvent(first).addDayEvent(second);
+    CalendarModel model = CalendarModel.empty()
+        .addDayEvent(first)
+        .addDayEvent(second);
 
     final CalendarState state = CalendarState(
       model: model,

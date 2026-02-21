@@ -41,10 +41,12 @@ class ArchivedChatScreen extends StatelessWidget {
     final xmppService = locate<XmppService>();
     final notificationService = locate<NotificationService>();
     final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
-    final EmailService? emailService =
-        endpointConfig.smtpEnabled ? locate<EmailService>() : null;
-    final OmemoService? omemoService =
-        xmppService is OmemoService ? xmppService as OmemoService : null;
+    final EmailService? emailService = endpointConfig.smtpEnabled
+        ? locate<EmailService>()
+        : null;
+    final OmemoService? omemoService = xmppService is OmemoService
+        ? xmppService as OmemoService
+        : null;
     final settings = locate<SettingsCubit>().state;
     final storageManager = locate<CalendarStorageManager>();
     final storage = storageManager.authStorage;
@@ -52,25 +54,27 @@ class ArchivedChatScreen extends StatelessWidget {
         ? null
         : ChatCalendarSyncCoordinator(
             storage: ChatCalendarStorage(storage: storage),
-            sendMessage: ({
-              required String jid,
-              required CalendarSyncOutbound outbound,
-              required chat_models.ChatType chatType,
-            }) async {
-              await xmppService.sendCalendarSyncMessage(
-                jid: jid,
-                outbound: outbound,
-                chatType: chatType,
-              );
-            },
+            sendMessage:
+                ({
+                  required String jid,
+                  required CalendarSyncOutbound outbound,
+                  required chat_models.ChatType chatType,
+                }) async {
+                  await xmppService.sendCalendarSyncMessage(
+                    jid: jid,
+                    outbound: outbound,
+                    chatType: chatType,
+                  );
+                },
             sendSnapshotFile: xmppService.uploadCalendarSnapshot,
           );
     final CalendarAvailabilityShareCoordinator? availabilityCoordinator =
         storage == null
-            ? null
-            : CalendarAvailabilityShareCoordinator(
-                store: CalendarAvailabilityShareStore(),
-                sendMessage: ({
+        ? null
+        : CalendarAvailabilityShareCoordinator(
+            store: CalendarAvailabilityShareStore(),
+            sendMessage:
+                ({
                   required String jid,
                   required CalendarAvailabilityMessage message,
                   required chat_models.ChatType chatType,
@@ -81,7 +85,7 @@ class ArchivedChatScreen extends StatelessWidget {
                     chatType: chatType,
                   );
                 },
-              );
+          );
 
     return MultiBlocProvider(
       providers: [

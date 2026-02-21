@@ -41,8 +41,7 @@ void main() {
     final payload = (mox.XmlBuilder.withNamespace(
       'payload',
       'urn:test',
-    )..text('value'))
-        .build();
+    )..text('value')).build();
 
     final result = await manager.publish(
       serviceJid,

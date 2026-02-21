@@ -111,7 +111,8 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   void _showRemovedFeedback(BuildContext context, List<CalendarTask> tasks) {
     final l10n = context.l10n;
     final removedIds = tasks.map((task) => task.id).toSet();
-    final removalMatchesUndo = _awaitingUndoRemoval &&
+    final removalMatchesUndo =
+        _awaitingUndoRemoval &&
         removedIds.containsAll(_expectedRemovalIds) &&
         _expectedRemovalIds.containsAll(removedIds);
 

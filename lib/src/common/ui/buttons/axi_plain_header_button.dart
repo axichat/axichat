@@ -59,21 +59,27 @@ class _AxiPlainHeaderButtonState extends State<AxiPlainHeaderButton> {
       (cubit) => cubit.animationDuration,
     );
     final enabled = widget.onPressed != null || widget.onLongPress != null;
-    final VoidCallback? onTap =
-        enabled ? withSelectionHaptic(widget.onPressed) : null;
-    final VoidCallback? onLongPress =
-        enabled ? withSelectionHaptic(widget.onLongPress) : null;
+    final VoidCallback? onTap = enabled
+        ? withSelectionHaptic(widget.onPressed)
+        : null;
+    final VoidCallback? onLongPress = enabled
+        ? withSelectionHaptic(widget.onLongPress)
+        : null;
     final baseBackground = widget.backgroundColor ?? Colors.transparent;
-    final hoverBackground = widget.hoverBackgroundColor ??
+    final hoverBackground =
+        widget.hoverBackgroundColor ??
         Color.alphaBlend(
-          context.colorScheme.primary
-              .withValues(alpha: context.motion.tapHoverAlpha),
+          context.colorScheme.primary.withValues(
+            alpha: context.motion.tapHoverAlpha,
+          ),
           baseBackground,
         );
-    final pressedBackground = widget.pressedBackgroundColor ??
+    final pressedBackground =
+        widget.pressedBackgroundColor ??
         Color.alphaBlend(
-          context.colorScheme.primary
-              .withValues(alpha: context.motion.tapSplashAlpha),
+          context.colorScheme.primary.withValues(
+            alpha: context.motion.tapSplashAlpha,
+          ),
           hoverBackground,
         );
     final Color resolvedBackground = _pressed
@@ -95,8 +101,9 @@ class _AxiPlainHeaderButtonState extends State<AxiPlainHeaderButton> {
           onFocusChange: widget.onFocusChange,
           builder: (context, _, child) => child ?? const SizedBox.shrink(),
           child: ShadGestureDetector(
-            cursor:
-                enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            cursor: enabled
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
             hoverStrategies: ShadTheme.of(context).hoverStrategies,
             onHoverChange: enabled ? _setHovered : null,
             onTap: onTap,
@@ -106,10 +113,7 @@ class _AxiPlainHeaderButtonState extends State<AxiPlainHeaderButton> {
             onTapCancel: enabled ? () => _setPressed(false) : null,
             onLongPressStart: enabled ? (_) => _setPressed(true) : null,
             onLongPressEnd: enabled ? (_) => _setPressed(false) : null,
-            child: Padding(
-              padding: widget.padding,
-              child: widget.child,
-            ),
+            child: Padding(padding: widget.padding, child: widget.child),
           ),
         ),
       ),

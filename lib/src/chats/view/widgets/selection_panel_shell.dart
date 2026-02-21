@@ -57,8 +57,9 @@ class SelectionSummaryHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolvedStyle = textStyle ?? context.textTheme.muted;
-    final resolvedTooltip =
-        tooltip.isEmpty ? context.l10n.commonClearSelection : tooltip;
+    final resolvedTooltip = tooltip.isEmpty
+        ? context.l10n.commonClearSelection
+        : tooltip;
     return Row(
       children: [
         Expanded(

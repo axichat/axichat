@@ -21,10 +21,8 @@ class ChatCalendarSyncEnvelope {
 }
 
 class CalendarSyncDispatch {
-  CalendarSyncDispatch({
-    required this.inbound,
-    Completer<bool>? completer,
-  }) : _completer = completer ?? Completer<bool>();
+  CalendarSyncDispatch({required this.inbound, Completer<bool>? completer})
+    : _completer = completer ?? Completer<bool>();
 
   final CalendarSyncInbound inbound;
   final Completer<bool> _completer;
@@ -47,10 +45,8 @@ class CalendarSyncDispatch {
 }
 
 class ChatCalendarSyncDispatch {
-  ChatCalendarSyncDispatch({
-    required this.envelope,
-    Completer<void>? completer,
-  }) : _completer = completer ?? Completer<void>();
+  ChatCalendarSyncDispatch({required this.envelope, Completer<void>? completer})
+    : _completer = completer ?? Completer<void>();
 
   final ChatCalendarSyncEnvelope envelope;
   final Completer<void> _completer;
@@ -72,5 +68,5 @@ class ChatCalendarSyncDispatch {
   }
 }
 
-typedef ChatCalendarSyncHandler = Future<void> Function(
-    ChatCalendarSyncEnvelope envelope);
+typedef ChatCalendarSyncHandler =
+    Future<void> Function(ChatCalendarSyncEnvelope envelope);

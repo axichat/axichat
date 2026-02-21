@@ -125,14 +125,16 @@ class _AvatarSummaryCard extends StatelessWidget {
     final template = state.draftAvatar?.template;
     final showBackgroundPicker =
         state.draftAvatar?.source == AvatarSource.template &&
-            template != null &&
-            template.category != AvatarTemplateCategory.abstract &&
-            template.hasAlphaBackground;
-    final size =
-        isWide ? sizing.buttonHeightLg * 2 : sizing.buttonHeightLg * 1.5;
+        template != null &&
+        template.category != AvatarTemplateCategory.abstract &&
+        template.hasAlphaBackground;
+    final size = isWide
+        ? sizing.buttonHeightLg * 2
+        : sizing.buttonHeightLg * 1.5;
     final errorText = state.errorType?.resolve(l10n);
     final avatarSavedMessage = l10n.avatarSavedMessage;
-    final showSuccessMessage = !state.publishing &&
+    final showSuccessMessage =
+        !state.publishing &&
         errorText == null &&
         state.lastSavedHash != null &&
         state.draftAvatar?.payload.hash == state.lastSavedHash;
@@ -162,10 +164,7 @@ class _AvatarSummaryCard extends StatelessWidget {
                 SizedBox(width: spacing.m),
                 Expanded(child: centerStage),
                 SizedBox(width: spacing.m),
-                SizedBox(
-                  width: sizing.menuMaxWidth,
-                  child: actionButtons,
-                ),
+                SizedBox(width: sizing.menuMaxWidth, child: actionButtons),
               ],
             )
           else ...[
@@ -234,35 +233,26 @@ class _AvatarActionButtons extends StatelessWidget {
           onPressed: state.processing || state.publishing || state.shuffling
               ? null
               : () => context.read<AvatarEditorCubit>().shuffleTemplate(colors),
-          leading: Icon(
-            LucideIcons.refreshCw,
-            size: sizing.iconButtonIconSize,
-          ),
+          leading: Icon(LucideIcons.refreshCw, size: sizing.iconButtonIconSize),
           child: Text(l10n.signupAvatarShuffle),
         ),
         AxiButton.outline(
           onPressed: state.processing || state.publishing
               ? null
               : context.read<AvatarEditorCubit>().pickImage,
-          leading: Icon(
-            LucideIcons.upload,
-            size: sizing.iconButtonIconSize,
-          ),
+          leading: Icon(LucideIcons.upload, size: sizing.iconButtonIconSize),
           child: Text(l10n.signupAvatarUploadImage),
         ),
         AxiButton.primary(
           loading: state.publishing,
           onPressed:
               state.draftAvatar == null || state.processing || state.publishing
-                  ? null
-                  : () => context.read<AvatarEditorCubit>().publish(
-                        draftAvatar: state.draftAvatar,
-                        backgroundColor: state.backgroundColor,
-                      ),
-          leading: Icon(
-            LucideIcons.save,
-            size: sizing.iconButtonIconSize,
-          ),
+              ? null
+              : () => context.read<AvatarEditorCubit>().publish(
+                  draftAvatar: state.draftAvatar,
+                  backgroundColor: state.backgroundColor,
+                ),
+          leading: Icon(LucideIcons.save, size: sizing.iconButtonIconSize),
           child: Text(l10n.avatarSaveAvatar),
         ),
       ],
@@ -293,18 +283,20 @@ class _AvatarCenterStage extends StatelessWidget {
     final imageHeight = draftAvatar?.sourceHeight?.toDouble();
     final canCommit =
         draftAvatar?.source == AvatarSource.upload && !state.processing;
-    final cropRect = (draftAvatar?.cropRect == null ||
+    final cropRect =
+        (draftAvatar?.cropRect == null ||
             imageWidth == null ||
             imageHeight == null)
         ? (imageWidth != null && imageHeight != null
-            ? AxiImageCropper.fallbackCropRect(
-                imageWidth: imageWidth,
-                imageHeight: imageHeight,
-                minCropSide: AvatarEditorCubit.minCropSide,
-              )
-            : null)
+              ? AxiImageCropper.fallbackCropRect(
+                  imageWidth: imageWidth,
+                  imageHeight: imageHeight,
+                  minCropSide: AvatarEditorCubit.minCropSide,
+                )
+              : null)
         : draftAvatar?.cropRect;
-    final hasCropPreview = draftAvatar?.source == AvatarSource.upload &&
+    final hasCropPreview =
+        draftAvatar?.source == AvatarSource.upload &&
         sourceBytes != null &&
         sourceBytes.isNotEmpty &&
         imageWidth != null &&
@@ -328,12 +320,13 @@ class _AvatarCenterStage extends StatelessWidget {
                     imageWidth: imageWidth,
                     imageHeight: imageHeight,
                     cropRect: cropRect,
-                    onCropChanged:
-                        context.read<AvatarEditorCubit>().updateCropRect,
+                    onCropChanged: context
+                        .read<AvatarEditorCubit>()
+                        .updateCropRect,
                     onCropReset: context.read<AvatarEditorCubit>().resetCrop,
                     onCropCommitted: canCommit
                         ? (rect) =>
-                            context.read<AvatarEditorCubit>().commitCrop(rect)
+                              context.read<AvatarEditorCubit>().commitCrop(rect)
                         : null,
                     minCropSide: AvatarEditorCubit.minCropSide,
                   ),
@@ -363,9 +356,7 @@ class _AvatarCenterStage extends StatelessWidget {
           children: [
             Text(
               profile.username,
-              style: context.textTheme.h3.copyWith(
-                color: colors.foreground,
-              ),
+              style: context.textTheme.h3.copyWith(color: colors.foreground),
               textAlign: TextAlign.center,
             ),
             Text(
@@ -401,7 +392,8 @@ class _BackgroundPicker extends StatelessWidget {
       colors.background,
       colors.foreground.withAlpha((0.65 * 255).round()),
     ];
-    final needsPicker = state.draftAvatar?.source == AvatarSource.template &&
+    final needsPicker =
+        state.draftAvatar?.source == AvatarSource.template &&
         template != null &&
         template.category != AvatarTemplateCategory.abstract &&
         template.hasAlphaBackground;
@@ -486,9 +478,9 @@ class _BackgroundPicker extends StatelessWidget {
               onPressed: state.backgroundColor == Colors.transparent
                   ? null
                   : () => context.read<AvatarEditorCubit>().setBackgroundColor(
-                        Colors.transparent,
-                        colors,
-                      ),
+                      Colors.transparent,
+                      colors,
+                    ),
               child: Text(l10n.avatarBackgroundTransparent),
             ),
           ),
@@ -567,18 +559,18 @@ class _DefaultsSection extends StatelessWidget {
             final columns = maxWidth >= largeScreen
                 ? _avatarDefaultsColumnsWide
                 : maxWidth >= mediumScreen
-                    ? _avatarDefaultsColumnsMedium
-                    : _avatarDefaultsColumnsNarrow;
+                ? _avatarDefaultsColumnsMedium
+                : _avatarDefaultsColumnsNarrow;
             final cardWidth = columns == _avatarDefaultsColumnsNarrow
                 ? maxWidth
                 : (maxWidth - (spacing.s * (columns - 1))) / columns;
             final templatesByCategory =
                 <AvatarTemplateCategory, List<AvatarTemplate>>{
-              for (final category in AvatarTemplateCategory.values)
-                category: templates
-                    .where((template) => template.category == category)
-                    .toList(),
-            };
+                  for (final category in AvatarTemplateCategory.values)
+                    category: templates
+                        .where((template) => template.category == category)
+                        .toList(),
+                };
             return Wrap(
               spacing: spacing.s,
               runSpacing: spacing.s,
@@ -612,12 +604,12 @@ const _avatarDefaultsColumnsNarrow = 1;
 
 extension _AvatarTemplateCategoryLabel on AvatarTemplateCategory {
   String label(AppLocalizations l10n) => switch (this) {
-        AvatarTemplateCategory.abstract => l10n.avatarCategoryAbstract,
-        AvatarTemplateCategory.stem => l10n.avatarCategoryStem,
-        AvatarTemplateCategory.sports => l10n.avatarCategorySports,
-        AvatarTemplateCategory.music => l10n.avatarCategoryMusic,
-        AvatarTemplateCategory.misc => l10n.avatarCategoryMisc,
-      };
+    AvatarTemplateCategory.abstract => l10n.avatarCategoryAbstract,
+    AvatarTemplateCategory.stem => l10n.avatarCategoryStem,
+    AvatarTemplateCategory.sports => l10n.avatarCategorySports,
+    AvatarTemplateCategory.music => l10n.avatarCategoryMusic,
+    AvatarTemplateCategory.misc => l10n.avatarCategoryMisc,
+  };
 }
 
 extension _AvatarTemplateLocalization on AvatarTemplate {
@@ -769,9 +761,9 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
                 tooltip: l10n.commonPrevious,
                 onPressed: canNavigate
                     ? () => _carouselController.previousPage(
-                          duration: animationDuration,
-                          curve: Curves.easeOutCubic,
-                        )
+                        duration: animationDuration,
+                        curve: Curves.easeOutCubic,
+                      )
                     : null,
               ),
               SizedBox(width: spacing.xs),
@@ -780,17 +772,18 @@ class _CategoryCarouselCardState extends State<_CategoryCarouselCard> {
                 tooltip: l10n.commonNext,
                 onPressed: canNavigate
                     ? () => _carouselController.nextPage(
-                          duration: animationDuration,
-                          curve: Curves.easeOutCubic,
-                        )
+                        duration: animationDuration,
+                        curve: Curves.easeOutCubic,
+                      )
                     : null,
               ),
             ],
           ),
           LayoutBuilder(
             builder: (context, constraints) {
-              final availableWidth =
-                  constraints.maxWidth > 0 ? constraints.maxWidth : cardWidth;
+              final availableWidth = constraints.maxWidth > 0
+                  ? constraints.maxWidth
+                  : cardWidth;
               final viewportFraction = canNavigate
                   ? (cardWidth / availableWidth).clamp(0.56, 0.78).toDouble()
                   : 1.0;
@@ -847,8 +840,9 @@ class _TemplatePreviewCard extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    final previewBackground =
-        template.hasAlphaBackground ? colors.card : colors.card;
+    final previewBackground = template.hasAlphaBackground
+        ? colors.card
+        : colors.card;
     final assetPath = template.assetPath;
     final labelStyle = isSelected
         ? context.textTheme.p.copyWith(
@@ -856,8 +850,9 @@ class _TemplatePreviewCard extends StatelessWidget {
             fontWeight: FontWeight.w700,
           )
         : context.textTheme.small.copyWith(color: colors.mutedForeground);
-    final borderWidth =
-        isSelected ? context.borderSide.width * 2 : context.borderSide.width;
+    final borderWidth = isSelected
+        ? context.borderSide.width * 2
+        : context.borderSide.width;
     final border = Border.fromBorderSide(
       context.borderSide.copyWith(
         color: isSelected ? colors.primary : colors.border,

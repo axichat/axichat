@@ -244,16 +244,13 @@ bool _isBundledAttachmentFile(File file) {
 }
 
 void _scheduleBundleCleanup(File file) {
-  Timer(
-    _bundleCleanupDelay,
-    () async {
-      try {
-        if (await file.exists()) {
-          await file.delete();
-        }
-      } on Exception {
-        return;
+  Timer(_bundleCleanupDelay, () async {
+    try {
+      if (await file.exists()) {
+        await file.delete();
       }
-    },
-  );
+    } on Exception {
+      return;
+    }
+  });
 }

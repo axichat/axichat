@@ -21,13 +21,13 @@ class AccessibilityChatState extends Equatable {
   const AccessibilityChatState.initial({
     required this.jid,
     required this.draftId,
-  })  : messages = const [],
-        attachments = const <String, List<FileMetadataData>>{},
-        busy = false,
-        statusMessage = null,
-        errorMessage = null,
-        sendCount = 0,
-        draftSaveCount = 0;
+  }) : messages = const [],
+       attachments = const <String, List<FileMetadataData>>{},
+       busy = false,
+       statusMessage = null,
+       errorMessage = null,
+       sendCount = 0,
+       draftSaveCount = 0;
 
   final String jid;
   final List<Message> messages;
@@ -49,33 +49,32 @@ class AccessibilityChatState extends Equatable {
     int? sendCount,
     int? draftSaveCount,
     Object? draftId = _unset,
-  }) =>
-      AccessibilityChatState(
-        jid: jid ?? this.jid,
-        messages: messages ?? this.messages,
-        attachments: attachments ?? this.attachments,
-        busy: busy ?? this.busy,
-        statusMessage: statusMessage == _unset
-            ? this.statusMessage
-            : statusMessage as AccessibilityChatStatus?,
-        errorMessage: errorMessage == _unset
-            ? this.errorMessage
-            : errorMessage as AccessibilityChatError?,
-        sendCount: sendCount ?? this.sendCount,
-        draftSaveCount: draftSaveCount ?? this.draftSaveCount,
-        draftId: draftId == _unset ? this.draftId : draftId as int?,
-      );
+  }) => AccessibilityChatState(
+    jid: jid ?? this.jid,
+    messages: messages ?? this.messages,
+    attachments: attachments ?? this.attachments,
+    busy: busy ?? this.busy,
+    statusMessage: statusMessage == _unset
+        ? this.statusMessage
+        : statusMessage as AccessibilityChatStatus?,
+    errorMessage: errorMessage == _unset
+        ? this.errorMessage
+        : errorMessage as AccessibilityChatError?,
+    sendCount: sendCount ?? this.sendCount,
+    draftSaveCount: draftSaveCount ?? this.draftSaveCount,
+    draftId: draftId == _unset ? this.draftId : draftId as int?,
+  );
 
   @override
   List<Object?> get props => [
-        jid,
-        messages,
-        attachments,
-        busy,
-        statusMessage,
-        errorMessage,
-        sendCount,
-        draftSaveCount,
-        draftId,
-      ];
+    jid,
+    messages,
+    attachments,
+    busy,
+    statusMessage,
+    errorMessage,
+    sendCount,
+    draftSaveCount,
+    draftId,
+  ];
 }

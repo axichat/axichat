@@ -56,9 +56,7 @@ class DayEventDraft {
 class DayEventEditorResult {
   const DayEventEditorResult.save(this.draft) : deleted = false;
 
-  const DayEventEditorResult.deleted()
-      : draft = null,
-        deleted = true;
+  const DayEventEditorResult.deleted() : draft = null, deleted = true;
 
   final DayEventDraft? draft;
   final bool deleted;
@@ -169,8 +167,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final l10n = context.l10n;
     final bool isEditing = widget.existing != null;
     final colors = context.colorScheme;
-    final TextStyle titleStyle =
-        context.textTheme.h4.copyWith(color: calendarTitleColor);
+    final TextStyle titleStyle = context.textTheme.h4.copyWith(
+      color: calendarTitleColor,
+    );
     final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
     final bool keyboardOpen = keyboardInset > safeBottom;
@@ -289,8 +288,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                       borderRadius: calendarBorderRadius,
                       focusBorderColor: calendarPrimaryColor,
                       contentPadding: EdgeInsets.symmetric(
-                          horizontal: context.spacing.m,
-                          vertical: context.spacing.s),
+                        horizontal: context.spacing.m,
+                        vertical: context.spacing.s,
+                      ),
                       minLines: 3,
                       maxLines: 3,
                     ),
@@ -320,8 +320,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                           return;
                         }
                         setState(() {
-                          _endDate =
-                              date.isBefore(_startDate) ? _startDate : date;
+                          _endDate = date.isBefore(_startDate)
+                              ? _startDate
+                              : date;
                         });
                       },
                     ),
@@ -507,8 +508,9 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
           );
     final l10n = context.l10n;
     final String trimmedTitle = draft.title.trim();
-    final String subject =
-        trimmedTitle.isEmpty ? l10n.calendarExportFormatIcsTitle : trimmedTitle;
+    final String subject = trimmedTitle.isEmpty
+        ? l10n.calendarExportFormatIcsTitle
+        : trimmedTitle;
     final String shareText = '$subject (${l10n.calendarExportFormatIcsTitle})';
 
     try {

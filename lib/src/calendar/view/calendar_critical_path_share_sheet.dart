@@ -37,8 +37,9 @@ Future<void> showCalendarCriticalPathShareSheet({
   final BuildContext modalContext = context.calendarModalContext;
   final locate = modalContext.read;
   final List<Chat> chats = locate<ChatsCubit>().state.items ?? const <Chat>[];
-  final List<Chat> available =
-      chats.where((chat) => chat.supportsChatCalendar).toList(growable: false);
+  final List<Chat> available = chats
+      .where((chat) => chat.supportsChatCalendar)
+      .toList(growable: false);
   if (available.isEmpty) {
     FeedbackSystem.showInfo(
       context,
@@ -98,7 +99,8 @@ class _CalendarCriticalPathShareSheetState
   @override
   void initState() {
     super.initState();
-    _initialChat = widget.initialChat ??
+    _initialChat =
+        widget.initialChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
   }
 
@@ -113,7 +115,8 @@ class _CalendarCriticalPathShareSheetState
     if (initialChat == null) {
       return;
     }
-    final bool shareSignatureEnabled = initialChat.shareSignatureEnabled ??
+    final bool shareSignatureEnabled =
+        initialChat.shareSignatureEnabled ??
         widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled;
     _recipients = <ComposerRecipient>[
       ComposerRecipient(
@@ -127,14 +130,16 @@ class _CalendarCriticalPathShareSheetState
 
   @override
   Widget build(BuildContext context) {
-    final rosterItems = context.watch<RosterCubit>().state.items ??
+    final rosterItems =
+        context.watch<RosterCubit>().state.items ??
         (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
         const <RosterItem>[];
     final chatsSelfJid = widget.locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
-    final String? selfJid =
-        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final String? selfJid = resolvedProfileJid.isNotEmpty
+        ? resolvedProfileJid
+        : null;
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
@@ -167,20 +172,20 @@ class _CalendarCriticalPathShareSheetState
             selector: (state) => state.recipientAddressSuggestions,
             builder: (context, recipientAddressSuggestions) =>
                 RecipientChipsBar(
-              recipients: _recipients,
-              availableChats: widget.availableChats,
-              rosterItems: rosterItems,
-              databaseSuggestionAddresses: recipientAddressSuggestions,
-              selfJid: chatsSelfJid,
-              selfIdentity: selfIdentity,
-              latestStatuses: const {},
-              collapsedByDefault: false,
-              allowAddressTargets: false,
-              showSuggestionsWhenEmpty: true,
-              onRecipientAdded: _handleRecipientAdded,
-              onRecipientRemoved: _handleRecipientRemoved,
-              onRecipientToggled: _handleRecipientToggled,
-            ),
+                  recipients: _recipients,
+                  availableChats: widget.availableChats,
+                  rosterItems: rosterItems,
+                  databaseSuggestionAddresses: recipientAddressSuggestions,
+                  selfJid: chatsSelfJid,
+                  selfIdentity: selfIdentity,
+                  latestStatuses: const {},
+                  collapsedByDefault: false,
+                  allowAddressTargets: false,
+                  showSuggestionsWhenEmpty: true,
+                  onRecipientAdded: _handleRecipientAdded,
+                  onRecipientRemoved: _handleRecipientRemoved,
+                  onRecipientToggled: _handleRecipientToggled,
+                ),
           ),
         SizedBox(height: context.spacing.m),
         Padding(
@@ -257,17 +262,18 @@ class _CalendarCriticalPathShareSheetState
     setState(() => _isSending = true);
     try {
       final CalendarFragment fragment = _buildFragment();
-      final String shareText =
-          CalendarFragmentFormatter(context.l10n).describe(fragment).trim();
+      final String shareText = CalendarFragmentFormatter(
+        context.l10n,
+      ).describe(fragment).trim();
       final completer = Completer<CalendarShareResult>();
       context.read<CalendarBloc>().add(
-            CalendarEvent.criticalPathShareRequested(
-              fragment: fragment,
-              recipient: selected,
-              shareText: shareText,
-              completer: completer,
-            ),
-          );
+        CalendarEvent.criticalPathShareRequested(
+          fragment: fragment,
+          recipient: selected,
+          shareText: shareText,
+          completer: completer,
+        ),
+      );
       final result = await completer.future;
       if (!mounted) {
         return;
@@ -313,8 +319,9 @@ class _CalendarCriticalPathShareSheetState
   }
 
   CalendarFragment _buildFragment() {
-    final Set<String> availableIds =
-        widget.tasks.map((task) => task.id).toSet();
+    final Set<String> availableIds = widget.tasks
+        .map((task) => task.id)
+        .toSet();
     final List<String> orderedIds = widget.path.taskIds
         .where(availableIds.contains)
         .toList(growable: false);
@@ -330,10 +337,7 @@ class _CriticalPathShareSectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text.toUpperCase(),
-      style: context.textTheme.sectionLabelM,
-    );
+    return Text(text.toUpperCase(), style: context.textTheme.sectionLabelM);
   }
 }
 

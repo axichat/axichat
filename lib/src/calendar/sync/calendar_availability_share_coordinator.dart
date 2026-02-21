@@ -17,11 +17,12 @@ import 'package:uuid/uuid.dart';
 
 import 'calendar_availability_share_store.dart';
 
-typedef CalendarAvailabilityMessageSender = Future<void> Function({
-  required String jid,
-  required CalendarAvailabilityMessage message,
-  required ChatType chatType,
-});
+typedef CalendarAvailabilityMessageSender =
+    Future<void> Function({
+      required String jid,
+      required CalendarAvailabilityMessage message,
+      required ChatType chatType,
+    });
 
 const Duration _availabilityDaySpan = Duration(days: 1);
 const bool _availabilityOverlayDefaultRedacted = true;
@@ -32,9 +33,9 @@ class CalendarAvailabilityShareCoordinator {
     required CalendarAvailabilityShareStore store,
     required CalendarAvailabilityMessageSender sendMessage,
     DateTime Function()? now,
-  })  : _store = store,
-        _sendMessage = sendMessage,
-        _now = now ?? DateTime.now;
+  }) : _store = store,
+       _sendMessage = sendMessage,
+       _now = now ?? DateTime.now;
 
   final CalendarAvailabilityShareStore _store;
   final CalendarAvailabilityMessageSender _sendMessage;
@@ -486,8 +487,9 @@ List<_TimeRange> _mergeRanges(List<_TimeRange> ranges) {
       current = range;
       continue;
     }
-    final DateTime end =
-        range.end.isAfter(current.end) ? range.end : current.end;
+    final DateTime end = range.end.isAfter(current.end)
+        ? range.end
+        : current.end;
     current = _TimeRange(start: current.start, end: end);
   }
   merged.add(current);

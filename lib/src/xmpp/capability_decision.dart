@@ -6,11 +6,7 @@ part of 'package:axichat/src/xmpp/xmpp_service.dart';
 enum CapabilityDecisionKind { allowed, unsupported, unknown, error }
 
 class CapabilityDecision {
-  const CapabilityDecision(
-    this.kind, {
-    this.error,
-    this.stackTrace,
-  });
+  const CapabilityDecision(this.kind, {this.error, this.stackTrace});
 
   final CapabilityDecisionKind kind;
   final Object? error;

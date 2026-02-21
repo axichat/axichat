@@ -45,12 +45,12 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
   void _onPressed(BuildContext context) async {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     await context.read<AuthenticationCubit>().changePassword(
-          username: context.read<ProfileCubit>().state.username,
-          host: context.read<SettingsCubit>().state.endpointConfig.domain,
-          oldPassword: _passwordTextController.value.text,
-          password: _newPasswordTextController.value.text,
-          password2: _newPassword2TextController.value.text,
-        );
+      username: context.read<ProfileCubit>().state.username,
+      host: context.read<SettingsCubit>().state.endpointConfig.domain,
+      oldPassword: _passwordTextController.value.text,
+      password: _newPasswordTextController.value.text,
+      password2: _newPassword2TextController.value.text,
+    );
     if (!context.mounted) return;
     _passwordTextController.clear();
     _newPasswordTextController.clear();
@@ -80,15 +80,15 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                       ),
                     )
                   : state is AuthenticationPasswordChangeFailure
-                      ? Padding(
-                          padding: EdgeInsets.all(spacing.s),
-                          child: Text(
-                            state.message.resolve(context.l10n),
-                            textAlign: TextAlign.center,
-                            style: context.textTheme.small,
-                          ),
-                        )
-                      : SizedBox(height: spacing.l),
+                  ? Padding(
+                      padding: EdgeInsets.all(spacing.s),
+                      child: Text(
+                        state.message.resolve(context.l10n),
+                        textAlign: TextAlign.center,
+                        style: context.textTheme.small,
+                      ),
+                    )
+                  : SizedBox(height: spacing.l),
               Padding(
                 padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(

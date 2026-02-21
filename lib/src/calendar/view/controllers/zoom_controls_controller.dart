@@ -11,8 +11,8 @@ class ZoomControlsController extends ChangeNotifier {
   ZoomControlsController({
     Duration autoHideDuration = const Duration(seconds: 5),
     bool initiallyVisible = false,
-  })  : _autoHideDuration = autoHideDuration,
-        _isVisible = initiallyVisible;
+  }) : _autoHideDuration = autoHideDuration,
+       _isVisible = initiallyVisible;
 
   final Duration _autoHideDuration;
   bool _isVisible;

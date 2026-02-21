@@ -75,16 +75,16 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 part 'home/view/home_screen_widgets.dart';
 
 List<HomeSearchFilter> _blocklistSearchFilters(AppLocalizations l10n) => [
-      HomeSearchFilter(id: SearchFilterId.all, label: l10n.blocklistFilterAll),
-    ];
+  HomeSearchFilter(id: SearchFilterId.all, label: l10n.blocklistFilterAll),
+];
 
 List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
-      HomeSearchFilter(id: SearchFilterId.all, label: l10n.draftsFilterAll),
-      HomeSearchFilter(
-        id: SearchFilterId.attachments,
-        label: l10n.draftsFilterAttachments,
-      ),
-    ];
+  HomeSearchFilter(id: SearchFilterId.all, label: l10n.draftsFilterAll),
+  HomeSearchFilter(
+    id: SearchFilterId.attachments,
+    label: l10n.draftsFilterAttachments,
+  ),
+];
 
 class HomeShellScope extends InheritedWidget {
   const HomeShellScope({
@@ -135,8 +135,8 @@ class HomeShellCalendarScope extends StatelessWidget {
         const seedDemoCalendar = kEnableDemoChats;
         final emailService =
             locate<SettingsCubit>().state.endpointConfig.smtpEnabled
-                ? locate<EmailService>()
-                : null;
+            ? locate<EmailService>()
+            : null;
         final calendarBloc = CalendarBloc(
           xmppService: locate<XmppService>(),
           emailService: emailService,
@@ -160,10 +160,9 @@ class HomeShellCalendarScope extends StatelessWidget {
             previous.endpointConfig != current.endpointConfig,
         listener: (context, settings) {
           final config = settings.endpointConfig;
-          final emailService = locate<EmailService>();
-          final EmailService? activeEmailService =
-              config.smtpEnabled ? emailService : null;
-          locate<CalendarBloc>().updateEmailService(activeEmailService);
+          locate<CalendarBloc>().updateEmailService(
+            config.smtpEnabled ? locate<EmailService>() : null,
+          );
         },
         child: shell,
       ),
@@ -211,8 +210,9 @@ class _HomeShellState extends State<HomeShell> {
           .where((chat) => !chat.archived && !chat.spam)
           .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
       HomeTab.drafts: context.watch<DraftCubit>().state.items?.length ?? 0,
-      HomeTab.spam:
-          chatItems.where((chat) => chat.spam && !chat.archived).length,
+      HomeTab.spam: chatItems
+          .where((chat) => chat.spam && !chat.archived)
+          .length,
     };
     final showDesktopPrimaryActions = navPlacement == NavPlacement.rail;
     final tabs = <HomeTabEntry>[
@@ -297,9 +297,11 @@ class _HomeShellState extends State<HomeShell> {
       ValueListenableBuilder<int>(
         valueListenable: _bottomNavIndex,
         builder: (context, selectedBottomIndex, _) {
-          final safeSelectedBottomIndex =
-              selectedBottomIndex.clamp(0, 3).toInt();
-          final hideBottomBarForChat = isChatOpen &&
+          final safeSelectedBottomIndex = selectedBottomIndex
+              .clamp(0, 3)
+              .toInt();
+          final hideBottomBarForChat =
+              isChatOpen &&
               safeSelectedBottomIndex == 0 &&
               !isChatCalendarRoute;
           return Column(
@@ -431,8 +433,9 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_openCalendarHistoryEntry != null) {
       return;
     }
-    final entry =
-        LocalHistoryEntry(onRemove: _handleOpenCalendarHistoryRemoved);
+    final entry = LocalHistoryEntry(
+      onRemove: _handleOpenCalendarHistoryRemoved,
+    );
     _openCalendarHistoryEntry = entry;
     route.addLocalHistoryEntry(entry);
   }
@@ -476,9 +479,7 @@ class _HomeScreenState extends State<HomeScreen> {
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
     if (!_isFindActionEvent(event)) return KeyEventResult.ignored;
     final locate = context.read;
-    locate<AccessibilityActionBloc>().add(
-      const AccessibilityMenuOpened(),
-    );
+    locate<AccessibilityActionBloc>().add(const AccessibilityMenuOpened());
     return KeyEventResult.handled;
   }
 
@@ -487,8 +488,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final storageManager = context.watch<CalendarStorageManager>();
     final homeTabIndex = HomeShellScope.maybeOf(context)?.homeTabIndex;
     final bottomNavIndex = HomeShellScope.maybeOf(context)?.bottomNavIndex;
-    final calendarBottomDragSession =
-        HomeShellScope.maybeOf(context)?.calendarBottomDragSession;
+    final calendarBottomDragSession = HomeShellScope.maybeOf(
+      context,
+    )?.calendarBottomDragSession;
     final tabs =
         HomeShellScope.maybeOf(context)?.tabs ?? const <HomeTabEntry>[];
     return _HomeExitPopGuard(
@@ -566,70 +568,32 @@ class _HomeExitPopGuard extends StatelessWidget {
         }
         return ValueListenableBuilder<int>(
           valueListenable: bottomNotifier,
-          builder: (context, _, __) => content,
+          builder: (context, _, _) => content,
         );
       },
     );
   }
 }
 
-class _HomeCoordinatorBridge extends StatefulWidget {
-  const _HomeCoordinatorBridge({
-    required this.storage,
-    required this.child,
-  });
+class _HomeCoordinatorBridge extends StatelessWidget {
+  const _HomeCoordinatorBridge({required this.storage, required this.child});
 
   final Storage? storage;
   final Widget child;
 
   @override
-  State<_HomeCoordinatorBridge> createState() => _HomeCoordinatorBridgeState();
-}
-
-class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
-  Storage? _storage;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _configureCoordinators();
-  }
-
-  @override
-  void didUpdateWidget(covariant _HomeCoordinatorBridge oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.storage != widget.storage) {
-      _storage = null;
-    }
-    _configureCoordinators();
-  }
-
-  void _configureCoordinators() {
-    final storage = widget.storage;
-    if (storage == null) {
-      return;
-    }
-    if (_storage == storage) {
-      return;
-    }
-    _storage = storage;
-    final locate = context.read;
-    locate<CalendarBloc>().configureHomeCoordinators(storage: storage);
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (widget.storage == null) {
-      return widget.child;
+    if (storage == null) {
+      return child;
     }
-    final chatCoordinator =
-        context.select<CalendarBloc, ChatCalendarSyncCoordinator?>(
-      (stateOwner) => stateOwner.chatCalendarCoordinator,
-    );
-    final availabilityCoordinator =
-        context.select<CalendarBloc, CalendarAvailabilityShareCoordinator?>(
-      (stateOwner) => stateOwner.availabilityCoordinator,
-    );
+    final chatCoordinator = context
+        .select<CalendarBloc, ChatCalendarSyncCoordinator?>(
+          (stateOwner) => stateOwner.chatCalendarCoordinator,
+        );
+    final availabilityCoordinator = context
+        .select<CalendarBloc, CalendarAvailabilityShareCoordinator?>(
+          (stateOwner) => stateOwner.availabilityCoordinator,
+        );
     return MultiRepositoryProvider(
       providers: [
         if (chatCoordinator != null)
@@ -641,7 +605,7 @@ class _HomeCoordinatorBridgeState extends State<_HomeCoordinatorBridge> {
             value: availabilityCoordinator,
           ),
       ],
-      child: widget.child,
+      child: child,
     );
   }
 }
@@ -729,7 +693,8 @@ class _HomeContent extends StatelessWidget {
     final settings = context.watch<SettingsCubit>().state;
     final endpointConfig = settings.endpointConfig;
     final bool emailEnabled = endpointConfig.smtpEnabled;
-    final bool demoOffline = kEnableDemoChats &&
+    final bool demoOffline =
+        kEnableDemoChats &&
         context.select<ProfileCubit, String>(
               (stateOwner) => stateOwner.state.jid,
             ) ==
@@ -765,8 +730,9 @@ class _HomeContent extends StatelessWidget {
                     builder: (context, state) {
                       final chatsState = context.watch<ChatsCubit>().state;
                       final chatRoute = chatsState.openChatRoute;
-                      final Widget chatPaneContent =
-                          openJid == null ? const GuestChat() : const Chat();
+                      final Widget chatPaneContent = openJid == null
+                          ? const GuestChat()
+                          : const Chat();
                       final Widget chatPane = Align(
                         alignment: Alignment.topLeft,
                         child: chatPaneContent,
@@ -816,8 +782,9 @@ class _HomeContent extends StatelessWidget {
                                   final safeTab = tabIndex.clamp(0, 1).toInt();
                                   final scope = HomeShellScope.maybeOf(context);
                                   if (scope != null) {
-                                    scope.bottomNavIndex.value =
-                                        safeTab == 0 ? 1 : 2;
+                                    scope.bottomNavIndex.value = safeTab == 0
+                                        ? 1
+                                        : 2;
                                   }
                                 },
                                 bottomDragSession: calendarBottomDragSession,
@@ -828,7 +795,8 @@ class _HomeContent extends StatelessWidget {
                       }
 
                       Widget contentForBottomIndex(int selectedBottomIndex) {
-                        final bool openCalendar = (selectedBottomIndex == 1 ||
+                        final bool openCalendar =
+                            (selectedBottomIndex == 1 ||
                             selectedBottomIndex == 2);
                         final int? calendarTabIndex = openCalendar
                             ? (selectedBottomIndex == 2 ? 1 : 0)
@@ -885,10 +853,10 @@ class _HomeContent extends StatelessWidget {
         ? Builder(
             builder: (context) {
               final locate = context.read;
-              final initialTasks =
-                  context.select<CalendarBloc, Map<String, CalendarTask>>(
-                (stateOwner) => stateOwner.state.model.tasks,
-              );
+              final initialTasks = context
+                  .select<CalendarBloc, Map<String, CalendarTask>>(
+                    (stateOwner) => stateOwner.state.model.tasks,
+                  );
               return CalendarTaskFeedbackObserver<CalendarBloc>(
                 initialTasks: initialTasks,
                 onEvent: (event) => locate<CalendarBloc>().add(event),
@@ -949,14 +917,13 @@ class _HomeContent extends StatelessWidget {
               autoDownloadDocuments: settings.autoDownloadDocuments,
               autoDownloadArchives: settings.autoDownloadArchives,
             );
-            final emailService = emailEnabled ? locate<EmailService>() : null;
             return ChatBloc(
               jid: resolvedJid,
               messageService: locate<XmppService>(),
               chatsService: locate<XmppService>(),
               mucService: locate<XmppService>(),
               notificationService: locate<NotificationService>(),
-              emailService: emailService,
+              emailService: emailEnabled ? locate<EmailService>() : null,
               settings: settingsSnapshot,
             );
           },
@@ -1059,8 +1026,9 @@ class _HomeActionLayer extends StatelessWidget {
                 onInvoke: (_) {
                   if (!hasCalendarBloc) return null;
                   final scope = HomeShellScope.maybeOf(context);
-                  final int currentIndex =
-                      (scope?.bottomNavIndex.value ?? 0).clamp(0, 3).toInt();
+                  final int currentIndex = (scope?.bottomNavIndex.value ?? 0)
+                      .clamp(0, 3)
+                      .toInt();
                   if (currentIndex == 1 || currentIndex == 2) {
                     if (scope != null) {
                       scope.bottomNavIndex.value = 0;
@@ -1116,10 +1084,12 @@ class _HomeActionLayer extends StatelessWidget {
 bool _isFindActionEvent(KeyEvent event) {
   if (event is! KeyDownEvent) return false;
   final pressedKeys = HardwareKeyboard.instance.logicalKeysPressed;
-  final hasMeta = pressedKeys.contains(LogicalKeyboardKey.metaLeft) ||
+  final hasMeta =
+      pressedKeys.contains(LogicalKeyboardKey.metaLeft) ||
       pressedKeys.contains(LogicalKeyboardKey.metaRight) ||
       pressedKeys.contains(LogicalKeyboardKey.meta);
-  final hasControl = pressedKeys.contains(LogicalKeyboardKey.controlLeft) ||
+  final hasControl =
+      pressedKeys.contains(LogicalKeyboardKey.controlLeft) ||
       pressedKeys.contains(LogicalKeyboardKey.controlRight) ||
       pressedKeys.contains(LogicalKeyboardKey.control);
   return event.logicalKey == LogicalKeyboardKey.keyK && (hasMeta || hasControl);

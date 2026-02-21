@@ -36,18 +36,11 @@ final class BlocklistNotice extends Equatable {
 }
 
 final class BlocklistAvailable extends BlocklistState {
-  const BlocklistAvailable({
-    required super.items,
-    required super.visibleItems,
-  });
+  const BlocklistAvailable({required super.items, required super.visibleItems});
 }
 
 final class BlocklistLoading extends BlocklistState {
-  const BlocklistLoading({
-    required this.jid,
-    super.items,
-    super.visibleItems,
-  });
+  const BlocklistLoading({required this.jid, super.items, super.visibleItems});
 
   final String? jid;
 
@@ -56,11 +49,7 @@ final class BlocklistLoading extends BlocklistState {
 }
 
 final class BlocklistSuccess extends BlocklistState {
-  const BlocklistSuccess(
-    this.notice, {
-    super.items,
-    super.visibleItems,
-  });
+  const BlocklistSuccess(this.notice, {super.items, super.visibleItems});
 
   final BlocklistNotice notice;
 
@@ -69,11 +58,7 @@ final class BlocklistSuccess extends BlocklistState {
 }
 
 final class BlocklistFailure extends BlocklistState {
-  const BlocklistFailure(
-    this.notice, {
-    super.items,
-    super.visibleItems,
-  });
+  const BlocklistFailure(this.notice, {super.items, super.visibleItems});
 
   final BlocklistNotice notice;
 

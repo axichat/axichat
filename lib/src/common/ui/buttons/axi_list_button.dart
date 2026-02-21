@@ -37,9 +37,9 @@ class AxiListButton extends StatefulWidget {
     this.foregroundColor,
     this.backgroundColor,
   }) : assert(
-          !collapsed || collapsedIconData != null || collapsedIcon != null,
-          'Collapsed list buttons require an icon.',
-        );
+         !collapsed || collapsedIconData != null || collapsedIcon != null,
+         'Collapsed list buttons require an icon.',
+       );
 
   const AxiListButton.destructive({
     super.key,
@@ -66,11 +66,11 @@ class AxiListButton extends StatefulWidget {
     this.textStyle,
     this.foregroundColor,
     this.backgroundColor,
-  })  : variant = AxiButtonVariant.destructive,
-        assert(
-          !collapsed || collapsedIconData != null || collapsedIcon != null,
-          'Collapsed list buttons require an icon.',
-        );
+  }) : variant = AxiButtonVariant.destructive,
+       assert(
+         !collapsed || collapsedIconData != null || collapsedIcon != null,
+         'Collapsed list buttons require an icon.',
+       );
 
   const AxiListButton.destructiveGhost({
     super.key,
@@ -96,12 +96,12 @@ class AxiListButton extends StatefulWidget {
     this.textStyle,
     this.foregroundColor,
     this.backgroundColor,
-  })  : variant = AxiButtonVariant.ghost,
-        destructiveGhost = true,
-        assert(
-          !collapsed || collapsedIconData != null || collapsedIcon != null,
-          'Collapsed list buttons require an icon.',
-        );
+  }) : variant = AxiButtonVariant.ghost,
+       destructiveGhost = true,
+       assert(
+         !collapsed || collapsedIconData != null || collapsedIcon != null,
+         'Collapsed list buttons require an icon.',
+       );
 
   final Widget child;
   final AxiButtonVariant variant;
@@ -181,25 +181,30 @@ class _AxiListButtonState extends State<AxiListButton> {
       builder: (context, states, _) {
         final bool enabled =
             widget.onPressed != null || widget.onLongPress != null;
-        final VoidCallback? onTap =
-            enabled ? withSelectionHaptic(widget.onPressed) : null;
-        final VoidCallback? onLongPress =
-            enabled ? withSelectionHaptic(widget.onLongPress) : null;
+        final VoidCallback? onTap = enabled
+            ? withSelectionHaptic(widget.onPressed)
+            : null;
+        final VoidCallback? onLongPress = enabled
+            ? withSelectionHaptic(widget.onLongPress)
+            : null;
         final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
         final bool focused = states.contains(WidgetState.focused);
         final bool hoverOrFocus = hovered || focused || widget.selected;
-        final ShadButtonTheme buttonTheme =
-            widget.variant.themeFor(ShadTheme.of(context));
+        final ShadButtonTheme buttonTheme = widget.variant.themeFor(
+          ShadTheme.of(context),
+        );
         final colors = context.colorScheme;
-        final Color baseBackground = widget.backgroundColor ??
+        final Color baseBackground =
+            widget.backgroundColor ??
             widget.variant.backgroundColor(
               theme: buttonTheme,
               colors: colors,
               hovered: hoverOrFocus,
               pressed: pressed,
             );
-        final Color baseForeground = widget.foregroundColor ??
+        final Color baseForeground =
+            widget.foregroundColor ??
             widget.variant.foregroundColor(
               theme: buttonTheme,
               colors: colors,
@@ -227,11 +232,11 @@ class _AxiListButtonState extends State<AxiListButton> {
         }
         final BorderSide? borderSide =
             widget.variant == AxiButtonVariant.outline
-                ? BorderSide(
-                    color: context.borderSide.color,
-                    width: context.borderSide.width,
-                  )
-                : null;
+            ? BorderSide(
+                color: context.borderSide.color,
+                width: context.borderSide.width,
+              )
+            : null;
         final shape = RoundedSuperellipseBorder(
           borderRadius: BorderRadius.circular(context.radii.squircle),
           side: borderSide ?? BorderSide.none,
@@ -307,7 +312,8 @@ class _AxiListButtonState extends State<AxiListButton> {
               cursor: enabled
                   ? (buttonTheme.cursor ?? SystemMouseCursors.click)
                   : MouseCursor.defer,
-              hoverStrategies: buttonTheme.hoverStrategies ??
+              hoverStrategies:
+                  buttonTheme.hoverStrategies ??
                   ShadTheme.of(context).hoverStrategies,
               longPressDuration: buttonTheme.longPressDuration,
               onHoverChange: enabled
@@ -356,14 +362,16 @@ class _AxiListButtonState extends State<AxiListButton> {
             enabled: animationDuration != Duration.zero,
             scale: context.motion.buttonBounceScale,
             pressDuration: Duration(
-              milliseconds: (animationDuration.inMilliseconds *
-                      context.motion.buttonPressDurationFactor)
-                  .round(),
+              milliseconds:
+                  (animationDuration.inMilliseconds *
+                          context.motion.buttonPressDurationFactor)
+                      .round(),
             ),
             releaseDuration: Duration(
-              milliseconds: (animationDuration.inMilliseconds *
-                      context.motion.buttonReleaseDurationFactor)
-                  .round(),
+              milliseconds:
+                  (animationDuration.inMilliseconds *
+                          context.motion.buttonReleaseDurationFactor)
+                      .round(),
             ),
             child: button,
           );

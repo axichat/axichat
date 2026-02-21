@@ -4,7 +4,7 @@
 part of 'profile_cubit.dart';
 
 @Freezed(toJson: false, fromJson: false)
-class ProfileState with _$ProfileState {
+abstract class ProfileState with _$ProfileState {
   const factory ProfileState({
     required String jid,
     required String resource,

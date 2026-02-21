@@ -38,25 +38,16 @@ void main() {
       ),
     );
 
-    await sendShortcut(
-        tester,
-        const [
-          LogicalKeyboardKey.controlLeft,
-        ],
-        LogicalKeyboardKey.keyZ);
-    await sendShortcut(
-        tester,
-        const [
-          LogicalKeyboardKey.controlLeft,
-          LogicalKeyboardKey.shiftLeft,
-        ],
-        LogicalKeyboardKey.keyZ);
-    await sendShortcut(
-        tester,
-        const [
-          LogicalKeyboardKey.controlLeft,
-        ],
-        LogicalKeyboardKey.keyY);
+    await sendShortcut(tester, const [
+      LogicalKeyboardKey.controlLeft,
+    ], LogicalKeyboardKey.keyZ);
+    await sendShortcut(tester, const [
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.shiftLeft,
+    ], LogicalKeyboardKey.keyZ);
+    await sendShortcut(tester, const [
+      LogicalKeyboardKey.controlLeft,
+    ], LogicalKeyboardKey.keyY);
 
     expect(undoCount, 1);
     expect(redoCount, 2);
@@ -83,12 +74,9 @@ void main() {
     await tester.tap(find.byType(TextField));
     await tester.pump();
 
-    await sendShortcut(
-        tester,
-        const [
-          LogicalKeyboardKey.controlLeft,
-        ],
-        LogicalKeyboardKey.keyZ);
+    await sendShortcut(tester, const [
+      LogicalKeyboardKey.controlLeft,
+    ], LogicalKeyboardKey.keyZ);
 
     expect(undoCount, 0);
   });

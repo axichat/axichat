@@ -108,11 +108,11 @@ class CalendarZoomLevel {
   final String label;
 
   String localizedLabel(AppLocalizations l10n) => switch (label) {
-        _calendarZoomLabelCompact => l10n.calendarZoomLabelCompact,
-        _calendarZoomLabelComfort => l10n.calendarZoomLabelComfort,
-        _calendarZoomLabelExpanded => l10n.calendarZoomLabelExpanded,
-        _ => label,
-      };
+    _calendarZoomLabelCompact => l10n.calendarZoomLabelCompact,
+    _calendarZoomLabelComfort => l10n.calendarZoomLabelComfort,
+    _calendarZoomLabelExpanded => l10n.calendarZoomLabelExpanded,
+    _ => label,
+  };
 }
 
 const List<CalendarZoomLevel> kCalendarZoomLevels = <CalendarZoomLevel>[
@@ -201,10 +201,12 @@ CalendarLayoutMetrics resolveCalendarLayoutMetrics({
 }) {
   final CalendarZoomLevel zoom = zoomLevels[zoomIndex];
   final bool useDayViewTheme = isDayView && !allowDayViewZoom;
-  final double desiredHourHeight =
-      useDayViewTheme ? theme.dayViewHourHeight : zoom.hourHeight;
-  final int subdivisions =
-      useDayViewTheme ? theme.dayViewSubdivisions : zoom.daySubdivisions;
+  final double desiredHourHeight = useDayViewTheme
+      ? theme.dayViewHourHeight
+      : zoom.hourHeight;
+  final int subdivisions = useDayViewTheme
+      ? theme.dayViewSubdivisions
+      : zoom.daySubdivisions;
   final double baseSlotHeight = desiredHourHeight / subdivisions;
   // Legacy grid renders from 00:00 through 24:00 inclusive, resulting in 25
   // visible hour rows.
@@ -348,8 +350,9 @@ CalendarTaskLayout? resolveCalendarTaskLayout({
     scheduledTime.day,
   );
   DateTime? effectiveEnd = task.effectiveEndDate;
-  effectiveEnd ??=
-      task.duration != null ? scheduledTime.add(task.duration!) : null;
+  effectiveEnd ??= task.duration != null
+      ? scheduledTime.add(task.duration!)
+      : null;
   final DateTime layoutEndReference = effectiveEnd == null
       ? scheduledTime
       : _normalizeEndBoundary(scheduledTime, effectiveEnd);
@@ -359,10 +362,12 @@ CalendarTaskLayout? resolveCalendarTaskLayout({
     layoutEndReference.day,
   );
 
-  final DateTime clampedWeekStart =
-      eventStartDate.isBefore(weekStartDate) ? weekStartDate : eventStartDate;
-  final DateTime clampedWeekEnd =
-      eventEndDate.isAfter(weekEndDate) ? weekEndDate : eventEndDate;
+  final DateTime clampedWeekStart = eventStartDate.isBefore(weekStartDate)
+      ? weekStartDate
+      : eventStartDate;
+  final DateTime clampedWeekEnd = eventEndDate.isAfter(weekEndDate)
+      ? weekEndDate
+      : eventEndDate;
 
   if (dayDate.isAfter(clampedWeekEnd) || dayDate.isBefore(clampedWeekStart)) {
     return null;
@@ -492,20 +497,19 @@ DateTime _resolveOverlapEnd(CalendarTask task, DateTime start) {
 Map<String, OverlapInfo> calculateOverlapColumns(List<CalendarTask> tasks) {
   final List<_OverlapCandidate> sortedTasks =
       tasks.where((task) => task.scheduledTime != null).map((task) {
-    final DateTime scheduled = task.scheduledTime!;
-    final DateTime normalizedStart = _stripSubMinute(scheduled);
-    final DateTime rawEnd = _resolveOverlapEnd(task, scheduled);
-    final DateTime normalizedEnd = _stripSubMinute(rawEnd);
-    final DateTime effectiveEnd = normalizedEnd.isAfter(normalizedStart)
-        ? normalizedEnd
-        : normalizedStart;
-    return _OverlapCandidate(
-      taskId: task.id,
-      start: normalizedStart,
-      end: effectiveEnd,
-    );
-  }).toList()
-        ..sort((a, b) => a.start.compareTo(b.start));
+        final DateTime scheduled = task.scheduledTime!;
+        final DateTime normalizedStart = _stripSubMinute(scheduled);
+        final DateTime rawEnd = _resolveOverlapEnd(task, scheduled);
+        final DateTime normalizedEnd = _stripSubMinute(rawEnd);
+        final DateTime effectiveEnd = normalizedEnd.isAfter(normalizedStart)
+            ? normalizedEnd
+            : normalizedStart;
+        return _OverlapCandidate(
+          taskId: task.id,
+          start: normalizedStart,
+          end: effectiveEnd,
+        );
+      }).toList()..sort((a, b) => a.start.compareTo(b.start));
 
   final List<_ActiveTask> active = <_ActiveTask>[];
   final Map<String, _MutableOverlapInfo> overlapMap =
@@ -517,8 +521,9 @@ Map<String, OverlapInfo> calculateOverlapColumns(List<CalendarTask> tasks) {
 
     active.removeWhere((entry) => !entry.end.isAfter(start));
 
-    final Set<int> usedColumns =
-        active.map((entry) => entry.columnIndex).toSet();
+    final Set<int> usedColumns = active
+        .map((entry) => entry.columnIndex)
+        .toSet();
     var columnIndex = 0;
     while (usedColumns.contains(columnIndex)) {
       columnIndex++;

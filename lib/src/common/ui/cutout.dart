@@ -30,13 +30,14 @@ class CutoutSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.maybeOf(context);
-    final scaleFactor =
-        mediaQuery == null ? 1.0 : mediaQuery.textScaler.scale(1);
+    final scaleFactor = mediaQuery == null
+        ? 1.0
+        : mediaQuery.textScaler.scale(1);
     final resolvedCutouts = scaleFactor == 1
         ? cutouts
         : cutouts
-            .map((spec) => spec.scaled(scaleFactor))
-            .toList(growable: false);
+              .map((spec) => spec.scaled(scaleFactor))
+              .toList(growable: false);
     final resolvedShadowOpacity = shadowOpacity.clamp(0.0, 1.0);
     final borderWidth = shape.side.width;
 
@@ -100,12 +101,7 @@ class _CutoutRender extends MultiChildRenderObjectWidget {
     required this.shadows,
     required this.shadowOpacity,
     required Widget child,
-  }) : super(
-          children: [
-            child,
-            for (final spec in cutouts) spec.child,
-          ],
-        );
+  }) : super(children: [child, for (final spec in cutouts) spec.child]);
 
   final List<CutoutSpec> cutouts;
   final Color backgroundColor;
@@ -153,13 +149,13 @@ class _RenderCutoutSurface extends RenderBox
     required OutlinedBorder shape,
     required List<BoxShadow> shadows,
     required double shadowOpacity,
-  })  : _cutouts = cutouts,
-        _backgroundColor = backgroundColor,
-        _borderColor = borderColor,
-        _borderWidth = borderWidth,
-        _shape = shape,
-        _shadows = shadows,
-        _shadowOpacity = shadowOpacity;
+  }) : _cutouts = cutouts,
+       _backgroundColor = backgroundColor,
+       _borderColor = borderColor,
+       _borderWidth = borderWidth,
+       _shape = shape,
+       _shadows = shadows,
+       _shadowOpacity = shadowOpacity;
 
   List<CutoutSpec> get cutouts => _cutouts;
   List<CutoutSpec> _cutouts;
@@ -249,8 +245,10 @@ class _RenderCutoutSurface extends RenderBox
       final childBox = cutoutChildren[i];
       final spec = _cutouts[i];
       if (spec.edge == CutoutEdge.right) {
-        maxRightHalfWidth =
-            math.max(maxRightHalfWidth, childBox.size.width / 2);
+        maxRightHalfWidth = math.max(
+          maxRightHalfWidth,
+          childBox.size.width / 2,
+        );
       }
     }
 
@@ -333,15 +331,12 @@ class _RenderCutoutSurface extends RenderBox
     context.canvas.restore();
 
     final clipRect = paintOffset & bodySize;
-    context.pushClipPath(
-      needsCompositing,
-      paintOffset,
-      clipRect,
-      fillPath,
-      (context, offset) {
-        context.paintChild(bodyChild, offset);
-      },
-    );
+    context.pushClipPath(needsCompositing, paintOffset, clipRect, fillPath, (
+      context,
+      offset,
+    ) {
+      context.paintChild(bodyChild, offset);
+    });
 
     var child = childAfter(bodyChild);
     while (child != null) {
@@ -374,8 +369,8 @@ Path _cutoutPath(Size size, OutlinedBorder shape, List<CutoutSpec> cutouts) {
     final cutoutRect = _cutoutRect(size, spec);
     final Path cutoutPath = switch (spec.shape) {
       CutoutShape.squircle => SquircleBorder(
-          cornerRadius: spec.cornerRadius,
-        ).getOuterPath(cutoutRect),
+        cornerRadius: spec.cornerRadius,
+      ).getOuterPath(cutoutRect),
       CutoutShape.circle => Path()..addOval(cutoutRect),
     };
     fillPath = Path.combine(PathOperation.difference, fillPath, cutoutPath);

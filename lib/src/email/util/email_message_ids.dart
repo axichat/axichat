@@ -32,18 +32,22 @@ String? parseEmailMessageId(String? rawHeaders) {
     if (line.trim().isEmpty) continue;
     final separatorIndex = line.indexOf(_emailHeaderSeparator);
     if (separatorIndex <= _emailHeaderSeparatorMissingIndex) continue;
-    final String headerName =
-        line.substring(0, separatorIndex).trim().toLowerCase();
+    final String headerName = line
+        .substring(0, separatorIndex)
+        .trim()
+        .toLowerCase();
     if (headerName != emailMessageIdHeaderName) {
       continue;
     }
-    String value =
-        line.substring(separatorIndex + _emailHeaderSeparatorOffset).trim();
+    String value = line
+        .substring(separatorIndex + _emailHeaderSeparatorOffset)
+        .trim();
     while (index + _emailNextLineOffset < lines.length &&
         _emailHeaderContinuationRegex.hasMatch(
           lines[index + _emailNextLineOffset],
         )) {
-      value = '$value$_emailHeaderContinuationSeparator'
+      value =
+          '$value$_emailHeaderContinuationSeparator'
           '${lines[index + _emailNextLineOffset].trim()}';
       index += _emailNextLineOffset;
     }

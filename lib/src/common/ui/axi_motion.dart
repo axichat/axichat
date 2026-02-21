@@ -71,7 +71,8 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
       iconButtonHoverScale: iconButtonHoverScale ?? this.iconButtonHoverScale,
       iconButtonPressDurationFactor:
           iconButtonPressDurationFactor ?? this.iconButtonPressDurationFactor,
-      iconButtonReleaseDurationFactor: iconButtonReleaseDurationFactor ??
+      iconButtonReleaseDurationFactor:
+          iconButtonReleaseDurationFactor ??
           this.iconButtonReleaseDurationFactor,
       tapHoverScale: tapHoverScale ?? this.tapHoverScale,
       tapSplashAlpha: tapSplashAlpha ?? this.tapSplashAlpha,

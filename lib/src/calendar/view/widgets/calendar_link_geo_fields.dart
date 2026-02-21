@@ -239,8 +239,9 @@ class _LinkGeoChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle labelStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.s,

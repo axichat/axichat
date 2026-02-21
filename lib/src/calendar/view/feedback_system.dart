@@ -178,9 +178,7 @@ class FeedbackSystem {
         backgroundColor: colorsForTone.background,
         duration: feedback.duration ?? const Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: context.radius,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: context.radius),
         action: feedback.actionLabel != null && feedback.onAction != null
             ? SnackBarAction(
                 label: feedback.actionLabel!,
@@ -320,9 +318,7 @@ class ProgressIndicator extends StatelessWidget {
             Text(label, style: textTheme.small),
             if (showPercentage && progress != null)
               Text(
-                context.l10n.commonPercentLabel(
-                  (progress! * 100).toInt(),
-                ),
+                context.l10n.commonPercentLabel((progress! * 100).toInt()),
                 style: textTheme.small,
               ),
           ],
@@ -334,8 +330,9 @@ class ProgressIndicator extends StatelessWidget {
           backgroundColor: colors.border.withValues(alpha: 0.6),
           color: colors.primary,
           borderRadius: BorderRadius.circular(_feedbackProgressCornerRadius),
-          innerBorderRadius:
-              BorderRadius.circular(_feedbackProgressCornerRadius),
+          innerBorderRadius: BorderRadius.circular(
+            _feedbackProgressCornerRadius,
+          ),
         ),
       ],
     );

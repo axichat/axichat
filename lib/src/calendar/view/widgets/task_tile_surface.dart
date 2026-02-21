@@ -85,15 +85,18 @@ class _TaskTileSurfaceState extends State<TaskTileSurface> {
   @override
   Widget build(BuildContext context) {
     final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
-        borderRadius: BorderRadius.circular(context.radii.squircle));
+      borderRadius: BorderRadius.circular(context.radii.squircle),
+    );
     final bool enabled = widget.onTap != null;
-    final MouseCursor effectiveCursor = widget.mouseCursor ??
+    final MouseCursor effectiveCursor =
+        widget.mouseCursor ??
         (enabled ? SystemMouseCursors.click : MouseCursor.defer);
     final Border? border = widget.decoration.border is Border
         ? widget.decoration.border as Border
         : null;
-    final BorderSide? uniformSide =
-        border == null || !border.isUniform ? null : border.top;
+    final BorderSide? uniformSide = border == null || !border.isUniform
+        ? null
+        : border.top;
     final RoundedSuperellipseBorder decoratedShape = uniformSide == null
         ? shape
         : RoundedSuperellipseBorder(
@@ -109,15 +112,15 @@ class _TaskTileSurfaceState extends State<TaskTileSurface> {
     final Color? stripeColor = widget.leadingStripeColor;
     final Widget content =
         stripeColor != null && stripeWidth != null && stripeWidth > 0
-            ? CustomPaint(
-                painter: _TaskTileStripePainter(
-                  shape: decoratedShape,
-                  color: stripeColor,
-                  width: stripeWidth,
-                ),
-                child: widget.child,
-              )
-            : widget.child;
+        ? CustomPaint(
+            painter: _TaskTileStripePainter(
+              shape: decoratedShape,
+              color: stripeColor,
+              width: stripeWidth,
+            ),
+            child: widget.child,
+          )
+        : widget.child;
 
     return Container(
       margin: widget.margin,

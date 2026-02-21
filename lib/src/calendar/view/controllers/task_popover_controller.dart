@@ -15,9 +15,9 @@ class TaskPopoverLayout {
 }
 
 TaskPopoverLayout defaultTaskPopoverLayout() => const TaskPopoverLayout(
-      topLeft: Offset.zero,
-      maxHeight: calendarTaskPopoverFallbackHeight,
-    );
+  topLeft: Offset.zero,
+  maxHeight: calendarTaskPopoverFallbackHeight,
+);
 
 class TaskPopoverController extends ChangeNotifier {
   final Map<String, TaskPopoverLayout> _layouts = {};

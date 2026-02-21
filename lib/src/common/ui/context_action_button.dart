@@ -21,8 +21,9 @@ class ContextActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final destructiveColor =
-        destructive ? context.colorScheme.destructive : null;
+    final destructiveColor = destructive
+        ? context.colorScheme.destructive
+        : null;
     final textStyle = destructive
         ? context.textTheme.small.copyWith(color: destructiveColor)
         : null;

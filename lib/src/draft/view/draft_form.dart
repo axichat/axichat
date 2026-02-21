@@ -50,6 +50,7 @@ class DraftForm extends StatefulWidget {
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
     required this.locate,
+    this.subjectTrailing,
     this.onClosed,
     this.onDiscarded,
     this.onDraftSaved,
@@ -63,6 +64,7 @@ class DraftForm extends StatefulWidget {
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
   final T Function<T>() locate;
+  final Widget? subjectTrailing;
   final VoidCallback? onClosed;
   final VoidCallback? onDiscarded;
   final ValueChanged<int>? onDraftSaved;
@@ -124,9 +126,7 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_shouldCleanupSeedAttachments) {
-      unawaited(
-        _cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>()),
-      );
+      unawaited(_cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>()));
     }
     _autosaveTimer?.cancel();
     _bodyTextController.removeListener(_bodyListener);
@@ -207,8 +207,9 @@ class _DraftFormState extends State<DraftForm> {
       builder: (context, profileState) {
         final profileJid = profileState.jid;
         final resolvedProfileJid = profileJid.trim();
-        final String? selfJid =
-            resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+        final String? selfJid = resolvedProfileJid.isNotEmpty
+            ? resolvedProfileJid
+            : null;
         final selfIdentity = SelfIdentitySnapshot(
           selfJid: selfJid,
           avatarPath: profileState.avatarPath,
@@ -216,7 +217,8 @@ class _DraftFormState extends State<DraftForm> {
         return BlocBuilder<RosterCubit, RosterState>(
           bloc: locate<RosterCubit>(),
           builder: (context, rosterState) {
-            final rosterItems = rosterState.items ??
+            final rosterItems =
+                rosterState.items ??
                 (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
                 const <RosterItem>[];
             return BlocBuilder<ChatsCubit, ChatsState>(
@@ -237,10 +239,9 @@ class _DraftFormState extends State<DraftForm> {
                       listener: (context, state) async {
                         if (state is DraftSaveComplete) {
                           if (!state.autoSaved) {
-                            ShadToaster.maybeOf(
-                              context,
-                            )?.show(
-                                FeedbackToast.success(title: l10n.draftSaved));
+                            ShadToaster.maybeOf(context)?.show(
+                              FeedbackToast.success(title: l10n.draftSaved),
+                            );
                           }
                         }
                         if (state is DraftSending) {
@@ -263,8 +264,10 @@ class _DraftFormState extends State<DraftForm> {
                             setState(() {
                               _sendCompletionHandled = true;
                               _sendingDraft = false;
-                              _sendErrorMessage =
-                                  _draftFailureMessage(state.type, l10n);
+                              _sendErrorMessage = _draftFailureMessage(
+                                state.type,
+                                l10n,
+                              );
                               _pendingAttachments = _pendingAttachments
                                   .map(
                                     (pending) => pending.copyWith(
@@ -300,14 +303,17 @@ class _DraftFormState extends State<DraftForm> {
                           hasXmppTargets: hasXmppTargets,
                           settings: settingsState,
                         );
-                        final hasContent =
-                            _hasContent(hasAttachments: hasAttachments);
-                        final canSave = enabled &&
+                        final hasContent = _hasContent(
+                          hasAttachments: hasAttachments,
+                        );
+                        final canSave =
+                            enabled &&
                             (hasActiveRecipients ||
                                 bodyText.isNotEmpty ||
                                 subjectText.isNotEmpty ||
                                 hasAttachments);
-                        final canDiscard = enabled &&
+                        final canDiscard =
+                            enabled &&
                             (id != null ||
                                 bodyText.isNotEmpty ||
                                 subjectText.isNotEmpty ||
@@ -317,17 +323,19 @@ class _DraftFormState extends State<DraftForm> {
                           hasContent: hasContent,
                           emailRecipientsUnavailable:
                               !endpointConfig.smtpEnabled &&
-                                  split.emailTargets.isNotEmpty,
+                              split.emailTargets.isNotEmpty,
                         );
                         final bool showSendBlockerMessage =
                             _showValidationMessages &&
-                                sendBlocker != null &&
-                                sendBlocker != l10n.draftNoRecipients;
+                            sendBlocker != null &&
+                            sendBlocker != l10n.draftNoRecipients;
                         final String? sendErrorMessage = _sendErrorMessage;
-                        final readyToSend = sendBlocker == null &&
+                        final readyToSend =
+                            sendBlocker == null &&
                             !_addingAttachment &&
                             !hasPreparingAttachments;
-                        final bool showAutosaveHint = _lastAutosaveAt != null &&
+                        final bool showAutosaveHint =
+                            _lastAutosaveAt != null &&
                             _lastSavedSignature == _currentDraftSignature();
                         return _DraftTaskDropRegion(
                           onTaskDropped: enabled ? _handleTaskDrop : null,
@@ -353,12 +361,12 @@ class _DraftFormState extends State<DraftForm> {
                                         selfJid: locate<ChatsCubit>().selfJid,
                                         selfIdentity: selfIdentity,
                                         onRecipientAdded: (target) {
-                                          _handleRecipientAdded(target).then(
-                                            (added) {
-                                              if (!mounted || !added) return;
-                                              field.didChange(null);
-                                            },
-                                          );
+                                          _handleRecipientAdded(target).then((
+                                            added,
+                                          ) {
+                                            if (!mounted || !added) return;
+                                            field.didChange(null);
+                                          });
                                         },
                                         onRecipientRemoved: (key) {
                                           _handleRecipientRemoved(key);
@@ -378,8 +386,9 @@ class _DraftFormState extends State<DraftForm> {
                                       if (_showValidationMessages &&
                                           field.hasError)
                                         Padding(
-                                          padding:
-                                              EdgeInsets.only(top: spacing.s),
+                                          padding: EdgeInsets.only(
+                                            top: spacing.s,
+                                          ),
                                           child: Text(
                                             field.errorText ?? '',
                                             style: textTheme.small.copyWith(
@@ -416,9 +425,16 @@ class _DraftFormState extends State<DraftForm> {
                                                   TextInputAction.next,
                                               onSubmitted: (_) =>
                                                   _bodyFocusNode.requestFocus(),
-                                              placeholder: Text(
-                                                '${l10n.chatSubjectHint}:',
+                                              leading: Text(
+                                                '${l10n.chatSubjectHint}: ',
+                                                style: textTheme.small.copyWith(
+                                                  color: colors.mutedForeground,
+                                                ),
                                               ),
+                                              placeholder: Text(
+                                                l10n.draftSubjectHintOptional,
+                                              ),
+                                              trailing: widget.subjectTrailing,
                                             ),
                                           ),
                                         ),
@@ -427,7 +443,8 @@ class _DraftFormState extends State<DraftForm> {
                                           readyToSend: readyToSend,
                                           sending: isSending,
                                           disabledReason: sendBlocker,
-                                          onPressed: isSending ||
+                                          onPressed:
+                                              isSending ||
                                                   _addingAttachment ||
                                                   hasPreparingAttachments
                                               ? null
@@ -437,8 +454,9 @@ class _DraftFormState extends State<DraftForm> {
                                     ),
                                     if (showSendBlockerMessage)
                                       Padding(
-                                        padding:
-                                            EdgeInsets.only(top: spacing.s),
+                                        padding: EdgeInsets.only(
+                                          top: spacing.s,
+                                        ),
                                         child: Text(
                                           sendBlocker,
                                           style: textTheme.small.copyWith(
@@ -449,8 +467,9 @@ class _DraftFormState extends State<DraftForm> {
                                     if (sendErrorMessage != null &&
                                         sendBlocker == null)
                                       Padding(
-                                        padding:
-                                            EdgeInsets.only(top: spacing.s),
+                                        padding: EdgeInsets.only(
+                                          top: spacing.s,
+                                        ),
                                         child: Text(
                                           sendErrorMessage,
                                           style: textTheme.small.copyWith(
@@ -497,15 +516,15 @@ class _DraftFormState extends State<DraftForm> {
                                       actions: <Type, Action<Intent>>{
                                         _SendDraftIntent:
                                             CallbackAction<_SendDraftIntent>(
-                                          onInvoke: (_) {
-                                            if (readyToSend &&
-                                                sendOnEnter &&
-                                                enabled) {
-                                              unawaited(_handleSendDraft());
-                                            }
-                                            return null;
-                                          },
-                                        ),
+                                              onInvoke: (_) {
+                                                if (readyToSend &&
+                                                    sendOnEnter &&
+                                                    enabled) {
+                                                  unawaited(_handleSendDraft());
+                                                }
+                                                return null;
+                                              },
+                                            ),
                                       },
                                       child: AxiTextFormField(
                                         controller: _bodyTextController,
@@ -523,8 +542,9 @@ class _DraftFormState extends State<DraftForm> {
                                             unawaited(_handleSendDraft());
                                           }
                                         },
-                                        placeholder:
-                                            Text(l10n.draftMessageHint),
+                                        placeholder: Text(
+                                          l10n.draftMessageHint,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -539,8 +559,9 @@ class _DraftFormState extends State<DraftForm> {
                                   children: [
                                     if (isSending)
                                       Padding(
-                                        padding:
-                                            EdgeInsets.only(bottom: spacing.s),
+                                        padding: EdgeInsets.only(
+                                          bottom: spacing.s,
+                                        ),
                                         child: Row(
                                           children: [
                                             AxiProgressIndicator(
@@ -556,8 +577,9 @@ class _DraftFormState extends State<DraftForm> {
                                       ),
                                     if (showAutosaveHint)
                                       Padding(
-                                        padding:
-                                            EdgeInsets.only(bottom: spacing.s),
+                                        padding: EdgeInsets.only(
+                                          bottom: spacing.s,
+                                        ),
                                         child: Text(
                                           l10n.draftAutosaved,
                                           style: textTheme.muted,
@@ -573,8 +595,9 @@ class _DraftFormState extends State<DraftForm> {
                                         ),
                                         const Spacer(),
                                         AxiButton.outline(
-                                          onPressed:
-                                              canSave ? _handleSaveDraft : null,
+                                          onPressed: canSave
+                                              ? _handleSaveDraft
+                                              : null,
                                           child: Text(l10n.draftSave),
                                         ),
                                       ],
@@ -624,7 +647,8 @@ class _DraftFormState extends State<DraftForm> {
           ComposerRecipient(
             target: FanOutTarget.chat(
               chat: match,
-              shareSignatureEnabled: match.shareSignatureEnabled ??
+              shareSignatureEnabled:
+                  match.shareSignatureEnabled ??
                   widget
                       .locate<SettingsCubit>()
                       .state
@@ -671,9 +695,9 @@ class _DraftFormState extends State<DraftForm> {
     Iterable<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    final hydrated = await widget
-        .locate<DraftCubit>()
-        .loadDraftAttachments(metadataIds.toList());
+    final hydrated = await widget.locate<DraftCubit>().loadDraftAttachments(
+      metadataIds.toList(),
+    );
     final List<PendingAttachment> pending = <PendingAttachment>[];
     for (final attachment in hydrated) {
       final EmailAttachment resolvedAttachment =
@@ -870,8 +894,9 @@ class _DraftFormState extends State<DraftForm> {
         }
       }
       if (!mounted) return;
-      attachment =
-          await widget.locate<DraftCubit>().optimizeAttachment(attachment);
+      attachment = await widget.locate<DraftCubit>().optimizeAttachment(
+        attachment,
+      );
       if (!mounted) return;
       setState(() {
         _pendingAttachments = _pendingAttachments
@@ -908,8 +933,9 @@ class _DraftFormState extends State<DraftForm> {
 
   void _handlePendingAttachmentRemoved(String id) {
     setState(() {
-      _pendingAttachments =
-          _pendingAttachments.where((pending) => pending.id != id).toList();
+      _pendingAttachments = _pendingAttachments
+          .where((pending) => pending.id != id)
+          .toList();
     });
     _scheduleAutosave();
   }
@@ -929,17 +955,18 @@ class _DraftFormState extends State<DraftForm> {
   Future<void> _saveDraft({required bool autoSave}) async {
     final int saveEpoch = _saveEpoch;
     final bool wasNewDraft = id == null;
-    final List<String> attachmentIds =
-        _pendingAttachments.map((pending) => pending.id).toList();
+    final List<String> attachmentIds = _pendingAttachments
+        .map((pending) => pending.id)
+        .toList();
     final List<String> recipients = _recipientStrings();
     final DraftSaveResult result = await widget.locate<DraftCubit>().saveDraft(
-          id: id,
-          jids: recipients,
-          body: _bodyTextController.text,
-          subject: _subjectTextController.text,
-          attachments: _currentAttachments(),
-          autoSave: autoSave,
-        );
+      id: id,
+      jids: recipients,
+      body: _bodyTextController.text,
+      subject: _subjectTextController.text,
+      attachments: _currentAttachments(),
+      autoSave: autoSave,
+    );
     if (!mounted || saveEpoch != _saveEpoch) return;
     final int signature = _draftSignature(
       recipients: recipients,
@@ -971,17 +998,17 @@ class _DraftFormState extends State<DraftForm> {
     );
     if (!mounted) return;
     if (wasNewDraft && widget.attachmentMetadataIds.isNotEmpty) {
-      final Set<String> retainedMetadataIds =
-          result.attachmentMetadataIds.toSet();
+      final Set<String> retainedMetadataIds = result.attachmentMetadataIds
+          .toSet();
       final List<String> staleMetadataIds = widget.attachmentMetadataIds
           .where((metadataId) => !retainedMetadataIds.contains(metadataId))
           .toList();
       if (staleMetadataIds.isNotEmpty) {
         for (final metadataId in staleMetadataIds) {
           try {
-            await context
-                .read<DraftCubit>()
-                .deleteDraftAttachmentMetadata(metadataId);
+            await context.read<DraftCubit>().deleteDraftAttachmentMetadata(
+              metadataId,
+            );
           } on Exception {
             // Best-effort cleanup for share intent attachment metadata.
           }
@@ -1151,9 +1178,7 @@ class _DraftFormState extends State<DraftForm> {
     }
   }
 
-  Future<void> _cleanupSeedAttachmentMetadata(
-    DraftCubit draftCubit,
-  ) async {
+  Future<void> _cleanupSeedAttachmentMetadata(DraftCubit draftCubit) async {
     if (!_shouldCleanupSeedAttachments) {
       return;
     }
@@ -1188,8 +1213,10 @@ class _DraftFormState extends State<DraftForm> {
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
     final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
-    final shareTokenSignatureEnabled =
-        widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled;
+    final shareTokenSignatureEnabled = widget
+        .locate<SettingsCubit>()
+        .state
+        .shareTokenSignatureEnabled;
     final xmppTargets = split.xmppTargets
         .map((recipient) {
           final jid = _resolveXmppJid(recipient);
@@ -1246,14 +1273,14 @@ class _DraftFormState extends State<DraftForm> {
     var succeeded = false;
     try {
       succeeded = await widget.locate<DraftCubit>().sendDraft(
-            id: id,
-            xmppTargets: xmppTargets,
-            emailTargets: emailTargets,
-            body: _bodyTextController.text,
-            shareTokenSignatureEnabled: shareTokenSignatureEnabled,
-            subject: _subjectTextController.text,
-            attachments: _currentAttachments(),
-          );
+        id: id,
+        xmppTargets: xmppTargets,
+        emailTargets: emailTargets,
+        body: _bodyTextController.text,
+        shareTokenSignatureEnabled: shareTokenSignatureEnabled,
+        subject: _subjectTextController.text,
+        attachments: _currentAttachments(),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -1334,7 +1361,8 @@ class _DraftFormState extends State<DraftForm> {
     List<ComposerRecipient> emailTargets,
     List<ComposerRecipient> xmppTargets,
     bool hasActiveRecipients,
-  }) _splitRecipients() {
+  })
+  _splitRecipients() {
     final emailTargets = <ComposerRecipient>[];
     final xmppTargets = <ComposerRecipient>[];
     var hasActiveRecipients = false;
@@ -1530,12 +1558,7 @@ class _DraftFormState extends State<DraftForm> {
               spacing.s,
             ),
           ),
-          bodyPadding: EdgeInsets.fromLTRB(
-            spacing.m,
-            0,
-            spacing.m,
-            spacing.m,
-          ),
+          bodyPadding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.m),
           children: [
             AxiListTile(
               leading: Icon(attachmentIcon(attachment), color: colors.primary),
@@ -1589,8 +1612,9 @@ class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
 
   void _updateHover(DragTargetDetails<CalendarDragPayload> details) {
     final RenderBox? box = _box;
-    final Offset local =
-        box != null ? box.globalToLocal(details.offset) : details.offset;
+    final Offset local = box != null
+        ? box.globalToLocal(details.offset)
+        : details.offset;
     setState(() {
       _hoverPayload = details.data;
       _localPosition = local;
@@ -1630,7 +1654,7 @@ class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
       onMove: _updateHover,
       onAcceptWithDetails: _handleDrop,
       onLeave: _handleLeave,
-      builder: (context, candidates, __) {
+      builder: (context, candidates, _) {
         final hovering = candidates.isNotEmpty || _hoverPayload != null;
         final payload = _hoverPayload;
         final Offset? anchor = _localPosition;
@@ -1645,8 +1669,9 @@ class _DraftTaskDropRegionState extends State<_DraftTaskDropRegion> {
               width: borderWidth,
             ),
             borderRadius: borderRadius,
-            color:
-                hovering ? colors.primary.withValues(alpha: hoverAlpha) : null,
+            color: hovering
+                ? colors.primary.withValues(alpha: hoverAlpha)
+                : null,
           ),
           child: widget.child,
         );
@@ -1763,8 +1788,9 @@ class _DraftTaskDragGhost extends StatelessWidget {
     final textTheme = context.textTheme;
     final spacing = context.spacing;
     final l10n = context.l10n;
-    final String title =
-        task.title.trim().isEmpty ? l10n.draftTaskUntitled : task.title.trim();
+    final String title = task.title.trim().isEmpty
+        ? l10n.draftTaskUntitled
+        : task.title.trim();
     final String? description = task.description?.trim().isNotEmpty == true
         ? task.description!.trim()
         : null;
@@ -1862,10 +1888,12 @@ class _DraftSendIconButton extends StatelessWidget {
     final l10n = context.l10n;
     final disabledColor = colors.mutedForeground;
     final iconColor = readyToSend && !sending ? colors.primary : disabledColor;
-    final borderColor =
-        sending || !readyToSend ? colors.border : colors.primary;
-    final tooltip =
-        sending ? l10n.draftSendingEllipsis : disabledReason ?? l10n.draftSend;
+    final borderColor = sending || !readyToSend
+        ? colors.border
+        : colors.primary;
+    final tooltip = sending
+        ? l10n.draftSendingEllipsis
+        : disabledReason ?? l10n.draftSend;
     final interactive = onPressed != null && !sending;
     return _DraftComposerIconButton(
       tooltip: tooltip,
@@ -1989,7 +2017,8 @@ class _DraftComposerIconButton extends StatelessWidget {
     final colors = context.colorScheme;
     final sizing = context.sizing;
     final enabled = onPressed != null;
-    final iconColor = iconColorOverride ??
+    final iconColor =
+        iconColorOverride ??
         (enabled ? colors.foreground : colors.mutedForeground);
     final borderColor = borderColorOverride ?? colors.border;
     return AxiIconButton(

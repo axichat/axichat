@@ -71,8 +71,9 @@ class _TaskChecklistState extends State<TaskChecklist> {
   }
 
   void _syncControllers() {
-    final Set<String> activeIds =
-        widget.controller.items.map((item) => item.id).toSet();
+    final Set<String> activeIds = widget.controller.items
+        .map((item) => item.id)
+        .toSet();
     final List<String> staleIds = _itemControllers.keys
         .where((id) => !activeIds.contains(id))
         .toList(growable: false);
@@ -350,9 +351,7 @@ class _ChecklistItemRow extends StatelessWidget {
             child: ReorderableDragStartListener(
               index: index,
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: context.spacing.xxs,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: context.spacing.xxs),
                 child: Icon(
                   Icons.drag_indicator,
                   size: context.sizing.menuItemIconSize,

@@ -109,7 +109,8 @@ final class MucBookmark {
     if (node.tag != _conferenceTag) return null;
     if (node.attributes['xmlns']?.toString() != _bookmarksNode) return null;
 
-    final rawRoomJid = _normalizeBareJid(itemId) ??
+    final rawRoomJid =
+        _normalizeBareJid(itemId) ??
         _normalizeBareJid(node.attributes[_conferenceJidAttr]?.toString());
     if (rawRoomJid == null || rawRoomJid.isEmpty) return null;
 
@@ -199,8 +200,8 @@ final class MucBookmarkRetractedEvent extends mox.XmppEvent {
 
 final class BookmarksManager extends mox.XmppManagerBase {
   BookmarksManager({String? maxItems})
-      : _maxItems = maxItems ?? _defaultMaxItems,
-        super(managerId);
+    : _maxItems = maxItems ?? _defaultMaxItems,
+      super(managerId);
 
   static const String managerId = 'axi.bookmarks';
   static const String bookmarksNotifyFeature = _bookmarksNotifyFeature;
@@ -328,11 +329,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
   }
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
-        accessModel: mox.AccessModel.whitelist.value,
-        maxItems: _maxItems,
-        persistItems: _persistItemsEnabled,
-        publishModel: _publishModelPublishers,
-      );
+    accessModel: mox.AccessModel.whitelist.value,
+    maxItems: _maxItems,
+    persistItems: _persistItemsEnabled,
+    publishModel: _publishModelPublishers,
+  );
 
   SafePubSubManager? _pubSub() =>
       getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
@@ -340,11 +341,10 @@ final class BookmarksManager extends mox.XmppManagerBase {
   Future<String?> _resolveSendLastPublishedItem(
     SafePubSubManager pubsub,
     mox.JID host,
-  ) =>
-      pubsub.resolveSendLastPublishedItemForNode(
-        host: host,
-        node: _bookmarksNode,
-      );
+  ) => pubsub.resolveSendLastPublishedItemForNode(
+    host: host,
+    node: _bookmarksNode,
+  );
 
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
@@ -392,8 +392,10 @@ final class BookmarksManager extends mox.XmppManagerBase {
     var success = false;
     getAttributes().sendEvent(_bookmarksEnsureStartEvent);
     try {
-      final sendLastPublishedItem =
-          await _resolveSendLastPublishedItem(pubsub, host);
+      final sendLastPublishedItem = await _resolveSendLastPublishedItem(
+        pubsub,
+        host,
+      );
       final config = _nodeConfig(sendLastPublishedItem: sendLastPublishedItem);
       final configuredError = await _configureNodeWithFallback(
         pubsub,
@@ -755,8 +757,9 @@ final class BookmarksManager extends mox.XmppManagerBase {
     final result = await fetchAllWithStatus();
     if (!result.isSuccess) return;
     final items = result.items;
-    final freshIds =
-        items.map((item) => item.roomBare.toBare().toString()).toSet();
+    final freshIds = items
+        .map((item) => item.roomBare.toBare().toString())
+        .toSet();
     _cache.clear();
     for (final item in items) {
       final id = item.roomBare.toBare().toString();

@@ -286,8 +286,9 @@ class _QuickAddModalState extends State<QuickAddModal>
     if (keyboardInset <= safeBottom) {
       return 0;
     }
-    final double inset =
-        keyboardInset > safeBottom ? keyboardInset - safeBottom : 0;
+    final double inset = keyboardInset > safeBottom
+        ? keyboardInset - safeBottom
+        : 0;
     return context.spacing.s + inset;
   }
 
@@ -359,7 +360,8 @@ class _QuickAddModalState extends State<QuickAddModal>
 
     if (!_scheduleLocked) {
       final DateTime? start = task.scheduledTime;
-      final DateTime? end = task.endDate ??
+      final DateTime? end =
+          task.endDate ??
           (start != null && task.duration != null
               ? start.add(task.duration!)
               : null);
@@ -622,7 +624,7 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
     final List<CalendarCriticalPath> paths =
         _locateCalendarBloc()?.state.model.criticalPaths.values.toList() ??
-            const <CalendarCriticalPath>[];
+        const <CalendarCriticalPath>[];
     await showCriticalPathPicker(
       context: context,
       paths: paths,
@@ -639,8 +641,12 @@ class _QuickAddModalState extends State<QuickAddModal>
         if (!mounted || name == null) {
           return null;
         }
-        final Set<String>? previousIds =
-            _locateCalendarBloc()?.state.model.criticalPaths.keys.toSet();
+        final Set<String>? previousIds = _locateCalendarBloc()
+            ?.state
+            .model
+            .criticalPaths
+            .keys
+            .toSet();
         if (previousIds == null) {
           return null;
         }
@@ -692,10 +698,12 @@ class _QuickAddModalState extends State<QuickAddModal>
     final description = _descriptionController.text.trim();
     final scheduledTime = _formController.startTime;
 
-    final recurrence =
-        scheduledTime != null ? _formController.buildRecurrence() : null;
+    final recurrence = scheduledTime != null
+        ? _formController.buildRecurrence()
+        : null;
 
-    final duration = _formController.effectiveDuration ??
+    final duration =
+        _formController.effectiveDuration ??
         (scheduledTime != null ? const Duration(hours: 1) : null);
     final List<String>? categories = resolveCategoryOverride(
       base: null,
@@ -790,16 +798,17 @@ class _QuickAddModalState extends State<QuickAddModal>
     Set<String> previousIds,
   ) async {
     try {
-      final Set<String> difference = (await bloc.stream
-              .firstWhere(
-                (state) => state.model.tasks.length > previousIds.length,
-              )
-              .timeout(const Duration(seconds: 2)))
-          .model
-          .tasks
-          .keys
-          .toSet()
-          .difference(previousIds);
+      final Set<String> difference =
+          (await bloc.stream
+                  .firstWhere(
+                    (state) => state.model.tasks.length > previousIds.length,
+                  )
+                  .timeout(const Duration(seconds: 2)))
+              .model
+              .tasks
+              .keys
+              .toSet()
+              .difference(previousIds);
       if (difference.isEmpty) {
         return null;
       }
@@ -948,8 +957,9 @@ class _QuickAddModalContent extends StatelessWidget {
     final BorderRadius borderRadius = isSheet
         ? const BorderRadius.vertical(top: Radius.circular(24))
         : BorderRadius.circular(calendarBorderRadius);
-    final Color background =
-        isSheet ? context.colorScheme.card : calendarContainerColor;
+    final Color background = isSheet
+        ? context.colorScheme.card
+        : calendarContainerColor;
     final List<BoxShadow>? boxShadow = isSheet ? null : calendarMediumShadow;
     final Widget header = ValueListenableBuilder<TextEditingValue>(
       valueListenable: taskNameController,
@@ -1017,9 +1027,7 @@ class _QuickAddModalContent extends StatelessWidget {
                               ? const SizedBox.shrink()
                               : Container(
                                   key: const ValueKey('quick-add-error'),
-                                  margin: EdgeInsets.only(
-                                    bottom: spacing.s,
-                                  ),
+                                  margin: EdgeInsets.only(bottom: spacing.s),
                                   padding: EdgeInsets.symmetric(
                                     horizontal: spacing.m,
                                     vertical: spacing.xs,
@@ -1050,8 +1058,8 @@ class _QuickAddModalContent extends StatelessWidget {
                                           formError!,
                                           style: context.textTheme.label.strong
                                               .copyWith(
-                                            color: calendarDangerColor,
-                                          ),
+                                                color: calendarDangerColor,
+                                              ),
                                         ),
                                       ),
                                     ],
@@ -1085,25 +1093,19 @@ class _QuickAddModalContent extends StatelessWidget {
                         ),
                         SizedBox(height: spacing.m),
                         TaskChecklist(controller: checklistController),
-                        TaskSectionDivider(
-                          verticalPadding: spacing.m,
-                        ),
+                        TaskSectionDivider(verticalPadding: spacing.m),
                         _QuickAddScheduleSection(
                           formController: formController,
                           onStartChanged: onStartChanged,
                           onEndChanged: onEndChanged,
                           onClear: onScheduleCleared,
                         ),
-                        TaskSectionDivider(
-                          verticalPadding: spacing.m,
-                        ),
+                        TaskSectionDivider(verticalPadding: spacing.m),
                         _QuickAddDeadlineSection(
                           formController: formController,
                           onChanged: onDeadlineChanged,
                         ),
-                        TaskSectionDivider(
-                          verticalPadding: spacing.m,
-                        ),
+                        TaskSectionDivider(verticalPadding: spacing.m),
                         AnimatedBuilder(
                           animation: formController,
                           builder: (context, _) {
@@ -1117,9 +1119,7 @@ class _QuickAddModalContent extends StatelessWidget {
                             );
                           },
                         ),
-                        TaskSectionDivider(
-                          verticalPadding: spacing.m,
-                        ),
+                        TaskSectionDivider(verticalPadding: spacing.m),
                         AnimatedBuilder(
                           animation: formController,
                           builder: (context, _) {
@@ -1130,9 +1130,7 @@ class _QuickAddModalContent extends StatelessWidget {
                             );
                           },
                         ),
-                        TaskSectionDivider(
-                          verticalPadding: spacing.m,
-                        ),
+                        TaskSectionDivider(verticalPadding: spacing.m),
                         AnimatedBuilder(
                           animation: formController,
                           builder: (context, _) {
@@ -1144,9 +1142,7 @@ class _QuickAddModalContent extends StatelessWidget {
                             );
                           },
                         ),
-                        TaskSectionDivider(
-                          verticalPadding: spacing.m,
-                        ),
+                        TaskSectionDivider(verticalPadding: spacing.m),
                         AnimatedBuilder(
                           animation: formController,
                           builder: (context, _) {
@@ -1158,9 +1154,7 @@ class _QuickAddModalContent extends StatelessWidget {
                             );
                           },
                         ),
-                        TaskSectionDivider(
-                          verticalPadding: spacing.m,
-                        ),
+                        TaskSectionDivider(verticalPadding: spacing.m),
                         _QuickAddRecurrenceSection(
                           formController: formController,
                           onChanged: onRecurrenceChanged,
@@ -1172,8 +1166,8 @@ class _QuickAddModalContent extends StatelessWidget {
                           icon: Icons.route,
                           onPressed:
                               formController.isSubmitting || !hasCalendarBloc
-                                  ? null
-                                  : onAddToCriticalPath,
+                              ? null
+                              : onAddToCriticalPath,
                         ),
                         SizedBox(height: spacing.xxs),
                         CriticalPathMembershipList(
@@ -1222,10 +1216,7 @@ class _QuickAddHeader extends StatelessWidget {
     final double iconSize = context.sizing.iconButtonIconSize;
     final spacing = context.spacing;
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.m,
-        vertical: spacing.m,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.m),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
@@ -1527,7 +1518,8 @@ class _QuickAddRecurrenceSection extends StatelessWidget {
     return AnimatedBuilder(
       animation: formController,
       builder: (context, _) {
-        final fallbackWeekday = formController.startTime?.weekday ??
+        final fallbackWeekday =
+            formController.startTime?.weekday ??
             fallbackDate?.weekday ??
             DateTime.now().weekday;
         return TaskRecurrenceSection(
@@ -1617,14 +1609,16 @@ Future<void> showQuickAddModal({
 
   final commandSurface = resolveCommandSurface(context);
   final colors = context.colorScheme;
-  final bool isDesktop = !kIsWeb &&
+  final bool isDesktop =
+      !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
           defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux);
   final bool useSheet = !isDesktop && commandSurface == CommandSurface.sheet;
   final Color scrimColor = colors.foreground.withValues(alpha: 0.5);
-  final surface =
-      useSheet ? QuickAddModalSurface.bottomSheet : QuickAddModalSurface.dialog;
+  final surface = useSheet
+      ? QuickAddModalSurface.bottomSheet
+      : QuickAddModalSurface.dialog;
 
   if (!useSheet) {
     return showFadeScaleDialog<void>(

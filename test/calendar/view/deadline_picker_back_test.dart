@@ -10,42 +10,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
-  testWidgets(
-    'system back closes deadline dropdown before popping route',
-    (tester) async {
-      tester.view
-        ..physicalSize = const Size(1280, 900)
-        ..devicePixelRatio = 1.0;
-      addTearDown(() {
-        tester.view.resetPhysicalSize();
-        tester.view.resetDevicePixelRatio();
-      });
+  testWidgets('system back closes deadline dropdown before popping route', (
+    tester,
+  ) async {
+    tester.view
+      ..physicalSize = const Size(1280, 900)
+      ..devicePixelRatio = 1.0;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
 
-      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await mouse.addPointer(location: const Offset(1, 1));
-      addTearDown(() async {
-        await mouse.removePointer();
-      });
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1, 1));
+    addTearDown(() async {
+      await mouse.removePointer();
+    });
 
-      await tester.pumpWidget(const _DeadlineBackTestApp());
+    await tester.pumpWidget(const _DeadlineBackTestApp());
 
-      await tester.tap(find.byKey(const Key('open-deadline-page')));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('open-deadline-page')));
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('deadline-page')), findsOneWidget);
+    expect(find.byKey(const Key('deadline-page')), findsOneWidget);
 
-      await tester.tap(find.byIcon(Icons.calendar_today_outlined));
-      await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.calendar_today_outlined));
+    await tester.pumpAndSettle();
 
-      expect(find.byIcon(Icons.keyboard_arrow_up), findsOneWidget);
+    expect(find.byIcon(Icons.keyboard_arrow_up), findsOneWidget);
 
-      await tester.binding.handlePopRoute();
-      await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
 
-      expect(find.byKey(const Key('deadline-page')), findsOneWidget);
-      expect(find.byIcon(Icons.keyboard_arrow_down), findsOneWidget);
-    },
-  );
+    expect(find.byKey(const Key('deadline-page')), findsOneWidget);
+    expect(find.byIcon(Icons.keyboard_arrow_down), findsOneWidget);
+  });
 }
 
 class _DeadlineBackTestApp extends StatelessWidget {

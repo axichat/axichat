@@ -115,7 +115,7 @@ class EmailContactImportException implements Exception {
 
 class EmailContactImportService {
   const EmailContactImportService({required EmailService emailService})
-      : _emailService = emailService;
+    : _emailService = emailService;
 
   final EmailService _emailService;
 
@@ -284,9 +284,11 @@ class EmailContactImportService {
     }
     final List<EmailContactImportContact> contacts =
         <EmailContactImportContact>[];
-    for (int index = _firstDataRowIndex;
-        index < rows.length;
-        index += _nextIndex) {
+    for (
+      int index = _firstDataRowIndex;
+      index < rows.length;
+      index += _nextIndex
+    ) {
       final List<String> row = rows[index];
       final String? displayName = headerMap.displayNameFor(row);
       for (final int emailIndex in headerMap.emailIndices) {
@@ -380,8 +382,9 @@ class EmailContactImportService {
     final String candidate = bracketed ?? trimmed;
     final String normalized = candidate.toLowerCase();
     final bool hasMailto = normalized.startsWith(_mailtoPrefix);
-    final String sanitized =
-        hasMailto ? candidate.substring(_mailtoPrefix.length) : candidate;
+    final String sanitized = hasMailto
+        ? candidate.substring(_mailtoPrefix.length)
+        : candidate;
     final Iterable<String> parts = sanitized.split(_vcardEmailSplitExpression);
     return parts
         .map((part) => part.trim())
@@ -727,12 +730,15 @@ class _CsvHeaderMap {
   final int? nicknameIndex;
 
   factory _CsvHeaderMap.fromHeaders(List<String> headers) {
-    final List<String> normalized =
-        headers.map((header) => _canonicalHeaderKey(header)).toList();
+    final List<String> normalized = headers
+        .map((header) => _canonicalHeaderKey(header))
+        .toList();
     final List<int> emailIndices = <int>[];
-    for (int index = _startIndex;
-        index < normalized.length;
-        index += _nextIndex) {
+    for (
+      int index = _startIndex;
+      index < normalized.length;
+      index += _nextIndex
+    ) {
       if (_isEmailHeader(normalized[index])) {
         emailIndices.add(index);
       }

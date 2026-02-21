@@ -90,8 +90,9 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
           onFocusChange: (focused) {
             if (!mounted) return;
             setState(
-              () => _hoverState =
-                  focused ? _HoverState.hovered : _HoverState.idle,
+              () => _hoverState = focused
+                  ? _HoverState.hovered
+                  : _HoverState.idle,
             );
           },
           builder: (context, focused, child) =>
@@ -117,12 +118,12 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
                     transitionBuilder:
                         (child, primaryAnimation, secondaryAnimation) =>
                             FadeTransition(
-                      opacity: primaryAnimation,
-                      child: FadeTransition(
-                        opacity: ReverseAnimation(secondaryAnimation),
-                        child: child,
-                      ),
-                    ),
+                              opacity: primaryAnimation,
+                              child: FadeTransition(
+                                opacity: ReverseAnimation(secondaryAnimation),
+                                child: child,
+                              ),
+                            ),
                     child: hasBytes
                         ? AxiAvatar(
                             key: ValueKey(_previewVersion),
@@ -173,7 +174,8 @@ class _SignupAvatarSelectorState extends State<SignupAvatarSelector> {
                                 width: sizing.progressIndicatorSize,
                                 height: sizing.progressIndicatorSize,
                                 child: AxiProgressIndicator(
-                                    color: colors.foreground),
+                                  color: colors.foreground,
+                                ),
                               ),
                             )
                           : Icon(

@@ -99,8 +99,9 @@ class _AxiImageCropperState extends State<AxiImageCropper> {
             ? constraints.maxHeight
             : double.infinity;
         final maxSide = min(maxWidth, maxHeight);
-        final dimension =
-            maxSide.isFinite && maxSide > 0 ? maxSide : sizing.menuMaxWidth;
+        final dimension = maxSide.isFinite && maxSide > 0
+            ? maxSide
+            : sizing.menuMaxWidth;
         if (!_hasValidImage) {
           return SizedBox.square(
             dimension: dimension,
@@ -224,8 +225,9 @@ class _AxiImageCropperState extends State<AxiImageCropper> {
                           progressIndicator: Center(
                             child: SizedBox.square(
                               dimension: sizing.progressIndicatorSize,
-                              child:
-                                  AxiProgressIndicator(color: colors.primary),
+                              child: AxiProgressIndicator(
+                                color: colors.primary,
+                              ),
                             ),
                           ),
                         ),
@@ -279,10 +281,12 @@ class _AxiImageCropperState extends State<AxiImageCropper> {
     );
     if (!_isValidRect(rect)) return fallback;
 
-    final targetWidth =
-        rect.width.isFinite && rect.width > 0 ? rect.width : fallback.width;
-    final targetHeight =
-        rect.height.isFinite && rect.height > 0 ? rect.height : fallback.height;
+    final targetWidth = rect.width.isFinite && rect.width > 0
+        ? rect.width
+        : fallback.width;
+    final targetHeight = rect.height.isFinite && rect.height > 0
+        ? rect.height
+        : fallback.height;
     final width = targetWidth.clamp(minSide, maxSide);
     final height = targetHeight.clamp(minSide, maxSide);
     final maxLeft = widget.imageWidth - width;

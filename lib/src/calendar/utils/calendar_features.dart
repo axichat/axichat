@@ -17,16 +17,16 @@ class CalendarFeatures {
   });
 
   const CalendarFeatures.guest()
-      : showSyncControls = false,
-        showGuestBanner = true,
-        showUnscheduledTasks = true,
-        showInlineInput = true,
-        enableCloudSync = false;
+    : showSyncControls = false,
+      showGuestBanner = true,
+      showUnscheduledTasks = true,
+      showInlineInput = true,
+      enableCloudSync = false;
 
   const CalendarFeatures.authenticated()
-      : showSyncControls = true,
-        showGuestBanner = false,
-        showUnscheduledTasks = true,
-        showInlineInput = true,
-        enableCloudSync = true;
+    : showSyncControls = true,
+      showGuestBanner = false,
+      showUnscheduledTasks = true,
+      showInlineInput = true,
+      enableCloudSync = true;
 }

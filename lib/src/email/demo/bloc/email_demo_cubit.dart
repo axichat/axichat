@@ -20,17 +20,17 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
     required EmailService emailService,
     required CredentialStore credentialStore,
     Logger? log,
-  })  : _emailService = emailService,
-        _credentialStore = credentialStore,
-        _log = log ?? Logger('EmailDemoCubit'),
-        super(
-          const EmailDemoState(
-            status: EmailDemoStatus.idle,
-            account: null,
-            failure: null,
-            detail: null,
-          ),
-        );
+  }) : _emailService = emailService,
+       _credentialStore = credentialStore,
+       _log = log ?? Logger('EmailDemoCubit'),
+       super(
+         const EmailDemoState(
+           status: EmailDemoStatus.idle,
+           account: null,
+           failure: null,
+           detail: null,
+         ),
+       );
 
   final EmailService _emailService;
   final CredentialStore _credentialStore;
@@ -75,10 +75,7 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
       emit(
         state.copyWith(
           status: EmailDemoStatus.provisioned,
-          account: const EmailAccount(
-            address: kDemoSelfJid,
-            password: 'demo',
-          ),
+          account: const EmailAccount(address: kDemoSelfJid, password: 'demo'),
           failure: null,
           detail: null,
         ),

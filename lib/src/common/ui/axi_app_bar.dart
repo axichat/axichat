@@ -38,9 +38,7 @@ class AxiAppBar extends StatelessWidget {
     return Container(
       height: context.sizing.appBarHeight,
       padding: EdgeInsets.symmetric(vertical: spacing.s, horizontal: spacing.m),
-      decoration: BoxDecoration(
-        border: Border(bottom: context.borderSide),
-      ),
+      decoration: BoxDecoration(border: Border(bottom: context.borderSide)),
       child: hasTitle
           ? Row(
               crossAxisAlignment: CrossAxisAlignment.center,
@@ -79,10 +77,7 @@ class AxiAppBar extends StatelessWidget {
                 alignment: Alignment.center,
                 children: [
                   if (hasLeading)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: leading!,
-                    ),
+                    Align(alignment: Alignment.centerLeft, child: leading!),
                   trailingContent,
                 ],
               ),

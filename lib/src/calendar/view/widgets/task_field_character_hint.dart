@@ -34,8 +34,9 @@ class TaskFieldCharacterHint extends StatelessWidget {
       builder: (context, value, _) {
         final int length = TaskTitleValidation.characterCount(value.text);
         final bool overLimit = length > limit;
-        final Color counterColor =
-            overLimit ? calendarDangerColor : calendarSubtitleColor;
+        final Color counterColor = overLimit
+            ? calendarDangerColor
+            : calendarSubtitleColor;
 
         return Padding(
           padding: padding,

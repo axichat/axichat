@@ -38,15 +38,16 @@ Message mergeOriginMessages({
   final fallbackTimestamp = DateTime.timestamp();
   final resolvedTimestamp =
       primary.timestamp ?? duplicate.timestamp ?? fallbackTimestamp;
-  final resolvedError =
-      primary.error != MessageError.none ? primary.error : duplicate.error;
+  final resolvedError = primary.error != MessageError.none
+      ? primary.error
+      : duplicate.error;
   final resolvedWarning = primary.warning != MessageWarning.none
       ? primary.warning
       : duplicate.warning;
   final resolvedEncryption =
       primary.encryptionProtocol != EncryptionProtocol.none
-          ? primary.encryptionProtocol
-          : duplicate.encryptionProtocol;
+      ? primary.encryptionProtocol
+      : duplicate.encryptionProtocol;
   final resolvedTrust = primary.trust ?? duplicate.trust;
   final resolvedTrusted = primary.trusted ?? duplicate.trusted;
   final resolvedDeviceId = primary.deviceID ?? duplicate.deviceID;
@@ -97,10 +98,12 @@ Message resolveOriginMergePrimary({
   required String? selfJid,
 }) {
   final String normalizedSelf = normalizedAddressValueOrEmpty(selfJid);
-  final String normalizedExisting =
-      normalizedAddressValueOrEmpty(existing.senderJid);
-  final String normalizedDuplicate =
-      normalizedAddressValueOrEmpty(duplicate.senderJid);
+  final String normalizedExisting = normalizedAddressValueOrEmpty(
+    existing.senderJid,
+  );
+  final String normalizedDuplicate = normalizedAddressValueOrEmpty(
+    duplicate.senderJid,
+  );
   final bool existingIsPlaceholder = normalizedExisting.isDeltaPlaceholderJid;
   final bool duplicateIsPlaceholder = normalizedDuplicate.isDeltaPlaceholderJid;
   final bool existingIsSelf = _isSelfSender(

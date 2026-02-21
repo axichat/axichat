@@ -35,8 +35,11 @@ const bool _calendarLoadingOverlayEnabled = false;
 
 /// Base [State] used by both the authenticated and guest calendar surfaces to
 /// host the shared drag/tab interactions, sidebars, and layout switching.
-abstract class CalendarExperienceState<W extends StatefulWidget,
-        B extends BaseCalendarBloc> extends State<W>
+abstract class CalendarExperienceState<
+  W extends StatefulWidget,
+  B extends BaseCalendarBloc
+>
+    extends State<W>
     with TickerProviderStateMixin, CalendarDragTabMixin {
   late final TabController _mobileTabController;
   late final AnimationController _tasksTabPulseController;
@@ -104,7 +107,8 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
         _usesMobileLayout = !usesDesktopLayout;
         onLayoutModeResolved(state, usesDesktopLayout);
 
-        final bool highlightTasksTab = !usesDesktopLayout &&
+        final bool highlightTasksTab =
+            !usesDesktopLayout &&
             state.isSelectionMode &&
             _mobileTabController.index != 1;
 
@@ -144,8 +148,9 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
                 onDragSessionEnded: _handleCalendarGridDragSessionEnded,
                 cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
               );
-        final Widget dragTargets =
-            isMonthView ? const SizedBox.shrink() : buildDragEdgeTargets();
+        final Widget dragTargets = isMonthView
+            ? const SizedBox.shrink()
+            : buildDragEdgeTargets();
         final double tabSwitcherBottomInset = resolveTabSwitcherBottomInset(
           context,
           mediaQuery,
@@ -176,15 +181,15 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
               );
         final Widget mobileTabShell = usesDesktopLayout
             ? const SizedBox.shrink()
-            : buildMobileTabShell(
-                context,
-                tabSwitcher,
-                cancelBucket,
-              );
-        final Widget? desktopTopHeader =
-            buildDesktopTopHeader(navigation, errorBanner);
-        final Widget? desktopBodyHeader =
-            buildDesktopBodyHeader(navigation, errorBanner);
+            : buildMobileTabShell(context, tabSwitcher, cancelBucket);
+        final Widget? desktopTopHeader = buildDesktopTopHeader(
+          navigation,
+          errorBanner,
+        );
+        final Widget? desktopBodyHeader = buildDesktopBodyHeader(
+          navigation,
+          errorBanner,
+        );
         final Widget layout = _CalendarExperienceLayout(
           usesDesktopLayout: usesDesktopLayout,
           desktopTopHeader: desktopTopHeader,
@@ -363,10 +368,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   void onDragCancelRequested(CalendarDragPayload payload) {
     final CalendarTask restored = restoreTaskFromPayload(payload);
     calendarBloc.add(CalendarEvent.taskUpdated(task: restored));
-    FeedbackSystem.showInfo(
-      context,
-      context.l10n.calendarDragCanceled,
-    );
+    FeedbackSystem.showInfo(context, context.l10n.calendarDragCanceled);
   }
 
   @override
@@ -447,8 +449,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   EdgeInsets? navigationPadding(
     CalendarResponsiveSpec spec,
     bool usesDesktopLayout,
-  ) =>
-      null;
+  ) => null;
 
   @protected
   CalendarChatAcl? buildNavigationChatAcl(CalendarState state) => null;
@@ -461,24 +462,21 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     BuildContext context,
     CalendarState state,
     bool usesDesktopLayout,
-  ) =>
-      null;
+  ) => null;
 
   @protected
   Widget? buildNavigationTrailingActions(
     BuildContext context,
     CalendarState state,
     bool usesDesktopLayout,
-  ) =>
-      null;
+  ) => null;
 
   @protected
   VoidCallback? buildNavigationSearchAction(
     BuildContext context,
     CalendarState state,
     bool usesDesktopLayout,
-  ) =>
-      null;
+  ) => null;
 
   /// Builds the error banner shown above the content, if any.
   Widget? buildErrorBanner(
@@ -501,15 +499,12 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   EdgeInsets? errorBannerMargin(
     CalendarResponsiveSpec spec,
     bool usesDesktopLayout,
-  ) =>
-      null;
+  ) => null;
 
   /// Builds the tab label for the schedule pane. Subclasses can override to
   /// customize text/style.
-  Widget buildScheduleTabLabel(BuildContext context) => Icon(
-        LucideIcons.calendarClock,
-        size: context.sizing.menuItemIconSize,
-      );
+  Widget buildScheduleTabLabel(BuildContext context) =>
+      Icon(LucideIcons.calendarClock, size: context.sizing.menuItemIconSize);
 
   double resolveTabSwitcherBottomInset(
     BuildContext context,
@@ -627,8 +622,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
   CalendarSizeClass resolveLayoutSizeClass(
     CalendarResponsiveSpec spec,
     MediaQueryData mediaQuery,
-  ) =>
-      _resolveSizeClass(spec, mediaQuery);
+  ) => _resolveSizeClass(spec, mediaQuery);
 
   CalendarSizeClass _resolveSizeClass(
     CalendarResponsiveSpec spec,
@@ -637,7 +631,7 @@ abstract class CalendarExperienceState<W extends StatefulWidget,
     final CalendarSizeClass base = spec.sizeClass;
     final bool landscapeCompactDevice =
         mediaQuery.orientation == Orientation.landscape &&
-            mediaQuery.size.shortestSide < compactDeviceBreakpoint;
+        mediaQuery.size.shortestSide < compactDeviceBreakpoint;
     if (landscapeCompactDevice && base == CalendarSizeClass.expanded) {
       return CalendarSizeClass.medium;
     }
@@ -699,7 +693,7 @@ class _CalendarExperienceLayout extends StatelessWidget {
   final bool safeAreaTop;
   final bool safeAreaBottom;
   final Widget Function(BuildContext context, bool showingPrimary)
-      headerBuilder;
+  headerBuilder;
 
   @override
   Widget build(BuildContext context) {

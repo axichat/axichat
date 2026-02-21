@@ -308,11 +308,11 @@ abstract interface class XmppBase {
 
   AttachmentAutoDownload get defaultChatAttachmentAutoDownload =>
       autoDownloadImages ||
-              autoDownloadVideos ||
-              autoDownloadDocuments ||
-              autoDownloadArchives
-          ? AttachmentAutoDownload.allowed
-          : AttachmentAutoDownload.blocked;
+          autoDownloadVideos ||
+          autoDownloadDocuments ||
+          autoDownloadArchives
+      ? AttachmentAutoDownload.allowed
+      : AttachmentAutoDownload.blocked;
 
   void updateAttachmentAutoDownloadSettings({
     required bool imagesEnabled,
@@ -345,13 +345,11 @@ abstract interface class XmppBase {
   Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream;
 
   Stream<anti_abuse.EmailBlocklistSyncUpdate>
-      get emailBlocklistSyncUpdateStream;
+  get emailBlocklistSyncUpdateStream;
 
   void emitSpamSyncUpdate(anti_abuse.SpamSyncUpdate update);
 
-  void emitEmailBlocklistSyncUpdate(
-    anti_abuse.EmailBlocklistSyncUpdate update,
-  );
+  void emitEmailBlocklistSyncUpdate(anti_abuse.EmailBlocklistSyncUpdate update);
 
   List<int> secureBytes(int length);
 
@@ -480,14 +478,13 @@ class XmppService extends XmppBase
     required FutureOr<XmppDatabase> Function(String, String) buildDatabase,
     NotificationService? notificationService,
     Capability capability = const Capability(),
-  }) =>
-      _instance ??= XmppService._(
-        buildConnection,
-        buildStateStore,
-        buildDatabase,
-        notificationService ?? NotificationService(),
-        capability,
-      );
+  }) => _instance ??= XmppService._(
+    buildConnection,
+    buildStateStore,
+    buildDatabase,
+    notificationService ?? NotificationService(),
+    capability,
+  );
 
   final Logger _xmppLogger = Logger('XmppService');
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
@@ -514,7 +511,7 @@ class XmppService extends XmppBase
   StreamController<anti_abuse.SpamSyncUpdate> _spamSyncUpdateController =
       StreamController<anti_abuse.SpamSyncUpdate>.broadcast();
   StreamController<anti_abuse.EmailBlocklistSyncUpdate>
-      _emailBlocklistSyncUpdateController =
+  _emailBlocklistSyncUpdateController =
       StreamController<anti_abuse.EmailBlocklistSyncUpdate>.broadcast();
 
   AppLocalizations get localizations =>
@@ -622,8 +619,8 @@ class XmppService extends XmppBase
 
   @override
   Stream<anti_abuse.EmailBlocklistSyncUpdate>
-      get emailBlocklistSyncUpdateStream =>
-          _emailBlocklistSyncUpdateController.stream;
+  get emailBlocklistSyncUpdateStream =>
+      _emailBlocklistSyncUpdateController.stream;
 
   void _notifyDatabaseReloaded() {
     if (_databaseReloadController.isClosed) return;
@@ -645,8 +642,9 @@ class XmppService extends XmppBase
   @override
   final selfAvatarHashKey = XmppStateStore.registerKey('self_avatar_hash');
   @override
-  final selfAvatarPendingPublishKey =
-      XmppStateStore.registerKey('self_avatar_pending_publish_v1');
+  final selfAvatarPendingPublishKey = XmppStateStore.registerKey(
+    'self_avatar_pending_publish_v1',
+  );
   final avatarEncryptionSaltKey = XmppStateStore.registerKey(
     'avatar_encryption_salt',
   );
@@ -844,41 +842,38 @@ class XmppService extends XmppBase
         final shouldHandleFailedResumption =
             !resumed && _streamResumptionAttempted;
         _streamResumptionAttempted = false;
-        fireAndForget(
-          () async {
-            if (_connection.carbonsEnabled != true) {
-              _xmppLogger.info('Enabling carbons...');
-              if (!await _connection.enableCarbons()) {
-                _xmppLogger.warning('Failed to enable carbons.');
-              }
+        fireAndForget(() async {
+          if (_connection.carbonsEnabled != true) {
+            _xmppLogger.info('Enabling carbons...');
+            if (!await _connection.enableCarbons()) {
+              _xmppLogger.warning('Failed to enable carbons.');
             }
-            // Device publishing is now handled internally by OmemoManager.
-            if (shouldHandleFailedResumption) {
-              final sm = _connection.getManager<XmppStreamManagementManager>();
-              await sm?.handleFailedResumption();
-              fireAndForget(
-                _syncAfterReconnect,
-                operationName: _syncAfterReconnectOperationName,
+          }
+          // Device publishing is now handled internally by OmemoManager.
+          if (shouldHandleFailedResumption) {
+            final sm = _connection.getManager<XmppStreamManagementManager>();
+            await sm?.handleFailedResumption();
+            fireAndForget(
+              _syncAfterReconnect,
+              operationName: _syncAfterReconnectOperationName,
+            );
+          }
+          if (!resumed) {
+            try {
+              final presenceManager = _connection
+                  .getManager<XmppPresenceManager>();
+              await presenceManager?.sendInitialPresence();
+            } catch (error, stackTrace) {
+              _xmppLogger.warning(
+                'Failed to send initial presence.',
+                error,
+                stackTrace,
               );
             }
-            if (!resumed) {
-              try {
-                final presenceManager =
-                    _connection.getManager<XmppPresenceManager>();
-                await presenceManager?.sendInitialPresence();
-              } catch (error, stackTrace) {
-                _xmppLogger.warning(
-                  'Failed to send initial presence.',
-                  error,
-                  stackTrace,
-                );
-              }
-              await _refreshHttpUploadSupport();
-              await _refreshPubSubSupport();
-            }
-          },
-          operationName: _postNegotiationsSetupOperationName,
-        );
+            await _refreshHttpUploadSupport();
+            await _refreshPubSubSupport();
+          }
+        }, operationName: _postNegotiationsSetupOperationName);
         // Connection handling is automatic in moxxmpp v0.5.0.
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
@@ -933,14 +928,13 @@ class XmppService extends XmppBase
             type: _capability.discoClient,
             name: appDisplayName,
           ),
-        ])
-          ..addFeatures(const [
-            BookmarksManager.bookmarksNotifyFeature,
-            conversationIndexNotifyFeature,
-            draftsNotifyFeature,
-            spamNotifyFeature,
-            emailBlocklistNotifyFeature,
-          ])),
+        ])..addFeatures(const [
+          BookmarksManager.bookmarksNotifyFeature,
+          conversationIndexNotifyFeature,
+          draftsNotifyFeature,
+          spamNotifyFeature,
+          emailBlocklistNotifyFeature,
+        ])),
         XmppKeepAliveManager(),
         mox.EntityCapabilitiesManager(_capabilityHashBase),
         SafePubSubManager(),
@@ -1085,20 +1079,13 @@ class XmppService extends XmppBase
   }
 
   void _scheduleConnectivityNotificationUpdate(ConnectionState state) {
-    fireAndForget(
-      () async {
-        try {
-          await _connection.updateConnectivityNotification(state);
-        } catch (error, stackTrace) {
-          _xmppLogger.fine(
-            _connectivityNotificationFailedLog,
-            error,
-            stackTrace,
-          );
-        }
-      },
-      operationName: _connectivityNotificationUpdateOperationName,
-    );
+    fireAndForget(() async {
+      try {
+        await _connection.updateConnectivityNotification(state);
+      } catch (error, stackTrace) {
+        _xmppLogger.fine(_connectivityNotificationFailedLog, error, stackTrace);
+      }
+    }, operationName: _connectivityNotificationUpdateOperationName);
   }
 
   void _recordStreamReady(bool resumed) {
@@ -1346,8 +1333,8 @@ class XmppService extends XmppBase
 
     await _eventSubscription?.cancel();
     _eventSubscription = _connection.asBroadcastStream().listen(
-          _handleXmppEvent,
-        );
+      _handleXmppEvent,
+    );
 
     _connection.connectionSettings = XmppConnectionSettings(
       jid: _myJid!.toBare(),
@@ -1397,7 +1384,7 @@ class XmppService extends XmppBase
       );
       final threadKey =
           _notificationPayloadCodec.encodeChatJid(message.chatJid) ??
-              message.chatJid.trim();
+          message.chatJid.trim();
       if (threadKey.isEmpty) {
         return;
       }
@@ -1860,8 +1847,9 @@ class XmppService extends XmppBase
                 (_nickFromSender(message.senderJid) ?? '').toLowerCase() ==
                 'james',
           );
-          final madisonSecondMessage =
-              madisonMessages.length >= 2 ? madisonMessages.elementAt(1) : null;
+          final madisonSecondMessage = madisonMessages.length >= 2
+              ? madisonMessages.elementAt(1)
+              : null;
           if (madisonSecondMessage != null &&
               !hasReactionsForMessage(madisonSecondMessage.stanzaID)) {
             await db.replaceReactions(
@@ -1921,7 +1909,7 @@ class XmppService extends XmppBase
   static const ui.Color _demoFranklinBackground = ui.Color(0xFFFFFFFF);
 
   Future<({String path, int sizeBytes, int? width, int? height})?>
-      materializeDemoAsset({
+  materializeDemoAsset({
     required String assetPath,
     required String fileName,
   }) async {
@@ -2035,11 +2023,11 @@ class XmppService extends XmppBase
   }
 
   img.Color _imgColor(int argb) => img.ColorUint8.rgba(
-        (argb >> 16) & 0xFF,
-        (argb >> 8) & 0xFF,
-        argb & 0xFF,
-        (argb >> 24) & 0xFF,
-      );
+    (argb >> 16) & 0xFF,
+    (argb >> 8) & 0xFF,
+    argb & 0xFF,
+    (argb >> 24) & 0xFF,
+  );
 
   Future<void> _seedDemoAvatarForJid({
     required String jid,
@@ -2109,16 +2097,18 @@ class XmppService extends XmppBase
     if (_networkAvailabilitySubscription != null) {
       return;
     }
-    _networkAvailabilitySubscription =
-        NetworkAvailabilityService.instance.stream.listen((availability) {
-      if (!availability.isAvailable) {
-        return;
-      }
-      fireAndForget(
-        () => requestReconnect(ReconnectTrigger.networkAvailable),
-        operationName: 'XmppService.reconnectOnNetworkAvailable',
-      );
-    });
+    _networkAvailabilitySubscription = NetworkAvailabilityService
+        .instance
+        .stream
+        .listen((availability) {
+          if (!availability.isAvailable) {
+            return;
+          }
+          fireAndForget(
+            () => requestReconnect(ReconnectTrigger.networkAvailable),
+            operationName: 'XmppService.reconnectOnNetworkAvailable',
+          );
+        });
   }
 
   Future<void> _stopNetworkAvailabilityListener() async {
@@ -2149,20 +2139,17 @@ class XmppService extends XmppBase
     );
     _sessionReconnectEnabled = false;
     _reconnectBlocked = true;
-    fireAndForget(
-      () async {
-        try {
-          await _connection.setShouldReconnect(false);
-        } catch (error, stackTrace) {
-          _xmppLogger.fine(
-            'Failed to disable reconnection after stale connection.',
-            error,
-            stackTrace,
-          );
-        }
-      },
-      operationName: 'XmppService.disableReconnectAfterStale',
-    );
+    fireAndForget(() async {
+      try {
+        await _connection.setShouldReconnect(false);
+      } catch (error, stackTrace) {
+        _xmppLogger.fine(
+          'Failed to disable reconnection after stale connection.',
+          error,
+          stackTrace,
+        );
+      }
+    }, operationName: 'XmppService.disableReconnectAfterStale');
     _setConnectionState(ConnectionState.error);
   }
 
@@ -2212,8 +2199,8 @@ class XmppService extends XmppBase
       return;
     }
 
-    final bool shouldReconnect =
-        await _connection.reconnectionPolicy.getShouldReconnect();
+    final bool shouldReconnect = await _connection.reconnectionPolicy
+        .getShouldReconnect();
     if (!shouldReconnect) {
       try {
         await _connection.setShouldReconnect(true);
@@ -2285,7 +2272,7 @@ class XmppService extends XmppBase
         config: buildForegroundServiceConfig(
           notificationText:
               toBeginningOfSentenceCase(ConnectionState.connecting.name) ??
-                  ConnectionState.connecting.name,
+              ConnectionState.connecting.name,
         ),
       );
       warmupAcquired = true;
@@ -2338,8 +2325,8 @@ class XmppService extends XmppBase
       );
       await _initConnection(preHashed: _connectionPasswordPreHashed);
       _eventSubscription = _connection.asBroadcastStream().listen(
-            _handleXmppEvent,
-          );
+        _handleXmppEvent,
+      );
       _myJid = existingJid;
       _connection.connectionSettings = XmppConnectionSettings(
         jid: existingJid,
@@ -2387,8 +2374,8 @@ class XmppService extends XmppBase
         );
         await _initConnection(preHashed: _connectionPasswordPreHashed);
         _eventSubscription = _connection.asBroadcastStream().listen(
-              _handleXmppEvent,
-            );
+          _handleXmppEvent,
+        );
         _myJid = existingJid;
         _connection.connectionSettings = XmppConnectionSettings(
           jid: existingJid,
@@ -2465,7 +2452,8 @@ class XmppService extends XmppBase
 
     // Only disable session reconnect for fatal errors (auth/database).
     // Network errors should allow reconnection attempts.
-    final isFatalError = e == null ||
+    final isFatalError =
+        e == null ||
         e is XmppAuthenticationException ||
         e is XmppDatabaseCreationException;
     if (isFatalError) {
@@ -2653,10 +2641,10 @@ class XmppService extends XmppBase
   }
 
   Completer<T> _getDatabaseCompleter<T>() => switch (T) {
-        == XmppStateStore => _stateStore.completer as Completer<T>,
-        == XmppDatabase => _database.completer as Completer<T>,
-        _ => throw UnimplementedError('No database of type: $T exists.'),
-      };
+    == XmppStateStore => _stateStore.completer as Completer<T>,
+    == XmppDatabase => _database.completer as Completer<T>,
+    _ => throw UnimplementedError('No database of type: $T exists.'),
+  };
 
   @override
   Future<V> _dbOpReturning<D extends Database, V>(
@@ -2813,18 +2801,14 @@ class XmppService extends XmppBase
   }) {
     final decision = _pubSubSupportResolved
         ? (supported
-            ? const CapabilityDecision(CapabilityDecisionKind.allowed)
-            : const CapabilityDecision(CapabilityDecisionKind.unsupported))
+              ? const CapabilityDecision(CapabilityDecisionKind.allowed)
+              : const CapabilityDecision(CapabilityDecisionKind.unsupported))
         : const CapabilityDecision(CapabilityDecisionKind.unknown);
     if (decision.isAllowed) return decision;
     if (decision.isUnknown) {
-      _xmppLogger.fine(
-        'Skipping $featureLabel (pubsub support unknown).',
-      );
+      _xmppLogger.fine('Skipping $featureLabel (pubsub support unknown).');
     } else {
-      _xmppLogger.fine(
-        'Skipping $featureLabel (unsupported).',
-      );
+      _xmppLogger.fine('Skipping $featureLabel (unsupported).');
     }
     return decision;
   }
@@ -2866,15 +2850,17 @@ class XmppService extends XmppBase
       jid: hostJid,
     );
 
-    final pubSubSupported = selfFeatures.contains(mox.pubsubXmlns) ||
+    final pubSubSupported =
+        selfFeatures.contains(mox.pubsubXmlns) ||
         selfFeatures.contains(mox.pubsubOwnerXmlns) ||
         hostFeatures.contains(mox.pubsubXmlns) ||
         hostFeatures.contains(mox.pubsubOwnerXmlns);
-    final pepSupported = selfFeatures.contains(mox.pubsubEventXmlns) ||
+    final pepSupported =
+        selfFeatures.contains(mox.pubsubEventXmlns) ||
         selfFeatures.contains(mox.pubsubXmlns);
     final bookmarks2Supported =
         selfFeatures.contains(BookmarksManager.bookmarksNotifyFeature) ||
-            selfFeatures.contains(_bookmarks2NodeXmlns);
+        selfFeatures.contains(_bookmarks2NodeXmlns);
 
     final support = PubSubSupport(
       pubSubSupported: pubSubSupported,
@@ -2934,12 +2920,12 @@ class XmppClientNegotiator extends mox.ClientToServerNegotiator {
 
 class XmppTlsRequirementNegotiator extends mox.XmppFeatureNegotiatorBase {
   XmppTlsRequirementNegotiator()
-      : super(
-          _tlsRequirementNegotiatorPriority,
-          _tlsRequirementSendStreamHeader,
-          _tlsRequirementNegotiatorXmlns,
-          _tlsRequirementNegotiatorId,
-        );
+    : super(
+        _tlsRequirementNegotiatorPriority,
+        _tlsRequirementSendStreamHeader,
+        _tlsRequirementNegotiatorXmlns,
+        _tlsRequirementNegotiatorId,
+      );
 
   @override
   bool matchesFeature(List<mox.XMLNode> features) =>
@@ -3173,8 +3159,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
   static const String _xmlEntityToken = '<!entity';
   static const int _xmlTokenCarryLength =
       _xmlDoctypeToken.length > _xmlEntityToken.length
-          ? _xmlDoctypeToken.length - 1
-          : _xmlEntityToken.length - 1;
+      ? _xmlDoctypeToken.length - 1
+      : _xmlEntityToken.length - 1;
   static const String _xmlForbiddenLog =
       'Blocked XML containing DTD/entity declaration.';
   static const String _xmlForbiddenError =
@@ -3444,7 +3430,8 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
 
   bool _containsForbiddenXml(String data) {
     final combined = (_xmlTokenCarry + data).toLowerCase();
-    final hasForbidden = combined.contains(_xmlDoctypeToken) ||
+    final hasForbidden =
+        combined.contains(_xmlDoctypeToken) ||
         combined.contains(_xmlEntityToken);
     if (combined.length <= _xmlTokenCarryLength) {
       _xmlTokenCarry = combined;
@@ -3571,16 +3558,13 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
 
   void _cancelSocketSubscription(StreamSubscription<dynamic>? subscription) {
     if (subscription == null) return;
-    fireAndForget(
-      () async {
-        try {
-          await subscription.cancel();
-        } catch (error, stackTrace) {
-          _log.fine(_socketCancelFailedLog, error, stackTrace);
-        }
-      },
-      operationName: _cancelSocketSubscriptionOperationName,
-    );
+    fireAndForget(() async {
+      try {
+        await subscription.cancel();
+      } catch (error, stackTrace) {
+        _log.fine(_socketCancelFailedLog, error, stackTrace);
+      }
+    }, operationName: _cancelSocketSubscriptionOperationName);
   }
 
   void _markSocketClosed(Socket socket) {
@@ -3606,7 +3590,7 @@ class XmppSocketWrapper implements mox.BaseSocketWrapper, XmppTrafficTracker {
 /// message loss during network disruptions or app lifecycle changes.
 class XmppStreamManagementManager extends mox.StreamManagementManager {
   XmppStreamManagementManager({required this.owner})
-      : super(ackTimeout: const Duration(minutes: 2));
+    : super(ackTimeout: const Duration(minutes: 2));
 
   final XmppService owner;
   final _log = Logger('XmppStreamManagementManager');
@@ -3614,21 +3598,20 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   static const keyPrefix = 'stream_management';
   final clientToServerCountKey = XmppStateStore.registerKey('${keyPrefix}_c2s');
   final serverToClientCountKey = XmppStateStore.registerKey('${keyPrefix}_s2c');
-  final streamResumptionIDKey =
-      XmppStateStore.registerKey('${keyPrefix}_resID');
-  final streamResumptionLocationKey =
-      XmppStateStore.registerKey('${keyPrefix}_resLoc');
+  final streamResumptionIDKey = XmppStateStore.registerKey(
+    '${keyPrefix}_resID',
+  );
+  final streamResumptionLocationKey = XmppStateStore.registerKey(
+    '${keyPrefix}_resLoc',
+  );
 
   Future<void> clearPersistedState() async {
-    await owner._dbOp<XmppStateStore>(
-      (ss) async {
-        await ss.delete(key: clientToServerCountKey);
-        await ss.delete(key: serverToClientCountKey);
-        await ss.delete(key: streamResumptionIDKey);
-        await ss.delete(key: streamResumptionLocationKey);
-      },
-      awaitDatabase: true,
-    );
+    await owner._dbOp<XmppStateStore>((ss) async {
+      await ss.delete(key: clientToServerCountKey);
+      await ss.delete(key: serverToClientCountKey);
+      await ss.delete(key: streamResumptionIDKey);
+      await ss.delete(key: streamResumptionLocationKey);
+    }, awaitDatabase: true);
   }
 
   @override
@@ -3710,7 +3693,7 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
 /// - Compatibility with the app's credential management system
 class SaslScramNegotiator extends mox.SaslScramNegotiator {
   SaslScramNegotiator({this.preHashed = false})
-      : super(10, '', '', mox.ScramHashType.sha512);
+    : super(10, '', '', mox.ScramHashType.sha512);
 
   final bool preHashed;
 

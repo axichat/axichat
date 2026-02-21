@@ -18,7 +18,6 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_participant.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
-import 'package:axichat/src/calendar/models/duration_adapter.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
 
 final Set<HiveInterface> _registeredAdapterTargets = <HiveInterface>{};
@@ -30,9 +29,6 @@ void registerCalendarHiveAdapters([HiveInterface? hive]) {
     return;
   }
 
-  if (!target.isAdapterRegistered(DurationAdapter().typeId)) {
-    target.registerAdapter<Duration>(DurationAdapter());
-  }
   if (!target.isAdapterRegistered(CalendarDateTimeAdapter().typeId)) {
     target.registerAdapter<CalendarDateTime>(CalendarDateTimeAdapter());
   }

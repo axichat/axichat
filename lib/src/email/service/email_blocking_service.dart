@@ -21,9 +21,9 @@ class EmailBlockingService {
     required Future<XmppDatabase> Function() databaseBuilder,
     DeltaChatBlockCallback? onBlock,
     DeltaChatBlockCallback? onUnblock,
-  })  : _databaseBuilder = databaseBuilder,
-        _onBlock = onBlock,
-        _onUnblock = onUnblock;
+  }) : _databaseBuilder = databaseBuilder,
+       _onBlock = onBlock,
+       _onUnblock = onUnblock;
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaChatBlockCallback? _onBlock;

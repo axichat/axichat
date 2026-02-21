@@ -50,8 +50,9 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
     final locale = Localizations.localeOf(context);
     if (_lastLocale == locale) return;
     _lastLocale = locale;
-    _timestampFormat =
-        intl.DateFormat.yMMMMEEEEd(locale.toLanguageTag()).add_jms();
+    _timestampFormat = intl.DateFormat.yMMMMEEEEd(
+      locale.toLanguageTag(),
+    ).add_jms();
   }
 
   @override
@@ -64,12 +65,13 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
         return BlocSelector<ProfileCubit, ProfileState, String?>(
           selector: (profileState) => profileState.jid,
           builder: (context, profileJid) {
-            final resolvedEmailSelfJid =
-                state.emailSelfJid?.resolveDeltaPlaceholderJid();
+            final resolvedEmailSelfJid = state.emailSelfJid
+                ?.resolveDeltaPlaceholderJid();
             final bareSender = bareAddress(message.senderJid);
             final bool isPlaceholderSender =
                 bareSender?.isDeltaPlaceholderJid ?? false;
-            final isFromSelf = isPlaceholderSender ||
+            final isFromSelf =
+                isPlaceholderSender ||
                 bareSender == bareAddress(profileJid) ||
                 (resolvedEmailSelfJid != null &&
                     bareSender == bareAddress(resolvedEmailSelfJid));
@@ -101,10 +103,12 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
             final timestampLabel = timestamp == null
                 ? l10n.commonUnknownLabel
                 : _timestampFormat.format(timestamp);
-            final showEmailRecipients = isFromSelf &&
+            final showEmailRecipients =
+                isFromSelf &&
                 (transport?.isEmail ?? false) &&
                 shareParticipants.isNotEmpty;
-            final showReactions = (transport == null || transport.isXmpp) &&
+            final showReactions =
+                (transport == null || transport.isXmpp) &&
                 message.reactionsPreview.isNotEmpty;
             final copyLabel = l10n.chatActionCopy;
             final String? resolvedSenderAddress = message.senderJid
@@ -113,9 +117,11 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
             final String? rawHeaders = deltaMessageId == null
                 ? null
                 : state.emailRawHeadersByDeltaId[deltaMessageId];
-            final bool isHeadersLoading = deltaMessageId != null &&
+            final bool isHeadersLoading =
+                deltaMessageId != null &&
                 state.emailRawHeadersLoading.contains(deltaMessageId);
-            final bool isHeadersUnavailable = deltaMessageId != null &&
+            final bool isHeadersUnavailable =
+                deltaMessageId != null &&
                 state.emailRawHeadersUnavailable.contains(deltaMessageId);
             final xmppCapabilities = state.xmppCapabilities;
             final supportsMarkers =
@@ -179,9 +185,9 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
               );
             }
             void handleBack() {
-              context
-                  .read<ChatsCubit>()
-                  .setOpenChatRoute(route: ChatRouteIndex.main);
+              context.read<ChatsCubit>().setOpenChatRoute(
+                route: ChatRouteIndex.main,
+              );
             }
 
             return SingleChildScrollView(
@@ -205,20 +211,19 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                       _SanitizedHtmlBody(
                         html: message.htmlBody ?? '',
                         textStyle: textTheme.lead,
-                        shouldLoadImages: settings.autoLoadEmailImages ||
+                        shouldLoadImages:
+                            settings.autoLoadEmailImages ||
                             (message.id != null &&
-                                widget.loadedEmailImageMessageIds
-                                    .contains(message.id)),
+                                widget.loadedEmailImageMessageIds.contains(
+                                  message.id,
+                                )),
                         onLoadRequested: message.id == null
                             ? null
                             : () => widget.onEmailImagesApproved(message.id!),
                         onLinkTap: (url) => _handleLinkTap(context, url),
                       )
                     else
-                      SelectableText(
-                        message.body ?? '',
-                        style: textTheme.lead,
-                      ),
+                      SelectableText(message.body ?? '', style: textTheme.lead),
                     if (shareContext?.subject?.isNotEmpty == true)
                       Column(
                         spacing: spacing.s,
@@ -259,7 +264,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                                     recipient: participant,
                                     canCreateEmailChat:
                                         state.emailServiceAvailable &&
-                                            participant.deltaChatId == null,
+                                        participant.deltaChatId == null,
                                   ),
                                 ),
                             ],
@@ -288,7 +293,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                                     recipient: participant,
                                     canCreateEmailChat:
                                         state.emailServiceAvailable &&
-                                            participant.deltaChatId == null,
+                                        participant.deltaChatId == null,
                                   ),
                                 ),
                             ],
@@ -479,8 +484,9 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
         return StatefulBuilder(
           builder: (context, setState) {
             return ShadDialog(
-              constraints:
-                  BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
+              constraints: BoxConstraints(
+                maxWidth: context.sizing.dialogMaxWidth,
+              ),
               title: Text(
                 recipient.contactDisplayName ?? recipient.title,
                 style: context.modalHeaderTextStyle,
@@ -508,7 +514,8 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                           SnackBar(
                             content: Text(
                               context.l10n.chatMessageAddRecipientSuccess(
-                                  recipientName),
+                                recipientName,
+                              ),
                             ),
                           ),
                         );
@@ -536,16 +543,16 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                               Navigator.of(dialogContext).pop();
                               final recipientName =
                                   recipient.contactDisplayName ??
-                                      recipient.title;
+                                  recipient.title;
                               context.read<ChatBloc>().add(
-                                    ChatRecipientEmailChatRequested(
-                                      recipient: recipient,
-                                      failureMessage: context.l10n
-                                          .chatMessageCreateChatFailure(
+                                ChatRecipientEmailChatRequested(
+                                  recipient: recipient,
+                                  failureMessage: context.l10n
+                                      .chatMessageCreateChatFailure(
                                         recipientName,
                                       ),
-                                    ),
-                                  );
+                                ),
+                              );
                             },
                       child: Text(context.l10n.chatMessageCreateChat),
                     ),
@@ -646,7 +653,8 @@ class _SanitizedHtmlBodyState extends State<_SanitizedHtmlBody> {
 
   @override
   Widget build(BuildContext context) {
-    final fallbackFontSize = widget.textStyle.fontSize ??
+    final fallbackFontSize =
+        widget.textStyle.fontSize ??
         context.textTheme.p.fontSize ??
         context.textTheme.small.fontSize ??
         context.sizing.menuItemIconSize;
@@ -658,7 +666,7 @@ class _SanitizedHtmlBodyState extends State<_SanitizedHtmlBody> {
           onLoadRequested: widget.onLoadRequested,
         ),
       ],
-      onLinkTap: (url, _, __) {
+      onLinkTap: (url, _, _) {
         if (url == null) return;
         widget.onLinkTap(url);
       },
@@ -761,7 +769,8 @@ class _RawHeadersDialog extends StatelessWidget {
     final trimmedNote = note.trim();
     final hasNote = trimmedNote.isNotEmpty;
     final spacing = context.spacing;
-    final maxHeight = MediaQuery.sizeOf(context).height *
+    final maxHeight =
+        MediaQuery.sizeOf(context).height *
         context.sizing.dialogMaxHeightFraction;
     return ShadDialog(
       constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
@@ -842,15 +851,9 @@ class _MessageDetailsInfo extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        if (leading != null) ...[
-          leading!,
-          SizedBox(width: spacing.xs),
-        ],
+        if (leading != null) ...[leading!, SizedBox(width: spacing.xs)],
         Flexible(fit: FlexFit.loose, child: valueText),
-        if (copyButton != null) ...[
-          SizedBox(width: spacing.xs),
-          copyButton,
-        ],
+        if (copyButton != null) ...[SizedBox(width: spacing.xs), copyButton],
       ],
     );
     return Column(

@@ -146,7 +146,8 @@ class FileTypeReport {
   bool get hasMismatch {
     final normalizedDetected = _normalizeMimeType(detectedMimeType);
     if (!_isReliableMimeType(normalizedDetected)) return false;
-    final normalizedDeclared = _normalizeMimeType(declaredMimeType) ??
+    final normalizedDeclared =
+        _normalizeMimeType(declaredMimeType) ??
         _normalizeMimeType(extensionMimeType);
     if (normalizedDeclared == null) return false;
     return normalizedDeclared != normalizedDetected;
@@ -230,8 +231,9 @@ Future<Uint8List> _readHeaderBytes(File file) async {
   final handle = await file.open();
   try {
     final length = await handle.length();
-    final bytesToRead =
-        length < _fileTypeProbeBytes ? length : _fileTypeProbeBytes;
+    final bytesToRead = length < _fileTypeProbeBytes
+        ? length
+        : _fileTypeProbeBytes;
     if (bytesToRead <= 0) return Uint8List(0);
     final chunk = await handle.read(bytesToRead);
     return Uint8List.fromList(chunk);

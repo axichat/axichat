@@ -77,8 +77,9 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
         ? current.domain
         : EndpointConfig.defaultDomain;
     final domain = parsed == null ? resolvedDomain : fallbackDomain;
-    final emailProvisioningPublicToken =
-        _emailProvisioningPublicTokenController.text.trim();
+    final emailProvisioningPublicToken = _emailProvisioningPublicTokenController
+        .text
+        .trim();
 
     return current.copyWith(
       domain: domain,
@@ -128,10 +129,7 @@ class _EndpointConfigSheetState extends State<EndpointConfigSheet> {
       ),
       bodyPadding: sheetPadding.copyWith(bottom: spacing.m),
       children: [
-        Text(
-          context.l10n.authCustomServerDescription,
-          style: textTheme.muted,
-        ),
+        Text(context.l10n.authCustomServerDescription, style: textTheme.muted),
         SizedBox(height: spacing.m),
         AxiTextFormField(
           autocorrect: false,

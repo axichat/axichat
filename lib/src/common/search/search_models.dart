@@ -22,12 +22,12 @@ enum SearchSortOrder {
   bool get isNewestFirst => this == SearchSortOrder.newestFirst;
 
   SearchSortOrder get toggled => switch (this) {
-        SearchSortOrder.newestFirst => SearchSortOrder.oldestFirst,
-        SearchSortOrder.oldestFirst => SearchSortOrder.newestFirst,
-      };
+    SearchSortOrder.newestFirst => SearchSortOrder.oldestFirst,
+    SearchSortOrder.oldestFirst => SearchSortOrder.newestFirst,
+  };
 
   String label(AppLocalizations l10n) => switch (this) {
-        SearchSortOrder.newestFirst => l10n.chatSearchSortNewestFirst,
-        SearchSortOrder.oldestFirst => l10n.chatSearchSortOldestFirst,
-      };
+    SearchSortOrder.newestFirst => l10n.chatSearchSortNewestFirst,
+    SearchSortOrder.oldestFirst => l10n.chatSearchSortOldestFirst,
+  };
 }

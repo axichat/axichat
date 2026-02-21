@@ -16,20 +16,20 @@ class ProfileCubit extends Cubit<ProfileState> {
     required XmppService xmppService,
     PresenceService? presenceService,
     OmemoService? omemoService,
-  })  : _xmppService = xmppService,
-        _presenceService = presenceService,
-        _omemoService = omemoService,
-        super(
-          ProfileState(
-            jid: xmppService.myJid ?? '',
-            resource: xmppService.resource ?? '',
-            username: xmppService.username ?? '',
-            avatarPath: xmppService.cachedSelfAvatar?.path,
-            avatarHash: xmppService.cachedSelfAvatar?.hash,
-            presence: presenceService?.presence,
-            status: presenceService?.status,
-          ),
-        ) {
+  }) : _xmppService = xmppService,
+       _presenceService = presenceService,
+       _omemoService = omemoService,
+       super(
+         ProfileState(
+           jid: xmppService.myJid ?? '',
+           resource: xmppService.resource ?? '',
+           username: xmppService.username ?? '',
+           avatarPath: xmppService.cachedSelfAvatar?.path,
+           avatarHash: xmppService.cachedSelfAvatar?.hash,
+           presence: presenceService?.presence,
+           status: presenceService?.status,
+         ),
+       ) {
     _presenceSubscription = _presenceService?.presenceStream.listen(
       (presence) =>
           emit(state.copyWith(presence: presence ?? Presence.unknown)),
@@ -37,24 +37,24 @@ class ProfileCubit extends Cubit<ProfileState> {
     _statusSubscription = _presenceService?.statusStream.listen(
       (status) => emit(state.copyWith(status: status)),
     );
-    _selfAvatarSubscription = _xmppService.selfAvatarStream.listen(
-      (avatar) async {
-        if (avatar == null || avatar.isEmpty) {
-          emit(state.copyWith(avatarPath: null, avatarHash: null));
-          return;
-        }
-        final path = avatar.path?.trim();
-        if (path != null && path.isNotEmpty) {
-          await _xmppService.loadAvatarBytes(path);
-        }
-        emit(
-          state.copyWith(
-            avatarPath: path ?? state.avatarPath,
-            avatarHash: avatar.hash ?? state.avatarHash,
-          ),
-        );
-      },
-    );
+    _selfAvatarSubscription = _xmppService.selfAvatarStream.listen((
+      avatar,
+    ) async {
+      if (avatar == null || avatar.isEmpty) {
+        emit(state.copyWith(avatarPath: null, avatarHash: null));
+        return;
+      }
+      final path = avatar.path?.trim();
+      if (path != null && path.isNotEmpty) {
+        await _xmppService.loadAvatarBytes(path);
+      }
+      emit(
+        state.copyWith(
+          avatarPath: path ?? state.avatarPath,
+          avatarHash: avatar.hash ?? state.avatarHash,
+        ),
+      );
+    });
     unawaited(_loadAvatar());
     if (_omemoService != null) {
       loadFingerprints();
@@ -82,10 +82,7 @@ class ProfileCubit extends Cubit<ProfileState> {
     required String? status,
   }) async {
     try {
-      await _presenceService?.sendPresence(
-        presence: presence,
-        status: status,
-      );
+      await _presenceService?.sendPresence(presence: presence, status: status);
     } on XmppPresenceException catch (_) {}
   }
 

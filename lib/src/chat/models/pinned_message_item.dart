@@ -25,10 +25,10 @@ class PinnedMessageItem extends Equatable {
 
   @override
   List<Object?> get props => [
-        messageStanzaId,
-        chatJid,
-        pinnedAt,
-        message,
-        attachmentMetadataIds,
-      ];
+    messageStanzaId,
+    chatJid,
+    pinnedAt,
+    message,
+    attachmentMetadataIds,
+  ];
 }

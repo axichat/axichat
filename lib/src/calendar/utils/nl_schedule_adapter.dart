@@ -20,8 +20,8 @@ class ParseContext {
     DateTime? reference,
     this.localeTag = 'en',
     Map<String, Object?>? metadata,
-  })  : reference = (reference ?? DateTime.now()).toUtc(),
-        metadata = Map.unmodifiable(metadata ?? const {});
+  }) : reference = (reference ?? DateTime.now()).toUtc(),
+       metadata = Map.unmodifiable(metadata ?? const {});
 
   final tz.Location location;
   final String timezoneId;
@@ -142,9 +142,9 @@ class NlAdapterResult {
     this.end,
     this.deadline,
     this.recurrenceUntil,
-  })  : participants = UnmodifiableListView(participants),
-        assumptions = UnmodifiableListView(assumptions),
-        flags = Set.unmodifiable(flags);
+  }) : participants = UnmodifiableListView(participants),
+       assumptions = UnmodifiableListView(assumptions),
+       flags = Set.unmodifiable(flags);
 
   final CalendarTask task;
   final TaskBucket bucket;

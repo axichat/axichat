@@ -32,16 +32,11 @@ enum SignupAvatarErrorType {
 }
 
 class SignupAvatarCubit extends Cubit<SignupAvatarState> {
-  SignupAvatarCubit({
-    List<AvatarTemplate>? templates,
-    AvatarPipeline? pipeline,
-  })  : _templates = templates ?? buildDefaultAvatarTemplates(),
-        _random = math.Random(),
-        _pipeline = pipeline ??
-            AvatarPipeline(
-              config: _defaultPipelineConfig,
-            ),
-        super(const SignupAvatarState(backgroundColor: Colors.transparent)) {
+  SignupAvatarCubit({List<AvatarTemplate>? templates, AvatarPipeline? pipeline})
+    : _templates = templates ?? buildDefaultAvatarTemplates(),
+      _random = math.Random(),
+      _pipeline = pipeline ?? AvatarPipeline(config: _defaultPipelineConfig),
+      super(const SignupAvatarState(backgroundColor: Colors.transparent)) {
     _carouselEngine = AvatarCarouselEngine(
       pipeline: _pipeline,
       templates: _templates,
@@ -55,10 +50,10 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   static const AvatarPipelineConfig _defaultPipelineConfig =
       AvatarPipelineConfig(
-    minJpegQuality: 35,
-    minCropSide: minCropSide,
-    uploadMaxDimension: 0,
-  );
+        minJpegQuality: 35,
+        minCropSide: minCropSide,
+        uploadMaxDimension: 0,
+      );
   static final int avatarMaxKilobytes = _defaultPipelineConfig.maxBytes ~/ 1024;
   static const int _sourceMaxBytes = 8 * 1024 * 1024;
   static const double avatarInsetFraction = 0.10;
@@ -101,8 +96,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   Future<void> setVisible(bool visible, ShadColorScheme colors) async {
     _colors = colors;
-    _carouselVisibility =
-        visible ? _CarouselVisibility.visible : _CarouselVisibility.hidden;
+    _carouselVisibility = visible
+        ? _CarouselVisibility.visible
+        : _CarouselVisibility.hidden;
     if (!visible) {
       _stopAvatarCarousel();
       return;
@@ -279,11 +275,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _pendingCropRect = null;
 
     emit(
-      state.copyWith(
-        processing: true,
-        clearError: true,
-        carouselAvatar: null,
-      ),
+      state.copyWith(processing: true, clearError: true, carouselAvatar: null),
     );
 
     final resolvedBackground = _resolveTemplateBackground(
@@ -326,11 +318,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _stopAvatarCarousel();
 
     emit(
-      state.copyWith(
-        processing: true,
-        carouselAvatar: null,
-        clearError: true,
-      ),
+      state.copyWith(processing: true, carouselAvatar: null, clearError: true),
     );
 
     try {
@@ -510,11 +498,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         backgroundColor: Colors.transparent,
       );
       emit(
-        state.copyWith(
-          avatar: updated,
-          processing: false,
-          clearError: true,
-        ),
+        state.copyWith(avatar: updated, processing: false, clearError: true),
       );
       _stopAvatarCarousel();
       return updated;
@@ -554,15 +538,15 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final resolvedBackground = template.hasAlphaBackground
         ? background
         : state.backgroundColor == Colors.transparent
-            ? colors.accent
-            : state.backgroundColor;
+        ? colors.accent
+        : state.backgroundColor;
     final useTemplateInset =
         template.category != AvatarTemplateCategory.abstract;
     final padAlphaTemplate = template.hasAlphaBackground && useTemplateInset;
     final insetFraction = useTemplateInset
         ? (padAlphaTemplate
-            ? avatarTransparentInsetFraction
-            : avatarInsetFraction)
+              ? avatarTransparentInsetFraction
+              : avatarInsetFraction)
         : 0.0;
     return _pipeline.buildFromTemplate(
       template: template,
@@ -650,12 +634,7 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
         backgroundColor: fallbackBackground,
       );
       _currentCarouselAvatar = entry;
-      emit(
-        state.copyWith(
-          carouselAvatar: entry,
-          clearError: true,
-        ),
-      );
+      emit(state.copyWith(carouselAvatar: entry, clearError: true));
       return true;
     }
 
@@ -773,15 +752,15 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     final resolvedBackground = template.hasAlphaBackground
         ? _randomAvatarBackgroundColor()
         : context.currentBackground == Colors.transparent
-            ? context.colors.accent
-            : context.currentBackground;
+        ? context.colors.accent
+        : context.currentBackground;
     final useTemplateInset =
         template.category != AvatarTemplateCategory.abstract;
     final padAlphaTemplate = template.hasAlphaBackground && useTemplateInset;
     final insetFraction = useTemplateInset
         ? (padAlphaTemplate
-            ? avatarTransparentInsetFraction
-            : avatarInsetFraction)
+              ? avatarTransparentInsetFraction
+              : avatarInsetFraction)
         : 0.0;
     return AvatarRenderSpec(
       background: resolvedBackground,
@@ -839,12 +818,9 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _avatarCarouselTimer?.cancel();
     if (!_shouldRunCarousel) return;
     final generation = _carouselGeneration;
-    _avatarCarouselTimer = Timer(
-      _avatarCarouselInterval,
-      () async {
-        await _handleCarouselTick(generation);
-      },
-    );
+    _avatarCarouselTimer = Timer(_avatarCarouselInterval, () async {
+      await _handleCarouselTick(generation);
+    });
   }
 
   Future<void> _handleCarouselTick(int generation) async {

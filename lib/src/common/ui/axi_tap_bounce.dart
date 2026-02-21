@@ -38,16 +38,17 @@ class AxiTapBounce extends StatefulWidget {
 class _AxiTapBounceState extends State<AxiTapBounce> {
   static final Set<PointerDeviceKind> _tapBouncePointerKinds =
       <PointerDeviceKind>{
-    PointerDeviceKind.touch,
-    PointerDeviceKind.stylus,
-    PointerDeviceKind.invertedStylus,
-  };
+        PointerDeviceKind.touch,
+        PointerDeviceKind.stylus,
+        PointerDeviceKind.invertedStylus,
+      };
   _TapBouncePressState _pressState = _TapBouncePressState.idle;
   bool _hovered = false;
 
   void _setPressed(bool value) {
-    final nextState =
-        value ? _TapBouncePressState.pressed : _TapBouncePressState.idle;
+    final nextState = value
+        ? _TapBouncePressState.pressed
+        : _TapBouncePressState.idle;
     if (_pressState == nextState) return;
     if (!mounted) return;
     setState(() {
@@ -114,12 +115,14 @@ class _AxiTapBounceState extends State<AxiTapBounce> {
     final double targetScale = isPressed
         ? widget.scale
         : isHovered
-            ? hoverScale
-            : 1.0;
-    final duration =
-        isPressed || isHovered ? widget.pressDuration : widget.releaseDuration;
-    final curve =
-        isPressed || isHovered ? widget.pressCurve : widget.releaseCurve;
+        ? hoverScale
+        : 1.0;
+    final duration = isPressed || isHovered
+        ? widget.pressDuration
+        : widget.releaseDuration;
+    final curve = isPressed || isHovered
+        ? widget.pressCurve
+        : widget.releaseCurve;
     final animationChild = AnimatedScale(
       scale: targetScale,
       duration: duration,

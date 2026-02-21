@@ -72,10 +72,10 @@ Future<void> showCalendarAvailabilityShareSheet({
   final List<Chat> available = lockToChat
       ? (canLockToChat ? <Chat>[lockedChat] : const <Chat>[])
       : chats
-          .where(
-            (chat) => chat.supportsChatCalendar && chat.type != ChatType.note,
-          )
-          .toList(growable: false);
+            .where(
+              (chat) => chat.supportsChatCalendar && chat.type != ChatType.note,
+            )
+            .toList(growable: false);
   if (available.isEmpty) {
     FeedbackSystem.showInfo(
       context,
@@ -85,22 +85,22 @@ Future<void> showCalendarAvailabilityShareSheet({
     );
     return;
   }
-  final record =
-      await Navigator.of(modalContext).push<CalendarAvailabilityShareRecord>(
-    AxiFadePageRoute(
-      duration: baseAnimationDuration,
-      fullscreenDialog: true,
-      builder: (routeContext) => CalendarAvailabilityShareScreen(
-        source: source,
-        model: model,
-        ownerJid: ownerJid,
-        availableChats: available,
-        initialChat: initialChat,
-        lockToChat: lockToChat,
-        locate: locate,
-      ),
-    ),
-  );
+  final record = await Navigator.of(modalContext)
+      .push<CalendarAvailabilityShareRecord>(
+        AxiFadePageRoute(
+          duration: baseAnimationDuration,
+          fullscreenDialog: true,
+          builder: (routeContext) => CalendarAvailabilityShareScreen(
+            source: source,
+            model: model,
+            ownerJid: ownerJid,
+            availableChats: available,
+            initialChat: initialChat,
+            lockToChat: lockToChat,
+            locate: locate,
+          ),
+        ),
+      );
   if (record == null || !context.mounted) {
     return;
   }
@@ -169,7 +169,8 @@ class _CalendarAvailabilityShareScreenState
     _presetStore = CalendarAvailabilityPresetStore();
     _presets = _loadPresets();
     _lockedChat = widget.lockToChat ? widget.initialChat : null;
-    _selectedChat = _lockedChat ??
+    _selectedChat =
+        _lockedChat ??
         (widget.availableChats.isEmpty ? null : widget.availableChats.first);
     _resetDraftIntervals();
   }
@@ -185,7 +186,8 @@ class _CalendarAvailabilityShareScreenState
     if (lockedChat == null) {
       return;
     }
-    final bool shareSignatureEnabled = lockedChat.shareSignatureEnabled ??
+    final bool shareSignatureEnabled =
+        lockedChat.shareSignatureEnabled ??
         widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled;
     _recipients = <ComposerRecipient>[
       ComposerRecipient(
@@ -277,11 +279,11 @@ class _CalendarAvailabilityShareScreenState
                 transitionBuilder:
                     (child, primaryAnimation, secondaryAnimation) =>
                         SharedAxisTransition(
-                  animation: primaryAnimation,
-                  secondaryAnimation: secondaryAnimation,
-                  transitionType: SharedAxisTransitionType.horizontal,
-                  child: child,
-                ),
+                          animation: primaryAnimation,
+                          secondaryAnimation: secondaryAnimation,
+                          transitionType: SharedAxisTransitionType.horizontal,
+                          child: child,
+                        ),
                 child: KeyedSubtree(
                   key: ValueKey<_AvailabilityShareStep>(_step),
                   child: paddedStepChild,
@@ -319,10 +321,14 @@ class _CalendarAvailabilityShareScreenState
     if (start == null || end == null || !end.isAfter(start)) {
       return context.l10n.calendarAvailabilityShareInvalidRange;
     }
-    final String startLabel =
-        TimeFormatter.formatFriendlyDateTime(context.l10n, start);
-    final String endLabel =
-        TimeFormatter.formatFriendlyDateTime(context.l10n, end);
+    final String startLabel = TimeFormatter.formatFriendlyDateTime(
+      context.l10n,
+      start,
+    );
+    final String endLabel = TimeFormatter.formatFriendlyDateTime(
+      context.l10n,
+      end,
+    );
     if (startLabel == endLabel) {
       return startLabel;
     }
@@ -448,8 +454,9 @@ class _CalendarAvailabilityShareScreenState
       return;
     }
     setState(() {
-      final existingIndex =
-          _recipients.indexWhere((recipient) => recipient.key == target.key);
+      final existingIndex = _recipients.indexWhere(
+        (recipient) => recipient.key == target.key,
+      );
       if (existingIndex >= 0) {
         _recipients[existingIndex] = _recipients[existingIndex].copyWith(
           target: target,
@@ -467,8 +474,9 @@ class _CalendarAvailabilityShareScreenState
 
   void _handleRecipientRemoved(String key) {
     setState(() {
-      _recipients =
-          _recipients.where((recipient) => recipient.key != key).toList();
+      _recipients = _recipients
+          .where((recipient) => recipient.key != key)
+          .toList();
     });
   }
 
@@ -530,8 +538,9 @@ class _CalendarAvailabilityShareScreenState
       _isSending = true;
     });
     final String? tzid = _resolveTimeZone(_localModel);
-    final CalendarAvailabilityOverlay? customOverlay =
-        _hasCustomDraft ? _buildCustomOverlay(ownerJid, tzid) : null;
+    final CalendarAvailabilityOverlay? customOverlay = _hasCustomDraft
+        ? _buildCustomOverlay(ownerJid, tzid)
+        : null;
     final CalendarAvailabilityOverlay recentOverlay = _buildRecentOverlay(
       ownerJid,
       tzid,
@@ -539,18 +548,18 @@ class _CalendarAvailabilityShareScreenState
     try {
       final completer = Completer<CalendarShareResult>();
       context.read<CalendarBloc>().add(
-            CalendarEvent.availabilityShareRequested(
-              source: widget.source,
-              model: _localModel,
-              ownerJid: ownerJid,
-              recipients: recipients,
-              rangeStart: CalendarDateTime(value: start, tzid: tzid),
-              rangeEnd: CalendarDateTime(value: end, tzid: tzid),
-              overrideOverlay: customOverlay,
-              lockOverlay: _hasCustomDraft,
-              completer: completer,
-            ),
-          );
+        CalendarEvent.availabilityShareRequested(
+          source: widget.source,
+          model: _localModel,
+          ownerJid: ownerJid,
+          recipients: recipients,
+          rangeStart: CalendarDateTime(value: start, tzid: tzid),
+          rangeEnd: CalendarDateTime(value: end, tzid: tzid),
+          overrideOverlay: customOverlay,
+          lockOverlay: _hasCustomDraft,
+          completer: completer,
+        ),
+      );
       final result = await completer.future;
       if (!mounted) {
         return;
@@ -599,8 +608,9 @@ class _CalendarAvailabilityShareScreenState
     if (start == null || end == null || !end.isAfter(start)) {
       return null;
     }
-    final String resolvedOwner =
-        ownerJid.isEmpty ? context.l10n.commonOwnerFallback : ownerJid;
+    final String resolvedOwner = ownerJid.isEmpty
+        ? context.l10n.commonOwnerFallback
+        : ownerJid;
     return CalendarAvailabilityOverlay(
       owner: resolvedOwner,
       rangeStart: CalendarDateTime(value: start, tzid: tzid),
@@ -616,8 +626,9 @@ class _CalendarAvailabilityShareScreenState
   ) {
     final DateTime start = _rangeStart ?? DateTime.now();
     final DateTime end = _rangeEnd ?? start;
-    final String resolvedOwner =
-        ownerJid.isEmpty ? context.l10n.commonOwnerFallback : ownerJid;
+    final String resolvedOwner = ownerJid.isEmpty
+        ? context.l10n.commonOwnerFallback
+        : ownerJid;
     return CalendarAvailabilityOverlay(
       owner: resolvedOwner,
       rangeStart: CalendarDateTime(value: start, tzid: tzid),
@@ -683,23 +694,25 @@ class _CalendarAvailabilityShareScreenState
       updatedAt: DateTime.now(),
     );
     final records = _presetStore.readAll()..[preset.id] = preset;
-    final List<CalendarAvailabilityPreset> sorted = records.values
-        .where((preset) => preset.name?.trim().isNotEmpty == true)
-        .toList(growable: false)
-      ..sort(
-        (a, b) =>
-            (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
-          a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
-        ),
-      );
+    final List<CalendarAvailabilityPreset> sorted =
+        records.values
+            .where((preset) => preset.name?.trim().isNotEmpty == true)
+            .toList(growable: false)
+          ..sort(
+            (a, b) => (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0))
+                .compareTo(
+                  a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+                ),
+          );
     final Map<String, CalendarAvailabilityPreset> trimmed = {
       for (final preset in sorted.take(_availabilityPresetMaxCount))
         preset.id: preset,
     };
     await _presetStore.writeAll(trimmed);
     setState(() {
-      _presets =
-          sorted.take(_availabilityPresetMaxCount).toList(growable: false);
+      _presets = sorted
+          .take(_availabilityPresetMaxCount)
+          .toList(growable: false);
     });
   }
 
@@ -989,14 +1002,16 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rosterItems = context.watch<RosterCubit>().state.items ??
+    final rosterItems =
+        context.watch<RosterCubit>().state.items ??
         (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
         const <RosterItem>[];
     final chatsSelfJid = locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
-    final String? selfJid =
-        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final String? selfJid = resolvedProfileJid.isNotEmpty
+        ? resolvedProfileJid
+        : null;
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
@@ -1099,10 +1114,7 @@ class _AvailabilitySheetSectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: _availabilitySheetSectionGap),
-      child: Text(
-        text,
-        style: context.textTheme.sectionLabelM,
-      ),
+      child: Text(text, style: context.textTheme.sectionLabelM),
     );
   }
 }
@@ -1185,10 +1197,7 @@ class _AvailabilityPresetChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final String label =
         preset.name?.trim() ?? _presetRangeLabel(context, preset);
-    return AxiButton.ghost(
-      onPressed: onPressed,
-      child: Text(label),
-    );
+    return AxiButton.ghost(onPressed: onPressed, child: Text(label));
   }
 
   String _presetRangeLabel(
@@ -1222,10 +1231,7 @@ class _AvailabilityDualActionRow extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        AxiButton.ghost(
-          onPressed: onPrimaryPressed,
-          child: Text(primaryLabel),
-        ),
+        AxiButton.ghost(onPressed: onPrimaryPressed, child: Text(primaryLabel)),
         const SizedBox(width: _availabilityRecipientChipSpacing),
         AxiButton.primary(
           onPressed: onSecondaryPressed,

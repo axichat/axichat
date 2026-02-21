@@ -17,9 +17,9 @@ part 'settings_state.dart';
 
 class SettingsCubit extends HydratedCubit<SettingsState> {
   SettingsCubit({XmppService? xmppService, Capability? capability})
-      : _xmppService = xmppService,
-        _capability = capability,
-        super(const SettingsState());
+    : _xmppService = xmppService,
+      _capability = capability,
+      super(const SettingsState());
 
   final XmppService? _xmppService;
   final Capability? _capability;
@@ -212,16 +212,19 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       if (migrated.containsKey('attachment_auto_download_settings')) {
         const defaultState = SettingsState();
         final settings = migrated['attachment_auto_download_settings'];
-        final Map<dynamic, dynamic> parsed =
-            settings is Map ? settings : const {};
+        final Map<dynamic, dynamic> parsed = settings is Map
+            ? settings
+            : const {};
         final imagesValue = parsed['images_enabled'];
         final videosValue = parsed['videos_enabled'];
         final documentsValue = parsed['documents_enabled'];
         final archivesValue = parsed['archives_enabled'];
-        migrated['auto_download_images'] =
-            imagesValue is bool ? imagesValue : defaultState.autoDownloadImages;
-        migrated['auto_download_videos'] =
-            videosValue is bool ? videosValue : defaultState.autoDownloadVideos;
+        migrated['auto_download_images'] = imagesValue is bool
+            ? imagesValue
+            : defaultState.autoDownloadImages;
+        migrated['auto_download_videos'] = videosValue is bool
+            ? videosValue
+            : defaultState.autoDownloadVideos;
         migrated['auto_download_documents'] = documentsValue is bool
             ? documentsValue
             : defaultState.autoDownloadDocuments;
@@ -246,7 +249,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       }
       return SettingsState.fromJson(migrated);
     } catch (_) {
-      return const SettingsState(shadColor: ShadColor.blue);
+      return const SettingsState(
+        themeMode: ThemeMode.light,
+        shadColor: ShadColor.neutral,
+      );
     }
   }
 

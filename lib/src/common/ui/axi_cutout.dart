@@ -32,7 +32,8 @@ class AxiCutout extends StatelessWidget {
     final mediaQuery = MediaQuery.maybeOf(context);
     final textScaler = mediaQuery?.textScaler ?? const TextScaler.linear(1);
     double scaled(double value) => textScaler.scale(value);
-    final resolvedPadding = padding ??
+    final resolvedPadding =
+        padding ??
         EdgeInsets.symmetric(
           horizontal: scaled(context.spacing.s),
           vertical: scaled(context.spacing.xs),

@@ -20,12 +20,14 @@ class CalendarTaskListTile extends StatelessWidget {
     this.scheduleLabel,
     this.trailing,
     this.onToggleCompletion,
+    this.fillWidth = true,
   });
 
   final CalendarTask task;
   final String? scheduleLabel;
   final Widget? trailing;
   final ValueChanged<bool>? onToggleCompletion;
+  final bool fillWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -42,8 +44,10 @@ class CalendarTaskListTile extends StatelessWidget {
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisSize: fillWidth ? MainAxisSize.max : MainAxisSize.min,
             children: [
-              Expanded(
+              Flexible(
+                fit: fillWidth ? FlexFit.tight : FlexFit.loose,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -139,12 +143,11 @@ class CalendarTaskListTile extends StatelessWidget {
           if (task.location?.isNotEmpty == true) ...[
             SizedBox(height: context.spacing.xs),
             Row(
+              mainAxisSize: fillWidth ? MainAxisSize.max : MainAxisSize.min,
               children: [
-                Text(
-                  '📍',
-                  style: context.textTheme.label,
-                ),
-                Expanded(
+                Text('📍', style: context.textTheme.label),
+                Flexible(
+                  fit: fillWidth ? FlexFit.tight : FlexFit.loose,
                   child: Text(
                     task.location!,
                     style: context.textTheme.label.copyWith(

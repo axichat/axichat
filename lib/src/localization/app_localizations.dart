@@ -66,7 +66,7 @@ import 'app_localizations_zh.dart';
 /// property.
 abstract class AppLocalizations {
   AppLocalizations(String locale)
-      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -89,11 +89,11 @@ abstract class AppLocalizations {
   /// of delegates is preferred or required.
   static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
       <LocalizationsDelegate<dynamic>>[
-    delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-  ];
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
@@ -102,7 +102,7 @@ abstract class AppLocalizations {
     Locale('es'),
     Locale('fr'),
     Locale('zh'),
-    Locale('zh', 'HK')
+    Locale('zh', 'HK'),
   ];
 
   /// The title of the application
@@ -1532,7 +1532,10 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Subject \"{subject}\" failed to send to {count} {recipientLabel}.'**
   String chatFanOutFailureWithSubject(
-      Object subject, int count, Object recipientLabel);
+    Object subject,
+    int count,
+    Object recipientLabel,
+  );
 
   /// No description provided for @chatFanOutFailure.
   ///
@@ -1557,6 +1560,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Subject'**
   String get chatSubjectHint;
+
+  /// No description provided for @chatCollapseLongEmails.
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse long emails'**
+  String get chatCollapseLongEmails;
+
+  /// No description provided for @chatExpandLongEmails.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand long emails'**
+  String get chatExpandLongEmails;
 
   /// No description provided for @chatAttachmentTooltip.
   ///
@@ -2313,7 +2328,11 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Step {current} of {total}: {currentLabel}. {percent}% complete.'**
   String signupProgressValue(
-      Object current, Object currentLabel, Object percent, Object total);
+    Object current,
+    Object currentLabel,
+    Object percent,
+    Object total,
+  );
 
   /// No description provided for @signupProgressSection.
   ///
@@ -2860,7 +2879,10 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{sender} at {timestamp}: {body}'**
   String accessibilityMessageLabel(
-      Object sender, Object timestamp, Object body);
+    Object sender,
+    Object timestamp,
+    Object body,
+  );
 
   /// No description provided for @accessibilityMessageSent.
   ///
@@ -2981,7 +3003,10 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Step {position} of {total}: {label}. Activate to jump to this step.'**
   String accessibilityBreadcrumbLabel(
-      Object position, Object total, Object label);
+    Object position,
+    Object total,
+    Object label,
+  );
 
   /// No description provided for @accessibilityShortcutOpenMenu.
   ///
@@ -3156,7 +3181,10 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Item {position} of {total} in {section}'**
   String accessibilityActionItemPosition(
-      Object position, Object total, Object section);
+    Object position,
+    Object total,
+    Object section,
+  );
 
   /// No description provided for @accessibilityActionReadOnlyHint.
   ///
@@ -6943,7 +6971,11 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Imported {imported} contacts. {duplicates} duplicates, {invalid} invalid, {failed} failed.'**
   String emailContactsImportSuccess(
-      Object imported, Object duplicates, Object invalid, Object failed);
+    Object imported,
+    Object duplicates,
+    Object invalid,
+    Object failed,
+  );
 
   /// No description provided for @fanOutErrorNoRecipients.
   ///
@@ -7028,6 +7060,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search your provider\'s help docs, or start here:'**
   String get emailForwardingGuideLinksSubtitle;
+
+  /// No description provided for @emailForwardingWelcomeSetupFrom.
+  ///
+  /// In en, this message translates to:
+  /// **'Setup forwarding from:'**
+  String get emailForwardingWelcomeSetupFrom;
+
+  /// No description provided for @emailForwardingWelcomeOtherProviderHint.
+  ///
+  /// In en, this message translates to:
+  /// **'If you use another provider, their website should have instructions as well.'**
+  String get emailForwardingWelcomeOtherProviderHint;
 
   /// No description provided for @emailForwardingGuideNotificationsTitle.
   ///
@@ -9050,7 +9094,10 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **' on {date} from {startTime} to {endTime}'**
   String taskShareScheduleSameDay(
-      String date, String startTime, String endTime);
+    String date,
+    String startTime,
+    String endTime,
+  );
 
   /// No description provided for @taskShareScheduleRange.
   ///
@@ -9063,7 +9110,10 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **' on {date} at {time} for {duration}'**
   String taskShareScheduleStartDuration(
-      String date, String time, String duration);
+    String date,
+    String time,
+    String duration,
+  );
 
   /// No description provided for @taskShareScheduleStart.
   ///
@@ -10431,8 +10481,9 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
   }
 
   throw FlutterError(
-      'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
-      'an issue with the localizations generation tool. Please file an issue '
-      'on GitHub with a reproducible sample app and the gen-l10n configuration '
-      'that was used.');
+    'AppLocalizations.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.',
+  );
 }

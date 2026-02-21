@@ -34,17 +34,18 @@ class PendingAttachment extends Equatable {
       attachment: attachment ?? this.attachment,
       status: status ?? this.status,
       isPreparing: isPreparing ?? this.isPreparing,
-      errorMessage:
-          clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
+      errorMessage: clearErrorMessage
+          ? null
+          : (errorMessage ?? this.errorMessage),
     );
   }
 
   @override
   List<Object?> get props => [
-        id,
-        attachment,
-        status,
-        isPreparing,
-        errorMessage,
-      ];
+    id,
+    attachment,
+    status,
+    isPreparing,
+    errorMessage,
+  ];
 }

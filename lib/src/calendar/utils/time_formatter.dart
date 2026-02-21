@@ -52,10 +52,7 @@ class TimeFormatter {
   }
 
   /// Format short duration for compact display
-  static String formatDurationShort(
-    AppLocalizations l10n,
-    Duration duration,
-  ) {
+  static String formatDurationShort(AppLocalizations l10n, Duration duration) {
     if (duration.inMinutes < 60) {
       return l10n.commonDurationMinutesShort(duration.inMinutes);
     }

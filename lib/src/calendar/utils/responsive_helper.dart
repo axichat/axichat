@@ -80,62 +80,59 @@ class CalendarSidebarDimensions {
 /// Helper class for responsive layout decisions based on shared descriptors.
 class ResponsiveHelper {
   static List<CalendarResponsiveSpec> _specs(AxiSpacing spacing) => [
-        CalendarResponsiveSpec(
-          sizeClass: CalendarSizeClass.compact,
-          minWidth: calendarViewModeMinWidth - calendarViewModeMinWidth,
-          maxWidth: smallScreen,
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: spacing.m,
-            vertical: spacing.s,
-          ),
-          modalMargin: EdgeInsets.all(spacing.m),
-          gridHorizontalPadding: spacing.s,
-          sidebarMinWidthFraction: 1.0,
-          sidebarWidthFraction: 1.0,
-          sidebarMaxWidthFraction: 1.0,
-          quickAddMaxWidth: calendarQuickAddModalCompactMaxWidth,
-          dayColumnWidth: calendarCompactDayColumnWidth,
-        ),
-        CalendarResponsiveSpec(
-          sizeClass: CalendarSizeClass.medium,
-          minWidth: smallScreen,
-          maxWidth: largeScreen,
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: spacing.m,
-            vertical: spacing.m,
-          ),
-          modalMargin: EdgeInsets.all(spacing.m),
-          gridHorizontalPadding: 0,
-          sidebarMinWidthFraction: calendarSidebarWidthMinFraction,
-          sidebarWidthFraction: calendarSidebarWidthDefaultFraction,
-          sidebarMaxWidthFraction: calendarSidebarWidthMaxFraction,
-          quickAddMaxWidth: calendarQuickAddModalMaxWidth,
-        ),
-        CalendarResponsiveSpec(
-          sizeClass: CalendarSizeClass.expanded,
-          minWidth: largeScreen,
-          contentPadding: EdgeInsets.symmetric(
-            horizontal: spacing.m,
-            vertical: spacing.m,
-          ),
-          modalMargin: EdgeInsets.all(spacing.m),
-          gridHorizontalPadding: 0,
-          sidebarMinWidthFraction: calendarSidebarWidthMinFraction,
-          sidebarWidthFraction: calendarSidebarWidthDefaultFraction,
-          sidebarMaxWidthFraction: calendarSidebarWidthMaxFraction,
-          quickAddMaxWidth: calendarQuickAddModalMaxWidth,
-        ),
-      ];
+    CalendarResponsiveSpec(
+      sizeClass: CalendarSizeClass.compact,
+      minWidth: calendarViewModeMinWidth - calendarViewModeMinWidth,
+      maxWidth: smallScreen,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.s,
+      ),
+      modalMargin: EdgeInsets.all(spacing.m),
+      gridHorizontalPadding: spacing.s,
+      sidebarMinWidthFraction: 1.0,
+      sidebarWidthFraction: 1.0,
+      sidebarMaxWidthFraction: 1.0,
+      quickAddMaxWidth: calendarQuickAddModalCompactMaxWidth,
+      dayColumnWidth: calendarCompactDayColumnWidth,
+    ),
+    CalendarResponsiveSpec(
+      sizeClass: CalendarSizeClass.medium,
+      minWidth: smallScreen,
+      maxWidth: largeScreen,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.m,
+      ),
+      modalMargin: EdgeInsets.all(spacing.m),
+      gridHorizontalPadding: 0,
+      sidebarMinWidthFraction: calendarSidebarWidthMinFraction,
+      sidebarWidthFraction: calendarSidebarWidthDefaultFraction,
+      sidebarMaxWidthFraction: calendarSidebarWidthMaxFraction,
+      quickAddMaxWidth: calendarQuickAddModalMaxWidth,
+    ),
+    CalendarResponsiveSpec(
+      sizeClass: CalendarSizeClass.expanded,
+      minWidth: largeScreen,
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.m,
+      ),
+      modalMargin: EdgeInsets.all(spacing.m),
+      gridHorizontalPadding: 0,
+      sidebarMinWidthFraction: calendarSidebarWidthMinFraction,
+      sidebarWidthFraction: calendarSidebarWidthDefaultFraction,
+      sidebarMaxWidthFraction: calendarSidebarWidthMaxFraction,
+      quickAddMaxWidth: calendarQuickAddModalMaxWidth,
+    ),
+  ];
 
   /// Returns the responsive specification for the current screen width.
   static CalendarResponsiveSpec spec(BuildContext context) =>
       specForWidth(MediaQuery.of(context).size.width, context.spacing);
 
   /// Returns the responsive specification for an arbitrary width.
-  static CalendarResponsiveSpec specForWidth(
-    double width,
-    AxiSpacing spacing,
-  ) {
+  static CalendarResponsiveSpec specForWidth(double width, AxiSpacing spacing) {
     final specs = _specs(spacing);
     for (final candidate in specs) {
       if (candidate.containsWidth(width)) {
@@ -205,19 +202,16 @@ class ResponsiveHelper {
   static CalendarSidebarDimensions sidebarDimensionsForWidth(
     double width,
     AxiSpacing spacing,
-  ) =>
-      specForWidth(width, spacing).resolveSidebarDimensions(width);
+  ) => specForWidth(width, spacing).resolveSidebarDimensions(width);
 
   static double dayColumnWidth(
     BuildContext context, {
     double fallback = calendarCompactDayColumnWidth,
-  }) =>
-      spec(context).resolveDayColumnWidth(fallback);
+  }) => spec(context).resolveDayColumnWidth(fallback);
 
   static double dayColumnWidthForWidth(
     double width, {
     double fallback = calendarCompactDayColumnWidth,
     required AxiSpacing spacing,
-  }) =>
-      specForWidth(width, spacing).resolveDayColumnWidth(fallback);
+  }) => specForWidth(width, spacing).resolveDayColumnWidth(fallback);
 }

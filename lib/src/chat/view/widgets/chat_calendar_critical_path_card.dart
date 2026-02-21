@@ -56,12 +56,12 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
 
     final CalendarCriticalPathCopyDecision? decision =
         await showCalendarCriticalPathCopySheet(
-      context: context,
-      path: path,
-      tasks: tasks,
-      canAddToPersonal: canAddToPersonal,
-      canAddToChat: canAddToChat,
-    );
+          context: context,
+          path: path,
+          tasks: tasks,
+          canAddToPersonal: canAddToPersonal,
+          canAddToChat: canAddToChat,
+        );
     if (decision == null) {
       return;
     }
@@ -114,8 +114,9 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
 
   CalendarModel _importModel() {
     final Set<String> availableIds = tasks.map((task) => task.id).toSet();
-    final List<String> orderedIds =
-        path.taskIds.where(availableIds.contains).toList(growable: false);
+    final List<String> orderedIds = path.taskIds
+        .where(availableIds.contains)
+        .toList(growable: false);
     final CalendarCriticalPath resolvedPath = path.copyWith(
       taskIds: orderedIds,
     );
@@ -123,8 +124,9 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
       for (final task in tasks) task.id: task,
     };
     final CalendarModel base = CalendarModel.empty();
-    final CalendarModel withTasks =
-        taskMap.isEmpty ? base : base.replaceTasks(taskMap);
+    final CalendarModel withTasks = taskMap.isEmpty
+        ? base
+        : base.replaceTasks(taskMap);
     return withTasks.addCriticalPath(resolvedPath);
   }
 

@@ -6,10 +6,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-typedef AxiNowTickerBuilder = Widget Function(
-  BuildContext context,
-  ValueListenable<DateTime> nowListenable,
-);
+typedef AxiNowTickerBuilder =
+    Widget Function(
+      BuildContext context,
+      ValueListenable<DateTime> nowListenable,
+    );
 
 class AxiNowTicker extends StatefulWidget {
   const AxiNowTicker({

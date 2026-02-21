@@ -9,13 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-enum AxiIconButtonVariant {
-  primary,
-  secondary,
-  outline,
-  ghost,
-  destructive;
-}
+enum AxiIconButtonVariant { primary, secondary, outline, ghost, destructive }
 
 class AxiIconButton extends StatefulWidget {
   static const double kDefaultSize = 40;
@@ -39,12 +33,12 @@ class AxiIconButton extends StatefulWidget {
     this.borderWidth,
     this.loading = false,
     this.selected = false,
-  })  : variant = AxiIconButtonVariant.primary,
-        resolvedIconSize = iconSize,
-        resolvedButtonSize = buttonSize,
-        resolvedTapTargetSize = tapTargetSize,
-        resolvedCornerRadius = cornerRadius,
-        resolvedBorderWidth = borderWidth;
+  }) : variant = AxiIconButtonVariant.primary,
+       resolvedIconSize = iconSize,
+       resolvedButtonSize = buttonSize,
+       resolvedTapTargetSize = tapTargetSize,
+       resolvedCornerRadius = cornerRadius,
+       resolvedBorderWidth = borderWidth;
 
   const AxiIconButton.raw({
     super.key,
@@ -65,11 +59,11 @@ class AxiIconButton extends StatefulWidget {
     this.borderWidth,
     this.loading = false,
     this.selected = false,
-  })  : resolvedIconSize = iconSize,
-        resolvedButtonSize = buttonSize,
-        resolvedTapTargetSize = tapTargetSize,
-        resolvedCornerRadius = cornerRadius,
-        resolvedBorderWidth = borderWidth;
+  }) : resolvedIconSize = iconSize,
+       resolvedButtonSize = buttonSize,
+       resolvedTapTargetSize = tapTargetSize,
+       resolvedCornerRadius = cornerRadius,
+       resolvedBorderWidth = borderWidth;
 
   const AxiIconButton.ghost({
     super.key,
@@ -88,13 +82,13 @@ class AxiIconButton extends StatefulWidget {
     this.borderColor,
     this.loading = false,
     this.selected = false,
-  })  : variant = AxiIconButtonVariant.ghost,
-        borderWidth = null,
-        resolvedIconSize = iconSize,
-        resolvedButtonSize = buttonSize,
-        resolvedTapTargetSize = tapTargetSize,
-        resolvedCornerRadius = cornerRadius,
-        resolvedBorderWidth = 0;
+  }) : variant = AxiIconButtonVariant.ghost,
+       borderWidth = null,
+       resolvedIconSize = iconSize,
+       resolvedButtonSize = buttonSize,
+       resolvedTapTargetSize = tapTargetSize,
+       resolvedCornerRadius = cornerRadius,
+       resolvedBorderWidth = 0;
 
   const AxiIconButton.outline({
     super.key,
@@ -111,15 +105,15 @@ class AxiIconButton extends StatefulWidget {
     this.cornerRadius,
     this.loading = false,
     this.selected = false,
-  })  : variant = AxiIconButtonVariant.outline,
-        backgroundColor = null,
-        borderColor = null,
-        borderWidth = null,
-        resolvedIconSize = iconSize,
-        resolvedButtonSize = buttonSize,
-        resolvedTapTargetSize = tapTargetSize,
-        resolvedCornerRadius = cornerRadius,
-        resolvedBorderWidth = null;
+  }) : variant = AxiIconButtonVariant.outline,
+       backgroundColor = null,
+       borderColor = null,
+       borderWidth = null,
+       resolvedIconSize = iconSize,
+       resolvedButtonSize = buttonSize,
+       resolvedTapTargetSize = tapTargetSize,
+       resolvedCornerRadius = cornerRadius,
+       resolvedBorderWidth = null;
 
   const AxiIconButton.secondary({
     super.key,
@@ -139,12 +133,12 @@ class AxiIconButton extends StatefulWidget {
     this.borderColor,
     this.loading = false,
     this.selected = false,
-  })  : variant = AxiIconButtonVariant.secondary,
-        resolvedIconSize = iconSize,
-        resolvedButtonSize = buttonSize,
-        resolvedTapTargetSize = tapTargetSize,
-        resolvedCornerRadius = cornerRadius,
-        resolvedBorderWidth = borderWidth;
+  }) : variant = AxiIconButtonVariant.secondary,
+       resolvedIconSize = iconSize,
+       resolvedButtonSize = buttonSize,
+       resolvedTapTargetSize = tapTargetSize,
+       resolvedCornerRadius = cornerRadius,
+       resolvedBorderWidth = borderWidth;
 
   const AxiIconButton.destructive({
     super.key,
@@ -164,12 +158,12 @@ class AxiIconButton extends StatefulWidget {
     this.borderColor,
     this.loading = false,
     this.selected = false,
-  })  : variant = AxiIconButtonVariant.destructive,
-        resolvedIconSize = iconSize,
-        resolvedButtonSize = buttonSize,
-        resolvedTapTargetSize = tapTargetSize,
-        resolvedCornerRadius = cornerRadius,
-        resolvedBorderWidth = borderWidth;
+  }) : variant = AxiIconButtonVariant.destructive,
+       resolvedIconSize = iconSize,
+       resolvedButtonSize = buttonSize,
+       resolvedTapTargetSize = tapTargetSize,
+       resolvedCornerRadius = cornerRadius,
+       resolvedBorderWidth = borderWidth;
 
   final AxiIconButtonVariant variant;
   final IconData iconData;
@@ -236,11 +230,13 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                 _ => context.colorScheme.foreground,
               };
         final Color resolvedForeground = widget.color ?? fallbackForeground;
-        final Color baseBorder = widget.borderColor ??
+        final Color baseBorder =
+            widget.borderColor ??
             (widget.variant == AxiIconButtonVariant.ghost
                 ? Colors.transparent
                 : context.borderSide.color);
-        final Color baseBackground = widget.backgroundColor ??
+        final Color baseBackground =
+            widget.backgroundColor ??
             switch (widget.variant) {
               AxiIconButtonVariant.outline => Colors.transparent,
               AxiIconButtonVariant.ghost => context.colorScheme.secondary,
@@ -252,20 +248,22 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         );
         final Color resolvedBorder = (isSelected && widget.borderColor == null)
             ? (widget.variant == AxiIconButtonVariant.ghost
-                ? Colors.transparent
-                : context.colorScheme.primary)
+                  ? Colors.transparent
+                  : context.colorScheme.primary)
             : baseBorder;
         final Color resolvedBackground =
             (isSelected && widget.backgroundColor == null)
-                ? Color.alphaBlend(selectedTint, baseBackground)
-                : baseBackground;
+            ? Color.alphaBlend(selectedTint, baseBackground)
+            : baseBackground;
         final bool enabled =
             (widget.onPressed != null || widget.onLongPress != null) &&
-                !widget.loading;
-        final VoidCallback? onTap =
-            enabled ? withSelectionHaptic(widget.onPressed) : null;
-        final VoidCallback? onLongPress =
-            enabled ? withSelectionHaptic(widget.onLongPress) : null;
+            !widget.loading;
+        final VoidCallback? onTap = enabled
+            ? withSelectionHaptic(widget.onPressed)
+            : null;
+        final VoidCallback? onLongPress = enabled
+            ? withSelectionHaptic(widget.onLongPress)
+            : null;
         final bool pressed = states.contains(WidgetState.pressed);
         final double resolvedIconSize =
             widget.resolvedIconSize ?? context.sizing.iconButtonIconSize;
@@ -273,7 +271,8 @@ class _AxiIconButtonState extends State<AxiIconButton> {
             widget.resolvedButtonSize ?? context.sizing.iconButtonSize;
         final double resolvedTapTargetSize =
             widget.resolvedTapTargetSize ?? context.sizing.iconButtonTapTarget;
-        final double resolvedBorderWidth = widget.resolvedBorderWidth ??
+        final double resolvedBorderWidth =
+            widget.resolvedBorderWidth ??
             (widget.variant == AxiIconButtonVariant.outline
                 ? context.borderSide.width
                 : 0);
@@ -286,20 +285,21 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         final Widget iconWidget = widget.loading
             ? AxiProgressIndicator(color: resolvedForeground)
             : (widget.icon == null
-                ? Icon(
-                    widget.iconData,
-                    size: resolvedIconSize,
-                    color: resolvedForeground,
-                  )
-                : IconTheme.merge(
-                    data: IconThemeData(size: resolvedIconSize),
-                    child: widget.icon!,
-                  ));
+                  ? Icon(
+                      widget.iconData,
+                      size: resolvedIconSize,
+                      color: resolvedForeground,
+                    )
+                  : IconTheme.merge(
+                      data: IconThemeData(size: resolvedIconSize),
+                      child: widget.icon!,
+                    ));
         Color background = resolvedBackground;
         if (pressed) {
           background = Color.alphaBlend(
-            context.colorScheme.primary
-                .withValues(alpha: context.motion.tapSplashAlpha),
+            context.colorScheme.primary.withValues(
+              alpha: context.motion.tapSplashAlpha,
+            ),
             background,
           );
         }
@@ -320,8 +320,10 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                 builder: (context, focused, child) =>
                     child ?? const SizedBox.shrink(),
                 child: ShadGestureDetector(
-                  cursor:
-                      enabled ? SystemMouseCursors.click : MouseCursor.defer,
+                  cursor: enabled
+                      ? SystemMouseCursors.click
+                      : MouseCursor.defer,
+                  behavior: HitTestBehavior.opaque,
                   hoverStrategies: ShadTheme.of(context).hoverStrategies,
                   onHoverChange: enabled
                       ? (value) => _updateState(WidgetState.hovered, value)
@@ -372,14 +374,16 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         if (enabled) {
           final double compactSizeThreshold = context.sizing.iconButtonSize;
           final Duration pressDuration = Duration(
-            milliseconds: (animationDuration.inMilliseconds *
-                    context.motion.iconButtonPressDurationFactor)
-                .round(),
+            milliseconds:
+                (animationDuration.inMilliseconds *
+                        context.motion.iconButtonPressDurationFactor)
+                    .round(),
           );
           final Duration releaseDuration = Duration(
-            milliseconds: (animationDuration.inMilliseconds *
-                    context.motion.iconButtonReleaseDurationFactor)
-                .round(),
+            milliseconds:
+                (animationDuration.inMilliseconds *
+                        context.motion.iconButtonReleaseDurationFactor)
+                    .round(),
           );
           tappable = AxiTapBounce(
             controller: _bounceController,

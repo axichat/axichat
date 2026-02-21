@@ -28,8 +28,9 @@ class JidInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Autocomplete<String>(
-      initialValue:
-          initialValue == null ? null : TextEditingValue(text: initialValue!),
+      initialValue: initialValue == null
+          ? null
+          : TextEditingValue(text: initialValue!),
       onSelected: onChanged,
       optionsBuilder: (value) {
         if (value.text.isEmpty) return const [];
@@ -68,7 +69,7 @@ class JidInput extends StatelessWidget {
           ),
         ),
       ),
-      fieldViewBuilder: (context, controller, focus, __) {
+      fieldViewBuilder: (context, controller, focus, _) {
         Widget child = AxiTextInput(
           controller: controller,
           focusNode: focus,

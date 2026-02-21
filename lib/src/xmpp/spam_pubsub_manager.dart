@@ -83,8 +83,9 @@ final class SpamSyncPayload {
     }
 
     final rawJid = node.attributes[_spamJidAttr]?.toString();
-    final resolvedJid =
-        rawJid == null || rawJid.isEmpty ? itemId?.trim() : rawJid;
+    final resolvedJid = rawJid == null || rawJid.isEmpty
+        ? itemId?.trim()
+        : rawJid;
     if (resolvedJid == null || resolvedJid.isEmpty) return null;
     final normalizedJid = resolvedJid.toBareJidOrNull(
       maxBytes: syncAddressMaxBytes,
@@ -159,8 +160,8 @@ final class SpamSyncRetractedEvent extends mox.XmppEvent {
 
 final class SpamPubSubManager extends mox.XmppManagerBase {
   SpamPubSubManager({String? maxItems})
-      : _maxItems = maxItems ?? _defaultMaxItems,
-        super(managerId);
+    : _maxItems = maxItems ?? _defaultMaxItems,
+      super(managerId);
 
   static const String managerId = 'axi.spam';
 
@@ -239,21 +240,20 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
   AxiPubSubNodeConfig _nodeConfig(
     mox.AccessModel accessModel, {
     String? sendLastPublishedItem,
-  }) =>
-      AxiPubSubNodeConfig(
-        accessModel: accessModel,
-        publishModel: _publishModelPublishers,
-        deliverNotifications: _deliverNotificationsEnabled,
-        deliverPayloads: _deliverPayloadsEnabled,
-        maxItems: _maxItems,
-        notifyRetract: _notifyEnabled,
-        notifyDelete: _notifyEnabled,
-        notifyConfig: _notifyEnabled,
-        notifySub: _notifyEnabled,
-        presenceBasedDelivery: _presenceBasedDeliveryDisabled,
-        persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: sendLastPublishedItem,
-      );
+  }) => AxiPubSubNodeConfig(
+    accessModel: accessModel,
+    publishModel: _publishModelPublishers,
+    deliverNotifications: _deliverNotificationsEnabled,
+    deliverPayloads: _deliverPayloadsEnabled,
+    maxItems: _maxItems,
+    notifyRetract: _notifyEnabled,
+    notifyDelete: _notifyEnabled,
+    notifyConfig: _notifyEnabled,
+    notifySub: _notifyEnabled,
+    presenceBasedDelivery: _presenceBasedDeliveryDisabled,
+    persistItems: _persistItemsEnabled,
+    sendLastPublishedItem: sendLastPublishedItem,
+  );
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,
@@ -302,11 +302,11 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
   }
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
-        accessModel: _accessModel.value,
-        maxItems: _maxItems,
-        persistItems: _persistItemsEnabled,
-        publishModel: _publishModelPublishers,
-      );
+    accessModel: _accessModel.value,
+    maxItems: _maxItems,
+    persistItems: _persistItemsEnabled,
+    publishModel: _publishModelPublishers,
+  );
 
   mox.JID? _selfPepHost() {
     try {
@@ -322,11 +322,10 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
   Future<String?> _resolveSendLastPublishedItem(
     SafePubSubManager pubsub,
     mox.JID host,
-  ) =>
-      pubsub.resolveSendLastPublishedItemForNode(
-        host: host,
-        node: spamPubSubNode,
-      );
+  ) => pubsub.resolveSendLastPublishedItemForNode(
+    host: host,
+    node: spamPubSubNode,
+  );
 
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
@@ -374,8 +373,10 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     var success = false;
     getAttributes().sendEvent(_spamEnsureStartEvent);
     try {
-      final sendLastPublishedItem =
-          await _resolveSendLastPublishedItem(pubsub, host);
+      final sendLastPublishedItem = await _resolveSendLastPublishedItem(
+        pubsub,
+        host,
+      );
       final primaryConfig = _nodeConfig(
         mox.AccessModel.whitelist,
         sendLastPublishedItem: sendLastPublishedItem,
@@ -407,7 +408,8 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
         success = true;
         return;
       }
-      final shouldCreateNode = primaryError.indicatesMissingNode ||
+      final shouldCreateNode =
+          primaryError.indicatesMissingNode ||
           fallbackError.indicatesMissingNode;
       if (!shouldCreateNode) {
         return;
@@ -581,7 +583,8 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
       }
       parsed.add(parsedPayload);
     }
-    final isComplete = !hadParseFailure &&
+    final isComplete =
+        !hadParseFailure &&
         _isSnapshotComplete(itemsCount: items.length, maxItems: limit);
 
     return PubSubFetchResult(
@@ -795,8 +798,9 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
     if (!snapshot.isComplete) {
       return;
     }
-    final removedIds =
-        previousCache.keys.where((id) => !freshIds.contains(id)).toList();
+    final removedIds = previousCache.keys
+        .where((id) => !freshIds.contains(id))
+        .toList();
     for (final id in removedIds) {
       _emitRetraction(id);
     }

@@ -313,15 +313,17 @@ final class DraftSyncPayload {
     }
 
     final rawSyncId = node.attributes[_draftSyncIdAttr]?.toString().trim();
-    final resolvedSyncId =
-        rawSyncId == null || rawSyncId.isEmpty ? itemId?.trim() : rawSyncId;
+    final resolvedSyncId = rawSyncId == null || rawSyncId.isEmpty
+        ? itemId?.trim()
+        : rawSyncId;
     if (resolvedSyncId == null || resolvedSyncId.isEmpty) return null;
     if (!isWithinUtf8ByteLimit(resolvedSyncId, maxBytes: draftSyncMaxIdBytes)) {
       return null;
     }
 
-    final rawUpdatedAt =
-        node.attributes[_draftUpdatedAtAttr]?.toString().trim();
+    final rawUpdatedAt = node.attributes[_draftUpdatedAtAttr]
+        ?.toString()
+        .trim();
     if (rawUpdatedAt == null || rawUpdatedAt.isEmpty) return null;
     final parsedUpdatedAt = DateTime.tryParse(rawUpdatedAt);
     if (parsedUpdatedAt == null) return null;
@@ -329,10 +331,11 @@ final class DraftSyncPayload {
     final rawSourceId = node.attributes[_draftSourceIdAttr]?.toString().trim();
     final resolvedSourceId =
         _normalizeText(rawSourceId, maxBytes: draftSyncMaxIdBytes) ??
-            _draftSourceIdFallback;
+        _draftSourceIdFallback;
 
     final recipientsNode = node.firstTag(_recipientsTag);
-    final recipients = recipientsNode
+    final recipients =
+        recipientsNode
             ?.findTags(_recipientTag)
             .map(DraftRecipient.fromXml)
             .whereType<DraftRecipient>()
@@ -353,7 +356,8 @@ final class DraftSyncPayload {
     );
 
     final attachmentsNode = node.firstTag(_attachmentsTag);
-    final attachments = attachmentsNode
+    final attachments =
+        attachmentsNode
             ?.findTags(_attachmentTag)
             .map(DraftAttachmentRef.fromXml)
             .whereType<DraftAttachmentRef>()
@@ -404,7 +408,7 @@ final class DraftSyncPayload {
       attributes: {
         _draftSyncIdAttr: syncId,
         _draftUpdatedAtAttr: updatedAtIso,
-        if (normalizedSourceId != null) _draftSourceIdAttr: normalizedSourceId,
+        _draftSourceIdAttr: ?normalizedSourceId,
       },
       children: [
         if (limitedRecipients.isNotEmpty)
@@ -470,8 +474,8 @@ final class DraftSyncRetractedEvent extends mox.XmppEvent {
 
 final class DraftsPubSubManager extends mox.XmppManagerBase {
   DraftsPubSubManager({String? maxItems})
-      : _maxItems = maxItems ?? _defaultMaxItems,
-        super(managerId);
+    : _maxItems = maxItems ?? _defaultMaxItems,
+      super(managerId);
 
   static const String managerId = 'axi.drafts';
 
@@ -550,30 +554,28 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   AxiPubSubNodeConfig _nodeConfig(
     mox.AccessModel accessModel, {
     String? sendLastPublishedItem,
-  }) =>
-      AxiPubSubNodeConfig(
-        accessModel: accessModel,
-        publishModel: _publishModelPublishers,
-        deliverNotifications: _deliverNotificationsEnabled,
-        deliverPayloads: _deliverPayloadsEnabled,
-        maxItems: _maxItems,
-        notifyRetract: _notifyEnabled,
-        notifyDelete: _notifyEnabled,
-        notifyConfig: _notifyEnabled,
-        notifySub: _notifyEnabled,
-        presenceBasedDelivery: _presenceBasedDeliveryDisabled,
-        persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: sendLastPublishedItem,
-      );
+  }) => AxiPubSubNodeConfig(
+    accessModel: accessModel,
+    publishModel: _publishModelPublishers,
+    deliverNotifications: _deliverNotificationsEnabled,
+    deliverPayloads: _deliverPayloadsEnabled,
+    maxItems: _maxItems,
+    notifyRetract: _notifyEnabled,
+    notifyDelete: _notifyEnabled,
+    notifyConfig: _notifyEnabled,
+    notifySub: _notifyEnabled,
+    presenceBasedDelivery: _presenceBasedDeliveryDisabled,
+    persistItems: _persistItemsEnabled,
+    sendLastPublishedItem: sendLastPublishedItem,
+  );
 
   mox.NodeConfig _createNodeConfig(
     mox.AccessModel accessModel, {
     String? sendLastPublishedItem,
-  }) =>
-      _nodeConfig(
-        accessModel,
-        sendLastPublishedItem: sendLastPublishedItem,
-      ).toNodeConfig();
+  }) => _nodeConfig(
+    accessModel,
+    sendLastPublishedItem: sendLastPublishedItem,
+  ).toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,
@@ -622,11 +624,11 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   }
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
-        accessModel: _accessModel.value,
-        maxItems: _maxItems,
-        persistItems: _persistItemsEnabled,
-        publishModel: _publishModelPublishers,
-      );
+    accessModel: _accessModel.value,
+    maxItems: _maxItems,
+    persistItems: _persistItemsEnabled,
+    publishModel: _publishModelPublishers,
+  );
 
   mox.JID? _selfPepHost() {
     try {
@@ -642,11 +644,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
   Future<String?> _resolveSendLastPublishedItem(
     SafePubSubManager pubsub,
     mox.JID host,
-  ) =>
-      pubsub.resolveSendLastPublishedItemForNode(
-        host: host,
-        node: draftsPubSubNode,
-      );
+  ) => pubsub.resolveSendLastPublishedItemForNode(
+    host: host,
+    node: draftsPubSubNode,
+  );
 
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
@@ -694,8 +695,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     var success = false;
     getAttributes().sendEvent(_draftsEnsureStartEvent);
     try {
-      final sendLastPublishedItem =
-          await _resolveSendLastPublishedItem(pubsub, host);
+      final sendLastPublishedItem = await _resolveSendLastPublishedItem(
+        pubsub,
+        host,
+      );
       final primaryConfig = _nodeConfig(
         mox.AccessModel.whitelist,
         sendLastPublishedItem: sendLastPublishedItem,
@@ -727,7 +730,8 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         success = true;
         return;
       }
-      final shouldCreateNode = primaryError.indicatesMissingNode ||
+      final shouldCreateNode =
+          primaryError.indicatesMissingNode ||
           fallbackError.indicatesMissingNode;
       if (!shouldCreateNode) {
         return;
@@ -903,7 +907,8 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
       }
       parsed.add(parsedPayload);
     }
-    final isComplete = !hadParseFailure &&
+    final isComplete =
+        !hadParseFailure &&
         _isSnapshotComplete(itemsCount: items.length, maxItems: fetchLimit);
     return PubSubFetchResult(
       items: List<DraftSyncPayload>.unmodifiable(parsed),
@@ -1118,8 +1123,9 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (!snapshot.isComplete) {
       return;
     }
-    final removedIds =
-        previousCache.keys.where((id) => !freshIds.contains(id)).toList();
+    final removedIds = previousCache.keys
+        .where((id) => !freshIds.contains(id))
+        .toList();
     for (final id in removedIds) {
       _emitRetraction(id);
     }

@@ -15,7 +15,7 @@ class PinnedMessages extends Table {
   Set<Column<Object>>? get primaryKey => {messageStanzaId, chatJid};
 
   List<Index> get indexes => [
-        Index('idx_pinned_messages_chat', 'chat_jid, pinned_at'),
-        Index('idx_pinned_messages_message', 'message_stanza_id'),
-      ];
+    Index('idx_pinned_messages_chat', 'chat_jid, pinned_at'),
+    Index('idx_pinned_messages_message', 'message_stanza_id'),
+  ];
 }

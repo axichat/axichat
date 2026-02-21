@@ -146,7 +146,8 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
       0.0,
       1.0,
     );
-    final double pointerOffsetY = _pointerOffsetY ??
+    final double pointerOffsetY =
+        _pointerOffsetY ??
         (_childSize.height.isFinite && _childSize.height > 0
             ? _childSize.height / 2
             : 0.0);
@@ -263,7 +264,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
         onDragStarted: _handleDragStarted,
         onDragUpdate: _handleDragUpdated,
         onDragEnd: (_) => _handleDragFinished(cancelled: false),
-        onDraggableCanceled: (_, __) => _handleDragFinished(cancelled: true),
+        onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
         child: listener,
       );
     }
@@ -278,7 +279,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
       onDragStarted: _handleDragStarted,
       onDragUpdate: _handleDragUpdated,
       onDragEnd: (_) => _handleDragFinished(cancelled: false),
-      onDraggableCanceled: (_, __) => _handleDragFinished(cancelled: true),
+      onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
       child: listener,
     );
   }

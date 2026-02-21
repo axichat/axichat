@@ -4,7 +4,7 @@
 part of 'avatar_editor_cubit.dart';
 
 @freezed
-class AvatarEditorState with _$AvatarEditorState {
+abstract class AvatarEditorState with _$AvatarEditorState {
   const factory AvatarEditorState({
     Avatar? draftAvatar,
     Avatar? carouselAvatar,

@@ -136,7 +136,7 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
       onMove: _handleMove,
       onAcceptWithDetails: _handleAccept,
       onLeave: _handleLeave,
-      builder: (context, _, __) => widget.child,
+      builder: (context, _, _) => widget.child,
     );
   }
 }

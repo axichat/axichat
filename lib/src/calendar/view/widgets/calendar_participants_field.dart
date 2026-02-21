@@ -75,7 +75,8 @@ class _CalendarParticipantsFieldState extends State<CalendarParticipantsField> {
   bool _shouldStartExpanded(CalendarParticipantsField widget) {
     final String? address = widget.organizer?.address.trim();
     final String? name = widget.organizer?.commonName?.trim();
-    final bool hasOrganizer = (address != null && address.isNotEmpty) ||
+    final bool hasOrganizer =
+        (address != null && address.isNotEmpty) ||
         (name != null && name.isNotEmpty);
     return hasOrganizer || widget.attendees.isNotEmpty;
   }
@@ -320,8 +321,9 @@ class _AttendeesFieldState extends State<_AttendeesField> {
   Widget build(BuildContext context) {
     final bool enabled = widget.enabled;
     final TextStyle labelStyle = context.textTheme.sectionLabelM;
-    final List<CalendarAttendee> attendees =
-        widget.attendees.isEmpty ? _emptyAttendees : widget.attendees;
+    final List<CalendarAttendee> attendees = widget.attendees.isEmpty
+        ? _emptyAttendees
+        : widget.attendees;
     final List<ShadOption<CalendarParticipantRole?>> roleOptions = [
       const ShadOption<CalendarParticipantRole?>(
         value: null,
@@ -428,16 +430,17 @@ class _AttendeeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle titleStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle titleStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final TextStyle subtitleStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );
     final String displayName = attendee.displayName;
     final String? secondary =
         attendee.commonName != null && attendee.commonName!.trim().isNotEmpty
-            ? attendee.address
-            : null;
+        ? attendee.address
+        : null;
 
     return Container(
       padding: EdgeInsets.symmetric(

@@ -40,12 +40,12 @@ class DeltaNetworkException extends DeltaChatException {
 
 class DeltaAuthException extends DeltaChatException {
   const DeltaAuthException({required super.operation, required super.message})
-      : super(code: DeltaChatErrorCode.auth);
+    : super(code: DeltaChatErrorCode.auth);
 }
 
 class DeltaServerException extends DeltaChatException {
   const DeltaServerException({required super.operation, required super.message})
-      : super(code: DeltaChatErrorCode.server);
+    : super(code: DeltaChatErrorCode.server);
 }
 
 class DeltaAttachmentTooLargeException extends DeltaChatException {
@@ -90,8 +90,9 @@ class DeltaChatExceptionMapper {
     String? fallbackMessage,
   }) {
     final normalized = (message ?? '').trim();
-    final resolvedMessage =
-        normalized.isEmpty ? (fallbackMessage ?? '') : normalized;
+    final resolvedMessage = normalized.isEmpty
+        ? (fallbackMessage ?? '')
+        : normalized;
     final lower = resolvedMessage.toLowerCase();
     if (_matchesAny(lower, const ['network', 'disconnect', 'offline', 'dns'])) {
       return DeltaNetworkException(

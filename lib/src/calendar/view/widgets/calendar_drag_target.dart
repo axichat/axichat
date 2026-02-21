@@ -5,11 +5,12 @@ import 'package:flutter/widgets.dart';
 
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 
-typedef CalendarDragTargetBuilder = Widget Function(
-  BuildContext context,
-  bool isHovering,
-  CalendarDropDetails? details,
-);
+typedef CalendarDragTargetBuilder =
+    Widget Function(
+      BuildContext context,
+      bool isHovering,
+      CalendarDropDetails? details,
+    );
 
 class CalendarDragTargetRegion extends StatefulWidget {
   const CalendarDragTargetRegion({
@@ -55,8 +56,9 @@ class _CalendarDragTargetRegionState extends State<CalendarDragTargetRegion> {
     DragTargetDetails<CalendarDragPayload> details,
   ) {
     final RenderBox? box = _renderBox;
-    final Offset local =
-        box != null ? box.globalToLocal(details.offset) : details.offset;
+    final Offset local = box != null
+        ? box.globalToLocal(details.offset)
+        : details.offset;
     return CalendarDropDetails(
       payload: details.data,
       globalPosition: details.offset,
@@ -118,7 +120,7 @@ class _CalendarDragTargetRegionState extends State<CalendarDragTargetRegion> {
       onMove: _handleMove,
       onAcceptWithDetails: _handleDrop,
       onLeave: _handleLeave,
-      builder: (context, _, __) =>
+      builder: (context, _, _) =>
           widget.builder(context, _isHovering, _lastDetails),
     );
   }

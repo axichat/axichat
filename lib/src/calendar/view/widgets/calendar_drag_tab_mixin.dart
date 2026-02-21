@@ -204,8 +204,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final double minTabWidth = context.sizing.listButtonHeight * 2;
     final Color hoverBackground = scheme.primary.withValues(alpha: 0.08);
     final Color pressedBackground = scheme.primary.withValues(alpha: 0.14);
-    final Color selectedBackground =
-        scheme.primary.withValues(alpha: context.motion.tapSplashAlpha);
+    final Color selectedBackground = scheme.primary.withValues(
+      alpha: context.motion.tapSplashAlpha,
+    );
     final ShadDecoration baseDecoration = ShadDecoration(
       border: ShadBorder.none,
       secondaryBorder: ShadBorder.none,
@@ -233,8 +234,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         builder: (context, constraints) {
           final double width = constraints.maxWidth;
           final bool useScrollable = width.isFinite && width < minTabWidth * 2;
-          final Alignment tabBarAlignment =
-              useScrollable ? Alignment.centerLeft : Alignment.center;
+          final Alignment tabBarAlignment = useScrollable
+              ? Alignment.centerLeft
+              : Alignment.center;
 
           return AnimatedBuilder(
             animation: mobileTabController,
@@ -274,12 +276,13 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                         _handleScheduleTabDragLeave();
                         onDragCancelRequested(details.data);
                       },
-                      builder: (context, _, __) => _DragTabLabel(
+                      builder: (context, _, _) => _DragTabLabel(
                         label: scheduleTabLabel,
                         scheme: scheme,
                         selected: scheduleSelected,
                         showCue: scheduleCueActive,
-                        shake: !lowMotion &&
+                        shake:
+                            !lowMotion &&
                             scheduleSwitchHintActive &&
                             !scheduleCueActive,
                       ),
@@ -307,12 +310,13 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                         _handleTasksTabDragLeave();
                         onDragCancelRequested(details.data);
                       },
-                      builder: (context, _, __) => _DragTabLabel(
+                      builder: (context, _, _) => _DragTabLabel(
                         label: tasksTabLabel,
                         scheme: scheme,
                         selected: tasksSelected,
                         showCue: tasksCueActive,
-                        shake: !lowMotion &&
+                        shake:
+                            !lowMotion &&
                             tasksSwitchHintActive &&
                             !tasksCueActive,
                       ),
@@ -425,7 +429,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                         _handleCancelBucketDrop(details.data);
                         _setActiveCancelPayload(null);
                       },
-                      builder: (context, candidate, __) {
+                      builder: (context, candidate, _) {
                         if (candidate.isNotEmpty) {
                           _setActiveCancelPayload(candidate.first);
                         }
@@ -619,10 +623,12 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     }
     final Offset localPosition = box.globalToLocal(globalPosition);
     final double width = box.size.width;
-    final double leftThreshold =
-        width <= 0 ? 0 : math.min(_leftEdgeHotZoneWidth, width * 0.5);
-    final double rightThreshold =
-        width <= 0 ? 0 : math.min(_rightEdgeHotZoneWidth, width * 0.5);
+    final double leftThreshold = width <= 0
+        ? 0
+        : math.min(_leftEdgeHotZoneWidth, width * 0.5);
+    final double rightThreshold = width <= 0
+        ? 0
+        : math.min(_rightEdgeHotZoneWidth, width * 0.5);
     _dragStartLocalDx ??= localPosition.dx;
     if (_dragStartLocalDx != null &&
         !_dragStartInLeftZone &&
@@ -888,7 +894,8 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
   CalendarTask restoreTaskFromPayload(CalendarDragPayload payload) {
     final CalendarTask snapshot = payload.snapshot;
-    final DateTime? originalStart = payload.pickupScheduledTime ??
+    final DateTime? originalStart =
+        payload.pickupScheduledTime ??
         snapshot.scheduledTime ??
         payload.originSlot;
     if (originalStart != null) {
@@ -926,10 +933,12 @@ class _DragTabLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final duration = context.watch<SettingsCubit>().animationDuration;
-    final Color cueColor =
-        showCue ? scheme.primary.withValues(alpha: 0.55) : Colors.transparent;
-    final double width =
-        showCue ? context.borderSide.width * 2 : context.borderSide.width;
+    final Color cueColor = showCue
+        ? scheme.primary.withValues(alpha: 0.55)
+        : Colors.transparent;
+    final double width = showCue
+        ? context.borderSide.width * 2
+        : context.borderSide.width;
     final bool emphasize = showCue || selected;
     final labelContent = AnimatedContainer(
       duration: duration,
@@ -939,10 +948,7 @@ class _DragTabLabel extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: cueColor,
-            width: width,
-          ),
+          bottom: BorderSide(color: cueColor, width: width),
         ),
       ),
       child: DefaultTextStyle.merge(
@@ -994,8 +1000,8 @@ class _ShakingDragTabLabelState extends State<_ShakingDragTabLabel>
   }
 }
 
-typedef _EdgeDragEventHandler = void Function(
-    DragTargetDetails<CalendarDragPayload> details);
+typedef _EdgeDragEventHandler =
+    void Function(DragTargetDetails<CalendarDragPayload> details);
 
 class _DragEdgeTarget extends StatelessWidget {
   const _DragEdgeTarget({
@@ -1033,7 +1039,7 @@ class _DragEdgeTarget extends StatelessWidget {
             onMove: onEvent,
             onLeave: (_) => onLeave(),
             onAcceptWithDetails: (_) => onLeave(),
-            builder: (context, _, __) {
+            builder: (context, _, _) {
               return AnimatedContainer(
                 duration: calendarSlotHoverAnimationDuration,
                 height: double.infinity,

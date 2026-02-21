@@ -81,20 +81,20 @@ class EndpointConfig extends Equatable {
   }
 
   Map<String, dynamic> toJson() => {
-        'domain': domain,
-        'xmppEnabled': xmppEnabled,
-        'smtpEnabled': smtpEnabled,
-        'xmppHost': xmppHost,
-        'xmppPort': xmppPort,
-        'imapHost': imapHost,
-        'imapPort': imapPort,
-        'smtpHost': smtpHost,
-        'smtpPort': smtpPort,
-        'apiPort': apiPort,
-        'apiUseTls': apiUseTls,
-        'emailProvisioningBaseUrl': emailProvisioningBaseUrl,
-        'emailProvisioningPublicToken': emailProvisioningPublicToken,
-      };
+    'domain': domain,
+    'xmppEnabled': xmppEnabled,
+    'smtpEnabled': smtpEnabled,
+    'xmppHost': xmppHost,
+    'xmppPort': xmppPort,
+    'imapHost': imapHost,
+    'imapPort': imapPort,
+    'smtpHost': smtpHost,
+    'smtpPort': smtpPort,
+    'apiPort': apiPort,
+    'apiUseTls': apiUseTls,
+    'emailProvisioningBaseUrl': emailProvisioningBaseUrl,
+    'emailProvisioningPublicToken': emailProvisioningPublicToken,
+  };
 
   factory EndpointConfig.fromJson(Map<String, dynamic> json) {
     int readPort(dynamic value, int fallback) {
@@ -123,48 +123,41 @@ class EndpointConfig extends Equatable {
       smtpPort: readPort(json['smtpPort'], defaultSmtpPort),
       apiPort: readPort(json['apiPort'], defaultApiPort),
       apiUseTls: json['apiUseTls'] as bool? ?? true,
-      emailProvisioningBaseUrl:
-          readOptionalString(json['emailProvisioningBaseUrl']),
-      emailProvisioningPublicToken:
-          readOptionalString(json['emailProvisioningPublicToken']),
+      emailProvisioningBaseUrl: readOptionalString(
+        json['emailProvisioningBaseUrl'],
+      ),
+      emailProvisioningPublicToken: readOptionalString(
+        json['emailProvisioningPublicToken'],
+      ),
     );
   }
 
   @override
   List<Object?> get props => [
-        domain,
-        xmppEnabled,
-        smtpEnabled,
-        xmppHost,
-        xmppPort,
-        imapHost,
-        imapPort,
-        smtpHost,
-        smtpPort,
-        apiPort,
-        apiUseTls,
-        emailProvisioningBaseUrl,
-        emailProvisioningPublicToken,
-      ];
+    domain,
+    xmppEnabled,
+    smtpEnabled,
+    xmppHost,
+    xmppPort,
+    imapHost,
+    imapPort,
+    smtpHost,
+    smtpPort,
+    apiPort,
+    apiUseTls,
+    emailProvisioningBaseUrl,
+    emailProvisioningPublicToken,
+  ];
 }
 
 class EndpointOverride extends Equatable {
-  const EndpointOverride({
-    required this.host,
-    required this.port,
-  });
+  const EndpointOverride({required this.host, required this.port});
 
   final String host;
   final int port;
 
-  EndpointOverride copyWith({
-    String? host,
-    int? port,
-  }) {
-    return EndpointOverride(
-      host: host ?? this.host,
-      port: port ?? this.port,
-    );
+  EndpointOverride copyWith({String? host, int? port}) {
+    return EndpointOverride(host: host ?? this.host, port: port ?? this.port);
   }
 
   @override
@@ -180,8 +173,9 @@ class EndpointResolver {
     EndpointConfig config, {
     EndpointOverride? fallback,
   }) async {
-    final resolvedPort =
-        config.xmppPort > 0 ? config.xmppPort : EndpointConfig.defaultXmppPort;
+    final resolvedPort = config.xmppPort > 0
+        ? config.xmppPort
+        : EndpointConfig.defaultXmppPort;
     return await _resolve(
       config: config,
       preferredHost: config.xmppHost,
@@ -194,8 +188,9 @@ class EndpointResolver {
     EndpointConfig config, {
     EndpointOverride? fallback,
   }) async {
-    final resolvedPort =
-        config.smtpPort > 0 ? config.smtpPort : EndpointConfig.defaultSmtpPort;
+    final resolvedPort = config.smtpPort > 0
+        ? config.smtpPort
+        : EndpointConfig.defaultSmtpPort;
     return await _resolve(
       config: config,
       preferredHost: config.smtpHost,
@@ -218,10 +213,7 @@ class EndpointResolver {
         ? null
         : InternetAddress.tryParse(preferred);
     if (preferredIp != null) {
-      return EndpointOverride(
-        host: preferredIp.address,
-        port: selectedPort,
-      );
+      return EndpointOverride(host: preferredIp.address, port: selectedPort);
     }
     final host = _chooseHost(preferredHost, fallbackHost, config.domain);
     try {
@@ -229,12 +221,10 @@ class EndpointResolver {
           ? preferred
           : config.domain.trim();
       final addresses = await lookup(lookupHost);
-      final resolvedHost =
-          addresses.isNotEmpty ? addresses.first.address : host;
-      return EndpointOverride(
-        host: resolvedHost,
-        port: selectedPort,
-      );
+      final resolvedHost = addresses.isNotEmpty
+          ? addresses.first.address
+          : host;
+      return EndpointOverride(host: resolvedHost, port: selectedPort);
     } on SocketException {
       return EndpointOverride(host: host, port: selectedPort);
     } on FormatException {

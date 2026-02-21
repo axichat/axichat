@@ -30,8 +30,8 @@ class AxiAdaptiveLayout extends StatelessWidget {
     this.secondaryFlex = 6,
     EdgeInsets? primaryPadding,
     EdgeInsets? secondaryPadding,
-  })  : primaryPadding = primaryPadding ?? panePadding,
-        secondaryPadding = secondaryPadding ?? panePadding;
+  }) : primaryPadding = primaryPadding ?? panePadding,
+       secondaryPadding = secondaryPadding ?? panePadding;
 
   final Widget primaryChild;
   final Widget secondaryChild;
@@ -76,22 +76,24 @@ class AxiAdaptiveLayout extends StatelessWidget {
                 duration: context.watch<SettingsCubit>().animationDuration,
                 transitionBuilder:
                     (child, primaryAnimation, secondaryAnimation) {
-                  final bool showCompactDivider = showPrimary && showSecondary;
-                  final Widget transition = SlideTransition(
-                    position: Tween<Offset>(
-                      begin: _compactSlideBeginOffset,
-                      end: Offset.zero,
-                    ).animate(
-                      CurvedAnimation(
-                        parent: primaryAnimation,
-                        curve: _compactSlideCurve,
-                      ),
-                    ),
-                    child: child,
-                  );
-                  if (!showCompactDivider) return transition;
-                  return transition;
-                },
+                      final bool showCompactDivider =
+                          showPrimary && showSecondary;
+                      final Widget transition = SlideTransition(
+                        position:
+                            Tween<Offset>(
+                              begin: _compactSlideBeginOffset,
+                              end: Offset.zero,
+                            ).animate(
+                              CurvedAnimation(
+                                parent: primaryAnimation,
+                                curve: _compactSlideCurve,
+                              ),
+                            ),
+                        child: child,
+                      );
+                      if (!showCompactDivider) return transition;
+                      return transition;
+                    },
                 child: compactChild,
               ),
             ),
@@ -100,16 +102,17 @@ class AxiAdaptiveLayout extends StatelessWidget {
 
         final bool showSecondaryDivider = showPrimary && showSecondary;
         final BoxDecoration secondaryDividerDecoration = BoxDecoration(
-          border: Border(
-            left: context.borderSide,
-          ),
+          border: Border(left: context.borderSide),
         );
-        final primaryAlign = primaryAlignment ??
+        final primaryAlign =
+            primaryAlignment ??
             (centerPrimary ? Alignment.center : Alignment.topLeft);
-        final secondaryAlign = secondaryAlignment ??
+        final secondaryAlign =
+            secondaryAlignment ??
             (centerSecondary ? Alignment.center : Alignment.topLeft);
-        final animationDuration =
-            context.watch<SettingsCubit>().animationDuration;
+        final animationDuration = context
+            .watch<SettingsCubit>()
+            .animationDuration;
         if (!animatePaneChanges) {
           return ConstrainedBox(
             constraints: constraints,

@@ -109,17 +109,17 @@ class HtmlContentCodec {
   static const Duration _maxHtmlParseDuration = Duration(milliseconds: 100);
   static const Map<String, Set<String>> _sanitizedAllowedAttributes =
       <String, Set<String>>{
-    'a': <String>{_hrefAttribute, _titleAttribute},
-    'img': <String>{
-      _srcAttribute,
-      _altAttribute,
-      _titleAttribute,
-      _widthAttribute,
-      _heightAttribute,
-    },
-    'td': <String>{_colspanAttribute, _rowspanAttribute},
-    'th': <String>{_colspanAttribute, _rowspanAttribute},
-  };
+        'a': <String>{_hrefAttribute, _titleAttribute},
+        'img': <String>{
+          _srcAttribute,
+          _altAttribute,
+          _titleAttribute,
+          _widthAttribute,
+          _heightAttribute,
+        },
+        'td': <String>{_colspanAttribute, _rowspanAttribute},
+        'th': <String>{_colspanAttribute, _rowspanAttribute},
+      };
   static const String _lineBreak = '\n';
   static const String _doubleLineBreak = '\n\n';
   static final RegExp _spaceCollapse = RegExp(r'[ \t]+');
@@ -179,8 +179,9 @@ class HtmlContentCodec {
     final sanitized = sanitizeHtml(trimmed);
     if (sanitized.isEmpty) return null;
     final collapsed = sanitized.replaceAll(_spaceCollapse, ' ');
-    final normalized =
-        collapsed.replaceAll(_multiLineBreaks, _doubleLineBreak).trim();
+    final normalized = collapsed
+        .replaceAll(_multiLineBreaks, _doubleLineBreak)
+        .trim();
     return normalized.isEmpty ? null : normalized;
   }
 

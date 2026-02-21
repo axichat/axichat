@@ -25,7 +25,7 @@ class CalendarMobileSplitScaffold extends StatelessWidget {
   final Widget dragOverlay;
   final Widget tabBar;
   final Widget Function(BuildContext context, bool showingPrimaryTab)
-      headerBuilder;
+  headerBuilder;
   final bool safeAreaTop;
   final bool safeAreaBottom;
 
@@ -91,7 +91,7 @@ class CalendarDesktopSplitScaffold extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (topHeader != null) topHeader!,
+        ?topHeader,
         Expanded(
           child: Row(
             children: [
@@ -100,7 +100,7 @@ class CalendarDesktopSplitScaffold extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (bodyHeader != null) bodyHeader!,
+                    ?bodyHeader,
                     Expanded(child: content),
                   ],
                 ),

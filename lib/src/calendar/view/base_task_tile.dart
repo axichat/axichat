@@ -48,8 +48,11 @@ abstract class BaseTaskTile<T extends BaseCalendarBloc> extends StatefulWidget {
   final bool compactShareFragment;
 }
 
-abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
-    T extends BaseCalendarBloc> extends State<W> {
+abstract class BaseTaskTileState<
+  W extends BaseTaskTile<T>,
+  T extends BaseCalendarBloc
+>
+    extends State<W> {
   bool _isUpdating = false;
   bool? _pendingCompletionValue;
 
@@ -100,8 +103,9 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
                 ? _formatDuration(context, task.duration!)
                 : null;
             final Color timeColor = _getTimeColor(context);
-            final FontWeight? timeFontWeight =
-                _isOverdue() ? FontWeight.bold : null;
+            final FontWeight? timeFontWeight = _isOverdue()
+                ? FontWeight.bold
+                : null;
             void handleEdit() {
               showEditTaskInput(context, task);
             }
@@ -115,12 +119,15 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
             }
 
             final bool hideActions = widget.hideActionMenu;
-            final VoidCallback? editAction =
-                (isReadOnly || hideActions) ? null : handleEdit;
-            final VoidCallback? deleteAction =
-                (isReadOnly || hideActions) ? null : handleDelete;
-            final ValueChanged<bool>? toggleAction =
-                isReadOnly ? null : handleToggleCompletion;
+            final VoidCallback? editAction = (isReadOnly || hideActions)
+                ? null
+                : handleEdit;
+            final VoidCallback? deleteAction = (isReadOnly || hideActions)
+                ? null
+                : handleDelete;
+            final ValueChanged<bool>? toggleAction = isReadOnly
+                ? null
+                : handleToggleCompletion;
 
             late final Widget tile;
             switch (spec.sizeClass) {
@@ -224,8 +231,8 @@ abstract class BaseTaskTileState<W extends BaseTaskTile<T>,
     });
     final String baseId = widget.task.baseId;
     context.read<T>().add(
-          CalendarEvent.taskCompleted(taskId: baseId, completed: completed),
-        );
+      CalendarEvent.taskCompleted(taskId: baseId, completed: completed),
+    );
   }
 
   String _formatDuration(BuildContext context, Duration duration) {
@@ -306,17 +313,16 @@ class _CompactTaskTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color indicatorColor =
-        task.isCompleted ? taskCompletedColor : taskColor;
+    final Color indicatorColor = task.isCompleted
+        ? taskCompletedColor
+        : taskColor;
     final bool showActions = onEdit != null || onDelete != null;
     final double stripWidth = context.spacing.xs;
-    final double leadingInset =
-        compactShareFragment ? context.spacing.xxs : context.spacing.m;
+    final double leadingInset = compactShareFragment
+        ? context.spacing.xxs
+        : context.spacing.m;
     final l10n = context.l10n;
-    final String? scheduleLabel = _compactTaskScheduleLabel(
-      l10n,
-      task,
-    );
+    final String? scheduleLabel = _compactTaskScheduleLabel(l10n, task);
     return TaskTileSurface(
       margin: margin,
       decoration: BoxDecoration(
@@ -332,12 +338,11 @@ class _CompactTaskTile extends StatelessWidget {
       onTap: onTap,
       child: IntrinsicHeight(
         child: Padding(
-          padding: EdgeInsets.only(
-            left: leadingInset,
-          ),
+          padding: EdgeInsets.only(left: leadingInset),
           child: CalendarTaskListTile(
             task: task,
             scheduleLabel: scheduleLabel,
+            fillWidth: !compactShareFragment,
             trailing: showActions
                 ? _TaskActionMenu(
                     onEdit: onEdit,
@@ -354,10 +359,7 @@ class _CompactTaskTile extends StatelessWidget {
   }
 }
 
-String? _compactTaskScheduleLabel(
-  AppLocalizations l10n,
-  CalendarTask task,
-) {
+String? _compactTaskScheduleLabel(AppLocalizations l10n, CalendarTask task) {
   final DateTime? start = task.scheduledTime;
   if (start == null) {
     return null;
@@ -406,10 +408,12 @@ class _MediumTaskTile extends StatelessWidget {
     final textTheme = context.textTheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final Color backgroundColor =
-        task.isCompleted ? taskCompletedColor : taskColor;
-    final Brightness textBrightness =
-        ThemeData.estimateBrightnessForColor(backgroundColor);
+    final Color backgroundColor = task.isCompleted
+        ? taskCompletedColor
+        : taskColor;
+    final Brightness textBrightness = ThemeData.estimateBrightnessForColor(
+      backgroundColor,
+    );
     final Color textColor = textBrightness == Brightness.dark
         ? colors.primaryForeground
         : colors.foreground;
@@ -471,10 +475,7 @@ class _MediumTaskTile extends StatelessWidget {
                     color: textColor.withValues(alpha: 0.8),
                   ),
                   SizedBox(width: spacing.xs),
-                  Text(
-                    timeLabel!,
-                    style: timeStyle,
-                  ),
+                  Text(timeLabel!, style: timeStyle),
                   if (showActions) ...[
                     const Spacer(),
                     _TaskActionMenu(onEdit: onEdit, onDelete: onDelete),
@@ -486,10 +487,7 @@ class _MediumTaskTile extends StatelessWidget {
                 SizedBox(height: spacing.xs),
                 Align(
                   alignment: Alignment.centerRight,
-                  child: _TaskActionMenu(
-                    onEdit: onEdit,
-                    onDelete: onDelete,
-                  ),
+                  child: _TaskActionMenu(onEdit: onEdit, onDelete: onDelete),
                 ),
               ],
             ],
@@ -535,8 +533,9 @@ class _FullTaskTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    final Color indicatorColor =
-        task.isCompleted ? taskCompletedColor : task.priorityColor;
+    final Color indicatorColor = task.isCompleted
+        ? taskCompletedColor
+        : task.priorityColor;
     final Color progressTrack = colors.muted.withValues(alpha: 0.2);
     final bool showActions = onEdit != null || onDelete != null;
     final double stripWidth = context.sizing.progressIndicatorBarHeight;
@@ -702,10 +701,7 @@ class _TaskCompletionToggle extends StatelessWidget {
 }
 
 class _TaskTitle extends StatelessWidget {
-  const _TaskTitle({
-    required this.task,
-    required this.maxLines,
-  });
+  const _TaskTitle({required this.task, required this.maxLines});
 
   final CalendarTask task;
   final int maxLines;
@@ -852,10 +848,7 @@ class _TaskStatusChip extends StatelessWidget {
         border: Border.all(color: color),
         borderRadius: context.radius,
       ),
-      child: Text(
-        text,
-        style: context.textTheme.label.copyWith(color: color),
-      ),
+      child: Text(text, style: context.textTheme.label.copyWith(color: color)),
     );
   }
 }

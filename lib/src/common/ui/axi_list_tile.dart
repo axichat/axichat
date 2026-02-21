@@ -65,7 +65,8 @@ class AxiListTile extends StatelessWidget {
     backgroundColor = selected
         ? Color.alphaBlend(selectionOverlay, backgroundColor)
         : backgroundColor;
-    final shape = surfaceShape ??
+    final shape =
+        surfaceShape ??
         ShadRoundedSuperellipseBorder(
           radius: BorderRadius.circular(context.radii.squircle),
           side: ShadBorderSide(
@@ -76,7 +77,8 @@ class AxiListTile extends StatelessWidget {
           textDirection: Directionality.of(context),
           defaultRadius: BorderRadius.circular(context.radii.squircle),
         );
-    final resolvedMinTileHeight = minTileHeight ??
+    final resolvedMinTileHeight =
+        minTileHeight ??
         (subtitle == null && subtitlePlaceholder == null
             ? _compactMinTileHeight
             : _defaultMinTileHeight);
@@ -96,7 +98,8 @@ class AxiListTile extends StatelessWidget {
       leading: leading == null
           ? null
           : ConstrainedBox(
-              constraints: leadingConstraints ??
+              constraints:
+                  leadingConstraints ??
                   const BoxConstraints(maxHeight: 40.0, maxWidth: 40.0),
               child: leading,
             ),
@@ -112,14 +115,14 @@ class AxiListTile extends StatelessWidget {
             ),
       subtitle: subtitle == null
           ? subtitlePlaceholder == null
-              ? null
-              : Text(
-                  subtitlePlaceholder!,
-                  style: context.textTheme.muted.copyWith(
-                    fontStyle: FontStyle.italic,
-                    color: colors.mutedForeground,
-                  ),
-                )
+                ? null
+                : Text(
+                    subtitlePlaceholder!,
+                    style: context.textTheme.muted.copyWith(
+                      fontStyle: FontStyle.italic,
+                      color: colors.mutedForeground,
+                    ),
+                  )
           : Text(
               subtitle!,
               overflow: TextOverflow.ellipsis,

@@ -170,10 +170,7 @@ class Avatar {
     return Rect.fromLTWH(left, top, minSide, minSide);
   }
 
-  Rect constrainCropRect({
-    required Rect rect,
-    required double minCropSide,
-  }) {
+  Rect constrainCropRect({required Rect rect, required double minCropSide}) {
     final width = sourceWidth?.toDouble();
     final height = sourceHeight?.toDouble();
     if (width == null ||

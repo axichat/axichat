@@ -110,7 +110,8 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
     );
     if (itemsResult.isType<mox.PubSubError>()) {
       final error = itemsResult.get<mox.PubSubError>();
-      final shouldRetry = error is mox.EjabberdMaxItemsError ||
+      final shouldRetry =
+          error is mox.EjabberdMaxItemsError ||
           error is mox.MalformedResponseError ||
           error is mox.UnknownPubSubError;
       logger.fine(
@@ -152,8 +153,10 @@ class SafeUserAvatarManager extends mox.UserAvatarManager {
       return;
     }
 
-    final metadata =
-        payload.findTags(_infoTag).map(mox.UserAvatarMetadata.fromXML).toList();
+    final metadata = payload
+        .findTags(_infoTag)
+        .map(mox.UserAvatarMetadata.fromXML)
+        .toList();
     logger.fine('Avatar metadata parsed. count=${metadata.length}.');
     getAttributes().sendEvent(mox.UserAvatarUpdatedEvent(from, metadata));
   }

@@ -19,9 +19,9 @@ class NlScheduleParserService {
   NlScheduleParserService({
     NlAdapterConfig config = const NlAdapterConfig(),
     FutureOr<void> Function()? initializeTimezones,
-  })  : _config = config,
-        _initializeTimezones =
-            initializeTimezones ?? tzdata.initializeTimeZones {
+  }) : _config = config,
+       _initializeTimezones =
+           initializeTimezones ?? tzdata.initializeTimeZones {
     _adapter = NlScheduleAdapter(config: config);
   }
 

@@ -16,13 +16,13 @@ class AuthProgressSnapshot {
   const AuthProgressSnapshot.idle() : this._(AuthProgressPhase.idle, '');
 
   const AuthProgressSnapshot.running(String label)
-      : this._(AuthProgressPhase.running, label);
+    : this._(AuthProgressPhase.running, label);
 
   const AuthProgressSnapshot.completing(String label)
-      : this._(AuthProgressPhase.completing, label);
+    : this._(AuthProgressPhase.completing, label);
 
   const AuthProgressSnapshot.failing(String label)
-      : this._(AuthProgressPhase.failing, label);
+    : this._(AuthProgressPhase.failing, label);
 
   final AuthProgressPhase phase;
   final String label;
@@ -32,14 +32,14 @@ class AuthProgressSnapshot {
 
 class AuthProgressController {
   AuthProgressController({required TickerProvider vsync})
-      : _controller = AnimationController(
-          vsync: vsync,
-          lowerBound: 0,
-          upperBound: 1,
-        ),
-        _snapshot = ValueNotifier<AuthProgressSnapshot>(
-          const AuthProgressSnapshot.idle(),
-        );
+    : _controller = AnimationController(
+        vsync: vsync,
+        lowerBound: 0,
+        upperBound: 1,
+      ),
+      _snapshot = ValueNotifier<AuthProgressSnapshot>(
+        const AuthProgressSnapshot.idle(),
+      );
 
   static const double _maxDuringOperation = 0.8;
   final AnimationController _controller;
@@ -51,10 +51,7 @@ class AuthProgressController {
 
   AuthProgressSnapshot get snapshot => _snapshot.value;
 
-  void start({
-    required String label,
-    required Duration rampDuration,
-  }) {
+  void start({required String label, required Duration rampDuration}) {
     _snapshot.value = AuthProgressSnapshot.running(label);
     _controller
       ..stop()
@@ -81,9 +78,7 @@ class AuthProgressController {
     if (_snapshot.value.phase == AuthProgressPhase.idle) {
       _snapshot.value = const AuthProgressSnapshot.completing('');
     } else {
-      _snapshot.value = AuthProgressSnapshot.completing(
-        _snapshot.value.label,
-      );
+      _snapshot.value = AuthProgressSnapshot.completing(_snapshot.value.label);
     }
     _controller.stop();
     await _controller.animateTo(
@@ -97,15 +92,9 @@ class AuthProgressController {
     if (_snapshot.value.phase == AuthProgressPhase.idle) {
       return;
     }
-    _snapshot.value = AuthProgressSnapshot.failing(
-      _snapshot.value.label,
-    );
+    _snapshot.value = AuthProgressSnapshot.failing(_snapshot.value.label);
     _controller.stop();
-    await _controller.animateTo(
-      0,
-      duration: duration,
-      curve: Curves.easeIn,
-    );
+    await _controller.animateTo(0, duration: duration, curve: Curves.easeIn);
     reset();
   }
 

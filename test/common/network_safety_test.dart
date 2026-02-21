@@ -55,9 +55,9 @@ void main() {
 
     test('rejects a host that resolves to any unsafe address', () async {
       Future<List<InternetAddress>> lookup(String _) async => [
-            InternetAddress.tryParse('1.1.1.1')!,
-            InternetAddress.tryParse('192.168.0.1')!,
-          ];
+        InternetAddress.tryParse('1.1.1.1')!,
+        InternetAddress.tryParse('192.168.0.1')!,
+      ];
 
       expect(
         await isSafeHostForRemoteConnection('example.com', lookup: lookup),
@@ -67,9 +67,9 @@ void main() {
 
     test('accepts a host that resolves only to safe addresses', () async {
       Future<List<InternetAddress>> lookup(String _) async => [
-            InternetAddress.tryParse('1.1.1.1')!,
-            InternetAddress.tryParse('8.8.8.8')!,
-          ];
+        InternetAddress.tryParse('1.1.1.1')!,
+        InternetAddress.tryParse('8.8.8.8')!,
+      ];
 
       expect(
         await isSafeHostForRemoteConnection('example.com', lookup: lookup),

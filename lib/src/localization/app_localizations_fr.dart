@@ -825,7 +825,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String chatFanOutFailureWithSubject(
-      Object subject, int count, Object recipientLabel) {
+    Object subject,
+    int count,
+    Object recipientLabel,
+  ) {
     return 'L’objet « $subject » n’a pas pu être envoyé à $count $recipientLabel.';
   }
 
@@ -842,6 +845,12 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatSubjectHint => 'Objet';
+
+  @override
+  String get chatCollapseLongEmails => 'Collapse long emails';
+
+  @override
+  String get chatExpandLongEmails => 'Expand long emails';
 
   @override
   String get chatAttachmentTooltip => 'Pièces jointes';
@@ -1275,7 +1284,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String signupProgressValue(
-      Object current, Object currentLabel, Object percent, Object total) {
+    Object current,
+    Object currentLabel,
+    Object percent,
+    Object total,
+  ) {
     return 'Étape $current sur $total : $currentLabel. $percent % terminé.';
   }
 
@@ -1579,7 +1592,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String accessibilityMessageLabel(
-      Object sender, Object timestamp, Object body) {
+    Object sender,
+    Object timestamp,
+    Object body,
+  ) {
     return '$sender à $timestamp : $body';
   }
 
@@ -1658,7 +1674,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String accessibilityBreadcrumbLabel(
-      Object position, Object total, Object label) {
+    Object position,
+    Object total,
+    Object label,
+  ) {
     return 'Étape $position sur $total : $label. Activez pour passer à cette étape.';
   }
 
@@ -1767,7 +1786,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String accessibilityActionItemPosition(
-      Object position, Object total, Object section) {
+    Object position,
+    Object total,
+    Object section,
+  ) {
     return 'Élément $position sur $total dans $section';
   }
 
@@ -3938,7 +3960,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String emailContactsImportSuccess(
-      Object imported, Object duplicates, Object invalid, Object failed) {
+    Object imported,
+    Object duplicates,
+    Object invalid,
+    Object failed,
+  ) {
     return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
   }
 
@@ -3993,6 +4019,13 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get emailForwardingGuideLinksSubtitle =>
       'Consultez l’aide de votre fournisseur, ou commencez ici :';
+
+  @override
+  String get emailForwardingWelcomeSetupFrom => 'Setup forwarding from:';
+
+  @override
+  String get emailForwardingWelcomeOtherProviderHint =>
+      'If you use another provider, their website should have instructions as well.';
 
   @override
   String get emailForwardingGuideNotificationsTitle =>
@@ -5266,7 +5299,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String taskShareScheduleSameDay(
-      String date, String startTime, String endTime) {
+    String date,
+    String startTime,
+    String endTime,
+  ) {
     return ' le $date de $startTime a $endTime';
   }
 
@@ -5277,7 +5313,10 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String taskShareScheduleStartDuration(
-      String date, String time, String duration) {
+    String date,
+    String time,
+    String duration,
+  ) {
     return ' le $date a $time pour $duration';
   }
 

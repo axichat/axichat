@@ -9,10 +9,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 
 class SelfIdentitySnapshot {
-  const SelfIdentitySnapshot({
-    required this.selfJid,
-    required this.avatarPath,
-  });
+  const SelfIdentitySnapshot({required this.selfJid, required this.avatarPath});
 
   final String? selfJid;
   final String? avatarPath;
@@ -55,12 +52,13 @@ class TransportAwareAvatar extends StatelessWidget {
     final avatarIdentifier = chat.contactDisplayName?.trim().isNotEmpty == true
         ? chat.contactDisplayName!.trim()
         : chat.title.trim().isNotEmpty
-            ? chat.title.trim()
-            : chat.avatarIdentifier;
+        ? chat.title.trim()
+        : chat.avatarIdentifier;
     final supportsEmail = chat.transport.isEmail;
     final isAxiCompatible = chat.isAxiContact;
     final shouldLabelAll = !supportsEmail && isAxiCompatible;
-    final Subscription effectiveSubscription = subscription ??
+    final Subscription effectiveSubscription =
+        subscription ??
         (isAxiCompatible ? Subscription.both : Subscription.none);
     Widget? badge;
     if (showBadge) {
@@ -95,8 +93,8 @@ class TransportAwareAvatar extends StatelessWidget {
               avatarPath: avatarPathOverride?.trim().isNotEmpty == true
                   ? avatarPathOverride!.trim()
                   : isSelfChat && hasSelfAvatarPath
-                      ? selfAvatarPath
-                      : chat.avatarPath ?? chat.contactAvatarPath,
+                  ? selfAvatarPath
+                  : chat.avatarPath ?? chat.contactAvatarPath,
             ),
           ),
           if (badge != null)

@@ -24,7 +24,8 @@ Future<T?> showFadeScaleDialog<T>({
   final Color? themeBarrierColor = Theme.of(context).dialogTheme.barrierColor;
   final Color resolvedBarrierColor =
       barrierColor ?? themeBarrierColor ?? _defaultDialogBarrierColor;
-  final String resolvedBarrierLabel = barrierLabel ??
+  final String resolvedBarrierLabel =
+      barrierLabel ??
       MaterialLocalizations.of(context).modalBarrierDismissLabel;
   final Duration resolvedDuration =
       transitionDuration ?? context.read<SettingsCubit>().animationDuration;

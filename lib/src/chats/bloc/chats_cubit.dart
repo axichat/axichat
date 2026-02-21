@@ -61,21 +61,20 @@ class ChatsCubit extends Cubit<ChatsState> {
     required XmppService xmppService,
     required HomeRefreshSyncService homeRefreshSyncService,
     EmailService? emailService,
-  })  : _chatsService = xmppService,
-        _xmppService = xmppService,
-        _homeRefreshSyncService = homeRefreshSyncService,
-        _emailService = emailService,
-        super(
-          _seedInitialState(xmppService.cachedChatList),
-        ) {
+  }) : _chatsService = xmppService,
+       _xmppService = xmppService,
+       _homeRefreshSyncService = homeRefreshSyncService,
+       _emailService = emailService,
+       super(_seedInitialState(xmppService.cachedChatList)) {
     _chatsSubscription = _chatsService.chatsStream().listen(
-          (items) => _updateChats(items),
-        );
+      (items) => _updateChats(items),
+    );
     _recipientAddressSuggestionsSubscription = _chatsService
         .recipientAddressSuggestionsStream()
         .listen(_updateRecipientAddressSuggestions);
-    _homeRefreshSyncSubscription =
-        _homeRefreshSyncService.syncUpdates.listen(_handleHomeRefreshUpdate);
+    _homeRefreshSyncSubscription = _homeRefreshSyncService.syncUpdates.listen(
+      _handleHomeRefreshUpdate,
+    );
     _demoResetSubscription = _xmppService.demoResetStream.listen(
       (_) => _handleDemoReset(),
     );
@@ -131,9 +130,9 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   late final StreamSubscription<List<Chat>> _chatsSubscription;
   late final StreamSubscription<HomeRefreshSyncUpdate>
-      _homeRefreshSyncSubscription;
+  _homeRefreshSyncSubscription;
   late final StreamSubscription<List<String>>
-      _recipientAddressSuggestionsSubscription;
+  _recipientAddressSuggestionsSubscription;
   late final StreamSubscription<void> _demoResetSubscription;
   final List<Timer> _exportCleanupTimers = [];
 
@@ -297,8 +296,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     required SearchSortOrder searchSortOrder,
     required Set<String> selectedJids,
   }) {
-    final normalizedQuery =
-        searchActive ? searchQuery.trim().toLowerCase() : '';
+    final normalizedQuery = searchActive
+        ? searchQuery.trim().toLowerCase()
+        : '';
     bool matchesFilter(Chat chat) {
       return switch (searchFilter ?? SearchFilterId.all) {
         SearchFilterId.contacts =>
@@ -324,24 +324,26 @@ class ChatsCubit extends Cubit<ChatsState> {
           (chat.alert?.toLowerCase().contains(normalizedQuery) ?? false);
     }
 
-    final visibleItems = items
-        .where((chat) => !chat.archived && !chat.spam)
-        .where(matchesFilter)
-        .where(matchesQuery)
-        .toList(growable: false)
-      ..sort(
-        (a, b) => searchSortOrder.isNewestFirst
-            ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
-            : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp),
-      );
+    final visibleItems =
+        items
+            .where((chat) => !chat.archived && !chat.spam)
+            .where(matchesFilter)
+            .where(matchesQuery)
+            .toList(growable: false)
+          ..sort(
+            (a, b) => searchSortOrder.isNewestFirst
+                ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
+                : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp),
+          );
 
-    final archivedItems =
-        items.where((chat) => chat.archived).toList(growable: false);
+    final archivedItems = items
+        .where((chat) => chat.archived)
+        .toList(growable: false);
     final selectedChats = selectedJids.isEmpty
         ? const <Chat>[]
         : items
-            .where((chat) => selectedJids.contains(chat.jid))
-            .toList(growable: false);
+              .where((chat) => selectedJids.contains(chat.jid))
+              .toList(growable: false);
     return _ChatViewResults(
       visibleItems: visibleItems,
       archivedItems: archivedItems,
@@ -356,8 +358,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     required SearchFilterId? searchFilter,
     required SearchSortOrder searchSortOrder,
   }) {
-    final normalizedQuery =
-        searchActive ? searchQuery.trim().toLowerCase() : '';
+    final normalizedQuery = searchActive
+        ? searchQuery.trim().toLowerCase()
+        : '';
     bool matchesFilter(Chat chat) {
       return switch (searchFilter ?? SearchFilterId.all) {
         SearchFilterId.email => chat.transport.isEmail,
@@ -372,39 +375,41 @@ class ChatsCubit extends Cubit<ChatsState> {
           chat.jid.toLowerCase().contains(normalizedQuery);
     }
 
-    final visibleItems = items
-        .where((chat) => chat.spam)
-        .where(matchesFilter)
-        .where(matchesQuery)
-        .toList(growable: false)
-      ..sort(
-        (a, b) {
-          final aTimestamp = a.spamUpdatedAt ?? a.lastChangeTimestamp;
-          final bTimestamp = b.spamUpdatedAt ?? b.lastChangeTimestamp;
-          return searchSortOrder.isNewestFirst
-              ? bTimestamp.compareTo(aTimestamp)
-              : aTimestamp.compareTo(bTimestamp);
-        },
-      );
+    final visibleItems =
+        items
+            .where((chat) => chat.spam)
+            .where(matchesFilter)
+            .where(matchesQuery)
+            .toList(growable: false)
+          ..sort((a, b) {
+            final aTimestamp = a.spamUpdatedAt ?? a.lastChangeTimestamp;
+            final bTimestamp = b.spamUpdatedAt ?? b.lastChangeTimestamp;
+            return searchSortOrder.isNewestFirst
+                ? bTimestamp.compareTo(aTimestamp)
+                : aTimestamp.compareTo(bTimestamp);
+          });
     return visibleItems;
   }
 
   void _updateChats(List<Chat> items) {
     final availableJids = items.map((chat) => chat.jid).toSet();
-    final retainedSelection =
-        state.selectedJids.where((jid) => availableJids.contains(jid)).toSet();
+    final retainedSelection = state.selectedJids
+        .where((jid) => availableJids.contains(jid))
+        .toSet();
     final seededStack = List<String>.of(state.openStack, growable: false);
-    final retainedForward =
-        List<String>.of(state.forwardStack, growable: false);
+    final retainedForward = List<String>.of(
+      state.forwardStack,
+      growable: false,
+    );
     final shouldKeepChatCalendar =
         state.openChatCalendar && seededStack.isNotEmpty;
     final nextChatRoute = seededStack.isEmpty
         ? ChatRouteIndex.main
         : shouldKeepChatCalendar
-            ? ChatRouteIndex.calendar
-            : state.openChatRoute.isCalendar
-                ? ChatRouteIndex.main
-                : state.openChatRoute;
+        ? ChatRouteIndex.calendar
+        : state.openChatRoute.isCalendar
+        ? ChatRouteIndex.main
+        : state.openChatRoute;
     final derived = _deriveChatViews(
       items: items,
       rosterContacts: state.rosterContacts,
@@ -476,8 +481,9 @@ class ChatsCubit extends Cubit<ChatsState> {
       await openChat(jid: jid);
       return;
     }
-    final filtered =
-        state.openStack.where((entry) => entry != jid).toList(growable: false);
+    final filtered = state.openStack
+        .where((entry) => entry != jid)
+        .toList(growable: false);
     final nextStack = [...filtered, jid];
     emit(
       state.copyWith(
@@ -517,8 +523,9 @@ class ChatsCubit extends Cubit<ChatsState> {
     if (state.forwardStack.isEmpty) return;
     final restored = state.forwardStack.last;
     final nextForward = List<String>.of(state.forwardStack)..removeLast();
-    final filteredStack =
-        state.openStack.where((entry) => entry != restored).toList();
+    final filteredStack = state.openStack
+        .where((entry) => entry != restored)
+        .toList();
     filteredStack.add(restored);
     emit(
       state.copyWith(
@@ -578,8 +585,8 @@ class ChatsCubit extends Cubit<ChatsState> {
         openChatRoute: open
             ? ChatRouteIndex.calendar
             : state.openChatRoute.isCalendar
-                ? ChatRouteIndex.main
-                : state.openChatRoute,
+            ? ChatRouteIndex.main
+            : state.openChatRoute,
       ),
     );
   }
@@ -623,11 +630,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     if (state.spamUpdatingJids.contains(jid)) {
       return null;
     }
-    emit(
-      state.copyWith(
-        spamUpdatingJids: {...state.spamUpdatingJids, jid},
-      ),
-    );
+    emit(state.copyWith(spamUpdatingJids: {...state.spamUpdatingJids, jid}));
     bool success = false;
     try {
       await _xmppService.setSpamStatus(jid: jid, spam: false);
@@ -819,9 +822,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     if (targets.contains(state.openJid)) {
       await _chatsService.closeChat();
     }
-    await Future.wait(
-      targets.map((jid) => _chatsService.deleteChat(jid: jid)),
-    );
+    await Future.wait(targets.map((jid) => _chatsService.deleteChat(jid: jid)));
     clearSelection();
   }
 

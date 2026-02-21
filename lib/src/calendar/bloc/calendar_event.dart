@@ -24,18 +24,16 @@ enum CalendarShareFailure {
   serviceUnavailable,
   permissionDenied,
   attachmentFailed,
-  sendFailed;
+  sendFailed,
 }
 
 class CalendarShareResult {
-  const CalendarShareResult.success({
-    this.partialFailure = false,
-    this.record,
-  }) : failure = null;
+  const CalendarShareResult.success({this.partialFailure = false, this.record})
+    : failure = null;
 
   const CalendarShareResult.failure(this.failure)
-      : partialFailure = false,
-        record = null;
+    : partialFailure = false,
+      record = null;
 
   final CalendarShareFailure? failure;
   final bool partialFailure;
@@ -45,7 +43,7 @@ class CalendarShareResult {
 }
 
 @freezed
-class CalendarEvent with _$CalendarEvent {
+abstract class CalendarEvent with _$CalendarEvent {
   const factory CalendarEvent.started() = CalendarStarted;
 
   const factory CalendarEvent.dataChanged() = CalendarDataChanged;

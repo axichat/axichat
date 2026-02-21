@@ -76,20 +76,27 @@ class FakeOmemoDevice extends Fake implements OmemoDevice {}
 
 class FakeOmemoRatchet extends Fake implements OmemoRatchet {}
 
-class FakeOmemoDeviceList extends Fake implements OmemoDeviceList {}
-
 class FakeOmemoTrust extends Fake implements OmemoTrust {}
 
 class FakeOmemoBundleCache extends Fake implements OmemoBundleCache {}
 
-class FakeChat extends Fake implements Chat {}
+final OmemoDeviceList fallbackOmemoDeviceList = OmemoDeviceList(
+  jid: 'fallback@example.com',
+  devices: const <int>[],
+);
 
-class FakeMessage extends Fake implements Message {}
+final Chat fallbackChat = Chat.fromJid('fallback@example.com');
+
+final Message fallbackMessage = Message(
+  stanzaID: 'fallback-stanza',
+  senderJid: 'fallback@example.com',
+  chatJid: 'fallback@example.com',
+);
 
 void registerOmemoFallbacks() {
   registerFallbackValue(FakeOmemoDevice());
   registerFallbackValue(FakeOmemoRatchet());
-  registerFallbackValue(FakeOmemoDeviceList());
+  registerFallbackValue(fallbackOmemoDeviceList);
   registerFallbackValue(FakeOmemoTrust());
   registerFallbackValue(FakeOmemoBundleCache());
 }

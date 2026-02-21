@@ -166,24 +166,24 @@ const List<_OrdinalOption> _ordinalOptions = <_OrdinalOption>[
 
 extension CalendarWeekdayLabelX on CalendarWeekday {
   String get shortLabel => switch (this) {
-        CalendarWeekday.monday => _recurrenceWeekdayShortMon,
-        CalendarWeekday.tuesday => _recurrenceWeekdayShortTue,
-        CalendarWeekday.wednesday => _recurrenceWeekdayShortWed,
-        CalendarWeekday.thursday => _recurrenceWeekdayShortThu,
-        CalendarWeekday.friday => _recurrenceWeekdayShortFri,
-        CalendarWeekday.saturday => _recurrenceWeekdayShortSat,
-        CalendarWeekday.sunday => _recurrenceWeekdayShortSun,
-      };
+    CalendarWeekday.monday => _recurrenceWeekdayShortMon,
+    CalendarWeekday.tuesday => _recurrenceWeekdayShortTue,
+    CalendarWeekday.wednesday => _recurrenceWeekdayShortWed,
+    CalendarWeekday.thursday => _recurrenceWeekdayShortThu,
+    CalendarWeekday.friday => _recurrenceWeekdayShortFri,
+    CalendarWeekday.saturday => _recurrenceWeekdayShortSat,
+    CalendarWeekday.sunday => _recurrenceWeekdayShortSun,
+  };
 
   String get longLabel => switch (this) {
-        CalendarWeekday.monday => _recurrenceWeekdayLongMonday,
-        CalendarWeekday.tuesday => _recurrenceWeekdayLongTuesday,
-        CalendarWeekday.wednesday => _recurrenceWeekdayLongWednesday,
-        CalendarWeekday.thursday => _recurrenceWeekdayLongThursday,
-        CalendarWeekday.friday => _recurrenceWeekdayLongFriday,
-        CalendarWeekday.saturday => _recurrenceWeekdayLongSaturday,
-        CalendarWeekday.sunday => _recurrenceWeekdayLongSunday,
-      };
+    CalendarWeekday.monday => _recurrenceWeekdayLongMonday,
+    CalendarWeekday.tuesday => _recurrenceWeekdayLongTuesday,
+    CalendarWeekday.wednesday => _recurrenceWeekdayLongWednesday,
+    CalendarWeekday.thursday => _recurrenceWeekdayLongThursday,
+    CalendarWeekday.friday => _recurrenceWeekdayLongFriday,
+    CalendarWeekday.saturday => _recurrenceWeekdayLongSaturday,
+    CalendarWeekday.sunday => _recurrenceWeekdayLongSunday,
+  };
 }
 
 extension RecurrenceFrequencyX on RecurrenceFrequency {
@@ -216,18 +216,18 @@ class RecurrenceFormValue {
     List<int>? byHours,
     List<int>? byMinutes,
     List<int>? bySeconds,
-  })  : weekdays = weekdays ?? const <int>{},
-        byDays = byDays ?? const <RecurrenceWeekday>[],
-        byMonthDays = byMonthDays ?? const <int>[],
-        byYearDays = byYearDays ?? const <int>[],
-        byWeekNumbers = byWeekNumbers ?? const <int>[],
-        byMonths = byMonths ?? const <int>[],
-        bySetPositions = bySetPositions ?? const <int>[],
-        rDates = rDates ?? const <CalendarDateTime>[],
-        exDates = exDates ?? const <CalendarDateTime>[],
-        byHours = byHours ?? const <int>[],
-        byMinutes = byMinutes ?? const <int>[],
-        bySeconds = bySeconds ?? const <int>[];
+  }) : weekdays = weekdays ?? const <int>{},
+       byDays = byDays ?? const <RecurrenceWeekday>[],
+       byMonthDays = byMonthDays ?? const <int>[],
+       byYearDays = byYearDays ?? const <int>[],
+       byWeekNumbers = byWeekNumbers ?? const <int>[],
+       byMonths = byMonths ?? const <int>[],
+       bySetPositions = bySetPositions ?? const <int>[],
+       rDates = rDates ?? const <CalendarDateTime>[],
+       exDates = exDates ?? const <CalendarDateTime>[],
+       byHours = byHours ?? const <int>[],
+       byMinutes = byMinutes ?? const <int>[],
+       bySeconds = bySeconds ?? const <int>[];
 
   factory RecurrenceFormValue.fromRule(RecurrenceRule? rule) {
     if (rule == null || rule.frequency.isNone) {
@@ -358,8 +358,9 @@ class RecurrenceFormValue {
       return null;
     }
 
-    final DateTime? effectiveUntil =
-        normalized.count != null ? null : normalized.until;
+    final DateTime? effectiveUntil = normalized.count != null
+        ? null
+        : normalized.until;
     final List<RecurrenceWeekday> normalizedByDays = _normalizeByDays(
       normalized.byDays,
     );
@@ -454,14 +455,17 @@ class RecurrenceFormValue {
         byMinutes: normalizedByMinutes.isEmpty ? null : normalizedByMinutes,
         byHours: normalizedByHours.isEmpty ? null : normalizedByHours,
         byDays: byDays,
-        byMonthDays:
-            normalizedByMonthDays.isEmpty ? null : normalizedByMonthDays,
+        byMonthDays: normalizedByMonthDays.isEmpty
+            ? null
+            : normalizedByMonthDays,
         byYearDays: normalizedByYearDays.isEmpty ? null : normalizedByYearDays,
-        byWeekNumbers:
-            normalizedByWeekNumbers.isEmpty ? null : normalizedByWeekNumbers,
+        byWeekNumbers: normalizedByWeekNumbers.isEmpty
+            ? null
+            : normalizedByWeekNumbers,
         byMonths: normalizedByMonths.isEmpty ? null : normalizedByMonths,
-        bySetPositions:
-            normalizedBySetPositions.isEmpty ? null : normalizedBySetPositions,
+        bySetPositions: normalizedBySetPositions.isEmpty
+            ? null
+            : normalizedBySetPositions,
         rDates: normalizedRDates,
         exDates: normalizedExDates,
       );
@@ -529,8 +533,9 @@ List<RecurrenceWeekday> _advancedByDaysForFrequency(
     return const <RecurrenceWeekday>[];
   }
   if (frequency.isWeekly) {
-    final List<RecurrenceWeekday> advanced =
-        byDays.where((entry) => entry.position != null).toList(growable: false);
+    final List<RecurrenceWeekday> advanced = byDays
+        .where((entry) => entry.position != null)
+        .toList(growable: false);
     return advanced;
   }
   return List<RecurrenceWeekday>.from(byDays);
@@ -741,12 +746,14 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
     final bool hasAdvancedData = value.hasAdvancedData;
     final bool isAdvancedVisible = forceAdvanced || _advancedExpanded;
     final bool canToggleAdvanced = showAdvancedToggle && !forceAdvanced;
-    final EdgeInsets resolvedChipPadding = widget.chipPadding ??
+    final EdgeInsets resolvedChipPadding =
+        widget.chipPadding ??
         EdgeInsets.symmetric(
           horizontal: context.spacing.m,
           vertical: context.spacing.s,
         );
-    final EdgeInsets resolvedWeekdayChipPadding = widget.weekdayChipPadding ??
+    final EdgeInsets resolvedWeekdayChipPadding =
+        widget.weekdayChipPadding ??
         EdgeInsets.symmetric(
           horizontal: context.spacing.s,
           vertical: context.spacing.xs,
@@ -924,8 +931,8 @@ class _RecurrenceEditorState extends State<RecurrenceEditor> {
     final current = value.weekdays;
     final updated = current.contains(weekday)
         ? (current.length == 1
-            ? current
-            : (Set<int>.from(current)..remove(weekday)))
+              ? current
+              : (Set<int>.from(current)..remove(weekday)))
         : (Set<int>.from(current)..add(weekday));
 
     widget.onChanged(value.copyWith(weekdays: updated));
@@ -982,8 +989,9 @@ class _RecurrenceFrequencyChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final EdgeInsets basePadding =
-        AxiButtonSize.regular.padding(context.spacing);
+    final EdgeInsets basePadding = AxiButtonSize.regular.padding(
+      context.spacing,
+    );
     final EdgeInsets extraPadding = EdgeInsets.only(
       left: math.max(0, padding.left - basePadding.left),
       right: math.max(0, padding.right - basePadding.right),
@@ -994,10 +1002,7 @@ class _RecurrenceFrequencyChip extends StatelessWidget {
       variant: isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
       selected: isSelected,
       onPressed: enabled ? onPressed : null,
-      child: Padding(
-        padding: extraPadding,
-        child: Text(label),
-      ),
+      child: Padding(padding: extraPadding, child: Text(label)),
     );
   }
 }
@@ -1028,8 +1033,9 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final EdgeInsets basePadding =
-        AxiButtonSize.regular.padding(context.spacing);
+    final EdgeInsets basePadding = AxiButtonSize.regular.padding(
+      context.spacing,
+    );
     final EdgeInsets extraPadding = EdgeInsets.only(
       left: math.max(0, padding.left - basePadding.left),
       right: math.max(0, padding.right - basePadding.right),
@@ -1043,14 +1049,12 @@ class _RecurrenceWeekdaySelector extends StatelessWidget {
         final weekday = _values[index];
         final isSelected = selectedWeekdays.contains(weekday);
         return AxiButton(
-          variant:
-              isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
+          variant: isSelected
+              ? AxiButtonVariant.primary
+              : AxiButtonVariant.outline,
           selected: isSelected,
           onPressed: enabled ? () => onWeekdayToggled(weekday) : null,
-          child: Padding(
-            padding: extraPadding,
-            child: Text(_labels[index]),
-          ),
+          child: Padding(padding: extraPadding, child: Text(_labels[index])),
         );
       }),
     );
@@ -1135,10 +1139,10 @@ extension _RecurrenceEndModeX on _RecurrenceEndMode {
   bool get isCount => this == _RecurrenceEndMode.count;
 
   String get label => switch (this) {
-        _RecurrenceEndMode.never => _recurrenceEndModeNeverLabel,
-        _RecurrenceEndMode.until => _recurrenceEndModeUntilLabel,
-        _RecurrenceEndMode.count => _recurrenceEndModeCountLabel,
-      };
+    _RecurrenceEndMode.never => _recurrenceEndModeNeverLabel,
+    _RecurrenceEndMode.until => _recurrenceEndModeUntilLabel,
+    _RecurrenceEndMode.count => _recurrenceEndModeCountLabel,
+  };
 }
 
 class _RecurrenceEndControls extends StatelessWidget {
@@ -1291,8 +1295,9 @@ class _RecurrenceEndModeChip extends StatelessWidget {
       horizontal: context.spacing.m,
       vertical: context.spacing.s,
     );
-    final EdgeInsets basePadding =
-        AxiButtonSize.regular.padding(context.spacing);
+    final EdgeInsets basePadding = AxiButtonSize.regular.padding(
+      context.spacing,
+    );
     final EdgeInsets extraPadding = EdgeInsets.only(
       left: math.max(0, padding.left - basePadding.left),
       right: math.max(0, padding.right - basePadding.right),
@@ -1303,10 +1308,7 @@ class _RecurrenceEndModeChip extends StatelessWidget {
       variant: isSelected ? AxiButtonVariant.primary : AxiButtonVariant.outline,
       selected: isSelected,
       onPressed: enabled ? onPressed : null,
-      child: Padding(
-        padding: extraPadding,
-        child: Text(label),
-      ),
+      child: Padding(padding: extraPadding, child: Text(label)),
     );
   }
 }
@@ -1436,13 +1438,15 @@ CalendarDateTime _calendarDateTimeForDate({
     date: date,
     referenceStart: referenceStart,
   );
-  final CalendarDateTime resolvedTemplate = template ??
+  final CalendarDateTime resolvedTemplate =
+      template ??
       CalendarDateTime(
         value: merged,
         isAllDay: false,
         isFloating: !merged.isUtc,
       );
-  final bool isFloating = resolvedTemplate.isFloating ||
+  final bool isFloating =
+      resolvedTemplate.isFloating ||
       (!merged.isUtc && resolvedTemplate.tzid == null);
   return CalendarDateTime(
     value: merged,
@@ -1478,10 +1482,7 @@ class _RecurrenceAdvancedToggle extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(
-            _recurrenceAdvancedLabel.toUpperCase(),
-            style: labelStyle,
-          ),
+          Text(_recurrenceAdvancedLabel.toUpperCase(), style: labelStyle),
           if (hasAdvancedData) ...[
             SizedBox(width: context.spacing.xxs),
             _RecurrenceAdvancedActiveBadge(enabled: onPressed != null),
@@ -1607,7 +1608,8 @@ class _RecurrenceAdvancedFields extends StatelessWidget {
         value.frequency.isYearly || value.byWeekNumbers.isNotEmpty;
     final bool showBySetPositions =
         value.frequency.isMonthlyOrYearly || value.bySetPositions.isNotEmpty;
-    final bool showTimeSummary = value.byHours.isNotEmpty ||
+    final bool showTimeSummary =
+        value.byHours.isNotEmpty ||
         value.byMinutes.isNotEmpty ||
         value.bySeconds.isNotEmpty;
 
@@ -1972,8 +1974,9 @@ class _RecurrenceNumberChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle labelStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     return Container(
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.s,
@@ -2056,8 +2059,9 @@ class _RecurrenceDateListEditorState extends State<_RecurrenceDateListEditor> {
     if (pending == null) {
       return;
     }
-    final CalendarDateTime? template =
-        widget.values.isNotEmpty ? widget.values.first : null;
+    final CalendarDateTime? template = widget.values.isNotEmpty
+        ? widget.values.first
+        : null;
     final CalendarDateTime entry = _calendarDateTimeForDate(
       date: pending,
       referenceStart: widget.referenceStart,
@@ -2138,8 +2142,9 @@ class _RecurrenceDateChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final TextStyle labelStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle labelStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final String label = _formatRecurrenceDateLabel(l10n, entry);
     return Container(
       padding: EdgeInsets.symmetric(
@@ -2361,8 +2366,9 @@ class _RecurrenceWeekdayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle labelStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final String label = _formatByDayEntry(entry);
     return Container(
       padding: EdgeInsets.symmetric(
@@ -2450,8 +2456,9 @@ class _RecurrenceTimeSummaryRow extends StatelessWidget {
           Expanded(
             child: Text(
               values,
-              style: context.textTheme.label
-                  .copyWith(color: calendarSubtitleColor),
+              style: context.textTheme.label.copyWith(
+                color: calendarSubtitleColor,
+              ),
             ),
           ),
         ],
@@ -2462,19 +2469,19 @@ class _RecurrenceTimeSummaryRow extends StatelessWidget {
 
 class _RecurrenceLimitSolver {
   _RecurrenceLimitSolver(this.anchor, this.value)
-      : _effectiveWeekdays = value.frequency == RecurrenceFrequency.weekdays
-            ? const {
-                DateTime.monday,
-                DateTime.tuesday,
-                DateTime.wednesday,
-                DateTime.thursday,
-                DateTime.friday,
-              }
-            : (value.weekdays.isNotEmpty
+    : _effectiveWeekdays = value.frequency == RecurrenceFrequency.weekdays
+          ? const {
+              DateTime.monday,
+              DateTime.tuesday,
+              DateTime.wednesday,
+              DateTime.thursday,
+              DateTime.friday,
+            }
+          : (value.weekdays.isNotEmpty
                 ? Set<int>.from(value.weekdays)
                 : {anchor.weekday}),
-        _anchorDay = anchor.day,
-        _anchorMonth = anchor.month;
+      _anchorDay = anchor.day,
+      _anchorMonth = anchor.month;
 
   final DateTime anchor;
   final RecurrenceFormValue value;
@@ -2487,9 +2494,11 @@ class _RecurrenceLimitSolver {
   DateTime? untilForCount(int count) {
     if (count <= 1) return anchor;
     var current = anchor;
-    for (var produced = 1;
-        produced < count && produced < _maxIterations;
-        produced++) {
+    for (
+      var produced = 1;
+      produced < count && produced < _maxIterations;
+      produced++
+    ) {
       current = _nextOccurrence(current);
     }
     return current;
@@ -2543,7 +2552,8 @@ class _RecurrenceLimitSolver {
     }
     final int firstDay = sorted.first;
     final int intervalWeeks = math.max(value.interval, 1);
-    final int daysToNextCycle = ((intervalWeeks - 1) * 7) +
+    final int daysToNextCycle =
+        ((intervalWeeks - 1) * 7) +
         ((DateTime.sunday - current.weekday + 7) % 7) +
         firstDay;
     return current.add(Duration(days: daysToNextCycle));
@@ -2588,8 +2598,9 @@ class _RecurrenceLimitSolver {
   }
 
   int _daysInMonth(int year, int month) {
-    final DateTime firstNext =
-        month == 12 ? DateTime(year + 1, 1, 1) : DateTime(year, month + 1, 1);
+    final DateTime firstNext = month == 12
+        ? DateTime(year + 1, 1, 1)
+        : DateTime(year, month + 1, 1);
     return firstNext.subtract(const Duration(days: 1)).day;
   }
 }

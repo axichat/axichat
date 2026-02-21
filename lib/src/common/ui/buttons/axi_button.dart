@@ -113,17 +113,17 @@ enum AxiButtonSize {
   EdgeInsets padding(AxiSpacing spacing) {
     return switch (this) {
       AxiButtonSize.sm => EdgeInsets.symmetric(
-          horizontal: spacing.s,
-          vertical: spacing.xs,
-        ),
+        horizontal: spacing.s,
+        vertical: spacing.xs,
+      ),
       AxiButtonSize.regular => EdgeInsets.symmetric(
-          horizontal: spacing.m,
-          vertical: spacing.s,
-        ),
+        horizontal: spacing.m,
+        vertical: spacing.s,
+      ),
       AxiButtonSize.lg => EdgeInsets.symmetric(
-          horizontal: spacing.l,
-          vertical: spacing.m,
-        ),
+        horizontal: spacing.l,
+        vertical: spacing.m,
+      ),
     };
   }
 
@@ -152,10 +152,7 @@ enum AxiButtonSize {
   }
 }
 
-enum AxiButtonWidth {
-  fit,
-  expand;
-}
+enum AxiButtonWidth { fit, expand }
 
 class AxiButton extends StatefulWidget {
   const AxiButton({
@@ -312,16 +309,19 @@ class _AxiButtonState extends State<AxiButton> {
       builder: (context, states, _) {
         final bool enabled =
             widget.onPressed != null || widget.onLongPress != null;
-        final VoidCallback? onTap =
-            enabled ? withSelectionHaptic(widget.onPressed) : null;
-        final VoidCallback? onLongPress =
-            enabled ? withSelectionHaptic(widget.onLongPress) : null;
+        final VoidCallback? onTap = enabled
+            ? withSelectionHaptic(widget.onPressed)
+            : null;
+        final VoidCallback? onLongPress = enabled
+            ? withSelectionHaptic(widget.onLongPress)
+            : null;
         final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
         final bool focused = states.contains(WidgetState.focused);
         final bool hoverOrFocus = hovered || focused || widget.selected;
-        final ShadButtonTheme buttonTheme =
-            widget.variant.themeFor(ShadTheme.of(context));
+        final ShadButtonTheme buttonTheme = widget.variant.themeFor(
+          ShadTheme.of(context),
+        );
         final Color background = widget.variant.backgroundColor(
           theme: buttonTheme,
           colors: context.colorScheme,
@@ -336,11 +336,11 @@ class _AxiButtonState extends State<AxiButton> {
         );
         final BorderSide? borderSide =
             widget.variant == AxiButtonVariant.outline
-                ? BorderSide(
-                    color: context.borderSide.color,
-                    width: context.borderSide.width,
-                  )
-                : null;
+            ? BorderSide(
+                color: context.borderSide.color,
+                width: context.borderSide.width,
+              )
+            : null;
         final shape = RoundedSuperellipseBorder(
           borderRadius: BorderRadius.circular(
             widget.size.cornerRadius(context.radii),
@@ -387,7 +387,8 @@ class _AxiButtonState extends State<AxiButton> {
           child: Padding(
             padding: widget.size.padding(context.spacing),
             child: Row(
-              mainAxisSize: widget.widthBehavior == AxiButtonWidth.expand ||
+              mainAxisSize:
+                  widget.widthBehavior == AxiButtonWidth.expand ||
                       widget.width != null
                   ? MainAxisSize.max
                   : MainAxisSize.min,
@@ -426,7 +427,8 @@ class _AxiButtonState extends State<AxiButton> {
                   ? (buttonTheme.cursor ?? SystemMouseCursors.click)
                   : MouseCursor.defer,
               behavior: HitTestBehavior.opaque,
-              hoverStrategies: buttonTheme.hoverStrategies ??
+              hoverStrategies:
+                  buttonTheme.hoverStrategies ??
                   ShadTheme.of(context).hoverStrategies,
               longPressDuration: buttonTheme.longPressDuration,
               onHoverChange: enabled
@@ -471,14 +473,16 @@ class _AxiButtonState extends State<AxiButton> {
 
         if (enabled) {
           final Duration pressDuration = Duration(
-            milliseconds: (animationDuration.inMilliseconds *
-                    context.motion.buttonPressDurationFactor)
-                .round(),
+            milliseconds:
+                (animationDuration.inMilliseconds *
+                        context.motion.buttonPressDurationFactor)
+                    .round(),
           );
           final Duration releaseDuration = Duration(
-            milliseconds: (animationDuration.inMilliseconds *
-                    context.motion.buttonReleaseDurationFactor)
-                .round(),
+            milliseconds:
+                (animationDuration.inMilliseconds *
+                        context.motion.buttonReleaseDurationFactor)
+                    .round(),
           );
           button = AxiTapBounce(
             controller: _bounceController,

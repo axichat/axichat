@@ -154,8 +154,10 @@ class CalendarFragmentFormatter {
       return l10n.calendarFragmentCriticalPathSummary(name);
     }
     final int completed = tasks.where((task) => task.isCompleted).length;
-    final String progress =
-        l10n.calendarFragmentCriticalPathProgress(completed, tasks.length);
+    final String progress = l10n.calendarFragmentCriticalPathProgress(
+      completed,
+      tasks.length,
+    );
     return l10n.calendarFragmentCriticalPathDetail(name, progress);
   }
 

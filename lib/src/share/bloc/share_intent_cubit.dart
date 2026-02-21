@@ -16,8 +16,8 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
   static const int _maxSharedAttachmentPathLength = 4096;
 
   ShareIntentCubit({ShareHandlerPlatform? handler})
-      : _handler = handler ?? ShareHandlerPlatform.instance,
-        super(const ShareIntentState.idle());
+    : _handler = handler ?? ShareHandlerPlatform.instance,
+      super(const ShareIntentState.idle());
 
   final ShareHandlerPlatform _handler;
   StreamSubscription<SharedMedia>? _subscription;
@@ -86,9 +86,7 @@ class ShareIntentCubit extends Cubit<ShareIntentState> {
           defaultTargetPlatform == TargetPlatform.iOS);
 
   SharePayload? _sanitizePayload(SharedMedia media) {
-    final String? sanitizedText = _sanitizeSharedText(
-      media.content ?? '',
-    );
+    final String? sanitizedText = _sanitizeSharedText(media.content ?? '');
     final List<ShareAttachmentPayload> attachments = _sanitizeSharedAttachments(
       media.attachments,
     );

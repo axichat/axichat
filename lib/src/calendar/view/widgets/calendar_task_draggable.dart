@@ -50,7 +50,8 @@ class CalendarTaskDraggable extends StatefulWidget {
     BuildContext context,
     CalendarTask task,
     CalendarTaskGeometry geometry,
-  ) feedbackBuilder;
+  )
+  feedbackBuilder;
   final Widget child;
   final Widget? childWhenDragging;
   final bool enabled;
@@ -151,7 +152,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
         onDragStarted: _handleDragStarted,
         onDragUpdate: _handleDragUpdate,
         onDragEnd: (details) => _handleDragFinished(cancelled: false),
-        onDraggableCanceled: (_, __) => _handleDragFinished(cancelled: true),
+        onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
         delay: widget.longPressDelay ?? kLongPressTimeout,
         child: interactiveChild,
       );
@@ -166,7 +167,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       onDragStarted: _handleDragStarted,
       onDragUpdate: _handleDragUpdate,
       onDragEnd: (details) => _handleDragFinished(cancelled: false),
-      onDraggableCanceled: (_, __) => _handleDragFinished(cancelled: true),
+      onDraggableCanceled: (_, _) => _handleDragFinished(cancelled: true),
       child: interactiveChild,
     );
   }
@@ -226,11 +227,13 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     final Rect? centeredBounds = width > 0 && height > 0
         ? Rect.fromLTWH(fallbackTopLeft.dx, fallbackTopLeft.dy, width, height)
         : null;
-    final Rect? resolvedBounds = centeredBounds ??
+    final Rect? resolvedBounds =
+        centeredBounds ??
         _resolveGlobalBounds(fallbackTopLeft: fallbackTopLeft);
 
-    double normalizedX =
-        width > 0 && anchorLocal.dx.isFinite ? anchorLocal.dx / width : 0.5;
+    double normalizedX = width > 0 && anchorLocal.dx.isFinite
+        ? anchorLocal.dx / width
+        : 0.5;
     if (!normalizedX.isFinite) {
       normalizedX = 0.5;
     }
@@ -332,8 +335,9 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       return false;
     }
 
-    final double extent =
-        math.max(widget.resizeHandleExtent, 0.0).clamp(0.0, double.infinity);
+    final double extent = math
+        .max(widget.resizeHandleExtent, 0.0)
+        .clamp(0.0, double.infinity);
     final double width = size.width;
 
     if (extent > _centeredHandleGateThreshold && width.isFinite && width > 0) {
@@ -376,7 +380,8 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       0.0,
       1.0,
     );
-    final double pointerOffsetY = _pointerOffsetY ??
+    final double pointerOffsetY =
+        _pointerOffsetY ??
         (_geometry.rect.height.isFinite && _geometry.rect.height > 0
             ? _geometry.rect.height / 2
             : 0.0);

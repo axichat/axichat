@@ -172,17 +172,17 @@ class OmemoDevice extends omemo.OmemoDevice {
     this.onetimePreKeys = const {},
     String? label,
   }) : super(
-          jid,
-          id,
-          identityKey,
-          signedPreKey,
-          signedPreKey.id!,
-          signedPreKey.signature!,
-          oldSignedPreKey,
-          oldSignedPreKey?.id,
-          onetimePreKeys,
-          label,
-        );
+         jid,
+         id,
+         identityKey,
+         signedPreKey,
+         signedPreKey.id!,
+         signedPreKey.signature!,
+         oldSignedPreKey,
+         oldSignedPreKey?.id,
+         onetimePreKeys,
+         label,
+       );
 
   final omemo.OmemoKeyPair identityKey;
   final SignedPreKey signedPreKey;
@@ -197,44 +197,42 @@ class OmemoDevice extends omemo.OmemoDevice {
     required String? oldSignedPreKey,
     required String onetimePreKeys,
     required String? label,
-  }) =>
-      OmemoDevice(
-        jid: jid,
-        id: id,
-        identityKey: OmemoKeyPair.fromJson(identityKey),
-        signedPreKey: SignedPreKey.fromJson(signedPreKey),
-        oldSignedPreKey: oldSignedPreKey != null
-            ? SignedPreKey.fromJson(oldSignedPreKey)
-            : null,
-        onetimePreKeys: onetimePreKeysFromJson(onetimePreKeys),
-        label: label,
-      );
+  }) => OmemoDevice(
+    jid: jid,
+    id: id,
+    identityKey: OmemoKeyPair.fromJson(identityKey),
+    signedPreKey: SignedPreKey.fromJson(signedPreKey),
+    oldSignedPreKey: oldSignedPreKey != null
+        ? SignedPreKey.fromJson(oldSignedPreKey)
+        : null,
+    onetimePreKeys: onetimePreKeysFromJson(onetimePreKeys),
+    label: label,
+  );
 
   factory OmemoDevice.fromMox(omemo.OmemoDevice device) => OmemoDevice(
-        id: device.id,
-        jid: device.jid,
-        identityKey:
-            omemo.OmemoKeyPair(device.ik.pk, device.ik.sk, device.ik.type),
-        signedPreKey: SignedPreKey(
-          device.spk.pk,
-          device.spk.sk,
-          device.spk.type,
-          id: device.spkId,
-          signature: device.spkSignature,
-        ),
-        oldSignedPreKey: device.oldSpk != null
-            ? SignedPreKey(
-                device.oldSpk!.pk,
-                device.oldSpk!.sk,
-                device.oldSpk!.type,
-                id: device.oldSpkId,
-              )
-            : null,
-        onetimePreKeys: <int, omemo.OmemoKeyPair>{
-          for (final opk in device.opks.entries)
-            opk.key: OmemoKeyPair.fromMox(opk.value),
-        },
-      );
+    id: device.id,
+    jid: device.jid,
+    identityKey: omemo.OmemoKeyPair(device.ik.pk, device.ik.sk, device.ik.type),
+    signedPreKey: SignedPreKey(
+      device.spk.pk,
+      device.spk.sk,
+      device.spk.type,
+      id: device.spkId,
+      signature: device.spkSignature,
+    ),
+    oldSignedPreKey: device.oldSpk != null
+        ? SignedPreKey(
+            device.oldSpk!.pk,
+            device.oldSpk!.sk,
+            device.oldSpk!.type,
+            id: device.oldSpkId,
+          )
+        : null,
+    onetimePreKeys: <int, omemo.OmemoKeyPair>{
+      for (final opk in device.opks.entries)
+        opk.key: OmemoKeyPair.fromMox(opk.value),
+    },
+  );
 
   static int generateID() => Random.secure().nextInt(2147483647);
 
@@ -344,8 +342,9 @@ class OmemoDevice extends omemo.OmemoDevice {
     final oldSignedPreKeyFuture = oldSignedPreKey?.toJson();
 
     final results = await Future.wait(futures);
-    final oldSignedPreKeyResult =
-        oldSignedPreKeyFuture != null ? await oldSignedPreKeyFuture : null;
+    final oldSignedPreKeyResult = oldSignedPreKeyFuture != null
+        ? await oldSignedPreKeyFuture
+        : null;
 
     return OmemoDevicesCompanion.insert(
       jid: jid,
@@ -421,23 +420,22 @@ class OmemoTrust extends omemo.BTBVTrustData implements Insertable<OmemoTrust> {
     required bool enabled,
     required bool trusted,
     required String? label,
-  }) =>
-      OmemoTrust(
-        jid: jid,
-        device: device,
-        trust: trust,
-        enabled: enabled,
-        trusted: trusted,
-        label: label,
-      );
+  }) => OmemoTrust(
+    jid: jid,
+    device: device,
+    trust: trust,
+    enabled: enabled,
+    trusted: trusted,
+    label: label,
+  );
 
   factory OmemoTrust.fromMox(omemo.BTBVTrustData data) => OmemoTrust(
-        device: data.device,
-        jid: data.jid,
-        trust: data.state,
-        enabled: data.enabled,
-        trusted: data.trusted,
-      );
+    device: data.device,
+    jid: data.jid,
+    trust: data.state,
+    enabled: data.enabled,
+    trusted: data.trusted,
+  );
 
   @override
   Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>
@@ -471,7 +469,7 @@ class OmemoTrusts extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class OmemoDeviceList
+sealed class OmemoDeviceList
     with _$OmemoDeviceList
     implements Insertable<OmemoDeviceList> {
   const factory OmemoDeviceList({
@@ -500,7 +498,7 @@ class OmemoDeviceLists extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
-class OmemoFingerprint with _$OmemoFingerprint {
+abstract class OmemoFingerprint with _$OmemoFingerprint {
   const factory OmemoFingerprint({
     required String jid,
     required String fingerprint,
@@ -558,8 +556,7 @@ class OmemoRatchet {
     required String jid,
     required int device,
     required String serialized,
-  }) =>
-      OmemoRatchet(jid: jid, device: device, serialized: serialized);
+  }) => OmemoRatchet(jid: jid, device: device, serialized: serialized);
 
   Insertable<OmemoRatchet> toDb() {
     return OmemoRatchetsCompanion.insert(
@@ -620,13 +617,12 @@ class OmemoBundleCache {
     required int device,
     required String bundleJson,
     required DateTime updatedAt,
-  }) =>
-      OmemoBundleCache(
-        jid: jid,
-        device: device,
-        serializedBundle: bundleJson,
-        updatedAt: updatedAt,
-      );
+  }) => OmemoBundleCache(
+    jid: jid,
+    device: device,
+    serializedBundle: bundleJson,
+    updatedAt: updatedAt,
+  );
 
   Insertable<OmemoBundleCache> toDb() {
     return OmemoBundleCachesCompanion.insert(

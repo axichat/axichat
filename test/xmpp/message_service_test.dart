@@ -64,8 +64,8 @@ void main() {
     database = XmppDrift.inMemory();
     xmppService = XmppService(
       buildConnection: () => mockConnection,
-      buildStateStore: (_, __) => mockStateStore,
-      buildDatabase: (_, __) => database,
+      buildStateStore: (_, _) => mockStateStore,
+      buildDatabase: (_, _) => database,
       notificationService: mockNotificationService,
     );
     messagesByTimestamp = messageEvents.indexed.map((e) {
@@ -202,13 +202,14 @@ void main() {
       ).copyWith(timestamp: DateTime.timestamp().toLocal());
       final normalMessage = Message.fromMox(normalEvent).copyWith(
         timestamp: DateTime.timestamp().toLocal().add(
-              const Duration(seconds: 1),
-            ),
+          const Duration(seconds: 1),
+        ),
       );
 
       final emissions = <List<Message>>[];
-      final subscription =
-          xmppService.messageStreamForChat(selfJid).listen(emissions.add);
+      final subscription = xmppService
+          .messageStreamForChat(selfJid)
+          .listen(emissions.add);
 
       await database.saveMessage(calendarMessage);
       await database.saveMessage(normalMessage);

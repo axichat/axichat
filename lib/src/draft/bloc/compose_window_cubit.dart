@@ -47,38 +47,37 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
   }
 
   void minimize(int id) => _updateWindow(
-        id,
-        (entry) => entry.copyWith(view: ComposeWindowView.minimized),
-      );
+    id,
+    (entry) => entry.copyWith(view: ComposeWindowView.minimized),
+  );
 
   void restore(int id) => _updateWindow(
-        id,
-        (entry) => entry.copyWith(view: ComposeWindowView.normal),
-      );
+    id,
+    (entry) => entry.copyWith(view: ComposeWindowView.normal),
+  );
 
   void toggleExpanded(int id) => _updateWindow(
-        id,
-        (entry) => entry.copyWith(
-          view: entry.isExpanded
-              ? ComposeWindowView.normal
-              : ComposeWindowView.expanded,
-        ),
-      );
+    id,
+    (entry) => entry.copyWith(
+      view: entry.isExpanded
+          ? ComposeWindowView.normal
+          : ComposeWindowView.expanded,
+    ),
+  );
 
   void closeWindow(int id) => emit(
-        state.copyWith(
-          windows: state.windows.where((entry) => entry.id != id).toList(),
-        ),
-      );
+    state.copyWith(
+      windows: state.windows.where((entry) => entry.id != id).toList(),
+    ),
+  );
 
   void updateOffset(int id, Offset offset) =>
       _updateWindow(id, (entry) => entry.copyWith(offset: offset));
 
   void initializeOffset(int id, Offset offset) => _updateWindow(
-        id,
-        (entry) =>
-            entry.offset == null ? entry.copyWith(offset: offset) : entry,
-      );
+    id,
+    (entry) => entry.offset == null ? entry.copyWith(offset: offset) : entry,
+  );
 
   void _updateWindow(
     int id,

@@ -76,8 +76,9 @@ class ChipsBarSurface extends StatelessWidget {
     final Color resolvedBackground =
         backgroundColor ?? chipsBarBackground(context, colors);
     final BorderSide resolvedBorder = borderSide ?? context.borderSide;
-    final Border? border =
-        includeTopBorder ? Border(top: resolvedBorder) : null;
+    final Border? border = includeTopBorder
+        ? Border(top: resolvedBorder)
+        : null;
     return AnimatedContainer(
       duration: duration,
       curve: curve,
@@ -106,8 +107,9 @@ class ChipsBarCountBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = context.textTheme;
-    final background =
-        expanded ? colors.primary : colors.primary.withValues(alpha: 0.09);
+    final background = expanded
+        ? colors.primary
+        : colors.primary.withValues(alpha: 0.09);
     final foreground = expanded ? colors.primaryForeground : colors.primary;
     return AnimatedContainer(
       duration: duration,

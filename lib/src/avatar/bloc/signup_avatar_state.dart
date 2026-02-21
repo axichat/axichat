@@ -71,8 +71,9 @@ class SignupAvatarState extends Equatable {
       carouselAvatar: carouselAvatar ?? this.carouselAvatar,
       processing: processing ?? this.processing,
       errorType: clearError ? null : errorType ?? this.errorType,
-      errorMaxKilobytes:
-          clearError ? null : errorMaxKilobytes ?? this.errorMaxKilobytes,
+      errorMaxKilobytes: clearError
+          ? null
+          : errorMaxKilobytes ?? this.errorMaxKilobytes,
       backgroundLocked: backgroundLocked ?? this.backgroundLocked,
       lockedBackgroundColor:
           lockedBackgroundColor ?? this.lockedBackgroundColor,
@@ -81,13 +82,13 @@ class SignupAvatarState extends Equatable {
 
   @override
   List<Object?> get props => [
-        avatar,
-        carouselAvatar,
-        processing,
-        errorType,
-        errorMaxKilobytes,
-        backgroundColor,
-        backgroundLocked,
-        lockedBackgroundColor,
-      ];
+    avatar,
+    carouselAvatar,
+    processing,
+    errorType,
+    errorMaxKilobytes,
+    backgroundColor,
+    backgroundLocked,
+    lockedBackgroundColor,
+  ];
 }

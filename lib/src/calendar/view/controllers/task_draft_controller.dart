@@ -35,22 +35,22 @@ class TaskDraftController extends ChangeNotifier {
     List<CalendarAlarm> initialAdvancedAlarms = _emptyAdvancedAlarms,
     CalendarOrganizer? initialOrganizer,
     List<CalendarAttendee> initialAttendees = _emptyAttendees,
-  })  : _startTime = initialStart,
-        _endTime = initialEnd,
-        _deadline = initialDeadline,
-        _recurrence = initialRecurrence,
-        _isImportant = initialImportant,
-        _isUrgent = initialUrgent,
-        _reminders =
-            (initialReminders ?? ReminderPreferences.defaults()).normalized(),
-        _status = initialStatus,
-        _transparency = initialTransparency,
-        _categories = _normalizeCategories(initialCategories),
-        _url = _normalizeUrl(initialUrl),
-        _geo = initialGeo,
-        _advancedAlarms = List<CalendarAlarm>.from(initialAdvancedAlarms),
-        _organizer = initialOrganizer,
-        _attendees = List<CalendarAttendee>.from(initialAttendees);
+  }) : _startTime = initialStart,
+       _endTime = initialEnd,
+       _deadline = initialDeadline,
+       _recurrence = initialRecurrence,
+       _isImportant = initialImportant,
+       _isUrgent = initialUrgent,
+       _reminders = (initialReminders ?? ReminderPreferences.defaults())
+           .normalized(),
+       _status = initialStatus,
+       _transparency = initialTransparency,
+       _categories = _normalizeCategories(initialCategories),
+       _url = _normalizeUrl(initialUrl),
+       _geo = initialGeo,
+       _advancedAlarms = List<CalendarAlarm>.from(initialAdvancedAlarms),
+       _organizer = initialOrganizer,
+       _attendees = List<CalendarAttendee>.from(initialAttendees);
 
   bool _isImportant;
   bool _isUrgent;
@@ -271,7 +271,8 @@ class TaskDraftController extends ChangeNotifier {
   /// Resets the draft back to an empty state. Returns `true` if listeners were
   /// notified because at least one field changed.
   bool reset() {
-    final bool didChange = _isImportant ||
+    final bool didChange =
+        _isImportant ||
         _isUrgent ||
         _startTime != null ||
         _endTime != null ||

@@ -51,16 +51,17 @@ abstract class BaseCalendarBloc
     CalendarReminderController? reminderController,
     DateTime Function()? now,
     NlScheduleParserService? parserService,
-  })  : _reminderController = reminderController,
-        _now = now ?? DateTime.now,
-        _storagePrefix = storagePrefix,
-        _storageId = storageId,
-        _storage = storage,
-        _nlParserService = parserService ?? NlScheduleParserService(),
-        super(CalendarState.initial()) {
+  }) : _reminderController = reminderController,
+       _now = now ?? DateTime.now,
+       _storagePrefix = storagePrefix,
+       _storageId = storageId,
+       _storage = storage,
+       _nlParserService = parserService ?? NlScheduleParserService(),
+       super(CalendarState.initial()) {
     _linkedTaskRegistry.registerActiveStorage(id);
-    _linkedTaskSubscription =
-        _linkedTaskRegistry.updates.listen(_handleLinkedTaskUpdate);
+    _linkedTaskSubscription = _linkedTaskRegistry.updates.listen(
+      _handleLinkedTaskUpdate,
+    );
     _assertStorageRegistered();
     on<CalendarStarted>(_onStarted);
     on<CalendarDataChanged>(_onDataChanged);
@@ -136,7 +137,7 @@ abstract class BaseCalendarBloc
   static final Map<String, Set<String>> _linkedTaskSuppression =
       <String, Set<String>>{};
   late final StreamSubscription<CalendarLinkedTaskUpdate>
-      _linkedTaskSubscription;
+  _linkedTaskSubscription;
 
   @override
   String get id => _storageId;
@@ -361,7 +362,8 @@ abstract class BaseCalendarBloc
       final Duration? nextDuration = normalized.effectiveDuration;
       final bool startChanged =
           !(directTask.scheduledTime?.isAtSameMomentAs(scheduled) ?? false);
-      final bool durationChanged = previousDuration != null &&
+      final bool durationChanged =
+          previousDuration != null &&
           nextDuration != null &&
           previousDuration.inMinutes != nextDuration.inMinutes;
       final bool endChanged =
@@ -403,7 +405,8 @@ abstract class BaseCalendarBloc
       final Duration? nextDuration = normalized.effectiveDuration;
       final bool startChanged =
           !(baseTask.scheduledTime?.isAtSameMomentAs(scheduled) ?? false);
-      final bool durationChanged = previousDuration != null &&
+      final bool durationChanged =
+          previousDuration != null &&
           nextDuration != null &&
           previousDuration.inMinutes != nextDuration.inMinutes;
       final bool endChanged =
@@ -557,7 +560,8 @@ abstract class BaseCalendarBloc
         event.reminders,
         parsed.reminders,
       );
-      final DateTime? computedEndDate = event.endDate ??
+      final DateTime? computedEndDate =
+          event.endDate ??
           (scheduledTime != null && duration != null
               ? scheduledTime.add(duration)
               : null);
@@ -631,7 +635,8 @@ abstract class BaseCalendarBloc
         event.task.reminders,
         null,
       );
-      final DateTime? computedEndDate = event.task.endDate ??
+      final DateTime? computedEndDate =
+          event.task.endDate ??
           (scheduledTime != null && duration != null
               ? scheduledTime.add(duration)
               : null);
@@ -671,8 +676,9 @@ abstract class BaseCalendarBloc
         _recordUndoSnapshot();
 
         final updatedModel = state.model.deleteTask(event.taskId);
-        final remainingSelection =
-            state.selectedTaskIds.where((id) => id != event.taskId).toSet();
+        final remainingSelection = state.selectedTaskIds
+            .where((id) => id != event.taskId)
+            .toSet();
         final bool nextSelectionMode =
             state.isSelectionMode && remainingSelection.isNotEmpty;
 
@@ -689,8 +695,9 @@ abstract class BaseCalendarBloc
       }
 
       final occurrenceKey = occurrenceKeyFrom(event.taskId);
-      final targetTaskId =
-          occurrenceKey == null ? event.taskId : baseTaskIdFrom(event.taskId);
+      final targetTaskId = occurrenceKey == null
+          ? event.taskId
+          : baseTaskIdFrom(event.taskId);
       final taskToDelete = state.model.tasks[targetTaskId];
       if (taskToDelete == null) {
         throw CalendarTaskNotFoundException(event.taskId);
@@ -725,8 +732,9 @@ abstract class BaseCalendarBloc
 
       final CalendarTask deletedTask = taskToDelete.copyWith(modifiedAt: now);
       final CalendarModel updatedModel = state.model.deleteTask(targetTaskId);
-      final remainingSelection =
-          state.selectedTaskIds.where((id) => id != targetTaskId).toSet();
+      final remainingSelection = state.selectedTaskIds
+          .where((id) => id != targetTaskId)
+          .toSet();
       final bool nextSelectionMode =
           state.isSelectionMode && remainingSelection.isNotEmpty;
 
@@ -784,7 +792,8 @@ abstract class BaseCalendarBloc
       final DateTime? scheduled = task.scheduledTime;
       if (scheduled == null) {
         final DateTime newStart = event.time;
-        final Duration preservedDuration = task.duration ??
+        final Duration preservedDuration =
+            task.duration ??
             (task.endDate != null && task.scheduledTime != null
                 ? task.endDate!.difference(task.scheduledTime!)
                 : _taskDuration(task));
@@ -1595,7 +1604,8 @@ abstract class BaseCalendarBloc
         ),
       );
 
-      final TaskOccurrenceOverride existing = overrides[occurrenceKey] ??
+      final TaskOccurrenceOverride existing =
+          overrides[occurrenceKey] ??
           baseReference.occurrenceOverrides[occurrenceKey] ??
           const TaskOccurrenceOverride();
       final String? overrideTitle = title == baseTask.title ? null : title;
@@ -1645,8 +1655,9 @@ abstract class BaseCalendarBloc
       return;
     }
     final String? normalized = event.description?.trim();
-    final String? description =
-        normalized == null || normalized.isEmpty ? null : normalized;
+    final String? description = normalized == null || normalized.isEmpty
+        ? null
+        : normalized;
 
     final now = _now();
     final updates = <String, CalendarTask>{};
@@ -1683,13 +1694,15 @@ abstract class BaseCalendarBloc
         ),
       );
 
-      final TaskOccurrenceOverride existing = overrides[occurrenceKey] ??
+      final TaskOccurrenceOverride existing =
+          overrides[occurrenceKey] ??
           baseReference.occurrenceOverrides[occurrenceKey] ??
           const TaskOccurrenceOverride();
       final String baseDescription = baseTask.description ?? '';
       final String newDescription = description ?? '';
-      final String? overrideDescription =
-          newDescription == baseDescription ? null : newDescription;
+      final String? overrideDescription = newDescription == baseDescription
+          ? null
+          : newDescription;
       final TaskOccurrenceOverride updatedOverride = existing.copyWith(
         description: overrideDescription,
       );
@@ -1736,8 +1749,9 @@ abstract class BaseCalendarBloc
       return;
     }
     final String? normalized = event.location?.trim();
-    final String? location =
-        normalized == null || normalized.isEmpty ? null : normalized;
+    final String? location = normalized == null || normalized.isEmpty
+        ? null
+        : normalized;
 
     final now = _now();
     final updates = <String, CalendarTask>{};
@@ -1771,13 +1785,15 @@ abstract class BaseCalendarBloc
         ),
       );
 
-      final TaskOccurrenceOverride existing = overrides[occurrenceKey] ??
+      final TaskOccurrenceOverride existing =
+          overrides[occurrenceKey] ??
           baseReference.occurrenceOverrides[occurrenceKey] ??
           const TaskOccurrenceOverride();
       final String baseLocation = baseTask.location ?? '';
       final String newLocation = location ?? '';
-      final String? overrideLocation =
-          newLocation == baseLocation ? null : newLocation;
+      final String? overrideLocation = newLocation == baseLocation
+          ? null
+          : newLocation;
       final TaskOccurrenceOverride updatedOverride = existing.copyWith(
         location: overrideLocation,
       );
@@ -1851,15 +1867,16 @@ abstract class BaseCalendarBloc
       }
 
       final CalendarTask baseReference = updates[baseId] ?? baseTask;
-      final Map<String, TaskOccurrenceOverride> overrides =
-          baseOverrideUpdates.putIfAbsent(
-        baseId,
-        () => Map<String, TaskOccurrenceOverride>.from(
-          baseReference.occurrenceOverrides,
-        ),
-      );
+      final Map<String, TaskOccurrenceOverride> overrides = baseOverrideUpdates
+          .putIfAbsent(
+            baseId,
+            () => Map<String, TaskOccurrenceOverride>.from(
+              baseReference.occurrenceOverrides,
+            ),
+          );
 
-      final TaskOccurrenceOverride existing = overrides[occurrenceKey] ??
+      final TaskOccurrenceOverride existing =
+          overrides[occurrenceKey] ??
           baseReference.occurrenceOverrides[occurrenceKey] ??
           const TaskOccurrenceOverride();
       final bool matchesBase = _checklistsEqual(checklist, baseTask.checklist);
@@ -2231,8 +2248,9 @@ abstract class BaseCalendarBloc
     final updates = <String, CalendarTask>{};
     final baseOverrideUpdates = <String, Map<String, TaskOccurrenceOverride>>{};
     final now = _now();
-    final TaskPriority? targetPriority =
-        event.priority == TaskPriority.none ? null : event.priority;
+    final TaskPriority? targetPriority = event.priority == TaskPriority.none
+        ? null
+        : event.priority;
 
     for (final id in state.selectedTaskIds) {
       final task = state.model.tasks[id];
@@ -2249,8 +2267,9 @@ abstract class BaseCalendarBloc
       }
 
       final TaskPriority? basePriority = baseTask.priority;
-      final TaskPriority? overridePriority =
-          targetPriority == basePriority ? null : targetPriority;
+      final TaskPriority? overridePriority = targetPriority == basePriority
+          ? null
+          : targetPriority;
       final overrides = baseOverrideUpdates.putIfAbsent(
         baseId,
         () => Map<String, TaskOccurrenceOverride>.from(
@@ -2439,8 +2458,9 @@ abstract class BaseCalendarBloc
       emitModel(
         updatedModel,
         emit,
-        focusedCriticalPathId:
-            shouldFocus ? path.id : state.focusedCriticalPathId,
+        focusedCriticalPathId: shouldFocus
+            ? path.id
+            : state.focusedCriticalPathId,
         focusedCriticalPathSpecified: shouldFocus,
       );
       final createdPath = updatedModel.criticalPaths[path.id]!;
@@ -2504,8 +2524,9 @@ abstract class BaseCalendarBloc
       emitModel(
         updatedModel,
         emit,
-        focusedCriticalPathId:
-            shouldClearFocus ? null : state.focusedCriticalPathId,
+        focusedCriticalPathId: shouldClearFocus
+            ? null
+            : state.focusedCriticalPathId,
         focusedCriticalPathSpecified: true,
       );
       await onCriticalPathDeleted(existingPath);
@@ -2633,8 +2654,9 @@ abstract class BaseCalendarBloc
       state.copyWith(
         focusedCriticalPathId: normalized,
         isSelectionMode: nextSelectionMode,
-        selectedTaskIds:
-            nextSelectionMode ? filteredSelection : const <String>{},
+        selectedTaskIds: nextSelectionMode
+            ? filteredSelection
+            : const <String>{},
         canUndo: _undoStack.isNotEmpty,
         canRedo: _redoStack.isNotEmpty,
       ),
@@ -2719,8 +2741,9 @@ abstract class BaseCalendarBloc
       }
 
       final bool baseCompleted = baseTask.isCompleted;
-      final bool? overrideCompleted =
-          event.completed == baseCompleted ? null : event.completed;
+      final bool? overrideCompleted = event.completed == baseCompleted
+          ? null
+          : event.completed;
       final overrides = baseOverrideUpdates.putIfAbsent(
         baseId,
         () => Map<String, TaskOccurrenceOverride>.from(
@@ -2876,15 +2899,15 @@ abstract class BaseCalendarBloc
     final now = _now();
     final RecurrenceRule? normalizedRecurrence =
         (event.recurrence == null || event.recurrence!.isNone)
-            ? null
-            : event.recurrence;
+        ? null
+        : event.recurrence;
     final Set<String> processedBaseIds = <String>{};
 
     bool recurrenceMatches(CalendarTask task) {
       final RecurrenceRule? current =
           (task.recurrence == null || task.recurrence!.isNone)
-              ? null
-              : task.recurrence;
+          ? null
+          : task.recurrence;
       if (current == null && normalizedRecurrence == null) {
         return true;
       }
@@ -3062,8 +3085,9 @@ abstract class BaseCalendarBloc
     String defaultMessage,
     Emitter<CalendarState> emit,
   ) async {
-    final errorMessage =
-        error is CalendarException ? error.message : '$defaultMessage: $error';
+    final errorMessage = error is CalendarException
+        ? error.message
+        : '$defaultMessage: $error';
     logError(errorMessage, error);
     emit(state.copyWith(isLoading: false, error: errorMessage));
   }
@@ -3100,7 +3124,7 @@ abstract class BaseCalendarBloc
     );
     final bool resolvedSelectionMode =
         (isSelectionMode ?? state.isSelectionMode) &&
-            filteredSelection.isNotEmpty;
+        filteredSelection.isNotEmpty;
 
     final nextState = state.copyWith(
       model: model,
@@ -3110,8 +3134,9 @@ abstract class BaseCalendarBloc
       isLoading: isLoading ?? state.isLoading,
       lastSyncTime: lastSyncTime ?? state.lastSyncTime,
       isSelectionMode: resolvedSelectionMode,
-      selectedTaskIds:
-          resolvedSelectionMode ? filteredSelection : const <String>{},
+      selectedTaskIds: resolvedSelectionMode
+          ? filteredSelection
+          : const <String>{},
       canUndo: _undoStack.isNotEmpty,
       canRedo: _redoStack.isNotEmpty,
       focusedCriticalPathId: normalizedFocus,
@@ -3154,8 +3179,9 @@ abstract class BaseCalendarBloc
       return selection;
     }
 
-    final CalendarCriticalPath? focus =
-        focusedPathId == null ? null : model.criticalPaths[focusedPathId];
+    final CalendarCriticalPath? focus = focusedPathId == null
+        ? null
+        : model.criticalPaths[focusedPathId];
 
     final Set<String> normalizedSelection = selection.where((id) {
       final String baseId = baseTaskIdFrom(id);
@@ -3170,8 +3196,9 @@ abstract class BaseCalendarBloc
       return <String>{};
     }
 
-    final Set<String> allowedBaseIds =
-        focus.taskIds.map(baseTaskIdFrom).toSet();
+    final Set<String> allowedBaseIds = focus.taskIds
+        .map(baseTaskIdFrom)
+        .toSet();
     return normalizedSelection
         .where((id) => allowedBaseIds.contains(baseTaskIdFrom(id)))
         .toSet();
@@ -3185,21 +3212,21 @@ abstract class BaseCalendarBloc
         return false;
       }
       return task.deadline!.isBefore(now);
-    }).toList()
-      ..sort((a, b) => a.deadline!.compareTo(b.deadline!));
+    }).toList()..sort((a, b) => a.deadline!.compareTo(b.deadline!));
   }
 
   CalendarTask? _getNextTask(CalendarModel model) {
     final now = _now();
-    final upcomingTasks = model.tasks.values
-        .where(
-          (task) =>
-              !task.isCompleted &&
-              task.scheduledTime != null &&
-              task.scheduledTime!.isAfter(now),
-        )
-        .toList()
-      ..sort((a, b) => a.scheduledTime!.compareTo(b.scheduledTime!));
+    final upcomingTasks =
+        model.tasks.values
+            .where(
+              (task) =>
+                  !task.isCompleted &&
+                  task.scheduledTime != null &&
+                  task.scheduledTime!.isAfter(now),
+            )
+            .toList()
+          ..sort((a, b) => a.scheduledTime!.compareTo(b.scheduledTime!));
     return upcomingTasks.isEmpty ? null : upcomingTasks.first;
   }
 

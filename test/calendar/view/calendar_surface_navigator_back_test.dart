@@ -26,14 +26,12 @@ void main() {
         MaterialPageRoute<void>(
           builder: (_) => PopScope<void>(
             canPop: false,
-            onPopInvokedWithResult: (didPop, __) {
+            onPopInvokedWithResult: (didPop, _) {
               if (!didPop) {
                 blockedBackInvocations += 1;
               }
             },
-            child: const Scaffold(
-              body: SizedBox(key: Key('guarded-route')),
-            ),
+            child: const Scaffold(body: SizedBox(key: Key('guarded-route'))),
           ),
         ),
       );

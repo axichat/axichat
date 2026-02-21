@@ -31,11 +31,11 @@ enum CalendarAvailabilityShareSourceType {
   bool get isChat => this == CalendarAvailabilityShareSourceType.chat;
 
   String get storageValue => switch (this) {
-        CalendarAvailabilityShareSourceType.personal =>
-          _availabilityShareSourcePersonalValue,
-        CalendarAvailabilityShareSourceType.chat =>
-          _availabilityShareSourceChatValue,
-      };
+    CalendarAvailabilityShareSourceType.personal =>
+      _availabilityShareSourcePersonalValue,
+    CalendarAvailabilityShareSourceType.chat =>
+      _availabilityShareSourceChatValue,
+  };
 
   static CalendarAvailabilityShareSourceType? fromStorageValue(String? value) =>
       switch (value) {
@@ -49,11 +49,11 @@ enum CalendarAvailabilityShareSourceType {
 
 class CalendarAvailabilityShareSource {
   const CalendarAvailabilityShareSource.personal()
-      : type = CalendarAvailabilityShareSourceType.personal,
-        chatJid = null;
+    : type = CalendarAvailabilityShareSourceType.personal,
+      chatJid = null;
 
   const CalendarAvailabilityShareSource.chat({required this.chatJid})
-      : type = CalendarAvailabilityShareSourceType.chat;
+    : type = CalendarAvailabilityShareSourceType.chat;
 
   final CalendarAvailabilityShareSourceType type;
   final String? chatJid;
@@ -62,9 +62,9 @@ class CalendarAvailabilityShareSource {
   bool get isChat => type.isChat;
 
   Map<String, dynamic> toJson() => {
-        _availabilityShareSourceTypeKey: type.storageValue,
-        if (chatJid != null) _availabilityShareSourceChatJidKey: chatJid,
-      };
+    _availabilityShareSourceTypeKey: type.storageValue,
+    if (chatJid != null) _availabilityShareSourceChatJidKey: chatJid,
+  };
 
   static CalendarAvailabilityShareSource? fromJson(Map<String, dynamic> json) {
     final typeValue = json[_availabilityShareSourceTypeKey] as String?;
@@ -121,27 +121,26 @@ class CalendarAvailabilityShareRecord {
     CalendarAvailabilityOverlay? overlay,
     bool? lockOverlay,
     DateTime? updatedAt,
-  }) =>
-      CalendarAvailabilityShareRecord(
-        id: id ?? this.id,
-        source: source ?? this.source,
-        chatJid: chatJid ?? this.chatJid,
-        chatType: chatType ?? this.chatType,
-        overlay: overlay ?? this.overlay,
-        lockOverlay: lockOverlay ?? this.lockOverlay,
-        updatedAt: updatedAt ?? this.updatedAt,
-      );
+  }) => CalendarAvailabilityShareRecord(
+    id: id ?? this.id,
+    source: source ?? this.source,
+    chatJid: chatJid ?? this.chatJid,
+    chatType: chatType ?? this.chatType,
+    overlay: overlay ?? this.overlay,
+    lockOverlay: lockOverlay ?? this.lockOverlay,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
 
   Map<String, dynamic> toJson() => {
-        _availabilityShareRecordIdKey: id,
-        _availabilityShareRecordSourceKey: source.toJson(),
-        _availabilityShareRecordChatJidKey: chatJid,
-        _availabilityShareRecordChatTypeKey: chatType.name,
-        _availabilityShareRecordOverlayKey: overlay.toJson(),
-        if (lockOverlay) _availabilityShareRecordLockOverlayKey: lockOverlay,
-        if (updatedAt != null)
-          _availabilityShareRecordUpdatedAtKey: updatedAt!.toIso8601String(),
-      };
+    _availabilityShareRecordIdKey: id,
+    _availabilityShareRecordSourceKey: source.toJson(),
+    _availabilityShareRecordChatJidKey: chatJid,
+    _availabilityShareRecordChatTypeKey: chatType.name,
+    _availabilityShareRecordOverlayKey: overlay.toJson(),
+    if (lockOverlay) _availabilityShareRecordLockOverlayKey: lockOverlay,
+    if (updatedAt != null)
+      _availabilityShareRecordUpdatedAtKey: updatedAt!.toIso8601String(),
+  };
 
   static CalendarAvailabilityShareRecord? fromJson(Map<String, dynamic> json) {
     final id = json[_availabilityShareRecordIdKey] as String?;
@@ -171,8 +170,9 @@ class CalendarAvailabilityShareRecord {
     final chatType = _chatTypeFromString(chatTypeValue);
     final updatedAtValue =
         json[_availabilityShareRecordUpdatedAtKey] as String?;
-    final updatedAt =
-        updatedAtValue == null ? null : DateTime.tryParse(updatedAtValue);
+    final updatedAt = updatedAtValue == null
+        ? null
+        : DateTime.tryParse(updatedAtValue);
     return CalendarAvailabilityShareRecord(
       id: id,
       source: source,
@@ -203,21 +203,20 @@ class CalendarAvailabilityPreset {
     CalendarAvailabilityOverlay? overlay,
     String? name,
     DateTime? updatedAt,
-  }) =>
-      CalendarAvailabilityPreset(
-        id: id ?? this.id,
-        overlay: overlay ?? this.overlay,
-        name: name ?? this.name,
-        updatedAt: updatedAt ?? this.updatedAt,
-      );
+  }) => CalendarAvailabilityPreset(
+    id: id ?? this.id,
+    overlay: overlay ?? this.overlay,
+    name: name ?? this.name,
+    updatedAt: updatedAt ?? this.updatedAt,
+  );
 
   Map<String, dynamic> toJson() => {
-        _availabilityPresetIdKey: id,
-        _availabilityPresetOverlayKey: overlay.toJson(),
-        if (name != null) _availabilityPresetNameKey: name,
-        if (updatedAt != null)
-          _availabilityPresetUpdatedAtKey: updatedAt!.toIso8601String(),
-      };
+    _availabilityPresetIdKey: id,
+    _availabilityPresetOverlayKey: overlay.toJson(),
+    if (name != null) _availabilityPresetNameKey: name,
+    if (updatedAt != null)
+      _availabilityPresetUpdatedAtKey: updatedAt!.toIso8601String(),
+  };
 
   static CalendarAvailabilityPreset? fromJson(Map<String, dynamic> json) {
     final id = json[_availabilityPresetIdKey] as String?;
@@ -230,8 +229,9 @@ class CalendarAvailabilityPreset {
       _normalizeJsonMap(overlayRaw),
     );
     final updatedAtValue = json[_availabilityPresetUpdatedAtKey] as String?;
-    final updatedAt =
-        updatedAtValue == null ? null : DateTime.tryParse(updatedAtValue);
+    final updatedAt = updatedAtValue == null
+        ? null
+        : DateTime.tryParse(updatedAtValue);
     return CalendarAvailabilityPreset(
       id: id,
       overlay: overlay,

@@ -147,11 +147,7 @@ class TaskSectionExpander extends StatelessWidget {
 /// Divider that matches the legacy calendar form styling (subtle grey line with
 /// pill radius). Used between logical sections in sidebars and modals.
 class TaskSectionDivider extends StatelessWidget {
-  const TaskSectionDivider({
-    super.key,
-    this.verticalPadding,
-    this.color,
-  });
+  const TaskSectionDivider({super.key, this.verticalPadding, this.color});
 
   final double? verticalPadding;
   final Color? color;
@@ -380,14 +376,17 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
             widget.onChanged?.call(value);
           },
           onSubmitted: widget.onFieldSubmitted,
-          style: widget.textStyle ??
+          style:
+              widget.textStyle ??
               context.textTheme.small.copyWith(color: calendarTitleColor),
           decoration: InputDecoration(
             labelText: widget.labelText,
-            labelStyle: widget.labelStyle ??
+            labelStyle:
+                widget.labelStyle ??
                 context.textTheme.small.copyWith(color: calendarSubtitleColor),
             hintText: widget.hintText,
-            hintStyle: widget.hintStyle ??
+            hintStyle:
+                widget.hintStyle ??
                 context.textTheme.small.copyWith(color: calendarTimeLabelColor),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(radius),
@@ -404,7 +403,8 @@ class _TaskTextFormFieldState extends State<TaskTextFormField> {
                 width: context.borderSide.width * 2,
               ),
             ),
-            contentPadding: widget.contentPadding ??
+            contentPadding:
+                widget.contentPadding ??
                 EdgeInsets.symmetric(
                   horizontal: context.spacing.m,
                   vertical: context.spacing.m,
@@ -456,8 +456,9 @@ class TaskTitleField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String resolvedHint =
-        hintText.isEmpty ? context.l10n.calendarTaskTitleHint : hintText;
+    final String resolvedHint = hintText.isEmpty
+        ? context.l10n.calendarTaskTitleHint
+        : hintText;
     return TaskTextFormField(
       controller: controller,
       focusNode: focusNode,
@@ -474,7 +475,9 @@ class TaskTitleField extends StatelessWidget {
       borderRadius: calendarBorderRadius,
       focusBorderColor: calendarPrimaryColor,
       contentPadding: EdgeInsets.symmetric(
-          horizontal: context.spacing.m, vertical: context.spacing.s),
+        horizontal: context.spacing.m,
+        vertical: context.spacing.s,
+      ),
       errorText: errorText,
       errorStyle: errorStyle,
     );
@@ -589,10 +592,10 @@ class TaskScheduleSection extends StatelessWidget {
     final bool allowClear = enabled && hasSelection;
     final VoidCallback? clearHandler = allowClear
         ? onClear ??
-            () {
-              onStartChanged(null);
-              onEndChanged(null);
-            }
+              () {
+                onStartChanged(null);
+                onEndChanged(null);
+              }
         : null;
     final trailingChildren = <Widget>[];
     if (headerTrailing != null) {
@@ -603,10 +606,9 @@ class TaskScheduleSection extends StatelessWidget {
         trailingChildren.add(SizedBox(width: context.spacing.xs));
       }
       trailingChildren.add(
-        TaskGhostIconButton(
-          icon: Icons.close,
-          tooltip: context.l10n.calendarClearSchedule,
+        AxiButton.ghost(
           onPressed: clearHandler,
+          child: Text(context.l10n.commonClear),
         ),
       );
     }
@@ -619,10 +621,16 @@ class TaskScheduleSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TaskSectionHeader(
-            title: title,
-            size: headerSize,
-            trailing: effectiveTrailing,
+          Row(
+            children: [
+              Expanded(
+                child: TaskSectionHeader(title: title, size: headerSize),
+              ),
+              if (effectiveTrailing != null) ...[
+                SizedBox(width: context.spacing.s),
+                effectiveTrailing,
+              ],
+            ],
           ),
           SizedBox(height: resolvedSpacing),
           ScheduleRangeFields(
@@ -689,12 +697,14 @@ class TaskRecurrenceSection extends StatelessWidget {
     final double resolvedSpacing = spacing ?? context.spacing.s;
     final RecurrenceEditorSpacing resolvedSpacingConfig =
         spacingConfig ?? calendarRecurrenceSpacingStandard(context);
-    final EdgeInsets resolvedChipPadding = chipPadding ??
+    final EdgeInsets resolvedChipPadding =
+        chipPadding ??
         EdgeInsets.symmetric(
           horizontal: context.spacing.m,
           vertical: context.spacing.s,
         );
-    final EdgeInsets resolvedWeekdayChipPadding = weekdayChipPadding ??
+    final EdgeInsets resolvedWeekdayChipPadding =
+        weekdayChipPadding ??
         EdgeInsets.symmetric(
           horizontal: context.spacing.m,
           vertical: context.spacing.s,
@@ -927,11 +937,13 @@ class _TaskDateTimeToolbarButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isTime = type == _TaskDateTimeButtonType.time;
-    final String label =
-        isTime ? field.timeLabel(context) : field.dateLabel(context);
+    final String label = isTime
+        ? field.timeLabel(context)
+        : field.dateLabel(context);
     final IconData icon = isTime ? field.timeIcon : field.dateIcon;
-    final VoidCallback onPressed =
-        isTime ? field.onSelectTime : field.onSelectDate;
+    final VoidCallback onPressed = isTime
+        ? field.onSelectTime
+        : field.onSelectDate;
 
     return Expanded(
       child: TaskToolbarButton(
@@ -1088,8 +1100,9 @@ class TaskDescriptionField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String resolvedHint =
-        hintText.isEmpty ? context.l10n.calendarTaskDescriptionHint : hintText;
+    final String resolvedHint = hintText.isEmpty
+        ? context.l10n.calendarTaskDescriptionHint
+        : hintText;
     return TaskTextField(
       controller: controller,
       focusNode: focusNode,
@@ -1103,7 +1116,8 @@ class TaskDescriptionField extends StatelessWidget {
       enabled: enabled,
       borderRadius: borderRadius,
       focusBorderColor: focusBorderColor,
-      contentPadding: contentPadding ??
+      contentPadding:
+          contentPadding ??
           EdgeInsets.symmetric(
             horizontal: context.spacing.m,
             vertical: context.spacing.m,
@@ -1227,9 +1241,7 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
           alignment: Alignment.topLeft,
           child: Material(
             elevation: calendarZoomControlsElevation,
-            borderRadius: BorderRadius.circular(
-              context.radii.container,
-            ),
+            borderRadius: BorderRadius.circular(context.radii.container),
             child: ConstrainedBox(
               constraints: const BoxConstraints(
                 maxHeight: calendarWeekHeaderHeight * 6,
@@ -1249,17 +1261,19 @@ class _TaskLocationFieldState extends State<TaskLocationField> {
                     },
                     title: Text(
                       suggestion.label,
-                      style: context.textTheme.small
-                          .copyWith(color: calendarTitleColor),
+                      style: context.textTheme.small.copyWith(
+                        color: calendarTitleColor,
+                      ),
                     ),
                     subtitle: Text(
                       suggestion.isHistory ? 'From your tasks' : 'Suggested',
-                      style: context.textTheme.label
-                          .copyWith(color: calendarSubtitleColor),
+                      style: context.textTheme.label.copyWith(
+                        color: calendarSubtitleColor,
+                      ),
                     ),
                   );
                 },
-                separatorBuilder: (_, __) => ShadSeparator.horizontal(
+                separatorBuilder: (_, _) => ShadSeparator.horizontal(
                   thickness: context.borderSide.width,
                   color: calendarBorderColor,
                 ),
@@ -1321,7 +1335,8 @@ class _TaskLocationTextInput extends StatelessWidget {
       enabled: enabled,
       borderRadius: borderRadius,
       focusBorderColor: focusBorderColor,
-      contentPadding: contentPadding ??
+      contentPadding:
+          contentPadding ??
           EdgeInsets.symmetric(
             horizontal: context.spacing.m,
             vertical: context.spacing.m,

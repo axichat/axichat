@@ -115,7 +115,7 @@ const String _calendarTransparencyTransparentLabel = 'Free';
 
 @freezed
 @HiveType(typeId: _calendarGeoTypeId)
-class CalendarGeo with _$CalendarGeo {
+abstract class CalendarGeo with _$CalendarGeo {
   const factory CalendarGeo({
     @HiveField(_calendarGeoLatitudeField) required double latitude,
     @HiveField(_calendarGeoLongitudeField) required double longitude,
@@ -154,27 +154,27 @@ enum CalendarIcsStatus {
   bool get isFinalState => this == CalendarIcsStatus.finalState;
 
   String get icsValue => switch (this) {
-        CalendarIcsStatus.tentative => _calendarIcsStatusTentativeIcs,
-        CalendarIcsStatus.confirmed => _calendarIcsStatusConfirmedIcs,
-        CalendarIcsStatus.cancelled => _calendarIcsStatusCancelledIcs,
-        CalendarIcsStatus.needsAction => _calendarIcsStatusNeedsActionIcs,
-        CalendarIcsStatus.completed => _calendarIcsStatusCompletedIcs,
-        CalendarIcsStatus.inProcess => _calendarIcsStatusInProcessIcs,
-        CalendarIcsStatus.draft => _calendarIcsStatusDraftIcs,
-        CalendarIcsStatus.finalState => _calendarIcsStatusFinalIcs,
-      };
+    CalendarIcsStatus.tentative => _calendarIcsStatusTentativeIcs,
+    CalendarIcsStatus.confirmed => _calendarIcsStatusConfirmedIcs,
+    CalendarIcsStatus.cancelled => _calendarIcsStatusCancelledIcs,
+    CalendarIcsStatus.needsAction => _calendarIcsStatusNeedsActionIcs,
+    CalendarIcsStatus.completed => _calendarIcsStatusCompletedIcs,
+    CalendarIcsStatus.inProcess => _calendarIcsStatusInProcessIcs,
+    CalendarIcsStatus.draft => _calendarIcsStatusDraftIcs,
+    CalendarIcsStatus.finalState => _calendarIcsStatusFinalIcs,
+  };
 
   static CalendarIcsStatus? fromIcsValue(String? value) => switch (value) {
-        _calendarIcsStatusTentativeIcs => CalendarIcsStatus.tentative,
-        _calendarIcsStatusConfirmedIcs => CalendarIcsStatus.confirmed,
-        _calendarIcsStatusCancelledIcs => CalendarIcsStatus.cancelled,
-        _calendarIcsStatusNeedsActionIcs => CalendarIcsStatus.needsAction,
-        _calendarIcsStatusCompletedIcs => CalendarIcsStatus.completed,
-        _calendarIcsStatusInProcessIcs => CalendarIcsStatus.inProcess,
-        _calendarIcsStatusDraftIcs => CalendarIcsStatus.draft,
-        _calendarIcsStatusFinalIcs => CalendarIcsStatus.finalState,
-        _ => null,
-      };
+    _calendarIcsStatusTentativeIcs => CalendarIcsStatus.tentative,
+    _calendarIcsStatusConfirmedIcs => CalendarIcsStatus.confirmed,
+    _calendarIcsStatusCancelledIcs => CalendarIcsStatus.cancelled,
+    _calendarIcsStatusNeedsActionIcs => CalendarIcsStatus.needsAction,
+    _calendarIcsStatusCompletedIcs => CalendarIcsStatus.completed,
+    _calendarIcsStatusInProcessIcs => CalendarIcsStatus.inProcess,
+    _calendarIcsStatusDraftIcs => CalendarIcsStatus.draft,
+    _calendarIcsStatusFinalIcs => CalendarIcsStatus.finalState,
+    _ => null,
+  };
 }
 
 @HiveType(typeId: _calendarPrivacyClassTypeId)
@@ -191,19 +191,17 @@ enum CalendarPrivacyClass {
   bool get isConfidential => this == CalendarPrivacyClass.confidential;
 
   String get icsValue => switch (this) {
-        CalendarPrivacyClass.public => _calendarPrivacyClassPublicIcs,
-        CalendarPrivacyClass.private => _calendarPrivacyClassPrivateIcs,
-        CalendarPrivacyClass.confidential =>
-          _calendarPrivacyClassConfidentialIcs,
-      };
+    CalendarPrivacyClass.public => _calendarPrivacyClassPublicIcs,
+    CalendarPrivacyClass.private => _calendarPrivacyClassPrivateIcs,
+    CalendarPrivacyClass.confidential => _calendarPrivacyClassConfidentialIcs,
+  };
 
   static CalendarPrivacyClass? fromIcsValue(String? value) => switch (value) {
-        _calendarPrivacyClassPublicIcs => CalendarPrivacyClass.public,
-        _calendarPrivacyClassPrivateIcs => CalendarPrivacyClass.private,
-        _calendarPrivacyClassConfidentialIcs =>
-          CalendarPrivacyClass.confidential,
-        _ => null,
-      };
+    _calendarPrivacyClassPublicIcs => CalendarPrivacyClass.public,
+    _calendarPrivacyClassPrivateIcs => CalendarPrivacyClass.private,
+    _calendarPrivacyClassConfidentialIcs => CalendarPrivacyClass.confidential,
+    _ => null,
+  };
 }
 
 @HiveType(typeId: _calendarTransparencyTypeId)
@@ -217,41 +215,40 @@ enum CalendarTransparency {
   bool get isTransparent => this == CalendarTransparency.transparent;
 
   String get icsValue => switch (this) {
-        CalendarTransparency.opaque => _calendarTransparencyOpaqueIcs,
-        CalendarTransparency.transparent => _calendarTransparencyTransparentIcs,
-      };
+    CalendarTransparency.opaque => _calendarTransparencyOpaqueIcs,
+    CalendarTransparency.transparent => _calendarTransparencyTransparentIcs,
+  };
 
   static CalendarTransparency? fromIcsValue(String? value) => switch (value) {
-        _calendarTransparencyOpaqueIcs => CalendarTransparency.opaque,
-        _calendarTransparencyTransparentIcs => CalendarTransparency.transparent,
-        _ => null,
-      };
+    _calendarTransparencyOpaqueIcs => CalendarTransparency.opaque,
+    _calendarTransparencyTransparentIcs => CalendarTransparency.transparent,
+    _ => null,
+  };
 }
 
 extension CalendarIcsStatusLabel on CalendarIcsStatus {
   String get label => switch (this) {
-        CalendarIcsStatus.tentative => _calendarIcsStatusTentativeLabel,
-        CalendarIcsStatus.confirmed => _calendarIcsStatusConfirmedLabel,
-        CalendarIcsStatus.cancelled => _calendarIcsStatusCancelledLabel,
-        CalendarIcsStatus.needsAction => _calendarIcsStatusNeedsActionLabel,
-        CalendarIcsStatus.completed => _calendarIcsStatusCompletedLabel,
-        CalendarIcsStatus.inProcess => _calendarIcsStatusInProcessLabel,
-        CalendarIcsStatus.draft => _calendarIcsStatusDraftLabel,
-        CalendarIcsStatus.finalState => _calendarIcsStatusFinalLabel,
-      };
+    CalendarIcsStatus.tentative => _calendarIcsStatusTentativeLabel,
+    CalendarIcsStatus.confirmed => _calendarIcsStatusConfirmedLabel,
+    CalendarIcsStatus.cancelled => _calendarIcsStatusCancelledLabel,
+    CalendarIcsStatus.needsAction => _calendarIcsStatusNeedsActionLabel,
+    CalendarIcsStatus.completed => _calendarIcsStatusCompletedLabel,
+    CalendarIcsStatus.inProcess => _calendarIcsStatusInProcessLabel,
+    CalendarIcsStatus.draft => _calendarIcsStatusDraftLabel,
+    CalendarIcsStatus.finalState => _calendarIcsStatusFinalLabel,
+  };
 }
 
 extension CalendarTransparencyLabel on CalendarTransparency {
   String get label => switch (this) {
-        CalendarTransparency.opaque => _calendarTransparencyOpaqueLabel,
-        CalendarTransparency.transparent =>
-          _calendarTransparencyTransparentLabel,
-      };
+    CalendarTransparency.opaque => _calendarTransparencyOpaqueLabel,
+    CalendarTransparency.transparent => _calendarTransparencyTransparentLabel,
+  };
 }
 
 extension CalendarIcsMetaJson on CalendarIcsMeta {
   Map<String, dynamic> toJson() =>
-      _$$CalendarIcsMetaImplToJson(this as _$CalendarIcsMetaImpl);
+      _$CalendarIcsMetaToJson(this as _CalendarIcsMeta);
 }
 
 @HiveType(typeId: _calendarIcsComponentTypeTypeId)
@@ -276,7 +273,7 @@ enum CalendarIcsComponentType {
 
 @freezed
 @HiveType(typeId: _calendarCriticalPathLinkTypeId)
-class CalendarCriticalPathLink with _$CalendarCriticalPathLink {
+abstract class CalendarCriticalPathLink with _$CalendarCriticalPathLink {
   const factory CalendarCriticalPathLink({
     @HiveField(_calendarCriticalPathLinkPathIdField) required String pathId,
     @HiveField(_calendarCriticalPathLinkOrderField) int? order,
@@ -288,7 +285,7 @@ class CalendarCriticalPathLink with _$CalendarCriticalPathLink {
 
 @freezed
 @HiveType(typeId: _calendarAxiExtensionsTypeId)
-class CalendarAxiExtensions with _$CalendarAxiExtensions {
+abstract class CalendarAxiExtensions with _$CalendarAxiExtensions {
   const factory CalendarAxiExtensions({
     @HiveField(_calendarAxiExtensionsCriticalPathsField)
     @Default(_emptyCalendarCriticalPathLinks)
@@ -304,7 +301,7 @@ class CalendarAxiExtensions with _$CalendarAxiExtensions {
 
 @freezed
 @HiveType(typeId: _calendarIcsMetaTypeId)
-class CalendarIcsMeta with _$CalendarIcsMeta {
+abstract class CalendarIcsMeta with _$CalendarIcsMeta {
   const factory CalendarIcsMeta({
     @HiveField(_calendarIcsMetaUidField) String? uid,
     @HiveField(_calendarIcsMetaDtStampField) DateTime? dtStamp,

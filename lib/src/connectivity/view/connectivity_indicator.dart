@@ -105,38 +105,39 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
 
     final colors = context.colorScheme;
     final brightness = ShadTheme.of(context).brightness;
-    final darkForeground =
-        brightness == Brightness.dark ? colors.background : colors.foreground;
+    final darkForeground = brightness == Brightness.dark
+        ? colors.background
+        : colors.foreground;
     final l10n = context.l10n;
     final presentation = switch (connectivityState) {
       ConnectivityConnected() => _ConnectivityIndicatorPresentation(
-          show: _showConnectedSuccess,
-          color: colors.green,
-          foregroundColor: darkForeground,
-          iconData: LucideIcons.cloud,
-          text: l10n.connectivityStatusConnected,
-        ),
+        show: _showConnectedSuccess,
+        color: colors.green,
+        foregroundColor: darkForeground,
+        iconData: LucideIcons.cloud,
+        text: l10n.connectivityStatusConnected,
+      ),
       ConnectivityConnecting() => _ConnectivityIndicatorPresentation(
-          show: true,
-          color: colors.primary,
-          foregroundColor: colors.primaryForeground,
-          iconData: LucideIcons.cloudCog,
-          text: l10n.connectivityStatusConnecting,
-        ),
+        show: true,
+        color: colors.primary,
+        foregroundColor: colors.primaryForeground,
+        iconData: LucideIcons.cloudCog,
+        text: l10n.connectivityStatusConnecting,
+      ),
       ConnectivityNotConnected() => _ConnectivityIndicatorPresentation(
-          show: true,
-          color: colors.warning,
-          foregroundColor: darkForeground,
-          iconData: LucideIcons.cloudOff,
-          text: l10n.connectivityStatusNotConnected,
-        ),
+        show: true,
+        color: colors.warning,
+        foregroundColor: darkForeground,
+        iconData: LucideIcons.cloudOff,
+        text: l10n.connectivityStatusNotConnected,
+      ),
       ConnectivityError() => _ConnectivityIndicatorPresentation(
-          show: true,
-          color: colors.destructive,
-          foregroundColor: colors.destructiveForeground,
-          iconData: LucideIcons.cloudOff,
-          text: l10n.connectivityStatusFailed,
-        ),
+        show: true,
+        color: colors.destructive,
+        foregroundColor: colors.destructiveForeground,
+        iconData: LucideIcons.cloudOff,
+        text: l10n.connectivityStatusFailed,
+      ),
     };
 
     return BlocListener<ConnectivityCubit, ConnectivityState>(
@@ -213,10 +214,7 @@ class ConnectivityIndicatorContainer extends StatelessWidget {
           axisAlignment: -1.0,
           child: FadeTransition(
             opacity: animation,
-            child: SlideTransition(
-              position: slideAnimation,
-              child: child,
-            ),
+            child: SlideTransition(position: slideAnimation, child: child),
           ),
         );
       },
@@ -261,10 +259,7 @@ class _ConnectivityIndicatorBanner extends StatelessWidget {
                   size: sizing.iconButtonIconSize,
                 ),
                 SizedBox.square(dimension: spacing.s),
-                Text(
-                  text,
-                  style: textStyle,
-                ),
+                Text(text, style: textStyle),
               ],
             ),
           ),

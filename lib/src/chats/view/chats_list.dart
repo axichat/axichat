@@ -51,7 +51,8 @@ class ChatsList extends StatelessWidget {
       builder: (context, searchState) {
         return BlocBuilder<RosterCubit, RosterState>(
           builder: (context, rosterState) {
-            final rosterItems = rosterState.items ??
+            final rosterItems =
+                rosterState.items ??
                 (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
                 const <RosterItem>[];
             return _ChatsListSync(
@@ -110,11 +111,11 @@ class _ChatsListSyncState extends State<_ChatsListSync> {
     final tabState = widget.searchState.stateFor(HomeTab.chats);
     final query = widget.searchState.active ? tabState.query : '';
     context.read<ChatsCubit>().updateSearchSnapshot(
-          active: widget.searchState.active,
-          query: query,
-          filterId: tabState.filterId,
-          sortOrder: tabState.sort,
-        );
+      active: widget.searchState.active,
+      query: query,
+      filterId: tabState.filterId,
+      sortOrder: tabState.sort,
+    );
   }
 
   void _syncRoster() {
@@ -151,8 +152,9 @@ class _ChatsListBody extends StatelessWidget {
     final sizing = context.sizing;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
-    final String? selfJid =
-        resolvedProfileJid.isNotEmpty ? resolvedProfileJid : null;
+    final String? selfJid = resolvedProfileJid.isNotEmpty
+        ? resolvedProfileJid
+        : null;
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
@@ -222,8 +224,9 @@ class _ChatsListBody extends StatelessWidget {
                   now: kEnableDemoChats ? demoNow : DateTime.now,
                   builder: (context, nowListenable) => AnimatedChatsListView(
                     items: visibleItems,
-                    animationDuration:
-                        context.watch<SettingsCubit>().animationDuration,
+                    animationDuration: context
+                        .watch<SettingsCubit>()
+                        .animationDuration,
                     scrollPhysics: scrollPhysics,
                     selectedJids: state.selectedJids,
                     openJid: state.openJid,
@@ -276,33 +279,34 @@ class _ChatsListBody extends StatelessWidget {
               final clamped = controller.value.clamp(0.0, 1.0).toDouble();
               final isLeadingPull =
                   controller.hasEdge && controller.edge!.isLeading;
-              final isActive = controller.isLoading ||
+              final isActive =
+                  controller.isLoading ||
                   (isLeadingPull && !controller.state.isIdle);
               final isRevealed =
                   isActive && (controller.isLoading || clamped > 0.0);
-              final revealFactor =
-                  isRevealed ? (controller.isLoading ? 1.0 : clamped) : 0.0;
+              final revealFactor = isRevealed
+                  ? (controller.isLoading ? 1.0 : clamped)
+                  : 0.0;
 
               final revealedExtent = refreshSpinnerExtent * revealFactor;
               final isArmed = controller.state.isArmed;
-              final showIndicator = isLeadingPull &&
+              final showIndicator =
+                  isLeadingPull &&
                   (controller.isLoading || clamped > refreshRevealThreshold);
               final indicatorContent = !showIndicator
                   ? const SizedBox.shrink()
                   : controller.isLoading
-                      ? AxiProgressIndicator(
-                          color: context.colorScheme.primary,
-                        )
-                      : AnimatedRotation(
-                          turns: isArmed ? 0.5 : 0.0,
-                          duration: baseAnimationDuration,
-                          curve: Curves.easeOutCubic,
-                          child: Icon(
-                            LucideIcons.arrowDown,
-                            size: refreshSpinnerDimension,
-                            color: context.colorScheme.primary,
-                          ),
-                        );
+                  ? AxiProgressIndicator(color: context.colorScheme.primary)
+                  : AnimatedRotation(
+                      turns: isArmed ? 0.5 : 0.0,
+                      duration: baseAnimationDuration,
+                      curve: Curves.easeOutCubic,
+                      child: Icon(
+                        LucideIcons.arrowDown,
+                        size: refreshSpinnerDimension,
+                        color: context.colorScheme.primary,
+                      ),
+                    );
 
               return Stack(
                 children: [
@@ -320,9 +324,7 @@ class _ChatsListBody extends StatelessWidget {
                             child: DecoratedBox(
                               decoration: BoxDecoration(
                                 color: context.colorScheme.card,
-                                border: Border(
-                                  bottom: context.borderSide,
-                                ),
+                                border: Border(bottom: context.borderSide),
                               ),
                               child: Align(
                                 alignment: Alignment.bottomCenter,
@@ -582,10 +584,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
       );
       if (currentIndex == -1) {
         _displayedItems.insert(targetIndex, nextChat);
-        listState.insertItem(
-          targetIndex,
-          duration: widget.animationDuration,
-        );
+        listState.insertItem(targetIndex, duration: widget.animationDuration);
         mutated = true;
         continue;
       }
@@ -599,10 +598,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
           duration: widget.animationDuration,
         );
         _displayedItems.insert(targetIndex, movedChat);
-        listState.insertItem(
-          targetIndex,
-          duration: widget.animationDuration,
-        );
+        listState.insertItem(targetIndex, duration: widget.animationDuration);
         mutated = true;
       }
 
@@ -733,8 +729,9 @@ class _ChatListTileState extends State<ChatListTile> {
     final displayName = item.displayName;
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
-    final double unreadDiameter =
-        showUnreadBadge ? _resolveUnreadDiameter(context) : 0.0;
+    final double unreadDiameter = showUnreadBadge
+        ? _resolveUnreadDiameter(context)
+        : 0.0;
     final unreadCutoutVerticalClearance = spacing.xs;
     final unreadMinDepth = spacing.m;
     final double unreadDepth = showUnreadBadge
@@ -747,7 +744,10 @@ class _ChatListTileState extends State<ChatListTile> {
     final timestampLabel = item.lastMessage == null
         ? null
         : formatTimeSinceLabel(
-            l10n, widget.timestampNow, item.lastChangeTimestamp);
+            l10n,
+            widget.timestampNow,
+            item.lastChangeTimestamp,
+          );
     final timestampThickness = timestampLabel == null
         ? 0.0
         : math.max(
@@ -762,15 +762,14 @@ class _ChatListTileState extends State<ChatListTile> {
     final overlayAlpha = brightness == Brightness.dark
         ? motion.tapHoverAlpha
         : motion.tapSplashAlpha;
-    final selectionOverlay = colors.primary.withValues(
-      alpha: overlayAlpha,
-    );
-    final tileBackgroundColor =
-        isOpen ? Color.alphaBlend(selectionOverlay, colors.card) : colors.card;
+    final selectionOverlay = colors.primary.withValues(alpha: overlayAlpha);
+    final tileBackgroundColor = isOpen
+        ? Color.alphaBlend(selectionOverlay, colors.card)
+        : colors.card;
     late final VoidCallback tileOnTap;
     if (selectionActive) {
-      tileOnTap =
-          () => context.read<ChatsCubit>().toggleChatSelection(item.jid);
+      tileOnTap = () =>
+          context.read<ChatsCubit>().toggleChatSelection(item.jid);
     } else {
       tileOnTap = () async {
         await _handleTap(item);
@@ -860,10 +859,7 @@ class _ChatListTileState extends State<ChatListTile> {
           cornerRadius: context.radii.container,
           child: Transform.translate(
             offset: Offset(0, -scaled(timestampOffset)),
-            child: Text(
-              timestampLabel,
-              style: context.textTheme.muted,
-            ),
+            child: Text(timestampLabel, style: context.textTheme.muted),
           ),
         ),
     ];
@@ -927,18 +923,14 @@ class _ChatListTileState extends State<ChatListTile> {
     final semanticsValue = l10n.chatsUnreadLabel(unreadCount);
     final semanticsHint = selectionActive
         ? (isSelected
-            ? l10n.chatsSemanticsUnselectHint
-            : l10n.chatsSemanticsSelectHint)
+              ? l10n.chatsSemanticsUnselectHint
+              : l10n.chatsSemanticsSelectHint)
         : l10n.chatsSemanticsOpenHint;
     Widget tileContent = tileSurface.withTapBounce();
     if (isDesktop) {
       tileContent = AxiContextMenuRegion(
         longPressEnabled: false,
-        items: [
-          AxiMenu(
-            actions: _chatContextMenuActions(item),
-          ),
-        ],
+        items: [AxiMenu(actions: _chatContextMenuActions(item))],
         child: tileContent,
       );
     }
@@ -979,10 +971,7 @@ class _ChatListTileState extends State<ChatListTile> {
       return _cachedTimestampWidth;
     }
     final painter = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: context.textTheme.small,
-      ),
+      text: TextSpan(text: label, style: context.textTheme.small),
       textDirection: Directionality.of(context),
       textScaler: MediaQuery.of(context).textScaler,
     )..layout();
@@ -1064,8 +1053,9 @@ class _ChatListTileState extends State<ChatListTile> {
         return StatefulBuilder(
           builder: (context, setState) {
             return ShadDialog(
-              constraints:
-                  BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
+              constraints: BoxConstraints(
+                maxWidth: context.sizing.dialogMaxWidth,
+              ),
               title: Text(
                 l10n.commonConfirm,
                 style: context.modalHeaderTextStyle,
@@ -1125,8 +1115,9 @@ class _ChatListTileState extends State<ChatListTile> {
 
   Future<void> _exportChatFromContextMenu(Chat chat) async {
     final l10n = context.l10n;
-    final scheduleExportCleanup =
-        context.read<ChatsCubit>().scheduleExportCleanup;
+    final scheduleExportCleanup = context
+        .read<ChatsCubit>()
+        .scheduleExportCleanup;
     final confirmed = await _confirmChatExport(context);
     if (!mounted || !confirmed) return;
     File? exportFile;
@@ -1190,9 +1181,9 @@ class _ChatListTileState extends State<ChatListTile> {
         label: chat.favorited ? l10n.commonUnfavorite : l10n.commonFavorite,
         onPressed: () async {
           await context.read<ChatsCubit>().toggleFavorited(
-                jid: chat.jid,
-                favorited: !chat.favorited,
-              );
+            jid: chat.jid,
+            favorited: !chat.favorited,
+          );
         },
       ),
       AxiMenuAction(
@@ -1200,9 +1191,9 @@ class _ChatListTileState extends State<ChatListTile> {
         label: chat.archived ? l10n.commonUnarchive : l10n.commonArchive,
         onPressed: () async {
           await context.read<ChatsCubit>().toggleArchived(
-                jid: chat.jid,
-                archived: !chat.archived,
-              );
+            jid: chat.jid,
+            archived: !chat.archived,
+          );
         },
       ),
       if (!widget.archivedContext)
@@ -1211,9 +1202,9 @@ class _ChatListTileState extends State<ChatListTile> {
           label: chat.hidden ? l10n.commonShow : l10n.commonHide,
           onPressed: () async {
             await context.read<ChatsCubit>().toggleHidden(
-                  jid: chat.jid,
-                  hidden: !chat.hidden,
-                );
+              jid: chat.jid,
+              hidden: !chat.hidden,
+            );
           },
         ),
       AxiMenuAction(
@@ -1263,9 +1254,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           icon: Icon(LucideIcons.squareCheck, size: iconSize),
           label: l10n.commonSelect,
           onPressed: () {
-            context.read<ChatsCubit>().ensureChatSelected(
-                  widget.chat.jid,
-                );
+            context.read<ChatsCubit>().ensureChatSelected(widget.chat.jid);
             widget.onClose();
           },
         ),
@@ -1285,9 +1274,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
               : l10n.commonFavorite,
           onPressed: () async {
             await context.read<ChatsCubit>().toggleFavorited(
-                  jid: widget.chat.jid,
-                  favorited: !widget.chat.favorited,
-                );
+              jid: widget.chat.jid,
+              favorited: !widget.chat.favorited,
+            );
             if (!mounted) return;
             widget.onClose();
           },
@@ -1303,13 +1292,14 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             widget.chat.archived ? LucideIcons.undo2 : LucideIcons.archive,
             size: iconSize,
           ),
-          label:
-              widget.chat.archived ? l10n.commonUnarchive : l10n.commonArchive,
+          label: widget.chat.archived
+              ? l10n.commonUnarchive
+              : l10n.commonArchive,
           onPressed: () async {
             await context.read<ChatsCubit>().toggleArchived(
-                  jid: widget.chat.jid,
-                  archived: !widget.chat.archived,
-                );
+              jid: widget.chat.jid,
+              archived: !widget.chat.archived,
+            );
             _showSnack(
               widget.chat.archived
                   ? l10n.chatsArchivedRestored
@@ -1328,9 +1318,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             label: widget.chat.hidden ? l10n.commonShow : l10n.commonHide,
             onPressed: () async {
               await context.read<ChatsCubit>().toggleHidden(
-                    jid: widget.chat.jid,
-                    hidden: !widget.chat.hidden,
-                  );
+                jid: widget.chat.jid,
+                hidden: !widget.chat.hidden,
+              );
               _showSnack(
                 widget.chat.hidden
                     ? l10n.chatsVisibleNotice
@@ -1376,9 +1366,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     if (result == null) return;
     try {
       await context.read<ChatsCubit>().renameContact(
-            jid: widget.chat.jid,
-            displayName: result,
-          );
+        jid: widget.chat.jid,
+        displayName: result,
+      );
       if (!mounted) return;
       _showSnack(l10n.chatContactRenameSuccess);
       widget.onClose();
@@ -1390,8 +1380,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
 
   Future<void> _exportChat() async {
     final l10n = context.l10n;
-    final scheduleExportCleanup =
-        context.read<ChatsCubit>().scheduleExportCleanup;
+    final scheduleExportCleanup = context
+        .read<ChatsCubit>()
+        .scheduleExportCleanup;
     final confirmed = await _confirmChatExport(context);
     if (!mounted || !confirmed) return;
     setState(() {

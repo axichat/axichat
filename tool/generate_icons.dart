@@ -8,8 +8,9 @@ import 'package:image/image.dart' as img;
 /// (squircle, circle, rounded rectangle, etc.), so we pre-render those shapes
 /// before flutter_launcher_icons copies them into the various bundles.
 Future<void> main(List<String> args) async {
-  final sourcePath =
-      args.isNotEmpty ? args[0] : 'assets/icons/app_icon_source.png';
+  final sourcePath = args.isNotEmpty
+      ? args[0]
+      : 'assets/icons/app_icon_source.png';
   final outputDir = args.length > 1 ? args[1] : 'assets/icons/generated';
 
   final sourceFile = File(sourcePath);

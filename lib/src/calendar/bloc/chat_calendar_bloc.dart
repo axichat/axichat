@@ -19,22 +19,22 @@ class ChatCalendarBloc extends CalendarBloc {
     super.emailService,
     super.reminderController,
     super.availabilityCoordinator,
-  })  : _chatJid = chatJid,
-        super(
-          storageId: chatCalendarStorageId(chatJid),
-          syncManagerBuilder: (bloc) {
-            coordinator.registerBloc(
-              chatJid: chatJid,
-              chatType: chatType,
-              readModel: () => bloc.currentModel,
-              applyModel: (CalendarModel model) async {
-                bloc.add(CalendarEvent.remoteModelApplied(model: model));
-              },
-            );
-            return coordinator.managerFor(chatJid: chatJid, chatType: chatType);
-          },
-          onDispose: () => coordinator.unregisterBloc(chatJid: chatJid),
-        );
+  }) : _chatJid = chatJid,
+       super(
+         storageId: chatCalendarStorageId(chatJid),
+         syncManagerBuilder: (bloc) {
+           coordinator.registerBloc(
+             chatJid: chatJid,
+             chatType: chatType,
+             readModel: () => bloc.currentModel,
+             applyModel: (CalendarModel model) async {
+               bloc.add(CalendarEvent.remoteModelApplied(model: model));
+             },
+           );
+           return coordinator.managerFor(chatJid: chatJid, chatType: chatType);
+         },
+         onDispose: () => coordinator.unregisterBloc(chatJid: chatJid),
+       );
 
   final String _chatJid;
 

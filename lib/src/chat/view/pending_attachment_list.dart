@@ -48,8 +48,9 @@ class PendingAttachmentList extends StatelessWidget {
                 onRetry: () => onRetry(pending.id),
                 onRemove: () => onRemove(pending.id),
                 onPressed: onPressed == null ? null : () => onPressed!(pending),
-                onLongPress:
-                    onLongPress == null ? null : () => onLongPress!(pending),
+                onLongPress: onLongPress == null
+                    ? null
+                    : () => onLongPress!(pending),
                 contextMenuBuilder: contextMenuBuilder,
               ),
             )
@@ -153,7 +154,8 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
           );
           final FileTypeReport resolvedReport = report ?? fallbackReport;
           final bool useDeclaredFallback = !resolvedReport.hasReliableDetection;
-          final bool isImage = resolvedReport.isDetectedImage ||
+          final bool isImage =
+              resolvedReport.isDetectedImage ||
               (useDeclaredFallback && resolvedReport.isDeclaredImage);
           if (isImage) {
             return _PendingImageAttachment(
@@ -188,10 +190,7 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
           onTapDown: _bounceController.handleTapDown,
           onTapUp: _bounceController.handleTapUp,
           onTapCancel: _bounceController.handleTapCancel,
-          child: AxiTapBounce(
-            controller: _bounceController,
-            child: preview,
-          ),
+          child: AxiTapBounce(controller: _bounceController, child: preview),
         ),
       );
     }
@@ -217,11 +216,11 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
           actions: {
             _ShowAttachmentMenuIntent:
                 CallbackAction<_ShowAttachmentMenuIntent>(
-              onInvoke: (_) {
-                _showMenu();
-                return null;
-              },
-            ),
+                  onInvoke: (_) {
+                    _showMenu();
+                    return null;
+                  },
+                ),
           },
           child: AxiContextMenuRegion(
             controller: _menuController,
@@ -283,7 +282,8 @@ class _PendingImageAttachment extends StatelessWidget {
       side: context.borderSide,
     );
     final clipShape = RoundedSuperellipseBorder(
-        borderRadius: BorderRadius.circular(context.radii.squircle));
+      borderRadius: BorderRadius.circular(context.radii.squircle),
+    );
     final borderWidth = context.borderSide.width;
     final previewExtent = sizing.attachmentPreviewExtent;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
@@ -296,10 +296,7 @@ class _PendingImageAttachment extends StatelessWidget {
         children: [
           Positioned.fill(
             child: DecoratedBox(
-              decoration: ShapeDecoration(
-                color: colors.card,
-                shape: shape,
-              ),
+              decoration: ShapeDecoration(color: colors.card, shape: shape),
               child: Padding(
                 padding: EdgeInsets.all(borderWidth),
                 child: ClipPath(
@@ -311,12 +308,12 @@ class _PendingImageAttachment extends StatelessWidget {
                     cacheHeight: cacheExtent,
                     frameBuilder:
                         (context, child, frame, wasSynchronouslyLoaded) {
-                      if (wasSynchronouslyLoaded || frame != null) {
-                        return child;
-                      }
-                      return _PendingImageSkeleton(shape: clipShape);
-                    },
-                    errorBuilder: (_, __, ___) => ColoredBox(
+                          if (wasSynchronouslyLoaded || frame != null) {
+                            return child;
+                          }
+                          return _PendingImageSkeleton(shape: clipShape);
+                        },
+                    errorBuilder: (_, _, _) => ColoredBox(
                       color: colors.card,
                       child: Icon(
                         attachmentIcon(
@@ -352,10 +349,7 @@ class _PendingImageAttachment extends StatelessWidget {
 }
 
 class _PendingFileAttachment extends StatelessWidget {
-  const _PendingFileAttachment({
-    required this.pending,
-    this.typeReport,
-  });
+  const _PendingFileAttachment({required this.pending, this.typeReport});
 
   final PendingAttachment pending;
   final FileTypeReport? typeReport;
@@ -368,8 +362,9 @@ class _PendingFileAttachment extends StatelessWidget {
     final borderRadius = BorderRadius.circular(context.radii.squircle);
     final isFailed = pending.status == PendingAttachmentStatus.failed;
     final background = isFailed ? colors.destructive : colors.card;
-    final foreground =
-        isFailed ? colors.destructiveForeground : colors.foreground;
+    final foreground = isFailed
+        ? colors.destructiveForeground
+        : colors.foreground;
     final borderColor = isFailed ? colors.destructive : colors.border;
     final sizeLabel = formatBytes(pending.attachment.sizeBytes, context.l10n);
     return IntrinsicWidth(
@@ -470,9 +465,11 @@ class _PendingImageSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     final sizing = context.sizing;
     final extent = sizing.attachmentPreviewExtent;
-    final resolvedShape = shape ??
+    final resolvedShape =
+        shape ??
         RoundedSuperellipseBorder(
-            borderRadius: BorderRadius.circular(context.radii.squircle));
+          borderRadius: BorderRadius.circular(context.radii.squircle),
+        );
     return SizedBox(
       width: extent,
       height: extent,
@@ -512,10 +509,7 @@ class _PendingFileSkeleton extends StatelessWidget {
           width: context.borderSide.width,
         ),
       ),
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.m,
-        vertical: spacing.s,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.s),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -603,11 +597,7 @@ class _ShimmerSurface extends StatelessWidget {
     final colors = context.colorScheme;
     return ExcludeSemantics(
       child: SizedBox.expand(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.card,
-          ),
-        ),
+        child: DecoratedBox(decoration: BoxDecoration(color: colors.card)),
       ),
     );
   }
@@ -634,15 +624,14 @@ class _PendingAttachmentErrorOverlay extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final errorLabel =
-        message?.isNotEmpty == true ? message! : l10n.chatAttachmentSendFailed;
+    final errorLabel = message?.isNotEmpty == true
+        ? message!
+        : l10n.chatAttachmentSendFailed;
     return Positioned.fill(
       child: ClipPath(
         clipper: ShapeBorderClipper(shape: shape),
         child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.destructive,
-          ),
+          decoration: BoxDecoration(color: colors.destructive),
           child: Padding(
             padding: EdgeInsets.all(spacing.s),
             child: Column(

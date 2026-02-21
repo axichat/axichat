@@ -46,8 +46,8 @@ class CalendarEventWidget extends StatefulWidget {
   State<CalendarEventWidget> createState() => _CalendarEventWidgetState();
 }
 
-typedef _EventContainerBuilder = Widget Function(
-    {bool isDragging, bool isGhost, bool interactive});
+typedef _EventContainerBuilder =
+    Widget Function({bool isDragging, bool isGhost, bool interactive});
 
 class _CalendarEventWidgetState extends State<CalendarEventWidget>
     with TickerProviderStateMixin {
@@ -171,8 +171,8 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
                 setState(() => _isDragging = true);
                 HapticFeedback.selectionClick();
                 context.read<CalendarBloc>().add(
-                      CalendarEvent.taskDragStarted(taskId: widget.task.baseId),
-                    );
+                  CalendarEvent.taskDragStarted(taskId: widget.task.baseId),
+                );
               },
               onDragEnd: (details) {
                 setState(() => _isDragging = false);
@@ -214,12 +214,14 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
       return;
     }
     final DateTime startTime = widget.task.scheduledTime!;
-    final Duration baseDuration = widget.task.duration ??
+    final Duration baseDuration =
+        widget.task.duration ??
         (widget.task.effectiveEndDate != null
             ? widget.task.effectiveEndDate!.difference(startTime)
             : const Duration(hours: 1));
-    final Duration normalizedDuration =
-        baseDuration.inMinutes <= 0 ? const Duration(hours: 1) : baseDuration;
+    final Duration normalizedDuration = baseDuration.inMinutes <= 0
+        ? const Duration(hours: 1)
+        : baseDuration;
     setState(() {
       _isResizing = true;
       _resizeAccumulatedDelta = 0;
@@ -254,8 +256,8 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
 
     switch (direction) {
       case ResizeDirection.top:
-        final int quarterChange =
-            (_resizeAccumulatedDelta / quarterHeight).round();
+        final int quarterChange = (_resizeAccumulatedDelta / quarterHeight)
+            .round();
         final int deltaMinutes = quarterChange * 15;
         final Duration candidateDuration =
             _resizeStartDuration! - Duration(minutes: deltaMinutes);
@@ -267,8 +269,8 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
         }
         break;
       case ResizeDirection.bottom:
-        final int quarterChange =
-            (_resizeAccumulatedDelta / quarterHeight).round();
+        final int quarterChange = (_resizeAccumulatedDelta / quarterHeight)
+            .round();
         final int deltaMinutes = quarterChange * 15;
         final Duration candidateDuration =
             _resizeStartDuration! + Duration(minutes: deltaMinutes);
@@ -371,8 +373,11 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
 
     if (_tempStartTime != null && _tempDuration != null) {
       String targetId = widget.task.id;
-      CalendarTask? targetTask =
-          context.read<CalendarBloc>().state.model.tasks[targetId];
+      CalendarTask? targetTask = context
+          .read<CalendarBloc>()
+          .state
+          .model
+          .tasks[targetId];
       if (targetTask == null) {
         final String baseId = widget.task.baseId;
         targetTask = context.read<CalendarBloc>().state.model.tasks[baseId];
@@ -382,13 +387,13 @@ class _CalendarEventWidgetState extends State<CalendarEventWidget>
       }
 
       context.read<CalendarBloc>().add(
-            CalendarEvent.taskResized(
-              taskId: targetId,
-              scheduledTime: _tempStartTime,
-              duration: _tempDuration,
-              endDate: _tempEndDate,
-            ),
-          );
+        CalendarEvent.taskResized(
+          taskId: targetId,
+          scheduledTime: _tempStartTime,
+          duration: _tempDuration,
+          endDate: _tempEndDate,
+        ),
+      );
 
       _tempStartTime = null;
       _tempDuration = null;
@@ -469,7 +474,7 @@ class _CalendarEventContainer extends StatelessWidget {
   final ValueChanged<bool> onHoverChanged;
   final void Function(ResizeDirection direction) onResizeStart;
   final void Function(DragUpdateDetails details, ResizeDirection direction)
-      onResizeUpdate;
+  onResizeUpdate;
   final VoidCallback onResizeEnd;
 
   @override
@@ -478,8 +483,8 @@ class _CalendarEventContainer extends StatelessWidget {
     final spacing = context.spacing;
     Color foregroundFor(Color background) =>
         ThemeData.estimateBrightnessForColor(background) == Brightness.dark
-            ? colors.primaryForeground
-            : colors.foreground;
+        ? colors.primaryForeground
+        : colors.foreground;
     final BorderRadius radius = BorderRadius.circular(calendarEventRadius);
     final double blendAmount = isDragging ? 0.22 : 0.14;
     final Color blendedBackground = Color.lerp(
@@ -487,8 +492,9 @@ class _CalendarEventContainer extends StatelessWidget {
       eventColor,
       blendAmount,
     )!;
-    final Color background =
-        isGhost ? blendedBackground.withValues(alpha: 0.75) : blendedBackground;
+    final Color background = isGhost
+        ? blendedBackground.withValues(alpha: 0.75)
+        : blendedBackground;
     final Color textColor = foregroundFor(blendedBackground);
     final Color mutedColor = textColor.withValues(alpha: 0.82);
     final Color stripeColor = eventColor;
@@ -516,8 +522,8 @@ class _CalendarEventContainer extends StatelessWidget {
             boxShadow: isDragging
                 ? calendarMediumShadow
                 : isHovering
-                    ? calendarLightShadow
-                    : calendarLightShadow,
+                ? calendarLightShadow
+                : calendarLightShadow,
             border: Border.all(
               color: stripeColor.withValues(alpha: 0.35),
               width: context.borderSide.width,
@@ -612,14 +618,16 @@ class _CalendarEventContent extends StatelessWidget {
               Expanded(
                 child: Text(
                   task.title,
-                  style: (height < 40
-                          ? context.textTheme.label
-                          : context.textTheme.small)
-                      .copyWith(
-                    color: textColor,
-                    decoration:
-                        task.isCompleted ? TextDecoration.lineThrough : null,
-                  ),
+                  style:
+                      (height < 40
+                              ? context.textTheme.label
+                              : context.textTheme.small)
+                          .copyWith(
+                            color: textColor,
+                            decoration: task.isCompleted
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
                   overflow: TextOverflow.ellipsis,
                   maxLines: height < 40 ? 1 : 2,
                 ),
@@ -638,9 +646,7 @@ class _CalendarEventContent extends StatelessWidget {
             Expanded(
               child: Text(
                 task.description!,
-                style: context.textTheme.label.copyWith(
-                  color: mutedColor,
-                ),
+                style: context.textTheme.label.copyWith(color: mutedColor),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 3,
               ),
@@ -658,10 +664,7 @@ class _CalendarEventContent extends StatelessWidget {
             SizedBox(height: spacing.xxs),
             Row(
               children: [
-                Text(
-                  '📍',
-                  style: context.textTheme.labelSm,
-                ),
+                Text('📍', style: context.textTheme.labelSm),
                 SizedBox(width: spacing.xxs),
                 Expanded(
                   child: Text(
@@ -693,7 +696,7 @@ class _CalendarEventResizeHandles extends StatelessWidget {
   final Color gripColor;
   final void Function(ResizeDirection direction) onResizeStart;
   final void Function(DragUpdateDetails details, ResizeDirection direction)
-      onResizeUpdate;
+  onResizeUpdate;
   final VoidCallback onResizeEnd;
 
   @override

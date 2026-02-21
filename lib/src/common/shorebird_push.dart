@@ -102,7 +102,8 @@ class ShorebirdChecker extends StatelessWidget {
       child: FutureBuilder<ShorebirdUpdateGateStatus>(
         future: checkShorebirdStatus(),
         builder: (context, snapshot) {
-          final hasUpdate = snapshot.connectionState == ConnectionState.done &&
+          final hasUpdate =
+              snapshot.connectionState == ConnectionState.done &&
               snapshot.hasData &&
               snapshot.requireData.requiresRestart;
           if (!hasUpdate) {

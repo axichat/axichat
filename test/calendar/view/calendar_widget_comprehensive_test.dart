@@ -214,9 +214,9 @@ void main() {
       final dynamic stateAfterPointerDown = tester.state(
         find.byType(TaskSidebar),
       );
-      final bool isResizingAfterDown = (stateAfterPointerDown as dynamic)
-          .debugSidebarState
-          .isResizing as bool;
+      final bool isResizingAfterDown =
+          (stateAfterPointerDown as dynamic).debugSidebarState.isResizing
+              as bool;
       expect(
         isResizingAfterDown,
         isTrue,
@@ -228,9 +228,9 @@ void main() {
       final dynamic sidebarStateDuringDrag = tester.state(
         find.byType(TaskSidebar),
       );
-      final bool isResizingDuringDrag = (sidebarStateDuringDrag as dynamic)
-          .debugSidebarState
-          .isResizing as bool;
+      final bool isResizingDuringDrag =
+          (sidebarStateDuringDrag as dynamic).debugSidebarState.isResizing
+              as bool;
       expect(
         isResizingDuringDrag,
         isTrue,
@@ -245,9 +245,9 @@ void main() {
       final dynamic sidebarStateAfterShrink = tester.state(
         find.byType(TaskSidebar),
       );
-      final double controllerShrunkWidth = (sidebarStateAfterShrink as dynamic)
-          .debugSidebarState
-          .width as double;
+      final double controllerShrunkWidth =
+          (sidebarStateAfterShrink as dynamic).debugSidebarState.width
+              as double;
       expect(
         controllerShrunkWidth,
         lessThan(initialWidth),

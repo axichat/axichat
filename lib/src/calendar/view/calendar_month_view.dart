@@ -42,7 +42,8 @@ class CalendarMonthView extends StatelessWidget {
       color: colors.border.withValues(alpha: 0.35),
     );
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
-    final bool chatCalendar = _isChatCalendar(context) &&
+    final bool chatCalendar =
+        _isChatCalendar(context) &&
         spec.sizeClass != CalendarSizeClass.expanded;
     final Border gridBorder = chatCalendar
         ? Border(
@@ -56,10 +57,7 @@ class CalendarMonthView extends StatelessWidget {
           );
 
     return Container(
-      decoration: BoxDecoration(
-        color: colors.card,
-        border: gridBorder,
-      ),
+      decoration: BoxDecoration(color: colors.card, border: gridBorder),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -173,19 +171,23 @@ class _WeekdayHeaderRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<String> labels = [
-      DateTime.monday,
-      DateTime.tuesday,
-      DateTime.wednesday,
-      DateTime.thursday,
-      DateTime.friday,
-      DateTime.saturday,
-      DateTime.sunday,
-    ].map((weekday) {
-      final List<String> localized =
-          MaterialLocalizations.of(context).narrowWeekdays;
-      return localized[weekday % localized.length];
-    }).toList(growable: false);
+    final List<String> labels =
+        [
+              DateTime.monday,
+              DateTime.tuesday,
+              DateTime.wednesday,
+              DateTime.thursday,
+              DateTime.friday,
+              DateTime.saturday,
+              DateTime.sunday,
+            ]
+            .map((weekday) {
+              final List<String> localized = MaterialLocalizations.of(
+                context,
+              ).narrowWeekdays;
+              return localized[weekday % localized.length];
+            })
+            .toList(growable: false);
     final TextStyle labelStyle = context.textTheme.sectionLabelM.copyWith(
       color: colors.mutedForeground,
     );
@@ -193,27 +195,31 @@ class _WeekdayHeaderRow extends StatelessWidget {
     return SizedBox(
       height: calendarWeekHeaderHeight,
       child: Row(
-        children: labels.asMap().entries.map((entry) {
-          final bool showRightBorder = entry.key != labels.length - 1;
-          return Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: colors.card,
-                border: Border(
-                  right: BorderSide(
-                    color: showRightBorder ? divider : Colors.transparent,
-                    width: context.borderSide.width,
+        children: labels
+            .asMap()
+            .entries
+            .map((entry) {
+              final bool showRightBorder = entry.key != labels.length - 1;
+              return Expanded(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.card,
+                    border: Border(
+                      right: BorderSide(
+                        color: showRightBorder ? divider : Colors.transparent,
+                        width: context.borderSide.width,
+                      ),
+                      bottom: BorderSide(
+                        color: divider,
+                        width: context.borderSide.width,
+                      ),
+                    ),
                   ),
-                  bottom: BorderSide(
-                    color: divider,
-                    width: context.borderSide.width,
-                  ),
+                  child: Center(child: Text(entry.value, style: labelStyle)),
                 ),
-              ),
-              child: Center(child: Text(entry.value, style: labelStyle)),
-            ),
-          );
-        }).toList(growable: false),
+              );
+            })
+            .toList(growable: false),
       ),
     );
   }
@@ -251,7 +257,8 @@ class _MonthWeekRow extends StatelessWidget {
                 inMonth: day.month == month,
                 isToday: _isSameDay(day, today),
                 isSelected: _isSameDay(day, selectedDate),
-                events: eventsByDate[DateTime(day.year, day.month, day.day)] ??
+                events:
+                    eventsByDate[DateTime(day.year, day.month, day.day)] ??
                     const <DayEvent>[],
                 onSelected: onDateSelected,
                 onCreateEvent: onCreateEvent,
@@ -303,8 +310,8 @@ class _MonthDayTile extends StatelessWidget {
     final Color dayColor = isToday
         ? calendarPrimaryColor
         : (inMonth
-            ? colors.foreground
-            : colors.mutedForeground.withValues(alpha: 0.55));
+              ? colors.foreground
+              : colors.mutedForeground.withValues(alpha: 0.55));
     final bool highlightDay = isToday || isSelected;
     final Color badgeBackground = highlightDay
         ? calendarPrimaryColor.withValues(alpha: isToday ? 0.18 : 0.12)
@@ -319,11 +326,12 @@ class _MonthDayTile extends StatelessWidget {
     final int overflow = events.length - visible.length;
 
     final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
-        borderRadius: BorderRadius.circular(context.radii.squircle));
+      borderRadius: BorderRadius.circular(context.radii.squircle),
+    );
     return AxiTapBounce(
       child: ShadFocusable(
         canRequestFocus: true,
-        builder: (context, _, __) {
+        builder: (context, _, _) {
           return Material(
             type: MaterialType.transparency,
             shape: shape,
@@ -336,8 +344,9 @@ class _MonthDayTile extends StatelessWidget {
               },
               onLongPress: () => onSelected(date),
               child: Container(
-                constraints:
-                    const BoxConstraints(minHeight: calendarMonthCellMinHeight),
+                constraints: const BoxConstraints(
+                  minHeight: calendarMonthCellMinHeight,
+                ),
                 decoration: BoxDecoration(
                   color: background,
                   border: Border(
@@ -418,7 +427,8 @@ class _DayEventBullet extends StatelessWidget {
     final spacing = context.spacing;
     final double opacity = dimmed ? 0.6 : 1;
     final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
-        borderRadius: BorderRadius.circular(context.radii.squircle));
+      borderRadius: BorderRadius.circular(context.radii.squircle),
+    );
 
     return Opacity(
       opacity: opacity,
@@ -427,7 +437,7 @@ class _DayEventBullet extends StatelessWidget {
         child: AxiTapBounce(
           child: ShadFocusable(
             canRequestFocus: true,
-            builder: (context, _, __) {
+            builder: (context, _, _) {
               return Material(
                 type: MaterialType.transparency,
                 shape: shape,

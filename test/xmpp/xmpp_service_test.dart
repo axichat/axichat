@@ -64,8 +64,8 @@ void main() {
     setUp(() async {
       xmppService = XmppService(
         buildConnection: () => mockConnection,
-        buildStateStore: (_, __) => mockStateStore,
-        buildDatabase: (_, __) => database,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
         notificationService: mockNotificationService,
       );
       await connectSuccessfully(xmppService);
@@ -426,12 +426,12 @@ void main() {
     bool builtStateStore = false;
     bool builtDatabase = false;
 
-    XmppStateStore buildStateStore(String _, String __) {
+    XmppStateStore buildStateStore(String _, String _) {
       builtStateStore = true;
       return mockStateStore;
     }
 
-    XmppDatabase buildDatabase(String _, String __) {
+    XmppDatabase buildDatabase(String _, String _) {
       builtDatabase = true;
       return database;
     }

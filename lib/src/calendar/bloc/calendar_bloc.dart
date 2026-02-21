@@ -39,11 +39,7 @@ CalendarSyncManager buildPersonalCalendarSyncManager(CalendarBloc owner) {
   return CalendarSyncManager(
     readModel: () => owner.currentModel,
     applyModel: (model) async {
-      owner.add(
-        CalendarEvent.remoteModelApplied(
-          model: model,
-        ),
-      );
+      owner.add(CalendarEvent.remoteModelApplied(model: model));
     },
     sendCalendarMessage: owner.sendPersonalCalendarSync,
     sendSnapshotFile: owner.uploadCalendarSnapshot,
@@ -53,31 +49,34 @@ CalendarSyncManager buildPersonalCalendarSyncManager(CalendarBloc owner) {
 class CalendarBloc extends BaseCalendarBloc {
   CalendarBloc({
     required CalendarSyncManager Function(CalendarBloc owner)
-        syncManagerBuilder,
-    required super.storage,
+    syncManagerBuilder,
+    required Storage storage,
     super.storageId,
     super.reminderController,
     CalendarAvailabilityShareCoordinator? availabilityCoordinator,
     required XmppService xmppService,
     EmailService? emailService,
     VoidCallback? onDispose,
-  })  : _syncManagerBuilder = syncManagerBuilder,
-        _availabilityCoordinator = availabilityCoordinator,
-        _xmppService = xmppService,
-        _emailService = emailService,
-        _onDispose = onDispose,
-        super(storagePrefix: authStoragePrefix) {
+  }) : _syncManagerBuilder = syncManagerBuilder,
+       _availabilityCoordinator = availabilityCoordinator,
+       _xmppService = xmppService,
+       _emailService = emailService,
+       _onDispose = onDispose,
+       super(storage: storage, storagePrefix: authStoragePrefix) {
     _syncManager = _syncManagerBuilder(this);
     _attachCalendarSyncSubscriptions();
+    _configureHomeCoordinators(storage: storage);
     on<CalendarSyncRequested>(_onCalendarSyncRequested);
     on<CalendarSyncPushed>(_onCalendarSyncPushed);
     on<CalendarRemoteModelApplied>(_onRemoteModelApplied);
     on<CalendarRemoteTaskApplied>(_onRemoteTaskApplied);
     on<CalendarTaskShareRequested>(_onCalendarTaskShareRequested);
     on<CalendarCriticalPathShareRequested>(
-        _onCalendarCriticalPathShareRequested);
+      _onCalendarCriticalPathShareRequested,
+    );
     on<CalendarAvailabilityShareRequested>(
-        _onCalendarAvailabilityShareRequested);
+      _onCalendarAvailabilityShareRequested,
+    );
   }
 
   final CalendarSyncManager Function(CalendarBloc owner) _syncManagerBuilder;
@@ -111,7 +110,7 @@ class CalendarBloc extends BaseCalendarBloc {
   CalendarAvailabilityShareCoordinator? get availabilityCoordinator =>
       _availabilityCoordinator;
 
-  void configureHomeCoordinators({required Storage storage}) {
+  void _configureHomeCoordinators({required Storage storage}) {
     if (_chatCalendarStorage == storage &&
         _chatCalendarCoordinator != null &&
         _availabilityCoordinator != null) {
@@ -121,32 +120,34 @@ class CalendarBloc extends BaseCalendarBloc {
     _chatCalendarStorage = storage;
     _chatCalendarCoordinator = ChatCalendarSyncCoordinator(
       storage: ChatCalendarStorage(storage: storage),
-      sendMessage: ({
-        required String jid,
-        required CalendarSyncOutbound outbound,
-        required ChatType chatType,
-      }) {
-        return sendCalendarSyncMessage(
-          jid: jid,
-          outbound: outbound,
-          chatType: chatType,
-        );
-      },
+      sendMessage:
+          ({
+            required String jid,
+            required CalendarSyncOutbound outbound,
+            required ChatType chatType,
+          }) {
+            return sendCalendarSyncMessage(
+              jid: jid,
+              outbound: outbound,
+              chatType: chatType,
+            );
+          },
       sendSnapshotFile: uploadCalendarSnapshot,
     );
     final availabilityCoordinator = CalendarAvailabilityShareCoordinator(
       store: CalendarAvailabilityShareStore(),
-      sendMessage: ({
-        required String jid,
-        required CalendarAvailabilityMessage message,
-        required ChatType chatType,
-      }) {
-        return sendAvailabilityMessage(
-          jid: jid,
-          message: message,
-          chatType: chatType,
-        );
-      },
+      sendMessage:
+          ({
+            required String jid,
+            required CalendarAvailabilityMessage message,
+            required ChatType chatType,
+          }) {
+            return sendAvailabilityMessage(
+              jid: jid,
+              message: message,
+              chatType: chatType,
+            );
+          },
     );
     attachAvailabilityCoordinator(availabilityCoordinator);
     _ensureChatCalendarSyncSubscription();
@@ -217,26 +218,23 @@ class CalendarBloc extends BaseCalendarBloc {
         _calendarSyncWarningSubscription != null) {
       return;
     }
-    _calendarSyncSubscription ??=
-        _xmppService.calendarSyncDispatchStream.listen(
-      (dispatch) {
-        _pendingCalendarDispatch = _pendingCalendarDispatch.then((_) async {
-          try {
-            final applied =
-                await _syncManager.onCalendarMessage(dispatch.inbound);
-            dispatch.complete(applied);
-          } catch (error, stackTrace) {
-            dispatch.completeError(error, stackTrace);
-          }
+    _calendarSyncSubscription ??= _xmppService.calendarSyncDispatchStream
+        .listen((dispatch) {
+          _pendingCalendarDispatch = _pendingCalendarDispatch.then((_) async {
+            try {
+              final applied = await _syncManager.onCalendarMessage(
+                dispatch.inbound,
+              );
+              dispatch.complete(applied);
+            } catch (error, stackTrace) {
+              dispatch.completeError(error, stackTrace);
+            }
+          });
         });
-      },
-    );
-    _calendarSyncWarningSubscription ??=
-        _xmppService.calendarSyncWarningStream.listen(
-      (warning) {
-        add(CalendarEvent.syncWarningRaised(warning: warning));
-      },
-    );
+    _calendarSyncWarningSubscription ??= _xmppService.calendarSyncWarningStream
+        .listen((warning) {
+          add(CalendarEvent.syncWarningRaised(warning: warning));
+        });
     _streamReadySubscription?.cancel();
     _streamReadySubscription = null;
   }
@@ -250,27 +248,27 @@ class CalendarBloc extends BaseCalendarBloc {
       return;
     }
     if (_xmppService.lastStreamReady == null) {
-      _chatStreamReadySubscription ??= _xmppService.streamReadyStream.listen(
-        (_) {
-          _ensureChatCalendarSyncSubscription();
-        },
-      );
+      _chatStreamReadySubscription ??= _xmppService.streamReadyStream.listen((
+        _,
+      ) {
+        _ensureChatCalendarSyncSubscription();
+      });
       return;
     }
-    _chatCalendarSyncSubscription ??=
-        _xmppService.chatCalendarSyncDispatchStream.listen(
-      (dispatch) {
-        _pendingChatCalendarDispatch =
-            _pendingChatCalendarDispatch.then((_) async {
-          try {
-            await coordinator.handleInbound(dispatch.envelope);
-            dispatch.complete();
-          } catch (error, stackTrace) {
-            dispatch.completeError(error, stackTrace);
-          }
+    _chatCalendarSyncSubscription ??= _xmppService
+        .chatCalendarSyncDispatchStream
+        .listen((dispatch) {
+          _pendingChatCalendarDispatch = _pendingChatCalendarDispatch.then((
+            _,
+          ) async {
+            try {
+              await coordinator.handleInbound(dispatch.envelope);
+              dispatch.complete();
+            } catch (error, stackTrace) {
+              dispatch.completeError(error, stackTrace);
+            }
+          });
         });
-      },
-    );
     _chatStreamReadySubscription?.cancel();
     _chatStreamReadySubscription = null;
   }
@@ -666,6 +664,7 @@ class CalendarBloc extends BaseCalendarBloc {
             calendarTaskIcsReadOnly: event.readOnly,
             chatType: chat.type,
           );
+          _xmppService.notifyDemoOutboundAttachmentMessage(chatJid: chat.jid);
           if (!event.readOnly) {
             await _linkSharedTask(chat: chat, taskId: event.task.id);
           }

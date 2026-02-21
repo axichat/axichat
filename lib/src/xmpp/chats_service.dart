@@ -142,9 +142,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   RegisteredStateKey _transportKeyFor(String jid) => _transportKeys.putIfAbsent(
-        jid,
-        () => XmppStateStore.registerKey('chat_transport_$jid'),
-      );
+    jid,
+    () => XmppStateStore.registerKey('chat_transport_$jid'),
+  );
 
   RegisteredStateKey _viewFilterKeyFor(String jid) =>
       _viewFilterKeys.putIfAbsent(
@@ -573,12 +573,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
     }
     await sendChatState(jid: jid, state: mox.ChatState.active);
-    fireAndForget(
-      () async {
-        await _publishConversationIndexForOpenChat(jid);
-      },
-      operationName: _publishOpenChatOperationName,
-    );
+    fireAndForget(() async {
+      await _publishConversationIndexForOpenChat(jid);
+    }, operationName: _publishOpenChatOperationName);
   }
 
   Future<void> closeChat() async {
@@ -823,8 +820,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
         final effectiveLastChange =
             lastChangeCandidate.isAfter(existing.lastChangeTimestamp)
-                ? lastChangeCandidate
-                : existing.lastChangeTimestamp;
+            ? lastChangeCandidate
+            : existing.lastChangeTimestamp;
 
         final shouldUpdateMuted = existing.muted != muted;
         final shouldUpdatePinned = existing.favorited != pinned;
@@ -866,8 +863,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<void> _reconcileConversationIndexRemovals(List<ConvItem> items) async {
-    final knownPeers =
-        items.map((item) => item.peerBare.toBare().toString()).toSet();
+    final knownPeers = items
+        .map((item) => item.peerBare.toBare().toString())
+        .toSet();
     final selfJid = myJid;
     await _dbOp<XmppDatabase>((db) async {
       final chats = await db.getChats(

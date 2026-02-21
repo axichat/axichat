@@ -205,12 +205,12 @@ final class _MessageStatusSyncEnvelope {
   final bool displayed;
 
   Map<String, dynamic> toJson() => {
-        _messageStatusSyncEnvelopeVersionKey: _messageStatusSyncEnvelopeVersion,
-        _messageStatusSyncEnvelopeIdKey: id,
-        _messageStatusSyncEnvelopeAckedKey: acked,
-        _messageStatusSyncEnvelopeReceivedKey: received,
-        _messageStatusSyncEnvelopeDisplayedKey: displayed,
-      };
+    _messageStatusSyncEnvelopeVersionKey: _messageStatusSyncEnvelopeVersion,
+    _messageStatusSyncEnvelopeIdKey: id,
+    _messageStatusSyncEnvelopeAckedKey: acked,
+    _messageStatusSyncEnvelopeReceivedKey: received,
+    _messageStatusSyncEnvelopeDisplayedKey: displayed,
+  };
 
   static _MessageStatusSyncEnvelope? tryParseEnvelope(String raw) {
     try {
@@ -257,9 +257,9 @@ enum _OutboundMessageKind { message, attachment }
 
 extension _OutboundMessageKindView on _OutboundMessageKind {
   String get label => switch (this) {
-        _OutboundMessageKind.message => _outboundSummaryKindMessage,
-        _OutboundMessageKind.attachment => _outboundSummaryKindAttachment,
-      };
+    _OutboundMessageKind.message => _outboundSummaryKindMessage,
+    _OutboundMessageKind.attachment => _outboundSummaryKindAttachment,
+  };
 }
 
 enum _OutboundMessageFlag {
@@ -280,30 +280,29 @@ enum _OutboundMessageFlag {
 
 extension _OutboundMessageFlagView on _OutboundMessageFlag {
   String get label => switch (this) {
-        _OutboundMessageFlag.chatState => _outboundSummaryFlagChatState,
-        _OutboundMessageFlag.markable => _outboundSummaryFlagMarkable,
-        _OutboundMessageFlag.receipt => _outboundSummaryFlagReceipt,
-        _OutboundMessageFlag.marker => _outboundSummaryFlagMarker,
-        _OutboundMessageFlag.processingHints =>
-          _outboundSummaryFlagProcessingHints,
-        _OutboundMessageFlag.reply => _outboundSummaryFlagReply,
-        _OutboundMessageFlag.retraction => _outboundSummaryFlagRetraction,
-        _OutboundMessageFlag.correction => _outboundSummaryFlagCorrection,
-        _OutboundMessageFlag.omemo => _outboundSummaryFlagOmemo,
-        _OutboundMessageFlag.oob => _outboundSummaryFlagOob,
-        _OutboundMessageFlag.sfs => _outboundSummaryFlagSfs,
-        _OutboundMessageFlag.uploadNotification =>
-          _outboundSummaryFlagUploadNotification,
-        _OutboundMessageFlag.xhtml => _outboundSummaryFlagXhtml,
-      };
+    _OutboundMessageFlag.chatState => _outboundSummaryFlagChatState,
+    _OutboundMessageFlag.markable => _outboundSummaryFlagMarkable,
+    _OutboundMessageFlag.receipt => _outboundSummaryFlagReceipt,
+    _OutboundMessageFlag.marker => _outboundSummaryFlagMarker,
+    _OutboundMessageFlag.processingHints => _outboundSummaryFlagProcessingHints,
+    _OutboundMessageFlag.reply => _outboundSummaryFlagReply,
+    _OutboundMessageFlag.retraction => _outboundSummaryFlagRetraction,
+    _OutboundMessageFlag.correction => _outboundSummaryFlagCorrection,
+    _OutboundMessageFlag.omemo => _outboundSummaryFlagOmemo,
+    _OutboundMessageFlag.oob => _outboundSummaryFlagOob,
+    _OutboundMessageFlag.sfs => _outboundSummaryFlagSfs,
+    _OutboundMessageFlag.uploadNotification =>
+      _outboundSummaryFlagUploadNotification,
+    _OutboundMessageFlag.xhtml => _outboundSummaryFlagXhtml,
+  };
 }
 
 extension _ChatTypeLogView on ChatType {
   String get logLabel => switch (this) {
-        ChatType.chat => _outboundSummaryChatTypeChat,
-        ChatType.groupChat => _outboundSummaryChatTypeGroup,
-        ChatType.note => _outboundSummaryChatTypeNote,
-      };
+    ChatType.chat => _outboundSummaryChatTypeChat,
+    ChatType.groupChat => _outboundSummaryChatTypeGroup,
+    ChatType.note => _outboundSummaryChatTypeNote,
+  };
 }
 
 final class _OutboundMessageSummary {
@@ -334,8 +333,9 @@ final class _OutboundMessageSummary {
       _pair(_outboundSummaryHasHtmlLabel, hasHtml),
     ];
     if (flags.isNotEmpty) {
-      final String joinedFlags =
-          flags.map((flag) => flag.label).join(_outboundSummaryFlagSeparator);
+      final String joinedFlags = flags
+          .map((flag) => flag.label)
+          .join(_outboundSummaryFlagSeparator);
       parts.add(_pair(_outboundSummaryFlagsLabel, joinedFlags));
     }
     if (errorName != null && errorName.isNotEmpty) {
@@ -527,9 +527,9 @@ mox.AccessModel _pinAccessModelForPolicy(_PinNodePolicy policy) =>
     };
 
 String _pinPublishModelForPolicy(_PinNodePolicy policy) => switch (policy) {
-      _PinNodePolicy.restricted => _pinPublishModelPublishers,
-      _PinNodePolicy.shared => _pinPublishModelOpen,
-    };
+  _PinNodePolicy.restricted => _pinPublishModelPublishers,
+  _PinNodePolicy.shared => _pinPublishModelOpen,
+};
 
 AxiPubSubNodeConfig _pinNodeConfig(_PinNodePolicy policy) =>
     AxiPubSubNodeConfig(
@@ -659,13 +659,13 @@ enum MamGlobalSyncOutcome {
 
 extension MamGlobalSyncOutcomeBehavior on MamGlobalSyncOutcome {
   bool get shouldFallbackToPerChat => switch (this) {
-        MamGlobalSyncOutcome.failed => true,
-        MamGlobalSyncOutcome.skippedDenied => true,
-        MamGlobalSyncOutcome.completed => false,
-        MamGlobalSyncOutcome.skippedUnsupported => false,
-        MamGlobalSyncOutcome.skippedInFlight => false,
-        MamGlobalSyncOutcome.skippedResumed => false,
-      };
+    MamGlobalSyncOutcome.failed => true,
+    MamGlobalSyncOutcome.skippedDenied => true,
+    MamGlobalSyncOutcome.completed => false,
+    MamGlobalSyncOutcome.skippedUnsupported => false,
+    MamGlobalSyncOutcome.skippedInFlight => false,
+    MamGlobalSyncOutcome.skippedResumed => false,
+  };
 }
 
 final _capabilityCacheKey = XmppStateStore.registerKey(
@@ -710,14 +710,14 @@ const int _inboundAttachmentAutoDownloadMaxEventsPerChat = 30;
 const int _inboundAttachmentAutoDownloadMaxEventsGlobal = 120;
 const WindowRateLimit _inboundAttachmentAutoDownloadPerChatRateLimit =
     WindowRateLimit(
-  maxEvents: _inboundAttachmentAutoDownloadMaxEventsPerChat,
-  window: _inboundAttachmentAutoDownloadRateLimitWindow,
-);
+      maxEvents: _inboundAttachmentAutoDownloadMaxEventsPerChat,
+      window: _inboundAttachmentAutoDownloadRateLimitWindow,
+    );
 const WindowRateLimit _inboundAttachmentAutoDownloadGlobalRateLimit =
     WindowRateLimit(
-  maxEvents: _inboundAttachmentAutoDownloadMaxEventsGlobal,
-  window: _inboundAttachmentAutoDownloadRateLimitWindow,
-);
+      maxEvents: _inboundAttachmentAutoDownloadMaxEventsGlobal,
+      window: _inboundAttachmentAutoDownloadRateLimitWindow,
+    );
 const int mamLoginBackfillMessageLimit = 50;
 const Duration _mamGlobalDeniedBackoff = Duration(minutes: 5);
 const int _calendarMamPageSize = 100;
@@ -752,10 +752,8 @@ const Set<String> _allowedHttpUploadPutHeaders = {
 };
 
 class XmppPeerCapabilities {
-  XmppPeerCapabilities({
-    required List<String> features,
-    this.resolvedAt,
-  }) : features = List<String>.unmodifiable(features);
+  XmppPeerCapabilities({required List<String> features, this.resolvedAt})
+    : features = List<String>.unmodifiable(features);
 
   final List<String> features;
   final DateTime? resolvedAt;
@@ -779,12 +777,11 @@ class _PeerCapabilities {
   final DateTime? resolvedAt;
 
   Map<String, Object> toJson() => {
-        'markers': supportsMarkers,
-        'receipts': supportsReceipts,
-        'features': features,
-        if (resolvedAt != null)
-          'resolvedAt': resolvedAt!.millisecondsSinceEpoch,
-      };
+    'markers': supportsMarkers,
+    'receipts': supportsReceipts,
+    'features': features,
+    if (resolvedAt != null) 'resolvedAt': resolvedAt!.millisecondsSinceEpoch,
+  };
 
   static _PeerCapabilities fromJson(Map<dynamic, dynamic> json) =>
       _PeerCapabilities(
@@ -859,11 +856,11 @@ class XmppAttachmentUpload {
     required String contentType,
     required int sizeBytes,
     required File file,
-  })  : _putUrl = putUrl,
-        _headers = headers,
-        _contentType = contentType,
-        _sizeBytes = sizeBytes,
-        _file = file;
+  }) : _putUrl = putUrl,
+       _headers = headers,
+       _contentType = contentType,
+       _sizeBytes = sizeBytes,
+       _file = file;
 
   final FileMetadataData metadata;
   final String getUrl;
@@ -979,10 +976,7 @@ mixin MessageService
       final chat = await db.getChat(chatJid);
       if (chat == null) return;
       await db.updateChat(
-        chat.copyWith(
-          lastMessage: lastMessage,
-          lastChangeTimestamp: timestamp,
-        ),
+        chat.copyWith(lastMessage: lastMessage, lastChangeTimestamp: timestamp),
       );
     });
   }
@@ -1025,8 +1019,9 @@ mixin MessageService
             .map((message) => message.stanzaID)
             .where((id) => id.isNotEmpty)
             .toSet();
-        final initialReactions =
-            await db.getReactionsForMessages(initialMessageIds);
+        final initialReactions = await db.getReactionsForMessages(
+          initialMessageIds,
+        );
         return _combineMessageAndReactionStreams(
           messageStream: messagesStream,
           initialMessages: initialMessages,
@@ -1055,13 +1050,10 @@ mixin MessageService
     DateTime candidate,
   ) async {
     return _dbOpReturning<XmppDatabase, DateTime>((db) async {
-      final messages = await db.getChatMessages(
-        jid,
-        start: 0,
-        end: 1,
-      );
-      final DateTime? lastTimestamp =
-          messages.isNotEmpty ? messages.first.timestamp : null;
+      final messages = await db.getChatMessages(jid, start: 0, end: 1);
+      final DateTime? lastTimestamp = messages.isNotEmpty
+          ? messages.first.timestamp
+          : null;
       if (lastTimestamp == null) {
         return candidate;
       }
@@ -1192,7 +1184,8 @@ mixin MessageService
       final shouldUpdateAcked =
           (incoming.acked || shouldUpdateReceived) && !existing.acked;
 
-      final needsMetadata = metadata != null &&
+      final needsMetadata =
+          metadata != null &&
           (existing.fileMetadataID == null || existing.fileMetadataID!.isEmpty);
       final needsBody =
           hasText && (existing.body == null || existing.body!.isEmpty);
@@ -1223,9 +1216,9 @@ mixin MessageService
   }
 
   RegisteredStateKey _lastSeenKeyFor(String jid) => _lastSeenKeys.putIfAbsent(
-        jid,
-        () => XmppStateStore.registerKey('mam_last_seen_$jid'),
-      );
+    jid,
+    () => XmppStateStore.registerKey('mam_last_seen_$jid'),
+  );
 
   Future<void> _recordLastSeenTimestamp(
     String chatJid,
@@ -1425,11 +1418,10 @@ mixin MessageService
   Stream<List<Draft>> draftsStream({
     int start = 0,
     int end = basePageItemLimit,
-  }) =>
-      createPaginatedStream<Draft, XmppDatabase>(
-        watchFunction: (db) async => db.watchDrafts(start: start, end: end),
-        getFunction: (db) => db.getDrafts(start: start, end: end),
-      );
+  }) => createPaginatedStream<Draft, XmppDatabase>(
+    watchFunction: (db) async => db.watchDrafts(start: start, end: end),
+    getFunction: (db) => db.getDrafts(start: start, end: end),
+  );
 
   Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String chatJid) =>
       createPaginatedStream<PinnedMessageEntry, XmppDatabase>(
@@ -1805,7 +1797,7 @@ mixin MessageService
   StreamController<CalendarSyncDispatch> _calendarSyncDispatchController =
       StreamController<CalendarSyncDispatch>.broadcast();
   StreamController<ChatCalendarSyncDispatch>
-      _chatCalendarSyncDispatchController =
+  _chatCalendarSyncDispatchController =
       StreamController<ChatCalendarSyncDispatch>.broadcast();
   StreamController<CalendarSyncWarning> _calendarSyncWarningController =
       StreamController<CalendarSyncWarning>.broadcast();
@@ -1856,9 +1848,9 @@ mixin MessageService
       WindowRateLimiter(_inboundAttachmentAutoDownloadGlobalRateLimit);
   final KeyedWindowRateLimiter _inboundAttachmentAutoDownloadChatLimiter =
       KeyedWindowRateLimiter(
-    limit: _inboundAttachmentAutoDownloadPerChatRateLimit,
-    cleanupInterval: _inboundAttachmentAutoDownloadRateLimitCleanupInterval,
-  );
+        limit: _inboundAttachmentAutoDownloadPerChatRateLimit,
+        cleanupInterval: _inboundAttachmentAutoDownloadRateLimitCleanupInterval,
+      );
   bool _pendingPinSyncLoaded = false;
   final Map<String, Set<String>> _pinAuthorizedPublishersByChat = {};
   final Map<String, Set<String>> _pendingPinPublishesByChat = {};
@@ -1921,8 +1913,9 @@ mixin MessageService
         if (metadata != null && (message.body?.trim().isEmpty ?? true)) {
           const fallbackFilename = 'Attachment';
           final filename = metadata.filename.trim();
-          final labelFilename =
-              filename.isNotEmpty ? filename : fallbackFilename;
+          final labelFilename = filename.isNotEmpty
+              ? filename
+              : fallbackFilename;
           final sizeBytes = metadata.sizeBytes ?? 0;
           message = message.copyWith(
             body: _attachmentLabel(labelFilename, sizeBytes),
@@ -1957,7 +1950,8 @@ mixin MessageService
           return;
         }
 
-        final hasInvite = event.get<DirectMucInviteData>() != null ||
+        final hasInvite =
+            event.get<DirectMucInviteData>() != null ||
             event.get<AxiMucInvitePayload>() != null;
         if (!event.displayable &&
             !hasInvite &&
@@ -2041,7 +2035,8 @@ mixin MessageService
         }
 
         await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
-        final isDirectChat = !isGroupChat &&
+        final isDirectChat =
+            !isGroupChat &&
             message.chatJid.isNotEmpty &&
             !_isMucChatJid(message.chatJid);
         final isPeerChat = isDirectChat && message.chatJid != myJid;
@@ -2134,30 +2129,24 @@ mixin MessageService
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
-        fireAndForget(
-          () async {
-            try {
-              await _flushPendingPinSync();
-            } on XmppAbortedException {
-              _log.fine(_pinSyncFlushAbortedLog);
-            } on Exception catch (error, stackTrace) {
-              _log.fine(_pinSyncFlushFailedLog, error, stackTrace);
-            }
-          },
-          operationName: _pinSyncFlushOperationName,
-        );
-        fireAndForget(
-          () async {
-            try {
-              await _syncEmailPinnedMessagesOnReconnect();
-            } on XmppAbortedException {
-              _log.fine(_pinSyncEmailReconnectAbortedLog);
-            } on Exception catch (error, stackTrace) {
-              _log.fine(_pinSyncEmailReconnectFailedLog, error, stackTrace);
-            }
-          },
-          operationName: _pinSyncEmailReconnectOperationName,
-        );
+        fireAndForget(() async {
+          try {
+            await _flushPendingPinSync();
+          } on XmppAbortedException {
+            _log.fine(_pinSyncFlushAbortedLog);
+          } on Exception catch (error, stackTrace) {
+            _log.fine(_pinSyncFlushFailedLog, error, stackTrace);
+          }
+        }, operationName: _pinSyncFlushOperationName);
+        fireAndForget(() async {
+          try {
+            await _syncEmailPinnedMessagesOnReconnect();
+          } on XmppAbortedException {
+            _log.fine(_pinSyncEmailReconnectAbortedLog);
+          } on Exception catch (error, stackTrace) {
+            _log.fine(_pinSyncEmailReconnectFailedLog, error, stackTrace);
+          }
+        }, operationName: _pinSyncEmailReconnectOperationName);
       });
   }
 
@@ -2284,9 +2273,7 @@ mixin MessageService
     } finally {
       _mucJoinMamSyncRooms.remove(normalizedRoom);
       if (started) {
-        emitXmppOperation(
-          success ? _mamMucSuccessEvent : _mamMucFailureEvent,
-        );
+        emitXmppOperation(success ? _mamMucSuccessEvent : _mamMucFailureEvent);
       }
     }
   }
@@ -2494,32 +2481,32 @@ mixin MessageService
   }
 
   @override
-  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
-    ..addAll([
-      MessageSanitizerManager(),
-      mox.MessageManager(),
-      XhtmlImManager(),
-      mox.CarbonsManager(),
-      mox.MAMManager(),
-      MamStreamManagementGuard(),
-      mox.MessageDeliveryReceiptManager(),
-      mox.ChatMarkerManager(),
-      mox.MessageRepliesManager(),
-      mox.ChatStateManager(),
-      mox.DelayedDeliveryManager(),
-      mox.MessageRetractionManager(),
-      mox.LastMessageCorrectionManager(),
-      mox.MessageReactionsManager(),
-      mox.MessageProcessingHintManager(),
-      mox.EmeManager(),
-      MUCManager(),
-      mox.OOBManager(),
-      mox.HttpFileUploadManager(),
-      mox.FileUploadNotificationManager(),
-      // mox.StickersManager(),
-      // mox.MUCManager(),
-      mox.SFSManager(),
-    ]);
+  List<mox.XmppManagerBase> get featureManagers =>
+      super.featureManagers..addAll([
+        MessageSanitizerManager(),
+        mox.MessageManager(),
+        XhtmlImManager(),
+        mox.CarbonsManager(),
+        mox.MAMManager(),
+        MamStreamManagementGuard(),
+        mox.MessageDeliveryReceiptManager(),
+        mox.ChatMarkerManager(),
+        mox.MessageRepliesManager(),
+        mox.ChatStateManager(),
+        mox.DelayedDeliveryManager(),
+        mox.MessageRetractionManager(),
+        mox.LastMessageCorrectionManager(),
+        mox.MessageReactionsManager(),
+        mox.MessageProcessingHintManager(),
+        mox.EmeManager(),
+        MUCManager(),
+        mox.OOBManager(),
+        mox.HttpFileUploadManager(),
+        mox.FileUploadNotificationManager(),
+        // mox.StickersManager(),
+        // mox.MUCManager(),
+        mox.SFSManager(),
+      ]);
 
   mox.MessageEvent _buildOutgoingMessageEvent({
     required Message message,
@@ -2533,8 +2520,9 @@ mixin MessageService
     final targetJid = mox.JID.fromString(message.chatJid);
     final isGroupChat = chatType == ChatType.groupChat;
     final isPrivateMucMessage = isGroupChat && targetJid.resource.isNotEmpty;
-    final toJid =
-        isGroupChat && !isPrivateMucMessage ? targetJid.toBare() : targetJid;
+    final toJid = isGroupChat && !isPrivateMucMessage
+        ? targetJid.toBare()
+        : targetJid;
     final type = isGroupChat && !isPrivateMucMessage ? 'groupchat' : 'chat';
 
     return message.toMox(
@@ -2621,15 +2609,19 @@ mixin MessageService
     final managerNickPresent = managerNick?.isNotEmpty == true;
     final needsJoin = _roomNeedsJoin(normalizedRoom);
     final hasSelfPresence = roomState?.hasSelfPresence == true;
-    final hasSelfStatus = roomState?.selfPresenceStatusCodes
-            .contains(MucStatusCode.selfPresence.code) ==
+    final hasSelfStatus =
+        roomState?.selfPresenceStatusCodes.contains(
+          MucStatusCode.selfPresence.code,
+        ) ==
         true;
     final myOccupantId = roomState?.myOccupantId;
     final myOccupantIdPresent = myOccupantId?.trim().isNotEmpty == true;
-    final expectedOccupantIdMatches = managerNickPresent &&
+    final expectedOccupantIdMatches =
+        managerNickPresent &&
         myOccupantIdPresent &&
         myOccupantId == '$normalizedRoom/$managerNick';
-    final selfOccupantPresent = myOccupantIdPresent &&
+    final selfOccupantPresent =
+        myOccupantIdPresent &&
         roomState?.occupants[myOccupantId]?.isPresent == true;
     final hasPresenceForSend = await _hasMucPresenceForSend(
       roomJid: normalizedRoom,
@@ -2793,8 +2785,9 @@ mixin MessageService
       _log.warning('Attempted to send a message before a JID was bound.');
       throw XmppMessageException();
     }
-    final resolvedEncryptionProtocol =
-        _resolveOutboundEncryptionProtocol(encryptionProtocol);
+    final resolvedEncryptionProtocol = _resolveOutboundEncryptionProtocol(
+      encryptionProtocol,
+    );
     final offlineDemo = demoOfflineMode;
     final isGroupChat = chatType == ChatType.groupChat;
     if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
@@ -2814,8 +2807,8 @@ mixin MessageService
     final resolvedText = text.isNotEmpty
         ? text
         : (normalizedHtml == null
-            ? ''
-            : HtmlContentCodec.toPlainText(normalizedHtml));
+              ? ''
+              : HtmlContentCodec.toPlainText(normalizedHtml));
     final CalendarFragmentPayload? fragmentPayload = calendarFragment == null
         ? null
         : CalendarFragmentPayload(fragment: calendarFragment);
@@ -2833,10 +2826,10 @@ mixin MessageService
           );
     final CalendarAvailabilityMessagePayload? availabilityPayload =
         calendarAvailabilityMessage == null
-            ? null
-            : CalendarAvailabilityMessagePayload(
-                message: calendarAvailabilityMessage,
-              );
+        ? null
+        : CalendarAvailabilityMessagePayload(
+            message: calendarAvailabilityMessage,
+          );
     final List<mox.StanzaHandlerExtension> resolvedExtensions =
         List<mox.StanzaHandlerExtension>.from(extraExtensions);
     if (fragmentPayload != null) {
@@ -2850,15 +2843,13 @@ mixin MessageService
     }
     final Map<String, dynamic>? fragmentData = calendarFragment?.toJson();
     final Map<String, dynamic>? taskData = taskIcsMessage?.toJson();
-    final Map<String, dynamic>? availabilityData =
-        calendarAvailabilityMessage?.toJson();
+    final Map<String, dynamic>? availabilityData = calendarAvailabilityMessage
+        ?.toJson();
     final PseudoMessageType? resolvedPseudoType =
         _calendarAvailabilityPseudoType(calendarAvailabilityMessage) ??
-            (taskData == null
-                ? (fragmentData == null
-                    ? null
-                    : PseudoMessageType.calendarFragment)
-                : PseudoMessageType.calendarTaskIcs);
+        (taskData == null
+            ? (fragmentData == null ? null : PseudoMessageType.calendarFragment)
+            : PseudoMessageType.calendarTaskIcs);
     final Map<String, dynamic>? pseudoMessageData =
         availabilityData ?? taskData ?? fragmentData;
     final String? resolvedForwardedFrom = forwardedFromJid?.trim();
@@ -3035,13 +3026,13 @@ mixin MessageService
     final lastTimestampUtc = lastTimestamp.toUtc();
     final nextTimestamp =
         cachedTimestamp != null && cachedTimestamp.isAfter(lastTimestampUtc)
-            ? cachedTimestamp
-            : lastTimestampUtc;
+        ? cachedTimestamp
+        : lastTimestampUtc;
 
     final mutedUntil = (chat?.muted ?? false)
         ? DateTime.timestamp()
-            .add(_conversationIndexMutedForeverDuration)
-            .toUtc()
+              .add(_conversationIndexMutedForeverDuration)
+              .toUtc()
         : null;
 
     final trimmedLastId = lastId?.trim();
@@ -3101,8 +3092,9 @@ mixin MessageService
       _log.warning('Attempted to send an attachment before a JID was bound.');
       throw XmppMessageException();
     }
-    final resolvedEncryptionProtocol =
-        _resolveOutboundEncryptionProtocol(encryptionProtocol);
+    final resolvedEncryptionProtocol = _resolveOutboundEncryptionProtocol(
+      encryptionProtocol,
+    );
     final isGroupChat = chatType == ChatType.groupChat;
     final senderJid = isGroupChat
         ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
@@ -3124,8 +3116,8 @@ mixin MessageService
     final resolvedCaption = captionText.isNotEmpty
         ? captionText
         : (normalizedHtmlCaption == null
-            ? ''
-            : HtmlContentCodec.toPlainText(normalizedHtmlCaption));
+              ? ''
+              : HtmlContentCodec.toPlainText(normalizedHtmlCaption));
     final body = resolvedCaption.isNotEmpty
         ? resolvedCaption
         : _attachmentLabel(filename, size);
@@ -3328,8 +3320,7 @@ mixin MessageService
   @override
   Future<XmppAttachmentUpload> _uploadDraftAttachment(
     EmailAttachment attachment,
-  ) =>
-      _uploadAttachment(attachment);
+  ) => _uploadAttachment(attachment);
 
   @override
   Future<void> _uploadDraftAttachmentFile({
@@ -3337,13 +3328,12 @@ mixin MessageService
     required FileMetadataData metadata,
     required String stanzaId,
     required bool shouldStore,
-  }) =>
-      _uploadAttachmentFile(
-        upload: upload,
-        metadata: metadata,
-        stanzaId: stanzaId,
-        shouldStore: shouldStore,
-      );
+  }) => _uploadAttachmentFile(
+    upload: upload,
+    metadata: metadata,
+    stanzaId: stanzaId,
+    shouldStore: shouldStore,
+  );
 
   Future<XmppAttachmentUpload> _uploadAttachment(
     EmailAttachment attachment,
@@ -3774,16 +3764,16 @@ mixin MessageService
             .map((header) => header.name.toLowerCase())
             .where(_safeHttpUploadLogHeaders.contains),
         ..._safeHttpUploadLogHeaders,
-      }.toList()
-        ..sort();
+      }.toList()..sort();
       final redactedHeaders = slot.headers
           .where(
             (header) =>
                 !_safeHttpUploadLogHeaders.contains(header.name.toLowerCase()),
           )
           .length;
-      final headerSuffix =
-          redactedHeaders > 0 ? ' (+$redactedHeaders redacted)' : '';
+      final headerSuffix = redactedHeaders > 0
+          ? ' (+$redactedHeaders redacted)'
+          : '';
       _log.finer(
         'HTTP upload PUT started len=$uploadLength '
         'headers=${safeHeaders.join(',')}$headerSuffix',
@@ -3802,9 +3792,9 @@ mixin MessageService
       final bodyBytes = await response
           .timeout(_httpUploadPutTimeout)
           .fold<List<int>>(<int>[], (buffer, data) {
-        buffer.addAll(data);
-        return buffer;
-      });
+            buffer.addAll(data);
+            return buffer;
+          });
       final success = statusCode >= 200 && statusCode < 300;
       if (!success) {
         _log.warning(
@@ -3993,7 +3983,8 @@ mixin MessageService
     final bool taskIcsReadOnly = message.calendarTaskIcsReadOnly;
     final CalendarAvailabilityMessage? availabilityMessage =
         message.calendarAvailabilityMessage;
-    final resolvedChatType = chatType ??
+    final resolvedChatType =
+        chatType ??
         await _dbOpReturning<XmppDatabase, ChatType?>(
           (db) async => (await db.getChat(message.chatJid))?.type,
         ) ??
@@ -4090,14 +4081,13 @@ mixin MessageService
     int pageSize = 50,
     bool isMuc = false,
     String? after,
-  }) async =>
-      _fetchMamPage(
-        jid: jid,
-        start: since,
-        pageSize: pageSize,
-        isMuc: isMuc,
-        after: after,
-      );
+  }) async => _fetchMamPage(
+    jid: jid,
+    start: since,
+    pageSize: pageSize,
+    isMuc: isMuc,
+    after: after,
+  );
 
   Future<MamPageResult> _fetchMamPage({
     required String jid,
@@ -4345,8 +4335,9 @@ mixin MessageService
     final resolvedFilename = attachment.fileName.isNotEmpty
         ? attachment.fileName
         : existing?.filename ?? p.basename(attachment.path);
-    final resolvedSizeBytes =
-        attachment.sizeBytes > 0 ? attachment.sizeBytes : existing?.sizeBytes;
+    final resolvedSizeBytes = attachment.sizeBytes > 0
+        ? attachment.sizeBytes
+        : existing?.sizeBytes;
     final resolvedMimeType = attachment.mimeType?.trim().isNotEmpty == true
         ? attachment.mimeType
         : existing?.mimeType;
@@ -4381,8 +4372,9 @@ mixin MessageService
     final resolvedFilename = attachment.fileName.isNotEmpty
         ? attachment.fileName
         : existing?.filename ?? p.basename(attachment.path);
-    final resolvedSizeBytes =
-        attachment.sizeBytes > 0 ? attachment.sizeBytes : existing?.sizeBytes;
+    final resolvedSizeBytes = attachment.sizeBytes > 0
+        ? attachment.sizeBytes
+        : existing?.sizeBytes;
     final metadata = FileMetadataData(
       id: resolvedId,
       filename: resolvedFilename,
@@ -4467,11 +4459,12 @@ mixin MessageService
     final Future<_PeerCapabilities> request = () async {
       if (!forceRefresh) {
         final parsed = parseJid(jid);
-        final capsManager =
-            _connection.getManager<mox.EntityCapabilitiesManager>();
+        final capsManager = _connection
+            .getManager<mox.EntityCapabilitiesManager>();
         if (parsed != null && capsManager != null) {
-          final cachedInfo =
-              await capsManager.getCachedDiscoInfoFromJid(parsed);
+          final cachedInfo = await capsManager.getCachedDiscoInfoFromJid(
+            parsed,
+          );
           if (cachedInfo != null) {
             final capabilities = _peerCapabilitiesFromInfo(cachedInfo);
             _capabilityCache[jid] = capabilities;
@@ -4510,8 +4503,10 @@ mixin MessageService
     required String jid,
     bool forceRefresh = false,
   }) async {
-    final capabilities =
-        await _capabilitiesFor(jid, forceRefresh: forceRefresh);
+    final capabilities = await _capabilitiesFor(
+      jid,
+      forceRefresh: forceRefresh,
+    );
     return XmppPeerCapabilities(
       features: capabilities.features,
       resolvedAt: capabilities.resolvedAt,
@@ -4573,9 +4568,7 @@ mixin MessageService
     return const CapabilityDecision(CapabilityDecisionKind.unsupported);
   }
 
-  Future<CapabilityDecision> _httpUploadDecision({
-    String? uploadJid,
-  }) async {
+  Future<CapabilityDecision> _httpUploadDecision({String? uploadJid}) async {
     final normalizedUploadJid = uploadJid?.trim();
     final accountDomain = addressDomainPart(myJid);
     final target = normalizedUploadJid?.isNotEmpty == true
@@ -4635,16 +4628,9 @@ mixin MessageService
   }
 
   Future<bool> _supportsMam(String jid) async {
-    final decision = await _featureDecision(
-      jid: jid,
-      feature: mox.mamXmlns,
-    );
+    final decision = await _featureDecision(jid: jid, feature: mox.mamXmlns);
     if (!decision.isAllowed) {
-      _logCapabilityDecision(
-        featureLabel: 'MAM',
-        jid: jid,
-        decision: decision,
-      );
+      _logCapabilityDecision(featureLabel: 'MAM', jid: jid, decision: decision);
       return false;
     }
     return true;
@@ -4691,8 +4677,9 @@ mixin MessageService
       return;
     }
 
-    final mucChats =
-        chats.where((chat) => chat.type == ChatType.groupChat).toList();
+    final mucChats = chats
+        .where((chat) => chat.type == ChatType.groupChat)
+        .toList();
     if (mucChats.isEmpty) return;
 
     final unsupportedRooms = <String>{};
@@ -4735,7 +4722,8 @@ mixin MessageService
 
     final markable =
         event.extensions.get<mox.MarkableData>()?.isMarkable ?? false;
-    final deliveryReceiptRequested = event.extensions
+    final deliveryReceiptRequested =
+        event.extensions
             .get<mox.MessageDeliveryReceiptData>()
             ?.receiptRequested ??
         false;
@@ -4756,8 +4744,9 @@ mixin MessageService
     }
     final target = isMuc ? event.from.toString() : peer;
     final messageType = _chatStateMessageType(target);
-    final capabilities =
-        isMuc ? _PeerCapabilities.supportsAll : await _capabilitiesFor(peer);
+    final capabilities = isMuc
+        ? _PeerCapabilities.supportsAll
+        : await _capabilitiesFor(peer);
 
     if (markable) {
       final decision = _decisionFromCapabilityFlag(
@@ -5102,8 +5091,9 @@ mixin MessageService
     final String? toBare = _normalizeMucRoomJidCandidate(
       event.to.toBare().toString(),
     );
-    final String? ownBare =
-        normalizedBareAddressValue(_myJid?.toBare().toString());
+    final String? ownBare = normalizedBareAddressValue(
+      _myJid?.toBare().toString(),
+    );
     if (ownBare == null || ownBare.isEmpty) {
       return fromBare ?? toBare;
     }
@@ -5119,8 +5109,9 @@ mixin MessageService
     final String? toBare = _normalizeMucRoomJidCandidate(
       event.to.toBare().toString(),
     );
-    final String? ownBare =
-        normalizedBareAddressValue(_myJid?.toBare().toString());
+    final String? ownBare = normalizedBareAddressValue(
+      _myJid?.toBare().toString(),
+    );
     if (ownBare == null || ownBare.isEmpty) {
       return fromBare ?? toBare;
     }
@@ -5179,12 +5170,13 @@ mixin MessageService
 
     final stanzaError = event.error;
     final MessageError error = _resolveMessageError(stanzaError);
-    final StanzaErrorConditionData? errorCondition =
-        event.extensions.get<StanzaErrorConditionData>();
+    final StanzaErrorConditionData? errorCondition = event.extensions
+        .get<StanzaErrorConditionData>();
     final _OutboundMessageSummary? summary = _outboundMessageSummaries.remove(
       stanzaId,
     );
-    final bool summaryDisplayable = (summary?.hasBody ?? false) ||
+    final bool summaryDisplayable =
+        (summary?.hasBody ?? false) ||
         (summary?.hasHtml ?? false) ||
         (summary?.flags.contains(_OutboundMessageFlag.sfs) ?? false) ||
         (summary?.flags.contains(_OutboundMessageFlag.oob) ?? false) ||
@@ -5192,8 +5184,8 @@ mixin MessageService
             false);
     final bool isChatStateOnlyError =
         event.extensions.get<mox.ChatState>() != null &&
-            !summaryDisplayable &&
-            !event.displayable;
+        !summaryDisplayable &&
+        !event.displayable;
     Message? persistedMessage;
     try {
       persistedMessage = await _dbOpReturning<XmppDatabase, Message?>(
@@ -5278,8 +5270,8 @@ mixin MessageService
       return true;
     }
 
-    final mox.OccupantIdData? occupantData =
-        event.extensions.get<mox.OccupantIdData>();
+    final mox.OccupantIdData? occupantData = event.extensions
+        .get<mox.OccupantIdData>();
     final String? occupantId = occupantData?.id;
     return await _dbOpReturning<XmppDatabase, bool>((db) async {
       if (await db.getMessageByOriginID(correction.id) case final message?) {
@@ -5308,8 +5300,8 @@ mixin MessageService
       return true;
     }
 
-    final mox.OccupantIdData? occupantData =
-        event.extensions.get<mox.OccupantIdData>();
+    final mox.OccupantIdData? occupantData = event.extensions
+        .get<mox.OccupantIdData>();
     final String? occupantId = occupantData?.id;
     return await _dbOpReturning<XmppDatabase, bool>((db) async {
       if (await db.getMessageByOriginID(retraction.id) case final message?) {
@@ -5347,8 +5339,9 @@ mixin MessageService
         return !event.displayable;
       }
       final bool isGroupChat = event.type == _messageTypeGroupchat;
-      final String senderJid =
-          isGroupChat ? event.from.toString() : event.from.toBare().toString();
+      final String senderJid = isGroupChat
+          ? event.from.toString()
+          : event.from.toBare().toString();
       await db.replaceReactions(
         messageId: message.stanzaID,
         senderJid: senderJid,
@@ -5374,8 +5367,9 @@ mixin MessageService
     }
 
     final bool isGroupChat = event.type == _messageTypeGroupchat;
-    final senderJid =
-        isGroupChat ? event.from.toString() : event.from.toBare().toString();
+    final senderJid = isGroupChat
+        ? event.from.toString()
+        : event.from.toBare().toString();
     final selfJid = myJid;
     final chatJid = _calendarSyncChatJid(event, selfJid);
     final chatType = _calendarSyncChatType(event);
@@ -5716,7 +5710,8 @@ mixin MessageService
     required Future<bool> Function(
       CalendarSyncMessage fullMessage,
       mox.MessageEvent event,
-    ) onMessageDecoded,
+    )
+    onMessageDecoded,
   }) async {
     final url = syncMessage.snapshotUrl;
     final hasUrl = url != null && url.trim().isNotEmpty;
@@ -5743,8 +5738,9 @@ mixin MessageService
     }
 
     try {
-      final bool? allowSelfOverride =
-          allowSelfDownload ? allowSelfDownload : null;
+      final bool? allowSelfOverride = allowSelfDownload
+          ? allowSelfDownload
+          : null;
       final decoded = await _decodeSnapshotFromAttachment(
         url ?? '',
         metadata: metadata,
@@ -5872,7 +5868,8 @@ mixin MessageService
           allowInsecureHostsOverride == true;
       final allowHttp =
           !kReleaseMode && (allowHttpOverrideEnabled || allowInsecureDownloads);
-      final allowInsecureHosts = !kReleaseMode &&
+      final allowInsecureHosts =
+          !kReleaseMode &&
           (allowInsecureHostsOverrideEnabled || allowInsecureDownloads);
       await _downloadUrlToFile(
         uri: uri,
@@ -6140,9 +6137,9 @@ mixin MessageService
     required List<Message> initialMessages,
     required List<Reaction> initialReactions,
     required Stream<List<Reaction>> Function(Iterable<String> messageIds)
-        reactionStreamFactory,
+    reactionStreamFactory,
     required Future<List<Reaction>> Function(Iterable<String> messageIds)
-        reactionSnapshotLoader,
+    reactionSnapshotLoader,
   }) {
     final controller = StreamController<List<Message>>.broadcast();
     StreamSubscription<List<Message>>? messageSubscription;
@@ -6201,8 +6198,9 @@ mixin MessageService
     void start() {
       emit();
       if (currentMessageIds.isNotEmpty) {
-        reactionSubscription =
-            reactionStreamFactory(currentMessageIds).listen((reactions) {
+        reactionSubscription = reactionStreamFactory(currentMessageIds).listen((
+          reactions,
+        ) {
           currentReactions = reactions;
           emit();
         });
@@ -6378,8 +6376,9 @@ mixin MessageService
     }
     final urls = <String>[];
     var exceededSourceLimit = false;
-    for (final source in statelessData.sources
-        .whereType<mox.StatelessFileSharingUrlSource>()) {
+    for (final source
+        in statelessData.sources
+            .whereType<mox.StatelessFileSharingUrlSource>()) {
       if (urls.length >= _attachmentSourceMaxCount) {
         exceededSourceLimit = true;
         break;
@@ -6444,51 +6443,51 @@ mixin MessageService
 
   Stream<Map<String, FileMetadataData?>> fileMetadataByIdsStream(
     Set<String> ids,
-  ) =>
-      createSingleItemStream<Map<String, FileMetadataData?>, XmppDatabase>(
-        watchFunction: (db) async {
-          final normalizedIds = <String>{
-            for (final id in ids)
-              if (id.trim().isNotEmpty) id.trim(),
-          };
-          if (normalizedIds.isEmpty) {
-            return Stream.value(const <String, FileMetadataData?>{});
-          }
-          final orderedIds = normalizedIds.toList(growable: false);
-          final initialRows = await db.getFileMetadataForIds(orderedIds);
-          final initialById = <String, FileMetadataData?>{
-            for (final id in orderedIds) id: null,
-            for (final metadata in initialRows) metadata.id: metadata,
-          };
-          if (db is! XmppDrift) {
-            return Stream.value(initialById);
-          }
-          final stream = db.fileMetadataAccessor.watchForIds(orderedIds).map(
-                (rows) => <String, FileMetadataData?>{
-                  for (final id in orderedIds) id: null,
-                  for (final metadata in rows) metadata.id: metadata,
-                },
-              );
-          return stream.startWith(initialById);
-        },
-      );
+  ) => createSingleItemStream<Map<String, FileMetadataData?>, XmppDatabase>(
+    watchFunction: (db) async {
+      final normalizedIds = <String>{
+        for (final id in ids)
+          if (id.trim().isNotEmpty) id.trim(),
+      };
+      if (normalizedIds.isEmpty) {
+        return Stream.value(const <String, FileMetadataData?>{});
+      }
+      final orderedIds = normalizedIds.toList(growable: false);
+      final initialRows = await db.getFileMetadataForIds(orderedIds);
+      final initialById = <String, FileMetadataData?>{
+        for (final id in orderedIds) id: null,
+        for (final metadata in initialRows) metadata.id: metadata,
+      };
+      if (db is! XmppDrift) {
+        return Stream.value(initialById);
+      }
+      final stream = db.fileMetadataAccessor
+          .watchForIds(orderedIds)
+          .map(
+            (rows) => <String, FileMetadataData?>{
+              for (final id in orderedIds) id: null,
+              for (final metadata in rows) metadata.id: metadata,
+            },
+          );
+      return stream.startWith(initialById);
+    },
+  );
 
   Stream<List<AttachmentGalleryItem>> attachmentGalleryStream({
     String? chatJid,
-  }) =>
-      createSingleItemStream<List<AttachmentGalleryItem>, XmppDatabase>(
-        watchFunction: (db) async {
-          if (db is! XmppDrift) {
-            return Stream.value(const <AttachmentGalleryItem>[]);
-          }
-          final trimmedJid = chatJid?.trim();
-          final includeChat = trimmedJid == null || trimmedJid.isEmpty;
-          return db.watchAttachmentGallery(
-            chatJid: chatJid,
-            includeChat: includeChat,
-          );
-        },
+  }) => createSingleItemStream<List<AttachmentGalleryItem>, XmppDatabase>(
+    watchFunction: (db) async {
+      if (db is! XmppDrift) {
+        return Stream.value(const <AttachmentGalleryItem>[]);
+      }
+      final trimmedJid = chatJid?.trim();
+      final includeChat = trimmedJid == null || trimmedJid.isEmpty;
+      return db.watchAttachmentGallery(
+        chatJid: chatJid,
+        includeChat: includeChat,
       );
+    },
+  );
 
   Future<String?> downloadInboundAttachment({
     required String metadataId,
@@ -6568,7 +6567,8 @@ mixin MessageService
           allowInsecureHostsOverride == true;
       final resolvedAllowHttp =
           !kReleaseMode && (allowHttpOverrideEnabled || allowInsecureDownloads);
-      final resolvedAllowInsecureHosts = !kReleaseMode &&
+      final resolvedAllowInsecureHosts =
+          !kReleaseMode &&
           (allowInsecureHostsOverrideEnabled || allowInsecureDownloads);
 
       await _validateInboundAttachmentDownloadUri(
@@ -6629,8 +6629,8 @@ mixin MessageService
       final resolvedMime = metadata.mimeType?.trim().isNotEmpty == true
           ? metadata.mimeType
           : responseMimeType?.trim().isNotEmpty == true
-              ? responseMimeType
-              : null;
+          ? responseMimeType
+          : null;
       final updatedMetadata = metadata.copyWith(
         path: finalFile.path,
         mimeType: resolvedMime,
@@ -6751,7 +6751,8 @@ mixin MessageService
     if (!await directory.exists()) {
       return;
     }
-    final normalizedExempt = <String>{}..addAll(
+    final normalizedExempt = <String>{}
+      ..addAll(
         exemptPaths
             .map((path) => p.normalize(path.trim()))
             .where((path) => path.isNotEmpty),
@@ -6826,8 +6827,9 @@ mixin MessageService
     final base = p.basename(filename).trim();
     if (base.isEmpty) return _attachmentFallbackName;
     final strippedSeparators = base.replaceAll(RegExp(r'[\\/]'), '_');
-    final collapsedWhitespace =
-        strippedSeparators.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final collapsedWhitespace = strippedSeparators
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (collapsedWhitespace.isEmpty) return _attachmentFallbackName;
     final safe = collapsedWhitespace.replaceAll(
       RegExp(r'[^a-zA-Z0-9._() \[\]-]'),
@@ -6895,8 +6897,8 @@ mixin MessageService
               ..followRedirects = false
               ..maxRedirects = 0;
         final response = await request.close().timeout(
-              _httpAttachmentGetTimeout,
-            );
+          _httpAttachmentGetTimeout,
+        );
         final statusCode = response.statusCode;
 
         if (_isHttpRedirectStatusCode(statusCode)) {
@@ -6981,14 +6983,13 @@ mixin MessageService
   }
 
   bool _isHttpRedirectStatusCode(int statusCode) => switch (statusCode) {
-        HttpStatus.movedPermanently ||
-        HttpStatus.found ||
-        HttpStatus.seeOther ||
-        HttpStatus.temporaryRedirect ||
-        HttpStatus.permanentRedirect =>
-          true,
-        _ => false,
-      };
+    HttpStatus.movedPermanently ||
+    HttpStatus.found ||
+    HttpStatus.seeOther ||
+    HttpStatus.temporaryRedirect ||
+    HttpStatus.permanentRedirect => true,
+    _ => false,
+  };
 
   Future<Uint8List> _decryptAttachmentBytes({
     required FileMetadataData metadata,
@@ -7191,9 +7192,8 @@ mixin MessageService
       );
       pendingChanged =
           _pendingPinPublishesByChat[chatJid]?.remove(normalized) == true ||
-              _pendingPinRetractionsByChat[chatJid]?.remove(normalized) ==
-                  true ||
-              pendingChanged;
+          _pendingPinRetractionsByChat[chatJid]?.remove(normalized) == true ||
+          pendingChanged;
     }
     if (pendingChanged) {
       await _persistPendingPinSync();
@@ -7481,8 +7481,8 @@ mixin MessageService
     };
     final localItems =
         await _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
-      (db) => db.getPinnedMessages(chatJid),
-    );
+          (db) => db.getPinnedMessages(chatJid),
+        );
     for (final local in localItems) {
       final messageId = local.messageStanzaId;
       if (remoteById.containsKey(messageId)) {
@@ -7666,14 +7666,14 @@ mixin MessageService
     await _subscribeToPins(host: host, nodeId: nodeId);
     final pendingRetractions =
         _pendingPinRetractionsByChat[normalizedChat]?.toList(growable: false) ??
-            const <String>[];
+        const <String>[];
     final pendingPublishes =
         _pendingPinPublishesByChat[normalizedChat]?.toList(growable: false) ??
-            const <String>[];
+        const <String>[];
     final pinnedEntries =
         await _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
-      (db) => db.getPinnedMessages(normalizedChat),
-    );
+          (db) => db.getPinnedMessages(normalizedChat),
+        );
     final pinnedById = <String, PinnedMessageEntry>{
       for (final entry in pinnedEntries) entry.messageStanzaId: entry,
     };
@@ -7692,8 +7692,8 @@ mixin MessageService
       }
       pendingChanged =
           _pendingPinRetractionsByChat[normalizedChat]?.remove(trimmed) ==
-                  true ||
-              pendingChanged;
+              true ||
+          pendingChanged;
     }
     for (final messageId in pendingPublishes) {
       final trimmed = messageId.trim();
@@ -7702,8 +7702,8 @@ mixin MessageService
       if (entry == null) {
         pendingChanged =
             _pendingPinPublishesByChat[normalizedChat]?.remove(trimmed) ==
-                    true ||
-                pendingChanged;
+                true ||
+            pendingChanged;
         continue;
       }
       final success = await _publishPinToServer(
@@ -7718,7 +7718,7 @@ mixin MessageService
       }
       pendingChanged =
           _pendingPinPublishesByChat[normalizedChat]?.remove(trimmed) == true ||
-              pendingChanged;
+          pendingChanged;
     }
     if (pendingChanged) {
       await _persistPendingPinSync();

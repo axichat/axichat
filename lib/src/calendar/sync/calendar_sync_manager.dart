@@ -54,18 +54,18 @@ class CalendarSyncManager {
     Future<CalendarSnapshotUploadResult> Function(File file)? sendSnapshotFile,
     CalendarSyncState Function()? readSyncState,
     Future<void> Function(CalendarSyncState)? writeSyncState,
-  })  : _readModel = readModel,
-        _applyModel = applyModel,
-        _sendCalendarMessage = sendCalendarMessage,
-        _sendSnapshotFile = sendSnapshotFile,
-        _readSyncState = readSyncState ?? CalendarSyncState.read,
-        _writeSyncState = writeSyncState ?? ((s) => s.write());
+  }) : _readModel = readModel,
+       _applyModel = applyModel,
+       _sendCalendarMessage = sendCalendarMessage,
+       _sendSnapshotFile = sendSnapshotFile,
+       _readSyncState = readSyncState ?? CalendarSyncState.read,
+       _writeSyncState = writeSyncState ?? ((s) => s.write());
 
   final CalendarModel Function() _readModel;
   final Future<void> Function(CalendarModel) _applyModel;
   final Future<void> Function(CalendarSyncOutbound) _sendCalendarMessage;
   final Future<CalendarSnapshotUploadResult> Function(File file)?
-      _sendSnapshotFile;
+  _sendSnapshotFile;
   final CalendarSyncState Function() _readSyncState;
   final Future<void> Function(CalendarSyncState) _writeSyncState;
   final ListQueue<CalendarSyncOutbound> _pendingEnvelopes =
@@ -148,10 +148,10 @@ class CalendarSyncManager {
 
       if (snapshotChecksum != null && localModel.checksum == snapshotChecksum) {
         final state = _readSyncState().resetCounter().copyWith(
-              lastAppliedTimestamp: inbound.appliedTimestamp,
-              lastAppliedStanzaId: inbound.stanzaId,
-              lastSnapshotChecksum: snapshotChecksum,
-            );
+          lastAppliedTimestamp: inbound.appliedTimestamp,
+          lastAppliedStanzaId: inbound.stanzaId,
+          lastSnapshotChecksum: snapshotChecksum,
+        );
         await _writeSyncState(state);
         return true;
       }
@@ -160,10 +160,10 @@ class CalendarSyncManager {
       await _applyModel(mergedModel);
 
       final state = _readSyncState().resetCounter().copyWith(
-            lastAppliedTimestamp: inbound.appliedTimestamp,
-            lastAppliedStanzaId: inbound.stanzaId,
-            lastSnapshotChecksum: snapshotChecksum,
-          );
+        lastAppliedTimestamp: inbound.appliedTimestamp,
+        lastAppliedStanzaId: inbound.stanzaId,
+        lastSnapshotChecksum: snapshotChecksum,
+      );
       await _writeSyncState(state);
       return true;
     } catch (e) {
@@ -328,8 +328,8 @@ class CalendarSyncManager {
         );
 
         final state = _readSyncState().resetCounter().copyWith(
-              lastSnapshotChecksum: result.checksum,
-            );
+          lastSnapshotChecksum: result.checksum,
+        );
         await _writeSyncState(state);
 
         SafeLogging.debugLog(
@@ -372,8 +372,8 @@ class CalendarSyncManager {
       await _sendCalendarMessage(CalendarSyncOutbound(envelope: messageJson));
 
       final state = _readSyncState().resetCounter().copyWith(
-            lastSnapshotChecksum: checksum,
-          );
+        lastSnapshotChecksum: checksum,
+      );
       await _writeSyncState(state);
 
       SafeLogging.debugLog(
@@ -508,10 +508,11 @@ class CalendarSyncManager {
           if (deletedAt != null && !remoteTask.modifiedAt.isAfter(deletedAt)) {
             return false;
           }
-          final Map<String, DateTime> updatedDeletedTaskIds = deletedAt == null
-              ? currentModel.deletedTaskIds
-              : Map<String, DateTime>.from(currentModel.deletedTaskIds)
-            ..remove(remoteTask.id);
+          final Map<String, DateTime> updatedDeletedTaskIds =
+              deletedAt == null
+                    ? currentModel.deletedTaskIds
+                    : Map<String, DateTime>.from(currentModel.deletedTaskIds)
+                ..remove(remoteTask.id);
           final CalendarModel baseModel = deletedAt == null
               ? currentModel
               : currentModel.copyWith(deletedTaskIds: updatedDeletedTaskIds);

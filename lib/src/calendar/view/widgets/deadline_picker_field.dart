@@ -177,8 +177,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
   }
 
   void _cacheTapRegionGroup() {
-    final renderTapRegion =
-        context.findAncestorRenderObjectOfType<RenderTapRegion>();
+    final renderTapRegion = context
+        .findAncestorRenderObjectOfType<RenderTapRegion>();
     final groupId = renderTapRegion?.groupId;
     if (!identical(_tapRegionGroupId, groupId)) {
       _tapRegionGroupId = groupId;
@@ -345,8 +345,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
               );
               final VoidCallback? handlePrevious =
                   _canNavigateToMonth(previousMonth)
-                      ? () => updateVisibleMonth(previousMonth)
-                      : null;
+                  ? () => updateVisibleMonth(previousMonth)
+                  : null;
               final VoidCallback? handleNext = _canNavigateToMonth(nextMonth)
                   ? () => updateVisibleMonth(nextMonth)
                   : null;
@@ -388,8 +388,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
                       : hostMediaQuery.size.height;
                   final double maxHeight =
                       availableHeight.isFinite && availableHeight > 0
-                          ? math.min(desiredHeight, availableHeight)
-                          : desiredHeight;
+                      ? math.min(desiredHeight, availableHeight)
+                      : desiredHeight;
                   final spacing = context.spacing;
                   final EdgeInsets sheetPadding = EdgeInsets.fromLTRB(
                     spacing.m,
@@ -472,8 +472,9 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
         ? math.min(desiredHeight, availableSpace)
         : desiredHeight;
 
-    final verticalOffset =
-        placeBelow ? triggerSize.height + gap : -(maxHeight + gap);
+    final verticalOffset = placeBelow
+        ? triggerSize.height + gap
+        : -(maxHeight + gap);
 
     double horizontalOffset = 0;
     final rightEdge = triggerOrigin.dx + dropdownWidth;
@@ -629,21 +630,19 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
     final DateTime? value = widget.value;
     final String? displayDate = value != null
         ? (widget.showTimeSelectors
-            ? TimeFormatter.formatFriendlyDateTime(context.l10n, value)
-            : TimeFormatter.formatFriendlyDate(value))
+              ? TimeFormatter.formatFriendlyDateTime(context.l10n, value)
+              : TimeFormatter.formatFriendlyDate(value))
         : null;
     final String? statusLabel = value != null ? _deadlineLabel(value) : null;
-    final bool showStatusLabel = value != null &&
+    final bool showStatusLabel =
+        value != null &&
         widget.showStatusColors &&
         (widget.showTimeSelectors || statusLabel != displayDate);
 
     final BorderSide baseBorder = context.borderSide;
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
       borderRadius: context.radius,
-      side: BorderSide(
-        color: borderColor,
-        width: baseBorder.width,
-      ),
+      side: BorderSide(color: borderColor, width: baseBorder.width),
     );
     final double iconSize = context.sizing.iconButtonIconSize;
     final spacing = context.spacing;
@@ -651,14 +650,15 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
       enabled: enabled,
       child: ShadFocusable(
         canRequestFocus: enabled,
-        builder: (context, _, __) {
+        builder: (context, _, _) {
           return Material(
             type: MaterialType.transparency,
             shape: decoratedShape,
             clipBehavior: Clip.antiAlias,
             child: ShadGestureDetector(
-              cursor:
-                  enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              cursor: enabled
+                  ? SystemMouseCursors.click
+                  : SystemMouseCursors.basic,
               onTap: enabled ? () => _toggleOverlay(context) : null,
               child: AnimatedContainer(
                 duration: calendarSlotHoverAnimationDuration,
@@ -734,8 +734,8 @@ class _DeadlinePickerFieldState extends State<DeadlinePickerField> {
           );
           final VoidCallback? handlePrevious =
               _canNavigateToMonth(previousMonth)
-                  ? () => _updateVisibleMonth(previousMonth)
-                  : null;
+              ? () => _updateVisibleMonth(previousMonth)
+              : null;
           final VoidCallback? handleNext = _canNavigateToMonth(nextMonth)
               ? () => _updateVisibleMonth(nextMonth)
               : null;
@@ -1151,10 +1151,7 @@ class _DeadlineMonthHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = context.spacing;
     return Container(
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.s,
-        vertical: spacing.s,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: spacing.s, vertical: spacing.s),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
@@ -1173,8 +1170,9 @@ class _DeadlineMonthHeader extends StatelessWidget {
             child: Center(
               child: Text(
                 label,
-                style: context.textTheme.small.strong
-                    .copyWith(color: calendarTitleColor),
+                style: context.textTheme.small.strong.copyWith(
+                  color: calendarTitleColor,
+                ),
               ),
             ),
           ),
@@ -1256,8 +1254,8 @@ class _DeadlineCalendarGrid extends StatelessWidget {
           final double maxWidth = constraints.maxWidth.isFinite
               ? constraints.maxWidth
               : (context.sizing.buttonHeightRegular * 7) + (spacing.xs * 6);
-          final double computedCellSize =
-              ((maxWidth - (spacing.xs * 6)) / 7).clamp(0.0, double.infinity);
+          final double computedCellSize = ((maxWidth - (spacing.xs * 6)) / 7)
+              .clamp(0.0, double.infinity);
           final double cellSize = math.min(
             context.sizing.buttonHeightRegular,
             computedCellSize,
@@ -1284,20 +1282,14 @@ class _DeadlineCalendarGrid extends StatelessWidget {
           }
           return Column(
             children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: weekdayRow,
-              ),
+              Row(mainAxisSize: MainAxisSize.min, children: weekdayRow),
               SizedBox(height: spacing.s),
               Wrap(
                 spacing: spacing.xs,
                 runSpacing: spacing.xs,
                 children: days.map((date) {
                   if (date == null) {
-                    return SizedBox(
-                      width: cellSize,
-                      height: cellSize,
-                    );
+                    return SizedBox(width: cellSize, height: cellSize);
                   }
 
                   final isSelected =

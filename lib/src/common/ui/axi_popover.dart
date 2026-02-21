@@ -88,7 +88,7 @@ class AxiPopover extends StatelessWidget {
         final canPop = !popoverController.isOpen;
         return PopScope(
           canPop: canPop,
-          onPopInvokedWithResult: (didPop, __) {
+          onPopInvokedWithResult: (didPop, _) {
             if (didPop || canPop) {
               return;
             }

@@ -15,7 +15,8 @@ CommandSurface resolveCommandSurface(BuildContext context) {
   if (env != null) return env.commandSurface;
   final mediaQuery = MediaQuery.maybeOf(context);
   final platform = Theme.of(context).platform;
-  final bool desktopPlatform = platform == TargetPlatform.macOS ||
+  final bool desktopPlatform =
+      platform == TargetPlatform.macOS ||
       platform == TargetPlatform.linux ||
       platform == TargetPlatform.windows;
   final bool desktopWidth = (mediaQuery?.size.width ?? 0) >= 900;
@@ -27,7 +28,7 @@ CommandSurface resolveCommandSurface(BuildContext context) {
 @immutable
 class Env {
   Env({required this.size, required this.platform})
-      : formFactor = _formFactorFor(size.width);
+    : formFactor = _formFactorFor(size.width);
 
   final Size size;
   final TargetPlatform platform;

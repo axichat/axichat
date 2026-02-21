@@ -28,11 +28,7 @@ Future<CalendarShareOutcome> shareCalendarExport({
   }
 
   await SharePlus.instance.share(
-    ShareParams(
-      files: <XFile>[XFile(file.path)],
-      subject: subject,
-      text: text,
-    ),
+    ShareParams(files: <XFile>[XFile(file.path)], subject: subject, text: text),
   );
   _scheduleExportCleanup(file);
   return CalendarShareOutcome.shared;
@@ -65,16 +61,13 @@ Future<bool> _openDirectory(Directory directory) async {
 }
 
 void _scheduleExportCleanup(File file) {
-  Timer(
-    _calendarExportCleanupDelay,
-    () async {
-      try {
-        if (await file.exists()) {
-          await file.delete();
-        }
-      } on Exception {
-        return;
+  Timer(_calendarExportCleanupDelay, () async {
+    try {
+      if (await file.exists()) {
+        await file.delete();
       }
-    },
-  );
+    } on Exception {
+      return;
+    }
+  });
 }

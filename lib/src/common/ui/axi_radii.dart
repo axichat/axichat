@@ -40,8 +40,9 @@ class AxiRadii extends ThemeExtension<AxiRadii> {
 
 const double axiContainerRadius = 8;
 const double axiSquircleRadius = 12;
-const BorderRadius axiBorderRadius =
-    BorderRadius.all(Radius.circular(axiContainerRadius));
+const BorderRadius axiBorderRadius = BorderRadius.all(
+  Radius.circular(axiContainerRadius),
+);
 
 const AxiRadii axiRadii = AxiRadii(
   container: axiContainerRadius,

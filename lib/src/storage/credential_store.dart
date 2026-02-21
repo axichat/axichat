@@ -35,10 +35,9 @@ class CredentialStore
   factory CredentialStore({
     required Capability capability,
     required Policy policy,
-  }) =>
-      _instance ??= kEnableDemoChats
-          ? _DemoCredentialStore(capability, policy)
-          : CredentialStore._(capability, policy);
+  }) => _instance ??= kEnableDemoChats
+      ? _DemoCredentialStore(capability, policy)
+      : CredentialStore._(capability, policy);
 
   final Capability capability;
   final Policy policy;

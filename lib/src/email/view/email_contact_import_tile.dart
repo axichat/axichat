@@ -52,10 +52,7 @@ class EmailContactImportTile extends StatelessWidget {
 }
 
 class EmailContactImportActionButton extends StatelessWidget {
-  const EmailContactImportActionButton({
-    super.key,
-    this.padding,
-  });
+  const EmailContactImportActionButton({super.key, this.padding});
 
   final EdgeInsetsGeometry? padding;
 
@@ -67,11 +64,9 @@ class EmailContactImportActionButton extends StatelessWidget {
       selector: (state) => state is EmailContactImportInProgress,
       builder: (context, loading) {
         return Padding(
-          padding: padding ??
-              EdgeInsets.symmetric(
-                horizontal: spacing.l,
-                vertical: spacing.xs,
-              ),
+          padding:
+              padding ??
+              EdgeInsets.symmetric(horizontal: spacing.l, vertical: spacing.xs),
           child: AxiListButton(
             leading: const Icon(LucideIcons.userRoundPlus),
             onPressed: loading
@@ -86,9 +81,7 @@ class EmailContactImportActionButton extends StatelessWidget {
                       ),
                     );
                   },
-            child: Text(
-              context.l10n.emailContactsImportTitle,
-            ),
+            child: Text(context.l10n.emailContactsImportTitle),
           ),
         );
       },
@@ -146,9 +139,10 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
     if (file == null) {
       return;
     }
-    context
-        .read<EmailContactImportCubit>()
-        .importContacts(file: file, format: _format);
+    context.read<EmailContactImportCubit>().importContacts(
+      file: file,
+      format: _format,
+    );
   }
 
   @override
@@ -237,10 +231,7 @@ class _EmailContactImportDialogState extends State<EmailContactImportDialog> {
                     .map(
                       (format) => ShadOption<EmailContactImportFormat>(
                         value: format,
-                        child: Text(
-                          format.label(l10n),
-                          style: selectTextStyle,
-                        ),
+                        child: Text(format.label(l10n), style: selectTextStyle),
                       ),
                     )
                     .toList(),

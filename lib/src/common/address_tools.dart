@@ -133,8 +133,9 @@ bool isValidAddress(String? raw, {int? maxBytes}) {
 String? displaySafeAddress(String? raw, {bool includeResource = false}) {
   final normalized = normalizeAddress(raw);
   if (normalized == null) return null;
-  final value =
-      includeResource ? fullAddress(normalized) : bareAddress(normalized);
+  final value = includeResource
+      ? fullAddress(normalized)
+      : bareAddress(normalized);
   final fallback = value ?? normalized;
   return sanitizeUnicodeControls(fallback).value;
 }

@@ -9,7 +9,6 @@ import 'package:axichat/src/authentication/view/auth_message_l10n.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -41,8 +40,9 @@ class _LoginFormState extends State<LoginForm> {
   }
 
   Future<void> _restoreRememberMePreference() async {
-    final preference =
-        await context.read<AuthenticationCubit>().loadRememberMeChoice();
+    final preference = await context
+        .read<AuthenticationCubit>()
+        .loadRememberMeChoice();
     if (!mounted) return;
     setState(() {
       rememberMe = preference;
@@ -62,21 +62,23 @@ class _LoginFormState extends State<LoginForm> {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
     widget.onSubmitStart?.call();
     await context.read<AuthenticationCubit>().login(
-          username: _jidTextController.value.text,
-          password: _passwordTextController.value.text,
-          rememberMe: rememberMe,
-        );
+      username: _jidTextController.value.text,
+      password: _passwordTextController.value.text,
+      rememberMe: rememberMe,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
-        final loading = state is AuthenticationInProgress ||
+        final loading =
+            state is AuthenticationInProgress ||
             state is AuthenticationComplete;
         final isBusy = widget.busy || loading;
-        final animationDuration =
-            context.watch<SettingsCubit>().animationDuration;
+        final animationDuration = context
+            .watch<SettingsCubit>()
+            .animationDuration;
         final spacing = context.spacing;
         final sizing = context.sizing;
         final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
@@ -125,11 +127,6 @@ class _LoginFormState extends State<LoginForm> {
                             ),
                           ),
                   ),
-                  Padding(
-                    padding: horizontalPadding,
-                    child: const NotificationRequest(),
-                  ),
-                  SizedBox(height: spacing.s),
                   Padding(
                     padding: horizontalPadding,
                     child: Semantics(

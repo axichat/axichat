@@ -8,8 +8,8 @@ import '../../mocks.dart';
 
 void main() {
   setUpAll(() {
-    registerFallbackValue(FakeChat());
-    registerFallbackValue(FakeMessage());
+    registerFallbackValue(fallbackChat);
+    registerFallbackValue(fallbackMessage);
   });
 
   late MockXmppDatabase database;
@@ -61,9 +61,9 @@ void main() {
       ),
     );
 
-    final persistedMessage = verify(() => database.saveMessage(captureAny()))
-        .captured
-        .single as Message;
+    final persistedMessage =
+        verify(() => database.saveMessage(captureAny())).captured.single
+            as Message;
     expect(persistedMessage.timestamp, timestamp);
 
     final updatedChat =

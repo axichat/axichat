@@ -17,18 +17,9 @@ void main() {
 
   test('prefill prefers abstract templates when requested', () async {
     final templates = [
-      _fakeTemplate(
-        id: 'abs-1',
-        category: AvatarTemplateCategory.abstract,
-      ),
-      _fakeTemplate(
-        id: 'abs-2',
-        category: AvatarTemplateCategory.abstract,
-      ),
-      _fakeTemplate(
-        id: 'misc-1',
-        category: AvatarTemplateCategory.misc,
-      ),
+      _fakeTemplate(id: 'abs-1', category: AvatarTemplateCategory.abstract),
+      _fakeTemplate(id: 'abs-2', category: AvatarTemplateCategory.abstract),
+      _fakeTemplate(id: 'misc-1', category: AvatarTemplateCategory.misc),
     ];
     final pipeline = AvatarPipeline(
       config: const AvatarPipelineConfig(
@@ -45,9 +36,7 @@ void main() {
       pipeline: pipeline,
       templates: templates,
       random: Random(4),
-      config: const AvatarCarouselEngineConfig(
-        historyLimit: 8,
-      ),
+      config: const AvatarCarouselEngineConfig(historyLimit: 8),
     );
     final context = AvatarCarouselBuildContext(
       colors: _buildColors(),
@@ -68,14 +57,8 @@ void main() {
 
   test('history avoids immediate repeats when alternates exist', () {
     final templates = [
-      _fakeTemplate(
-        id: 'abs-1',
-        category: AvatarTemplateCategory.abstract,
-      ),
-      _fakeTemplate(
-        id: 'abs-2',
-        category: AvatarTemplateCategory.abstract,
-      ),
+      _fakeTemplate(id: 'abs-1', category: AvatarTemplateCategory.abstract),
+      _fakeTemplate(id: 'abs-2', category: AvatarTemplateCategory.abstract),
     ];
     final engine = AvatarCarouselEngine(
       pipeline: _buildPipeline(),
@@ -185,8 +168,5 @@ img.Color _imgColor(Color color) {
 }
 
 ShadColorScheme _buildColors() {
-  return ShadColorScheme.fromName(
-    'zinc',
-    brightness: Brightness.light,
-  );
+  return ShadColorScheme.fromName('zinc', brightness: Brightness.light);
 }

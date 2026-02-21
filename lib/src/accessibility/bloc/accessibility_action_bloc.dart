@@ -21,11 +21,11 @@ class AccessibilityActionBloc
     required ChatsService chatsService,
     required MessageService messageService,
     RosterService? rosterService,
-  })  : _chatsService = chatsService,
-        _messageService = messageService,
-        _rosterService = rosterService,
-        _log = Logger('AccessibilityActionBloc'),
-        super(const AccessibilityActionState.initial()) {
+  }) : _chatsService = chatsService,
+       _messageService = messageService,
+       _rosterService = rosterService,
+       _log = Logger('AccessibilityActionBloc'),
+       super(const AccessibilityActionState.initial()) {
     on<AccessibilityMenuOpened>(_onMenuOpened);
     on<AccessibilityMenuClosed>(_onMenuClosed);
     on<AccessibilityMenuBack>(_onMenuBack);
@@ -40,18 +40,18 @@ class AccessibilityActionBloc
     on<AccessibilityDraftIdUpdated>(_onDraftIdUpdated);
 
     _chatSubscription = _chatsService.chatsStream().listen(
-          (items) => add(AccessibilityDataUpdated(chats: items)),
-        );
+      (items) => add(AccessibilityDataUpdated(chats: items)),
+    );
     _draftSubscription = _messageService.draftsStream().listen(
-          (items) => add(AccessibilityDataUpdated(drafts: items)),
-        );
+      (items) => add(AccessibilityDataUpdated(drafts: items)),
+    );
     if (_rosterService != null) {
       _rosterSubscription = _rosterService.rosterStream().listen(
-            (items) => add(AccessibilityDataUpdated(roster: items)),
-          );
+        (items) => add(AccessibilityDataUpdated(roster: items)),
+      );
       _inviteSubscription = _rosterService.invitesStream().listen(
-            (items) => add(AccessibilityDataUpdated(invites: items)),
-          );
+        (items) => add(AccessibilityDataUpdated(invites: items)),
+      );
     }
   }
 
@@ -253,8 +253,9 @@ class AccessibilityActionBloc
   ) async {
     final trimmed = state.newContactInput.trim();
     if (!trimmed.isValidJid) {
-      emit(state.copyWith(
-          errorMessage: AccessibilityActionError.jidInputInvalid));
+      emit(
+        state.copyWith(errorMessage: AccessibilityActionError.jidInputInvalid),
+      );
       return;
     }
     final contact = AccessibilityContact(
@@ -306,8 +307,9 @@ class AccessibilityActionBloc
       _drafts = sortedDrafts;
     }
     _refreshContacts();
-    final dismissedHighlights =
-        _purgeDismissedHighlights(state.dismissedHighlights);
+    final dismissedHighlights = _purgeDismissedHighlights(
+      state.dismissedHighlights,
+    );
     var nextState = state.copyWith(
       contacts: _contacts,
       invites: _invites,
@@ -494,10 +496,7 @@ class AccessibilityActionBloc
     }
   }
 
-  void _openDraftComposer(
-    Draft draft,
-    Emitter<AccessibilityActionState> emit,
-  ) {
+  void _openDraftComposer(Draft draft, Emitter<AccessibilityActionState> emit) {
     final recipients = draft.jids.map(_contactForJid).toList();
     final nextStack = List<AccessibilityStepEntry>.of(state.stack)
       ..add(
@@ -537,11 +536,7 @@ class AccessibilityActionBloc
       ),
     );
     emit(
-      state.copyWith(
-        stack: nextStack,
-        statusMessage: null,
-        errorMessage: null,
-      ),
+      state.copyWith(stack: nextStack, statusMessage: null, errorMessage: null),
     );
   }
 

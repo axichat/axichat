@@ -36,12 +36,14 @@ String sanitizeEmailAttachmentFilename(
   final fallbackCandidate = fallbackPath == null || fallbackPath.trim().isEmpty
       ? null
       : p.basename(fallbackPath.trim());
-  final candidate =
-      sanitized?.isNotEmpty == true ? sanitized! : (fallbackCandidate ?? '');
+  final candidate = sanitized?.isNotEmpty == true
+      ? sanitized!
+      : (fallbackCandidate ?? '');
   final base = p.basename(candidate).trim();
   final stripped = base.replaceAll(_emailFilenameSeparatorPattern, '_');
-  final collapsed =
-      stripped.replaceAll(_emailFilenameWhitespacePattern, ' ').trim();
+  final collapsed = stripped
+      .replaceAll(_emailFilenameWhitespacePattern, ' ')
+      .trim();
   if (collapsed.isEmpty) {
     return fallbackName;
   }

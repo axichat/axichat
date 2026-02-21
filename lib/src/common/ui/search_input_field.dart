@@ -41,8 +41,9 @@ class SearchInputField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final trimmedQuery = controller.text.trim();
-    final VoidCallback? clearAction =
-        trimmedQuery.isEmpty ? null : (onClear ?? controller.clear);
+    final VoidCallback? clearAction = trimmedQuery.isEmpty
+        ? null
+        : (onClear ?? controller.clear);
     final sizing = context.sizing;
     final resolvedButtonSize = clearButtonSize ?? sizing.inputSuffixButtonSize;
     final resolvedIconSize = clearIconSize ?? sizing.inputSuffixIconSize;

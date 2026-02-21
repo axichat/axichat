@@ -43,12 +43,13 @@ export 'package:flutter/services.dart'
 // late BuildContext context;
 // late FocusNode myFocusNode;
 
-typedef InputCounterWidgetBuilder = Widget? Function(
-  BuildContext context, {
-  required int currentLength,
-  required int? maxLength,
-  required bool isFocused,
-});
+typedef InputCounterWidgetBuilder =
+    Widget? Function(
+      BuildContext context, {
+      required int currentLength,
+      required int? maxLength,
+      required bool isFocused,
+    });
 
 const double _transparentCursorAlpha = 0.0;
 const double _selectionColorOpacity = 0.4;
@@ -62,8 +63,8 @@ class _AxiTextFieldSelectionGestureDetectorBuilder
     extends AxiTextSelectionGestureDetectorBuilder {
   _AxiTextFieldSelectionGestureDetectorBuilder({
     required _AxiTextFieldState state,
-  })  : _state = state,
-        super(delegate: state);
+  }) : _state = state,
+       super(delegate: state);
 
   final _AxiTextFieldState _state;
 
@@ -148,41 +149,44 @@ class AxiTextField extends StatefulWidget {
     this.spellCheckConfiguration,
     this.magnifierConfiguration,
     this.hintLocales,
-  })  : assert(obscuringCharacter.length == 1),
-        smartDashesType = smartDashesType ??
-            (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
-        smartQuotesType = smartQuotesType ??
-            (obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled),
-        assert(maxLines == null || maxLines > 0),
-        assert(minLines == null || minLines > 0),
-        assert(
-          (maxLines == null) || (minLines == null) || (maxLines >= minLines),
-          "minLines can't be greater than maxLines",
-        ),
-        assert(
-          !expands || (maxLines == null && minLines == null),
-          'minLines and maxLines must be null when expands is true.',
-        ),
-        assert(
-          !obscureText || maxLines == 1,
-          'Obscured fields cannot be multiline.',
-        ),
-        assert(
-          maxLength == null ||
-              maxLength == AxiTextField.noMaxLength ||
-              maxLength > 0,
-        ),
-        // Assert the following instead of setting it directly to avoid surprising the user by silently changing the value they set.
-        assert(
-          !identical(textInputAction, TextInputAction.newline) ||
-              maxLines == 1 ||
-              !identical(keyboardType, TextInputType.text),
-          'Use keyboardType TextInputType.multiline when using TextInputAction.newline on a multiline TextField.',
-        ),
-        keyboardType = keyboardType ??
-            (maxLines == 1 ? TextInputType.text : TextInputType.multiline),
-        enableInteractiveSelection =
-            enableInteractiveSelection ?? (!readOnly || !obscureText);
+  }) : assert(obscuringCharacter.length == 1),
+       smartDashesType =
+           smartDashesType ??
+           (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
+       smartQuotesType =
+           smartQuotesType ??
+           (obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled),
+       assert(maxLines == null || maxLines > 0),
+       assert(minLines == null || minLines > 0),
+       assert(
+         (maxLines == null) || (minLines == null) || (maxLines >= minLines),
+         "minLines can't be greater than maxLines",
+       ),
+       assert(
+         !expands || (maxLines == null && minLines == null),
+         'minLines and maxLines must be null when expands is true.',
+       ),
+       assert(
+         !obscureText || maxLines == 1,
+         'Obscured fields cannot be multiline.',
+       ),
+       assert(
+         maxLength == null ||
+             maxLength == AxiTextField.noMaxLength ||
+             maxLength > 0,
+       ),
+       // Assert the following instead of setting it directly to avoid surprising the user by silently changing the value they set.
+       assert(
+         !identical(textInputAction, TextInputAction.newline) ||
+             maxLines == 1 ||
+             !identical(keyboardType, TextInputType.text),
+         'Use keyboardType TextInputType.multiline when using TextInputAction.newline on a multiline TextField.',
+       ),
+       keyboardType =
+           keyboardType ??
+           (maxLines == 1 ? TextInputType.text : TextInputType.multiline),
+       enableInteractiveSelection =
+           enableInteractiveSelection ?? (!readOnly || !obscureText);
 
   final TextMagnifierConfiguration? magnifierConfiguration;
 
@@ -326,7 +330,8 @@ class AxiTextField extends StatefulWidget {
     BuildContext context,
     axi.EditableTextState editableTextState,
   ) {
-    final bool supportsSystemMenu = AxiSystemContextMenu.isSupported(context) &&
+    final bool supportsSystemMenu =
+        AxiSystemContextMenu.isSupported(context) &&
         !editableTextState.widget.readOnly;
     if (supportsSystemMenu) {
       return AxiSystemContextMenu.editableText(
@@ -366,7 +371,9 @@ class AxiTextField extends StatefulWidget {
     }
 
     return <ContextMenuButtonItem>[
-      ...spanAtCursor.suggestions.take(_spellCheckMaxSuggestions).map(
+      ...spanAtCursor.suggestions
+          .take(_spellCheckMaxSuggestions)
+          .map(
             (suggestion) => ContextMenuButtonItem(
               onPressed: () {
                 if (!editableTextState.mounted) {
@@ -454,8 +461,8 @@ class AxiTextField extends StatefulWidget {
           !editableTextState.widget.obscureText,
     );
 
-    final TextEditingValue replacedValue =
-        editableTextState.textEditingValue.replaced(replacementRange, text);
+    final TextEditingValue replacedValue = editableTextState.textEditingValue
+        .replaced(replacementRange, text);
     final TextEditingValue newValue = selectionOverride == null
         ? replacedValue
         : replacedValue.copyWith(selection: selectionOverride);
@@ -510,11 +517,12 @@ class AxiTextField extends StatefulWidget {
       return const SpellCheckConfiguration.disabled();
     }
     return configuration.copyWith(
-      misspelledTextStyle: configuration.misspelledTextStyle ??
+      misspelledTextStyle:
+          configuration.misspelledTextStyle ??
           AxiTextField.materialMisspelledTextStyle,
       spellCheckSuggestionsToolbarBuilder:
           configuration.spellCheckSuggestionsToolbarBuilder ??
-              AxiTextField.defaultSpellCheckSuggestionsToolbarBuilder,
+          AxiTextField.defaultSpellCheckSuggestionsToolbarBuilder,
     );
   }
 
@@ -526,11 +534,12 @@ class AxiTextField extends StatefulWidget {
       return const SpellCheckConfiguration.disabled();
     }
     return configuration.copyWith(
-      misspelledTextStyle: configuration.misspelledTextStyle ??
+      misspelledTextStyle:
+          configuration.misspelledTextStyle ??
           CupertinoTextField.cupertinoMisspelledTextStyle,
       spellCheckSuggestionsToolbarBuilder:
           configuration.spellCheckSuggestionsToolbarBuilder ??
-              AxiTextField.defaultSpellCheckSuggestionsToolbarBuilder,
+          AxiTextField.defaultSpellCheckSuggestionsToolbarBuilder,
     );
   }
 
@@ -605,16 +614,18 @@ class AxiTextField extends StatefulWidget {
       EnumProperty<SmartDashesType>(
         'smartDashesType',
         smartDashesType,
-        defaultValue:
-            obscureText ? SmartDashesType.disabled : SmartDashesType.enabled,
+        defaultValue: obscureText
+            ? SmartDashesType.disabled
+            : SmartDashesType.enabled,
       ),
     );
     properties.add(
       EnumProperty<SmartQuotesType>(
         'smartQuotesType',
         smartQuotesType,
-        defaultValue:
-            obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled,
+        defaultValue: obscureText
+            ? SmartQuotesType.disabled
+            : SmartQuotesType.enabled,
       ),
     );
     properties.add(
@@ -816,7 +827,7 @@ class _AxiTextFieldState extends State<AxiTextField>
   bool _showSelectionHandles = false;
 
   late _AxiTextFieldSelectionGestureDetectorBuilder
-      _selectionGestureDetectorBuilder;
+  _selectionGestureDetectorBuilder;
 
   // API for TextSelectionGestureDetectorBuilderDelegate.
   @override
@@ -839,10 +850,10 @@ class _AxiTextFieldState extends State<AxiTextField>
       widget.maxLength! > 0 &&
       (widget.controller == null
           ? !restorePending &&
-              _effectiveController.value.text.characters.length >
-                  widget.maxLength!
+                _effectiveController.value.text.characters.length >
+                    widget.maxLength!
           : _effectiveController.value.text.characters.length >
-              widget.maxLength!);
+                widget.maxLength!);
 
   bool get _hasError =>
       widget.decoration?.errorText != null ||
@@ -864,7 +875,8 @@ class _AxiTextFieldState extends State<AxiTextField>
             .applyDefaults(themeData.inputDecorationTheme)
             .copyWith(
               enabled: _isEnabled,
-              hintMaxLines: widget.decoration?.hintMaxLines ??
+              hintMaxLines:
+                  widget.decoration?.hintMaxLines ??
                   themeData.inputDecorationTheme.hintMaxLines ??
                   widget.maxLines,
             );
@@ -922,7 +934,8 @@ class _AxiTextFieldState extends State<AxiTextField>
     if (_hasIntrinsicError) {
       return effectiveDecoration.copyWith(
         errorText: effectiveDecoration.errorText ?? '',
-        counterStyle: effectiveDecoration.errorStyle ??
+        counterStyle:
+            effectiveDecoration.errorStyle ??
             (themeData.useMaterial3
                 ? _m3CounterErrorStyle(context)
                 : _m2CounterErrorStyle(context)),
@@ -1267,8 +1280,8 @@ class _AxiTextFieldState extends State<AxiTextField>
       case TargetPlatform.windows:
         spellCheckConfiguration =
             AxiTextField.inferAndroidSpellCheckConfiguration(
-          widget.spellCheckConfiguration,
-        );
+              widget.spellCheckConfiguration,
+            );
     }
 
     TextSelectionControls? textSelectionControls = widget.selectionControls;
@@ -1292,9 +1305,10 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorColor = _hasError
             ? _errorColor
             : widget.cursorColor ??
-                selectionStyle.cursorColor ??
-                cupertinoTheme.primaryColor;
-        selectionColor = selectionStyle.selectionColor ??
+                  selectionStyle.cursorColor ??
+                  cupertinoTheme.primaryColor;
+        selectionColor =
+            selectionStyle.selectionColor ??
             cupertinoTheme.primaryColor.withValues(
               alpha: _selectionColorOpacity,
             );
@@ -1314,9 +1328,10 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorColor = _hasError
             ? _errorColor
             : widget.cursorColor ??
-                selectionStyle.cursorColor ??
-                cupertinoTheme.primaryColor;
-        selectionColor = selectionStyle.selectionColor ??
+                  selectionStyle.cursorColor ??
+                  cupertinoTheme.primaryColor;
+        selectionColor =
+            selectionStyle.selectionColor ??
             cupertinoTheme.primaryColor.withValues(
               alpha: _selectionColorOpacity,
             );
@@ -1345,12 +1360,11 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorColor = _hasError
             ? _errorColor
             : widget.cursorColor ??
-                selectionStyle.cursorColor ??
-                theme.colorScheme.primary;
-        selectionColor = selectionStyle.selectionColor ??
-            theme.colorScheme.primary.withValues(
-              alpha: _selectionColorOpacity,
-            );
+                  selectionStyle.cursorColor ??
+                  theme.colorScheme.primary;
+        selectionColor =
+            selectionStyle.selectionColor ??
+            theme.colorScheme.primary.withValues(alpha: _selectionColorOpacity);
 
       case TargetPlatform.linux:
         forcePressEnabled = false;
@@ -1360,12 +1374,11 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorColor = _hasError
             ? _errorColor
             : widget.cursorColor ??
-                selectionStyle.cursorColor ??
-                theme.colorScheme.primary;
-        selectionColor = selectionStyle.selectionColor ??
-            theme.colorScheme.primary.withValues(
-              alpha: _selectionColorOpacity,
-            );
+                  selectionStyle.cursorColor ??
+                  theme.colorScheme.primary;
+        selectionColor =
+            selectionStyle.selectionColor ??
+            theme.colorScheme.primary.withValues(alpha: _selectionColorOpacity);
         handleDidGainAccessibilityFocus = () {
           // Automatically activate the TextField when it receives accessibility focus.
           if (!_effectiveFocusNode.hasFocus &&
@@ -1385,12 +1398,11 @@ class _AxiTextFieldState extends State<AxiTextField>
         cursorColor = _hasError
             ? _errorColor
             : widget.cursorColor ??
-                selectionStyle.cursorColor ??
-                theme.colorScheme.primary;
-        selectionColor = selectionStyle.selectionColor ??
-            theme.colorScheme.primary.withValues(
-              alpha: _selectionColorOpacity,
-            );
+                  selectionStyle.cursorColor ??
+                  theme.colorScheme.primary;
+        selectionColor =
+            selectionStyle.selectionColor ??
+            theme.colorScheme.primary.withValues(alpha: _selectionColorOpacity);
         handleDidGainAccessibilityFocus = () {
           // Automatically activate the TextField when it receives accessibility focus.
           if (!_effectiveFocusNode.hasFocus &&
@@ -1437,8 +1449,9 @@ class _AxiTextFieldState extends State<AxiTextField>
           expands: widget.expands,
           // Only show the selection highlight when the text field is focused.
           selectionColor: focusNode.hasFocus ? selectionColor : null,
-          selectionControls:
-              widget.selectionEnabled ? textSelectionControls : null,
+          selectionControls: widget.selectionEnabled
+              ? textSelectionControls
+              : null,
           onChanged: widget.onChanged,
           onSelectionChanged: _handleSelectionChanged,
           onEditingComplete: widget.onEditingComplete,
@@ -1479,7 +1492,8 @@ class _AxiTextFieldState extends State<AxiTextField>
           contentInsertionConfiguration: widget.contentInsertionConfiguration,
           contextMenuBuilder: widget.contextMenuBuilder,
           spellCheckConfiguration: spellCheckConfiguration,
-          magnifierConfiguration: widget.magnifierConfiguration ??
+          magnifierConfiguration:
+              widget.magnifierConfiguration ??
               TextMagnifier.adaptiveMagnifierConfiguration,
           hintLocales: widget.hintLocales,
         ),
@@ -1507,9 +1521,9 @@ class _AxiTextFieldState extends State<AxiTextField>
     }
     final MouseCursor effectiveMouseCursor =
         WidgetStateProperty.resolveAs<MouseCursor>(
-      widget.mouseCursor ?? WidgetStateMouseCursor.textable,
-      _statesController.value,
-    );
+          widget.mouseCursor ?? WidgetStateMouseCursor.textable,
+          _statesController.value,
+        );
 
     final int? semanticsMaxValueLength;
     if (_effectiveMaxLengthEnforcement != MaxLengthEnforcement.none &&
@@ -1540,8 +1554,8 @@ class _AxiTextFieldState extends State<AxiTextField>
                         if (!_effectiveController.selection.isValid) {
                           _effectiveController.selection =
                               TextSelection.collapsed(
-                            offset: _effectiveController.text.length,
-                          );
+                                offset: _effectiveController.text.length,
+                              );
                         }
                         _requestKeyboard();
                       },
@@ -1601,8 +1615,8 @@ TextStyle? _m2StateInputStyle(BuildContext context) =>
     });
 
 TextStyle _m2CounterErrorStyle(BuildContext context) => Theme.of(
-      context,
-    ).textTheme.bodySmall!.copyWith(color: Theme.of(context).colorScheme.error);
+  context,
+).textTheme.bodySmall!.copyWith(color: Theme.of(context).colorScheme.error);
 
 // BEGIN GENERATED TOKEN PROPERTIES - TextField
 

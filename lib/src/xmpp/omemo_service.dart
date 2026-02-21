@@ -788,10 +788,10 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
   @override
   Future<List<int>?> loadDeviceList(String jid) async {
     if (!_hasDatabase) return null;
-    final deviceList =
-        await _service._dbOpReturning<XmppDatabase, OmemoDeviceList?>(
-      (db) => db.getOmemoDeviceList(jid),
-    );
+    final deviceList = await _service
+        ._dbOpReturning<XmppDatabase, OmemoDeviceList?>(
+          (db) => db.getOmemoDeviceList(jid),
+        );
     return deviceList?.devices;
   }
 
@@ -852,13 +852,13 @@ class _OmemoPersistenceImpl implements mox.OmemoPersistence {
     if (!_hasDatabase) return <String, Map<int, int>>{};
     final allTrusts = await _service
         ._dbOpReturning<XmppDatabase, List<OmemoTrust>>((db) async {
-      try {
-        // Get all trust entries from database
-        return await db.getAllOmemoTrusts();
-      } catch (e) {
-        return <OmemoTrust>[];
-      }
-    });
+          try {
+            // Get all trust entries from database
+            return await db.getAllOmemoTrusts();
+          } catch (e) {
+            return <OmemoTrust>[];
+          }
+        });
 
     final result = <String, Map<int, int>>{};
 

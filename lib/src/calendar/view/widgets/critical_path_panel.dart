@@ -61,7 +61,7 @@ class CriticalPathPanel extends StatelessWidget {
   final void Function(CalendarCriticalPath path) onRenamePath;
   final void Function(CalendarCriticalPath path) onDeletePath;
   final void Function(CalendarCriticalPath path, List<CalendarTask> tasks)
-      onSharePath;
+  onSharePath;
   final void Function(CalendarCriticalPath? path) onFocusPath;
   final void Function(CalendarCriticalPath path) onOpenPath;
   final Duration animationDuration;
@@ -70,7 +70,8 @@ class CriticalPathPanel extends StatelessWidget {
     CalendarTask task,
     Widget? trailing, {
     bool requiresLongPress,
-  }) taskTileBuilder;
+  })
+  taskTileBuilder;
   final bool isExpanded;
   final VoidCallback onToggleExpanded;
   final bool requiresLongPressForReorder;
@@ -90,8 +91,9 @@ class CriticalPathPanel extends StatelessWidget {
     final CalendarCriticalPath? orderingPath = _pathById(orderingPathId);
     final CalendarCriticalPath? reorderTarget = orderingPath;
     final bool showingSinglePath = orderingPath != null;
-    final List<CalendarTask> focusedTasks =
-        reorderTarget != null ? _tasksForPath(reorderTarget) : const [];
+    final List<CalendarTask> focusedTasks = reorderTarget != null
+        ? _tasksForPath(reorderTarget)
+        : const [];
     final Iterable<CalendarCriticalPath> visiblePaths = orderingPath != null
         ? <CalendarCriticalPath>[orderingPath]
         : paths.where((path) => !(hideCompleted && _isPathCompleted(path)));
@@ -362,21 +364,19 @@ class CriticalPathCard extends StatelessWidget {
     final bool highlighted = isFocused || isActive;
     final Color borderColor = highlighted ? colors.primary : colors.border;
     final BorderSide baseBorder = context.borderSide;
-    final double borderWidth =
-        highlighted ? baseBorder.width * 2 : baseBorder.width;
+    final double borderWidth = highlighted
+        ? baseBorder.width * 2
+        : baseBorder.width;
     final Color backgroundColor = isActive
         ? colors.primary.withValues(alpha: 0.08)
         : colors.muted.withValues(alpha: 0.04);
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
       borderRadius: BorderRadius.circular(context.radii.squircle),
-      side: BorderSide(
-        color: borderColor,
-        width: borderWidth,
-      ),
+      side: BorderSide(color: borderColor, width: borderWidth),
     );
     return AxiTapBounce(
       child: ShadFocusable(
-        builder: (context, _, __) {
+        builder: (context, _, _) {
           return Material(
             type: MaterialType.transparency,
             shape: decoratedShape,
@@ -687,7 +687,8 @@ class _FocusedPathTasks extends StatelessWidget {
     CalendarTask task,
     Widget? trailing, {
     bool requiresLongPress,
-  }) taskTileBuilder;
+  })
+  taskTileBuilder;
   final bool requiresLongPressForReorder;
   final void Function(int oldIndex, int newIndex) onReorder;
   final VoidCallback? onAddTask;
@@ -711,10 +712,7 @@ class _FocusedPathTasks extends StatelessWidget {
             child: AxiButton.outline(
               onPressed: onAddTask,
               widthBehavior: AxiButtonWidth.expand,
-              leading: Icon(
-                Icons.add,
-                size: context.sizing.menuItemIconSize,
-              ),
+              leading: Icon(Icons.add, size: context.sizing.menuItemIconSize),
               child: Text(context.l10n.calendarCriticalPathAddTask),
             ),
           ),
@@ -743,7 +741,7 @@ class _FocusedPathTasks extends StatelessWidget {
             itemCount: tasks.length,
             buildDefaultDragHandles: false,
             onReorder: onReorder,
-            proxyDecorator: (child, __, ___) {
+            proxyDecorator: (child, _, _) {
               return Material(color: Colors.transparent, child: child);
             },
             itemBuilder: (context, index) {
@@ -897,10 +895,7 @@ class CriticalPathMembershipList extends StatelessWidget {
                     color: colors.mutedForeground,
                   ),
                   SizedBox(width: context.spacing.xxs),
-                  Text(
-                    path.name,
-                    style: textTheme.small.strong,
-                  ),
+                  Text(path.name, style: textTheme.small.strong),
                   if (onRemovePath != null) ...[
                     SizedBox(width: context.spacing.xxs),
                     AxiIconButton.ghost(
@@ -925,10 +920,10 @@ class CriticalPathPickerResult {
   });
 
   const CriticalPathPickerResult.createNew()
-      : this._(pathId: null, createNew: true);
+    : this._(pathId: null, createNew: true);
 
   const CriticalPathPickerResult.path(String pathId)
-      : this._(pathId: pathId, createNew: false);
+    : this._(pathId: pathId, createNew: false);
 
   final String? pathId;
   final bool createNew;
@@ -965,7 +960,8 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
     final textTheme = context.textTheme;
     final bool enabled = !widget.isBusy;
     final RoundedSuperellipseBorder itemShape = RoundedSuperellipseBorder(
-        borderRadius: BorderRadius.circular(context.radii.squircle));
+      borderRadius: BorderRadius.circular(context.radii.squircle),
+    );
     final RoundedSuperellipseBorder decoratedShape = RoundedSuperellipseBorder(
       borderRadius: BorderRadius.circular(context.radii.squircle),
       side: BorderSide(color: colors.border, width: context.borderSide.width),
@@ -981,14 +977,14 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
         padding: EdgeInsets.zero,
         shrinkWrap: true,
         itemCount: widget.paths.length,
-        separatorBuilder: (_, __) => SizedBox(height: context.spacing.xxs),
+        separatorBuilder: (_, _) => SizedBox(height: context.spacing.xxs),
         itemBuilder: (context, index) {
           final path = widget.paths[index];
           return AxiTapBounce(
             enabled: enabled,
             child: ShadFocusable(
               canRequestFocus: enabled,
-              builder: (context, _, __) {
+              builder: (context, _, _) {
                 return Material(
                   type: MaterialType.transparency,
                   shape: itemShape,
@@ -1021,10 +1017,7 @@ class _CriticalPathPickerListState extends State<_CriticalPathPickerList> {
                                 color: colors.muted.withValues(alpha: 0.12),
                                 borderRadius: iconRadius,
                               ),
-                              child: Icon(
-                                Icons.route,
-                                size: iconSize,
-                              ),
+                              child: Icon(Icons.route, size: iconSize),
                             ),
                             SizedBox(width: context.spacing.s),
                             Expanded(
@@ -1103,9 +1096,7 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                   SizedBox(height: context.spacing.m),
                 ] else
                   ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: listViewportHeight,
-                    ),
+                    constraints: BoxConstraints(maxHeight: listViewportHeight),
                     child: ValueListenableBuilder<bool>(
                       valueListenable: busyNotifier,
                       builder: (context, isBusy, _) {
@@ -1125,11 +1116,9 @@ Future<CriticalPathPickerResult?> showCriticalPathPicker({
                               }
                               return;
                             }
-                            Navigator.of(sheetContext).pop(
-                              CriticalPathPickerResult.path(
-                                path.id,
-                              ),
-                            );
+                            Navigator.of(
+                              sheetContext,
+                            ).pop(CriticalPathPickerResult.path(path.id));
                           },
                         );
                       },
@@ -1275,7 +1264,8 @@ Future<String?> promptCriticalPathName({
                             final String trimmed = value.trim();
                             if (trimmed.isEmpty) {
                               return context
-                                  .l10n.calendarCriticalPathNameEmptyError;
+                                  .l10n
+                                  .calendarCriticalPathNameEmptyError;
                             }
                             return null;
                           },

@@ -63,16 +63,16 @@ class HomeSearchCubit extends Cubit<HomeSearchState> {
     required List<HomeTab> tabs,
     Map<HomeTab, SearchFilterId?> initialFilters = const {},
   }) : super(
-          HomeSearchState(
-            tabs: List.unmodifiable(tabs),
-            active: false,
-            activeTab: tabs.isEmpty ? null : tabs.first,
-            tabStates: Map<HomeTab, TabSearchState>.unmodifiable({
-              for (final tab in tabs)
-                tab: TabSearchState(filterId: initialFilters[tab]),
-            }),
-          ),
-        );
+         HomeSearchState(
+           tabs: List.unmodifiable(tabs),
+           active: false,
+           activeTab: tabs.isEmpty ? null : tabs.first,
+           tabStates: Map<HomeTab, TabSearchState>.unmodifiable({
+             for (final tab in tabs)
+               tab: TabSearchState(filterId: initialFilters[tab]),
+           }),
+         ),
+       );
 
   void setActiveTab(HomeTab? tab) {
     if (state.activeTab == tab) return;

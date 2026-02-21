@@ -7,20 +7,18 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
   Stream<List<RosterItem>> rosterStream({
     int start = 0,
     int end = basePageItemLimit,
-  }) =>
-      createPaginatedStream<RosterItem, XmppDatabase>(
-        watchFunction: (db) async => db.watchRoster(start: start, end: end),
-        getFunction: (db) => db.getRoster(),
-      );
+  }) => createPaginatedStream<RosterItem, XmppDatabase>(
+    watchFunction: (db) async => db.watchRoster(start: start, end: end),
+    getFunction: (db) => db.getRoster(),
+  );
 
   Stream<List<Invite>> invitesStream({
     int start = 0,
     int end = basePageItemLimit,
-  }) =>
-      createPaginatedStream<Invite, XmppDatabase>(
-        watchFunction: (db) async => db.watchInvites(start: start, end: end),
-        getFunction: (db) => db.getInvites(start: start, end: end),
-      );
+  }) => createPaginatedStream<Invite, XmppDatabase>(
+    watchFunction: (db) async => db.watchInvites(start: start, end: end),
+    getFunction: (db) => db.getInvites(start: start, end: end),
+  );
 
   final _rosterLog = Logger('RosterService');
   static const String _rosterFetchOnLoginOperationName =
@@ -62,8 +60,9 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
   }
 
   @override
-  List<mox.XmppManagerBase> get featureManagers => super.featureManagers
-    ..addAll([mox.RosterManager(XmppRosterStateManager(owner: this))]);
+  List<mox.XmppManagerBase> get featureManagers =>
+      super.featureManagers
+        ..addAll([mox.RosterManager(XmppRosterStateManager(owner: this))]);
 
   Future<void> requestRoster() async {
     final result = await _connection.requestRoster();
@@ -283,20 +282,20 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     );
     _log.info('Loaded roster version: $version.');
 
-    final rosterItems =
-        await owner._dbOpReturning<XmppDatabase, List<mox.XmppRosterItem>>(
-      (db) async => (await db.getRoster())
-          .map(
-            (item) => mox.XmppRosterItem(
-              jid: item.jid,
-              name: item.title,
-              subscription: item.subscription.name,
-              ask: item.ask?.name,
-              groups: item.groups,
-            ),
-          )
-          .toList(),
-    );
+    final rosterItems = await owner
+        ._dbOpReturning<XmppDatabase, List<mox.XmppRosterItem>>(
+          (db) async => (await db.getRoster())
+              .map(
+                (item) => mox.XmppRosterItem(
+                  jid: item.jid,
+                  name: item.title,
+                  subscription: item.subscription.name,
+                  ask: item.ask?.name,
+                  groups: item.groups,
+                ),
+              )
+              .toList(),
+        );
     return mox.RosterCacheLoadResult(version, rosterItems);
   }
 }

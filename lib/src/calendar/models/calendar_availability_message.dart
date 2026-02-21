@@ -12,7 +12,7 @@ part 'calendar_availability_message.g.dart';
 const String _calendarAvailabilityMessageUnionKey = 'type';
 
 @freezed
-class CalendarAvailabilityShare with _$CalendarAvailabilityShare {
+abstract class CalendarAvailabilityShare with _$CalendarAvailabilityShare {
   const factory CalendarAvailabilityShare({
     required String id,
     required CalendarAvailabilityOverlay overlay,
@@ -23,7 +23,7 @@ class CalendarAvailabilityShare with _$CalendarAvailabilityShare {
 }
 
 @freezed
-class CalendarAvailabilityRequest with _$CalendarAvailabilityRequest {
+abstract class CalendarAvailabilityRequest with _$CalendarAvailabilityRequest {
   const factory CalendarAvailabilityRequest({
     required String id,
     required String shareId,
@@ -48,7 +48,8 @@ enum CalendarAvailabilityResponseStatus {
 }
 
 @freezed
-class CalendarAvailabilityResponse with _$CalendarAvailabilityResponse {
+abstract class CalendarAvailabilityResponse
+    with _$CalendarAvailabilityResponse {
   const factory CalendarAvailabilityResponse({
     required String id,
     required String shareId,
@@ -75,7 +76,7 @@ enum CalendarAvailabilityMessageKind {
   unionKey: _calendarAvailabilityMessageUnionKey,
   unionValueCase: FreezedUnionCase.snake,
 )
-class CalendarAvailabilityMessage with _$CalendarAvailabilityMessage {
+abstract class CalendarAvailabilityMessage with _$CalendarAvailabilityMessage {
   const factory CalendarAvailabilityMessage.share({
     required CalendarAvailabilityShare share,
   }) = CalendarAvailabilityShareMessage;
@@ -96,14 +97,14 @@ class CalendarAvailabilityMessage with _$CalendarAvailabilityMessage {
 
 extension CalendarAvailabilityMessageX on CalendarAvailabilityMessage {
   CalendarAvailabilityMessageKind get kind => map(
-        share: (_) => CalendarAvailabilityMessageKind.share,
-        request: (_) => CalendarAvailabilityMessageKind.request,
-        response: (_) => CalendarAvailabilityMessageKind.response,
-      );
+    share: (_) => CalendarAvailabilityMessageKind.share,
+    request: (_) => CalendarAvailabilityMessageKind.request,
+    response: (_) => CalendarAvailabilityMessageKind.response,
+  );
 
   String get shareId => map(
-        share: (message) => message.share.id,
-        request: (message) => message.request.shareId,
-        response: (message) => message.response.shareId,
-      );
+    share: (message) => message.share.id,
+    request: (message) => message.request.shareId,
+    response: (message) => message.response.shareId,
+  );
 }

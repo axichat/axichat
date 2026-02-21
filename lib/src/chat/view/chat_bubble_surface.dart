@@ -94,30 +94,30 @@ class ChatBubbleSurface extends MultiChildRenderObjectWidget {
     this.avatarStyle,
     this.avatarAnchor = ChatBubbleCutoutAnchor.left,
   }) : super(
-          children: [
-            _ChatBubbleSlotWidget(slot: _ChatBubbleSlot.body, child: body),
-            if (reactionOverlay != null)
-              _ChatBubbleSlotWidget(
-                slot: _ChatBubbleSlot.reaction,
-                child: reactionOverlay,
-              ),
-            if (recipientOverlay != null)
-              _ChatBubbleSlotWidget(
-                slot: _ChatBubbleSlot.recipients,
-                child: recipientOverlay,
-              ),
-            if (avatarOverlay != null)
-              _ChatBubbleSlotWidget(
-                slot: _ChatBubbleSlot.avatar,
-                child: avatarOverlay,
-              ),
-            if (selectionOverlay != null)
-              _ChatBubbleSlotWidget(
-                slot: _ChatBubbleSlot.selection,
-                child: selectionOverlay,
-              ),
-          ],
-        );
+         children: [
+           _ChatBubbleSlotWidget(slot: _ChatBubbleSlot.body, child: body),
+           if (reactionOverlay != null)
+             _ChatBubbleSlotWidget(
+               slot: _ChatBubbleSlot.reaction,
+               child: reactionOverlay,
+             ),
+           if (recipientOverlay != null)
+             _ChatBubbleSlotWidget(
+               slot: _ChatBubbleSlot.recipients,
+               child: recipientOverlay,
+             ),
+           if (avatarOverlay != null)
+             _ChatBubbleSlotWidget(
+               slot: _ChatBubbleSlot.avatar,
+               child: avatarOverlay,
+             ),
+           if (selectionOverlay != null)
+             _ChatBubbleSlotWidget(
+               slot: _ChatBubbleSlot.selection,
+               child: selectionOverlay,
+             ),
+         ],
+       );
 
   final bool isSelf;
   final Color backgroundColor;
@@ -203,21 +203,21 @@ class RenderChatBubbleSurface extends RenderBox
     ChatBubbleCutoutAnchor recipientAnchor = ChatBubbleCutoutAnchor.bottom,
     CutoutStyle? avatarStyle,
     ChatBubbleCutoutAnchor avatarAnchor = ChatBubbleCutoutAnchor.left,
-  })  : _isSelf = isSelf,
-        _backgroundColor = backgroundColor,
-        _borderColor = borderColor,
-        _borderRadius = borderRadius,
-        _shadowOpacity = shadowOpacity,
-        _shadows = shadows,
-        _bubbleWidthFraction = bubbleWidthFraction,
-        _cornerClearance = cornerClearance,
-        _reactionStyle = reactionStyle,
-        _recipientStyle = recipientStyle,
-        _selectionStyle = selectionStyle,
-        _selectionFollowsSelfEdge = selectionFollowsSelfEdge,
-        _recipientAnchor = _toInternalAnchor(recipientAnchor),
-        _avatarStyle = avatarStyle,
-        _avatarAnchor = _toInternalAnchor(avatarAnchor);
+  }) : _isSelf = isSelf,
+       _backgroundColor = backgroundColor,
+       _borderColor = borderColor,
+       _borderRadius = borderRadius,
+       _shadowOpacity = shadowOpacity,
+       _shadows = shadows,
+       _bubbleWidthFraction = bubbleWidthFraction,
+       _cornerClearance = cornerClearance,
+       _reactionStyle = reactionStyle,
+       _recipientStyle = recipientStyle,
+       _selectionStyle = selectionStyle,
+       _selectionFollowsSelfEdge = selectionFollowsSelfEdge,
+       _recipientAnchor = _toInternalAnchor(recipientAnchor),
+       _avatarStyle = avatarStyle,
+       _avatarAnchor = _toInternalAnchor(avatarAnchor);
 
   bool _isSelf;
   bool get isSelf => _isSelf;
@@ -384,14 +384,16 @@ class RenderChatBubbleSurface extends RenderBox
       if (reactionRect != null)
         _CutoutDescriptor(
           rect: reactionRect,
-          cornerRadius: reactionStyle?.shapeCornerRadius ??
+          cornerRadius:
+              reactionStyle?.shapeCornerRadius ??
               reactionStyle?.cornerRadius ??
               16,
         ),
       if (recipientRect != null)
         _CutoutDescriptor(
           rect: recipientRect,
-          cornerRadius: recipientStyle?.shapeCornerRadius ??
+          cornerRadius:
+              recipientStyle?.shapeCornerRadius ??
               recipientStyle?.cornerRadius ??
               16,
         ),
@@ -404,7 +406,8 @@ class RenderChatBubbleSurface extends RenderBox
       if (selectionRect != null)
         _CutoutDescriptor(
           rect: selectionRect,
-          cornerRadius: selectionStyle?.shapeCornerRadius ??
+          cornerRadius:
+              selectionStyle?.shapeCornerRadius ??
               selectionStyle?.cornerRadius ??
               16,
         ),
@@ -527,8 +530,9 @@ class RenderChatBubbleSurface extends RenderBox
       fraction: horizontalAnchor ? bubbleWidthFraction : 1.0,
     );
     maxThickness = math.max(maxThickness, style.minThickness);
-    final paddingExtent =
-        horizontalAnchor ? style.padding.horizontal : style.padding.vertical;
+    final paddingExtent = horizontalAnchor
+        ? style.padding.horizontal
+        : style.padding.vertical;
     final maxContentExtent = math.max(0.0, maxThickness - paddingExtent);
     final unboundedSelection =
         type == _CutoutType.selection && !horizontalAnchor;
@@ -722,10 +726,7 @@ class RenderChatBubbleSurface extends RenderBox
 }
 
 class _CutoutDescriptor {
-  const _CutoutDescriptor({
-    required this.rect,
-    required this.cornerRadius,
-  });
+  const _CutoutDescriptor({required this.rect, required this.cornerRadius});
 
   final Rect rect;
   final double cornerRadius;
@@ -810,14 +811,15 @@ double _horizontalCutoutLeft({
       bubbleWidth.isNaN) {
     return 0.0;
   }
-  final resolvedAlignment = (alignment ??
-          _reactionAlignmentForBubble(
-            bubbleWidth: bubbleWidth,
-            thickness: requestedThickness,
-            isSelf: isSelf,
-            cornerClearance: cornerClearance,
-          ))
-      .clamp(-1.0, 1.0);
+  final resolvedAlignment =
+      (alignment ??
+              _reactionAlignmentForBubble(
+                bubbleWidth: bubbleWidth,
+                thickness: requestedThickness,
+                isSelf: isSelf,
+                cornerClearance: cornerClearance,
+              ))
+          .clamp(-1.0, 1.0);
   final center = ((resolvedAlignment + 1) / 2) * bubbleWidth;
   final maxLeft = math.max(0.0, bubbleWidth - requestedThickness);
   return (center - requestedThickness / 2).clamp(0.0, maxLeft);

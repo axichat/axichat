@@ -29,7 +29,7 @@ const int _calendarSequenceDefault = 0;
 
 @freezed
 @HiveType(typeId: 33)
-class CalendarModel with _$CalendarModel {
+abstract class CalendarModel with _$CalendarModel {
   const factory CalendarModel({
     @HiveField(0) @Default({}) Map<String, CalendarTask> tasks,
     @HiveField(1) required DateTime lastModified,
@@ -488,8 +488,9 @@ class CalendarModel with _$CalendarModel {
     for (final MapEntry<String, CalendarCriticalPath> entry
         in criticalPaths.entries) {
       final CalendarCriticalPath path = entry.value;
-      final List<String> filtered =
-          path.taskIds.where((id) => id != baseId).toList();
+      final List<String> filtered = path.taskIds
+          .where((id) => id != baseId)
+          .toList();
       if (filtered.length != path.taskIds.length) {
         changed = true;
         next[entry.key] = path.copyWith(taskIds: filtered, modifiedAt: now);

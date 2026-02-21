@@ -16,14 +16,15 @@ import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 
-typedef ChatCalendarSendMessage = Future<void> Function({
-  required String jid,
-  required CalendarSyncOutbound outbound,
-  required ChatType chatType,
-});
+typedef ChatCalendarSendMessage =
+    Future<void> Function({
+      required String jid,
+      required CalendarSyncOutbound outbound,
+      required ChatType chatType,
+    });
 
-typedef ChatCalendarSnapshotSender = Future<CalendarSnapshotUploadResult>
-    Function(File file);
+typedef ChatCalendarSnapshotSender =
+    Future<CalendarSnapshotUploadResult> Function(File file);
 
 const String _chatCalendarTaskAddOperation = 'add';
 
@@ -33,10 +34,10 @@ class ChatCalendarSyncCoordinator {
     required ChatCalendarSendMessage sendMessage,
     ChatCalendarSnapshotSender? sendSnapshotFile,
     ChatCalendarSyncStateStore? syncStateStore,
-  })  : _storage = storage,
-        _sendMessage = sendMessage,
-        _sendSnapshotFile = sendSnapshotFile,
-        _syncStateStore = syncStateStore ?? const ChatCalendarSyncStateStore();
+  }) : _storage = storage,
+       _sendMessage = sendMessage,
+       _sendSnapshotFile = sendSnapshotFile,
+       _syncStateStore = syncStateStore ?? const ChatCalendarSyncStateStore();
 
   final ChatCalendarStorage _storage;
   final ChatCalendarSendMessage _sendMessage;
@@ -151,10 +152,10 @@ class _ChatCalendarSyncContext {
     required ChatCalendarStorage storage,
     required ChatCalendarSendMessage sendMessage,
     required ChatCalendarSyncStateStore syncStateStore,
-  })  : _storage = storage,
-        _sendMessage = sendMessage,
-        _syncStateStore = syncStateStore,
-        _chatType = chatType {
+  }) : _storage = storage,
+       _sendMessage = sendMessage,
+       _syncStateStore = syncStateStore,
+       _chatType = chatType {
     _resetToStorage();
   }
 

@@ -23,7 +23,8 @@ class AxiSystemContextMenu extends StatefulWidget {
     final (
       startGlyphHeight: double startGlyphHeight,
       endGlyphHeight: double endGlyphHeight,
-    ) = editableTextState.getGlyphHeights();
+    ) = editableTextState
+        .getGlyphHeights();
 
     return AxiSystemContextMenu._(
       key: key,

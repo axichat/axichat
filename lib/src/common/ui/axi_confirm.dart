@@ -20,10 +20,12 @@ Future<bool?> confirm(
 }) {
   final resolvedTitle = title.isEmpty ? context.l10n.commonConfirm : title;
   final resolvedMessage = message ?? text ?? context.l10n.commonAreYouSure;
-  final resolvedConfirmLabel =
-      confirmLabel.isEmpty ? context.l10n.commonContinue : confirmLabel;
-  final resolvedCancelLabel =
-      cancelLabel.isEmpty ? context.l10n.commonCancel : cancelLabel;
+  final resolvedConfirmLabel = confirmLabel.isEmpty
+      ? context.l10n.commonContinue
+      : confirmLabel;
+  final resolvedCancelLabel = cancelLabel.isEmpty
+      ? context.l10n.commonCancel
+      : cancelLabel;
   final Widget? dialogBody = resolvedMessage.isEmpty
       ? null
       : Text(
@@ -46,8 +48,9 @@ Future<bool?> confirm(
               child: Text(resolvedConfirmLabel),
             );
       return ShadDialog(
-        constraints:
-            BoxConstraints(maxWidth: dialogContext.sizing.dialogMaxWidth),
+        constraints: BoxConstraints(
+          maxWidth: dialogContext.sizing.dialogMaxWidth,
+        ),
         title: Text(resolvedTitle, style: context.modalHeaderTextStyle),
         actions: [
           AxiButton.outline(

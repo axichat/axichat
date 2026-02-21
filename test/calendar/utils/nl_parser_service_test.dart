@@ -86,8 +86,8 @@ void main() {
     final DateTime deadline = DateTime.utc(2024, 5, 31, 17, 0);
     final DateTime overrideOccurrence = DateTime.utc(2024, 6, 8, 14, 0);
     final Map<String, TaskOccurrenceOverride> overrides = {
-      overrideOccurrence.microsecondsSinceEpoch.toString():
-          TaskOccurrenceOverride(
+      overrideOccurrence.microsecondsSinceEpoch
+          .toString(): TaskOccurrenceOverride(
         scheduledTime: overrideOccurrence.add(const Duration(hours: 1)),
         duration: const Duration(minutes: 45),
         isCancelled: true,

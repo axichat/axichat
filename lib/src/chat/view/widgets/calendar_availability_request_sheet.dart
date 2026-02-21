@@ -419,11 +419,7 @@ class _AvailabilityDecisionSummary extends StatelessWidget {
     final title = request.title?.trim().isNotEmpty == true
         ? request.title!.trim()
         : context.l10n.calendarAvailabilityRequestTitleFallback;
-    final range = _formatRange(
-      context,
-      request.start.value,
-      request.end.value,
-    );
+    final range = _formatRange(context, request.start.value, request.end.value);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -523,10 +519,11 @@ class _RequestRangeDefaults {
 _RequestRangeDefaults _defaultRequestRange(
   CalendarAvailabilityOverlay overlay,
 ) {
-  final List<CalendarFreeBusyInterval> freeIntervals = overlay.intervals
-      .where((interval) => interval.type == CalendarFreeBusyType.free)
-      .toList()
-    ..sort((a, b) => a.start.value.compareTo(b.start.value));
+  final List<CalendarFreeBusyInterval> freeIntervals =
+      overlay.intervals
+          .where((interval) => interval.type == CalendarFreeBusyType.free)
+          .toList()
+        ..sort((a, b) => a.start.value.compareTo(b.start.value));
   if (freeIntervals.isNotEmpty) {
     final interval = freeIntervals.first;
     final start = interval.start.value;
@@ -549,8 +546,9 @@ _RequestRangeDefaults _resolveRequestRange({
     final DateTime clippedStart = start.isBefore(overlay.rangeStart.value)
         ? overlay.rangeStart.value
         : start;
-    final DateTime clippedEnd =
-        end.isAfter(overlay.rangeEnd.value) ? overlay.rangeEnd.value : end;
+    final DateTime clippedEnd = end.isAfter(overlay.rangeEnd.value)
+        ? overlay.rangeEnd.value
+        : end;
     if (clippedEnd.isAfter(clippedStart) &&
         _isRangeFree(overlay, clippedStart, clippedEnd)) {
       return _RequestRangeDefaults(start: clippedStart, end: clippedEnd);
@@ -612,10 +610,14 @@ CalendarDateTime _wrapDateTime(CalendarDateTime template, DateTime value) {
 }
 
 String _formatRange(BuildContext context, DateTime start, DateTime end) {
-  final String startLabel =
-      TimeFormatter.formatFriendlyDateTime(context.l10n, start);
-  final String endLabel =
-      TimeFormatter.formatFriendlyDateTime(context.l10n, end);
+  final String startLabel = TimeFormatter.formatFriendlyDateTime(
+    context.l10n,
+    start,
+  );
+  final String endLabel = TimeFormatter.formatFriendlyDateTime(
+    context.l10n,
+    end,
+  );
   if (startLabel == endLabel) {
     return startLabel;
   }

@@ -18,7 +18,7 @@ import 'storage_builders.dart';
 /// Extends ChangeNotifier to notify listeners when auth storage becomes ready.
 class CalendarStorageManager extends ChangeNotifier {
   CalendarStorageManager({required CalendarStorageRegistry registry})
-      : _registry = registry;
+    : _registry = registry;
 
   final CalendarStorageRegistry _registry;
   ImpatientCompleter<Storage>? _guestStorageCompleter;

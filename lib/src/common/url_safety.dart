@@ -121,12 +121,12 @@ class LinkSafetyReport {
 
 extension LinkSafetyWarningText on LinkSafetyWarning {
   String get message => switch (this) {
-        LinkSafetyWarning.punycode => _linkWarningPunycode,
-        LinkSafetyWarning.mixedScript => _linkWarningMixedScript,
-        LinkSafetyWarning.bidiControl => _linkWarningBidiControl,
-        LinkSafetyWarning.zeroWidth => _linkWarningZeroWidth,
-        LinkSafetyWarning.shortener => _linkWarningShortener,
-      };
+    LinkSafetyWarning.punycode => _linkWarningPunycode,
+    LinkSafetyWarning.mixedScript => _linkWarningMixedScript,
+    LinkSafetyWarning.bidiControl => _linkWarningBidiControl,
+    LinkSafetyWarning.zeroWidth => _linkWarningZeroWidth,
+    LinkSafetyWarning.shortener => _linkWarningShortener,
+  };
 }
 
 bool containsUnsafeUriText(String value) =>
@@ -200,8 +200,9 @@ LinkSafetyReport? assessLinkSafety({
   final displayUri = uri.toString();
   final host = uri.host.trim();
   final normalizedHost = host.toLowerCase();
-  final effectiveDomain =
-      normalizedHost.isEmpty ? '' : _effectiveDomain(normalizedHost);
+  final effectiveDomain = normalizedHost.isEmpty
+      ? ''
+      : _effectiveDomain(normalizedHost);
   final warnings = _detectLinkWarnings(rawUri: trimmed, host: normalizedHost);
   final displayHost = _formatHostLabel(
     host: host,

@@ -165,9 +165,7 @@ mixin DemoScriptService on XmppBase, MessageService {
     }
   }
 
-  void handleDemoOutboundAttachmentMessage({
-    required String chatJid,
-  }) {
+  void handleDemoOutboundAttachmentMessage({required String chatJid}) {
     if (!kEnableDemoChats || !demoOfflineMode) return;
     if (chatJid != DemoChats.contact1Jid) return;
     if (_demoInteractivePhase != _DemoInteractivePhase.overlaysRunning &&
@@ -316,10 +314,7 @@ mixin DemoScriptService on XmppBase, MessageService {
     }, awaitDatabase: true);
   }
 
-  void _scheduleDemoTimer(
-    Duration delay,
-    FutureOr<void> Function() action,
-  ) {
+  void _scheduleDemoTimer(Duration delay, FutureOr<void> Function() action) {
     late final Timer timer;
     timer = Timer(delay, () async {
       _demoTimers.remove(timer);

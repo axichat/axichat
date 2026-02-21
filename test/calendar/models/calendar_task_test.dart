@@ -284,8 +284,9 @@ void main() {
         );
 
         final occurrences = task.occurrencesWithin(rangeStart, rangeEnd);
-        final List<DateTime?> occurrenceTimes =
-            occurrences.map((occurrence) => occurrence.scheduledTime).toList();
+        final List<DateTime?> occurrenceTimes = occurrences
+            .map((occurrence) => occurrence.scheduledTime)
+            .toList();
 
         final DateTime firstExpected = DateTime(
           baseYear,
@@ -482,8 +483,8 @@ void main() {
         );
 
         final originalOccurrence = DateTime(2024, 1, 2, 9);
-        final overrideKey =
-            originalOccurrence.microsecondsSinceEpoch.toString();
+        final overrideKey = originalOccurrence.microsecondsSinceEpoch
+            .toString();
         final withOverride = baseTask.copyWith(
           occurrenceOverrides: {
             overrideKey: TaskOccurrenceOverride(
@@ -516,8 +517,8 @@ void main() {
         );
 
         final originalOccurrence = DateTime(2024, 1, 2, 7);
-        final overrideKey =
-            originalOccurrence.microsecondsSinceEpoch.toString();
+        final overrideKey = originalOccurrence.microsecondsSinceEpoch
+            .toString();
         final cancelled = baseTask.copyWith(
           occurrenceOverrides: {
             overrideKey: const TaskOccurrenceOverride(isCancelled: true),
@@ -610,18 +611,19 @@ void main() {
             recurrenceId: recurrenceId,
             range: RecurrenceRange.thisAndFuture,
           );
-          final String overrideKey =
-              seriesStart.microsecondsSinceEpoch.toString();
-          final CalendarTask task = CalendarTask.create(
-            title: taskTitle,
-            scheduledTime: seriesStart,
-            duration: baseDuration,
-            recurrence: weeklyRule,
-          ).copyWith(
-            occurrenceOverrides: <String, TaskOccurrenceOverride>{
-              overrideKey: rangeOverride,
-            },
-          );
+          final String overrideKey = seriesStart.microsecondsSinceEpoch
+              .toString();
+          final CalendarTask task =
+              CalendarTask.create(
+                title: taskTitle,
+                scheduledTime: seriesStart,
+                duration: baseDuration,
+                recurrence: weeklyRule,
+              ).copyWith(
+                occurrenceOverrides: <String, TaskOccurrenceOverride>{
+                  overrideKey: rangeOverride,
+                },
+              );
 
           final occurrences = task.occurrencesWithin(rangeStart, rangeEnd);
 
@@ -697,18 +699,19 @@ void main() {
           scheduledTime: overrideStart,
           range: RecurrenceRange.thisAndFuture,
         );
-        final String overrideKey =
-            seriesStart.microsecondsSinceEpoch.toString();
-        final CalendarTask task = CalendarTask.create(
-          title: taskTitle,
-          scheduledTime: seriesStart,
-          duration: baseDuration,
-          recurrence: weeklyRule,
-        ).copyWith(
-          occurrenceOverrides: <String, TaskOccurrenceOverride>{
-            overrideKey: rangeOverride,
-          },
-        );
+        final String overrideKey = seriesStart.microsecondsSinceEpoch
+            .toString();
+        final CalendarTask task =
+            CalendarTask.create(
+              title: taskTitle,
+              scheduledTime: seriesStart,
+              duration: baseDuration,
+              recurrence: weeklyRule,
+            ).copyWith(
+              occurrenceOverrides: <String, TaskOccurrenceOverride>{
+                overrideKey: rangeOverride,
+              },
+            );
 
         final occurrences = task.occurrencesWithin(rangeStart, rangeEnd);
 

@@ -57,10 +57,7 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
           );
           return;
         }
-        fireAndForget(
-          syncSpamSnapshot,
-          operationName: _spamSyncOperationName,
-        );
+        fireAndForget(syncSpamSnapshot, operationName: _spamSyncOperationName);
       })
       ..registerHandler<SpamSyncUpdatedEvent>((event) async {
         await _applySpamSyncUpdate(event.payload);
@@ -126,8 +123,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
 
       final localItems =
           await _dbOpReturning<XmppDatabase, List<EmailSpamEntry>>(
-        (db) => db.getEmailSpamlist(),
-      );
+            (db) => db.getEmailSpamlist(),
+          );
       final localByJid = <String, EmailSpamEntry>{};
       for (final item in localItems) {
         final normalized = _normalizeSpamJid(item.address);
@@ -495,8 +492,8 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     }
     await _dbOp<XmppStateStore>((ss) async {
       final rawTimestamp = ss.read(key: _spamSyncSnapshotAtKey);
-      final rawIds =
-          (ss.read(key: _spamSyncSnapshotIdsKey) as List?)?.cast<Object?>();
+      final rawIds = (ss.read(key: _spamSyncSnapshotIdsKey) as List?)
+          ?.cast<Object?>();
       _spamLastSnapshotAt = _parseSpamSnapshotAt(rawTimestamp);
       _spamLastSnapshotIds
         ..clear()

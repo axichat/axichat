@@ -11,11 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class BlockMenuItem extends StatelessWidget {
-  const BlockMenuItem({
-    super.key,
-    required this.jid,
-    required this.transport,
-  });
+  const BlockMenuItem({super.key, required this.jid, required this.transport});
 
   final String jid;
   final MessageTransport transport;
@@ -29,9 +25,10 @@ class BlockMenuItem extends StatelessWidget {
         return ShadContextMenuItem(
           onPressed: disabled
               ? null
-              : () => context
-                  .read<BlocklistCubit>()
-                  .block(address: jid, transport: transport),
+              : () => context.read<BlocklistCubit>().block(
+                  address: jid,
+                  transport: transport,
+                ),
           leading: Icon(
             LucideIcons.userX,
             color: context.colorScheme.destructive,
@@ -63,10 +60,10 @@ class ReportSpamMenuItem extends StatelessWidget {
           onPressed: disabled
               ? null
               : () => context.read<BlocklistCubit>().block(
-                    address: jid,
-                    transport: transport,
-                    reportReason: SpamReportReason.spam,
-                  ),
+                  address: jid,
+                  transport: transport,
+                  reportReason: SpamReportReason.spam,
+                ),
           leading: Icon(
             LucideIcons.flag,
             color: context.colorScheme.destructive,

@@ -99,40 +99,33 @@ enum CalendarParticipantRole {
   bool get isNonParticipant => this == CalendarParticipantRole.nonParticipant;
 
   String get icsValue => switch (this) {
-        CalendarParticipantRole.chair => _participantRoleChairIcs,
-        CalendarParticipantRole.requiredParticipant =>
-          _participantRoleRequiredIcs,
-        CalendarParticipantRole.optionalParticipant =>
-          _participantRoleOptionalIcs,
-        CalendarParticipantRole.nonParticipant =>
-          _participantRoleNonParticipantIcs,
-      };
+    CalendarParticipantRole.chair => _participantRoleChairIcs,
+    CalendarParticipantRole.requiredParticipant => _participantRoleRequiredIcs,
+    CalendarParticipantRole.optionalParticipant => _participantRoleOptionalIcs,
+    CalendarParticipantRole.nonParticipant => _participantRoleNonParticipantIcs,
+  };
 
   static CalendarParticipantRole? fromIcsValue(
     String? value,
-  ) =>
-      switch (value) {
-        _participantRoleChairIcs => CalendarParticipantRole.chair,
-        _participantRoleRequiredIcs =>
-          CalendarParticipantRole.requiredParticipant,
-        _participantRoleOptionalIcs =>
-          CalendarParticipantRole.optionalParticipant,
-        _participantRoleNonParticipantIcs =>
-          CalendarParticipantRole.nonParticipant,
-        _ => null,
-      };
+  ) => switch (value) {
+    _participantRoleChairIcs => CalendarParticipantRole.chair,
+    _participantRoleRequiredIcs => CalendarParticipantRole.requiredParticipant,
+    _participantRoleOptionalIcs => CalendarParticipantRole.optionalParticipant,
+    _participantRoleNonParticipantIcs => CalendarParticipantRole.nonParticipant,
+    _ => null,
+  };
 }
 
 extension CalendarParticipantRoleLabelX on CalendarParticipantRole {
   String get label => switch (this) {
-        CalendarParticipantRole.chair => _participantRoleChairLabel,
-        CalendarParticipantRole.requiredParticipant =>
-          _participantRoleRequiredLabel,
-        CalendarParticipantRole.optionalParticipant =>
-          _participantRoleOptionalLabel,
-        CalendarParticipantRole.nonParticipant =>
-          _participantRoleNonParticipantLabel,
-      };
+    CalendarParticipantRole.chair => _participantRoleChairLabel,
+    CalendarParticipantRole.requiredParticipant =>
+      _participantRoleRequiredLabel,
+    CalendarParticipantRole.optionalParticipant =>
+      _participantRoleOptionalLabel,
+    CalendarParticipantRole.nonParticipant =>
+      _participantRoleNonParticipantLabel,
+  };
 }
 
 @HiveType(typeId: _calendarParticipantStatusTypeId)
@@ -161,15 +154,14 @@ enum CalendarParticipantStatus {
   bool get isInProcess => this == CalendarParticipantStatus.inProcess;
 
   String get icsValue => switch (this) {
-        CalendarParticipantStatus.needsAction =>
-          _participantStatusNeedsActionIcs,
-        CalendarParticipantStatus.accepted => _participantStatusAcceptedIcs,
-        CalendarParticipantStatus.declined => _participantStatusDeclinedIcs,
-        CalendarParticipantStatus.tentative => _participantStatusTentativeIcs,
-        CalendarParticipantStatus.delegated => _participantStatusDelegatedIcs,
-        CalendarParticipantStatus.completed => _participantStatusCompletedIcs,
-        CalendarParticipantStatus.inProcess => _participantStatusInProcessIcs,
-      };
+    CalendarParticipantStatus.needsAction => _participantStatusNeedsActionIcs,
+    CalendarParticipantStatus.accepted => _participantStatusAcceptedIcs,
+    CalendarParticipantStatus.declined => _participantStatusDeclinedIcs,
+    CalendarParticipantStatus.tentative => _participantStatusTentativeIcs,
+    CalendarParticipantStatus.delegated => _participantStatusDelegatedIcs,
+    CalendarParticipantStatus.completed => _participantStatusCompletedIcs,
+    CalendarParticipantStatus.inProcess => _participantStatusInProcessIcs,
+  };
 
   static CalendarParticipantStatus? fromIcsValue(String? value) =>
       switch (value) {
@@ -187,15 +179,14 @@ enum CalendarParticipantStatus {
 
 extension CalendarParticipantStatusLabelX on CalendarParticipantStatus {
   String get label => switch (this) {
-        CalendarParticipantStatus.needsAction =>
-          _participantStatusNeedsActionLabel,
-        CalendarParticipantStatus.accepted => _participantStatusAcceptedLabel,
-        CalendarParticipantStatus.declined => _participantStatusDeclinedLabel,
-        CalendarParticipantStatus.tentative => _participantStatusTentativeLabel,
-        CalendarParticipantStatus.delegated => _participantStatusDelegatedLabel,
-        CalendarParticipantStatus.completed => _participantStatusCompletedLabel,
-        CalendarParticipantStatus.inProcess => _participantStatusInProcessLabel,
-      };
+    CalendarParticipantStatus.needsAction => _participantStatusNeedsActionLabel,
+    CalendarParticipantStatus.accepted => _participantStatusAcceptedLabel,
+    CalendarParticipantStatus.declined => _participantStatusDeclinedLabel,
+    CalendarParticipantStatus.tentative => _participantStatusTentativeLabel,
+    CalendarParticipantStatus.delegated => _participantStatusDelegatedLabel,
+    CalendarParticipantStatus.completed => _participantStatusCompletedLabel,
+    CalendarParticipantStatus.inProcess => _participantStatusInProcessLabel,
+  };
 }
 
 @HiveType(typeId: _calendarParticipantTypeTypeId)
@@ -218,12 +209,12 @@ enum CalendarParticipantType {
   bool get isUnknown => this == CalendarParticipantType.unknown;
 
   String get icsValue => switch (this) {
-        CalendarParticipantType.individual => _participantTypeIndividualIcs,
-        CalendarParticipantType.group => _participantTypeGroupIcs,
-        CalendarParticipantType.resource => _participantTypeResourceIcs,
-        CalendarParticipantType.room => _participantTypeRoomIcs,
-        CalendarParticipantType.unknown => _participantTypeUnknownIcs,
-      };
+    CalendarParticipantType.individual => _participantTypeIndividualIcs,
+    CalendarParticipantType.group => _participantTypeGroupIcs,
+    CalendarParticipantType.resource => _participantTypeResourceIcs,
+    CalendarParticipantType.room => _participantTypeRoomIcs,
+    CalendarParticipantType.unknown => _participantTypeUnknownIcs,
+  };
 
   static CalendarParticipantType? fromIcsValue(String? value) =>
       switch (value) {
@@ -238,12 +229,12 @@ enum CalendarParticipantType {
 
 extension CalendarParticipantTypeLabelX on CalendarParticipantType {
   String get label => switch (this) {
-        CalendarParticipantType.individual => _participantTypeIndividualLabel,
-        CalendarParticipantType.group => _participantTypeGroupLabel,
-        CalendarParticipantType.resource => _participantTypeResourceLabel,
-        CalendarParticipantType.room => _participantTypeRoomLabel,
-        CalendarParticipantType.unknown => _participantTypeUnknownLabel,
-      };
+    CalendarParticipantType.individual => _participantTypeIndividualLabel,
+    CalendarParticipantType.group => _participantTypeGroupLabel,
+    CalendarParticipantType.resource => _participantTypeResourceLabel,
+    CalendarParticipantType.room => _participantTypeRoomLabel,
+    CalendarParticipantType.unknown => _participantTypeUnknownLabel,
+  };
 }
 
 extension CalendarOrganizerDisplayX on CalendarOrganizer {
@@ -260,7 +251,7 @@ extension CalendarAttendeeDisplayX on CalendarAttendee {
 
 @freezed
 @HiveType(typeId: _calendarOrganizerTypeId)
-class CalendarOrganizer with _$CalendarOrganizer {
+abstract class CalendarOrganizer with _$CalendarOrganizer {
   const factory CalendarOrganizer({
     @HiveField(_calendarParticipantAddressField) required String address,
     @HiveField(_calendarParticipantCommonNameField) String? commonName,
@@ -290,7 +281,7 @@ class CalendarOrganizer with _$CalendarOrganizer {
 
 @freezed
 @HiveType(typeId: _calendarAttendeeTypeId)
-class CalendarAttendee with _$CalendarAttendee {
+abstract class CalendarAttendee with _$CalendarAttendee {
   const factory CalendarAttendee({
     @HiveField(_calendarParticipantAddressField) required String address,
     @HiveField(_calendarParticipantCommonNameField) String? commonName,

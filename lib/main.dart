@@ -54,8 +54,8 @@ Future<void> main() async {
 
   final NotificationService notificationService = NotificationService();
   final Future<void> notificationInitFuture = notificationService.init();
-  final Future<bool> notificationPermissionsFuture =
-      notificationService.hasAllNotificationPermissions();
+  final Future<bool> notificationPermissionsFuture = notificationService
+      .hasAllNotificationPermissions();
 
   final Future<Directory> storageDirectoryFuture =
       getApplicationDocumentsDirectory();

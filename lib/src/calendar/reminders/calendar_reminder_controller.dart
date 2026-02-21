@@ -17,8 +17,8 @@ class CalendarReminderController {
   CalendarReminderController({
     required NotificationService notificationService,
     DateTime Function()? now,
-  })  : _notificationService = notificationService,
-        _now = now ?? DateTime.now;
+  }) : _notificationService = notificationService,
+       _now = now ?? DateTime.now;
 
   final NotificationService _notificationService;
   final DateTime Function() _now;
@@ -48,8 +48,9 @@ class CalendarReminderController {
         _dayEventKey(event.id): _ReminderSubject.dayEvent(event),
     };
 
-    final Set<String> removedKeys =
-        _scheduledIdsByEntry.keys.toSet().difference(subjects.keys.toSet());
+    final Set<String> removedKeys = _scheduledIdsByEntry.keys
+        .toSet()
+        .difference(subjects.keys.toSet());
     for (final String key in removedKeys) {
       await _cancelEntry(key);
     }
@@ -65,8 +66,9 @@ class CalendarReminderController {
   }
 
   Future<void> clearAll() async {
-    final Set<int> allIds =
-        _scheduledIdsByEntry.values.expand((Set<int> ids) => ids).toSet();
+    final Set<int> allIds = _scheduledIdsByEntry.values
+        .expand((Set<int> ids) => ids)
+        .toSet();
     for (final id in allIds) {
       await _notificationService.cancelNotification(id);
     }
@@ -247,14 +249,14 @@ class _ScheduledReminder {
 
 class _ReminderSubject {
   _ReminderSubject.task(CalendarTask value)
-      : task = value,
-        dayEvent = null,
-        payloadId = value.id;
+    : task = value,
+      dayEvent = null,
+      payloadId = value.id;
 
   _ReminderSubject.dayEvent(DayEvent value)
-      : task = null,
-        dayEvent = value,
-        payloadId = value.id;
+    : task = null,
+      dayEvent = value,
+      payloadId = value.id;
 
   final CalendarTask? task;
   final DayEvent? dayEvent;

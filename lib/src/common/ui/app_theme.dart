@@ -184,10 +184,7 @@ class AppTheme {
       decoration: ShadDecoration(
         errorPadding: inputSubtextInsets,
         border: ShadBorder.fromBorderSide(
-          ShadBorderSide(
-            color: patchedScheme.border,
-            width: axiBorders.width,
-          ),
+          ShadBorderSide(color: patchedScheme.border, width: axiBorders.width),
         ),
       ),
       radius: axiBorderRadius,

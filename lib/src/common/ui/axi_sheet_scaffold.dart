@@ -24,7 +24,8 @@ class AxiSheetHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final EdgeInsetsGeometry resolvedPadding = padding ??
+    final EdgeInsetsGeometry resolvedPadding =
+        padding ??
         EdgeInsets.fromLTRB(
           context.spacing.m,
           context.spacing.m,
@@ -79,9 +80,9 @@ class AxiSheetScaffold extends StatelessWidget {
     required this.body,
     this.footer,
     super.key,
-  })  : _scrollChildren = null,
-        bodyPadding = null,
-        scrollPhysics = null;
+  }) : _scrollChildren = null,
+       bodyPadding = null,
+       scrollPhysics = null;
 
   const AxiSheetScaffold.scroll({
     required this.header,
@@ -90,8 +91,8 @@ class AxiSheetScaffold extends StatelessWidget {
     this.bodyPadding,
     this.scrollPhysics,
     super.key,
-  })  : body = null,
-        _scrollChildren = children;
+  }) : body = null,
+       _scrollChildren = children;
 
   final Widget header;
   final Widget? body;
@@ -186,7 +187,8 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
   @override
   Widget build(BuildContext context) {
     _scheduleExtentSync();
-    final EdgeInsets resolvedPadding = widget.bodyPadding ??
+    final EdgeInsets resolvedPadding =
+        widget.bodyPadding ??
         EdgeInsets.only(
           left: context.spacing.m,
           right: context.spacing.m,

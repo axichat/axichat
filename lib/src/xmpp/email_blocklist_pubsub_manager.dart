@@ -86,16 +86,18 @@ final class EmailBlocklistSyncPayload {
     }
 
     final rawAddress = node.attributes[_blockAddressAttr]?.toString();
-    final resolvedAddress =
-        rawAddress == null || rawAddress.isEmpty ? itemId?.trim() : rawAddress;
+    final resolvedAddress = rawAddress == null || rawAddress.isEmpty
+        ? itemId?.trim()
+        : rawAddress;
     if (resolvedAddress == null || resolvedAddress.isEmpty) return null;
     final normalizedAddress = resolvedAddress.toBareJidOrNull(
       maxBytes: syncAddressMaxBytes,
     );
     if (normalizedAddress == null) return null;
 
-    final rawUpdatedAt =
-        node.attributes[_blockUpdatedAtAttr]?.toString().trim();
+    final rawUpdatedAt = node.attributes[_blockUpdatedAtAttr]
+        ?.toString()
+        .trim();
     if (rawUpdatedAt == null || rawUpdatedAt.isEmpty) return null;
     final parsedUpdatedAt = DateTime.tryParse(rawUpdatedAt);
     if (parsedUpdatedAt == null) return null;
@@ -163,8 +165,8 @@ final class EmailBlocklistSyncRetractedEvent extends mox.XmppEvent {
 
 final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   EmailBlocklistPubSubManager({String? maxItems})
-      : _maxItems = maxItems ?? _defaultMaxItems,
-        super(managerId);
+    : _maxItems = maxItems ?? _defaultMaxItems,
+      super(managerId);
 
   static const String managerId = 'axi.email_blocklist';
 
@@ -245,21 +247,20 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   AxiPubSubNodeConfig _nodeConfig(
     mox.AccessModel accessModel, {
     String? sendLastPublishedItem,
-  }) =>
-      AxiPubSubNodeConfig(
-        accessModel: accessModel,
-        publishModel: _publishModelPublishers,
-        deliverNotifications: _deliverNotificationsEnabled,
-        deliverPayloads: _deliverPayloadsEnabled,
-        maxItems: _maxItems,
-        notifyRetract: _notifyEnabled,
-        notifyDelete: _notifyEnabled,
-        notifyConfig: _notifyEnabled,
-        notifySub: _notifyEnabled,
-        presenceBasedDelivery: _presenceBasedDeliveryDisabled,
-        persistItems: _persistItemsEnabled,
-        sendLastPublishedItem: sendLastPublishedItem,
-      );
+  }) => AxiPubSubNodeConfig(
+    accessModel: accessModel,
+    publishModel: _publishModelPublishers,
+    deliverNotifications: _deliverNotificationsEnabled,
+    deliverPayloads: _deliverPayloadsEnabled,
+    maxItems: _maxItems,
+    notifyRetract: _notifyEnabled,
+    notifyDelete: _notifyEnabled,
+    notifyConfig: _notifyEnabled,
+    notifySub: _notifyEnabled,
+    presenceBasedDelivery: _presenceBasedDeliveryDisabled,
+    persistItems: _persistItemsEnabled,
+    sendLastPublishedItem: sendLastPublishedItem,
+  );
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
     SafePubSubManager pubsub,
@@ -308,11 +309,11 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   }
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
-        accessModel: _accessModel.value,
-        maxItems: _maxItems,
-        persistItems: _persistItemsEnabled,
-        publishModel: _publishModelPublishers,
-      );
+    accessModel: _accessModel.value,
+    maxItems: _maxItems,
+    persistItems: _persistItemsEnabled,
+    publishModel: _publishModelPublishers,
+  );
 
   mox.JID? _selfPepHost() {
     try {
@@ -328,11 +329,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   Future<String?> _resolveSendLastPublishedItem(
     SafePubSubManager pubsub,
     mox.JID host,
-  ) =>
-      pubsub.resolveSendLastPublishedItemForNode(
-        host: host,
-        node: emailBlocklistPubSubNode,
-      );
+  ) => pubsub.resolveSendLastPublishedItemForNode(
+    host: host,
+    node: emailBlocklistPubSubNode,
+  );
 
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
@@ -380,8 +380,10 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     var success = false;
     getAttributes().sendEvent(_emailBlocklistEnsureStartEvent);
     try {
-      final sendLastPublishedItem =
-          await _resolveSendLastPublishedItem(pubsub, host);
+      final sendLastPublishedItem = await _resolveSendLastPublishedItem(
+        pubsub,
+        host,
+      );
       final primaryConfig = _nodeConfig(
         mox.AccessModel.whitelist,
         sendLastPublishedItem: sendLastPublishedItem,
@@ -413,7 +415,8 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
         success = true;
         return;
       }
-      final shouldCreateNode = primaryError.indicatesMissingNode ||
+      final shouldCreateNode =
+          primaryError.indicatesMissingNode ||
           fallbackError.indicatesMissingNode;
       if (!shouldCreateNode) {
         return;
@@ -543,7 +546,7 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
   }
 
   Future<PubSubFetchResult<EmailBlocklistSyncPayload>>
-      fetchAllWithStatus() async {
+  fetchAllWithStatus() async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) {
@@ -599,7 +602,8 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
       }
       parsed.add(parsedPayload);
     }
-    final isComplete = !hadParseFailure &&
+    final isComplete =
+        !hadParseFailure &&
         _isSnapshotComplete(itemsCount: items.length, maxItems: limit);
 
     return PubSubFetchResult(
@@ -820,8 +824,9 @@ final class EmailBlocklistPubSubManager extends mox.XmppManagerBase {
     if (!snapshot.isComplete) {
       return;
     }
-    final removedIds =
-        previousCache.keys.where((id) => !freshIds.contains(id)).toList();
+    final removedIds = previousCache.keys
+        .where((id) => !freshIds.contains(id))
+        .toList();
     for (final id in removedIds) {
       _emitRetraction(id);
     }

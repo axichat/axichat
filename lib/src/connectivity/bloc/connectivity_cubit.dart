@@ -15,16 +15,16 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
     required XmppBase xmppBase,
     required bool emailEnabled,
     EmailService? emailService,
-  })  : _xmppBase = xmppBase,
-        _emailEnabled = emailEnabled,
-        _emailService = emailService,
-        super(
-          stateMap(
-            xmppBase.connectionState,
-            emailState: emailService?.syncState ?? const EmailSyncState.ready(),
-            emailEnabled: emailEnabled,
-          ),
-        ) {
+  }) : _xmppBase = xmppBase,
+       _emailEnabled = emailEnabled,
+       _emailService = emailService,
+       super(
+         stateMap(
+           xmppBase.connectionState,
+           emailState: emailService?.syncState ?? const EmailSyncState.ready(),
+           emailEnabled: emailEnabled,
+         ),
+       ) {
     _connectivitySubscription = _xmppBase.connectivityStream.listen(
       (e) => emit(
         stateMap(
@@ -43,25 +43,24 @@ class ConnectivityCubit extends Cubit<ConnectivityState> {
     ConnectionState connectionState, {
     required EmailSyncState emailState,
     required bool emailEnabled,
-  }) =>
-      switch (connectionState) {
-        ConnectionState.connected => ConnectivityConnected(
-            emailState: emailState,
-            emailEnabled: emailEnabled,
-          ),
-        ConnectionState.connecting => ConnectivityConnecting(
-            emailState: emailState,
-            emailEnabled: emailEnabled,
-          ),
-        ConnectionState.notConnected => ConnectivityNotConnected(
-            emailState: emailState,
-            emailEnabled: emailEnabled,
-          ),
-        ConnectionState.error => ConnectivityError(
-            emailState: emailState,
-            emailEnabled: emailEnabled,
-          ),
-      };
+  }) => switch (connectionState) {
+    ConnectionState.connected => ConnectivityConnected(
+      emailState: emailState,
+      emailEnabled: emailEnabled,
+    ),
+    ConnectionState.connecting => ConnectivityConnecting(
+      emailState: emailState,
+      emailEnabled: emailEnabled,
+    ),
+    ConnectionState.notConnected => ConnectivityNotConnected(
+      emailState: emailState,
+      emailEnabled: emailEnabled,
+    ),
+    ConnectionState.error => ConnectivityError(
+      emailState: emailState,
+      emailEnabled: emailEnabled,
+    ),
+  };
 
   final XmppBase _xmppBase;
   EmailService? _emailService;

@@ -49,25 +49,25 @@ enum SendLastPublishedItemSetting {
   }
 
   String get value => switch (this) {
-        SendLastPublishedItemSetting.never => 'never',
-        SendLastPublishedItemSetting.onSubscribe => 'on_subscribe',
-        SendLastPublishedItemSetting.onPublish => 'on_publish',
-        SendLastPublishedItemSetting.onSubAndPresence => 'on_sub_and_presence',
-      };
+    SendLastPublishedItemSetting.never => 'never',
+    SendLastPublishedItemSetting.onSubscribe => 'on_subscribe',
+    SendLastPublishedItemSetting.onPublish => 'on_publish',
+    SendLastPublishedItemSetting.onSubAndPresence => 'on_sub_and_presence',
+  };
 }
 
 const List<SendLastPublishedItemSetting> _sendLastPreferenceOrder =
     <SendLastPublishedItemSetting>[
-  SendLastPublishedItemSetting.onSubscribe,
-  SendLastPublishedItemSetting.onSubAndPresence,
-  SendLastPublishedItemSetting.onPublish,
-  SendLastPublishedItemSetting.never,
-];
+      SendLastPublishedItemSetting.onSubscribe,
+      SendLastPublishedItemSetting.onSubAndPresence,
+      SendLastPublishedItemSetting.onPublish,
+      SendLastPublishedItemSetting.never,
+    ];
 
 mox.XMLNode _formField(String name, String value, {String? type}) =>
     mox.XMLNode(
       tag: _fieldTag,
-      attributes: {_varAttr: name, if (type != null) _typeAttr: type},
+      attributes: {_varAttr: name, _typeAttr: ?type},
       children: [mox.XMLNode(tag: _valueTag, text: value)],
     );
 
@@ -183,19 +183,19 @@ final class AxiPubSubNodeConfig {
       );
 
   AxiPubSubNodeConfig withoutSendLastPublishedItem() => AxiPubSubNodeConfig(
-        accessModel: accessModel,
-        publishModel: publishModel,
-        deliverNotifications: deliverNotifications,
-        deliverPayloads: deliverPayloads,
-        maxItems: maxItems,
-        notifyRetract: notifyRetract,
-        notifyDelete: notifyDelete,
-        notifyConfig: notifyConfig,
-        notifySub: notifySub,
-        presenceBasedDelivery: presenceBasedDelivery,
-        persistItems: persistItems,
-        sendLastPublishedItem: null,
-      );
+    accessModel: accessModel,
+    publishModel: publishModel,
+    deliverNotifications: deliverNotifications,
+    deliverPayloads: deliverPayloads,
+    maxItems: maxItems,
+    notifyRetract: notifyRetract,
+    notifyDelete: notifyDelete,
+    notifyConfig: notifyConfig,
+    notifySub: notifySub,
+    presenceBasedDelivery: presenceBasedDelivery,
+    persistItems: persistItems,
+    sendLastPublishedItem: null,
+  );
 
   mox.XMLNode toForm() {
     final fields = <mox.XMLNode>[
@@ -206,10 +206,7 @@ final class AxiPubSubNodeConfig {
       ),
       _formField(_accessModelField, accessModel.value),
       _formField(_publishModelField, publishModel),
-      _formField(
-        _deliverNotificationsField,
-        _boolValue(deliverNotifications),
-      ),
+      _formField(_deliverNotificationsField, _boolValue(deliverNotifications)),
       _formField(_deliverPayloadsField, _boolValue(deliverPayloads)),
       _formField(_maxItemsField, maxItems),
       _formField(_persistItemsField, _boolValue(persistItems)),
@@ -235,13 +232,13 @@ final class AxiPubSubNodeConfig {
   }
 
   mox.NodeConfig toNodeConfig() => mox.NodeConfig(
-        accessModel: accessModel,
-        publishModel: publishModel,
-        deliverNotifications: deliverNotifications,
-        deliverPayloads: deliverPayloads,
-        maxItems: maxItems,
-        notifyRetract: notifyRetract,
-        persistItems: persistItems,
-        sendLastPublishedItem: sendLastPublishedItem,
-      );
+    accessModel: accessModel,
+    publishModel: publishModel,
+    deliverNotifications: deliverNotifications,
+    deliverPayloads: deliverPayloads,
+    maxItems: maxItems,
+    notifyRetract: notifyRetract,
+    persistItems: persistItems,
+    sendLastPublishedItem: sendLastPublishedItem,
+  );
 }

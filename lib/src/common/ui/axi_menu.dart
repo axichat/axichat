@@ -183,9 +183,11 @@ class _AxiMenuState extends State<AxiMenu> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          for (int index = 0;
-                              index < widget.actions.length;
-                              index++)
+                          for (
+                            int index = 0;
+                            index < widget.actions.length;
+                            index++
+                          )
                             _AxiMenuItem(
                               action: widget.actions[index],
                               focusNode: _focusNodes[index],
@@ -205,10 +207,7 @@ class _AxiMenuState extends State<AxiMenu> {
 }
 
 class _AxiMenuItem extends StatefulWidget {
-  const _AxiMenuItem({
-    required this.action,
-    required this.focusNode,
-  });
+  const _AxiMenuItem({required this.action, required this.focusNode});
 
   final AxiMenuAction action;
   final FocusNode focusNode;
@@ -244,14 +243,16 @@ class _AxiMenuItemState extends State<_AxiMenuItem> {
       (cubit) => cubit.animationDuration,
     );
     final Duration pressDuration = Duration(
-      milliseconds: (animationDuration.inMilliseconds *
-              context.motion.buttonPressDurationFactor)
-          .round(),
+      milliseconds:
+          (animationDuration.inMilliseconds *
+                  context.motion.buttonPressDurationFactor)
+              .round(),
     );
     final Duration releaseDuration = Duration(
-      milliseconds: (animationDuration.inMilliseconds *
-              context.motion.buttonReleaseDurationFactor)
-          .round(),
+      milliseconds:
+          (animationDuration.inMilliseconds *
+                  context.motion.buttonReleaseDurationFactor)
+              .round(),
     );
     return ValueListenableBuilder<Set<WidgetState>>(
       valueListenable: _states,
@@ -265,8 +266,9 @@ class _AxiMenuItemState extends State<_AxiMenuItem> {
         final Color baseForeground = widget.action.destructive
             ? context.colorScheme.destructive
             : context.colorScheme.foreground;
-        final Color foreground =
-            selected ? context.colorScheme.accentForeground : baseForeground;
+        final Color foreground = selected
+            ? context.colorScheme.accentForeground
+            : baseForeground;
         final Color background = selected
             ? context.colorScheme.accent
             : context.colorScheme.background.withValues(alpha: 0);
@@ -313,7 +315,8 @@ class _AxiMenuItemState extends State<_AxiMenuItem> {
         content = Material(
           color: background,
           shape: RoundedSuperellipseBorder(
-              borderRadius: BorderRadius.circular(context.radii.squircle)),
+            borderRadius: BorderRadius.circular(context.radii.squircle),
+          ),
           clipBehavior: Clip.antiAlias,
           child: ShadFocusable(
             focusNode: widget.focusNode,

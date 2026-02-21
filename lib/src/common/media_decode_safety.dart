@@ -123,8 +123,9 @@ Future<bool> isSafeImageBytes(Uint8List bytes, ImageDecodeLimits limits) async {
     return false;
   }
   try {
-    final codec =
-        await ui.instantiateImageCodec(bytes).timeout(limits.decodeTimeout);
+    final codec = await ui
+        .instantiateImageCodec(bytes)
+        .timeout(limits.decodeTimeout);
     try {
       final frameCount = codec.frameCount;
       if (frameCount < limits.minFrames || frameCount > limits.maxFrames) {

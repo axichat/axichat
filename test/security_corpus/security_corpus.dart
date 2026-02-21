@@ -66,21 +66,21 @@ enum GroupMutationExpectation {
 
 extension LinkSafetyWarningParsing on LinkSafetyWarning {
   static LinkSafetyWarning parse(String raw) => switch (raw) {
-        'punycode' => LinkSafetyWarning.punycode,
-        'mixedScript' => LinkSafetyWarning.mixedScript,
-        'bidiControl' => LinkSafetyWarning.bidiControl,
-        'zeroWidth' => LinkSafetyWarning.zeroWidth,
-        'shortener' => LinkSafetyWarning.shortener,
-        _ => throw StateError('Unknown warning: $raw'),
-      };
+    'punycode' => LinkSafetyWarning.punycode,
+    'mixedScript' => LinkSafetyWarning.mixedScript,
+    'bidiControl' => LinkSafetyWarning.bidiControl,
+    'zeroWidth' => LinkSafetyWarning.zeroWidth,
+    'shortener' => LinkSafetyWarning.shortener,
+    _ => throw StateError('Unknown warning: $raw'),
+  };
 }
 
 extension FileOpenRiskParsing on FileOpenRisk {
   static FileOpenRisk parse(String raw) => switch (raw) {
-        'safe' => FileOpenRisk.safe,
-        'warning' => FileOpenRisk.warning,
-        _ => throw StateError('Unknown risk: $raw'),
-      };
+    'safe' => FileOpenRisk.safe,
+    'warning' => FileOpenRisk.warning,
+    _ => throw StateError('Unknown risk: $raw'),
+  };
 }
 
 extension MessageOriginExpectationParsing on MessageOriginExpectation {
@@ -114,10 +114,10 @@ class AttachmentRiskCase {
   final String? expectedPreferredMimeType;
 
   FileTypeReport toReport() => FileTypeReport(
-        detectedMimeType: detectedMimeType,
-        declaredMimeType: declaredMimeType,
-        extensionMimeType: extensionMimeType,
-      );
+    detectedMimeType: detectedMimeType,
+    declaredMimeType: declaredMimeType,
+    extensionMimeType: extensionMimeType,
+  );
 
   static AttachmentRiskCase fromJson(Map<String, dynamic> json) {
     return AttachmentRiskCase(
@@ -182,9 +182,9 @@ class LinkCorpusCase {
     final warningsRaw = json[_warningsKey];
     final warnings = warningsRaw is List
         ? warningsRaw
-            .whereType<String>()
-            .map(LinkSafetyWarningParsing.parse)
-            .toSet()
+              .whereType<String>()
+              .map(LinkSafetyWarningParsing.parse)
+              .toSet()
         : <LinkSafetyWarning>{};
     return LinkCorpusCase(
       url: json[_urlKey] as String? ?? '',
@@ -210,8 +210,9 @@ class HtmlCorpusCase {
     final notContainsRaw = json[_expectNotContainsKey];
     return HtmlCorpusCase(
       input: json[_inputKey] as String? ?? '',
-      expectContains:
-          containsRaw is List ? containsRaw.whereType<String>().toList() : [],
+      expectContains: containsRaw is List
+          ? containsRaw.whereType<String>().toList()
+          : [],
       expectNotContains: notContainsRaw is List
           ? notContainsRaw.whereType<String>().toList()
           : [],

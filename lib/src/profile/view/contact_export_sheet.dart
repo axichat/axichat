@@ -45,19 +45,19 @@ Future<ContactExportFormat?> showContactExportFormatSheet(
 
 extension ContactExportFormatLabels on ContactExportFormat {
   String title(AppLocalizations l10n) => switch (this) {
-        ContactExportFormat.csv => l10n.profileExportFormatCsvTitle,
-        ContactExportFormat.vcard => l10n.profileExportFormatVcardTitle,
-      };
+    ContactExportFormat.csv => l10n.profileExportFormatCsvTitle,
+    ContactExportFormat.vcard => l10n.profileExportFormatVcardTitle,
+  };
 
   String subtitle(AppLocalizations l10n) => switch (this) {
-        ContactExportFormat.csv => l10n.profileExportFormatCsvSubtitle,
-        ContactExportFormat.vcard => l10n.profileExportFormatVcardSubtitle,
-      };
+    ContactExportFormat.csv => l10n.profileExportFormatCsvSubtitle,
+    ContactExportFormat.vcard => l10n.profileExportFormatVcardSubtitle,
+  };
 
   IconData get icon => switch (this) {
-        ContactExportFormat.csv => LucideIcons.fileSpreadsheet,
-        ContactExportFormat.vcard => LucideIcons.idCard,
-      };
+    ContactExportFormat.csv => LucideIcons.fileSpreadsheet,
+    ContactExportFormat.vcard => LucideIcons.idCard,
+  };
 }
 
 class _ContactExportOption extends StatelessWidget {

@@ -378,7 +378,8 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     DraftSyncPayload payload, {
     Draft? existing,
   }) async {
-    final resolvedExisting = existing ??
+    final resolvedExisting =
+        existing ??
         await _dbOpReturning<XmppDatabase, Draft?>(
           (db) => db.getDraftBySyncId(payload.syncId),
         );
@@ -507,10 +508,10 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
   ) async {
     final metadataIds =
         draft.attachmentMetadataIds.length > draftSyncMaxAttachments
-            ? draft.attachmentMetadataIds
-                .take(draftSyncMaxAttachments)
-                .toList(growable: false)
-            : draft.attachmentMetadataIds;
+        ? draft.attachmentMetadataIds
+              .take(draftSyncMaxAttachments)
+              .toList(growable: false)
+        : draft.attachmentMetadataIds;
     if (metadataIds.isEmpty) return const <DraftAttachmentRef>[];
     final db = await database;
     final attachments = <DraftAttachmentRef>[];
@@ -727,8 +728,8 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     }
     await _dbOp<XmppStateStore>((ss) async {
       final rawTimestamp = ss.read(key: _draftSyncSnapshotAtKey);
-      final rawIds =
-          (ss.read(key: _draftSyncSnapshotIdsKey) as List?)?.cast<Object?>();
+      final rawIds = (ss.read(key: _draftSyncSnapshotIdsKey) as List?)
+          ?.cast<Object?>();
       _draftLastSnapshotAt = _parseDraftSnapshotAt(rawTimestamp);
       _draftLastSnapshotIds
         ..clear()
@@ -918,10 +919,12 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     required Draft draft,
     required String sourceId,
   }) async {
-    final resolvedSyncId =
-        draft.draftSyncId.trim().isEmpty ? uuid.v4() : draft.draftSyncId;
-    final resolvedSourceId =
-        draft.draftSourceId.trim().isEmpty ? sourceId : draft.draftSourceId;
+    final resolvedSyncId = draft.draftSyncId.trim().isEmpty
+        ? uuid.v4()
+        : draft.draftSyncId;
+    final resolvedSourceId = draft.draftSourceId.trim().isEmpty
+        ? sourceId
+        : draft.draftSourceId;
     if (resolvedSyncId == draft.draftSyncId &&
         resolvedSourceId == draft.draftSourceId) {
       return draft;

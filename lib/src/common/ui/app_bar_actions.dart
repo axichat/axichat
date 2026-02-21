@@ -72,14 +72,16 @@ class AppBarActions extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final double screenWidth = MediaQuery.sizeOf(context).width;
-        final double resolvedAvailableWidth = availableWidth ??
+        final double resolvedAvailableWidth =
+            availableWidth ??
             (constraints.hasBoundedWidth ? constraints.maxWidth : screenWidth);
         final int spacingCount = actions.length > 1 ? actions.length - 1 : 0;
         final double spacingWidth = spacing * spacingCount;
         final double estimatedActionsWidth = actions.fold<double>(
           spacingWidth,
           (total, action) {
-            final double actionWidth = action.estimatedWidth ??
+            final double actionWidth =
+                action.estimatedWidth ??
                 (action.inline != null
                     ? _inlineActionEstimatedWidth
                     : AxiIconButton.kTapTargetSize);
@@ -88,7 +90,7 @@ class AppBarActions extends StatelessWidget {
         );
         final bool autoCollapse =
             (overflowBreakpoint > 0 && screenWidth < overflowBreakpoint) ||
-                resolvedAvailableWidth < estimatedActionsWidth;
+            resolvedAvailableWidth < estimatedActionsWidth;
         final bool shouldCollapse = forceCollapsed ?? autoCollapse;
         if (shouldCollapse) {
           final List<AxiMenuAction> menuActions = actions
@@ -118,8 +120,10 @@ class AppBarActions extends StatelessWidget {
             for (var index = 0; index < actions.length; index++) ...[
               KeyedSubtree(
                 key: ValueKey<String>(
-                    'app-bar-action-${actions[index].iconData}'),
-                child: actions[index].inline ??
+                  'app-bar-action-${actions[index].iconData}',
+                ),
+                child:
+                    actions[index].inline ??
                     AxiIconButton.outline(
                       iconData: actions[index].iconData,
                       icon: actions[index].icon,

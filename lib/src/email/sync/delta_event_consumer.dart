@@ -290,12 +290,12 @@ class DeltaEventConsumer {
     AppLocalizations Function()? localizationsProvider,
     String? Function()? selfJidProvider,
     Logger? logger,
-  })  : _databaseBuilder = databaseBuilder,
-        _context = context,
-        _defaultChatAttachmentAutoDownload = defaultChatAttachmentAutoDownload,
-        _localizationsProvider = localizationsProvider,
-        _selfJidProvider = selfJidProvider,
-        _log = logger ?? Logger('DeltaEventConsumer');
+  }) : _databaseBuilder = databaseBuilder,
+       _context = context,
+       _defaultChatAttachmentAutoDownload = defaultChatAttachmentAutoDownload,
+       _localizationsProvider = localizationsProvider,
+       _selfJidProvider = selfJidProvider,
+       _log = logger ?? Logger('DeltaEventConsumer');
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaContextHandle _context;
@@ -315,9 +315,7 @@ class DeltaEventConsumer {
       _localizationsProvider?.call() ??
       lookupAppLocalizations(const Locale('en'));
 
-  void updateDefaultChatAttachmentAutoDownload(
-    AttachmentAutoDownload value,
-  ) {
+  void updateDefaultChatAttachmentAutoDownload(AttachmentAutoDownload value) {
     _defaultChatAttachmentAutoDownload = value;
   }
 
@@ -400,8 +398,9 @@ class DeltaEventConsumer {
       }
       final chat = await _ensureChat(chatId);
       final msgIds = await _context.getChatMessageIds(chatId: chatId);
-      final filteredMsgIds =
-          msgIds.where((id) => !_isDeltaMessageMarkerId(id)).toList();
+      final filteredMsgIds = msgIds
+          .where((id) => !_isDeltaMessageMarkerId(id))
+          .toList();
       if (filteredMsgIds.isEmpty) {
         continue;
       }
@@ -558,7 +557,7 @@ class DeltaEventConsumer {
         final bool shouldBackfillPreview = hasPreview && !hasStoredPreview;
         final bool shouldUpdateTimestamp =
             lastTimestamp.isAfter(updated.lastChangeTimestamp) ||
-                shouldBackfillPreview;
+            shouldBackfillPreview;
         if (shouldUpdateTimestamp) {
           updated = updated.copyWith(lastChangeTimestamp: lastTimestamp);
         }
@@ -627,8 +626,9 @@ class DeltaEventConsumer {
       chatId: chatId,
       beforeMessageId: marker,
     );
-    final messageIds =
-        rawMessageIds.where((id) => !_isDeltaMessageMarkerId(id)).toList();
+    final messageIds = rawMessageIds
+        .where((id) => !_isDeltaMessageMarkerId(id))
+        .toList();
     if (messageIds.isEmpty) {
       return _deltaMessageIdUnset;
     }
@@ -845,8 +845,9 @@ class DeltaEventConsumer {
       return;
     }
     final messageIds = await _context.getChatMessageIds(chatId: chatId);
-    final filteredIds =
-        messageIds.where((id) => !_isDeltaMessageMarkerId(id)).toList();
+    final filteredIds = messageIds
+        .where((id) => !_isDeltaMessageMarkerId(id))
+        .toList();
     if (filteredIds.isEmpty) {
       await db.trimChatMessages(
         jid: chat.jid,
@@ -895,9 +896,7 @@ class DeltaEventConsumer {
     const int batchSize = 8;
     for (var index = 0; index < missingIds.length; index += batchSize) {
       final chunk = missingIds.skip(index).take(batchSize).toList();
-      final messages = await Future.wait(
-        chunk.map(_context.getMessage),
-      );
+      final messages = await Future.wait(chunk.map(_context.getMessage));
       for (final msg in messages) {
         if (msg == null) {
           continue;
@@ -997,8 +996,9 @@ class DeltaEventConsumer {
     const String? originId = null;
     final timestamp = msg.timestamp ?? DateTime.timestamp();
     final isOutgoing = msg.isOutgoing;
-    final senderJid =
-        isOutgoing ? _resolveOutgoingSenderJid(resolvedChat) : resolvedChat.jid;
+    final senderJid = isOutgoing
+        ? _resolveOutgoingSenderJid(resolvedChat)
+        : resolvedChat.jid;
     final emailAddress = resolvedChat.emailAddress?.toLowerCase();
     if (!isOutgoing &&
         emailAddress != null &&
@@ -1046,26 +1046,27 @@ class DeltaEventConsumer {
       msg: msg,
     );
     await _storeMessage(db: db, message: message, chatJid: resolvedChat.jid);
-    await _scheduleOriginIdHydration(
-      msgId: msg.id,
-      accountId: deltaAccountId,
-    );
+    await _scheduleOriginIdHydration(msgId: msg.id, accountId: deltaAccountId);
     final bool isSpamQuarantined =
         warning == MessageWarning.emailSpamQuarantined;
     final fileSize = msg.fileSize;
-    if (!isOutgoing &&
-        msg.hasFile &&
-        (resolvedChat.attachmentAutoDownload ??
-                _defaultChatAttachmentAutoDownload)
-            .isAllowed &&
-        (fileSize == null || fileSize <= maxAttachmentAutoDownloadBytes) &&
-        !isSpamQuarantined) {
-      fireAndForget(
-        () => _autoDownloadQueue.run(
-          () async => _context.downloadFullMessage(msg.id),
-        ),
-        operationName: 'DeltaEventConsumer.downloadFullMessage',
-      );
+    final shouldAutoDownloadPartial =
+        !isOutgoing && msg.needsDownload && !isSpamQuarantined;
+    if (shouldAutoDownloadPartial) {
+      final shouldDownload = msg.hasFile
+          ? (resolvedChat.attachmentAutoDownload ??
+                        _defaultChatAttachmentAutoDownload)
+                    .isAllowed &&
+                (fileSize == null || fileSize <= maxAttachmentAutoDownloadBytes)
+          : true;
+      if (shouldDownload) {
+        fireAndForget(
+          () => _autoDownloadQueue.run(
+            () async => _context.downloadFullMessage(msg.id),
+          ),
+          operationName: 'DeltaEventConsumer.downloadFullMessage',
+        );
+      }
     }
     await _updateChatTimestamp(chatId: chatId, timestamp: timestamp);
   }
@@ -1078,11 +1079,11 @@ class DeltaEventConsumer {
   }) async {
     final PendingOutgoingEmailSignature incomingSignature =
         PendingOutgoingEmailSignature.fromOutgoing(
-      text: msg.text,
-      html: msg.html,
-      fileName: msg.fileName,
-      filePath: msg.filePath,
-    );
+          text: msg.text,
+          html: msg.html,
+          fileName: msg.fileName,
+          filePath: msg.filePath,
+        );
     if (incomingSignature.isEmpty) {
       return null;
     }
@@ -1114,9 +1115,9 @@ class DeltaEventConsumer {
       }
       final PendingOutgoingEmailSignature candidateSignature =
           PendingOutgoingEmailSignature.fromMessage(
-        message: candidate,
-        metadata: metadata,
-      );
+            message: candidate,
+            metadata: metadata,
+          );
       if (!candidateSignature.matches(incomingSignature)) {
         continue;
       }
@@ -1147,8 +1148,9 @@ class DeltaEventConsumer {
   }
 
   bool _isSelfPendingSender(Message message) {
-    final String normalizedSender =
-        normalizedAddressValueOrEmpty(message.senderJid);
+    final String normalizedSender = normalizedAddressValueOrEmpty(
+      message.senderJid,
+    );
     if (normalizedSender.isEmpty) {
       return false;
     }
@@ -1305,7 +1307,7 @@ class DeltaEventConsumer {
         final db = await _db();
         final existing =
             await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
-                await db.getMessageByStanzaID(stanzaId);
+            await db.getMessageByStanzaID(stanzaId);
         if (existing == null) {
           return;
         }
@@ -1373,8 +1375,9 @@ class DeltaEventConsumer {
       return;
     }
     final DateTime now = DateTime.timestamp();
-    final DateTime nextTimestamp =
-        now.isAfter(chat.lastChangeTimestamp) ? now : chat.lastChangeTimestamp;
+    final DateTime nextTimestamp = now.isAfter(chat.lastChangeTimestamp)
+        ? now
+        : chat.lastChangeTimestamp;
     final updated = chat.copyWith(
       lastMessage: preview,
       lastChangeTimestamp: nextTimestamp,
@@ -1643,8 +1646,8 @@ class DeltaEventConsumer {
     final resolvedBody = rawText?.trim().isNotEmpty == true
         ? rawText
         : (normalizedHtml == null
-            ? rawText
-            : HtmlContentCodec.toPlainText(normalizedHtml));
+              ? rawText
+              : HtmlContentCodec.toPlainText(normalizedHtml));
     var next = message.copyWith(
       body: resolvedBody?.trim().isEmpty == true ? null : resolvedBody,
       htmlBody: normalizedHtml,
@@ -1694,9 +1697,7 @@ class DeltaEventConsumer {
     );
     final normalizedBody = next.body?.trim() ?? '';
     if (normalizedBody.isEmpty) {
-      next = next.copyWith(
-        body: _attachmentLabel(merged ?? resolvedMetadata),
-      );
+      next = next.copyWith(body: _attachmentLabel(merged ?? resolvedMetadata));
     }
     return next;
   }
@@ -1729,8 +1730,9 @@ class DeltaEventConsumer {
   ) {
     if (existing == null) return next;
     final merged = existing.copyWith(
-      filename:
-          existing.filename.isNotEmpty ? existing.filename : next.filename,
+      filename: existing.filename.isNotEmpty
+          ? existing.filename
+          : next.filename,
       path: next.path ?? existing.path,
       mimeType: next.mimeType ?? existing.mimeType,
       sizeBytes: next.sizeBytes ?? existing.sizeBytes,
@@ -1756,8 +1758,9 @@ class DeltaEventConsumer {
 
   String _attachmentLabel(FileMetadataData metadata) {
     final filename = metadata.filename.trim();
-    final label =
-        filename.isEmpty ? _l10n.chatAttachmentFallbackLabel : filename;
+    final label = filename.isEmpty
+        ? _l10n.chatAttachmentFallbackLabel
+        : filename;
     final sizeLabel = _formatAttachmentBytes(metadata.sizeBytes);
     return _l10n.chatAttachmentCaption(label, sizeLabel);
   }
@@ -1940,10 +1943,12 @@ bool _matchesDeltaWelcomeText(String? text) {
   if (normalized.contains('messages in this chat are generated locally')) {
     return true;
   }
-  final generatedLocally = normalized.contains('generated locally') ||
+  final generatedLocally =
+      normalized.contains('generated locally') ||
       normalized.contains('created locally') ||
       normalized.contains('generated automatically');
-  final mentionsSetup = normalized.contains('setup message') ||
+  final mentionsSetup =
+      normalized.contains('setup message') ||
       normalized.contains('autocrypt setup message');
   final mentionsDevice = normalized.contains('device message');
   if (generatedLocally && (mentionsDelta || mentionsDevice || mentionsSetup)) {

@@ -46,22 +46,24 @@ class AxiTabBar extends StatelessWidget {
     final scheme = context.colorScheme;
     final WidgetStateProperty<Color?> overlayColor =
         WidgetStateColor.resolveWith((states) {
-      if (states.contains(WidgetState.pressed)) {
-        return scheme.primary.withValues(alpha: 0.14);
-      }
-      if (states.contains(WidgetState.focused) ||
-          states.contains(WidgetState.hovered)) {
-        return scheme.primary.withValues(alpha: 0.08);
-      }
-      return Colors.transparent;
-    });
+          if (states.contains(WidgetState.pressed)) {
+            return scheme.primary.withValues(alpha: 0.14);
+          }
+          if (states.contains(WidgetState.focused) ||
+              states.contains(WidgetState.hovered)) {
+            return scheme.primary.withValues(alpha: 0.08);
+          }
+          return Colors.transparent;
+        });
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final double width = constraints.maxWidth;
-        final bool useScrollable = isScrollableOverride ??
+        final bool useScrollable =
+            isScrollableOverride ??
             (width.isFinite && width < tabs.length * minTabWidth);
-        final TabAlignment alignment = tabAlignmentOverride ??
+        final TabAlignment alignment =
+            tabAlignmentOverride ??
             (useScrollable ? TabAlignment.center : TabAlignment.fill);
 
         final resolvedBadges = List<int>.filled(tabs.length, 0);
@@ -74,11 +76,7 @@ class AxiTabBar extends StatelessWidget {
             final count = resolvedBadges[index];
             if (count <= 0) return tabs[index];
             final offset = badgeOffset ?? Offset(0, -context.spacing.m);
-            return AxiBadge(
-              count: count,
-              offset: offset,
-              child: tabs[index],
-            );
+            return AxiBadge(count: count, offset: offset, child: tabs[index]);
           });
         }
 
@@ -92,7 +90,8 @@ class AxiTabBar extends StatelessWidget {
               isScrollable: useScrollable,
               tabAlignment: alignment,
               dividerHeight: 0,
-              indicator: indicatorColor == Colors.transparent &&
+              indicator:
+                  indicatorColor == Colors.transparent &&
                       (indicatorWeight ?? 0) == 0
                   ? const BoxDecoration()
                   : null,

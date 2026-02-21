@@ -35,9 +35,9 @@ class _BlocklistListState extends State<BlocklistList> {
     final tabState = searchState.stateFor(HomeTab.blocked);
     final query = searchState.active ? tabState.query : '';
     context.read<BlocklistCubit>().updateFilter(
-          query: query,
-          sortOrder: tabState.sort,
-        );
+      query: query,
+      sortOrder: tabState.sort,
+    );
   }
 
   @override
@@ -46,8 +46,10 @@ class _BlocklistListState extends State<BlocklistList> {
       listener: _syncSearchState,
       child: BlocBuilder<BlocklistCubit, BlocklistState>(
         builder: (context, state) {
-          final cachedItems = context.watch<BlocklistCubit>()[
-              BlocklistCubit.blocklistItemsCacheKey] as List<BlocklistEntry>?;
+          final cachedItems =
+              context.watch<BlocklistCubit>()[BlocklistCubit
+                      .blocklistItemsCacheKey]
+                  as List<BlocklistEntry>?;
           final items = state.items ?? cachedItems;
           if (items == null) {
             return Center(
@@ -60,7 +62,8 @@ class _BlocklistListState extends State<BlocklistList> {
           return BlocBuilder<RosterCubit, RosterState>(
             buildWhen: (previous, current) => previous.items != current.items,
             builder: (context, rosterState) {
-              final cachedRosterItems = rosterState.items ??
+              final cachedRosterItems =
+                  rosterState.items ??
                   (context.watch<RosterCubit>()['items'] as List<RosterItem>?);
               final avatarPathsByJid = <String, String>{};
               if (cachedRosterItems != null) {
@@ -92,8 +95,10 @@ class _BlocklistListBody extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) {
       return Center(
-        child:
-            Text(context.l10n.blocklistEmpty, style: context.textTheme.muted),
+        child: Text(
+          context.l10n.blocklistEmpty,
+          style: context.textTheme.muted,
+        ),
       );
     }
 

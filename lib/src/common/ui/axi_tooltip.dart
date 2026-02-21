@@ -58,8 +58,9 @@ class _AxiTooltipState extends State<AxiTooltip> {
       vertical: context.spacing.xs,
     );
     final double fallbackHeight = context.sizing.iconButtonTapTarget;
-    final double resolvedHeight =
-        _targetHeight > 0 ? _targetHeight : fallbackHeight;
+    final double resolvedHeight = _targetHeight > 0
+        ? _targetHeight
+        : fallbackHeight;
     final double verticalOffset = (resolvedHeight / 2) + context.spacing.xxs;
     final content = widget.builder(context);
     final colors = context.colorScheme;
@@ -87,10 +88,7 @@ class _AxiTooltipState extends State<AxiTooltip> {
           return false;
         },
         child: SizeChangedLayoutNotifier(
-          child: KeyedSubtree(
-            key: _childKey,
-            child: widget.child,
-          ),
+          child: KeyedSubtree(key: _childKey, child: widget.child),
         ),
       ),
     );

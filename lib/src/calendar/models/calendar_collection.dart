@@ -89,45 +89,45 @@ enum CalendarMethod {
   bool get isDeclineCounter => this == CalendarMethod.declineCounter;
 
   String get icsValue => switch (this) {
-        CalendarMethod.publish => _calendarMethodPublishIcs,
-        CalendarMethod.request => _calendarMethodRequestIcs,
-        CalendarMethod.reply => _calendarMethodReplyIcs,
-        CalendarMethod.cancel => _calendarMethodCancelIcs,
-        CalendarMethod.add => _calendarMethodAddIcs,
-        CalendarMethod.refresh => _calendarMethodRefreshIcs,
-        CalendarMethod.counter => _calendarMethodCounterIcs,
-        CalendarMethod.declineCounter => _calendarMethodDeclineCounterIcs,
-      };
+    CalendarMethod.publish => _calendarMethodPublishIcs,
+    CalendarMethod.request => _calendarMethodRequestIcs,
+    CalendarMethod.reply => _calendarMethodReplyIcs,
+    CalendarMethod.cancel => _calendarMethodCancelIcs,
+    CalendarMethod.add => _calendarMethodAddIcs,
+    CalendarMethod.refresh => _calendarMethodRefreshIcs,
+    CalendarMethod.counter => _calendarMethodCounterIcs,
+    CalendarMethod.declineCounter => _calendarMethodDeclineCounterIcs,
+  };
 
   static CalendarMethod? fromIcsValue(String? value) => switch (value) {
-        _calendarMethodPublishIcs => CalendarMethod.publish,
-        _calendarMethodRequestIcs => CalendarMethod.request,
-        _calendarMethodReplyIcs => CalendarMethod.reply,
-        _calendarMethodCancelIcs => CalendarMethod.cancel,
-        _calendarMethodAddIcs => CalendarMethod.add,
-        _calendarMethodRefreshIcs => CalendarMethod.refresh,
-        _calendarMethodCounterIcs => CalendarMethod.counter,
-        _calendarMethodDeclineCounterIcs => CalendarMethod.declineCounter,
-        _ => null,
-      };
+    _calendarMethodPublishIcs => CalendarMethod.publish,
+    _calendarMethodRequestIcs => CalendarMethod.request,
+    _calendarMethodReplyIcs => CalendarMethod.reply,
+    _calendarMethodCancelIcs => CalendarMethod.cancel,
+    _calendarMethodAddIcs => CalendarMethod.add,
+    _calendarMethodRefreshIcs => CalendarMethod.refresh,
+    _calendarMethodCounterIcs => CalendarMethod.counter,
+    _calendarMethodDeclineCounterIcs => CalendarMethod.declineCounter,
+    _ => null,
+  };
 }
 
 extension CalendarMethodLabelX on CalendarMethod {
   String get label => switch (this) {
-        CalendarMethod.publish => _calendarMethodPublishLabel,
-        CalendarMethod.request => _calendarMethodRequestLabel,
-        CalendarMethod.reply => _calendarMethodReplyLabel,
-        CalendarMethod.cancel => _calendarMethodCancelLabel,
-        CalendarMethod.add => _calendarMethodAddLabel,
-        CalendarMethod.refresh => _calendarMethodRefreshLabel,
-        CalendarMethod.counter => _calendarMethodCounterLabel,
-        CalendarMethod.declineCounter => _calendarMethodDeclineCounterLabel,
-      };
+    CalendarMethod.publish => _calendarMethodPublishLabel,
+    CalendarMethod.request => _calendarMethodRequestLabel,
+    CalendarMethod.reply => _calendarMethodReplyLabel,
+    CalendarMethod.cancel => _calendarMethodCancelLabel,
+    CalendarMethod.add => _calendarMethodAddLabel,
+    CalendarMethod.refresh => _calendarMethodRefreshLabel,
+    CalendarMethod.counter => _calendarMethodCounterLabel,
+    CalendarMethod.declineCounter => _calendarMethodDeclineCounterLabel,
+  };
 }
 
 @freezed
 @HiveType(typeId: _calendarSharingPolicyTypeId)
-class CalendarSharingPolicy with _$CalendarSharingPolicy {
+abstract class CalendarSharingPolicy with _$CalendarSharingPolicy {
   const factory CalendarSharingPolicy({
     @HiveField(_calendarSharingPolicyValueField) required String value,
   }) = _CalendarSharingPolicy;
@@ -138,7 +138,7 @@ class CalendarSharingPolicy with _$CalendarSharingPolicy {
 
 @freezed
 @HiveType(typeId: _calendarCollectionTypeId)
-class CalendarCollection with _$CalendarCollection {
+abstract class CalendarCollection with _$CalendarCollection {
   const factory CalendarCollection({
     @HiveField(_calendarCollectionIdField) required String id,
     @HiveField(_calendarCollectionNameField) required String name,

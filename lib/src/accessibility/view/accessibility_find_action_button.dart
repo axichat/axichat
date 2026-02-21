@@ -29,8 +29,8 @@ class AccessibilityFindActionButton extends StatelessWidget {
         builder: (_) => Text(tooltip),
         child: ShadButton.ghost(
           onPressed: () => context.read<AccessibilityActionBloc>().add(
-                const AccessibilityMenuOpened(),
-              ),
+            const AccessibilityMenuOpened(),
+          ),
           padding: EdgeInsets.all(spacing.s),
           child: Icon(
             LucideIcons.lifeBuoy,
@@ -41,15 +41,12 @@ class AccessibilityFindActionButton extends StatelessWidget {
     }
     return ShadButton.outline(
       onPressed: () => context.read<AccessibilityActionBloc>().add(
-            const AccessibilityMenuOpened(),
-          ),
+        const AccessibilityMenuOpened(),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            LucideIcons.lifeBuoy,
-            size: context.sizing.iconButtonIconSize,
-          ),
+          Icon(LucideIcons.lifeBuoy, size: context.sizing.iconButtonIconSize),
           SizedBox(width: spacing.s),
           ShortcutHint(shortcut: shortcut, dense: true),
         ],

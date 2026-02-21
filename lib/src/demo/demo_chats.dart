@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
 
 class DemoAttachmentAsset {
@@ -55,35 +56,35 @@ class DemoChats {
 
   static const Map<String, DemoContactAvatar> _avatars =
       <String, DemoContactAvatar>{
-    kDemoSelfJid: DemoContactAvatar(
-      assetPath: 'assets/images/avatars/stem/atom.png',
-      hash: 'demo-avatar-franklin',
-    ),
-    _washingtonJid: DemoContactAvatar(
-      assetPath: 'assets/images/avatars/misc/sword.png',
-      hash: 'demo-avatar-washington',
-    ),
-    _jeffersonJid: DemoContactAvatar(
-      assetPath: 'assets/images/avatars/music/violin.png',
-      hash: 'demo-avatar-jefferson',
-    ),
-    _adamsJid: DemoContactAvatar(
-      assetPath: 'assets/images/avatars/misc/chess.png',
-      hash: 'demo-avatar-adams',
-    ),
-    _madisonJid: DemoContactAvatar(
-      assetPath: 'assets/images/avatars/stem/compass.png',
-      hash: 'demo-avatar-madison',
-    ),
-    _hamiltonJid: DemoContactAvatar(
-      assetPath: 'assets/images/avatars/music/microphone.png',
-      hash: 'demo-avatar-hamilton',
-    ),
-    _groupJid: DemoContactAvatar(
-      assetPath: 'assets/images/avatars/misc/founders_star.png',
-      hash: 'demo-avatar-founders',
-    ),
-  };
+        kDemoSelfJid: DemoContactAvatar(
+          assetPath: 'assets/images/avatars/stem/atom.png',
+          hash: 'demo-avatar-franklin',
+        ),
+        _washingtonJid: DemoContactAvatar(
+          assetPath: 'assets/images/avatars/misc/sword.png',
+          hash: 'demo-avatar-washington',
+        ),
+        _jeffersonJid: DemoContactAvatar(
+          assetPath: 'assets/images/avatars/music/violin.png',
+          hash: 'demo-avatar-jefferson',
+        ),
+        _adamsJid: DemoContactAvatar(
+          assetPath: 'assets/images/avatars/misc/chess.png',
+          hash: 'demo-avatar-adams',
+        ),
+        _madisonJid: DemoContactAvatar(
+          assetPath: 'assets/images/avatars/stem/compass.png',
+          hash: 'demo-avatar-madison',
+        ),
+        _hamiltonJid: DemoContactAvatar(
+          assetPath: 'assets/images/avatars/music/microphone.png',
+          hash: 'demo-avatar-hamilton',
+        ),
+        _groupJid: DemoContactAvatar(
+          assetPath: 'assets/images/avatars/misc/founders_star.png',
+          hash: 'demo-avatar-founders',
+        ),
+      };
 
   static Map<String, DemoContactAvatar> avatarAssets() =>
       Map<String, DemoContactAvatar>.unmodifiable(_avatars);
@@ -171,13 +172,13 @@ class DemoChats {
     const contact1Jid = DemoChats.contact1Jid;
 
     Chat directChat(String jid, String title, List<Message> messages) => Chat(
-          jid: jid,
-          title: title,
-          type: ChatType.chat,
-          contactJid: jid,
-          lastChangeTimestamp: messages.first.timestamp!,
-          lastMessage: messages.first.body,
-        );
+      jid: jid,
+      title: title,
+      type: ChatType.chat,
+      contactJid: jid,
+      lastChangeTimestamp: messages.first.timestamp!,
+      lastMessage: messages.first.body,
+    );
 
     Message message({
       required String stanzaId,
@@ -186,18 +187,17 @@ class DemoChats {
       required String body,
       required DateTime timestamp,
       String? occupantId,
-    }) =>
-        Message(
-          stanzaID: stanzaId,
-          senderJid: senderJid,
-          chatJid: chatJid,
-          body: body,
-          timestamp: timestamp,
-          occupantID: occupantId,
-          acked: true,
-          received: true,
-          displayed: true,
-        );
+    }) => Message(
+      stanzaID: stanzaId,
+      senderJid: senderJid,
+      chatJid: chatJid,
+      body: body,
+      timestamp: timestamp,
+      occupantID: occupantId,
+      acked: true,
+      received: true,
+      displayed: true,
+    );
 
     final washingtonMessages = [
       message(
@@ -345,7 +345,7 @@ class DemoChats {
         stanzaId: 'demo-hamilton-2',
         senderJid: kDemoSelfJid,
         chatJid: hamiltonJid,
-        body: 'If all checks out, we can finish it the same day.',
+        body: 'If it all checks out, we can finish it the same day.',
         timestamp: now.subtract(const Duration(minutes: 96)),
       ),
       message(
@@ -429,7 +429,7 @@ class DemoChats {
         stanzaId: 'demo-group-5',
         senderJid: '$groupJid/James',
         chatJid: groupJid,
-        body: 'Let us pick who is doing what before we start.',
+        body: "Let's decide who is doing what before we start.",
         timestamp: now.subtract(const Duration(minutes: 27)),
         occupantId: '$groupJid/James',
       ),
@@ -446,7 +446,7 @@ class DemoChats {
         senderJid: '$groupJid/Ben',
         chatJid: groupJid,
         body:
-            'Give me five minutes, then I will post a quick recap so anyone joining late can catch up.',
+            "Give me five minutes, then I'll post a quick recap so anyone joining late can catch up.",
         timestamp: now.subtract(const Duration(minutes: 31)),
         occupantId: '$groupJid/Ben',
       ),
@@ -481,10 +481,12 @@ class DemoChats {
       lastChangeTimestamp: latestGroupMessage.timestamp!,
       lastMessage: latestGroupMessage.body,
     );
-    final contact1FirstTimestamp =
-        now.subtract(const Duration(days: 2, hours: 3));
-    final contact1SecondTimestamp =
-        contact1FirstTimestamp.add(const Duration(minutes: 49));
+    final contact1FirstTimestamp = now.subtract(
+      const Duration(days: 2, hours: 3),
+    );
+    final contact1SecondTimestamp = contact1FirstTimestamp.add(
+      const Duration(minutes: 49),
+    );
     final contact1Messages = [
       message(
         stanzaId: 'demo-contact1-2',
@@ -528,6 +530,7 @@ class DemoChats {
           jid: gmailJid,
           title: gmailJid,
           type: ChatType.chat,
+          transport: MessageTransport.email,
           contactJid: gmailJid,
           contactDisplayName: gmailJid,
           emailAddress: gmailJid,
@@ -566,6 +569,7 @@ class DemoChats {
           jid: contact1Jid,
           title: contact1Jid,
           type: ChatType.chat,
+          transport: MessageTransport.email,
           contactJid: contact1Jid,
           contactDisplayName: contact1Jid,
           emailAddress: contact1Jid,

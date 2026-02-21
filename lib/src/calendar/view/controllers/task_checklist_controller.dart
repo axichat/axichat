@@ -11,10 +11,10 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 /// Declarative controller for managing inline task checklists across forms.
 class TaskChecklistController extends ChangeNotifier {
   TaskChecklistController({List<TaskChecklistItem> initialItems = const []})
-      : _items = List<TaskChecklistItem>.from(
-          TaskChecklistController.normalize(initialItems),
-          growable: true,
-        );
+    : _items = List<TaskChecklistItem>.from(
+        TaskChecklistController.normalize(initialItems),
+        growable: true,
+      );
 
   static const Uuid _uuid = Uuid();
   static const String _emptyPendingEntry = '';

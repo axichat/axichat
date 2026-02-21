@@ -21,20 +21,20 @@ class FeedbackToast extends ShadToast {
     Alignment alignment = Alignment.topRight,
     bool showCloseIconOnlyWhenHovered = false,
   }) : super.raw(
-          variant: _variantForTone(tone),
-          title: _textOrNull(title ?? _defaultTitleForTone(tone)),
-          description: message == null
-              ? null
-              : GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onTap,
-                  child: Text(message),
-                ),
-          action: _actionWidget(actionLabel, onAction),
-          alignment: alignment,
-          duration: duration ?? _defaultDurationForTone(tone),
-          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
-        );
+         variant: _variantForTone(tone),
+         title: _textOrNull(title ?? _defaultTitleForTone(tone)),
+         description: message == null
+             ? null
+             : GestureDetector(
+                 behavior: HitTestBehavior.opaque,
+                 onTap: onTap,
+                 child: Text(message),
+               ),
+         action: _actionWidget(actionLabel, onAction),
+         alignment: alignment,
+         duration: duration ?? _defaultDurationForTone(tone),
+         showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
+       );
 
   @override
   State<FeedbackToast> createState() => _FeedbackToastState();
@@ -50,17 +50,17 @@ class FeedbackToast extends ShadToast {
     Alignment alignment = Alignment.topRight,
     bool showCloseIconOnlyWhenHovered = false,
   }) : this(
-          key: key,
-          tone: FeedbackTone.success,
-          title: title,
-          message: message,
-          duration: duration,
-          onTap: onTap,
-          actionLabel: actionLabel,
-          onAction: onAction,
-          alignment: alignment,
-          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
-        );
+         key: key,
+         tone: FeedbackTone.success,
+         title: title,
+         message: message,
+         duration: duration,
+         onTap: onTap,
+         actionLabel: actionLabel,
+         onAction: onAction,
+         alignment: alignment,
+         showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
+       );
 
   FeedbackToast.info({
     Key? key,
@@ -73,17 +73,17 @@ class FeedbackToast extends ShadToast {
     Alignment alignment = Alignment.topRight,
     bool showCloseIconOnlyWhenHovered = false,
   }) : this(
-          key: key,
-          tone: FeedbackTone.info,
-          title: title,
-          message: message,
-          duration: duration,
-          onTap: onTap,
-          actionLabel: actionLabel,
-          onAction: onAction,
-          alignment: alignment,
-          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
-        );
+         key: key,
+         tone: FeedbackTone.info,
+         title: title,
+         message: message,
+         duration: duration,
+         onTap: onTap,
+         actionLabel: actionLabel,
+         onAction: onAction,
+         alignment: alignment,
+         showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
+       );
 
   FeedbackToast.warning({
     Key? key,
@@ -96,17 +96,17 @@ class FeedbackToast extends ShadToast {
     Alignment alignment = Alignment.topRight,
     bool showCloseIconOnlyWhenHovered = false,
   }) : this(
-          key: key,
-          tone: FeedbackTone.warning,
-          title: title,
-          message: message,
-          duration: duration,
-          onTap: onTap,
-          actionLabel: actionLabel,
-          onAction: onAction,
-          alignment: alignment,
-          showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
-        );
+         key: key,
+         tone: FeedbackTone.warning,
+         title: title,
+         message: message,
+         duration: duration,
+         onTap: onTap,
+         actionLabel: actionLabel,
+         onAction: onAction,
+         alignment: alignment,
+         showCloseIconOnlyWhenHovered: showCloseIconOnlyWhenHovered,
+       );
 
   factory FeedbackToast.error({
     Key? key,
@@ -224,7 +224,8 @@ class _FeedbackToastState extends State<FeedbackToast> {
       ShadToastVariant.primary => theme.colorScheme.foreground,
       ShadToastVariant.destructive => theme.colorScheme.destructiveForeground,
     };
-    final effectiveCloseIcon = widget.closeIcon ??
+    final effectiveCloseIcon =
+        widget.closeIcon ??
         effectiveToastTheme.closeIcon ??
         ShadIconButton.ghost(
           icon: Icon(
@@ -242,21 +243,25 @@ class _FeedbackToastState extends State<FeedbackToast> {
           pressedForegroundColor: effectiveForegroundColor,
           onPressed: () => ShadToaster.of(context).hide(),
         );
-    final effectiveTitleStyle = widget.titleStyle ??
+    final effectiveTitleStyle =
+        widget.titleStyle ??
         effectiveToastTheme.titleStyle ??
         theme.textTheme.muted.copyWith(
           fontWeight: FontWeight.w500,
           color: effectiveForegroundColor,
         );
-    final effectiveDescriptionStyle = widget.descriptionStyle ??
+    final effectiveDescriptionStyle =
+        widget.descriptionStyle ??
         effectiveToastTheme.descriptionStyle ??
         theme.textTheme.muted.copyWith(
           color: effectiveForegroundColor.withValues(alpha: .9),
         );
-    final effectiveActionPadding = widget.actionPadding ??
+    final effectiveActionPadding =
+        widget.actionPadding ??
         effectiveToastTheme.actionPadding ??
         const EdgeInsets.only(left: 16);
-    final effectiveBorder = widget.border ??
+    final effectiveBorder =
+        widget.border ??
         effectiveToastTheme.border ??
         ShadBorder.fromBorderSide(
           ShadBorderSide(
@@ -268,22 +273,26 @@ class _FeedbackToastState extends State<FeedbackToast> {
         widget.radius ?? effectiveToastTheme.radius ?? theme.radius;
     final effectiveShadows =
         widget.shadows ?? effectiveToastTheme.shadows ?? ShadShadows.lg;
-    final effectiveBackgroundColor = widget.backgroundColor ??
+    final effectiveBackgroundColor =
+        widget.backgroundColor ??
         effectiveToastTheme.backgroundColor ??
         theme.colorScheme.background;
-    final effectivePadding = widget.padding ??
+    final effectivePadding =
+        widget.padding ??
         effectiveToastTheme.padding ??
         const EdgeInsets.fromLTRB(24, 24, 32, 24);
-    final effectiveCrossAxisAlignment = widget.crossAxisAlignment ??
+    final effectiveCrossAxisAlignment =
+        widget.crossAxisAlignment ??
         effectiveToastTheme.crossAxisAlignment ??
         CrossAxisAlignment.center;
-    final effectiveCloseIconPosition = widget.closeIconPosition ??
+    final effectiveCloseIconPosition =
+        widget.closeIconPosition ??
         effectiveToastTheme.closeIconPosition ??
         const ShadPosition(top: 8, right: 8);
     final effectiveShowCloseIconOnlyWhenHovered =
         widget.showCloseIconOnlyWhenHovered ??
-            effectiveToastTheme.showCloseIconOnlyWhenHovered ??
-            true;
+        effectiveToastTheme.showCloseIconOnlyWhenHovered ??
+        true;
 
     return MouseRegion(
       onEnter: (_) => hovered.value = true,
@@ -294,10 +303,12 @@ class _FeedbackToastState extends State<FeedbackToast> {
             constrainedAxis: Axis.horizontal,
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                minWidth:
-                    breakpoint >= theme.breakpoints.md ? 0 : double.infinity,
-                maxWidth:
-                    breakpoint >= theme.breakpoints.md ? 420 : double.infinity,
+                minWidth: breakpoint >= theme.breakpoints.md
+                    ? 0
+                    : double.infinity,
+                maxWidth: breakpoint >= theme.breakpoints.md
+                    ? 420
+                    : double.infinity,
               ),
               child: DecoratedBox(
                 decoration: BoxDecoration(

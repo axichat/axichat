@@ -179,8 +179,8 @@ final class ConversationIndexItemRetractedEvent extends mox.XmppEvent {
 
 final class ConversationIndexManager extends mox.XmppManagerBase {
   ConversationIndexManager({String? maxItems})
-      : _maxItems = maxItems ?? _defaultMaxItems,
-        super(managerId);
+    : _maxItems = maxItems ?? _defaultMaxItems,
+      super(managerId);
 
   static const String managerId = 'axi.conversation.index';
   static const String _defaultMaxItems = '1000';
@@ -286,11 +286,11 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   }
 
   mox.PubSubPublishOptions _publishOptions() => mox.PubSubPublishOptions(
-        accessModel: mox.AccessModel.whitelist.value,
-        maxItems: _maxItems,
-        persistItems: _persistItemsEnabled,
-        publishModel: _publishModelPublishers,
-      );
+    accessModel: mox.AccessModel.whitelist.value,
+    maxItems: _maxItems,
+    persistItems: _persistItemsEnabled,
+    publishModel: _publishModelPublishers,
+  );
 
   mox.JID? _selfPepHost() {
     try {
@@ -306,11 +306,10 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
   Future<String?> _resolveSendLastPublishedItem(
     SafePubSubManager pubsub,
     mox.JID host,
-  ) =>
-      pubsub.resolveSendLastPublishedItemForNode(
-        host: host,
-        node: conversationIndexNode,
-      );
+  ) => pubsub.resolveSendLastPublishedItemForNode(
+    host: host,
+    node: conversationIndexNode,
+  );
 
   int? _parseMaxItems(String raw) {
     final normalized = raw.trim();
@@ -415,8 +414,10 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
     var success = false;
     getAttributes().sendEvent(_conversationEnsureStartEvent);
     try {
-      final sendLastPublishedItem =
-          await _resolveSendLastPublishedItem(pubsub, host);
+      final sendLastPublishedItem = await _resolveSendLastPublishedItem(
+        pubsub,
+        host,
+      );
       final config = _nodeConfig(sendLastPublishedItem: sendLastPublishedItem);
 
       final configuredError = await _configureNodeWithFallback(
@@ -434,9 +435,7 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
       if (!shouldCreateNode) {
         return;
       }
-      logger.fine(
-        'PubSub node missing; creating node=$conversationIndexNode.',
-      );
+      logger.fine('PubSub node missing; creating node=$conversationIndexNode.');
 
       try {
         await pubsub.createNodeWithConfig(
@@ -612,7 +611,8 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
   Future<void> archive(mox.JID peer, bool archived) async {
     final cached = cachedForPeer(peer);
-    final baseline = cached ??
+    final baseline =
+        cached ??
         ConvItem(
           peerBare: peer.toBare(),
           lastTimestamp: DateTime.timestamp().toUtc(),
@@ -623,7 +623,8 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
   Future<void> pin(mox.JID peer, bool pinned) async {
     final cached = cachedForPeer(peer);
-    final baseline = cached ??
+    final baseline =
+        cached ??
         ConvItem(
           peerBare: peer.toBare(),
           lastTimestamp: DateTime.timestamp().toUtc(),
@@ -634,7 +635,8 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
   Future<void> mute(mox.JID peer, DateTime? until) async {
     final cached = cachedForPeer(peer);
-    final baseline = cached ??
+    final baseline =
+        cached ??
         ConvItem(
           peerBare: peer.toBare(),
           lastTimestamp: DateTime.timestamp().toUtc(),
@@ -659,8 +661,9 @@ final class ConversationIndexManager extends mox.XmppManagerBase {
 
     final incomingTs = incoming.lastTimestamp.toUtc();
     final cachedTs = resolvedCache.lastTimestamp.toUtc();
-    final mergedLastTimestamp =
-        incomingTs.isAfter(cachedTs) ? incomingTs : cachedTs;
+    final mergedLastTimestamp = incomingTs.isAfter(cachedTs)
+        ? incomingTs
+        : cachedTs;
 
     final String? mergedLastId;
     if (incomingTs.isAfter(cachedTs)) {

@@ -9,7 +9,6 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
@@ -73,23 +72,24 @@ const double _profileWideColumnSpacing = 16.0;
 const double _profileColumnMinWidth = 340.0;
 const double _profileColumnMaxWidth = 460.0;
 const double _profileSettingsMinWidth = 300.0;
-const double _profileWideLayoutMinWidth = _profileColumnMaxWidth +
+const double _profileWideLayoutMinWidth =
+    _profileColumnMaxWidth +
     _profileSettingsMinWidth +
     _profileWideColumnSpacing +
     _profileWideHorizontalPadding * 2;
 const Curve _profileFadeCurve = Curves.easeInOutCubic;
 
 class ProfileScreen extends StatelessWidget {
-  const ProfileScreen({super.key, required this.locate});
-
-  final T Function<T>() locate;
+  const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final locate = context.read;
     final endpointConfig = locate<SettingsCubit>().state.endpointConfig;
     final emailEnabled = endpointConfig.smtpEnabled;
-    final EmailService? emailService =
-        emailEnabled ? locate<EmailService>() : null;
+    final EmailService? emailService = emailEnabled
+        ? locate<EmailService>()
+        : null;
     return RepositoryProvider.value(
       value: locate<Capability>(),
       child: MultiBlocProvider(
@@ -178,10 +178,6 @@ class _ProfileBodyState extends State<_ProfileBody> {
         final colors = context.colorScheme;
         final demoOffline = context.read<XmppService>().demoOfflineMode;
         final profileSidebarColor = colors.background;
-        final bottomNavVisible =
-            EnvScope.of(context).navPlacement == NavPlacement.bottom;
-        final showLeadingBack = !bottomNavVisible &&
-            (_profileRoute != _ProfileRoute.main || _canPopRoute(context));
         final canPop = _profileRoute == _ProfileRoute.main;
         return PopScope(
           canPop: canPop,
@@ -214,33 +210,15 @@ class _ProfileBodyState extends State<_ProfileBody> {
                     ),
                   ),
               ],
-              leadingWidth:
-                  showLeadingBack ? AxiIconButton.kDefaultSize + 24 : null,
-              leading: showLeadingBack
-                  ? Padding(
-                      padding: const EdgeInsets.only(left: 12),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: SizedBox(
-                          width: AxiIconButton.kDefaultSize,
-                          height: AxiIconButton.kDefaultSize,
-                          child: AxiIconButton.ghost(
-                            iconData: LucideIcons.arrowLeft,
-                            tooltip: l10n.commonBack,
-                            onPressed: () => _handleLeadingBackPressed(context),
-                          ),
-                        ),
-                      ),
-                    )
-                  : null,
             ),
             body: SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   final isWideLayout =
                       constraints.maxWidth >= _profileWideLayoutMinWidth;
-                  final Duration animationDuration =
-                      context.watch<SettingsCubit>().animationDuration;
+                  final Duration animationDuration = context
+                      .watch<SettingsCubit>()
+                      .animationDuration;
                   return AxiFadeIndexedStack(
                     index: _profileRoute.index,
                     duration: animationDuration,
@@ -270,27 +248,6 @@ class _ProfileBodyState extends State<_ProfileBody> {
         );
       },
     );
-  }
-
-  bool _canPopRoute(BuildContext context) {
-    final router = GoRouter.maybeOf(context);
-    if (router != null) {
-      return router.canPop();
-    }
-    return Navigator.of(context).canPop();
-  }
-
-  void _handleLeadingBackPressed(BuildContext context) {
-    if (_profileRoute != _ProfileRoute.main) {
-      _setRoute(_ProfileRoute.main);
-      return;
-    }
-    final router = GoRouter.maybeOf(context);
-    if (router != null && router.canPop()) {
-      router.pop();
-      return;
-    }
-    Navigator.of(context).maybePop();
   }
 }
 
@@ -323,8 +280,11 @@ class _ProfileMainView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emailEnabled =
-        context.watch<SettingsCubit>().state.endpointConfig.smtpEnabled;
+    final emailEnabled = context
+        .watch<SettingsCubit>()
+        .state
+        .endpointConfig
+        .smtpEnabled;
     final card = _ProfileCardSection(
       connectivityState: connectivityState,
       demoOffline: demoOffline,
@@ -340,7 +300,8 @@ class _ProfileMainView extends StatelessWidget {
       locate: locate,
       onNavigate: onNavigate,
     );
-    final showImportantSection = context.select<SettingsCubit, bool>(
+    final showImportantSection =
+        context.select<SettingsCubit, bool>(
           (cubit) => cubit.canForegroundService,
         ) &&
         !foregroundServiceActive.value;
@@ -432,7 +393,7 @@ class _ProfileMainView extends StatelessWidget {
                     emailEnabled: emailEnabled,
                     scrollController: settingsScrollController,
                     scrollOffsetListenable: settingsScrollOffset,
-                    textAlign: TextAlign.left,
+                    textAlign: TextAlign.right,
                   ),
                 ),
               ],
@@ -538,9 +499,7 @@ class _ProfileCardSection extends StatelessWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(
-                            height: _profileHeaderTextSpacing / 2,
-                          ),
+                          const SizedBox(height: _profileHeaderTextSpacing / 2),
                           SelectionArea(
                             child: Wrap(
                               alignment: WrapAlignment.start,
@@ -609,21 +568,17 @@ class _ProfileCardSection extends StatelessWidget {
                 Align(
                   alignment: Alignment.center,
                   child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: statusFieldMaxWidth,
-                    ),
+                    constraints: BoxConstraints(maxWidth: statusFieldMaxWidth),
                     child: Padding(
-                      padding: const EdgeInsets.all(
-                        _profileStatusFieldPadding,
-                      ),
+                      padding: const EdgeInsets.all(_profileStatusFieldPadding),
                       child: AxiTextFormField(
                         placeholder: Text(l10n.profileStatusPlaceholder),
                         initialValue: profileState.status,
                         onSubmitted: (value) =>
                             context.read<ProfileCubit>().updatePresence(
-                                  presence: profileState.presence,
-                                  status: value,
-                                ),
+                              presence: profileState.presence,
+                              status: value,
+                            ),
                       ),
                     ),
                   ),
@@ -636,8 +591,9 @@ class _ProfileCardSection extends StatelessWidget {
                       connectivityState,
                       demoOffline: demoOffline,
                     ),
-                    emailEnabled:
-                        demoOffline ? true : connectivityState.emailEnabled,
+                    emailEnabled: demoOffline
+                        ? true
+                        : connectivityState.emailEnabled,
                     compact: !wideCard,
                   ),
                 ),
@@ -832,8 +788,9 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final Duration animationDuration =
-        context.watch<SettingsCubit>().animationDuration;
+    final Duration animationDuration = context
+        .watch<SettingsCubit>()
+        .animationDuration;
     final sectionKeys = <GlobalKey?>[
       if (widget.showImportantSection) widget.anchors.importantKey,
       widget.anchors.accountKey,
@@ -873,10 +830,8 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
                 for (final entry in sectionLabels.indexed)
                   _SettingsJumpLink(
                     label: entry.$2,
-                    onTap: () async => await _jumpTo(
-                      sectionKeys[entry.$1],
-                      animationDuration,
-                    ),
+                    onTap: () async =>
+                        await _jumpTo(sectionKeys[entry.$1], animationDuration),
                     textAlign: widget.textAlign,
                     selected: selectedIndex == entry.$1,
                   ),
@@ -888,10 +843,7 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
     );
   }
 
-  Future<void> _jumpTo(
-    GlobalKey? anchor,
-    Duration animationDuration,
-  ) async {
+  Future<void> _jumpTo(GlobalKey? anchor, Duration animationDuration) async {
     final BuildContext? targetContext = anchor?.currentContext;
     if (targetContext == null) {
       return;
@@ -941,10 +893,12 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
         _sectionHeights.add(0);
         continue;
       }
-      final RenderAbstractViewport viewport =
-          RenderAbstractViewport.of(renderObject);
-      final double revealOffset =
-          viewport.getOffsetToReveal(renderObject, 0.0).offset;
+      final RenderAbstractViewport viewport = RenderAbstractViewport.of(
+        renderObject,
+      );
+      final double revealOffset = viewport
+          .getOffsetToReveal(renderObject, 0.0)
+          .offset;
       offsets.add(revealOffset);
       _sectionHeights.add(renderObject.size.height);
     }
@@ -999,8 +953,9 @@ class _SettingsJumpLink extends StatelessWidget {
     };
     final jumpColor = colors.foreground.withValues(alpha: 0.7);
     const double selectedOpacity = 0.45;
-    final Color selectedBackground =
-        colors.secondary.withValues(alpha: selectedOpacity);
+    final Color selectedBackground = colors.secondary.withValues(
+      alpha: selectedOpacity,
+    );
     return ShadButton.ghost(
       size: ShadButtonSize.sm,
       padding: EdgeInsets.symmetric(
@@ -1010,16 +965,11 @@ class _SettingsJumpLink extends StatelessWidget {
       mainAxisAlignment: alignment,
       foregroundColor: jumpColor,
       hoverForegroundColor: jumpColor,
-      textStyle: context.textTheme.small.copyWith(
-        color: jumpColor,
-      ),
+      textStyle: context.textTheme.small.copyWith(color: jumpColor),
       backgroundColor: selected ? selectedBackground : null,
       hoverBackgroundColor: selected ? selectedBackground : null,
       onPressed: onTap,
-      child: Text(
-        label,
-        textAlign: textAlign,
-      ),
+      child: Text(label, textAlign: textAlign),
     ).withTapBounce();
   }
 }

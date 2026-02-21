@@ -75,11 +75,11 @@ class Axichat extends StatefulWidget {
     Capability? capability,
     Policy? policy,
     required CalendarStorageManager storageManager,
-  })  : _xmppService = xmppService,
-        _notificationService = notificationService ?? NotificationService(),
-        _capability = capability ?? const Capability(),
-        _policy = policy ?? const Policy(),
-        _storageManager = storageManager;
+  }) : _xmppService = xmppService,
+       _notificationService = notificationService ?? NotificationService(),
+       _capability = capability ?? const Capability(),
+       _policy = policy ?? const Policy(),
+       _storageManager = storageManager;
 
   final XmppService? _xmppService;
   final NotificationService _notificationService;
@@ -94,14 +94,15 @@ class Axichat extends StatefulWidget {
 class _AxichatState extends State<Axichat> {
   late final CalendarReminderController _reminderController =
       CalendarReminderController(
-    notificationService: widget._notificationService,
-  );
+        notificationService: widget._notificationService,
+      );
   late final XmppService _xmppService;
 
   @override
   void initState() {
     super.initState();
-    _xmppService = widget._xmppService ??
+    _xmppService =
+        widget._xmppService ??
         XmppService(
           buildConnection: () => withForeground && foregroundServiceActive.value
               ? XmppConnection(socketWrapper: ForegroundSocketWrapper())
@@ -185,7 +186,8 @@ class _AxichatState extends State<Axichat> {
                 RepositoryProvider<HomeRefreshSyncService>(
                   create: (context) => HomeRefreshSyncService(
                     xmppService: context.read<XmppService>(),
-                    emailService: context
+                    emailService:
+                        context
                             .read<SettingsCubit>()
                             .state
                             .endpointConfig
@@ -201,23 +203,27 @@ class _AxichatState extends State<Axichat> {
                     create: (context) => AuthenticationCubit(
                       credentialStore: context.read<CredentialStore>(),
                       xmppService: context.read<XmppService>(),
-                      emailService: context
+                      emailService:
+                          context
                               .read<SettingsCubit>()
                               .state
                               .endpointConfig
                               .smtpEnabled
                           ? context.read<EmailService>()
                           : null,
-                      homeRefreshSyncService:
-                          context.read<HomeRefreshSyncService>(),
+                      homeRefreshSyncService: context
+                          .read<HomeRefreshSyncService>(),
                       notificationService: context.read<NotificationService>(),
-                      initialEndpointConfig:
-                          context.read<SettingsCubit>().state.endpointConfig,
+                      initialEndpointConfig: context
+                          .read<SettingsCubit>()
+                          .state
+                          .endpointConfig,
                     ),
                   ),
                   BlocProvider(
                     create: (context) => OmemoActivityCubit(
-                        xmppBase: context.read<XmppService>()),
+                      xmppBase: context.read<XmppService>(),
+                    ),
                   ),
                   BlocProvider(
                     create: (context) => XmppActivityCubit(
@@ -232,8 +238,8 @@ class _AxichatState extends State<Axichat> {
                       final xmppService = context.read<XmppService>();
                       final OmemoService? omemoService =
                           xmppService is OmemoService
-                              ? xmppService as OmemoService
-                              : null;
+                          ? xmppService as OmemoService
+                          : null;
                       return ProfileCubit(
                         xmppService: xmppService,
                         presenceService: xmppService as PresenceService,
@@ -249,9 +255,10 @@ class _AxichatState extends State<Axichat> {
                   BlocProvider(
                     create: (context) => ChatsCubit(
                       xmppService: context.read<XmppService>(),
-                      homeRefreshSyncService:
-                          context.read<HomeRefreshSyncService>(),
-                      emailService: context
+                      homeRefreshSyncService: context
+                          .read<HomeRefreshSyncService>(),
+                      emailService:
+                          context
                               .read<SettingsCubit>()
                               .state
                               .endpointConfig
@@ -269,7 +276,8 @@ class _AxichatState extends State<Axichat> {
                   BlocProvider(
                     create: (context) => DraftCubit(
                       messageService: context.read<MessageService>(),
-                      emailService: context
+                      emailService:
+                          context
                               .read<SettingsCubit>()
                               .state
                               .endpointConfig
@@ -280,14 +288,17 @@ class _AxichatState extends State<Axichat> {
                   ),
                   BlocProvider(
                     create: (context) {
-                      final endpointConfig =
-                          context.read<SettingsCubit>().state.endpointConfig;
+                      final endpointConfig = context
+                          .read<SettingsCubit>()
+                          .state
+                          .endpointConfig;
                       final emailEnabled = endpointConfig.smtpEnabled;
                       return ConnectivityCubit(
                         xmppBase: context.read<XmppService>(),
                         emailEnabled: emailEnabled,
-                        emailService:
-                            emailEnabled ? context.read<EmailService>() : null,
+                        emailService: emailEnabled
+                            ? context.read<EmailService>()
+                            : null,
                       );
                     },
                   ),
@@ -318,25 +329,23 @@ class _AxichatState extends State<Axichat> {
                             .read<AuthenticationCubit>()
                             .updateEmailService(activeEmailService);
                         if (!context.mounted) return;
-                        context
-                            .read<ChatsCubit>()
-                            .updateEmailService(activeEmailService);
-                        context
-                            .read<DraftCubit>()
-                            .updateEmailService(activeEmailService);
+                        context.read<ChatsCubit>().updateEmailService(
+                          activeEmailService,
+                        );
+                        context.read<DraftCubit>().updateEmailService(
+                          activeEmailService,
+                        );
                         emailService.updateEndpointConfig(config);
                         await context
                             .read<HomeRefreshSyncService>()
                             .updateEmailService(activeEmailService);
                         if (!context.mounted) return;
                         context.read<ConnectivityCubit>().updateEmailContext(
-                              emailEnabled: config.smtpEnabled,
-                              emailService: activeEmailService,
-                            );
+                          emailEnabled: config.smtpEnabled,
+                          emailService: activeEmailService,
+                        );
                         if (!config.smtpEnabled) {
-                          await emailService.shutdown(
-                            clearCredentials: false,
-                          );
+                          await emailService.shutdown(clearCredentials: false);
                           await emailService.handleNetworkLost();
                         } else {
                           await emailService.handleNetworkAvailable();
@@ -411,8 +420,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       listener: (context, state) async {
         final notificationService = context.read<NotificationService>();
         final endpointConfig = state.endpointConfig;
-        final EmailService? emailService =
-            endpointConfig.smtpEnabled ? context.read<EmailService>() : null;
+        final EmailService? emailService = endpointConfig.smtpEnabled
+            ? context.read<EmailService>()
+            : null;
         notificationService
           ..chatNotificationsMuted = state.chatNotificationsMuted
           ..emailNotificationsMuted = state.emailNotificationsMuted
@@ -443,17 +453,16 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           darkTheme: darkTheme,
           themeMode: state.themeMode,
           materialThemeBuilder: (context, theme) {
-            final shadTheme =
-                theme.brightness == Brightness.light ? lightTheme : darkTheme;
+            final shadTheme = theme.brightness == Brightness.light
+                ? lightTheme
+                : darkTheme;
             final chatTokens = AppTheme.tokens(
               brightness: theme.brightness,
               neutrals: chatNeutrals,
             );
             final materialColors = shadTheme.colorScheme;
             final globalRadius = shadTheme.radius;
-            final buttonShape = SquircleBorder(
-              cornerRadius: axiSquircleRadius,
-            );
+            final buttonShape = SquircleBorder(cornerRadius: axiSquircleRadius);
             final listTileShape = buttonShape;
             final outlineInputBorder = OutlineInputBorder(
               borderRadius: globalRadius,
@@ -474,23 +483,24 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             final focusRingColor = materialColors.primary.withValues(
               alpha: theme.brightness == Brightness.dark ? 0.25 : 0.15,
             );
-            final textThemeWithEmojiFallback = TextTheme(
-              displayLarge: shadTheme.textTheme.h1Large,
-              displayMedium: shadTheme.textTheme.h1,
-              displaySmall: shadTheme.textTheme.h2,
-              titleLarge: shadTheme.textTheme.h3,
-              titleMedium: shadTheme.textTheme.large,
-              titleSmall: shadTheme.textTheme.small,
-              bodyLarge: shadTheme.textTheme.p,
-              bodyMedium: shadTheme.textTheme.small,
-              bodySmall: shadTheme.textTheme.muted,
-              labelLarge: shadTheme.textTheme.muted,
-              labelMedium: shadTheme.textTheme.muted,
-              labelSmall: shadTheme.textTheme.muted,
-            ).apply(
-              fontFamily: interFontFamily,
-              fontFamilyFallback: interFontFallback,
-            );
+            final textThemeWithEmojiFallback =
+                TextTheme(
+                  displayLarge: shadTheme.textTheme.h1Large,
+                  displayMedium: shadTheme.textTheme.h1,
+                  displaySmall: shadTheme.textTheme.h2,
+                  titleLarge: shadTheme.textTheme.h3,
+                  titleMedium: shadTheme.textTheme.large,
+                  titleSmall: shadTheme.textTheme.small,
+                  bodyLarge: shadTheme.textTheme.p,
+                  bodyMedium: shadTheme.textTheme.small,
+                  bodySmall: shadTheme.textTheme.muted,
+                  labelLarge: shadTheme.textTheme.muted,
+                  labelMedium: shadTheme.textTheme.muted,
+                  labelSmall: shadTheme.textTheme.muted,
+                ).apply(
+                  fontFamily: interFontFamily,
+                  fontFamilyFallback: interFontFallback,
+                );
             final appBarTitleStyle = shadTheme.textTheme.h3.copyWith(
               fontFamily: gabaritoFontFamily,
               fontFamilyFallback: gabaritoFontFallback,
@@ -579,13 +589,16 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 materialTapTargetSize: MaterialTapTargetSize.padded,
                 visualDensity: VisualDensity.standard,
                 side: BorderSide(
-                    color: materialColors.border, width: axiSpaceXxs),
+                  color: materialColors.border,
+                  width: axiSpaceXxs,
+                ),
               ),
               scrollbarTheme: ScrollbarThemeData(
                 thickness: const WidgetStatePropertyAll<double>(axiSpaceXs),
                 radius: const Radius.circular(999),
                 thumbColor: WidgetStateProperty.resolveWith((states) {
-                  final hovered = states.contains(WidgetState.hovered) ||
+                  final hovered =
+                      states.contains(WidgetState.hovered) ||
                       states.contains(WidgetState.focused) ||
                       states.contains(WidgetState.dragged);
                   return hovered
@@ -609,20 +622,22 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           routerConfig: _router,
           builder: (context, child) {
             context.read<NotificationService>().updateLocalizations(
-                  AppLocalizations.of(context)!.toNotificationStrings(),
-                );
-            context
-                .read<XmppService>()
-                .updateLocalizations(AppLocalizations.of(context)!);
+              AppLocalizations.of(context)!.toNotificationStrings(),
+            );
+            context.read<XmppService>().updateLocalizations(
+              AppLocalizations.of(context)!,
+            );
             context.read<CalendarReminderController>().updateLocalizations(
-                  AppLocalizations.of(context)!,
-                );
-            final endpointConfig =
-                context.read<SettingsCubit>().state.endpointConfig;
+              AppLocalizations.of(context)!,
+            );
+            final endpointConfig = context
+                .read<SettingsCubit>()
+                .state
+                .endpointConfig;
             if (endpointConfig.smtpEnabled) {
               context.read<EmailService>().updateLocalizations(
-                    AppLocalizations.of(context)!,
-                  );
+                AppLocalizations.of(context)!,
+              );
             }
             final shadTheme = ShadTheme.of(context);
             final brightness = Theme.of(context).brightness;
@@ -641,8 +656,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         _router.routeInformationProvider.value.uri.path;
                     final matchList =
                         _router.routerDelegate.currentConfiguration;
-                    final matchedLocation =
-                        matchList.matches.isEmpty ? null : matchList.uri.path;
+                    final matchedLocation = matchList.matches.isEmpty
+                        ? null
+                        : matchList.uri.path;
                     final currentRoute = routeLocations[currentLocation];
                     final matchedRoute = matchedLocation == null
                         ? null
@@ -650,12 +666,14 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     final effectiveRoute = currentRoute ?? matchedRoute;
                     final onLoginRoute =
                         currentLocation == const LoginRoute().location ||
-                            matchedLocation == const LoginRoute().location;
-                    final onGuestRoute = onLoginRoute ||
+                        matchedLocation == const LoginRoute().location;
+                    final onGuestRoute =
+                        onLoginRoute ||
                         effectiveRoute == null ||
                         !effectiveRoute.authenticationRequired;
-                    final authCompletionDuration =
-                        context.read<SettingsCubit>().authCompletionDuration;
+                    final authCompletionDuration = context
+                        .read<SettingsCubit>()
+                        .authCompletionDuration;
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
@@ -675,8 +693,8 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                             _router.routerDelegate.currentConfiguration;
                         final currentMatchedLocation =
                             currentMatchList.matches.isEmpty
-                                ? null
-                                : currentMatchList.uri.path;
+                            ? null
+                            : currentMatchList.uri.path;
                         if (currentMatchedLocation ==
                             const HomeRoute().location) {
                           return;
@@ -755,8 +773,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
     }
     _shareIntentHandling = true;
     try {
-      final SharePayload? payload =
-          context.read<ShareIntentCubit>().state.payload;
+      final SharePayload? payload = context
+          .read<ShareIntentCubit>()
+          .state
+          .payload;
       if (payload == null) return;
       final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
       final bool hasBody = resolvedBody.isNotEmpty;
@@ -764,9 +784,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       final MessageService messageService = context.read<MessageService>();
       final List<String> attachmentMetadataIds =
           await _persistSharedAttachments(
-        messageService: messageService,
-        attachments: payload.attachments,
-      );
+            messageService: messageService,
+            attachments: payload.attachments,
+          );
       if (!mounted) return;
       if (!hasBody && attachmentMetadataIds.isEmpty) {
         _consumeSharePayload(payload);
@@ -958,10 +978,8 @@ extension ThemeExtension on BuildContext {
 
   AxiRadii get radii => Theme.of(this).extension<AxiRadii>() ?? axiRadii;
 
-  BorderSide get borderSide => BorderSide(
-        color: colorScheme.border,
-        width: borders.width,
-      );
+  BorderSide get borderSide =>
+      BorderSide(color: colorScheme.border, width: borders.width);
 }
 
 extension TargetPlatformExtension on TargetPlatform {
@@ -1032,8 +1050,9 @@ class _DesktopMenuShell extends StatelessWidget {
     }
     final composeShortcut = _composeActivator(env.platform);
     final searchShortcut = _searchActivator(env.platform);
-    final calendarShortcut =
-        env.supportsDesktopShortcuts ? _calendarActivator(env.platform) : null;
+    final calendarShortcut = env.supportsDesktopShortcuts
+        ? _calendarActivator(env.platform)
+        : null;
 
     // Keep shortcuts wired but hide the overlay/platform menu chrome to avoid clutter.
     return _ShortcutHintProvider(
@@ -1113,8 +1132,9 @@ class AxiDragScrollBehavior extends MaterialScrollBehavior {
 
 SystemUiOverlayStyle _systemUiOverlayStyleFor(ThemeData theme) {
   final isDark = theme.brightness == Brightness.dark;
-  final baseStyle =
-      isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark;
+  final baseStyle = isDark
+      ? SystemUiOverlayStyle.light
+      : SystemUiOverlayStyle.dark;
   final iconBrightness = isDark ? Brightness.light : Brightness.dark;
   return baseStyle.copyWith(
     statusBarColor: Colors.transparent,

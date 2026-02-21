@@ -55,10 +55,14 @@ class RosterAddButton extends StatelessWidget {
                             _rosterFailureMessage(context, reason),
                           _ => null,
                         };
-                        final isLoading = actionState is RosterActionLoading &&
+                        final isLoading =
+                            actionState is RosterActionLoading &&
                             actionState.action == RosterActionType.add;
-                        return BlocSelector<AuthenticationCubit,
-                            AuthenticationState, String>(
+                        return BlocSelector<
+                          AuthenticationCubit,
+                          AuthenticationState,
+                          String
+                        >(
                           selector: (authState) => authState.server,
                           builder: (context, server) {
                             return JidInput(
@@ -80,9 +84,9 @@ class RosterAddButton extends StatelessWidget {
                 callback: jid.isEmpty
                     ? null
                     : () => context.read<RosterCubit>().addContact(
-                          jid: jid,
-                          title: title,
-                        ),
+                        jid: jid,
+                        title: title,
+                      ),
               );
             },
           ),
@@ -92,16 +96,12 @@ class RosterAddButton extends StatelessWidget {
   }
 }
 
-String _rosterFailureMessage(
-  BuildContext context,
-  RosterFailureReason reason,
-) {
+String _rosterFailureMessage(BuildContext context, RosterFailureReason reason) {
   final l10n = context.l10n;
   return switch (reason) {
     RosterFailureReason.invalidJid => l10n.jidInputInvalid,
     RosterFailureReason.addFailed ||
     RosterFailureReason.removeFailed ||
-    RosterFailureReason.rejectFailed =>
-      l10n.authGenericError,
+    RosterFailureReason.rejectFailed => l10n.authGenericError,
   };
 }

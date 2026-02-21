@@ -107,8 +107,9 @@ class TypingTextEditingController extends TextEditingController {
   }
 
   void setHiddenRange(TextRange? range) {
-    final List<TextRange> ranges =
-        range == null ? const <TextRange>[] : <TextRange>[range];
+    final List<TextRange> ranges = range == null
+        ? const <TextRange>[]
+        : <TextRange>[range];
     setHiddenRanges(ranges);
   }
 
@@ -173,14 +174,15 @@ class TypingTextEditingController extends TextEditingController {
       }
       final String segment = fullText.substring(start, end);
       final bool isHidden = _isHiddenRange(hiddenRanges, start, end);
-      final bool isComposing = hasValidComposing &&
+      final bool isComposing =
+          hasValidComposing &&
           start >= composingRange.start &&
           end <= composingRange.end;
       final TextStyle? segmentStyle = isHidden
           ? hiddenStyle
           : isComposing
-              ? composingStyle
-              : null;
+          ? composingStyle
+          : null;
       children.add(TextSpan(text: segment, style: segmentStyle));
     }
 
@@ -314,9 +316,9 @@ class TypingCaretPainter extends RenderEditablePainter {
     required Color caretColor,
     required double cursorWidth,
     required Radius? cursorRadius,
-  })  : _caretColor = caretColor,
-        _cursorWidth = cursorWidth,
-        _cursorRadius = cursorRadius;
+  }) : _caretColor = caretColor,
+       _cursorWidth = cursorWidth,
+       _cursorRadius = cursorRadius;
 
   Color _caretColor;
   double _cursorWidth;
@@ -401,7 +403,8 @@ class TypingCaretPainter extends RenderEditablePainter {
     }
 
     final TextSelection? selection = renderEditable.selection;
-    final bool shouldPaintCaret = selection != null &&
+    final bool shouldPaintCaret =
+        selection != null &&
         selection.isValid &&
         selection.isCollapsed &&
         renderEditable.hasFocus &&
@@ -417,8 +420,9 @@ class TypingCaretPainter extends RenderEditablePainter {
     RenderEditable renderEditable,
     TypingGlyphFrame frame,
   ) {
-    final double progress =
-        frame.progress.clamp(_glyphStartOpacity, _glyphEndOpacity).toDouble();
+    final double progress = frame.progress
+        .clamp(_glyphStartOpacity, _glyphEndOpacity)
+        .toDouble();
     if (progress <= _glyphStartOpacity) {
       return;
     }
@@ -474,7 +478,8 @@ class TypingCaretPainter extends RenderEditablePainter {
       glyphRect.width,
       glyphRect.height,
     );
-    final double scale = _typingGlyphScaleMin +
+    final double scale =
+        _typingGlyphScaleMin +
         (_typingGlyphScaleMax - _typingGlyphScaleMin) * progress;
     final Offset glyphCenter = glyphRect.center;
     canvas
@@ -510,7 +515,8 @@ class TypingCaretPainter extends RenderEditablePainter {
       locale: renderEditable.locale,
     )..layout();
 
-    final double scale = _typingGlyphScaleMin +
+    final double scale =
+        _typingGlyphScaleMin +
         (_typingGlyphScaleMax - _typingGlyphScaleMin) * progress;
     final Offset glyphCenter = glyphRect.center;
     canvas
@@ -584,8 +590,10 @@ class TypingCaretPainter extends RenderEditablePainter {
     required _TypingGlyphRaster raster,
   }) async {
     try {
-      final ui.Image image =
-          await recorder.endRecording().toImage(width, height);
+      final ui.Image image = await recorder.endRecording().toImage(
+        width,
+        height,
+      );
       if (_disposed) {
         image.dispose();
         return;
@@ -608,8 +616,9 @@ class TypingCaretPainter extends RenderEditablePainter {
     if (_glyphRasters.isEmpty) {
       return;
     }
-    final Set<TypingGlyphAnimation> activeAnimations =
-        frames.map((TypingGlyphFrame frame) => frame.animation).toSet();
+    final Set<TypingGlyphAnimation> activeAnimations = frames
+        .map((TypingGlyphFrame frame) => frame.animation)
+        .toSet();
     final List<TypingGlyphAnimation> toRemove = <TypingGlyphAnimation>[];
     _glyphRasters.forEach((
       TypingGlyphAnimation key,

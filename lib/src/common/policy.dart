@@ -11,8 +11,8 @@ class Policy {
       const AndroidOptions(encryptedSharedPreferences: true);
 
   MacOsOptions getFssMacOsOptions() => const MacOsOptions(
-        accessibility: KeychainAccessibility.first_unlock_this_device,
-      );
+    accessibility: KeychainAccessibility.first_unlock_this_device,
+  );
 
   double getMaxEmojiSize() =>
       28 * (defaultTargetPlatform == TargetPlatform.iOS ? 1.2 : 1.0);

@@ -5,11 +5,7 @@ import 'package:axichat/src/app.dart';
 import 'package:flutter/material.dart';
 
 class AxiProgressIndicator extends StatelessWidget {
-  const AxiProgressIndicator({
-    super.key,
-    this.color,
-    this.semanticsLabel,
-  });
+  const AxiProgressIndicator({super.key, this.color, this.semanticsLabel});
 
   final Color? color;
   final String? semanticsLabel;

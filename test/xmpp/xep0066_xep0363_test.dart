@@ -131,8 +131,8 @@ class RecordingHttpHeaders extends Mock implements HttpHeaders {
   List<String> get headerNamesInOrder => List<String>.unmodifiable(_order);
 
   List<String> valuesFor(String name) => List<String>.unmodifiable(
-        _valuesByName[name.toLowerCase()] ?? const <String>[],
-      );
+    _valuesByName[name.toLowerCase()] ?? const <String>[],
+  );
 }
 
 class RecordingHttpResponse extends Mock implements HttpClientResponse {
@@ -140,8 +140,8 @@ class RecordingHttpResponse extends Mock implements HttpClientResponse {
     required this.statusCode,
     List<int> body = const <int>[],
   }) : _stream = body.isEmpty
-            ? const Stream<List<int>>.empty()
-            : Stream<List<int>>.fromIterable(<List<int>>[body]);
+           ? const Stream<List<int>>.empty()
+           : Stream<List<int>>.fromIterable(<List<int>>[body]);
 
   final Stream<List<int>> _stream;
 
@@ -157,13 +157,12 @@ class RecordingHttpResponse extends Mock implements HttpClientResponse {
     Function? onError,
     void Function()? onDone,
     bool? cancelOnError,
-  }) =>
-      _stream.listen(
-        onData,
-        onError: onError,
-        onDone: onDone,
-        cancelOnError: cancelOnError,
-      );
+  }) => _stream.listen(
+    onData,
+    onError: onError,
+    onDone: onDone,
+    cancelOnError: cancelOnError,
+  );
 }
 
 class RecordingHttpRequest extends Mock implements HttpClientRequest {
@@ -441,8 +440,8 @@ void main() {
 
     xmppService = XmppService(
       buildConnection: () => mockConnection,
-      buildStateStore: (_, __) => mockStateStore,
-      buildDatabase: (_, __) => database,
+      buildStateStore: (_, _) => mockStateStore,
+      buildDatabase: (_, _) => database,
       notificationService: mockNotificationService,
     );
 

@@ -90,14 +90,17 @@ class TaskTextField extends StatelessWidget {
       onChanged: onChanged,
       onSubmitted: onSubmitted,
       inputFormatters: inputFormatters,
-      style: textStyle ??
+      style:
+          textStyle ??
           context.textTheme.small.copyWith(color: calendarTitleColor),
       decoration: InputDecoration(
         labelText: labelText,
-        labelStyle: labelStyle ??
+        labelStyle:
+            labelStyle ??
             context.textTheme.small.copyWith(color: calendarSubtitleColor),
         hintText: hintText,
-        hintStyle: hintStyle ??
+        hintStyle:
+            hintStyle ??
             context.textTheme.small.copyWith(color: calendarTimeLabelColor),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radius),
@@ -114,7 +117,8 @@ class TaskTextField extends StatelessWidget {
             width: context.borderSide.width * 2,
           ),
         ),
-        contentPadding: contentPadding ??
+        contentPadding:
+            contentPadding ??
             EdgeInsets.symmetric(
               horizontal: context.spacing.m,
               vertical: context.spacing.m,

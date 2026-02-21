@@ -196,8 +196,9 @@ class _AvailabilityRequestBody extends StatelessWidget {
     final textTheme = context.textTheme;
     final title = request.title?.trim();
     final description = request.description?.trim();
-    final requestTitle =
-        title?.isNotEmpty == true ? title! : _availabilityRequestTitleFallback;
+    final requestTitle = title?.isNotEmpty == true
+        ? title!
+        : _availabilityRequestTitleFallback;
     final bool hasActions = onAccept != null || onDecline != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

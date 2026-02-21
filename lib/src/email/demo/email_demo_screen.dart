@@ -104,7 +104,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
               const String empty = '';
               final bool isBusy =
                   state.status == EmailDemoStatus.provisioning ||
-                      state.status == EmailDemoStatus.sending;
+                  state.status == EmailDemoStatus.sending;
               final String statusLabel = _statusLabel(context, state);
               final String accountLabel = state.account?.address ?? empty;
               return Scaffold(
@@ -113,9 +113,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                   backgroundColor: context.colorScheme.background,
                   scrolledUnderElevation: 0,
                   forceMaterialTransparency: true,
-                  shape: Border(
-                    bottom: context.borderSide,
-                  ),
+                  shape: Border(bottom: context.borderSide),
                   leadingWidth: sizing.iconButtonTapTarget + spacing.m,
                   leading: Navigator.canPop(context)
                       ? Padding(
@@ -165,8 +163,9 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                           AxiButton.primary(
                             onPressed: isBusy
                                 ? null
-                                : () =>
-                                    context.read<EmailDemoCubit>().provision(),
+                                : () => context
+                                      .read<EmailDemoCubit>()
+                                      .provision(),
                             loading:
                                 state.status == EmailDemoStatus.provisioning,
                             child: Text(context.l10n.emailDemoProvisionButton),
@@ -175,22 +174,25 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                             onPressed: isBusy
                                 ? null
                                 : () => context
-                                    .read<EmailDemoCubit>()
-                                    .sendDemoMessage(
-                                      account: state.account,
-                                      demoTarget: kEnableDemoChats
-                                          ? FanOutTarget.address(
-                                              address: state.account?.address ??
-                                                  kDemoSelfJid,
-                                              displayName: context.l10n
-                                                  .emailDemoDisplayNameSelf,
-                                              shareSignatureEnabled: false,
-                                            )
-                                          : null,
-                                      body: _messageController.text,
-                                      displayName:
-                                          context.l10n.emailDemoDisplayNameSelf,
-                                    ),
+                                      .read<EmailDemoCubit>()
+                                      .sendDemoMessage(
+                                        account: state.account,
+                                        demoTarget: kEnableDemoChats
+                                            ? FanOutTarget.address(
+                                                address:
+                                                    state.account?.address ??
+                                                    kDemoSelfJid,
+                                                displayName: context
+                                                    .l10n
+                                                    .emailDemoDisplayNameSelf,
+                                                shareSignatureEnabled: false,
+                                              )
+                                            : null,
+                                        body: _messageController.text,
+                                        displayName: context
+                                            .l10n
+                                            .emailDemoDisplayNameSelf,
+                                      ),
                             loading: state.status == EmailDemoStatus.sending,
                             child: Text(context.l10n.emailDemoSendButton),
                           ),

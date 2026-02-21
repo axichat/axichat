@@ -55,7 +55,8 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
     if (_presenceLoaded) return;
     _presenceLoaded = true;
     try {
-      _cachedPresence = await _dbOpReturning<XmppStateStore, Presence?>(
+      _cachedPresence =
+          await _dbOpReturning<XmppStateStore, Presence?>(
             (db) => db.read(key: presenceStorageKey) as Presence?,
           ) ??
           Presence.chat;
@@ -173,10 +174,10 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
     await _dbOp<XmppStateStore>((ss) async {
       final current =
           (ss.read(key: _presenceStatusesKey) as Map<Object?, Object?>?)?.map(
-                (key, value) => MapEntry(
-                    key as String, (value as Map).cast<String, String>()),
-              ) ??
-              <String, Map<String, String>>{};
+            (key, value) =>
+                MapEntry(key as String, (value as Map).cast<String, String>()),
+          ) ??
+          <String, Map<String, String>>{};
 
       if (sanitized.isEmpty) {
         current.remove(jid);
@@ -282,84 +283,84 @@ class XmppPresenceManager extends mox.PresenceManager {
 
   @override
   List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
-        mox.StanzaHandler(
-          stanzaTag: 'presence',
-          priority: mox.PresenceManager.presenceHandlerPriority,
-          callback: (stanza, state) async {
-            if (stanza.from == null) {
-              state.done = true;
-              return state;
-            }
+    mox.StanzaHandler(
+      stanzaTag: 'presence',
+      priority: mox.PresenceManager.presenceHandlerPriority,
+      callback: (stanza, state) async {
+        if (stanza.from == null) {
+          state.done = true;
+          return state;
+        }
 
-            if (_handleMucPresence(stanza)) {
-              return state;
-            }
+        if (_handleMucPresence(stanza)) {
+          return state;
+        }
 
-            final from = mox.JID.fromString(stanza.from!).toBare();
-            final stanzaType = stanza.type;
-            _log.info(
-              'Incoming presence from: ${from.toString()} '
-              'type: ${stanzaType ?? 'available'}',
-            );
-            if (await owner._isBlockedPresenceSender(from)) {
-              state.done = true;
-              return state;
-            }
+        final from = mox.JID.fromString(stanza.from!).toBare();
+        final stanzaType = stanza.type;
+        _log.info(
+          'Incoming presence from: ${from.toString()} '
+          'type: ${stanzaType ?? 'available'}',
+        );
+        if (await owner._isBlockedPresenceSender(from)) {
+          state.done = true;
+          return state;
+        }
 
-            switch (stanzaType) {
-              case 'probe':
-                await _respondToProbe(from);
-                state.done = true;
-                return state;
-              case 'unsubscribe':
-                await _ensureDirectedRecipientsLoaded();
-                await _removeDirectedRecipient(from);
-                await _acknowledgeUnsubscribe(from);
-                await owner._markSubscriptionRevoked(from.toString());
-                state.done = true;
-                return state;
-              case 'unsubscribed':
-                await _ensureDirectedRecipientsLoaded();
-                await _removeDirectedRecipient(from);
-                await owner._markSubscriptionAcknowledged(from.toString());
-                state.done = true;
-                return state;
-              case 'subscribe':
-                getAttributes().sendEvent(
-                  mox.SubscriptionRequestReceivedEvent(from: from),
-                );
-                state.done = true;
-                return state;
-              case 'subscribed':
-                await owner._markSubscriptionApproved(from.toString());
-                state.done = true;
-                return state;
-            }
-
-            final presence = stanzaType == Presence.unavailable.name
-                ? Presence.unavailable
-                : Presence.fromString(
-                    stanza.children
-                        .firstWhere(
-                          (node) => node.tag == 'show',
-                          orElse: () => mox.XMLNode(
-                              tag: 'show', text: Presence.chat.name),
-                        )
-                        .text,
-                  );
-
-            final statuses = _extractStatuses(stanza);
-            await owner.receivePresence(
-              from.toString(),
-              presence,
-              statuses: statuses.isEmpty ? null : statuses,
-            );
-
+        switch (stanzaType) {
+          case 'probe':
+            await _respondToProbe(from);
             state.done = true;
             return state;
-          },
-        ),
-      ];
+          case 'unsubscribe':
+            await _ensureDirectedRecipientsLoaded();
+            await _removeDirectedRecipient(from);
+            await _acknowledgeUnsubscribe(from);
+            await owner._markSubscriptionRevoked(from.toString());
+            state.done = true;
+            return state;
+          case 'unsubscribed':
+            await _ensureDirectedRecipientsLoaded();
+            await _removeDirectedRecipient(from);
+            await owner._markSubscriptionAcknowledged(from.toString());
+            state.done = true;
+            return state;
+          case 'subscribe':
+            getAttributes().sendEvent(
+              mox.SubscriptionRequestReceivedEvent(from: from),
+            );
+            state.done = true;
+            return state;
+          case 'subscribed':
+            await owner._markSubscriptionApproved(from.toString());
+            state.done = true;
+            return state;
+        }
+
+        final presence = stanzaType == Presence.unavailable.name
+            ? Presence.unavailable
+            : Presence.fromString(
+                stanza.children
+                    .firstWhere(
+                      (node) => node.tag == 'show',
+                      orElse: () =>
+                          mox.XMLNode(tag: 'show', text: Presence.chat.name),
+                    )
+                    .text,
+              );
+
+        final statuses = _extractStatuses(stanza);
+        await owner.receivePresence(
+          from.toString(),
+          presence,
+          statuses: statuses.isEmpty ? null : statuses,
+        );
+
+        state.done = true;
+        return state;
+      },
+    ),
+  ];
 
   @override
   Future<void> sendPresence({
@@ -585,7 +586,8 @@ class XmppPresenceManager extends mox.PresenceManager {
   Future<void> _ensureDirectedRecipientsLoaded() async {
     if (_directedLoaded) return;
     await owner._dbOp<XmppStateStore>((ss) {
-      final stored = (ss.read(key: _directedPresenceTargetsKey) as List?)
+      final stored =
+          (ss.read(key: _directedPresenceTargetsKey) as List?)
               ?.cast<String>() ??
           const <String>[];
       _directedRecipients

@@ -111,12 +111,12 @@ String _modifierLabel(
 ) {
   switch (modifier) {
     case LogicalKeyboardKey.meta ||
-          LogicalKeyboardKey.metaLeft ||
-          LogicalKeyboardKey.metaRight:
+        LogicalKeyboardKey.metaLeft ||
+        LogicalKeyboardKey.metaRight:
       switch (defaultTargetPlatform) {
         case TargetPlatform.android ||
-              TargetPlatform.fuchsia ||
-              TargetPlatform.linux:
+            TargetPlatform.fuchsia ||
+            TargetPlatform.linux:
           return localizations.keyboardKeyMeta;
         case TargetPlatform.windows:
           return localizations.keyboardKeyMetaWindows;
@@ -124,37 +124,37 @@ String _modifierLabel(
           return '⌘';
       }
     case LogicalKeyboardKey.alt ||
-          LogicalKeyboardKey.altLeft ||
-          LogicalKeyboardKey.altRight:
+        LogicalKeyboardKey.altLeft ||
+        LogicalKeyboardKey.altRight:
       switch (defaultTargetPlatform) {
         case TargetPlatform.android ||
-              TargetPlatform.fuchsia ||
-              TargetPlatform.linux ||
-              TargetPlatform.windows:
+            TargetPlatform.fuchsia ||
+            TargetPlatform.linux ||
+            TargetPlatform.windows:
           return localizations.keyboardKeyAlt;
         case TargetPlatform.iOS || TargetPlatform.macOS:
           return '⌥';
       }
     case LogicalKeyboardKey.control ||
-          LogicalKeyboardKey.controlLeft ||
-          LogicalKeyboardKey.controlRight:
+        LogicalKeyboardKey.controlLeft ||
+        LogicalKeyboardKey.controlRight:
       switch (defaultTargetPlatform) {
         case TargetPlatform.android ||
-              TargetPlatform.fuchsia ||
-              TargetPlatform.linux ||
-              TargetPlatform.windows:
+            TargetPlatform.fuchsia ||
+            TargetPlatform.linux ||
+            TargetPlatform.windows:
           return localizations.keyboardKeyControl;
         case TargetPlatform.iOS || TargetPlatform.macOS:
           return '⌃';
       }
     case LogicalKeyboardKey.shift ||
-          LogicalKeyboardKey.shiftLeft ||
-          LogicalKeyboardKey.shiftRight:
+        LogicalKeyboardKey.shiftLeft ||
+        LogicalKeyboardKey.shiftRight:
       switch (defaultTargetPlatform) {
         case TargetPlatform.android ||
-              TargetPlatform.fuchsia ||
-              TargetPlatform.linux ||
-              TargetPlatform.windows:
+            TargetPlatform.fuchsia ||
+            TargetPlatform.linux ||
+            TargetPlatform.windows:
           return localizations.keyboardKeyShift;
         case TargetPlatform.iOS || TargetPlatform.macOS:
           return '⇧';
@@ -191,9 +191,8 @@ bool _usesSymbolicModifiers() {
       defaultTargetPlatform == TargetPlatform.iOS;
 }
 
-MenuSerializableShortcut escapeShortcut() => const SingleActivator(
-      LogicalKeyboardKey.escape,
-    );
+MenuSerializableShortcut escapeShortcut() =>
+    const SingleActivator(LogicalKeyboardKey.escape);
 
 class _ShortcutKeycaps extends StatelessWidget {
   const _ShortcutKeycaps({required this.parts, required this.dense});
@@ -229,8 +228,11 @@ class _ShortcutKeycaps extends StatelessWidget {
       context.colorScheme.foreground,
       keyMidToneBlend,
     )!;
-    final keyShadow = Color.lerp(context.colorScheme.background,
-        context.colorScheme.foreground, keyShadowBlend)!;
+    final keyShadow = Color.lerp(
+      context.colorScheme.background,
+      context.colorScheme.foreground,
+      keyShadowBlend,
+    )!;
     final borderWidth = dense
         ? context.sizing.progressIndicatorStrokeWidth
         : context.sizing.progressIndicatorStrokeWidth * 2;
@@ -271,7 +273,8 @@ class _ShortcutKeycaps extends StatelessWidget {
               child: Padding(
                 padding: padding,
                 child: Opacity(
-                  opacity: context.motion.tapHoverAlpha -
+                  opacity:
+                      context.motion.tapHoverAlpha -
                       context.motion.tapHoverAlpha,
                   child: Text(label, style: context.textTheme.small),
                 ),
@@ -315,10 +318,12 @@ class _ShortcutKeycaps extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            context.colorScheme.foreground
-                                .withValues(alpha: keyOverlayTopAlpha),
-                            context.colorScheme.background
-                                .withValues(alpha: keyOverlayMidAlpha),
+                            context.colorScheme.foreground.withValues(
+                              alpha: keyOverlayTopAlpha,
+                            ),
+                            context.colorScheme.background.withValues(
+                              alpha: keyOverlayMidAlpha,
+                            ),
                             keyShadow.withValues(alpha: keyOverlayBottomAlpha),
                           ],
                           stops: overlayGradientStops,

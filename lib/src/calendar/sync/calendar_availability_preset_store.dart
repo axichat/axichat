@@ -8,7 +8,7 @@ const String _availabilityPresetStoreKey = 'calendar_availability_preset_v1';
 
 class CalendarAvailabilityPresetStore {
   CalendarAvailabilityPresetStore({XmppStateStore? stateStore})
-      : _stateStore = stateStore ?? XmppStateStore();
+    : _stateStore = stateStore ?? XmppStateStore();
 
   final XmppStateStore _stateStore;
   static final RegisteredStateKey _storeKey = XmppStateStore.registerKey(

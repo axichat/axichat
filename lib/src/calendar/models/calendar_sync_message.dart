@@ -68,7 +68,7 @@ class CalendarSyncInbound {
 }
 
 @freezed
-class CalendarSyncMessage with _$CalendarSyncMessage {
+abstract class CalendarSyncMessage with _$CalendarSyncMessage {
   static const int maxEnvelopeLength = _calendarSyncEnvelopeMaxLength;
 
   const factory CalendarSyncMessage({
@@ -98,50 +98,47 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       _$CalendarSyncMessageFromJson(json);
 
   factory CalendarSyncMessage.request() => CalendarSyncMessage(
-        type: CalendarSyncType.request,
-        timestamp: DateTime.now(),
-      );
+    type: CalendarSyncType.request,
+    timestamp: DateTime.now(),
+  );
 
   factory CalendarSyncMessage.full({
     required Map<String, dynamic> data,
     required String checksum,
-  }) =>
-      CalendarSyncMessage(
-        type: CalendarSyncType.full,
-        data: data,
-        checksum: checksum,
-        timestamp: DateTime.now(),
-      );
+  }) => CalendarSyncMessage(
+    type: CalendarSyncType.full,
+    data: data,
+    checksum: checksum,
+    timestamp: DateTime.now(),
+  );
 
   factory CalendarSyncMessage.update({
     required String taskId,
     required String operation,
     Map<String, dynamic>? data,
     String entity = 'task',
-  }) =>
-      CalendarSyncMessage(
-        type: CalendarSyncType.update,
-        data: data,
-        timestamp: DateTime.now(),
-        taskId: taskId,
-        operation: operation,
-        entity: entity,
-      );
+  }) => CalendarSyncMessage(
+    type: CalendarSyncType.update,
+    data: data,
+    timestamp: DateTime.now(),
+    taskId: taskId,
+    operation: operation,
+    entity: entity,
+  );
 
   /// Creates a snapshot message referencing an attachment-based snapshot.
   factory CalendarSyncMessage.snapshot({
     required String snapshotChecksum,
     required int snapshotVersion,
     required String snapshotUrl,
-  }) =>
-      CalendarSyncMessage(
-        type: CalendarSyncType.snapshot,
-        timestamp: DateTime.now(),
-        isSnapshot: true,
-        snapshotChecksum: snapshotChecksum,
-        snapshotVersion: snapshotVersion,
-        snapshotUrl: snapshotUrl,
-      );
+  }) => CalendarSyncMessage(
+    type: CalendarSyncType.snapshot,
+    timestamp: DateTime.now(),
+    isSnapshot: true,
+    snapshotChecksum: snapshotChecksum,
+    snapshotVersion: snapshotVersion,
+    snapshotUrl: snapshotUrl,
+  );
 
   const CalendarSyncMessage._();
 
@@ -247,7 +244,7 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
     );
     final entity =
         _trimmedBoundedText(getText('entity'), _calendarSyncEntityMaxLength) ??
-            'task';
+        'task';
 
     Map<String, dynamic>? data;
     final dataStr = getText('data');
@@ -271,8 +268,9 @@ class CalendarSyncMessage with _$CalendarSyncMessage {
       getText('snapshot_version'),
       _calendarSyncSnapshotVersionMaxLength,
     );
-    final snapshotVersion =
-        snapshotVersionStr != null ? int.tryParse(snapshotVersionStr) : null;
+    final snapshotVersion = snapshotVersionStr != null
+        ? int.tryParse(snapshotVersionStr)
+        : null;
     final snapshotUrl = _trimmedBoundedText(
       getText('snapshot_url'),
       _calendarSyncSnapshotUrlMaxLength,

@@ -10,7 +10,7 @@ class SquircleBorder extends RoundedSuperellipseBorder {
     double cornerRadius = 16.0,
     BorderRadius? borderRadius,
   }) : super(
-          borderRadius:
-              borderRadius ?? BorderRadius.all(Radius.circular(cornerRadius)),
-        );
+         borderRadius:
+             borderRadius ?? BorderRadius.all(Radius.circular(cornerRadius)),
+       );
 }

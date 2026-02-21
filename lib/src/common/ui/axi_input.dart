@@ -100,18 +100,21 @@ class AxiInput extends StatefulWidget {
         axi.EditableText.defaultStylusHandwritingEnabled,
     this.groupId,
     this.scrollbarPadding,
-  })  : smartDashesType = smartDashesType ??
-            (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
-        smartQuotesType = smartQuotesType ??
-            (obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled),
-        keyboardType = keyboardType ??
-            (maxLines == 1 ? TextInputType.text : TextInputType.multiline),
-        enableInteractiveSelection =
-            enableInteractiveSelection ?? (!readOnly || !obscureText),
-        assert(
-          initialValue == null || controller == null,
-          'Either initialValue or controller must be specified',
-        );
+  }) : smartDashesType =
+           smartDashesType ??
+           (obscureText ? SmartDashesType.disabled : SmartDashesType.enabled),
+       smartQuotesType =
+           smartQuotesType ??
+           (obscureText ? SmartQuotesType.disabled : SmartQuotesType.enabled),
+       keyboardType =
+           keyboardType ??
+           (maxLines == 1 ? TextInputType.text : TextInputType.multiline),
+       enableInteractiveSelection =
+           enableInteractiveSelection ?? (!readOnly || !obscureText),
+       assert(
+         initialValue == null || controller == null,
+         'Either initialValue or controller must be specified',
+       );
 
   final String? initialValue;
 
@@ -398,8 +401,9 @@ class AxiInputState extends State<AxiInput>
   axi.EditableTextState? get _editableText => editableTextKey.currentState;
 
   bool get isMultiline {
-    final int? maxLines =
-        widget.obscureText ? _singleLineCount : widget.maxLines;
+    final int? maxLines = widget.obscureText
+        ? _singleLineCount
+        : widget.maxLines;
     return maxLines != _singleLineCount;
   }
 
@@ -487,10 +491,11 @@ class AxiInputState extends State<AxiInput>
 
     final effectiveDecoration =
         (theme.inputTheme.decoration ?? const ShadDecoration()).merge(
-      widget.decoration,
-    );
+          widget.decoration,
+        );
 
-    final effectivePadding = widget.padding ??
+    final effectivePadding =
+        widget.padding ??
         theme.inputTheme.padding ??
         const EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 
@@ -501,15 +506,18 @@ class AxiInputState extends State<AxiInput>
         .merge(theme.inputTheme.placeholderStyle)
         .merge(widget.placeholderStyle);
 
-    final effectivePlaceholderAlignment = widget.placeholderAlignment ??
+    final effectivePlaceholderAlignment =
+        widget.placeholderAlignment ??
         theme.inputTheme.placeholderAlignment ??
         Alignment.topLeft;
 
-    final effectiveMainAxisAlignment = widget.mainAxisAlignment ??
+    final effectiveMainAxisAlignment =
+        widget.mainAxisAlignment ??
         theme.inputTheme.mainAxisAlignment ??
         MainAxisAlignment.start;
 
-    final effectiveCrossAxisAlignment = widget.crossAxisAlignment ??
+    final effectiveCrossAxisAlignment =
+        widget.crossAxisAlignment ??
         theme.inputTheme.crossAxisAlignment ??
         CrossAxisAlignment.center;
     final effectiveMouseCursor =
@@ -521,20 +529,19 @@ class AxiInputState extends State<AxiInput>
       TargetPlatform.iOS => cupertinoTextSelectionHandleControls,
       TargetPlatform.macOS => cupertinoDesktopTextSelectionHandleControls,
       TargetPlatform.android ||
-      TargetPlatform.fuchsia =>
-        materialTextSelectionHandleControls,
+      TargetPlatform.fuchsia => materialTextSelectionHandleControls,
       TargetPlatform.linux ||
-      TargetPlatform.windows =>
-        desktopTextSelectionHandleControls,
+      TargetPlatform.windows => desktopTextSelectionHandleControls,
     };
     final effectiveSelectionControls =
         widget.selectionControls ?? defaultSelectionControls;
 
-    final effectiveContextMenuBuilder = widget.contextMenuBuilder ??
+    final effectiveContextMenuBuilder =
+        widget.contextMenuBuilder ??
         (context, editableState) {
           final bool supportsSystemMenu =
               AxiSystemContextMenu.isSupported(context) &&
-                  !editableState.widget.readOnly;
+              !editableState.widget.readOnly;
           if (supportsSystemMenu) {
             return AxiSystemContextMenu.editableText(
               editableTextState: editableState,
@@ -551,7 +558,8 @@ class AxiInputState extends State<AxiInput>
       alpha: _transparentCursorAlpha,
     );
 
-    final effectiveMaxLengthEnforcement = widget.maxLengthEnforcement ??
+    final effectiveMaxLengthEnforcement =
+        widget.maxLengthEnforcement ??
         LengthLimitingTextInputFormatter.getDefaultMaxLengthEnforcement(
           Theme.of(context).platform,
         );
@@ -565,10 +573,12 @@ class AxiInputState extends State<AxiInput>
         ),
     ];
     final bool isObscured = widget.obscureText;
-    final int? effectiveMaxLines =
-        isObscured ? _singleLineCount : widget.maxLines;
-    final int? effectiveMinLines =
-        isObscured ? _singleLineCount : widget.minLines;
+    final int? effectiveMaxLines = isObscured
+        ? _singleLineCount
+        : widget.maxLines;
+    final int? effectiveMinLines = isObscured
+        ? _singleLineCount
+        : widget.minLines;
     final bool effectiveExpands = isObscured ? false : widget.expands;
 
     final textScaler = MediaQuery.textScalerOf(context);
@@ -585,8 +595,8 @@ class AxiInputState extends State<AxiInput>
 
     final effectiveGroupId = widget.groupId ?? _groupId;
 
-    final Widget inputBody =
-        _selectionGestureDetectorBuilder.buildGestureDetector(
+    final Widget
+    inputBody = _selectionGestureDetectorBuilder.buildGestureDetector(
       behavior: HitTestBehavior.translucent,
       child: ValueListenableBuilder(
         valueListenable: hasFocus,
@@ -646,7 +656,7 @@ class AxiInputState extends State<AxiInput>
                                             _handleSelectionChanged,
                                         selectionColor: focused
                                             ? widget.selectionColor ??
-                                                theme.colorScheme.selection
+                                                  theme.colorScheme.selection
                                             : null,
                                         selectionHeightStyle:
                                             widget.selectionHeightStyle,
@@ -672,7 +682,7 @@ class AxiInputState extends State<AxiInput>
                                         keyboardType: widget.keyboardType,
                                         keyboardAppearance:
                                             widget.keyboardAppearance ??
-                                                theme.brightness,
+                                            theme.brightness,
                                         textInputAction: widget.textInputAction,
                                         textCapitalization:
                                             widget.textCapitalization,
@@ -705,12 +715,13 @@ class AxiInputState extends State<AxiInput>
                                         scrollPhysics: widget.scrollPhysics,
                                         scrollController:
                                             effectiveScrollController,
-                                        scrollBehavior: ScrollConfiguration.of(
-                                          context,
-                                        ).copyWith(
-                                          scrollbars: isMultiline,
-                                          overscroll: false,
-                                        ),
+                                        scrollBehavior:
+                                            ScrollConfiguration.of(
+                                              context,
+                                            ).copyWith(
+                                              scrollbars: isMultiline,
+                                              overscroll: false,
+                                            ),
                                         autofillHints: widget.autofillHints,
                                         clipBehavior: widget.clipBehavior,
                                         restorationId: 'editable',
@@ -750,15 +761,13 @@ class AxiInputState extends State<AxiInput>
       ),
     );
 
-    final double resolvedOpacity =
-        widget.enabled ? _enabledOpacity : theme.disabledOpacity;
+    final double resolvedOpacity = widget.enabled
+        ? _enabledOpacity
+        : theme.disabledOpacity;
 
     return Opacity(
       opacity: resolvedOpacity,
-      child: AbsorbPointer(
-        absorbing: !widget.enabled,
-        child: inputBody,
-      ),
+      child: AbsorbPointer(absorbing: !widget.enabled, child: inputBody),
     );
   }
 }
@@ -766,8 +775,8 @@ class AxiInputState extends State<AxiInput>
 class _AxiInputSelectionGestureDetectorBuilder
     extends AxiTextSelectionGestureDetectorBuilder {
   _AxiInputSelectionGestureDetectorBuilder({required AxiInputState state})
-      : _state = state,
-        super(delegate: state);
+    : _state = state,
+      super(delegate: state);
 
   final AxiInputState _state;
 

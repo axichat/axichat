@@ -52,8 +52,8 @@ class ChatAlert extends StatelessWidget {
                         variant: AxiButtonVariant.secondary,
                         onPressed: () {
                           context.read<ChatBloc>().add(
-                                ChatAlertHidden(chatJid: chat.jid),
-                              );
+                            ChatAlertHidden(chatJid: chat.jid),
+                          );
                         },
                         child: Text(l10n.chatAlertHide),
                       ),
@@ -62,11 +62,8 @@ class ChatAlert extends StatelessWidget {
                         variant: AxiButtonVariant.ghost,
                         onPressed: () {
                           context.read<ChatBloc>().add(
-                                ChatAlertHidden(
-                                  chatJid: chat.jid,
-                                  forever: true,
-                                ),
-                              );
+                            ChatAlertHidden(chatJid: chat.jid, forever: true),
+                          );
                         },
                         child: Text(l10n.chatAlertIgnore),
                       ),

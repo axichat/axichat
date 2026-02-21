@@ -41,11 +41,9 @@ Future<T?> showAdaptiveBottomSheet<T>({
   final BorderRadiusGeometry sheetRadius = BorderRadius.vertical(
     top: Radius.circular(containerRadius),
   );
-  final EdgeInsets resolvedInsets = dialogInsetPadding ??
-      EdgeInsets.symmetric(
-        horizontal: spacing.l,
-        vertical: spacing.l,
-      );
+  final EdgeInsets resolvedInsets =
+      dialogInsetPadding ??
+      EdgeInsets.symmetric(horizontal: spacing.l, vertical: spacing.l);
   final double resolvedDialogMaxWidth = dialogMaxWidth ?? sizing.dialogMaxWidth;
   final double resolvedDialogMaxHeightFraction =
       dialogMaxHeightFraction ?? sizing.dialogMaxHeightFraction;
@@ -67,8 +65,9 @@ Future<T?> showAdaptiveBottomSheet<T>({
         );
         final bool transparentSurface = resolvedBackground.a == 0;
         const double zeroInset = 0;
-        final double topInset =
-            useSafeArea ? windowMediaQuery.viewPadding.top : zeroInset;
+        final double topInset = useSafeArea
+            ? windowMediaQuery.viewPadding.top
+            : zeroInset;
         final Widget child = _AxiSheetChrome(
           showDragHandle: showDragHandle,
           showCloseButton: showCloseButton,
@@ -80,8 +79,9 @@ Future<T?> showAdaptiveBottomSheet<T>({
           child: AxiModalSurface(
             backgroundColor: resolvedBackground,
             borderColor: Colors.transparent,
-            padding:
-                transparentSurface ? EdgeInsets.zero : resolvedSurfacePadding,
+            padding: transparentSurface
+                ? EdgeInsets.zero
+                : resolvedSurfacePadding,
             borderRadius: sheetRadius,
             shadows: transparentSurface ? const <BoxShadow>[] : null,
             child: child,
@@ -139,8 +139,9 @@ Future<T?> showAdaptiveBottomSheet<T>({
         ),
         child: child,
       );
-      final Widget wrappedChild =
-          useSafeArea ? SafeArea(child: constrainedChild) : constrainedChild;
+      final Widget wrappedChild = useSafeArea
+          ? SafeArea(child: constrainedChild)
+          : constrainedChild;
       return Dialog(
         insetPadding: dialogInsets,
         backgroundColor: Colors.transparent,
@@ -176,8 +177,10 @@ class _AxiSheetChrome extends StatelessWidget {
       return child;
     }
 
-    final EdgeInsets dragHandlePadding =
-        EdgeInsets.only(top: context.spacing.s, bottom: context.spacing.xs);
+    final EdgeInsets dragHandlePadding = EdgeInsets.only(
+      top: context.spacing.s,
+      bottom: context.spacing.xs,
+    );
     final EdgeInsets closeButtonPadding = EdgeInsets.only(
       top: context.spacing.xs,
       right: context.spacing.xs,

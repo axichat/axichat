@@ -147,15 +147,11 @@ class _CalendarWidgetState
       final l10n = context.l10n;
       final (String title, String message) = switch (warning.type) {
         CalendarSyncWarningType.snapshotUnavailable => (
-            l10n.calendarSyncWarningSnapshotTitle,
-            l10n.calendarSyncWarningSnapshotMessage,
-          ),
+          l10n.calendarSyncWarningSnapshotTitle,
+          l10n.calendarSyncWarningSnapshotMessage,
+        ),
       };
-      FeedbackSystem.showWarning(
-        context,
-        message,
-        title: title,
-      );
+      FeedbackSystem.showWarning(context, message, title: title);
       calendarBloc.add(const CalendarEvent.syncWarningCleared());
     }
   }
@@ -278,7 +274,7 @@ class _CalendarWidgetState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
-          children: [navigation, if (errorBanner != null) errorBanner],
+          children: [navigation, ?errorBanner],
         ),
       );
       headerChildren.add(navContent);
@@ -343,8 +339,8 @@ class _CalendarWidgetState
               : context.l10n.calendarHideCompleted,
           onPressed: () =>
               context.read<SettingsCubit>().toggleHideCompletedScheduled(
-                    !context.read<SettingsCubit>().state.hideCompletedScheduled,
-                  ),
+                !context.read<SettingsCubit>().state.hideCompletedScheduled,
+              ),
         ),
       ],
     );
@@ -370,15 +366,14 @@ class _CalendarWidgetState
               VoidCallback? onTap,
               VoidCallback? onDragStart,
               bool allowContextMenu = false,
-            }) =>
-              sidebarState.buildSearchTaskTile(
-                task,
-                trailing: trailing,
-                requiresLongPress: requiresLongPress,
-                onTap: onTap,
-                onDragStart: onDragStart,
-                allowContextMenu: allowContextMenu,
-              ),
+            }) => sidebarState.buildSearchTaskTile(
+              task,
+              trailing: trailing,
+              requiresLongPress: requiresLongPress,
+              onTap: onTap,
+              onDragStart: onDragStart,
+              allowContextMenu: allowContextMenu,
+            ),
     );
   }
 

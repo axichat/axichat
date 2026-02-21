@@ -102,27 +102,32 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
       });
     }
 
-    final ValueChanged<ReminderPreferences> onChanged =
-        enabled ? widget.onChanged : (_) {};
+    final ValueChanged<ReminderPreferences> onChanged = enabled
+        ? widget.onChanged
+        : (_) {};
     final bool usesDeadline = widget.anchor.isDeadline;
-    final List<Duration> options =
-        usesDeadline ? widget.deadlineOptions : widget.startOptions;
+    final List<Duration> options = usesDeadline
+        ? widget.deadlineOptions
+        : widget.startOptions;
     final List<Duration> selected = usesDeadline
         ? resolvedValue.deadlineOffsets
         : resolvedValue.startOffsets;
-    final String sectionLabel =
-        usesDeadline ? _reminderBeforeDeadlineLabel : _reminderBeforeStartLabel;
-    final String zeroLabel =
-        usesDeadline ? _reminderAtDeadlineLabel : _reminderAtStartLabel;
+    final String sectionLabel = usesDeadline
+        ? _reminderBeforeDeadlineLabel
+        : _reminderBeforeStartLabel;
+    final String zeroLabel = usesDeadline
+        ? _reminderAtDeadlineLabel
+        : _reminderAtStartLabel;
     final List<CalendarAlarm>? advancedAlarms = widget.advancedAlarms;
     final ValueChanged<List<CalendarAlarm>>? baseAdvancedChanged =
         widget.onAdvancedAlarmsChanged;
     final ValueChanged<List<CalendarAlarm>>? onAdvancedChanged = enabled
         ? baseAdvancedChanged
         : baseAdvancedChanged == null
-            ? null
-            : (_) {};
-    final bool allowAdvanced = widget.showAdvancedAlarms &&
+        ? null
+        : (_) {};
+    final bool allowAdvanced =
+        widget.showAdvancedAlarms &&
         advancedAlarms != null &&
         onAdvancedChanged != null;
     final List<CalendarAlarm> resolvedAdvancedAlarms =
@@ -204,13 +209,11 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
             onToggle: () => setState(() {
               _advancedExpanded = !_advancedExpanded;
             }),
-            badge:
-                hasAdvancedData ? const _ReminderAdvancedActiveBadge() : null,
+            badge: hasAdvancedData
+                ? const _ReminderAdvancedActiveBadge()
+                : null,
             collapsedHint: hasAdvancedData
-                ? Text(
-                    _reminderAdvancedSummary,
-                    style: context.textTheme.muted,
-                  )
+                ? Text(_reminderAdvancedSummary, style: context.textTheme.muted)
                 : null,
             enabled: enabled,
             child: CalendarAlarmsField(
@@ -241,8 +244,9 @@ class _ReminderPreferencesFieldState extends State<ReminderPreferencesField> {
     final List<Duration> nextDeadline = List<Duration>.from(
       prefs.deadlineOffsets,
     );
-    final List<Duration> targetOffsets =
-        anchor.isDeadline ? nextDeadline : nextStart;
+    final List<Duration> targetOffsets = anchor.isDeadline
+        ? nextDeadline
+        : nextStart;
 
     if (targetOffsets.contains(offset)) {
       targetOffsets.remove(offset);
@@ -285,8 +289,9 @@ class _ReminderAdvancedActiveBadge extends StatelessWidget {
       ),
       child: Text(
         _reminderAdvancedActiveLabel,
-        style: context.textTheme.label.strong
-            .copyWith(color: colors.mutedForeground),
+        style: context.textTheme.label.strong.copyWith(
+          color: colors.mutedForeground,
+        ),
       ),
     );
   }
@@ -333,14 +338,13 @@ class _ReminderSection extends StatelessWidget {
                 ),
                 decoration: BoxDecoration(
                   color: colors.muted.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(
-                    context.radii.container,
-                  ),
+                  borderRadius: BorderRadius.circular(context.radii.container),
                 ),
                 child: Text(
                   'Mixed',
-                  style: context.textTheme.label.strong
-                      .copyWith(color: colors.mutedForeground),
+                  style: context.textTheme.label.strong.copyWith(
+                    color: colors.mutedForeground,
+                  ),
                 ),
               ),
           ],

@@ -47,8 +47,8 @@ class _StateStoreWrite {
 
 class _StateStoreHarness {
   _StateStoreHarness({Map<RegisteredStateKey, Object?>? initialValues})
-      : values = initialValues ?? <RegisteredStateKey, Object?>{},
-        writes = <_StateStoreWrite>[];
+    : values = initialValues ?? <RegisteredStateKey, Object?>{},
+      writes = <_StateStoreWrite>[];
 
   final Map<RegisteredStateKey, Object?> values;
   final List<_StateStoreWrite> writes;
@@ -301,8 +301,9 @@ void main() {
 
         final List<mox.XmppFeatureNegotiatorBase> negotiators =
             _captureNegotiators(harness.connection);
-        final List<mox.Bind2Negotiator> bind2Negotiators =
-            negotiators.whereType<mox.Bind2Negotiator>().toList();
+        final List<mox.Bind2Negotiator> bind2Negotiators = negotiators
+            .whereType<mox.Bind2Negotiator>()
+            .toList();
         expect(bind2Negotiators, hasLength(_expectedSingleNegotiator));
 
         final mox.Bind2Negotiator bind2Negotiator = bind2Negotiators.single;
@@ -338,8 +339,8 @@ _XmppHarness _createHarness({required _StateStoreHarness stateStoreHarness}) {
 
   final XmppService xmppService = XmppService(
     buildConnection: () => mockConnection,
-    buildStateStore: (_, __) => mockStateStore,
-    buildDatabase: (_, __) => database,
+    buildStateStore: (_, _) => mockStateStore,
+    buildDatabase: (_, _) => database,
     notificationService: mockNotificationService,
   );
 

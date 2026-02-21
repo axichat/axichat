@@ -25,9 +25,9 @@ class RosterList extends StatelessWidget {
         final tabState = searchState.stateFor(HomeTab.contacts);
         final query = searchState.active ? tabState.query : '';
         context.read<RosterCubit>().updateContactsCriteria(
-              query: query,
-              sort: tabState.sort,
-            );
+          query: query,
+          sort: tabState.sort,
+        );
       },
       child: BlocBuilder<RosterCubit, RosterState>(
         buildWhen: (previous, current) =>
@@ -39,16 +39,15 @@ class RosterList extends StatelessWidget {
 
           if (items == null) {
             return Center(
-              child:
-                  AxiProgressIndicator(color: context.colorScheme.foreground),
+              child: AxiProgressIndicator(
+                color: context.colorScheme.foreground,
+              ),
             );
           }
 
           return BlocBuilder<ChatsCubit, ChatsState>(
-            builder: (context, chatsState) => _RosterListBody(
-              items: items,
-              chatsState: chatsState,
-            ),
+            builder: (context, chatsState) =>
+                _RosterListBody(items: items, chatsState: chatsState),
           );
         },
       ),
@@ -57,10 +56,7 @@ class RosterList extends StatelessWidget {
 }
 
 class _RosterListBody extends StatelessWidget {
-  const _RosterListBody({
-    required this.items,
-    this.chatsState,
-  });
+  const _RosterListBody({required this.items, this.chatsState});
 
   final List<RosterItem> items;
   final ChatsState? chatsState;
@@ -124,8 +120,8 @@ class _RosterListBody extends StatelessWidget {
                                 true &&
                             context.mounted) {
                           context.read<RosterCubit>().removeContact(
-                                jid: item.jid,
-                              );
+                            jid: item.jid,
+                          );
                         }
                       },
                     ),

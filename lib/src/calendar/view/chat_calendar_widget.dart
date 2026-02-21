@@ -7,7 +7,6 @@ import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/view/calendar_experience_state.dart';
 import 'package:axichat/src/calendar/view/calendar_task_search.dart';
 import 'package:axichat/src/calendar/view/calendar_widget.dart';
@@ -16,6 +15,7 @@ import 'package:axichat/src/calendar/view/task_sidebar.dart';
 import 'package:axichat/src/calendar/view/sync_controls.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
+import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/env.dart';
@@ -168,7 +168,7 @@ class _ChatCalendarWidgetState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
-          children: [navigation, if (errorBanner != null) errorBanner],
+          children: [navigation, ?errorBanner],
         ),
       );
       headerChildren.add(navContent);
@@ -233,8 +233,8 @@ class _ChatCalendarWidgetState
               : context.l10n.calendarHideCompleted,
           onPressed: () =>
               context.read<SettingsCubit>().toggleHideCompletedScheduled(
-                    !context.read<SettingsCubit>().state.hideCompletedScheduled,
-                  ),
+                !context.read<SettingsCubit>().state.hideCompletedScheduled,
+              ),
         ),
       ],
     );
@@ -260,15 +260,14 @@ class _ChatCalendarWidgetState
               VoidCallback? onTap,
               VoidCallback? onDragStart,
               bool allowContextMenu = false,
-            }) =>
-              sidebarState.buildSearchTaskTile(
-                task,
-                trailing: trailing,
-                requiresLongPress: requiresLongPress,
-                onTap: onTap,
-                onDragStart: onDragStart,
-                allowContextMenu: allowContextMenu,
-              ),
+            }) => sidebarState.buildSearchTaskTile(
+              task,
+              trailing: trailing,
+              requiresLongPress: requiresLongPress,
+              onTap: onTap,
+              onDragStart: onDragStart,
+              allowContextMenu: allowContextMenu,
+            ),
     );
   }
 

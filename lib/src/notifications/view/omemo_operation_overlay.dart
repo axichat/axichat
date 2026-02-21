@@ -75,8 +75,9 @@ class _OmemoOperationToast extends StatelessWidget {
     final colorScheme = context.colorScheme;
     final isFailure = operation.status == OmemoOperationStatus.failure;
     final surfaceColor = isFailure ? colorScheme.destructive : colorScheme.card;
-    final textColor =
-        isFailure ? colorScheme.destructiveForeground : colorScheme.foreground;
+    final textColor = isFailure
+        ? colorScheme.destructiveForeground
+        : colorScheme.foreground;
     return AxiModalSurface(
       backgroundColor: surfaceColor,
       child: Padding(
@@ -96,9 +97,7 @@ class _OmemoOperationToast extends StatelessWidget {
                 children: [
                   Text(
                     operation.statusLabel(),
-                    style: context.textTheme.p.copyWith(
-                      color: textColor,
-                    ),
+                    style: context.textTheme.p.copyWith(color: textColor),
                   ),
                   if (operation.status == OmemoOperationStatus.failure &&
                       operation.error != null)
@@ -131,18 +130,18 @@ class _OperationStatusIcon extends StatelessWidget {
     final colorScheme = context.colorScheme;
     return switch (status) {
       OmemoOperationStatus.inProgress => AxiProgressIndicator(
-          color: colorScheme.primary,
-        ),
+        color: colorScheme.primary,
+      ),
       OmemoOperationStatus.success => Icon(
-          Icons.check_circle_rounded,
-          size: context.sizing.iconButtonIconSize,
-          color: colorScheme.primary,
-        ),
+        Icons.check_circle_rounded,
+        size: context.sizing.iconButtonIconSize,
+        color: colorScheme.primary,
+      ),
       OmemoOperationStatus.failure => Icon(
-          Icons.error_rounded,
-          size: context.sizing.iconButtonIconSize,
-          color: colorScheme.destructiveForeground,
-        ),
+        Icons.error_rounded,
+        size: context.sizing.iconButtonIconSize,
+        color: colorScheme.destructiveForeground,
+      ),
     };
   }
 }

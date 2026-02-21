@@ -8,13 +8,13 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 class SafeVCardManager extends mox.VCardManager {
   @override
   List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
-        mox.StanzaHandler(
-          stanzaTag: 'presence',
-          tagName: 'x',
-          tagXmlns: mox.vCardTempUpdate,
-          callback: _onPresenceSafe,
-        ),
-      ];
+    mox.StanzaHandler(
+      stanzaTag: 'presence',
+      tagName: 'x',
+      tagXmlns: mox.vCardTempUpdate,
+      callback: _onPresenceSafe,
+    ),
+  ];
 
   Future<mox.StanzaHandlerData> _onPresenceSafe(
     mox.Stanza presence,

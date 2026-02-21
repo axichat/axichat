@@ -8,24 +8,22 @@ import 'recurrence_editor.dart';
 
 RecurrenceEditorSpacing calendarRecurrenceSpacingStandard(
   BuildContext context,
-) =>
-    RecurrenceEditorSpacing(
-      chipSpacing: context.spacing.s,
-      chipRunSpacing: context.spacing.s,
-      weekdaySpacing: context.spacing.m,
-      advancedSectionSpacing: context.spacing.m,
-      endSpacing: context.spacing.m,
-      fieldGap: context.spacing.m,
-    );
+) => RecurrenceEditorSpacing(
+  chipSpacing: context.spacing.s,
+  chipRunSpacing: context.spacing.s,
+  weekdaySpacing: context.spacing.m,
+  advancedSectionSpacing: context.spacing.m,
+  endSpacing: context.spacing.m,
+  fieldGap: context.spacing.m,
+);
 
 RecurrenceEditorSpacing calendarRecurrenceSpacingCompact(
   BuildContext context,
-) =>
-    RecurrenceEditorSpacing(
-      chipSpacing: context.spacing.s,
-      chipRunSpacing: context.spacing.s,
-      weekdaySpacing: context.spacing.s,
-      advancedSectionSpacing: context.spacing.m,
-      endSpacing: context.spacing.m,
-      fieldGap: context.spacing.m,
-    );
+) => RecurrenceEditorSpacing(
+  chipSpacing: context.spacing.s,
+  chipRunSpacing: context.spacing.s,
+  weekdaySpacing: context.spacing.s,
+  advancedSectionSpacing: context.spacing.m,
+  endSpacing: context.spacing.m,
+  fieldGap: context.spacing.m,
+);

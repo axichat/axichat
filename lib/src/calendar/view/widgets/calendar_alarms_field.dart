@@ -44,70 +44,69 @@ const List<CalendarAlarmRecipient> _emptyRecipients =
 const List<CalendarAttachment> _emptyAlarmAttachments = <CalendarAttachment>[];
 final List<TextInputFormatter> _digitsOnlyInputFormatters =
     List<TextInputFormatter>.unmodifiable(<TextInputFormatter>[
-  FilteringTextInputFormatter.digitsOnly,
-]);
+      FilteringTextInputFormatter.digitsOnly,
+    ]);
 
 enum AlarmOffsetUnit { minutes, hours, days, weeks }
 
 extension AlarmOffsetUnitX on AlarmOffsetUnit {
   String label(AppLocalizations l10n) => switch (this) {
-        AlarmOffsetUnit.minutes => l10n.calendarAlarmUnitMinutes,
-        AlarmOffsetUnit.hours => l10n.calendarAlarmUnitHours,
-        AlarmOffsetUnit.days => l10n.calendarAlarmUnitDays,
-        AlarmOffsetUnit.weeks => l10n.calendarAlarmUnitWeeks,
-      };
+    AlarmOffsetUnit.minutes => l10n.calendarAlarmUnitMinutes,
+    AlarmOffsetUnit.hours => l10n.calendarAlarmUnitHours,
+    AlarmOffsetUnit.days => l10n.calendarAlarmUnitDays,
+    AlarmOffsetUnit.weeks => l10n.calendarAlarmUnitWeeks,
+  };
 
   Duration toDuration(int value) => switch (this) {
-        AlarmOffsetUnit.minutes => Duration(minutes: value),
-        AlarmOffsetUnit.hours => Duration(hours: value),
-        AlarmOffsetUnit.days => Duration(days: value),
-        AlarmOffsetUnit.weeks => Duration(days: value * _alarmDaysPerWeek),
-      };
+    AlarmOffsetUnit.minutes => Duration(minutes: value),
+    AlarmOffsetUnit.hours => Duration(hours: value),
+    AlarmOffsetUnit.days => Duration(days: value),
+    AlarmOffsetUnit.weeks => Duration(days: value * _alarmDaysPerWeek),
+  };
 
   int valueFrom(Duration duration) => switch (this) {
-        AlarmOffsetUnit.minutes => duration.inMinutes,
-        AlarmOffsetUnit.hours => duration.inMinutes ~/ _alarmMinutesPerHour,
-        AlarmOffsetUnit.days => duration.inHours ~/ _alarmHoursPerDay,
-        AlarmOffsetUnit.weeks => duration.inDays ~/ _alarmDaysPerWeek,
-      };
+    AlarmOffsetUnit.minutes => duration.inMinutes,
+    AlarmOffsetUnit.hours => duration.inMinutes ~/ _alarmMinutesPerHour,
+    AlarmOffsetUnit.days => duration.inHours ~/ _alarmHoursPerDay,
+    AlarmOffsetUnit.weeks => duration.inDays ~/ _alarmDaysPerWeek,
+  };
 
   bool canRepresent(Duration duration) => switch (this) {
-        AlarmOffsetUnit.minutes => true,
-        AlarmOffsetUnit.hours => duration.inMinutes % _alarmMinutesPerHour == 0,
-        AlarmOffsetUnit.days => duration.inHours % _alarmHoursPerDay == 0,
-        AlarmOffsetUnit.weeks => duration.inDays % _alarmDaysPerWeek == 0,
-      };
+    AlarmOffsetUnit.minutes => true,
+    AlarmOffsetUnit.hours => duration.inMinutes % _alarmMinutesPerHour == 0,
+    AlarmOffsetUnit.days => duration.inHours % _alarmHoursPerDay == 0,
+    AlarmOffsetUnit.weeks => duration.inDays % _alarmDaysPerWeek == 0,
+  };
 }
 
 extension CalendarAlarmActionLabelX on CalendarAlarmAction {
   String label(AppLocalizations l10n) => switch (this) {
-        CalendarAlarmAction.display => l10n.calendarAlarmActionDisplay,
-        CalendarAlarmAction.audio => l10n.calendarAlarmActionAudio,
-        CalendarAlarmAction.email => l10n.calendarAlarmActionEmail,
-        CalendarAlarmAction.procedure => l10n.calendarAlarmActionProcedure,
-      };
+    CalendarAlarmAction.display => l10n.calendarAlarmActionDisplay,
+    CalendarAlarmAction.audio => l10n.calendarAlarmActionAudio,
+    CalendarAlarmAction.email => l10n.calendarAlarmActionEmail,
+    CalendarAlarmAction.procedure => l10n.calendarAlarmActionProcedure,
+  };
 }
 
 extension CalendarAlarmTriggerTypeLabelX on CalendarAlarmTriggerType {
   String label(AppLocalizations l10n) => switch (this) {
-        CalendarAlarmTriggerType.relative => l10n.calendarAlarmTriggerRelative,
-        CalendarAlarmTriggerType.absolute => l10n.calendarAlarmTriggerAbsolute,
-      };
+    CalendarAlarmTriggerType.relative => l10n.calendarAlarmTriggerRelative,
+    CalendarAlarmTriggerType.absolute => l10n.calendarAlarmTriggerAbsolute,
+  };
 }
 
 extension CalendarAlarmRelativeToLabelX on CalendarAlarmRelativeTo {
   String label(AppLocalizations l10n) => switch (this) {
-        CalendarAlarmRelativeTo.start => l10n.calendarAlarmRelativeToStart,
-        CalendarAlarmRelativeTo.end => l10n.calendarAlarmRelativeToEnd,
-      };
+    CalendarAlarmRelativeTo.start => l10n.calendarAlarmRelativeToStart,
+    CalendarAlarmRelativeTo.end => l10n.calendarAlarmRelativeToEnd,
+  };
 }
 
 extension CalendarAlarmOffsetDirectionLabelX on CalendarAlarmOffsetDirection {
   String label(AppLocalizations l10n) => switch (this) {
-        CalendarAlarmOffsetDirection.before =>
-          l10n.calendarAlarmDirectionBefore,
-        CalendarAlarmOffsetDirection.after => l10n.calendarAlarmDirectionAfter,
-      };
+    CalendarAlarmOffsetDirection.before => l10n.calendarAlarmDirectionBefore,
+    CalendarAlarmOffsetDirection.after => l10n.calendarAlarmDirectionAfter,
+  };
 }
 
 class CalendarAlarmsField extends StatelessWidget {
@@ -324,8 +323,9 @@ class _AlarmCardState extends State<_AlarmCard> {
     final CalendarAlarmTrigger trigger = _normalizedTrigger(alarm);
     final bool isProcedure = alarm.action == CalendarAlarmAction.procedure;
     final bool isEmail = alarm.action == CalendarAlarmAction.email;
-    final TextStyle titleStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle titleStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final TextStyle helperStyle = context.textTheme.muted;
 
     return LayoutBuilder(
@@ -354,8 +354,8 @@ class _AlarmCardState extends State<_AlarmCard> {
           trailing: triggerField,
           isCompact: isCompact,
         );
-        final Widget triggerDetails = trigger.type ==
-                CalendarAlarmTriggerType.absolute
+        final Widget triggerDetails =
+            trigger.type == CalendarAlarmTriggerType.absolute
             ? _AlarmAbsoluteTriggerField(
                 value: trigger.absolute,
                 referenceStart: widget.referenceStart,
@@ -392,7 +392,8 @@ class _AlarmCardState extends State<_AlarmCard> {
                 children: [
                   Text(
                     context.l10n.calendarAlarmItemLabel(
-                        widget.index + _alarmIndexOffset),
+                      widget.index + _alarmIndexOffset,
+                    ),
                     style: titleStyle,
                   ),
                   const Spacer(),
@@ -491,8 +492,9 @@ class _AlarmActionField extends StatelessWidget {
       CalendarAlarmAction.audio,
       CalendarAlarmAction.email,
     ];
-    final TextStyle valueStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle valueStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final Widget? helperWidget = helper;
     final Widget content = enabled
         ? AxiSelect<CalendarAlarmAction>(
@@ -1230,8 +1232,9 @@ class _AlarmRecipientChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle labelStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle labelStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final String display = recipient.commonName?.trim().isNotEmpty == true
         ? context.l10n.calendarAlarmRecipientDisplay(
             recipient.commonName!,
@@ -1277,18 +1280,15 @@ class _AlarmAcknowledgedRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final String formatted =
-        TimeFormatter.formatFriendlyDateTime(context.l10n, value);
+    final String formatted = TimeFormatter.formatFriendlyDateTime(
+      context.l10n,
+      value,
+    );
     return Row(
       children: [
         _AlarmFieldLabel(text: context.l10n.calendarAlarmAcknowledgedLabel),
         SizedBox(width: context.spacing.s),
-        Expanded(
-          child: Text(
-            formatted,
-            style: context.textTheme.muted,
-          ),
-        ),
+        Expanded(child: Text(formatted, style: context.textTheme.muted)),
       ],
     );
   }
@@ -1331,7 +1331,8 @@ CalendarDateTime _calendarDateTimeFrom(
 }) {
   final CalendarDateTime resolvedTemplate =
       template ?? _defaultAbsoluteDateTime(referenceStart);
-  final bool isFloating = resolvedTemplate.isFloating ||
+  final bool isFloating =
+      resolvedTemplate.isFloating ||
       (!value.isUtc && resolvedTemplate.tzid == null);
   return CalendarDateTime(
     value: value,

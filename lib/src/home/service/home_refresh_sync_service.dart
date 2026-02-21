@@ -14,8 +14,8 @@ class HomeRefreshSyncService {
   HomeRefreshSyncService({
     required XmppService xmppService,
     EmailService? emailService,
-  })  : _xmppService = xmppService,
-        _emailService = emailService;
+  }) : _xmppService = xmppService,
+       _emailService = emailService;
 
   final XmppService _xmppService;
   EmailService? _emailService;
@@ -109,9 +109,9 @@ class HomeRefreshSyncService {
     if (pending != null) {
       return pending;
     }
-    _syncUpdates.add(const HomeRefreshSyncUpdate(
-      phase: HomeRefreshSyncPhase.running,
-    ));
+    _syncUpdates.add(
+      const HomeRefreshSyncUpdate(phase: HomeRefreshSyncPhase.running),
+    );
     final task = () async {
       try {
         final syncedAt = await action();
@@ -124,9 +124,9 @@ class HomeRefreshSyncService {
         return syncedAt;
       } on Exception catch (error, stackTrace) {
         _log.fine('Home refresh failed.', error, stackTrace);
-        _syncUpdates.add(const HomeRefreshSyncUpdate(
-          phase: HomeRefreshSyncPhase.failure,
-        ));
+        _syncUpdates.add(
+          const HomeRefreshSyncUpdate(phase: HomeRefreshSyncPhase.failure),
+        );
         return _lastSyncAt ?? DateTime.timestamp();
       }
     }();
@@ -187,8 +187,9 @@ class HomeRefreshSyncService {
       return MamGlobalSyncOutcome.failed;
     }
     const streamReadyTimeout = Duration(seconds: 5);
-    final streamReady =
-        await _xmppService.waitForStreamReady(streamReadyTimeout);
+    final streamReady = await _xmppService.waitForStreamReady(
+      streamReadyTimeout,
+    );
     if (streamReady?.isResumed ?? false) {
       return MamGlobalSyncOutcome.skippedResumed;
     }

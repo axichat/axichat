@@ -31,8 +31,9 @@ class ProfileTile extends StatelessWidget {
         final sessionEmailState = demoOffline
             ? const EmailSyncState.ready()
             : connectivityState.emailState;
-        final emailEnabled =
-            demoOffline ? true : connectivityState.emailEnabled;
+        final emailEnabled = demoOffline
+            ? true
+            : connectivityState.emailEnabled;
         return BlocBuilder<ProfileCubit, ProfileState>(
           builder: (context, state) {
             final sizing = context.sizing;
@@ -45,13 +46,10 @@ class ProfileTile extends StatelessWidget {
               builder: (context, constraints) {
                 final indicatorMaxWidth =
                     constraints.maxWidth < sizing.menuMaxWidth
-                        ? constraints.maxWidth
-                        : sizing.menuMaxWidth;
+                    ? constraints.maxWidth
+                    : sizing.menuMaxWidth;
                 return _ProfileTileSurface(
-                  onTap: () => context.push(
-                    const ProfileRoute().location,
-                    extra: context.read,
-                  ),
+                  onTap: () => context.push(const ProfileRoute().location),
                   child: _ProfileTileLayout(
                     username: state.username,
                     jid: state.jid,
@@ -87,10 +85,7 @@ ConnectionState _xmppStateFor(
 }
 
 class _ProfileTileSurface extends StatefulWidget {
-  const _ProfileTileSurface({
-    required this.child,
-    required this.onTap,
-  });
+  const _ProfileTileSurface({required this.child, required this.onTap});
 
   final Widget child;
   final VoidCallback onTap;
@@ -130,7 +125,8 @@ class _ProfileTileSurfaceState extends State<_ProfileTileSurface> {
             child: Material(
               color: Colors.transparent,
               shape: RoundedSuperellipseBorder(
-                  borderRadius: BorderRadius.circular(context.radii.squircle)),
+                borderRadius: BorderRadius.circular(context.radii.squircle),
+              ),
               clipBehavior: Clip.antiAlias,
               child: AnimatedContainer(
                 duration: animationDuration,
@@ -172,10 +168,7 @@ class _ProfileTileLayout extends StatelessWidget {
   Widget build(BuildContext context) {
     final spacing = context.spacing;
     return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.m,
-        vertical: spacing.s,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.s),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [

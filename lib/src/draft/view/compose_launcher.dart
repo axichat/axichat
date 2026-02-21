@@ -18,34 +18,36 @@ void openComposeDraft(
   String body = '',
   String subject = '',
   List<String> attachmentMetadataIds = const <String>[],
+  bool scaleFromBottom = false,
 }) {
   final env = EnvScope.maybeOf(context);
   final platform = env?.platform ?? defaultTargetPlatform;
-  final bool isDesktopPlatform = env?.isDesktopPlatform ??
+  final bool isDesktopPlatform =
+      env?.isDesktopPlatform ??
       (platform == TargetPlatform.macOS ||
           platform == TargetPlatform.linux ||
           platform == TargetPlatform.windows);
   if (isDesktopPlatform ||
       resolveCommandSurface(context) != CommandSurface.sheet) {
     context.read<ComposeWindowCubit>().openDraft(
-          id: id,
-          jids: jids,
-          body: body,
-          subject: subject,
-          attachmentMetadataIds: attachmentMetadataIds,
-        );
+      id: id,
+      jids: jids,
+      body: body,
+      subject: subject,
+      attachmentMetadataIds: attachmentMetadataIds,
+    );
     return;
   }
 
   final resolvedNavigator = navigator ?? Navigator.maybeOf(context);
   if (resolvedNavigator == null) {
     context.read<ComposeWindowCubit>().openDraft(
-          id: id,
-          jids: jids,
-          body: body,
-          subject: subject,
-          attachmentMetadataIds: attachmentMetadataIds,
-        );
+      id: id,
+      jids: jids,
+      body: body,
+      subject: subject,
+      attachmentMetadataIds: attachmentMetadataIds,
+    );
     return;
   }
 
@@ -57,8 +59,44 @@ void openComposeDraft(
     attachmentMetadataIds: attachmentMetadataIds,
   );
   T locate<T>() => context.read<T>();
-  final Duration animationDuration =
-      context.read<SettingsCubit>().animationDuration;
+  final Duration animationDuration = context
+      .read<SettingsCubit>()
+      .animationDuration;
+  if (scaleFromBottom) {
+    resolvedNavigator.push<void>(
+      PageRouteBuilder<void>(
+        transitionDuration: animationDuration,
+        reverseTransitionDuration: animationDuration,
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            ComposeScreen(seed: seed, locate: locate),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          final slide = Tween<Offset>(
+            begin: const Offset(0, 0.04),
+            end: Offset.zero,
+          ).animate(curved);
+          final scale = Tween<double>(begin: 0.96, end: 1.0).animate(curved);
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: slide,
+              child: ScaleTransition(
+                alignment: Alignment.bottomCenter,
+                scale: scale,
+                child: child,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+    return;
+  }
+
   resolvedNavigator.push<void>(
     AxiFadePageRoute<void>(
       duration: animationDuration,

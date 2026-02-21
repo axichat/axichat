@@ -37,9 +37,9 @@ List<CalendarFreeBusyInterval> buildMutualAvailabilityIntervals({
 }) {
   final List<CalendarFreeBusyInterval> intervals =
       buildAvailabilityDisplayIntervals(
-    rangeOverlay: rangeOverlay,
-    comparisonOverlay: comparisonOverlay,
-  );
+        rangeOverlay: rangeOverlay,
+        comparisonOverlay: comparisonOverlay,
+      );
   return intervals
       .where((interval) => interval.type == CalendarFreeBusyType.busyTentative)
       .toList(growable: false);
@@ -148,8 +148,8 @@ List<_AvailabilitySegment> _mergeSegments({
     final CalendarFreeBusyType type = mutuallyFree
         ? CalendarFreeBusyType.busyTentative
         : senderSegment.isFree
-            ? CalendarFreeBusyType.free
-            : CalendarFreeBusyType.busy;
+        ? CalendarFreeBusyType.free
+        : CalendarFreeBusyType.busy;
     merged.add(_AvailabilitySegment(start: maxStart, end: minEnd, type: type));
     if (senderSegment.end.isAtSameMomentAs(minEnd)) {
       senderIndex += 1;

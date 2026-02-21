@@ -39,8 +39,11 @@ final class DraftSendComplete extends DraftState {
 }
 
 final class DraftFailure extends DraftState {
-  const DraftFailure(this.type,
-      {required super.items, required super.visibleItems});
+  const DraftFailure(
+    this.type, {
+    required super.items,
+    required super.visibleItems,
+  });
 
   final DraftSendFailureType type;
 

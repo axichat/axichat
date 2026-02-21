@@ -19,9 +19,9 @@ class EmailSpamService {
     required Future<XmppDatabase> Function() databaseBuilder,
     DeltaChatSpamCallback? onMarkSpam,
     DeltaChatSpamCallback? onUnmarkSpam,
-  })  : _databaseBuilder = databaseBuilder,
-        _onMarkSpam = onMarkSpam,
-        _onUnmarkSpam = onUnmarkSpam;
+  }) : _databaseBuilder = databaseBuilder,
+       _onMarkSpam = onMarkSpam,
+       _onUnmarkSpam = onUnmarkSpam;
 
   final Future<XmppDatabase> Function() _databaseBuilder;
   final DeltaChatSpamCallback? _onMarkSpam;

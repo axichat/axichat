@@ -213,11 +213,11 @@ class CalendarTestData {
       baseState().copyWith(viewMode: CalendarView.day, selectedDayIndex: 1);
 
   static CalendarState selectionMode() => baseState().copyWith(
-        viewMode: CalendarView.day,
-        selectedDayIndex: 0,
-        isSelectionMode: true,
-        selectedTaskIds: {'task-overlap-a', 'task-overlap-b'},
-      );
+    viewMode: CalendarView.day,
+    selectedDayIndex: 0,
+    isSelectionMode: true,
+    selectedTaskIds: {'task-overlap-a', 'task-overlap-b'},
+  );
 
   static String dayLabel(DateTime date) {
     const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -234,11 +234,11 @@ class CalendarWidgetHarness {
     required CalendarState initialState,
     required this.size,
     required StreamController<CalendarState> stateController,
-  })  : _stateController = stateController,
-        _currentState = initialState,
-        gridFinder = find.byWidgetPredicate(
-          (widget) => widget is CalendarGrid<CalendarBloc>,
-        );
+  }) : _stateController = stateController,
+       _currentState = initialState,
+       gridFinder = find.byWidgetPredicate(
+         (widget) => widget is CalendarGrid<CalendarBloc>,
+       );
 
   final WidgetTester tester;
   final MockCalendarBloc bloc;
@@ -356,7 +356,8 @@ class CalendarWidgetHarness {
     final bodyTop = _gridBodyTop();
     final scrollOffset = verticalScrollOffset();
     final minutesFromStart = timeOfDay.inMinutes.toDouble();
-    final centerY = bodyTop -
+    final centerY =
+        bodyTop -
         scrollOffset +
         minutesFromStart * minuteHeight +
         slotHeight / 2;
@@ -373,14 +374,14 @@ class CalendarWidgetHarness {
     }
 
     final bodyTop = _gridBodyTop();
-    final scheduledTasks = _currentState.model.tasks.values.where((task) {
-      return task.scheduledTime != null &&
-          task.duration != null &&
-          task.duration!.inMinutes > 0;
-    }).toList()
-      ..sort(
-        (a, b) => a.duration!.inMinutes.compareTo(b.duration!.inMinutes),
-      );
+    final scheduledTasks =
+        _currentState.model.tasks.values.where((task) {
+          return task.scheduledTime != null &&
+              task.duration != null &&
+              task.duration!.inMinutes > 0;
+        }).toList()..sort(
+          (a, b) => a.duration!.inMinutes.compareTo(b.duration!.inMinutes),
+        );
 
     for (final task in scheduledTasks) {
       final finder = find.byKey(ValueKey(task.id));

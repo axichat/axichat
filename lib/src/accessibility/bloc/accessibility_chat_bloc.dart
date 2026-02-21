@@ -29,13 +29,13 @@ class AccessibilityChatBloc
     required int initialUnreadCount,
     required int? draftId,
     EmailService? emailService,
-  })  : _jid = jid,
-        _messageService = messageService,
-        _emailService = emailService,
-        _contacts = contacts,
-        _myJid = myJid,
-        _log = Logger('AccessibilityChatBloc'),
-        super(AccessibilityChatState.initial(jid: jid, draftId: draftId)) {
+  }) : _jid = jid,
+       _messageService = messageService,
+       _emailService = emailService,
+       _contacts = contacts,
+       _myJid = myJid,
+       _log = Logger('AccessibilityChatBloc'),
+       super(AccessibilityChatState.initial(jid: jid, draftId: draftId)) {
     on<AccessibilityChatContactsUpdated>(_onContactsUpdated);
     on<AccessibilityChatUnreadUpdated>(_onUnreadUpdated);
     on<AccessibilityChatDraftIdUpdated>(_onDraftIdUpdated);
@@ -110,13 +110,7 @@ class AccessibilityChatBloc
       );
       return;
     }
-    emit(
-      state.copyWith(
-        busy: true,
-        statusMessage: null,
-        errorMessage: null,
-      ),
-    );
+    emit(state.copyWith(busy: true, statusMessage: null, errorMessage: null));
     final failures = <String>[];
     for (final contact in recipients) {
       if (_shouldSendEmail(contact)) {
@@ -132,8 +126,9 @@ class AccessibilityChatBloc
         try {
           await emailService.sendToAddress(
             address: contact.jid,
-            displayName:
-                contact.displayName == contact.jid ? null : contact.displayName,
+            displayName: contact.displayName == contact.jid
+                ? null
+                : contact.displayName,
             body: trimmedMessage,
           );
           continue;
@@ -207,13 +202,7 @@ class AccessibilityChatBloc
       );
       return;
     }
-    emit(
-      state.copyWith(
-        busy: true,
-        statusMessage: null,
-        errorMessage: null,
-      ),
-    );
+    emit(state.copyWith(busy: true, statusMessage: null, errorMessage: null));
     try {
       final result = await _messageService.saveDraft(
         id: event.draftId,
@@ -253,21 +242,19 @@ class AccessibilityChatBloc
     final messagePageSize = _messageWindowForUnread(unreadCount);
     _messageStreamLimit = messagePageSize;
     _messageSubscription = _messageService
-        .messageStreamForChat(
-      _jid,
-      end: messagePageSize,
-    )
+        .messageStreamForChat(_jid, end: messagePageSize)
         .listen(
-      (messages) =>
-          add(AccessibilityChatMessagesUpdated(jid: _jid, messages: messages)),
-      onError: (error, stackTrace) {
-        _log.safeWarning(
-          'Message stream error for $_jid',
-          error,
-          stackTrace,
+          (messages) => add(
+            AccessibilityChatMessagesUpdated(jid: _jid, messages: messages),
+          ),
+          onError: (error, stackTrace) {
+            _log.safeWarning(
+              'Message stream error for $_jid',
+              error,
+              stackTrace,
+            );
+          },
         );
-      },
-    );
   }
 
   Future<void> _clearMessageStream() async {
@@ -280,8 +267,9 @@ class AccessibilityChatBloc
     Emitter<AccessibilityChatState> emit,
   ) async {
     if (_jid != event.jid) return;
-    final previousIds =
-        state.messages.map((message) => _messageId(message)).toSet();
+    final previousIds = state.messages
+        .map((message) => _messageId(message))
+        .toSet();
     final ordered = List<Message>.of(event.messages)
       ..sort(
         (a, b) => (a.timestamp ?? DateTime.fromMillisecondsSinceEpoch(0))
@@ -344,8 +332,8 @@ class AccessibilityChatBloc
         );
         for (final entry in attachments.entries) {
           final ordered = entry.value.whereType<MessageAttachmentData>().toList(
-                growable: false,
-              )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+            growable: false,
+          )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
           final resolved = <FileMetadataData>[];
           for (final attachment in ordered) {
             final metadata = await resolveMetadata(attachment.fileMetadataId);

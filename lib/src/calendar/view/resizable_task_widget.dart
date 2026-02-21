@@ -44,8 +44,8 @@ class DragFeedbackHint {
   int get hashCode => Object.hash(width, pointerOffset, anchorDx, anchorDy);
 }
 
-typedef TaskContextMenuBuilder = List<Widget> Function(
-    BuildContext context, TaskContextMenuRequest request);
+typedef TaskContextMenuBuilder =
+    List<Widget> Function(BuildContext context, TaskContextMenuRequest request);
 
 class TaskContextMenuRequest {
   const TaskContextMenuRequest({
@@ -183,7 +183,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       builder: (context, hoveredTaskId, _) {
         return AnimatedBuilder(
           animation: controller,
-          builder: (context, __) {
+          builder: (context, _) {
             final CalendarTask task = widget.task;
             final bool isDragging = controller.draggingTaskId == task.id;
             final bool isHovering = hoveredTaskId == task.id;
@@ -214,7 +214,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
               );
 
               final shape = RoundedSuperellipseBorder(
-                  borderRadius: BorderRadius.circular(context.radii.squircle));
+                borderRadius: BorderRadius.circular(context.radii.squircle),
+              );
               final Widget shapedBody = Material(
                 color: Colors.transparent,
                 shape: shape,
@@ -246,7 +247,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
               return CalendarTaskTitleHoverReporter(
                 title: task.title,
-                enabled: widget.enableInteractions &&
+                enabled:
+                    widget.enableInteractions &&
                     !isDragging &&
                     !isResizing &&
                     !widget.isPopoverOpen,
@@ -278,7 +280,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
             return ValueListenableBuilder<DragFeedbackHint>(
               valueListenable: widget.dragFeedbackHint!,
-              builder: (_, __, ___) => buildContent(),
+              builder: (_, _, _) => buildContent(),
             );
           },
         );
@@ -406,7 +408,8 @@ class _ResizableTaskBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
-    final showHoverEffects = enableInteractions &&
+    final showHoverEffects =
+        enableInteractions &&
         (isPopoverOpen || isHovering || isResizing || isDragging);
     final highlightSelection = isSelectionMode && isSelected;
     final isCompleted = task.isCompleted;
@@ -422,13 +425,13 @@ class _ResizableTaskBody extends StatelessWidget {
     final borderColor = highlightSelection
         ? accentColor
         : showHoverEffects
-            ? accentColor.withValues(alpha: 0.45)
-            : Color.lerp(calendarBorderColor, accentColor, 0.18)!;
+        ? accentColor.withValues(alpha: 0.45)
+        : Color.lerp(calendarBorderColor, accentColor, 0.18)!;
     final boxShadows = highlightSelection
         ? calendarMediumShadow
         : showHoverEffects
-            ? calendarLightShadow
-            : const <BoxShadow>[];
+        ? calendarLightShadow
+        : const <BoxShadow>[];
     final titleColor = isCompleted ? calendarSubtitleColor : calendarTitleColor;
     final Color secondaryColor = calendarSubtitleColor;
     final stripeColor = highlightSelection
@@ -439,8 +442,8 @@ class _ResizableTaskBody extends StatelessWidget {
       width: highlightSelection
           ? 2.4
           : isResizing
-              ? 1.8
-              : 1,
+          ? 1.8
+          : 1,
     );
     final ShapeBorder shape = SquircleBorder(
       cornerRadius: context.radii.squircle,
@@ -502,8 +505,9 @@ class _ResizableTaskBody extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: context.textTheme.label.strong.copyWith(
                     color: titleColor,
-                    decoration:
-                        task.isCompleted ? TextDecoration.lineThrough : null,
+                    decoration: task.isCompleted
+                        ? TextDecoration.lineThrough
+                        : null,
                   ),
                 ),
               ),
@@ -517,29 +521,33 @@ class _ResizableTaskBody extends StatelessWidget {
     final stackedTime = innerHeight >= 36;
     final inlineTime = !stackedTime && innerHeight >= 16 && width >= 140;
     final showTime = stackedTime || inlineTime;
-    final showDescription = task.description?.isNotEmpty == true &&
+    final showDescription =
+        task.description?.isNotEmpty == true &&
         innerHeight >= _minDescriptionHeight;
-    final bool showLocation = task.location?.isNotEmpty == true &&
+    final bool showLocation =
+        task.location?.isNotEmpty == true &&
         innerHeight >= _minLocationHeight &&
         width >= _minLocationWidth;
-    final bool showDeadline = task.deadline != null &&
+    final bool showDeadline =
+        task.deadline != null &&
         innerHeight >= _minDeadlineHeight &&
         width >= _minDeadlineWidth;
 
     final double gap = innerHeight >= 90
         ? spacing.s
         : innerHeight >= 64
-            ? spacing.xs
-            : innerHeight >= 40
-                ? spacing.xxs
-                : 0.0;
+        ? spacing.xs
+        : innerHeight >= 40
+        ? spacing.xxs
+        : 0.0;
 
     final titleLines = innerHeight >= 48 ? 2 : 1;
     final descriptionLines = showDescription
         ? math.max(1, (innerHeight / 18).floor() - (stackedTime ? 1 : 0))
         : 0;
-    final descriptionOverflow =
-        descriptionLines >= 4 ? TextOverflow.fade : TextOverflow.ellipsis;
+    final descriptionOverflow = descriptionLines >= 4
+        ? TextOverflow.fade
+        : TextOverflow.ellipsis;
 
     Widget titleSection() {
       final title = Text(
@@ -691,10 +699,7 @@ class _TaskAccentStripe extends StatelessWidget {
         ),
         child: Align(
           alignment: Alignment.centerLeft,
-          child: Container(
-            width: accentWidth,
-            color: color,
-          ),
+          child: Container(width: accentWidth, color: color),
         ),
       ),
     );
@@ -748,10 +753,7 @@ class _TaskLocationRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Text(
-          '📍',
-          style: context.textTheme.label,
-        ),
+        Text('📍', style: context.textTheme.label),
         Expanded(
           child: Text(
             location,

@@ -16,7 +16,6 @@ import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/notifications/view/notification_request.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -102,8 +101,9 @@ class _SignupFormState extends State<SignupForm>
   }
 
   Future<void> _restoreRememberMePreference() async {
-    final preference =
-        await context.read<AuthenticationCubit>().loadRememberMeChoice();
+    final preference = await context
+        .read<AuthenticationCubit>()
+        .loadRememberMeChoice();
     if (!mounted) return;
     setState(() {
       rememberMe = preference;
@@ -133,9 +133,9 @@ class _SignupFormState extends State<SignupForm>
   void didChangeDependencies() {
     super.didChangeDependencies();
     context.read<SignupAvatarCubit>().setVisible(
-          widget.visible,
-          context.colorScheme,
-        );
+      widget.visible,
+      context.colorScheme,
+    );
     _usernameDescriptionHeight = _measureTextHeight(
       context,
       text: context.l10n.authUsernameCaseInsensitive,
@@ -183,10 +183,12 @@ class _SignupFormState extends State<SignupForm>
   }
 
   bool _isLoadingForState(AuthenticationState state) {
-    final isSubmittingLastStep = state is AuthenticationSignUpInProgress &&
+    final isSubmittingLastStep =
+        state is AuthenticationSignUpInProgress &&
         state.fromSubmission &&
         _currentIndex == _formKeys.length - 1;
-    final isPostSubmitState = state is AuthenticationLogInInProgress ||
+    final isPostSubmitState =
+        state is AuthenticationLogInInProgress ||
         state is AuthenticationComplete;
     return isSubmittingLastStep || isPostSubmitState;
   }
@@ -196,9 +198,9 @@ class _SignupFormState extends State<SignupForm>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.visible != widget.visible) {
       context.read<SignupAvatarCubit>().setVisible(
-            widget.visible,
-            context.colorScheme,
-          );
+        widget.visible,
+        context.colorScheme,
+      );
     }
   }
 
@@ -233,19 +235,20 @@ class _SignupFormState extends State<SignupForm>
       return;
     }
     context.read<SignupAvatarCubit>().pauseCarousel();
-    final avatarPayload =
-        await context.read<SignupAvatarCubit>().buildSelectedAvatarPayload();
+    final avatarPayload = await context
+        .read<SignupAvatarCubit>()
+        .buildSelectedAvatarPayload();
     if (!context.mounted) return;
     widget.onSubmitStart?.call();
     await context.read<AuthenticationCubit>().signup(
-          username: _jidTextController.value.text,
-          password: _passwordTextController.value.text,
-          confirmPassword: _password2TextController.value.text,
-          captchaID: captchaId,
-          captcha: _captchaTextController.value.text,
-          rememberMe: rememberMe,
-          avatar: avatarPayload,
-        );
+      username: _jidTextController.value.text,
+      password: _passwordTextController.value.text,
+      confirmPassword: _password2TextController.value.text,
+      captchaID: captchaId,
+      captcha: _captchaTextController.value.text,
+      rememberMe: rememberMe,
+      avatar: avatarPayload,
+    );
   }
 
   String? _resolveCaptchaId(String src) {
@@ -406,10 +409,10 @@ class _SignupFormState extends State<SignupForm>
   }
 
   int get _completedStepCount => [
-        _isUsernameValid,
-        _arePasswordsValid,
-        _captchaComplete,
-      ].where((complete) => complete).length;
+    _isUsernameValid,
+    _arePasswordsValid,
+    _captchaComplete,
+  ].where((complete) => complete).length;
 
   double get _progressValue => _completedStepCount / _formKeys.length;
 
@@ -449,8 +452,8 @@ class _SignupFormState extends State<SignupForm>
       _pwnedCheckInProgress = true;
     });
     final notPwned = await context.read<AuthenticationCubit>().checkNotPwned(
-          password: passwordSnapshot,
-        );
+      password: passwordSnapshot,
+    );
     if (!mounted) return;
     final currentPassword = _passwordTextController.text;
     if (currentPassword != passwordSnapshot) {
@@ -511,18 +514,16 @@ class _SignupFormState extends State<SignupForm>
       builder: (context, state) {
         return BlocBuilder<SignupAvatarCubit, SignupAvatarState>(
           builder: (context, avatarState) {
-            final avatarErrorText = _avatarErrorText(
-              avatarState,
-              context.l10n,
-            );
+            final avatarErrorText = _avatarErrorText(avatarState, context.l10n);
             final loading = _isLoadingForState(state);
             final isBusy = widget.busy || loading;
             final cleanupBlocked =
                 state is AuthenticationSignupFailure && state.isCleanupBlocked;
             final spacing = context.spacing;
             final sizing = context.sizing;
-            final horizontalPadding =
-                EdgeInsets.symmetric(horizontal: spacing.s);
+            final horizontalPadding = EdgeInsets.symmetric(
+              horizontal: spacing.s,
+            );
             final errorPadding = EdgeInsets.fromLTRB(
               spacing.s,
               spacing.m,
@@ -538,8 +539,9 @@ class _SignupFormState extends State<SignupForm>
             final fieldSpacing = EdgeInsets.symmetric(vertical: spacing.s);
             final captchaWidth = _captchaFrameSize.width;
             final captchaHeight = _captchaFrameSize.height;
-            final animationDuration =
-                context.watch<SettingsCubit>().animationDuration;
+            final animationDuration = context
+                .watch<SettingsCubit>()
+                .animationDuration;
             final usernameDescriptionHeight = _usernameDescriptionHeight;
             final errorText = _errorText?.trim();
             return Align(
@@ -571,7 +573,8 @@ class _SignupFormState extends State<SignupForm>
                       padding: globalErrorPadding,
                       child: AnimatedSwitcher(
                         duration: animationDuration,
-                        child: !_showBreachedError &&
+                        child:
+                            !_showBreachedError &&
                                 (errorText?.isNotEmpty ?? false)
                             ? Semantics(
                                 liveRegion: true,
@@ -594,18 +597,15 @@ class _SignupFormState extends State<SignupForm>
                     ),
                     Padding(
                       padding: horizontalPadding,
-                      child: const NotificationRequest(),
-                    ),
-                    SizedBox(height: spacing.s),
-                    Padding(
-                      padding: horizontalPadding,
                       child: AxiAnimatedSize(
-                        duration:
-                            context.watch<SettingsCubit>().animationDuration,
+                        duration: context
+                            .watch<SettingsCubit>()
+                            .animationDuration,
                         curve: Curves.easeIn,
                         child: AnimatedSwitcher(
-                          duration:
-                              context.watch<SettingsCubit>().animationDuration,
+                          duration: context
+                              .watch<SettingsCubit>()
+                              .animationDuration,
                           switchInCurve: Curves.easeIn,
                           switchOutCurve: Curves.easeOut,
                           transitionBuilder:
@@ -668,7 +668,8 @@ class _SignupFormState extends State<SignupForm>
                                                 horizontal: spacing.xs,
                                               ),
                                               child: Text(
-                                                context.l10n
+                                                context
+                                                    .l10n
                                                     .authUsernameCaseInsensitive,
                                               ),
                                             ),
@@ -683,12 +684,15 @@ class _SignupFormState extends State<SignupForm>
                                             validator: (text) {
                                               if (text.isEmpty) {
                                                 return context
-                                                    .l10n.authUsernameRequired;
+                                                    .l10n
+                                                    .authUsernameRequired;
                                               }
-                                              if (!_usernamePattern
-                                                  .hasMatch(text)) {
+                                              if (!_usernamePattern.hasMatch(
+                                                text,
+                                              )) {
                                                 return context
-                                                    .l10n.authUsernameRules;
+                                                    .l10n
+                                                    .authUsernameRules;
                                               }
                                               return null;
                                             },
@@ -703,8 +707,9 @@ class _SignupFormState extends State<SignupForm>
                                       ),
                                     if (_showAvatarEditor)
                                       Padding(
-                                        padding:
-                                            EdgeInsets.only(top: spacing.s),
+                                        padding: EdgeInsets.only(
+                                          top: spacing.s,
+                                        ),
                                         child: Center(
                                           child: ConstrainedBox(
                                             constraints: BoxConstraints(
@@ -724,25 +729,33 @@ class _SignupFormState extends State<SignupForm>
                                                   animationDuration:
                                                       animationDuration,
                                                   cropBytes: avatarState
-                                                      .avatar?.sourceBytes,
+                                                      .avatar
+                                                      ?.sourceBytes,
                                                   cropRect: avatarState
-                                                      .avatar?.cropRect,
+                                                      .avatar
+                                                      ?.cropRect,
                                                   imageWidth: avatarState
-                                                      .avatar?.sourceWidth
+                                                      .avatar
+                                                      ?.sourceWidth
                                                       ?.toDouble(),
                                                   imageHeight: avatarState
-                                                      .avatar?.sourceHeight
+                                                      .avatar
+                                                      ?.sourceHeight
                                                       ?.toDouble(),
-                                                  onCropChanged: (rect) => context
-                                                      .read<SignupAvatarCubit>()
-                                                      .updateCropRect(rect),
+                                                  onCropChanged: (rect) =>
+                                                      context
+                                                          .read<
+                                                            SignupAvatarCubit
+                                                          >()
+                                                          .updateCropRect(rect),
                                                   onCropReset: context
                                                       .read<SignupAvatarCubit>()
                                                       .resetCrop,
                                                   onCropCommitted: (rect) =>
                                                       context
                                                           .read<
-                                                              SignupAvatarCubit>()
+                                                            SignupAvatarCubit
+                                                          >()
                                                           .commitCrop(rect),
                                                   onShuffle: () => context
                                                       .read<SignupAvatarCubit>()
@@ -763,14 +776,17 @@ class _SignupFormState extends State<SignupForm>
                                                   canShuffleBackground:
                                                       avatarState
                                                           .canShuffleBackground,
-                                                  onShuffleBackground: avatarState
+                                                  onShuffleBackground:
+                                                      avatarState
                                                           .canShuffleBackground
                                                       ? () => context
-                                                          .read<
-                                                              SignupAvatarCubit>()
-                                                          .shuffleBackground(
-                                                            context.colorScheme,
-                                                          )
+                                                            .read<
+                                                              SignupAvatarCubit
+                                                            >()
+                                                            .shuffleBackground(
+                                                              context
+                                                                  .colorScheme,
+                                                            )
                                                       : null,
                                                 ),
                                                 Positioned(
@@ -779,7 +795,8 @@ class _SignupFormState extends State<SignupForm>
                                                   child: AxiIconButton(
                                                     iconData: LucideIcons.x,
                                                     tooltip: context
-                                                        .l10n.commonClose,
+                                                        .l10n
+                                                        .commonClose,
                                                     onPressed: () {
                                                       setState(() {
                                                         _showAvatarEditor =
@@ -817,8 +834,8 @@ class _SignupFormState extends State<SignupForm>
                                       enabled:
                                           !isBusy && !_pwnedCheckInProgress,
                                       controller: _password2TextController,
-                                      confirmValidator: (text) => text !=
-                                              _passwordTextController.text
+                                      confirmValidator: (text) =>
+                                          text != _passwordTextController.text
                                           ? context.l10n.authPasswordsMismatch
                                           : null,
                                     ),
@@ -829,7 +846,8 @@ class _SignupFormState extends State<SignupForm>
                                       entropyBits: _passwordEntropyBits,
                                       maxEntropyBits: _maxEntropyBits,
                                       strengthLevel: _passwordStrengthLevel,
-                                      showBreachWarning: _showBreachedError &&
+                                      showBreachWarning:
+                                          _showBreachedError &&
                                           _passwordBreached,
                                       animationDuration: animationDuration,
                                     ),
@@ -868,22 +886,24 @@ class _SignupFormState extends State<SignupForm>
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   Padding(
-                                    padding: fieldSpacing +
+                                    padding:
+                                        fieldSpacing +
                                         EdgeInsets.only(top: spacing.m),
                                     child: FutureBuilder<String>(
                                       future: _captchaSrc,
                                       builder: (context, snapshot) {
                                         Widget captchaSurface;
-                                        final hasValidUrl = snapshot.hasData &&
+                                        final hasValidUrl =
+                                            snapshot.hasData &&
                                             (snapshot.data?.trim().isNotEmpty ??
                                                 false);
-                                        final encounteredError = snapshot
-                                                .hasError ||
+                                        final encounteredError =
+                                            snapshot.hasError ||
                                             (snapshot.hasData && !hasValidUrl);
                                         final captchaLoading =
                                             encounteredError ||
-                                                !snapshot.hasData ||
-                                                !_captchaImageLoaded;
+                                            !snapshot.hasData ||
+                                            !_captchaImageLoaded;
                                         if (encounteredError) {
                                           _scheduleInitialCaptchaRetry();
                                           captchaSurface = _CaptchaSkeleton(
@@ -896,8 +916,8 @@ class _SignupFormState extends State<SignupForm>
                                                 animationDuration,
                                           );
                                         } else {
-                                          final url =
-                                              snapshot.requireData.trim();
+                                          final url = snapshot.requireData
+                                              .trim();
                                           captchaSurface = _CaptchaImage(
                                             url: url,
                                             animationDuration:
@@ -915,38 +935,44 @@ class _SignupFormState extends State<SignupForm>
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Semantics(
-                                                  label: context.l10n
-                                                      .signupCaptchaChallenge,
-                                                  hint: context.l10n
-                                                      .signupCaptchaInstructions,
-                                                  image: true,
-                                                  child: _CaptchaFrame(
-                                                    constraints: BoxConstraints(
-                                                      minHeight: captchaHeight,
-                                                      maxHeight: captchaHeight,
-                                                      minWidth: captchaWidth,
-                                                      maxWidth: captchaWidth,
-                                                    ),
-                                                    child: captchaSurface,
-                                                  )),
+                                                label: context
+                                                    .l10n
+                                                    .signupCaptchaChallenge,
+                                                hint: context
+                                                    .l10n
+                                                    .signupCaptchaInstructions,
+                                                image: true,
+                                                child: _CaptchaFrame(
+                                                  constraints: BoxConstraints(
+                                                    minHeight: captchaHeight,
+                                                    maxHeight: captchaHeight,
+                                                    minWidth: captchaWidth,
+                                                    maxWidth: captchaWidth,
+                                                  ),
+                                                  child: captchaSurface,
+                                                ),
+                                              ),
                                               SizedBox(width: spacing.s),
                                               Semantics(
                                                 button: true,
                                                 enabled:
                                                     !isBusy && !captchaLoading,
                                                 label: context
-                                                    .l10n.signupCaptchaReload,
-                                                hint: context.l10n
+                                                    .l10n
+                                                    .signupCaptchaReload,
+                                                hint: context
+                                                    .l10n
                                                     .signupCaptchaReloadHint,
                                                 child: AxiIconButton(
                                                   iconData:
                                                       LucideIcons.refreshCw,
                                                   tooltip: context
-                                                      .l10n.signupCaptchaReload,
+                                                      .l10n
+                                                      .signupCaptchaReload,
                                                   tapTargetSize:
                                                       sizing.appBarHeight,
-                                                  onPressed: isBusy ||
-                                                          captchaLoading
+                                                  onPressed:
+                                                      isBusy || captchaLoading
                                                       ? null
                                                       : () => _reloadCaptcha(),
                                                 ),
@@ -973,7 +999,8 @@ class _SignupFormState extends State<SignupForm>
                                           final value = text;
                                           if (value.isEmpty) {
                                             return context
-                                                .l10n.signupCaptchaValidation;
+                                                .l10n
+                                                .signupCaptchaValidation;
                                           }
                                           return null;
                                         },
@@ -1049,14 +1076,13 @@ class _SignupFormState extends State<SignupForm>
                           final continueButton = showNextButton
                               ? AxiButton.primary(
                                   loading: isCheckingPwned,
-                                  onPressed: isBusy ||
+                                  onPressed:
+                                      isBusy ||
                                           isCheckingPwned ||
                                           avatarState.processing
                                       ? null
                                       : () async {
-                                          await _handleContinuePressed(
-                                            context,
-                                          );
+                                          await _handleContinuePressed(context);
                                         },
                                   child: Text(context.l10n.signupContinue),
                                 )
@@ -1065,7 +1091,8 @@ class _SignupFormState extends State<SignupForm>
                           final submitButton = showSubmitButton
                               ? AxiButton.primary(
                                   loading: isBusy,
-                                  onPressed: isBusy ||
+                                  onPressed:
+                                      isBusy ||
                                           cleanupBlocked ||
                                           avatarState.processing
                                       ? null
@@ -1128,10 +1155,12 @@ class _SignupProgressMeter extends StatelessWidget {
       builder: (context, animatedPercent, child) {
         final clampedPercent = animatedPercent.clamp(0.0, 100.0);
         final fillFraction = (clampedPercent / 100).clamp(0.0, 1.0);
-        final currentStepNumber =
-            (currentStepIndex + 1).clamp(1, totalSteps).toInt();
-        final percentLabel =
-            context.l10n.commonPercentLabel(clampedPercent.round());
+        final currentStepNumber = (currentStepIndex + 1)
+            .clamp(1, totalSteps)
+            .toInt();
+        final percentLabel = context.l10n.commonPercentLabel(
+          clampedPercent.round(),
+        );
         final barHeight = sizing.progressIndicatorBarHeight;
         final barRadius = context.radius;
         return Semantics(
@@ -1152,10 +1181,7 @@ class _SignupProgressMeter extends StatelessWidget {
                     context.l10n.signupProgressSection,
                     style: context.textTheme.muted,
                   ),
-                  Text(
-                    percentLabel,
-                    style: context.textTheme.muted,
-                  ),
+                  Text(percentLabel, style: context.textTheme.muted),
                 ],
               ),
               SizedBox(height: spacing.s),
@@ -1244,9 +1270,7 @@ class _SignupPasswordStrengthMeter extends StatelessWidget {
                 Container(
                   height: barHeight,
                   decoration: BoxDecoration(
-                    color: colors.muted.withValues(
-                      alpha: motion.tapHoverAlpha,
-                    ),
+                    color: colors.muted.withValues(alpha: motion.tapHoverAlpha),
                     borderRadius: barRadius,
                   ),
                 ),
@@ -1354,19 +1378,18 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
                   enabled: !loading && !pwnedCheckInProgress,
                   initialValue: allowInsecurePassword,
                   inputLabel: Text(context.l10n.signupRiskAcknowledgement),
-                  inputSublabel:
-                      Text(_reasonDescription(reason!, context.l10n)),
+                  inputSublabel: Text(
+                    _reasonDescription(reason!, context.l10n),
+                  ),
                   onChanged: onChanged,
                 ),
                 AnimatedOpacity(
-                  opacity:
-                      showAllowInsecureError && !allowInsecurePassword ? 1 : 0,
+                  opacity: showAllowInsecureError && !allowInsecurePassword
+                      ? 1
+                      : 0,
                   duration: animationDuration,
                   child: Padding(
-                    padding: EdgeInsets.only(
-                      left: spacing.xs,
-                      top: spacing.xs,
-                    ),
+                    padding: EdgeInsets.only(left: spacing.xs, top: spacing.xs),
                     child: Text(
                       context.l10n.signupRiskError,
                       style: context.textTheme.small,
@@ -1561,13 +1584,18 @@ class _CaptchaSkeletonState extends State<_CaptchaSkeleton>
   @override
   Widget build(BuildContext context) {
     final motion = context.motion;
-    final baseAlpha =
-        (motion.tapHoverAlpha + motion.tapSplashAlpha).clamp(0.0, 1.0);
-    final highlightAlpha =
-        (motion.tapFocusAlpha + motion.tapSplashAlpha).clamp(0.0, 1.0);
+    final baseAlpha = (motion.tapHoverAlpha + motion.tapSplashAlpha).clamp(
+      0.0,
+      1.0,
+    );
+    final highlightAlpha = (motion.tapFocusAlpha + motion.tapSplashAlpha).clamp(
+      0.0,
+      1.0,
+    );
     final base = context.colorScheme.border.withValues(alpha: baseAlpha);
-    final highlight =
-        context.colorScheme.card.withValues(alpha: highlightAlpha);
+    final highlight = context.colorScheme.card.withValues(
+      alpha: highlightAlpha,
+    );
     return ExcludeSemantics(
       child: AnimatedBuilder(
         animation: _controller,

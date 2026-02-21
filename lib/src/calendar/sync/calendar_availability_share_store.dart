@@ -8,7 +8,7 @@ const String _availabilityShareStoreKey = 'calendar_availability_share_v1';
 
 class CalendarAvailabilityShareStore {
   CalendarAvailabilityShareStore({XmppStateStore? stateStore})
-      : _stateStore = stateStore ?? XmppStateStore();
+    : _stateStore = stateStore ?? XmppStateStore();
 
   final XmppStateStore _stateStore;
   static final RegisteredStateKey _storeKey = XmppStateStore.registerKey(

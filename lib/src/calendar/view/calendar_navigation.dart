@@ -167,9 +167,7 @@ class CalendarNavigation extends StatelessWidget {
           availableWidth: availableWidth,
         );
 
-        final Border border = Border(
-          bottom: BorderSide(color: colors.border),
-        );
+        final Border border = Border(bottom: BorderSide(color: colors.border));
         const List<BoxShadow> navShadows = [];
         final brightness = context.brightness;
         final Color navBackground = brightness == Brightness.dark
@@ -193,8 +191,9 @@ class CalendarNavigation extends StatelessWidget {
                 boxShadow: navShadows,
               ),
               child: DefaultTextStyle.merge(
-                style: context.textTheme.label
-                    .copyWith(color: colors.mutedForeground),
+                style: context.textTheme.label.copyWith(
+                  color: colors.mutedForeground,
+                ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
@@ -280,11 +279,7 @@ class _NavigationButton extends StatelessWidget {
             isBusy: false,
             icon: icon,
           )
-        : TaskSecondaryButton(
-            label: label,
-            onPressed: onPressed,
-            icon: icon,
-          );
+        : TaskSecondaryButton(label: label, onPressed: onPressed, icon: icon);
     return button;
   }
 }
@@ -333,8 +328,10 @@ class _IconControlButton extends StatelessWidget {
     final shortcut = icon == Icons.undo_rounded
         ? context.l10n.calendarShortcutUndo
         : context.l10n.calendarShortcutRedo;
-    final String message =
-        context.l10n.commonShortcutTooltip(tooltip, shortcut);
+    final String message = context.l10n.commonShortcutTooltip(
+      tooltip,
+      shortcut,
+    );
     return _CompactNavButton(
       icon: icon,
       tooltip: message,
@@ -369,13 +366,14 @@ class _CompactNavButton extends StatelessWidget {
     final bool active = enabled && onPressed != null;
     final Color foreground = active
         ? highlighted
-            ? colors.primaryForeground
-            : colors.primary
+              ? colors.primaryForeground
+              : colors.primary
         : colors.mutedForeground;
     final Color background = highlighted ? colors.primary : colors.card;
     final Color border = highlighted ? colors.primary : colors.border;
-    final double buttonSize =
-        dense ? context.sizing.menuItemHeight : context.sizing.iconButtonSize;
+    final double buttonSize = dense
+        ? context.sizing.menuItemHeight
+        : context.sizing.iconButtonSize;
     final double tapTarget = dense
         ? context.sizing.menuItemHeight
         : context.sizing.iconButtonTapTarget;
@@ -439,11 +437,7 @@ class CalendarNavigationLeadingActions extends StatelessWidget {
             onPressed: onBackPressed,
           ),
         if (showBackButton) SizedBox(width: context.spacing.s),
-        SyncControls(
-          state: state,
-          compact: true,
-          showTransferMenu: false,
-        ),
+        SyncControls(state: state, compact: true, showTransferMenu: false),
       ],
     );
   }
@@ -541,10 +535,12 @@ class _TrailingControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double trailingGap =
-        isCompact ? context.spacing.s : context.spacing.m;
-    final double maxDateLabelWidth =
-        isCompact ? _compactDateLabelMaxWidth : _defaultDateLabelMaxWidth;
+    final double trailingGap = isCompact
+        ? context.spacing.s
+        : context.spacing.m;
+    final double maxDateLabelWidth = isCompact
+        ? _compactDateLabelMaxWidth
+        : _defaultDateLabelMaxWidth;
 
     final bool showViewToggle = !isCompact;
 
@@ -612,8 +608,9 @@ class CalendarViewModeToggle extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final shadTheme = ShadTheme.of(context);
-    final Duration animationDuration =
-        context.watch<SettingsCubit>().animationDuration;
+    final Duration animationDuration = context
+        .watch<SettingsCubit>()
+        .animationDuration;
     final CalendarResponsiveSpec spec = ResponsiveHelper.spec(context);
     final bool isExpandedSize = spec.sizeClass == CalendarSizeClass.expanded;
     final EdgeInsets padding = EdgeInsets.symmetric(
@@ -631,12 +628,15 @@ class CalendarViewModeToggle extends StatelessWidget {
     );
     final double minHeight = context.sizing.buttonHeightRegular;
     final TextStyle tabStyle = context.textTheme.label;
-    final double minWidth =
-        isExpandedSize ? _minWidthExpanded : _minWidthRegular;
-    final double preferredWidth =
-        isExpandedSize ? _preferredWidthExpanded : _preferredWidthRegular;
-    final double widthScale =
-        isExpandedSize ? _widthScaleExpanded : _widthScaleRegular;
+    final double minWidth = isExpandedSize
+        ? _minWidthExpanded
+        : _minWidthRegular;
+    final double preferredWidth = isExpandedSize
+        ? _preferredWidthExpanded
+        : _preferredWidthRegular;
+    final double widthScale = isExpandedSize
+        ? _widthScaleExpanded
+        : _widthScaleRegular;
     final double controlWidth = math.min(
       preferredWidth,
       math.max(minWidth, availableWidth * widthScale),
@@ -684,8 +684,9 @@ class CalendarViewModeToggle extends StatelessWidget {
             borderRadius: BorderRadius.circular(context.radii.container),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final tabWidth =
-                    tabCount == 0 ? 0.0 : constraints.maxWidth / tabCount;
+                final tabWidth = tabCount == 0
+                    ? 0.0
+                    : constraints.maxWidth / tabCount;
                 final indicatorWidth = math.max(
                   0.0,
                   tabWidth - (horizontalIndicatorInset * 2),
@@ -695,7 +696,8 @@ class CalendarViewModeToggle extends StatelessWidget {
                     AnimatedPositionedDirectional(
                       duration: animationDuration,
                       curve: Curves.easeInOutCubic,
-                      start: (tabWidth * safeSelectedIndex) +
+                      start:
+                          (tabWidth * safeSelectedIndex) +
                           horizontalIndicatorInset,
                       top: verticalIndicatorInset,
                       bottom: verticalIndicatorInset,
@@ -705,8 +707,9 @@ class CalendarViewModeToggle extends StatelessWidget {
                           color: context.colorScheme.primary.withValues(
                             alpha: context.motion.tapSplashAlpha,
                           ),
-                          borderRadius:
-                              BorderRadius.circular(context.radii.container),
+                          borderRadius: BorderRadius.circular(
+                            context.radii.container,
+                          ),
                         ),
                       ),
                     ),
@@ -760,29 +763,29 @@ class _CalendarTab extends ShadTab<CalendarView> {
     required Color foregroundColor,
     required Color selectedForegroundColor,
   }) : super(
-          value: view,
-          flex: 1,
-          height: minHeight,
-          padding: padding,
-          backgroundColor: backgroundColor,
-          selectedBackgroundColor: selectedBackgroundColor,
-          hoverBackgroundColor: Colors.transparent,
-          selectedHoverBackgroundColor: Colors.transparent,
-          pressedBackgroundColor: Colors.transparent,
-          shadows: const <BoxShadow>[],
-          selectedShadows: const <BoxShadow>[],
-          foregroundColor: foregroundColor,
-          selectedForegroundColor: selectedForegroundColor,
-          decoration: decoration,
-          child: Text(
-            label,
-            style: textStyle,
-            maxLines: 1,
-            softWrap: false,
-            overflow: TextOverflow.ellipsis,
-          ),
-          content: const SizedBox.shrink(),
-        );
+         value: view,
+         flex: 1,
+         height: minHeight,
+         padding: padding,
+         backgroundColor: backgroundColor,
+         selectedBackgroundColor: selectedBackgroundColor,
+         hoverBackgroundColor: Colors.transparent,
+         selectedHoverBackgroundColor: Colors.transparent,
+         pressedBackgroundColor: Colors.transparent,
+         shadows: const <BoxShadow>[],
+         selectedShadows: const <BoxShadow>[],
+         foregroundColor: foregroundColor,
+         selectedForegroundColor: selectedForegroundColor,
+         decoration: decoration,
+         child: Text(
+           label,
+           style: textStyle,
+           maxLines: 1,
+           softWrap: false,
+           overflow: TextOverflow.ellipsis,
+         ),
+         content: const SizedBox.shrink(),
+       );
 }
 
 class CalendarSegmentedToggle<T> extends StatelessWidget {
@@ -927,13 +930,15 @@ class _SegmentedToggleItemState extends State<_SegmentedToggleItem> {
       left: widget.isFirst ? Radius.circular(widget.cornerRadius) : Radius.zero,
       right: widget.isLast ? Radius.circular(widget.cornerRadius) : Radius.zero,
     );
-    final RoundedSuperellipseBorder shape =
-        RoundedSuperellipseBorder(borderRadius: radius);
+    final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
+      borderRadius: radius,
+    );
     final bool enabled = !widget.selected;
     final Widget styledChild = IconTheme.merge(
       data: IconThemeData(
-        color:
-            widget.selected ? widget.activeTextColor : widget.inactiveTextColor,
+        color: widget.selected
+            ? widget.activeTextColor
+            : widget.inactiveTextColor,
       ),
       child: DefaultTextStyle.merge(
         style: context.textTheme.label.copyWith(
@@ -955,8 +960,9 @@ class _SegmentedToggleItemState extends State<_SegmentedToggleItem> {
             shape: shape,
             clipBehavior: Clip.antiAlias,
             child: ShadGestureDetector(
-              cursor:
-                  enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+              cursor: enabled
+                  ? SystemMouseCursors.click
+                  : SystemMouseCursors.basic,
               onHoverChange: enabled ? _setHovered : null,
               onTapDown: enabled ? (_) => _setPressed(true) : null,
               onTapUp: enabled ? (_) => _setPressed(false) : null,
@@ -968,10 +974,7 @@ class _SegmentedToggleItemState extends State<_SegmentedToggleItem> {
                 padding: widget.padding,
                 constraints: BoxConstraints(minHeight: widget.minHeight),
                 alignment: Alignment.center,
-                decoration: ShapeDecoration(
-                  color: background,
-                  shape: shape,
-                ),
+                decoration: ShapeDecoration(color: background, shape: shape),
                 child: styledChild,
               ),
             ),
@@ -1099,16 +1102,17 @@ class _DateLabelState extends State<_DateLabel> {
     final label = switch (widget.state.viewMode) {
       CalendarView.day => _formatDay(widget.state.selectedDate),
       CalendarView.week => context.l10n.commonRangeLabel(
-          _formatDay(widget.state.weekStart),
-          _formatDay(widget.state.weekEnd),
-        ),
+        _formatDay(widget.state.weekStart),
+        _formatDay(widget.state.weekEnd),
+      ),
       CalendarView.month => _monthFormat.format(widget.state.selectedDate),
     };
     final bool hideText =
         widget.collapseText || MediaQuery.of(context).size.width < 420;
     final bool isOpen = _isPickerOpen;
-    final Color iconColor =
-        isOpen ? calendarPrimaryColor : calendarSubtitleColor;
+    final Color iconColor = isOpen
+        ? calendarPrimaryColor
+        : calendarSubtitleColor;
 
     return CompositedTransformTarget(
       link: _link,
@@ -1416,7 +1420,7 @@ class _CalendarDropdown extends StatelessWidget {
               return AxiTapBounce(
                 child: ShadFocusable(
                   canRequestFocus: true,
-                  builder: (context, _, __) {
+                  builder: (context, _, _) {
                     return Material(
                       type: MaterialType.transparency,
                       shape: shape,

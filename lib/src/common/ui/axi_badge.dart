@@ -86,11 +86,7 @@ class AxiBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     if (count <= 0) return child;
     final spacing = context.spacing;
-    final resolvedOffset = offset ??
-        Offset(
-          spacing.s,
-          -spacing.s,
-        );
+    final resolvedOffset = offset ?? Offset(spacing.s, -spacing.s);
 
     return Stack(
       clipBehavior: Clip.none,

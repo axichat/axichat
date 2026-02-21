@@ -65,7 +65,8 @@ class _PasswordInputState extends State<PasswordInput> {
         ),
         validator: (text) {
           final localizations = context.l10n;
-          final confirmationValidator = widget.confirmValidator ??
+          final confirmationValidator =
+              widget.confirmValidator ??
               (value) => _defaultValidator(localizations, value);
           final baseResult = confirmationValidator(text);
           if (baseResult != null) {

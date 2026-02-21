@@ -55,7 +55,7 @@ const Uuid _calendarTaskCopyIdGenerator = Uuid();
 
 @freezed
 @HiveType(typeId: 36)
-class TaskOccurrenceOverride with _$TaskOccurrenceOverride {
+abstract class TaskOccurrenceOverride with _$TaskOccurrenceOverride {
   const factory TaskOccurrenceOverride({
     @HiveField(0) DateTime? scheduledTime,
     @HiveField(1) Duration? duration,
@@ -100,7 +100,7 @@ enum RecurrenceFrequency {
 
 @freezed
 @HiveType(typeId: 34)
-class RecurrenceRule with _$RecurrenceRule {
+abstract class RecurrenceRule with _$RecurrenceRule {
   const factory RecurrenceRule({
     @HiveField(0) required RecurrenceFrequency frequency,
     @HiveField(1) @Default(1) int interval,
@@ -185,7 +185,7 @@ enum TaskPriority {
 
 @freezed
 @HiveType(typeId: 30)
-class CalendarTask with _$CalendarTask implements CalendarItemBase {
+abstract class CalendarTask with _$CalendarTask implements CalendarItemBase {
   const factory CalendarTask({
     @HiveField(0) required String id,
     @HiveField(1) required String title,
@@ -310,7 +310,8 @@ extension CalendarTaskExtensions on CalendarTask {
     Duration? duration,
     DateTime? endDate,
   }) {
-    final Duration? resolvedDuration = duration ??
+    final Duration? resolvedDuration =
+        duration ??
         (endDate != null
             ? endDate.difference(scheduledTime)
             : effectiveDuration);
@@ -388,8 +389,9 @@ extension CalendarTaskExtensions on CalendarTask {
     DateTime? end = effectiveEndDate;
     if (end == null || !end.isAfter(start)) {
       final Duration fallback = duration ?? const Duration(hours: 1);
-      final Duration normalized =
-          fallback.inMinutes <= 0 ? const Duration(minutes: 15) : fallback;
+      final Duration normalized = fallback.inMinutes <= 0
+          ? const Duration(minutes: 15)
+          : fallback;
       end = start.add(normalized);
     }
 

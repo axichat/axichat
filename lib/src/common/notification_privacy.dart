@@ -65,8 +65,9 @@ String? sanitizeNotificationPreview(String? body) {
   if (sanitized.length <= _notificationPreviewMaxLength) {
     return sanitized;
   }
-  final String truncated =
-      sanitized.substring(0, _notificationPreviewMaxLength).trimRight();
+  final String truncated = sanitized
+      .substring(0, _notificationPreviewMaxLength)
+      .trimRight();
   if (truncated.isEmpty) return null;
   return '$truncated$_notificationTruncationSuffix';
 }

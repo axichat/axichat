@@ -45,12 +45,12 @@ class FanOutSendReport extends Equatable {
 
   @override
   List<Object?> get props => [
-        shareId,
-        subjectToken,
-        subject,
-        attachmentWarning,
-        statuses,
-      ];
+    shareId,
+    subjectToken,
+    subject,
+    attachmentWarning,
+    statuses,
+  ];
 }
 
 class FanOutTarget extends Equatable {
@@ -65,14 +65,13 @@ class FanOutTarget extends Equatable {
   factory FanOutTarget.chat({
     required Chat chat,
     required bool shareSignatureEnabled,
-  }) =>
-      FanOutTarget._(
-        chat: chat,
-        address: chat.emailAddress,
-        displayName: chat.contactDisplayName,
-        shareSignatureEnabled: shareSignatureEnabled,
-        transport: chat.defaultTransport,
-      );
+  }) => FanOutTarget._(
+    chat: chat,
+    address: chat.emailAddress,
+    displayName: chat.contactDisplayName,
+    shareSignatureEnabled: shareSignatureEnabled,
+    transport: chat.defaultTransport,
+  );
 
   factory FanOutTarget.address({
     required String address,
@@ -111,12 +110,12 @@ class FanOutTarget extends Equatable {
 
   @override
   List<Object?> get props => [
-        chat?.jid,
-        address,
-        displayName,
-        shareSignatureEnabled,
-        transport,
-      ];
+    chat?.jid,
+    address,
+    displayName,
+    shareSignatureEnabled,
+    transport,
+  ];
 }
 
 class ShareContext extends Equatable {
@@ -145,10 +144,10 @@ class ShareContext extends Equatable {
 
   @override
   List<Object?> get props => [
-        shareId,
-        participants,
-        subject,
-        originatorDeltaMsgId,
-        participantCount,
-      ];
+    shareId,
+    participants,
+    subject,
+    originatorDeltaMsgId,
+    participantCount,
+  ];
 }

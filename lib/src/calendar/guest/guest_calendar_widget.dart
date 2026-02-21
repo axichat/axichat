@@ -31,7 +31,6 @@ import 'package:axichat/src/calendar/view/widgets/calendar_loading_overlay.dart'
 import 'package:axichat/src/calendar/view/widgets/calendar_mobile_tab_shell.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_hover_title_scope.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_feedback_observer.dart';
-import 'package:axichat/src/calendar/view/widgets/task_form_section.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'guest_calendar_bloc.dart';
 
@@ -60,15 +59,13 @@ class _GuestCalendarWidgetState
   EdgeInsets? navigationPadding(
     CalendarResponsiveSpec spec,
     bool usesDesktopLayout,
-  ) =>
-      null;
+  ) => null;
 
   @override
   EdgeInsets? errorBannerMargin(
     CalendarResponsiveSpec spec,
     bool usesDesktopLayout,
-  ) =>
-      spec.modalMargin;
+  ) => spec.modalMargin;
 
   @override
   CalendarMobileTabShell buildMobileTabShell(
@@ -117,7 +114,7 @@ class _GuestCalendarWidgetState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,
-          children: [navigation, if (errorBanner != null) errorBanner],
+          children: [navigation, ?errorBanner],
         ),
       );
       children.add(navContent);
@@ -150,7 +147,6 @@ class _GuestCalendarWidgetState
           children: [
             _GuestBanner(
               onNavigateBack: _handleBannerBackNavigation,
-              onSignUp: () => context.go('/login'),
               transferMenu: _GuestTransferMenu(state: state),
             ),
             Expanded(child: layout),
@@ -165,10 +161,10 @@ class _GuestCalendarWidgetState
     return Builder(
       builder: (context) {
         final locate = context.read;
-        final initialTasks =
-            context.select<GuestCalendarBloc, Map<String, CalendarTask>>(
-          (bloc) => bloc.state.model.tasks,
-        );
+        final initialTasks = context
+            .select<GuestCalendarBloc, Map<String, CalendarTask>>(
+              (bloc) => bloc.state.model.tasks,
+            );
         return CalendarTaskFeedbackObserver<GuestCalendarBloc>(
           initialTasks: initialTasks,
           onEvent: (event) => locate<GuestCalendarBloc>().add(event),
@@ -208,15 +204,14 @@ class _GuestCalendarWidgetState
               VoidCallback? onTap,
               VoidCallback? onDragStart,
               bool allowContextMenu = false,
-            }) =>
-              sidebarState.buildSearchTaskTile(
-                task,
-                trailing: trailing,
-                requiresLongPress: requiresLongPress,
-                onTap: onTap,
-                onDragStart: onDragStart,
-                allowContextMenu: allowContextMenu,
-              ),
+            }) => sidebarState.buildSearchTaskTile(
+              task,
+              trailing: trailing,
+              requiresLongPress: requiresLongPress,
+              onTap: onTap,
+              onDragStart: onDragStart,
+              allowContextMenu: allowContextMenu,
+            ),
     );
   }
 
@@ -252,15 +247,11 @@ class _GuestCalendarWidgetState
       final l10n = context.l10n;
       final (String title, String message) = switch (warning.type) {
         CalendarSyncWarningType.snapshotUnavailable => (
-            l10n.calendarSyncWarningSnapshotTitle,
-            l10n.calendarSyncWarningSnapshotMessage,
-          ),
+          l10n.calendarSyncWarningSnapshotTitle,
+          l10n.calendarSyncWarningSnapshotMessage,
+        ),
       };
-      FeedbackSystem.showWarning(
-        context,
-        message,
-        title: title,
-      );
+      FeedbackSystem.showWarning(context, message, title: title);
       calendarBloc.add(const CalendarEvent.syncWarningCleared());
     }
   }
@@ -288,12 +279,10 @@ class _GuestCalendarWidgetState
 class _GuestBanner extends StatelessWidget {
   const _GuestBanner({
     required this.onNavigateBack,
-    required this.onSignUp,
     required this.transferMenu,
   });
 
   final Future<void> Function() onNavigateBack;
-  final VoidCallback onSignUp;
   final Widget transferMenu;
 
   @override
@@ -347,12 +336,6 @@ class _GuestBanner extends StatelessWidget {
           ),
           SizedBox(width: spacing.m),
           transferMenu,
-          SizedBox(width: spacing.m),
-          TaskPrimaryButton(
-            label: context.l10n.calendarGuestSignUpToSync,
-            onPressed: onSignUp,
-            icon: Icons.login,
-          ),
         ],
       ),
     );
@@ -393,10 +376,7 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
     try {
       final model = widget.state.model;
       if (!model.hasCalendarData) {
-        FeedbackSystem.showInfo(
-          context,
-          l10n.calendarGuestExportNoData,
-        );
+        FeedbackSystem.showInfo(context, l10n.calendarGuestExportNoData);
         return;
       }
       final format = await showCalendarExportFormatSheet(
@@ -486,9 +466,9 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
             .state
             .model
             .mergeWith(importedModel);
-        context
-            .read<GuestCalendarBloc>()
-            .add(CalendarEvent.modelImported(model: importedModel));
+        context.read<GuestCalendarBloc>().add(
+          CalendarEvent.modelImported(model: importedModel),
+        );
         final bool imported = await waitForCalendarChecksum(
           bloc: context.read<GuestCalendarBloc>(),
           checksum: mergedModel.checksum,
@@ -521,9 +501,9 @@ class _GuestTransferMenuState extends State<_GuestTransferMenu> {
       if (!mounted) return;
       final Set<String> taskIds = <String>{}
         ..addAll(tasks.map((task) => task.id));
-      context
-          .read<GuestCalendarBloc>()
-          .add(CalendarEvent.tasksImported(tasks: tasks));
+      context.read<GuestCalendarBloc>().add(
+        CalendarEvent.tasksImported(tasks: tasks),
+      );
       final bool imported = await waitForTasksInCalendar(
         bloc: context.read<GuestCalendarBloc>(),
         taskIds: taskIds,

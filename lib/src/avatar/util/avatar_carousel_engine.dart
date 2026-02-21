@@ -43,10 +43,11 @@ class AvatarRenderSpec {
   final double cropSide;
 }
 
-typedef AvatarRenderSpecResolver = AvatarRenderSpec Function(
-  AvatarTemplate template,
-  AvatarCarouselBuildContext context,
-);
+typedef AvatarRenderSpecResolver =
+    AvatarRenderSpec Function(
+      AvatarTemplate template,
+      AvatarCarouselBuildContext context,
+    );
 
 class AvatarCarouselEngine {
   AvatarCarouselEngine({
@@ -54,21 +55,19 @@ class AvatarCarouselEngine {
     required List<AvatarTemplate> templates,
     required Random random,
     AvatarCarouselEngineConfig config = const AvatarCarouselEngineConfig(),
-  })  : _pipeline = pipeline,
-        _random = random,
-        _config = config,
-        _abstractTemplates = templates
-            .where(
-              (template) =>
-                  template.category == AvatarTemplateCategory.abstract,
-            )
-            .toList(growable: false),
-        _nonAbstractTemplates = templates
-            .where(
-              (template) =>
-                  template.category != AvatarTemplateCategory.abstract,
-            )
-            .toList(growable: false);
+  }) : _pipeline = pipeline,
+       _random = random,
+       _config = config,
+       _abstractTemplates = templates
+           .where(
+             (template) => template.category == AvatarTemplateCategory.abstract,
+           )
+           .toList(growable: false),
+       _nonAbstractTemplates = templates
+           .where(
+             (template) => template.category != AvatarTemplateCategory.abstract,
+           )
+           .toList(growable: false);
 
   final AvatarPipeline _pipeline;
   final Random _random;
@@ -167,8 +166,10 @@ class AvatarCarouselEngine {
         _nonAbstractWarmupState != _NonAbstractWarmupState.warming &&
         _nonAbstractTemplates.isNotEmpty) {
       _nonAbstractWarmupState = _NonAbstractWarmupState.warming;
-      final warmTemplate =
-          _pickFromPool(_nonAbstractTemplates, bag: _nonAbstractBag);
+      final warmTemplate = _pickFromPool(
+        _nonAbstractTemplates,
+        bag: _nonAbstractBag,
+      );
       if (warmTemplate != null) {
         markTemplateUsed(warmTemplate);
         final warmed = await _buildAvatarForTemplate(
@@ -190,7 +191,7 @@ class AvatarCarouselEngine {
     while (results.length < targetSize && attempts < _config.maxAttempts) {
       final useAbstractOnly =
           (warmupActive || (preferAbstract && !nonAbstractReady)) &&
-              _abstractTemplates.isNotEmpty;
+          _abstractTemplates.isNotEmpty;
       AvatarTemplate? template = useAbstractOnly
           ? _pickFromPool(_abstractTemplates, bag: _abstractBag)
           : null;
@@ -235,8 +236,9 @@ class AvatarCarouselEngine {
       break;
     }
     bag.addAll(recycled);
-    selection ??=
-        bag.isNotEmpty ? bag.removeAt(0) : pool[_random.nextInt(pool.length)];
+    selection ??= bag.isNotEmpty
+        ? bag.removeAt(0)
+        : pool[_random.nextInt(pool.length)];
     return selection;
   }
 

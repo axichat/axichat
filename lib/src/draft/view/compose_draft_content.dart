@@ -16,6 +16,7 @@ class ComposeDraftContent extends StatelessWidget {
     super.key,
     required this.seed,
     required this.locate,
+    this.subjectTrailing,
     this.onClosed,
     this.onDiscarded,
     this.onDraftSaved,
@@ -23,6 +24,7 @@ class ComposeDraftContent extends StatelessWidget {
 
   final ComposeDraftSeed seed;
   final T Function<T>() locate;
+  final Widget? subjectTrailing;
   final VoidCallback? onClosed;
   final VoidCallback? onDiscarded;
   final ValueChanged<int>? onDraftSaved;
@@ -34,8 +36,9 @@ class ComposeDraftContent extends StatelessWidget {
       bloc: locate<SettingsCubit>(),
       builder: (context, settingsState) {
         final endpointConfig = settingsState.endpointConfig;
-        final emailService =
-            endpointConfig.smtpEnabled ? locate<EmailService>() : null;
+        final emailService = endpointConfig.smtpEnabled
+            ? locate<EmailService>()
+            : null;
         final emailAddress = emailService?.activeAccount?.address;
         final myJid = xmppService.myJid;
         final suggestionAddresses = <String>{
@@ -55,6 +58,7 @@ class ComposeDraftContent extends StatelessWidget {
           suggestionAddresses: suggestionAddresses,
           suggestionDomains: suggestionDomains,
           locate: locate,
+          subjectTrailing: subjectTrailing,
           onClosed: onClosed,
           onDiscarded: onDiscarded,
           onDraftSaved: onDraftSaved,

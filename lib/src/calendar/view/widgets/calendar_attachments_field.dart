@@ -49,8 +49,9 @@ class _AttachmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle primaryStyle =
-        context.textTheme.small.strong.copyWith(color: calendarTitleColor);
+    final TextStyle primaryStyle = context.textTheme.small.strong.copyWith(
+      color: calendarTitleColor,
+    );
     final TextStyle secondaryStyle = context.textTheme.muted.copyWith(
       color: calendarSubtitleColor,
     );

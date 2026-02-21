@@ -69,7 +69,7 @@ final class EmailConnectionConfigBuilder {
   const EmailConnectionConfigBuilder(this._builder);
 
   final Map<String, String> Function(String address, EndpointConfig config)
-      _builder;
+  _builder;
 
   Map<String, String> call(String address, EndpointConfig config) =>
       _builder(address, config);
@@ -269,8 +269,9 @@ class EmailService {
   static const String _imapIdleTimeoutConfigKey = 'imap_idle_timeout';
   static const String _imapMaxConnectionsConfigKey = 'imap_max_connections';
   static const Duration _imapIdleKeepaliveInterval = Duration(minutes: 25);
-  static const Duration _imapSentPollIntervalSingleConnection =
-      Duration(seconds: 60);
+  static const Duration _imapSentPollIntervalSingleConnection = Duration(
+    seconds: 60,
+  );
   static const Duration _imapPollIntervalNoIdle = Duration(seconds: 30);
   static const Duration _imapSyncFetchTimeout = Duration(seconds: 25);
   static const Duration _imapCapabilityRefreshInterval = Duration(minutes: 10);
@@ -312,17 +313,19 @@ class EmailService {
     Logger? logger,
     ForegroundTaskBridge? foregroundBridge,
     EndpointConfig endpointConfig = const EndpointConfig(),
-  })  : _credentialStore = credentialStore,
-        _databaseBuilder = databaseBuilder,
-        _endpointConfig = endpointConfig,
-        _connectionConfigBuilder = connectionConfigBuilder ??
-            const EmailConnectionConfigBuilder(_defaultConnectionConfig),
-        _log = logger ?? Logger('EmailService'),
-        _notificationService = notificationService,
-        _messageService = messageService,
-        _xmppService = xmppService,
-        _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
-    _transport = transport ??
+  }) : _credentialStore = credentialStore,
+       _databaseBuilder = databaseBuilder,
+       _endpointConfig = endpointConfig,
+       _connectionConfigBuilder =
+           connectionConfigBuilder ??
+           const EmailConnectionConfigBuilder(_defaultConnectionConfig),
+       _log = logger ?? Logger('EmailService'),
+       _notificationService = notificationService,
+       _messageService = messageService,
+       _xmppService = xmppService,
+       _foregroundBridge = foregroundBridge ?? foregroundTaskBridge {
+    _transport =
+        transport ??
         EmailDeltaTransport(
           databaseBuilder: databaseBuilder,
           logger: logger,
@@ -383,33 +386,31 @@ class EmailService {
         _emailBlocklistSyncSubscription != null) {
       return;
     }
-    _spamSyncSubscription = xmppService.spamSyncUpdateStream.listen(
-      (update) async {
-        try {
-          await applySpamSyncUpdate(update);
-        } on Exception catch (error, stackTrace) {
-          _log.fine(
-            'Failed to apply spam sync update from XMPP stream.',
-            error,
-            stackTrace,
-          );
-        }
-      },
-    );
-    _emailBlocklistSyncSubscription =
-        xmppService.emailBlocklistSyncUpdateStream.listen(
-      (update) async {
-        try {
-          await applyEmailBlocklistSyncUpdate(update);
-        } on Exception catch (error, stackTrace) {
-          _log.fine(
-            'Failed to apply email blocklist sync update from XMPP stream.',
-            error,
-            stackTrace,
-          );
-        }
-      },
-    );
+    _spamSyncSubscription = xmppService.spamSyncUpdateStream.listen((
+      update,
+    ) async {
+      try {
+        await applySpamSyncUpdate(update);
+      } on Exception catch (error, stackTrace) {
+        _log.fine(
+          'Failed to apply spam sync update from XMPP stream.',
+          error,
+          stackTrace,
+        );
+      }
+    });
+    _emailBlocklistSyncSubscription = xmppService.emailBlocklistSyncUpdateStream
+        .listen((update) async {
+          try {
+            await applyEmailBlocklistSyncUpdate(update);
+          } on Exception catch (error, stackTrace) {
+            _log.fine(
+              'Failed to apply email blocklist sync update from XMPP stream.',
+              error,
+              stackTrace,
+            );
+          }
+        });
     _xmppStreamReadySubscription?.cancel();
     _xmppStreamReadySubscription = null;
   }
@@ -487,9 +488,7 @@ class EmailService {
     _endpointConfig = config;
   }
 
-  void updateDefaultChatAttachmentAutoDownload(
-    AttachmentAutoDownload value,
-  ) {
+  void updateDefaultChatAttachmentAutoDownload(AttachmentAutoDownload value) {
     _transport.updateDefaultChatAttachmentAutoDownload(value);
   }
 
@@ -710,7 +709,8 @@ class EmailService {
     bool persistCredentials = true,
   }) async {
     final scope = _scopeForJid(jid);
-    final needsInit = _databasePrefix != databasePrefix ||
+    final needsInit =
+        _databasePrefix != databasePrefix ||
         _databasePassphrase != databasePassphrase;
     if (needsInit) {
       _databasePrefix = databasePrefix;
@@ -739,19 +739,18 @@ class EmailService {
 
     var address = await _credentialStore.read(key: addressKey);
     var password = await _credentialStore.read(key: passwordKey);
-    final normalizedOverrideAddress = normalizedAddressValue(
-      addressOverride,
-    );
+    final normalizedOverrideAddress = normalizedAddressValue(addressOverride);
     final preferredAddress = _preferredAddressFromJid(jid);
     var credentialsMutated = false;
     final shouldPersistCredentials = persistCredentials;
 
-    final resolvedAddress = (normalizedOverrideAddress != null &&
+    final resolvedAddress =
+        (normalizedOverrideAddress != null &&
             normalizedOverrideAddress.isNotEmpty)
         ? normalizedOverrideAddress
         : ((address != null && address.isNotEmpty)
-            ? address
-            : preferredAddress);
+              ? address
+              : preferredAddress);
     if (resolvedAddress == null || resolvedAddress.isEmpty) {
       throw const EmailProvisioningException(
         EmailProvisioningFailure.missingAddress,
@@ -778,11 +777,12 @@ class EmailService {
       }
     }
 
-    final deltaAccountId =
-        await _ensureEmailAccountSession(createIfMissing: true);
+    final deltaAccountId = await _ensureEmailAccountSession(
+      createIfMissing: true,
+    );
     var alreadyProvisioned =
         (await _credentialStore.read(key: provisionedKey)) ==
-            _credentialTrueValue;
+        _credentialTrueValue;
     if (!shouldPersistCredentials &&
         _ephemeralProvisionedScopes.contains(scope)) {
       alreadyProvisioned = true;
@@ -941,7 +941,8 @@ class EmailService {
             isRecoverable: true,
           );
         }
-        final isAuthFailure = mapped.code == DeltaChatErrorCode.permission ||
+        final isAuthFailure =
+            mapped.code == DeltaChatErrorCode.permission ||
             mapped.code == DeltaChatErrorCode.auth;
         throw EmailProvisioningException(
           isAuthFailure
@@ -977,8 +978,9 @@ class EmailService {
     return account;
   }
 
-  Future<int> _ensureEmailAccountSession(
-      {required bool createIfMissing}) async {
+  Future<int> _ensureEmailAccountSession({
+    required bool createIfMissing,
+  }) async {
     final existingAccountIds = await _transport.accountIds();
     if (existingAccountIds.isNotEmpty) {
       final preferredAccountId = _transport.activeAccountId;
@@ -1022,8 +1024,9 @@ class EmailService {
     if (address == null || address.isEmpty) {
       throw StateError('No email address found.');
     }
-    final deltaAccountId =
-        await _ensureEmailAccountSession(createIfMissing: false);
+    final deltaAccountId = await _ensureEmailAccountSession(
+      createIfMissing: false,
+    );
     if (persistCredentials) {
       await _credentialStore.write(
         key: _passwordKeyForScope(scope),
@@ -1130,10 +1133,7 @@ class EmailService {
     await _transport.dispose();
     await _transport.deleteStorageArtifacts();
     if (scope != null && _databasePrefix != null) {
-      await _clearStockPurgeKey(
-        scope: scope,
-        databasePrefix: _databasePrefix!,
-      );
+      await _clearStockPurgeKey(scope: scope, databasePrefix: _databasePrefix!);
     }
     _running = false;
     if (scope != null) {
@@ -1202,8 +1202,8 @@ class EmailService {
     final resolvedBody = trimmedBody.isNotEmpty
         ? trimmedBody
         : (normalizedHtml == null
-            ? ''
-            : HtmlContentCodec.toPlainText(normalizedHtml));
+              ? ''
+              : HtmlContentCodec.toPlainText(normalizedHtml));
     String? shareId;
     String? subjectToken;
     if (normalizedSubject != null) {
@@ -1213,7 +1213,7 @@ class EmailService {
       final db = await _databaseBuilder();
       final senderJid =
           _transport.selfJidForAccount(context.account.deltaAccountId) ??
-              context.account.address;
+          context.account.address;
       final participants = await _shareParticipants(
         shareId: shareId,
         chats: [context.chat],
@@ -1244,8 +1244,9 @@ class EmailService {
             subject: normalizedSubject,
             body: resolvedBody,
           );
-    final localBodyOverride =
-        trimmedBody.isNotEmpty ? trimmedBody : resolvedBody;
+    final localBodyOverride = trimmedBody.isNotEmpty
+        ? trimmedBody
+        : resolvedBody;
     final msgId = await _guardDeltaOperation(
       operation: 'send email message',
       body: () => _transport.sendText(
@@ -1313,7 +1314,7 @@ class EmailService {
       final db = await _databaseBuilder();
       final senderJid =
           _transport.selfJidForAccount(context.account.deltaAccountId) ??
-              context.account.address;
+          context.account.address;
       final participants = await _shareParticipants(
         shareId: shareId,
         chats: [context.chat],
@@ -1436,8 +1437,9 @@ class EmailService {
       );
     }
     final db = await _databaseBuilder();
-    final existingShare =
-        shareId == null ? null : await db.getMessageShareById(shareId);
+    final existingShare = shareId == null
+        ? null
+        : await db.getMessageShareById(shareId);
     final existingParticipants = <MessageParticipantData>[];
     final existingShareId = existingShare?.shareId ?? shareId;
     if (existingShareId != null) {
@@ -1448,7 +1450,8 @@ class EmailService {
     final resolvedShareId =
         shareId ?? existingShare?.shareId ?? ShareTokenCodec.generateShareId();
     final shouldUseToken = useSubjectToken && resolvedTargets.length > 1;
-    final resolvedToken = existingShare?.subjectToken ??
+    final resolvedToken =
+        existingShare?.subjectToken ??
         (shouldUseToken ? _shareTokenForShare(resolvedShareId) : null);
     final resolvedSubject = normalizedSubject ?? existingShare?.subject;
     final resolvedHtmlBody = resolvedToken == null
@@ -1586,11 +1589,15 @@ class EmailService {
 
     final results = <(FanOutRecipientStatus, int?)>[];
     final targetsToSend = resolvedTargets.values.toList(growable: false);
-    for (var index = 0;
-        index < targetsToSend.length;
-        index += _fanOutConcurrentOps) {
-      final chunk =
-          targetsToSend.skip(index).take(_fanOutConcurrentOps).toList();
+    for (
+      var index = 0;
+      index < targetsToSend.length;
+      index += _fanOutConcurrentOps
+    ) {
+      final chunk = targetsToSend
+          .skip(index)
+          .take(_fanOutConcurrentOps)
+          .toList();
       results.addAll(await Future.wait(chunk.map(sendTo)));
     }
 
@@ -1610,7 +1617,8 @@ class EmailService {
       );
     }
 
-    final attachmentWarning = hasAttachment &&
+    final attachmentWarning =
+        hasAttachment &&
         resolvedTargets.length > 1 &&
         attachment.sizeBytes > _attachmentFanOutWarningBytes;
 
@@ -1653,7 +1661,8 @@ class EmailService {
           _scheduleDemoCopiedReply(chat);
         } else {
           final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
-          final resolvedBody = body ??
+          final resolvedBody =
+              body ??
               (normalizedHtml == null
                   ? ''
                   : HtmlContentCodec.toPlainText(normalizedHtml));
@@ -1720,11 +1729,13 @@ class EmailService {
     if (target.chat != null) {
       return target.chat!;
     }
-    final String resolvedAddress =
-        address?.isNotEmpty == true ? address! : kDemoSelfJid;
+    final String resolvedAddress = address?.isNotEmpty == true
+        ? address!
+        : kDemoSelfJid;
     final displayName = target.displayName?.trim();
-    final String resolvedTitle =
-        displayName?.isNotEmpty == true ? displayName! : resolvedAddress;
+    final String resolvedTitle = displayName?.isNotEmpty == true
+        ? displayName!
+        : resolvedAddress;
     final String resolvedDisplayName = resolvedTitle;
     return Chat.fromJid(resolvedAddress).copyWith(
       title: resolvedTitle,
@@ -1801,12 +1812,11 @@ class EmailService {
     );
     if (shareId == null) return null;
     final participants = await db.getParticipantsForShare(shareId);
-    final participantJids =
-        participants.map((participant) => participant.contactJid).toList();
+    final participantJids = participants
+        .map((participant) => participant.contactJid)
+        .toList();
     final chatList = await db.getChatsByJids(participantJids);
-    final chatByJid = {
-      for (final chat in chatList) chat.jid: chat,
-    };
+    final chatByJid = {for (final chat in chatList) chat.jid: chat};
     final chats = <Chat>[
       for (final participant in participants)
         if (chatByJid[participant.contactJid] != null)
@@ -1837,8 +1847,8 @@ class EmailService {
           );
         }
         final ordered = attachments.whereType<MessageAttachmentData>().toList(
-              growable: false,
-            )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          growable: false,
+        )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
         for (final attachment in ordered) {
           metadataIds.add(attachment.fileMetadataId);
         }
@@ -1918,9 +1928,7 @@ class EmailService {
     await _transport.notifyNetworkAvailable();
     await _bootstrapActiveAccountIfNeeded();
     await _runReconnectCatchUp();
-    await _refreshConnectivityState(
-      source: _EmailSyncSource.networkAvailable,
-    );
+    await _refreshConnectivityState(source: _EmailSyncSource.networkAvailable);
     fireAndForget(
       _scheduleReconnectRestartIfOffline,
       operationName: 'EmailService.reconnectRestartIfOffline',
@@ -1981,10 +1989,7 @@ class EmailService {
 
     await db.replaceContacts(contactsByNativeId);
     await _syncEmailBlocklist(db: db, blockedContacts: blocked);
-    await _syncEmailChatMetadata(
-      db: db,
-      contactsByAddress: contactsByAddress,
-    );
+    await _syncEmailChatMetadata(db: db, contactsByAddress: contactsByAddress);
   }
 
   Future<void> refreshChatlistFromCore() async {
@@ -2566,7 +2571,7 @@ class EmailService {
     final stanzaId = _stanzaId(msgId, accountId: accountId);
     final message =
         await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
-            await db.getMessageByStanzaID(stanzaId);
+        await db.getMessageByStanzaID(stanzaId);
     if (message == null) {
       return null;
     }
@@ -2900,7 +2905,8 @@ class EmailService {
   }) {
     final now = DateTime.timestamp();
     final lastLoggedAt = _lastConnectivityLoggedAt;
-    final shouldLog = _lastLoggedConnectivityValue == null ||
+    final shouldLog =
+        _lastLoggedConnectivityValue == null ||
         _lastLoggedConnectivityValue != connectivity ||
         lastLoggedAt == null ||
         now.difference(lastLoggedAt) > _connectivityLogInterval;
@@ -2923,8 +2929,9 @@ class EmailService {
     required _EmailSyncSource source,
   }) {
     final connectivity = _lastConnectivityValue;
-    final connectivityLabel =
-        connectivity == null ? _emailLogUnknownValue : '$connectivity';
+    final connectivityLabel = connectivity == null
+        ? _emailLogUnknownValue
+        : '$connectivity';
     final hasMessage = next.message?.isNotEmpty == true;
     _log.fine(
       '$_emailSyncLogPrefix: '
@@ -3257,7 +3264,8 @@ class EmailService {
   Future<void> _refreshImapCapabilities({bool force = false}) async {
     final now = DateTime.timestamp();
     final lastChecked = _imapCapabilitiesCheckedAt;
-    final shouldReuse = !force &&
+    final shouldReuse =
+        !force &&
         _imapCapabilitiesResolved &&
         lastChecked != null &&
         now.difference(lastChecked) < _imapCapabilityRefreshInterval;
@@ -3278,8 +3286,9 @@ class EmailService {
     );
     final accountsActive =
         _transport.accountsActive || _transport.accountsSupported;
-    final defaultLimit =
-        accountsActive ? _imapConnectionLimitMulti : _imapConnectionLimitSingle;
+    final defaultLimit = accountsActive
+        ? _imapConnectionLimitMulti
+        : _imapConnectionLimitSingle;
     final idleSupported = idleFlag ?? accountsActive;
     final connectionLimit = _normalizeConnectionLimit(
       maxConnections ?? defaultLimit,
@@ -3399,8 +3408,8 @@ class EmailService {
     final resolvedBody = trimmedBody.isNotEmpty
         ? trimmedBody
         : (normalizedHtml == null
-            ? ''
-            : HtmlContentCodec.toPlainText(normalizedHtml));
+              ? ''
+              : HtmlContentCodec.toPlainText(normalizedHtml));
     final now = demoNow();
     const generator = Uuid();
     final stanzaId = 'demo-email-${generator.v4()}';
@@ -3526,8 +3535,8 @@ class EmailService {
           );
         }
         final ordered = attachments.whereType<MessageAttachmentData>().toList(
-              growable: false,
-            )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          growable: false,
+        )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
         final metadata = await db.getFileMetadata(ordered.first.fileMetadataId);
         if (metadata == null) {
           return l10n.notificationAttachmentLabel;
@@ -3586,9 +3595,7 @@ class EmailService {
     for (var index = 0; index < entries.length; index += _fanOutConcurrentOps) {
       final chunk = entries.skip(index).take(_fanOutConcurrentOps).toList();
       final results = await Future.wait(
-        chunk.map(
-          (entry) async => MapEntry(entry.key, await entry.value),
-        ),
+        chunk.map((entry) async => MapEntry(entry.key, await entry.value)),
       );
       for (final result in results) {
         final chat = result.value;
@@ -3692,10 +3699,12 @@ class EmailService {
     final smtpHost = config.smtpHost?.trim();
     final imapHost = config.imapHost?.trim();
     final fallbackHost = _connectionHostFor(normalizedAddress, config);
-    final resolvedSendHost =
-        (smtpHost != null && smtpHost.isNotEmpty) ? smtpHost : fallbackHost;
-    final resolvedMailHost =
-        (imapHost != null && imapHost.isNotEmpty) ? imapHost : fallbackHost;
+    final resolvedSendHost = (smtpHost != null && smtpHost.isNotEmpty)
+        ? smtpHost
+        : fallbackHost;
+    final resolvedMailHost = (imapHost != null && imapHost.isNotEmpty)
+        ? imapHost
+        : fallbackHost;
     final sendPortValue = config.smtpPort > _portUnsetValue
         ? config.smtpPort
         : EndpointConfig.defaultSmtpPort;
@@ -3726,8 +3735,7 @@ class EmailService {
   static String _securityModeForPort({
     required int port,
     required int implicitTlsPort,
-  }) =>
-      port == implicitTlsPort ? _securityModeSsl : _securityModeStartTls;
+  }) => port == implicitTlsPort ? _securityModeSsl : _securityModeStartTls;
 
   static String _connectionHostFor(String address, EndpointConfig config) {
     final customHost = config.smtpHost?.trim();
@@ -3857,10 +3865,7 @@ class EmailService {
     if (!persistCredentials) {
       return !_ephemeralStockPurgeScopes.contains(scope);
     }
-    final key = _stockPurgeKeyFor(
-      scope: scope,
-      databasePrefix: databasePrefix,
-    );
+    final key = _stockPurgeKeyFor(scope: scope, databasePrefix: databasePrefix);
     return (await _credentialStore.read(key: key)) != _credentialTrueValue;
   }
 
@@ -3873,10 +3878,7 @@ class EmailService {
       _ephemeralStockPurgeScopes.add(scope);
       return;
     }
-    final key = _stockPurgeKeyFor(
-      scope: scope,
-      databasePrefix: databasePrefix,
-    );
+    final key = _stockPurgeKeyFor(scope: scope, databasePrefix: databasePrefix);
     await _credentialStore.write(key: key, value: _credentialTrueValue);
   }
 
@@ -3887,9 +3889,7 @@ class EmailService {
     final identifier = '${_emailStockPurgeKeyPrefix}_${databasePrefix}_$scope';
     _stockPurgeKeys.remove(identifier);
     _ephemeralStockPurgeScopes.remove(scope);
-    await _credentialStore.delete(
-      key: CredentialStore.registerKey(identifier),
-    );
+    await _credentialStore.delete(key: CredentialStore.registerKey(identifier));
   }
 
   String _scopeForJid(String jid) => normalizedAddressKeyOrEmpty(jid);
@@ -3956,8 +3956,9 @@ class EmailService {
         EmailProvisioningFailure.missingAddress,
       );
     }
-    final deltaAccountId =
-        await _ensureEmailAccountSession(createIfMissing: false);
+    final deltaAccountId = await _ensureEmailAccountSession(
+      createIfMissing: false,
+    );
     await _hydrateAccountAddress(
       address: resolved,
       deltaAccountId: deltaAccountId,
@@ -4012,8 +4013,9 @@ class EmailService {
         accountId: account.deltaAccountId,
       );
       final databasePrefix = _databasePrefix;
-      final shouldPersistCredentials =
-          !_ephemeralProvisionedScopes.contains(scope);
+      final shouldPersistCredentials = !_ephemeralProvisionedScopes.contains(
+        scope,
+      );
       if (databasePrefix != null &&
           await _shouldPurgeStockMessages(
             scope: scope,
@@ -4045,7 +4047,8 @@ class EmailService {
           isRecoverable: true,
         );
       }
-      final isAuthFailure = mapped.code == DeltaChatErrorCode.permission ||
+      final isAuthFailure =
+          mapped.code == DeltaChatErrorCode.permission ||
           mapped.code == DeltaChatErrorCode.auth;
       throw EmailProvisioningException(
         isAuthFailure
@@ -4403,10 +4406,10 @@ class EmailService {
     final int chatId = chat == null
         ? 0
         : (await _deltaChatIdForAccount(
-              chat: chat,
-              deltaAccountId: account.deltaAccountId,
-            ) ??
-            0);
+                chat: chat,
+                deltaAccountId: account.deltaAccountId,
+              ) ??
+              0);
     final deltaIds = await _transport.searchMessages(
       chatId: chatId,
       query: query,
@@ -4589,8 +4592,8 @@ class EmailService {
     final resolvedBody = trimmedBody.isNotEmpty
         ? trimmedBody
         : (normalizedHtml == null
-            ? ''
-            : HtmlContentCodec.toPlainText(normalizedHtml));
+              ? ''
+              : HtmlContentCodec.toPlainText(normalizedHtml));
     final msgId = await _guardDeltaOperation(
       operation: 'send reply',
       body: () => _transport.sendTextWithQuote(
@@ -4725,21 +4728,21 @@ class EmailService {
     return _transport.getContact(contactId);
   }
 
-  Future<List<DeltaContact>> _hydrateContactsByIds(
-    List<int> ids,
-  ) async {
+  Future<List<DeltaContact>> _hydrateContactsByIds(List<int> ids) async {
     if (ids.isEmpty) {
       return const <DeltaContact>[];
     }
     final contacts = <DeltaContact>[];
-    for (var index = 0;
-        index < ids.length;
-        index += _contactHydrationConcurrentOps) {
-      final chunk =
-          ids.skip(index).take(_contactHydrationConcurrentOps).toList();
-      final resolved = await Future.wait(
-        chunk.map(_transport.getContact),
-      );
+    for (
+      var index = 0;
+      index < ids.length;
+      index += _contactHydrationConcurrentOps
+    ) {
+      final chunk = ids
+          .skip(index)
+          .take(_contactHydrationConcurrentOps)
+          .toList();
+      final resolved = await Future.wait(chunk.map(_transport.getContact));
       for (final contact in resolved) {
         if (contact != null) {
           contacts.add(contact);

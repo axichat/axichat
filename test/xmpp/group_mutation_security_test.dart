@@ -54,8 +54,8 @@ void main() {
 
     xmppService = XmppService(
       buildConnection: () => mockConnection,
-      buildStateStore: (_, __) => mockStateStore,
-      buildDatabase: (_, __) => database,
+      buildStateStore: (_, _) => mockStateStore,
+      buildDatabase: (_, _) => database,
       notificationService: mockNotificationService,
     );
   });

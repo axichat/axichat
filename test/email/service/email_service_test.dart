@@ -111,8 +111,9 @@ void main() {
     when(() => transport.selfJid).thenReturn('dc-self@user.delta.chat');
     when(() => transport.accountsSupported).thenReturn(true);
     when(() => transport.accountsActive).thenReturn(false);
-    when(() => transport.activeAccountId)
-        .thenReturn(DeltaAccountDefaults.legacyId);
+    when(
+      () => transport.activeAccountId,
+    ).thenReturn(DeltaAccountDefaults.legacyId);
     when(
       () => transport.createAccount(),
     ).thenAnswer((_) async => DeltaAccountDefaults.legacyId);
@@ -399,15 +400,17 @@ void main() {
       passwordOverride: 'password',
     );
 
-    final capturedAdditional = verify(
-      () => transport.configureAccount(
-        address: any(named: 'address'),
-        password: any(named: 'password'),
-        displayName: any(named: 'displayName'),
-        additional: captureAny(named: 'additional'),
-        accountId: any(named: 'accountId'),
-      ),
-    ).captured.single as Map<String, String>;
+    final capturedAdditional =
+        verify(
+              () => transport.configureAccount(
+                address: any(named: 'address'),
+                password: any(named: 'password'),
+                displayName: any(named: 'displayName'),
+                additional: captureAny(named: 'additional'),
+                accountId: any(named: 'accountId'),
+              ),
+            ).captured.single
+            as Map<String, String>;
     expect(
       capturedAdditional,
       equals({
@@ -711,12 +714,14 @@ void main() {
         ),
         isTrue,
       );
-      final participantsCapture = verify(
-        () => database.createMessageShare(
-          share: any(named: 'share'),
-          participants: captureAny(named: 'participants'),
-        ),
-      ).captured.single as List<MessageParticipantData>;
+      final participantsCapture =
+          verify(
+                () => database.createMessageShare(
+                  share: any(named: 'share'),
+                  participants: captureAny(named: 'participants'),
+                ),
+              ).captured.single
+              as List<MessageParticipantData>;
       expect(participantsCapture, hasLength(3));
       verify(
         () => transport.sendText(

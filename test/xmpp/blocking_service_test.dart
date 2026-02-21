@@ -38,8 +38,8 @@ void main() {
     );
     xmppService = XmppService(
       buildConnection: () => mockConnection,
-      buildStateStore: (_, __) => mockStateStore,
-      buildDatabase: (_, __) => database,
+      buildStateStore: (_, _) => mockStateStore,
+      buildDatabase: (_, _) => database,
       notificationService: mockNotificationService,
     );
     jids = List.generate(4, (_) => generateRandomJid());
@@ -63,8 +63,8 @@ void main() {
       () async {
         expectLater(
           xmppService.blocklistStream().map(
-                (items) => items.map((item) => item.jid).toList(),
-              ),
+            (items) => items.map((item) => item.jid).toList(),
+          ),
           emitsInOrder([
             [],
             ...List.generate(length, (index) => jids.sublist(0, index)),

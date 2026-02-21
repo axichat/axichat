@@ -129,7 +129,7 @@ class LocationAutocompleteHelper {
 
 class _LocationEntry {
   _LocationEntry({required this.label, this.isHistory = false})
-      : labelLower = label.toLowerCase();
+    : labelLower = label.toLowerCase();
 
   final String label;
   final String labelLower;

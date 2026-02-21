@@ -160,14 +160,8 @@ class _CapabilityChip extends StatelessWidget {
     final sizing = context.sizing;
     final radii = context.radii;
     final chipPadding = compact
-        ? EdgeInsets.symmetric(
-            horizontal: spacing.s,
-            vertical: spacing.xs,
-          )
-        : EdgeInsets.symmetric(
-            horizontal: spacing.m,
-            vertical: spacing.s,
-          );
+        ? EdgeInsets.symmetric(horizontal: spacing.s, vertical: spacing.xs)
+        : EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.s);
     final labelStyle = context.textTheme.small.copyWith(
       color: colors.foreground,
       fontWeight: FontWeight.w600,
@@ -206,13 +200,13 @@ class _CapabilityChip extends StatelessWidget {
                 TextSpan(
                   children: switch (data.level) {
                     _CapabilityLevel.ready || _CapabilityLevel.syncing => [
-                        TextSpan(text: data.status, style: statusStyle),
-                      ],
+                      TextSpan(text: data.status, style: statusStyle),
+                    ],
                     _ => [
-                        TextSpan(text: data.label, style: labelStyle),
-                        TextSpan(text: ' • ', style: separatorStyle),
-                        TextSpan(text: data.status, style: statusStyle),
-                      ],
+                      TextSpan(text: data.label, style: labelStyle),
+                      TextSpan(text: ' • ', style: separatorStyle),
+                      TextSpan(text: data.status, style: statusStyle),
+                    ],
                   },
                 ),
                 maxLines: maxLines,

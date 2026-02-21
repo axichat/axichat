@@ -80,8 +80,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   final Set<String> _enteringKeys = <String>{};
   final Set<String> _removingKeys = <String>{};
   List<FanOutTarget> _suggestions = const <FanOutTarget>[];
-  final ValueNotifier<int?> _highlightedSuggestionIndex =
-      ValueNotifier<int?>(null);
+  final ValueNotifier<int?> _highlightedSuggestionIndex = ValueNotifier<int?>(
+    null,
+  );
   String? _pendingRemovalKey;
   late final AnimationController _collapseController;
   late final Animation<double> _collapseAnimation;
@@ -190,8 +191,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
             status: _statusFor(recipient),
             pendingRemoval: _pendingRemovalKey == recipient.key,
             onToggle: () => widget.onRecipientToggled(recipient.key),
-            onRemove:
-                recipient.pinned ? null : () => _removeRecipient(recipient.key),
+            onRemove: recipient.pinned
+                ? null
+                : () => _removeRecipient(recipient.key),
           ),
         ),
       if (!_barCollapsed && !_expanded && overflow > 0)
@@ -232,8 +234,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final headerStyle = chipsBarHeaderTextStyle(context);
     final normalizedVisibilityLabel = widget.visibilityLabel?.trim() ?? '';
     final showVisibilityBadge = normalizedVisibilityLabel.isNotEmpty;
-    final arrowIcon =
-        _barCollapsed ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up;
+    final arrowIcon = _barCollapsed
+        ? Icons.keyboard_arrow_down
+        : Icons.keyboard_arrow_up;
     final shareTokenSignatureEnabled = context.select<SettingsCubit, bool>(
       (cubit) => cubit.state.shareTokenSignatureEnabled,
     );
@@ -476,7 +479,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     Set<String> domains,
     Set<String> addresses,
     Set<String> addressesLower,
-  }) _computeSuggestionPools() {
+  })
+  _computeSuggestionPools() {
     final allowAddressTargets = widget.allowAddressTargets;
     final availableChats = widget.availableChats;
     final recipients = widget.recipients;
@@ -548,8 +552,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       nextDomains = domains;
       nextAddresses = addresses;
     }
-    final lowerAddresses =
-        nextAddresses.map((address) => address.toLowerCase()).toSet();
+    final lowerAddresses = nextAddresses
+        .map((address) => address.toLowerCase())
+        .toSet();
     return (
       availableChats: nextAvailable,
       domains: nextDomains,
@@ -611,8 +616,10 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     _handleRecipientAdded(
       FanOutTarget.address(
         address: value,
-        shareSignatureEnabled:
-            context.read<SettingsCubit>().state.shareTokenSignatureEnabled,
+        shareSignatureEnabled: context
+            .read<SettingsCubit>()
+            .state
+            .shareTokenSignatureEnabled,
       ),
     );
     return true;
@@ -876,14 +883,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     const maxSuggestions = 8;
     final knownAddressesLower = _knownAddressesLower;
     FanOutTarget chatTarget(Chat chat) => FanOutTarget.chat(
-          chat: chat,
-          shareSignatureEnabled:
-              chat.shareSignatureEnabled ?? shareTokenSignatureEnabled,
-        );
+      chat: chat,
+      shareSignatureEnabled:
+          chat.shareSignatureEnabled ?? shareTokenSignatureEnabled,
+    );
     FanOutTarget addressTarget(String address) => FanOutTarget.address(
-          address: address,
-          shareSignatureEnabled: shareTokenSignatureEnabled,
-        );
+      address: address,
+      shareSignatureEnabled: shareTokenSignatureEnabled,
+    );
     final trimmed = raw.trim();
     final query = trimmed.toLowerCase();
     final results = <FanOutTarget>[];
@@ -941,25 +948,27 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       final localPart = parts.localPart;
       final typedDomain = parts.domainPart.toLowerCase();
       final normalizedLocal = localPart.toLowerCase();
-      final domainEntries = knownDomains
-          .map(
-            (domain) => _DomainCompletion(
-              domain: domain,
-              hasExactAddress:
-                  knownAddressesLower.contains('$normalizedLocal@$domain'),
-            ),
-          )
-          .where(
-            (entry) =>
-                typedDomain.isEmpty || entry.domain.startsWith(typedDomain),
-          )
-          .toList()
-        ..sort((a, b) {
-          if (a.hasExactAddress != b.hasExactAddress) {
-            return a.hasExactAddress ? -1 : 1;
-          }
-          return a.domain.compareTo(b.domain);
-        });
+      final domainEntries =
+          knownDomains
+              .map(
+                (domain) => _DomainCompletion(
+                  domain: domain,
+                  hasExactAddress: knownAddressesLower.contains(
+                    '$normalizedLocal@$domain',
+                  ),
+                ),
+              )
+              .where(
+                (entry) =>
+                    typedDomain.isEmpty || entry.domain.startsWith(typedDomain),
+              )
+              .toList()
+            ..sort((a, b) {
+              if (a.hasExactAddress != b.hasExactAddress) {
+                return a.hasExactAddress ? -1 : 1;
+              }
+              return a.domain.compareTo(b.domain);
+            });
       for (final entry in domainEntries) {
         final suggestion = '$localPart@${entry.domain}';
         if (addTarget(addressTarget(suggestion))) {
@@ -1046,8 +1055,9 @@ class _RecipientChip extends StatelessWidget {
       baseColor.withValues(alpha: overlayOpacity),
       colors.card,
     );
-    final foreground =
-        included ? _foregroundColor(background, colors) : colors.foreground;
+    final foreground = included
+        ? _foregroundColor(background, colors)
+        : colors.foreground;
     final accentColor = baseColor.withValues(alpha: 1);
     final removalColor = colors.destructive;
     final effectiveBackground = pendingRemoval
@@ -1153,9 +1163,7 @@ class _RecipientChipAvatar extends StatelessWidget {
             jid: target.address ?? target.displayName ?? '',
             size: avatarSize,
             shape: AxiAvatarShape.squircle,
-            avatarPath: _avatarPathForKey(
-              target.address ?? target.displayName,
-            ),
+            avatarPath: _avatarPathForKey(target.address ?? target.displayName),
           );
     final badgeIcon = _statusIcon(status, colors);
     if (badgeIcon == null) {
@@ -1180,10 +1188,7 @@ class _RecipientChipAvatar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: badgeBackground,
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: badgeBorder,
-                  width: badgeBorderWidth,
-                ),
+                border: Border.all(color: badgeBorder, width: badgeBorderWidth),
               ),
               child: Center(child: badgeIcon),
             ),
@@ -1197,23 +1202,23 @@ class _RecipientChipAvatar extends StatelessWidget {
     const double statusBadgeSize = 12.0;
     return switch (state) {
       FanOutRecipientState.failed => Icon(
-          Icons.warning_amber_rounded,
-          size: statusBadgeSize - 2,
-          color: colors.destructive,
-        ),
+        Icons.warning_amber_rounded,
+        size: statusBadgeSize - 2,
+        color: colors.destructive,
+      ),
       FanOutRecipientState.sent => Icon(
-          Icons.check,
-          size: statusBadgeSize - 2,
-          color: colors.primary,
-        ),
+        Icons.check,
+        size: statusBadgeSize - 2,
+        color: colors.primary,
+      ),
       FanOutRecipientState.queued || FanOutRecipientState.sending => SizedBox(
-          width: statusBadgeSize - 2,
-          height: statusBadgeSize - 2,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: colors.mutedForeground,
-          ),
+        width: statusBadgeSize - 2,
+        height: statusBadgeSize - 2,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: colors.mutedForeground,
         ),
+      ),
       null => null,
     };
   }
@@ -1459,7 +1464,8 @@ final class _RecipientAutocompleteOverlayState
   }
 
   void _syncPortalVisibility() {
-    final shouldShow = widget.focusNode.hasFocus &&
+    final shouldShow =
+        widget.focusNode.hasFocus &&
         (widget.controller.text.trim().isNotEmpty ||
             widget.showSuggestionsWhenEmpty) &&
         _options.isNotEmpty;
@@ -1514,10 +1520,14 @@ final class _RecipientAutocompleteOverlayState
         : (triggerBox?.localToGlobal(Offset.zero) ?? Offset.zero);
 
     final view = View.of(overlayContext);
-    final viewPadding =
-        EdgeInsets.fromViewPadding(view.padding, view.devicePixelRatio);
-    final viewInsets =
-        EdgeInsets.fromViewPadding(view.viewInsets, view.devicePixelRatio);
+    final viewPadding = EdgeInsets.fromViewPadding(
+      view.padding,
+      view.devicePixelRatio,
+    );
+    final viewInsets = EdgeInsets.fromViewPadding(
+      view.viewInsets,
+      view.devicePixelRatio,
+    );
     final fallbackScreenSize = view.physicalSize / view.devicePixelRatio;
 
     final screenSize = overlayBox?.size ?? fallbackScreenSize;
@@ -1530,7 +1540,8 @@ final class _RecipientAutocompleteOverlayState
       _suggestionMaxHeight,
       _options.length * _suggestionTileHeight,
     );
-    final belowSpace = visibleHeight -
+    final belowSpace =
+        visibleHeight -
         (triggerOrigin.dy + triggerSize.height) -
         bottomSafe -
         _overlayMargin;
@@ -1544,8 +1555,10 @@ final class _RecipientAutocompleteOverlayState
     final placeBelow = belowHeight >= aboveHeight;
     final maxHeight = placeBelow ? belowHeight : aboveHeight;
 
-    final maxAllowedWidth =
-        math.max(0.0, screenSize.width - _overlayHorizontalMargin * 2);
+    final maxAllowedWidth = math.max(
+      0.0,
+      screenSize.width - _overlayHorizontalMargin * 2,
+    );
     final maxWidth = math.min(_overlayPreferredMaxWidth, maxAllowedWidth);
     final minWidth = math.min(_overlayPreferredMinWidth, maxWidth);
 
@@ -1575,7 +1588,8 @@ final class _RecipientAutocompleteOverlayState
     const double gapBeforeTrailingIcon = 12.0;
     const double trailingIconSize = 16.0;
     const double extraTextBreathingRoom = 8.0;
-    const double fixedWidth = tileHorizontalPadding +
+    const double fixedWidth =
+        tileHorizontalPadding +
         avatarSize +
         gapAfterAvatar +
         gapBeforeTrailingIcon +
@@ -1594,7 +1608,8 @@ final class _RecipientAutocompleteOverlayState
     for (final option in _options) {
       final chat = option.chat;
       final title = chat?.title ?? option.displayName ?? option.address ?? '';
-      final subtitleSource = chat?.emailAddress ??
+      final subtitleSource =
+          chat?.emailAddress ??
           chat?.jid ??
           option.address ??
           option.displayName ??
@@ -1665,7 +1680,7 @@ final class _RecipientAutocompleteOverlayState
 
     return PopScope(
       canPop: canPop,
-      onPopInvokedWithResult: (didPop, __) {
+      onPopInvokedWithResult: (didPop, _) {
         if (didPop || canPop) {
           return;
         }
@@ -1698,10 +1713,12 @@ final class _RecipientAutocompleteOverlayState
             );
             final dividerColor = overlayColors.border.withValues(alpha: 0.55);
             final hoverColor = overlayColors.muted.withValues(alpha: 0.08);
-            final highlightColor =
-                overlayColors.primary.withValues(alpha: 0.12);
-            final trailingIconColor =
-                overlayColors.muted.withValues(alpha: 0.9);
+            final highlightColor = overlayColors.primary.withValues(
+              alpha: 0.12,
+            );
+            final trailingIconColor = overlayColors.muted.withValues(
+              alpha: 0.9,
+            );
             final overlayWidth = _computeOverlayWidth(
               overlayContext: overlayContext,
               limits: limits,
@@ -1743,8 +1760,9 @@ final class _RecipientAutocompleteOverlayState
                               color: overlayColors.card,
                               borderRadius: overlayRadius,
                               border: Border.all(
-                                color:
-                                    overlayColors.border.withValues(alpha: 0.9),
+                                color: overlayColors.border.withValues(
+                                  alpha: 0.9,
+                                ),
                                 width: 1,
                               ),
                               boxShadow: [
@@ -1807,8 +1825,9 @@ final class _RecipientAutocompleteOverlayState
               key: _triggerKey,
               height: chipsBarHeight,
               child: Padding(
-                padding:
-                    EdgeInsets.symmetric(horizontal: widget.fieldOuterPadding),
+                padding: EdgeInsets.symmetric(
+                  horizontal: widget.fieldOuterPadding,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: DecoratedBox(
@@ -1848,6 +1867,7 @@ final class _RecipientAutocompleteOverlayState
                           contentPadding: EdgeInsets.zero,
                         ),
                         style: textStyle,
+                        cursorHeight: textStyle.fontSize,
                         strutStyle: StrutStyle.fromTextStyle(textStyle),
                         textInputAction: TextInputAction.done,
                         onEditingComplete: () =>
@@ -1946,8 +1966,10 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
     if (options.isEmpty) {
       return const SizedBox.shrink();
     }
-    final height =
-        math.min(options.length * _suggestionTileHeight, widget.maxHeight);
+    final height = math.min(
+      options.length * _suggestionTileHeight,
+      widget.maxHeight,
+    );
     final scrollable = options.length * _suggestionTileHeight > height;
     return SizedBox(
       height: height,
@@ -1967,7 +1989,8 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
             final chat = option.chat;
             final title =
                 chat?.title ?? option.displayName ?? option.address ?? '';
-            final subtitleSource = chat?.emailAddress ??
+            final subtitleSource =
+                chat?.emailAddress ??
                 chat?.jid ??
                 option.address ??
                 option.displayName ??
@@ -1978,7 +2001,8 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
             final border = index == options.length - 1
                 ? BorderSide.none
                 : BorderSide(color: widget.dividerColor, width: 0.7);
-            final highlighted = widget.highlightedIndex != null &&
+            final highlighted =
+                widget.highlightedIndex != null &&
                 widget.highlightedIndex == index;
             return InkWell(
               onTap: () => widget.onSelected(option),
@@ -2056,7 +2080,8 @@ class _RecipientsAvatarStrip extends StatelessWidget {
     }
     final participants = <String>[];
     for (final recipient in recipients) {
-      final jid = recipient.target.chat?.jid ??
+      final jid =
+          recipient.target.chat?.jid ??
           recipient.target.address ??
           recipient.key;
       if (jid.isEmpty) continue;
@@ -2092,7 +2117,8 @@ class _CaterpillarAvatarStrip extends StatelessWidget {
         final recipientAvatarSize = spacing.m;
         final recipientAvatarOverlap = spacing.xs;
         final recipientOverflowGap = spacing.xs;
-        final maxWidth = constraints.hasBoundedWidth &&
+        final maxWidth =
+            constraints.hasBoundedWidth &&
                 constraints.maxWidth.isFinite &&
                 constraints.maxWidth > 0
             ? constraints.maxWidth
@@ -2122,14 +2148,12 @@ class _CaterpillarAvatarStrip extends StatelessWidget {
           final offset = visible.isEmpty
               ? 0.0
               : visible.length *
-                      (recipientAvatarSize - recipientAvatarOverlap) +
-                  recipientOverflowGap;
+                        (recipientAvatarSize - recipientAvatarOverlap) +
+                    recipientOverflowGap;
           children.add(
             Positioned(
               left: offset,
-              child: _RecipientOverflowAvatar(
-                backgroundColor: backgroundColor,
-              ),
+              child: _RecipientOverflowAvatar(backgroundColor: backgroundColor),
             ),
           );
         }

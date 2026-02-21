@@ -13,18 +13,18 @@ import 'package:flutter/services.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 
-typedef TaskTileContextMenuCallback = void Function(
-    Offset localPosition, Offset normalizedPosition);
+typedef TaskTileContextMenuCallback =
+    void Function(Offset localPosition, Offset normalizedPosition);
 
 extension PointerDeviceKindX on PointerDeviceKind {
   bool get usesResizeLongPress => switch (this) {
-        PointerDeviceKind.touch => true,
-        PointerDeviceKind.stylus => true,
-        PointerDeviceKind.invertedStylus => true,
-        PointerDeviceKind.mouse => false,
-        PointerDeviceKind.trackpad => false,
-        PointerDeviceKind.unknown => true,
-      };
+    PointerDeviceKind.touch => true,
+    PointerDeviceKind.stylus => true,
+    PointerDeviceKind.invertedStylus => true,
+    PointerDeviceKind.mouse => false,
+    PointerDeviceKind.trackpad => false,
+    PointerDeviceKind.unknown => true,
+  };
 }
 
 class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
@@ -132,22 +132,22 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     TaskTileContextMenuCallback? onContextMenuPosition,
     double handleExtent = 8.0,
     super.child,
-  })  : _task = task,
-        _interactionController = interactionController,
-        _minutesPerStep = minutesPerStep,
-        _stepHeight = stepHeight,
-        _enableInteractions = enableInteractions,
-        _isSelectionMode = isSelectionMode,
-        _isSelected = isSelected,
-        _isPopoverOpen = isPopoverOpen,
-        _onResizePreview = onResizePreview,
-        _onResizeEnd = onResizeEnd,
-        _onResizePointerMove = onResizePointerMove,
-        _onDragPointerDown = onDragPointerDown,
-        _onTap = onTap,
-        _onToggleSelection = onToggleSelection,
-        _onContextMenuPosition = onContextMenuPosition,
-        _handleExtent = handleExtent {
+  }) : _task = task,
+       _interactionController = interactionController,
+       _minutesPerStep = minutesPerStep,
+       _stepHeight = stepHeight,
+       _enableInteractions = enableInteractions,
+       _isSelectionMode = isSelectionMode,
+       _isSelected = isSelected,
+       _isPopoverOpen = isPopoverOpen,
+       _onResizePreview = onResizePreview,
+       _onResizeEnd = onResizeEnd,
+       _onResizePointerMove = onResizePointerMove,
+       _onDragPointerDown = onDragPointerDown,
+       _onTap = onTap,
+       _onToggleSelection = onToggleSelection,
+       _onContextMenuPosition = onContextMenuPosition,
+       _handleExtent = handleExtent {
     onEnter = _handlePointerEnter;
     onExit = _handlePointerExit;
     cursor = SystemMouseCursors.click;
@@ -643,15 +643,16 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       return;
     }
     _lastAppliedStep = stepToApply;
-    final double stepMinutes =
-        (minutesPerStep <= 0 ? 15 : minutesPerStep).clamp(1, 120).toDouble();
+    final double stepMinutes = (minutesPerStep <= 0 ? 15 : minutesPerStep)
+        .clamp(1, 120)
+        .toDouble();
     final double hoursDelta = (deltaSteps * stepMinutes) / 60.0;
     final double minDurationHours = stepMinutes / 60.0;
 
     if (_activeHandle == 'top') {
       final DateTime scheduled = task.scheduledTime!;
-      final double currentEndHour =
-          (_currentStartHour + _currentDurationHours).clamp(0.0, 24.0);
+      final double currentEndHour = (_currentStartHour + _currentDurationHours)
+          .clamp(0.0, 24.0);
       double newStartHour = (_currentStartHour + hoursDelta).clamp(
         0.0,
         currentEndHour - minDurationHours,
@@ -802,9 +803,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     }
     _activeHandle = 'bottom';
     _tempDuration = Duration(
-      minutes: ((task.duration ?? const Duration(minutes: 15)).inMinutes +
-              minutesPerStep.clamp(1, 60))
-          .clamp(15, 1440),
+      minutes:
+          ((task.duration ?? const Duration(minutes: 15)).inMinutes +
+                  minutesPerStep.clamp(1, 60))
+              .clamp(15, 1440),
     );
     final CalendarTask? preview = _resizePreview();
     if (preview != null) {

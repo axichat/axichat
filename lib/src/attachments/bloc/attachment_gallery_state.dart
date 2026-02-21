@@ -4,7 +4,7 @@
 part of 'attachment_gallery_bloc.dart';
 
 @freezed
-class AttachmentGalleryState with _$AttachmentGalleryState {
+abstract class AttachmentGalleryState with _$AttachmentGalleryState {
   const factory AttachmentGalleryState({
     @Default(RequestStatus.none) RequestStatus status,
     @Default(<AttachmentGalleryItem>[]) List<AttachmentGalleryItem> items,
@@ -26,7 +26,7 @@ class AttachmentGalleryState with _$AttachmentGalleryState {
 }
 
 @freezed
-class AttachmentGalleryEntryData with _$AttachmentGalleryEntryData {
+abstract class AttachmentGalleryEntryData with _$AttachmentGalleryEntryData {
   const factory AttachmentGalleryEntryData({
     required AttachmentGalleryItem item,
     required Chat? chat,

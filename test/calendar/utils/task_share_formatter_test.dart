@@ -45,14 +45,14 @@ void main() {
       const String title = 'Annual review';
 
       CalendarTask makeTask(int interval) => CalendarTask.create(
-            title: title,
-            scheduledTime: start,
-            duration: duration,
-            recurrence: RecurrenceRule(
-              frequency: RecurrenceFrequency.yearly,
-              interval: interval,
-            ),
-          );
+        title: title,
+        scheduledTime: start,
+        duration: duration,
+        recurrence: RecurrenceRule(
+          frequency: RecurrenceFrequency.yearly,
+          interval: interval,
+        ),
+      );
 
       final AppLocalizationsEn l10n = AppLocalizationsEn();
       final String yearlyText = TaskShareFormatter.describe(

@@ -4,10 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('hintTransportForAddress', () {
     test('returns xmpp for axi.im addresses', () {
-      expect(
-        hintTransportForAddress('person@axi.im'),
-        MessageTransport.xmpp,
-      );
+      expect(hintTransportForAddress('person@axi.im'), MessageTransport.xmpp);
     });
 
     test('returns xmpp for conversations.im addresses', () {

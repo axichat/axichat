@@ -50,8 +50,7 @@ void main() {
     int day, [
     int hour = 0,
     int minute = 0,
-  ]) =>
-      tz.TZDateTime(location, year, month, day, hour, minute);
+  ]) => tz.TZDateTime(location, year, month, day, hour, minute);
 
   setUpAll(() {
     tzdata.initializeTimeZones();
@@ -60,15 +59,15 @@ void main() {
   });
 
   DateTime wallTime(tz.TZDateTime dt) => DateTime(
-        dt.year,
-        dt.month,
-        dt.day,
-        dt.hour,
-        dt.minute,
-        dt.second,
-        dt.millisecond,
-        dt.microsecond,
-      );
+    dt.year,
+    dt.month,
+    dt.day,
+    dt.hour,
+    dt.minute,
+    dt.second,
+    dt.millisecond,
+    dt.microsecond,
+  );
 
   group('NlScheduleAdapter', () {
     test('maps scheduled bucket with explicit times', () {
