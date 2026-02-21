@@ -5428,6 +5428,7 @@ mixin MessageService
         syncMessage,
         event,
         metadata: metadata,
+        isSelfCalendar: isSelfCalendar,
         allowSelfDownload: isSelfSender,
         onMessageDecoded: (fullMessage, decodedEvent) async {
           if (isSelfCalendar) {
@@ -5706,6 +5707,7 @@ mixin MessageService
     CalendarSyncMessage syncMessage,
     mox.MessageEvent event, {
     FileMetadataData? metadata,
+    required bool isSelfCalendar,
     required bool allowSelfDownload,
     required Future<bool> Function(
       CalendarSyncMessage fullMessage,
@@ -5733,7 +5735,10 @@ mixin MessageService
     }
     if (!hasUrl && metadata == null) {
       _log.warning('Snapshot message missing URL');
-      await _maybeNotifySnapshotUnavailable(event);
+      await _maybeNotifySnapshotUnavailable(
+        event,
+        isSelfCalendar: isSelfCalendar,
+      );
       return;
     }
 
@@ -5750,20 +5755,29 @@ mixin MessageService
       );
       if (decoded == null) {
         _log.warning(_calendarSnapshotDecodeFailedMessage);
-        await _maybeNotifySnapshotUnavailable(event);
+        await _maybeNotifySnapshotUnavailable(
+          event,
+          isSelfCalendar: isSelfCalendar,
+        );
         return;
       }
 
       if (!CalendarSnapshotCodec.verifyChecksum(decoded)) {
         _log.warning(_calendarSnapshotChecksumFailedMessage);
-        await _maybeNotifySnapshotUnavailable(event);
+        await _maybeNotifySnapshotUnavailable(
+          event,
+          isSelfCalendar: isSelfCalendar,
+        );
         return;
       }
 
       final expectedChecksum = syncMessage.snapshotChecksum;
       if (expectedChecksum != null && expectedChecksum != decoded.checksum) {
         _log.warning(_calendarSnapshotChecksumMismatchMessage);
-        await _maybeNotifySnapshotUnavailable(event);
+        await _maybeNotifySnapshotUnavailable(
+          event,
+          isSelfCalendar: isSelfCalendar,
+        );
         return;
       }
 
@@ -5918,7 +5932,13 @@ mixin MessageService
     }
   }
 
-  Future<void> _maybeNotifySnapshotUnavailable(mox.MessageEvent event) async {
+  Future<void> _maybeNotifySnapshotUnavailable(
+    mox.MessageEvent event, {
+    required bool isSelfCalendar,
+  }) async {
+    if (!isSelfCalendar) {
+      return;
+    }
     if (!_calendarMamRehydrateInFlight && !event.isFromMAM) {
       return;
     }
@@ -6065,8 +6085,8 @@ mixin MessageService
       }
 
       await _backfillCalendarFromArchive(jid: selfJid);
-      if (!_calendarMamSnapshotSeen) {
-        await _emitCalendarSnapshotWarning();
+      if (!_calendarMamSnapshotSeen &&
+          _calendarMamSnapshotUnavailableNotified) {
         await _requestCalendarSnapshotFallback(selfJid);
       }
       _log.info('Calendar rehydration query complete');
