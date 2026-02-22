@@ -52,7 +52,8 @@ class ChatsList extends StatelessWidget {
         return BlocBuilder<RosterCubit, RosterState>(
           builder: (context, rosterState) {
             final rosterItems = rosterState.items ??
-                (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+                (context.read<RosterCubit>()[RosterCubit.itemsCacheKey]
+                    as List<RosterItem>?) ??
                 const <RosterItem>[];
             return _ChatsListSync(
               searchState: searchState,

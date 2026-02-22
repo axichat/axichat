@@ -19,6 +19,7 @@ part 'blocklist_state.dart';
 class BlocklistCubit extends Cubit<BlocklistState>
     with BlocCache<BlocklistState> {
   static const String blocklistItemsCacheKey = 'items';
+  static const String blocklistVisibleItemsCacheKey = 'visibleItems';
 
   BlocklistCubit({required XmppService xmppService})
       : _xmppService = xmppService,
@@ -47,6 +48,7 @@ class BlocklistCubit extends Cubit<BlocklistState>
     final current = change.currentState;
     if (current is BlocklistAvailable) {
       cache[blocklistItemsCacheKey] = current.items;
+      cache[blocklistVisibleItemsCacheKey] = current.visibleItems;
     }
   }
 

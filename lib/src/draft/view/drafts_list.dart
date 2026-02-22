@@ -48,9 +48,13 @@ class _DraftsListState extends State<DraftsList> {
         buildWhen: (_, current) => current is DraftsAvailable,
         builder: (context, state) {
           final l10n = context.l10n;
-          final cachedItems =
-              context.watch<DraftCubit>()['items'] as List<Draft>?;
-          final List<Draft>? items = state.items ?? cachedItems;
+          final cachedItems = context
+              .read<DraftCubit>()[DraftCubit.itemsCacheKey] as List<Draft>?;
+          final cachedVisibleItems =
+              context.read<DraftCubit>()[DraftCubit.visibleItemsCacheKey]
+                  as List<Draft>?;
+          final List<Draft>? items =
+              state.items ?? cachedItems ?? cachedVisibleItems;
 
           if (items == null) {
             return Center(
@@ -64,7 +68,7 @@ class _DraftsListState extends State<DraftsList> {
             buildWhen: (previous, current) => previous.items != current.items,
             builder: (context, rosterState) {
               final rosterItems = rosterState.items ??
-                  (context.watch<RosterCubit>()['items']
+                  (context.read<RosterCubit>()[RosterCubit.itemsCacheKey]
                       as List<RosterItem>?) ??
                   const <RosterItem>[];
               final avatarByJid = <String, String?>{
@@ -73,7 +77,7 @@ class _DraftsListState extends State<DraftsList> {
                       item.avatarPath,
               };
               return _DraftsListBody(
-                items: state.visibleItems ?? items,
+                items: state.visibleItems ?? cachedVisibleItems ?? items,
                 l10n: l10n,
                 avatarByJid: avatarByJid,
               );

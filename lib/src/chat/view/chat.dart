@@ -525,7 +525,8 @@ class _UnknownSenderBanner extends StatelessWidget {
           buildWhen: (previous, current) => previous.items != current.items,
           builder: (context, rosterState) {
             final rosterItems = rosterState.items ??
-                (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+                (context.read<RosterCubit>()[RosterCubit.itemsCacheKey]
+                    as List<RosterItem>?) ??
                 const <RosterItem>[];
             final rosterEntry = rosterItems
                 .where((entry) => entry.jid == chat.remoteJid)
@@ -3733,8 +3734,9 @@ class _ChatState extends State<Chat> {
                   : fanOutReports.entries.last;
               final showAttachmentWarning =
                   warningEntry?.value.attachmentWarning ?? false;
-              final rosterItems = context.watch<RosterCubit>().state.items ??
-                  (context.watch<RosterCubit>()['items']
+              final rosterCubit = context.watch<RosterCubit>();
+              final rosterItems = rosterCubit.state.items ??
+                  (rosterCubit[RosterCubit.itemsCacheKey]
                       as List<RosterItem>?) ??
                   const <RosterItem>[];
               final chatItems =
@@ -4040,8 +4042,8 @@ class _ChatState extends State<Chat> {
                                   previous.items != current.items,
                               builder: (context, rosterState) {
                                 final rosterItems = rosterState.items ??
-                                    (context.watch<RosterCubit>()['items']
-                                        as List<RosterItem>?) ??
+                                    (context.read<RosterCubit>()[RosterCubit
+                                        .itemsCacheKey] as List<RosterItem>?) ??
                                     const <RosterItem>[];
                                 final item = rosterItems
                                     .where((entry) => entry.jid == jid)
@@ -11509,8 +11511,9 @@ class _ChatComposerSection extends StatelessWidget {
         bloc: locate<ChatsCubit>(),
         selector: (state) => state.recipientAddressSuggestions,
         builder: (context, recipientAddressSuggestions) {
-          final rosterItems = context.watch<RosterCubit>().state.items ??
-              (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+          final rosterCubit = context.watch<RosterCubit>();
+          final rosterItems = rosterCubit.state.items ??
+              (rosterCubit[RosterCubit.itemsCacheKey] as List<RosterItem>?) ??
               const <RosterItem>[];
           return RecipientChipsBar(
             recipients: recipients,
@@ -14794,8 +14797,9 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
           bloc: locate<ChatsCubit>(),
           selector: (state) => state.recipientAddressSuggestions,
           builder: (context, recipientAddressSuggestions) {
-            final rosterItems = context.watch<RosterCubit>().state.items ??
-                (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+            final rosterCubit = context.watch<RosterCubit>();
+            final rosterItems = rosterCubit.state.items ??
+                (rosterCubit[RosterCubit.itemsCacheKey] as List<RosterItem>?) ??
                 const <RosterItem>[];
             return RecipientChipsBar(
               recipients: _recipients,

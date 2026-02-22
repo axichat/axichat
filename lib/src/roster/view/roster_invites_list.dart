@@ -32,9 +32,15 @@ class RosterInvitesList extends StatelessWidget {
             previous.visibleInvites != current.visibleInvites,
         builder: (context, state) {
           final cachedInvites =
-              context.watch<RosterCubit>()['invites'] as List<Invite>?;
-          final invites =
-              state.visibleInvites ?? state.invites ?? cachedInvites;
+              context.read<RosterCubit>()[RosterCubit.invitesCacheKey]
+                  as List<Invite>?;
+          final cachedVisibleInvites =
+              context.read<RosterCubit>()[RosterCubit.visibleInvitesCacheKey]
+                  as List<Invite>?;
+          final invites = state.visibleInvites ??
+              cachedVisibleInvites ??
+              state.invites ??
+              cachedInvites;
 
           if (invites == null) {
             return Center(

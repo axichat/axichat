@@ -93,8 +93,9 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final rosterItems = context.watch<RosterCubit>().state.items ??
-        (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+    final rosterCubit = context.watch<RosterCubit>();
+    final rosterItems = rosterCubit.state.items ??
+        (rosterCubit[RosterCubit.itemsCacheKey] as List<RosterItem>?) ??
         const <RosterItem>[];
     final chatsSelfJid = widget.locate<ChatsCubit>().selfJid;
     final profileJid = context.watch<ProfileCubit>().state.jid;
