@@ -269,7 +269,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _chatsService = chatsService,
         _notificationService = notificationService,
         _emailService = emailService,
-        _omemoService = omemoService,
+        _omemoService = omemoService ??
+            (messageService is OmemoService
+                ? messageService as OmemoService
+                : null),
         _mucService = mucService,
         _settingsSnapshot = settings,
         super(
@@ -3854,6 +3857,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               chat: target,
               attachment: captionedAttachment,
               htmlCaption: index == 0 ? htmlCaption : null,
+              forwarded: true,
+              forwardedFromJid: message.senderJid,
             );
           }
           if (shouldBundle && bundled.isNotEmpty) {
@@ -3875,6 +3880,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             encryptionProtocol: target.encryptionProtocol,
             chatType: target.type,
             htmlCaption: shouldApplyCaption ? resolvedHtmlBody : null,
+            forwarded: true,
+            forwardedFromJid: message.senderJid,
             transportGroupId: attachmentGroupId,
             attachmentOrder: index,
           );
@@ -3895,12 +3902,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           chat: target,
           body: plainText,
           htmlBody: resolvedHtmlBody,
+          forwarded: true,
+          forwardedFromJid: message.senderJid,
         );
       } else {
         await _messageService.sendMessage(
           jid: target.jid,
           text: plainText,
           htmlBody: resolvedHtmlBody,
+          forwarded: true,
+          forwardedFromJid: message.senderJid,
           encryptionProtocol: target.encryptionProtocol,
           chatType: target.type,
         );

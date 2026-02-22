@@ -117,6 +117,7 @@ class _DraftsListBody extends StatelessWidget {
     return ColoredBox(
       color: context.colorScheme.background,
       child: ListView.builder(
+        padding: EdgeInsets.only(top: spacing.m),
         itemCount: items.length,
         itemBuilder: (context, index) {
           final item = items[index];

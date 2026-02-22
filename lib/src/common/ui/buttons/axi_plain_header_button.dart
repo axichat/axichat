@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/buttons/axi_button_haptics.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -58,6 +59,10 @@ class _AxiPlainHeaderButtonState extends State<AxiPlainHeaderButton> {
       (cubit) => cubit.animationDuration,
     );
     final enabled = widget.onPressed != null || widget.onLongPress != null;
+    final VoidCallback? onTap =
+        enabled ? withSelectionHaptic(widget.onPressed) : null;
+    final VoidCallback? onLongPress =
+        enabled ? withSelectionHaptic(widget.onLongPress) : null;
     final baseBackground = widget.backgroundColor ?? Colors.transparent;
     final hoverBackground = widget.hoverBackgroundColor ??
         Color.alphaBlend(
@@ -79,8 +84,8 @@ class _AxiPlainHeaderButtonState extends State<AxiPlainHeaderButton> {
       button: true,
       enabled: enabled,
       label: widget.semanticLabel,
-      onTap: widget.onPressed,
-      onLongPress: widget.onLongPress,
+      onTap: onTap,
+      onLongPress: onLongPress,
       child: AnimatedContainer(
         duration: animationDuration,
         curve: Curves.easeInOutCubic,
@@ -94,8 +99,8 @@ class _AxiPlainHeaderButtonState extends State<AxiPlainHeaderButton> {
                 enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
             hoverStrategies: ShadTheme.of(context).hoverStrategies,
             onHoverChange: enabled ? _setHovered : null,
-            onTap: enabled ? widget.onPressed : null,
-            onLongPress: enabled ? widget.onLongPress : null,
+            onTap: onTap,
+            onLongPress: onLongPress,
             onTapDown: enabled ? (_) => _setPressed(true) : null,
             onTapUp: enabled ? (_) => _setPressed(false) : null,
             onTapCancel: enabled ? () => _setPressed(false) : null,

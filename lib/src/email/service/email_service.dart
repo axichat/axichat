@@ -1180,6 +1180,8 @@ class EmailService {
     required String body,
     String? subject,
     String? htmlBody,
+    bool forwarded = false,
+    String? forwardedFromJid,
   }) async {
     if (kEnableDemoChats) {
       return _sendDemoEmailMessage(
@@ -1187,6 +1189,8 @@ class EmailService {
         body: body,
         subject: subject,
         htmlBody: htmlBody,
+        forwarded: forwarded,
+        forwardedFromJid: forwardedFromJid,
       );
     }
     final context = await _ensureEmailChatContext(chat);
@@ -1261,6 +1265,22 @@ class EmailService {
         originatorDcMsgId: msgId,
       );
     }
+    if (forwarded) {
+      final db = await _databaseBuilder();
+      final message = await db.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: context.account.deltaAccountId,
+      );
+      if (message != null && !message.isForwarded) {
+        await db.updateMessage(
+          message.copyWith(
+            pseudoMessageData: message.pseudoMessageDataWithForwarded(
+              forwardedFromJid: forwardedFromJid,
+            ),
+          ),
+        );
+      }
+    }
     return msgId;
   }
 
@@ -1269,6 +1289,8 @@ class EmailService {
     required EmailAttachment attachment,
     String? subject,
     String? htmlCaption,
+    bool forwarded = false,
+    String? forwardedFromJid,
   }) async {
     if (kEnableDemoChats) {
       return _sendDemoEmailAttachment(
@@ -1276,6 +1298,8 @@ class EmailService {
         attachment: attachment,
         subject: subject,
         htmlCaption: htmlCaption,
+        forwarded: forwarded,
+        forwardedFromJid: forwardedFromJid,
       );
     }
     final context = await _ensureEmailChatContext(chat);
@@ -1335,6 +1359,22 @@ class EmailService {
         shareId: shareId,
         originatorDcMsgId: msgId,
       );
+    }
+    if (forwarded) {
+      final db = await _databaseBuilder();
+      final message = await db.getMessageByDeltaId(
+        msgId,
+        deltaAccountId: context.account.deltaAccountId,
+      );
+      if (message != null && !message.isForwarded) {
+        await db.updateMessage(
+          message.copyWith(
+            pseudoMessageData: message.pseudoMessageDataWithForwarded(
+              forwardedFromJid: forwardedFromJid,
+            ),
+          ),
+        );
+      }
     }
     return msgId;
   }
@@ -3350,6 +3390,8 @@ class EmailService {
     required String body,
     String? subject,
     String? htmlBody,
+    bool forwarded = false,
+    String? forwardedFromJid,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -3362,6 +3404,7 @@ class EmailService {
     final now = demoNow();
     const generator = Uuid();
     final stanzaId = 'demo-email-${generator.v4()}';
+    final resolvedForwardedFrom = forwardedFromJid?.trim();
     final message = Message(
       stanzaID: stanzaId,
       originID: stanzaId,
@@ -3375,6 +3418,14 @@ class EmailService {
       acked: false,
       received: false,
       displayed: false,
+      pseudoMessageData: forwarded
+          ? <String, dynamic>{
+              'forwarded': true,
+              if (resolvedForwardedFrom != null &&
+                  resolvedForwardedFrom.isNotEmpty)
+                'forwardedFromJid': resolvedForwardedFrom,
+            }
+          : null,
     );
     final db = await _databaseBuilder();
     await db.saveMessage(message);
@@ -3392,6 +3443,8 @@ class EmailService {
     required EmailAttachment attachment,
     String? subject,
     String? htmlCaption,
+    bool forwarded = false,
+    String? forwardedFromJid,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlCaption);
@@ -3417,6 +3470,7 @@ class EmailService {
       height: attachment.height,
       sourceUrls: [Uri.file(attachment.path).toString()],
     );
+    final resolvedForwardedFrom = forwardedFromJid?.trim();
     final message = Message(
       stanzaID: stanzaId,
       originID: stanzaId,
@@ -3431,6 +3485,14 @@ class EmailService {
       received: false,
       displayed: false,
       fileMetadataID: metadataId,
+      pseudoMessageData: forwarded
+          ? <String, dynamic>{
+              'forwarded': true,
+              if (resolvedForwardedFrom != null &&
+                  resolvedForwardedFrom.isNotEmpty)
+                'forwardedFromJid': resolvedForwardedFrom,
+            }
+          : null,
     );
     final db = await _databaseBuilder();
     await db.saveFileMetadata(metadata);

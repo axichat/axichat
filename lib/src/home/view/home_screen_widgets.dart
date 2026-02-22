@@ -280,7 +280,11 @@ class _TransportStatusChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final demoOffline = context.watch<XmppService>().demoOfflineMode;
+    final demoOffline = kEnableDemoChats &&
+        context.select<ProfileCubit, String>(
+              (stateOwner) => stateOwner.state.jid,
+            ) ==
+            kDemoSelfJid;
     return BlocBuilder<ConnectivityCubit, ConnectivityState>(
       builder: (context, connectivityState) {
         final connectionState = _xmppStateForHome(

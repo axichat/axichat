@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/buttons/axi_button_haptics.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -180,6 +181,10 @@ class _AxiListButtonState extends State<AxiListButton> {
       builder: (context, states, _) {
         final bool enabled =
             widget.onPressed != null || widget.onLongPress != null;
+        final VoidCallback? onTap =
+            enabled ? withSelectionHaptic(widget.onPressed) : null;
+        final VoidCallback? onLongPress =
+            enabled ? withSelectionHaptic(widget.onLongPress) : null;
         final bool hovered = states.contains(WidgetState.hovered);
         final bool pressed = states.contains(WidgetState.pressed);
         final bool focused = states.contains(WidgetState.focused);
@@ -308,8 +313,8 @@ class _AxiListButtonState extends State<AxiListButton> {
               onHoverChange: enabled
                   ? (value) => _updateState(WidgetState.hovered, value)
                   : null,
-              onTap: enabled ? widget.onPressed : null,
-              onLongPress: enabled ? widget.onLongPress : null,
+              onTap: onTap,
+              onLongPress: onLongPress,
               onTapDown: enabled
                   ? (details) {
                       _updateState(WidgetState.pressed, true);
@@ -374,8 +379,8 @@ class _AxiListButtonState extends State<AxiListButton> {
           enabled: enabled,
           selected: widget.selected,
           label: widget.semanticLabel,
-          onTap: widget.onPressed,
-          onLongPress: widget.onLongPress,
+          onTap: onTap,
+          onLongPress: onLongPress,
           child: button,
         );
       },

@@ -873,7 +873,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatQuotedNoContent => '(sin contenido)';
 
   @override
-  String get chatReplyingTo => 'Respondiendo a...';
+  String get chatReplyingTo => 'RE:';
+
+  @override
+  String get chatForwardPrefix => 'FWD:';
 
   @override
   String get chatCancelReply => 'Cancelar respuesta';

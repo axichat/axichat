@@ -555,6 +555,44 @@ extension MessageContent on Message {
   }
 }
 
+extension MessageForwardingX on Message {
+  bool get isForwarded {
+    final payload = pseudoMessageData;
+    if (payload == null || payload.isEmpty) {
+      return false;
+    }
+    return payload['forwarded'] == true;
+  }
+
+  String? get forwardedFromJid {
+    final payload = pseudoMessageData;
+    if (payload == null || payload.isEmpty) {
+      return null;
+    }
+    final raw = payload['forwardedFromJid'];
+    if (raw is! String) {
+      return null;
+    }
+    final resolved = raw.trim();
+    if (resolved.isEmpty) {
+      return null;
+    }
+    return resolved;
+  }
+
+  Map<String, dynamic> pseudoMessageDataWithForwarded({
+    String? forwardedFromJid,
+  }) {
+    final resolvedForwardedFrom = forwardedFromJid?.trim();
+    return <String, dynamic>{
+      ...(pseudoMessageData ?? const <String, dynamic>{}),
+      'forwarded': true,
+      if (resolvedForwardedFrom != null && resolvedForwardedFrom.isNotEmpty)
+        'forwardedFromJid': resolvedForwardedFrom,
+    };
+  }
+}
+
 extension MessageCalendarFragmentX on Message {
   CalendarFragment? get calendarFragment {
     if (pseudoMessageType != PseudoMessageType.calendarFragment) {

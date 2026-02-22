@@ -3,7 +3,6 @@
 
 import 'dart:async';
 import 'dart:io';
-import 'package:bloc/bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_share_state.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
@@ -13,13 +12,16 @@ import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/storage/calendar_linked_task_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
+import 'package:axichat/src/calendar/sync/calendar_availability_share_store.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_identifiers.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
+import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/common/safe_logging.dart';
@@ -28,13 +30,30 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'base_calendar_bloc.dart';
 import 'calendar_event.dart';
 import 'calendar_state.dart';
 
+CalendarSyncManager buildPersonalCalendarSyncManager(CalendarBloc owner) {
+  return CalendarSyncManager(
+    readModel: () => owner.currentModel,
+    applyModel: (model) async {
+      owner.add(
+        CalendarEvent.remoteModelApplied(
+          model: model,
+        ),
+      );
+    },
+    sendCalendarMessage: owner.sendPersonalCalendarSync,
+    sendSnapshotFile: owner.uploadCalendarSnapshot,
+  );
+}
+
 class CalendarBloc extends BaseCalendarBloc {
   CalendarBloc({
-    required CalendarSyncManager Function(CalendarBloc bloc) syncManagerBuilder,
+    required CalendarSyncManager Function(CalendarBloc owner)
+        syncManagerBuilder,
     required super.storage,
     super.storageId,
     super.reminderController,
@@ -61,17 +80,22 @@ class CalendarBloc extends BaseCalendarBloc {
         _onCalendarAvailabilityShareRequested);
   }
 
-  final CalendarSyncManager Function(CalendarBloc bloc) _syncManagerBuilder;
+  final CalendarSyncManager Function(CalendarBloc owner) _syncManagerBuilder;
   late final CalendarSyncManager _syncManager;
   CalendarAvailabilityShareCoordinator? _availabilityCoordinator;
+  ChatCalendarSyncCoordinator? _chatCalendarCoordinator;
+  Storage? _chatCalendarStorage;
   Future<void> _pendingAvailabilitySync = Future.value();
   final XmppService _xmppService;
   EmailService? _emailService;
   final VoidCallback? _onDispose;
   StreamSubscription<CalendarSyncDispatch>? _calendarSyncSubscription;
+  StreamSubscription<ChatCalendarSyncDispatch>? _chatCalendarSyncSubscription;
   StreamSubscription<CalendarSyncWarning>? _calendarSyncWarningSubscription;
   StreamSubscription<XmppStreamReady>? _streamReadySubscription;
+  StreamSubscription<XmppStreamReady>? _chatStreamReadySubscription;
   Future<void> _pendingCalendarDispatch = Future<void>.value();
+  Future<void> _pendingChatCalendarDispatch = Future<void>.value();
 
   void updateEmailService(EmailService? emailService) {
     _emailService = emailService;
@@ -80,6 +104,53 @@ class CalendarBloc extends BaseCalendarBloc {
   @protected
   CalendarAvailabilityShareSource get availabilityShareSource =>
       const CalendarAvailabilityShareSource.personal();
+
+  ChatCalendarSyncCoordinator? get chatCalendarCoordinator =>
+      _chatCalendarCoordinator;
+
+  CalendarAvailabilityShareCoordinator? get availabilityCoordinator =>
+      _availabilityCoordinator;
+
+  void configureHomeCoordinators({required Storage storage}) {
+    if (_chatCalendarStorage == storage &&
+        _chatCalendarCoordinator != null &&
+        _availabilityCoordinator != null) {
+      _ensureChatCalendarSyncSubscription();
+      return;
+    }
+    _chatCalendarStorage = storage;
+    _chatCalendarCoordinator = ChatCalendarSyncCoordinator(
+      storage: ChatCalendarStorage(storage: storage),
+      sendMessage: ({
+        required String jid,
+        required CalendarSyncOutbound outbound,
+        required ChatType chatType,
+      }) {
+        return sendCalendarSyncMessage(
+          jid: jid,
+          outbound: outbound,
+          chatType: chatType,
+        );
+      },
+      sendSnapshotFile: uploadCalendarSnapshot,
+    );
+    final availabilityCoordinator = CalendarAvailabilityShareCoordinator(
+      store: CalendarAvailabilityShareStore(),
+      sendMessage: ({
+        required String jid,
+        required CalendarAvailabilityMessage message,
+        required ChatType chatType,
+      }) {
+        return sendAvailabilityMessage(
+          jid: jid,
+          message: message,
+          chatType: chatType,
+        );
+      },
+    );
+    attachAvailabilityCoordinator(availabilityCoordinator);
+    _ensureChatCalendarSyncSubscription();
+  }
 
   void attachAvailabilityCoordinator(
     CalendarAvailabilityShareCoordinator coordinator,
@@ -99,6 +170,18 @@ class CalendarBloc extends BaseCalendarBloc {
       jid: jid,
       outbound: outbound,
       chatType: chatType,
+    );
+  }
+
+  Future<void> sendPersonalCalendarSync(CalendarSyncOutbound outbound) async {
+    final jid = _xmppService.myJid;
+    if (jid == null) {
+      return;
+    }
+    await sendCalendarSyncMessage(
+      jid: jid,
+      outbound: outbound,
+      chatType: ChatType.chat,
     );
   }
 
@@ -156,6 +239,40 @@ class CalendarBloc extends BaseCalendarBloc {
     );
     _streamReadySubscription?.cancel();
     _streamReadySubscription = null;
+  }
+
+  void _ensureChatCalendarSyncSubscription() {
+    final coordinator = _chatCalendarCoordinator;
+    if (coordinator == null) {
+      return;
+    }
+    if (_chatCalendarSyncSubscription != null) {
+      return;
+    }
+    if (_xmppService.lastStreamReady == null) {
+      _chatStreamReadySubscription ??= _xmppService.streamReadyStream.listen(
+        (_) {
+          _ensureChatCalendarSyncSubscription();
+        },
+      );
+      return;
+    }
+    _chatCalendarSyncSubscription ??=
+        _xmppService.chatCalendarSyncDispatchStream.listen(
+      (dispatch) {
+        _pendingChatCalendarDispatch =
+            _pendingChatCalendarDispatch.then((_) async {
+          try {
+            await coordinator.handleInbound(dispatch.envelope);
+            dispatch.complete();
+          } catch (error, stackTrace) {
+            dispatch.completeError(error, stackTrace);
+          }
+        });
+      },
+    );
+    _chatStreamReadySubscription?.cancel();
+    _chatStreamReadySubscription = null;
   }
 
   @override
@@ -384,9 +501,12 @@ class CalendarBloc extends BaseCalendarBloc {
   Future<void> close() async {
     _onDispose?.call();
     await _calendarSyncSubscription?.cancel();
+    await _chatCalendarSyncSubscription?.cancel();
     await _calendarSyncWarningSubscription?.cancel();
     await _streamReadySubscription?.cancel();
+    await _chatStreamReadySubscription?.cancel();
     await _pendingCalendarDispatch;
+    await _pendingChatCalendarDispatch;
     return super.close();
   }
 
