@@ -271,7 +271,7 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
                   children: [
                     TaskTitleField(
                       controller: _titleController,
-                      autofocus: true,
+                      autofocus: false,
                       labelText: l10n.commonTitle,
                       hintText: context.l10n.calendarDayEventHint,
                       focusNode: _titleFocusNode,

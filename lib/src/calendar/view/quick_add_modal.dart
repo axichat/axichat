@@ -1291,7 +1291,7 @@ class _QuickAddTaskNameField extends StatelessWidget {
       child: TaskTitleField(
         controller: controller,
         focusNode: focusNode,
-        autofocus: true,
+        autofocus: false,
         onChanged: onChanged,
         validator: validator,
         autovalidateMode: autovalidateMode,
