@@ -1953,6 +1953,25 @@ class _AutocompleteOptionsList extends StatefulWidget {
 class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
   static const double _suggestionTileHeight = 64;
   final ScrollController _scrollController = ScrollController();
+  int? _hoveredIndex;
+
+  void _updateHoveredIndex({required int index, required bool hovering}) {
+    if (hovering) {
+      if (_hoveredIndex == index) {
+        return;
+      }
+      setState(() {
+        _hoveredIndex = index;
+      });
+      return;
+    }
+    if (_hoveredIndex != index) {
+      return;
+    }
+    setState(() {
+      _hoveredIndex = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -2004,12 +2023,21 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
             final highlighted =
                 widget.highlightedIndex != null &&
                 widget.highlightedIndex == index;
+            final hovered = _hoveredIndex == index;
+            final Color? rowColor = highlighted
+                ? widget.highlightColor
+                : hovered
+                ? widget.hoverColor
+                : null;
             return InkWell(
               onTap: () => widget.onSelected(option),
+              onHover: (hovering) =>
+                  _updateHoveredIndex(index: index, hovering: hovering),
+              mouseCursor: SystemMouseCursors.click,
               hoverColor: widget.hoverColor,
               child: Container(
                 decoration: BoxDecoration(
-                  color: highlighted ? widget.highlightColor : null,
+                  color: rowColor,
                   border: Border(bottom: border),
                 ),
                 padding: const EdgeInsets.symmetric(

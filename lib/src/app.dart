@@ -213,7 +213,6 @@ class _AxichatState extends State<Axichat> {
                           : null,
                       homeRefreshSyncService: context
                           .read<HomeRefreshSyncService>(),
-                      notificationService: context.read<NotificationService>(),
                       initialEndpointConfig: context
                           .read<SettingsCubit>()
                           .state
@@ -374,6 +373,15 @@ class MaterialAxichat extends StatefulWidget {
 class _MaterialAxichatState extends State<MaterialAxichat> {
   bool _shareIntentHandling = false;
   bool _shareIntentAwaitingRoute = false;
+  bool _notificationIntentHandling = false;
+  bool _notificationIntentAwaitingRoute = false;
+  String? _pendingNotificationChatJid;
+  bool _checkedInitialNotificationLaunchDetails = false;
+  late final AppLifecycleListener _lifecycleListener = AppLifecycleListener(
+    onResume: _handleLifecycleResume,
+    onShow: _handleLifecycleResume,
+    onRestart: _handleLifecycleResume,
+  );
 
   late final GoRouter _router = GoRouter(
     restorationScopeId: 'app',
@@ -381,7 +389,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       if (context.read<AuthenticationCubit>().state
           is! AuthenticationComplete) {
         // Check if the current route allows guest access
-        final location = routeLocations[routerState.matchedLocation];
+        final location = resolveRouteLocation(routerState.matchedLocation);
         if (location?.authenticationRequired == false) {
           return null; // Allow access to guest routes
         }
@@ -409,6 +417,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
 
   @override
   void dispose() {
+    _lifecycleListener.dispose();
     _router.routerDelegate.removeListener(_handleRouteChange);
     _router.dispose();
     super.dispose();
@@ -659,26 +668,24 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     final matchedLocation = matchList.matches.isEmpty
                         ? null
                         : matchList.uri.path;
-                    final currentRoute = routeLocations[currentLocation];
+                    final currentRoute = resolveRouteLocation(currentLocation);
                     final matchedRoute = matchedLocation == null
                         ? null
-                        : routeLocations[matchedLocation];
+                        : resolveRouteLocation(matchedLocation);
                     final effectiveRoute = currentRoute ?? matchedRoute;
+                    final authRequired =
+                        effectiveRoute?.authenticationRequired ?? true;
                     final onLoginRoute =
                         currentLocation == const LoginRoute().location ||
                         matchedLocation == const LoginRoute().location;
-                    final onGuestRoute =
-                        onLoginRoute ||
-                        effectiveRoute == null ||
-                        !effectiveRoute.authenticationRequired;
+                    final onGuestRoute = onLoginRoute || !authRequired;
                     final authCompletionDuration = context
                         .read<SettingsCubit>()
                         .authCompletionDuration;
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
-                      if (!onLoginRoute &&
-                          (effectiveRoute?.authenticationRequired ?? true)) {
+                      if (!onLoginRoute && authRequired) {
                         _router.go(const LoginRoute().location);
                       }
                     } else if (state is AuthenticationComplete &&
@@ -712,6 +719,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         );
                       }
                     }
+                    await _handleNotificationIntent();
                     await _handleShareIntent();
                   },
                 ),
@@ -752,6 +760,70 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         return ScaffoldMessenger(child: app);
       },
     );
+  }
+
+  void _handleLifecycleResume() {
+    _handleNotificationIntent();
+    _handleShareIntent();
+  }
+
+  Future<void> _handleNotificationIntent() async {
+    if (!mounted || _notificationIntentHandling) return;
+    if (context.read<AuthenticationCubit>().state is! AuthenticationComplete) {
+      return;
+    }
+    final xmppService = context.read<XmppService>();
+    final chatsCubit = context.read<ChatsCubit>();
+    _notificationIntentHandling = true;
+    try {
+      final payload = await _takePendingNotificationPayload();
+      if (payload != null) {
+        final String? chatJid = await xmppService.resolveNotificationPayload(
+          payload,
+        );
+        if (chatJid != null) {
+          _pendingNotificationChatJid = chatJid;
+        }
+      }
+      final pendingJid = _pendingNotificationChatJid;
+      if (pendingJid == null) {
+        return;
+      }
+      if (!_isOnHomeRoute()) {
+        _notificationIntentAwaitingRoute = true;
+        _router.go(const HomeRoute().location);
+        return;
+      }
+      _notificationIntentAwaitingRoute = false;
+      await chatsCubit.openChat(jid: pendingJid);
+      if (_pendingNotificationChatJid == pendingJid) {
+        _pendingNotificationChatJid = null;
+      }
+    } finally {
+      _notificationIntentHandling = false;
+    }
+  }
+
+  Future<String?> _takePendingNotificationPayload() async {
+    if (launchedFromNotification) {
+      launchedFromNotification = false;
+      final payload = takeLaunchedNotificationChatJid();
+      if (payload != null && payload.isNotEmpty) {
+        return payload;
+      }
+    }
+    if (_checkedInitialNotificationLaunchDetails) {
+      return null;
+    }
+    _checkedInitialNotificationLaunchDetails = true;
+    final launchDetails = await context
+        .read<NotificationService>()
+        .getAppNotificationAppLaunchDetails();
+    final payload = launchDetails?.notificationResponse?.payload;
+    if (payload == null || payload.isEmpty) {
+      return null;
+    }
+    return payload;
   }
 
   Future<void> _handleShareIntent() async {
@@ -824,11 +896,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         _router.routeInformationProvider.value.uri.path;
     final String matchedLocation = _router.state.matchedLocation;
     final AuthenticationRouteData? currentRoute =
-        routeLocations[currentLocation] ?? routeLocations[matchedLocation];
-    if (currentRoute == null) {
-      return true;
-    }
-    return currentRoute.authenticationRequired == false;
+        resolveRouteLocation(currentLocation) ??
+        resolveRouteLocation(matchedLocation);
+    return (currentRoute?.authenticationRequired ?? true) == false;
   }
 
   void _consumeSharePayload(SharePayload payload) {
@@ -839,7 +909,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   }
 
   void _handleRouteChange() {
-    if (!mounted || !_shareIntentAwaitingRoute) return;
+    if (!mounted) return;
+    if (_notificationIntentAwaitingRoute && _isOnHomeRoute()) {
+      _notificationIntentAwaitingRoute = false;
+      _handleNotificationIntent();
+    }
+    if (!_shareIntentAwaitingRoute) return;
     if (!_isOnHomeRoute()) {
       return;
     }

@@ -350,7 +350,7 @@ class _ProfileMainView extends StatelessWidget {
     );
     final jumpMenuPadding = EdgeInsetsDirectional.only(
       start: _profileWideHorizontalPadding,
-      end: context.spacing.s,
+      end: _profileWideHorizontalPadding,
       top: _profileWideHeaderSpacing,
       bottom: _profileWideHeaderSpacing,
     );

@@ -58,7 +58,6 @@ import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/session_capability_indicators.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
-import 'package:axichat/src/routes.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/storage/models.dart' as m;
@@ -115,15 +114,15 @@ class HomeShellScope extends InheritedWidget {
 }
 
 class HomeShellCalendarScope extends StatelessWidget {
-  const HomeShellCalendarScope({super.key, required this.child});
+  const HomeShellCalendarScope({super.key, required this.navigationShell});
 
-  final Widget child;
+  final StatefulNavigationShell navigationShell;
 
   @override
   Widget build(BuildContext context) {
     final storageManager = context.watch<CalendarStorageManager>();
     final storage = storageManager.authStorage;
-    final shell = HomeShell(child: child);
+    final shell = HomeShell(navigationShell: navigationShell);
     if (storage == null) {
       return shell;
     }
@@ -171,15 +170,18 @@ class HomeShellCalendarScope extends StatelessWidget {
 }
 
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key, required this.child});
+  const HomeShell({super.key, required this.navigationShell});
 
-  final Widget child;
+  final StatefulNavigationShell navigationShell;
 
   @override
   State<HomeShell> createState() => _HomeShellState();
 }
 
 class _HomeShellState extends State<HomeShell> {
+  static const int _homeBranchIndex = 0;
+  static const int _profileBranchIndex = 1;
+  static const int _profileBottomNavIndex = 3;
   final ValueNotifier<CalendarBottomDragSession?> _calendarBottomDragSession =
       ValueNotifier<CalendarBottomDragSession?>(null);
   final ValueNotifier<int> _bottomNavIndex = ValueNotifier<int>(0);
@@ -187,11 +189,71 @@ class _HomeShellState extends State<HomeShell> {
   bool _railCollapsed = true;
 
   @override
+  void initState() {
+    super.initState();
+    _bottomNavIndex.addListener(_handleBottomNavIndexSelection);
+  }
+
+  @override
   void dispose() {
+    _bottomNavIndex.removeListener(_handleBottomNavIndexSelection);
     _calendarBottomDragSession.dispose();
     _bottomNavIndex.dispose();
     _homeTabIndex.dispose();
     super.dispose();
+  }
+
+  void _handleBottomNavIndexSelection() {
+    if (!mounted) {
+      return;
+    }
+    final index = _bottomNavIndex.value;
+    assert(index >= 0 && index <= 2, 'bottom nav index must be 0..2');
+    if (index < 0 || index > 2) {
+      _bottomNavIndex.value = index.clamp(0, 2).toInt();
+      return;
+    }
+    if (widget.navigationShell.currentIndex != _homeBranchIndex) {
+      return;
+    }
+    if (index == 0) {
+      context.read<ChatsCubit>().closeAllChats();
+    }
+  }
+
+  int _selectedBottomNavIndex(int homeIndex) {
+    if (widget.navigationShell.currentIndex == _profileBranchIndex) {
+      return _profileBottomNavIndex;
+    }
+    return homeIndex.clamp(0, 2).toInt();
+  }
+
+  void _onBottomNavSelected(int index) {
+    assert(index >= 0 && index <= 3, 'bottom nav index must be 0..3');
+    if (index < 0 || index > 3) {
+      return;
+    }
+    if (index == _profileBottomNavIndex) {
+      if (widget.navigationShell.currentIndex == _profileBranchIndex) {
+        return;
+      }
+      widget.navigationShell.goBranch(_profileBranchIndex);
+      return;
+    }
+    final safeIndex = index.clamp(0, 2).toInt();
+    if (_bottomNavIndex.value != safeIndex) {
+      _bottomNavIndex.value = safeIndex;
+    }
+    if (widget.navigationShell.currentIndex != _homeBranchIndex) {
+      widget.navigationShell.goBranch(_homeBranchIndex);
+      if (safeIndex == 0) {
+        context.read<ChatsCubit>().closeAllChats();
+      }
+      return;
+    }
+    if (safeIndex == 0) {
+      context.read<ChatsCubit>().closeAllChats();
+    }
   }
 
   @override
@@ -276,19 +338,29 @@ class _HomeShellState extends State<HomeShell> {
 
     if (navPlacement != NavPlacement.bottom) {
       return buildShellChild(
-        _HomeShellRailLayout(
-          tabs: tabs,
-          homeTabIndex: _homeTabIndex,
-          bottomNavIndex: _bottomNavIndex,
-          calendarAvailable: calendarAvailable,
-          collapsed: _railCollapsed,
-          badgeCounts: badgeCounts,
-          onCollapsedChanged: (value) {
-            setState(() {
-              _railCollapsed = value;
-            });
+        ValueListenableBuilder<int>(
+          valueListenable: _bottomNavIndex,
+          builder: (context, homeBottomIndex, _) {
+            final selectedBottomIndex = _selectedBottomNavIndex(
+              homeBottomIndex,
+            );
+            return _HomeShellRailLayout(
+              tabs: tabs,
+              homeTabIndex: _homeTabIndex,
+              bottomNavIndex: _bottomNavIndex,
+              selectedBottomIndex: selectedBottomIndex,
+              calendarAvailable: calendarAvailable,
+              collapsed: _railCollapsed,
+              badgeCounts: badgeCounts,
+              onBottomNavSelected: _onBottomNavSelected,
+              onCollapsedChanged: (value) {
+                setState(() {
+                  _railCollapsed = value;
+                });
+              },
+              child: widget.navigationShell,
+            );
           },
-          child: widget.child,
         ),
       );
     }
@@ -296,10 +368,10 @@ class _HomeShellState extends State<HomeShell> {
     return buildShellChild(
       ValueListenableBuilder<int>(
         valueListenable: _bottomNavIndex,
-        builder: (context, selectedBottomIndex, _) {
-          final safeSelectedBottomIndex = selectedBottomIndex
-              .clamp(0, 3)
-              .toInt();
+        builder: (context, homeBottomIndex, _) {
+          final safeSelectedBottomIndex = _selectedBottomNavIndex(
+            homeBottomIndex,
+          );
           final hideBottomBarForChat =
               isChatOpen &&
               safeSelectedBottomIndex == 0 &&
@@ -314,7 +386,7 @@ class _HomeShellState extends State<HomeShell> {
                       data: mediaQuery.removePadding(
                         removeBottom: !hideBottomBarForChat,
                       ),
-                      child: widget.child,
+                      child: widget.navigationShell,
                     );
                   },
                 ),
@@ -322,7 +394,8 @@ class _HomeShellState extends State<HomeShell> {
               if (!hideBottomBarForChat)
                 _HomeShellBottomBar(
                   calendarBottomDragSession: _calendarBottomDragSession,
-                  bottomNavIndex: _bottomNavIndex,
+                  selectedBottomIndex: safeSelectedBottomIndex,
+                  onBottomNavSelected: _onBottomNavSelected,
                   calendarAvailable: calendarAvailable,
                 ),
             ],

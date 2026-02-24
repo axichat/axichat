@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:math' as math;
+import 'dart:ui' show lerpDouble;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -9,8 +10,10 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'controllers/task_interaction_controller.dart';
@@ -178,6 +181,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   @override
   Widget build(BuildContext context) {
     final TaskInteractionController controller = widget.interactionController;
+    final Duration animationDuration = context
+        .watch<SettingsCubit>()
+        .animationDuration;
+    final Duration firstInteractionPulseDuration =
+        _firstInteractionPulseDuration(animationDuration);
     return ValueListenableBuilder<String?>(
       valueListenable: controller.hoveredTaskId,
       builder: (context, hoveredTaskId, _) {
@@ -187,6 +195,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
             final CalendarTask task = widget.task;
             final bool isDragging = controller.draggingTaskId == task.id;
             final bool isHovering = hoveredTaskId == task.id;
+            final bool highlightOnFirstInteraction = controller
+                .shouldHighlightTaskForFirstInteraction(task.id);
             final TaskResizeInteraction? resizeSession =
                 controller.activeResizeInteraction;
             final bool isResizing =
@@ -204,6 +214,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 isPopoverOpen: widget.isPopoverOpen,
                 isSelectionMode: widget.isSelectionMode,
                 isSelected: widget.isSelected,
+                highlightOnFirstInteraction: highlightOnFirstInteraction,
                 height: widget.height,
                 width: widget.width,
                 accentColor: accentColor,
@@ -211,6 +222,16 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 accentPadding: _accentPadding,
                 timeLabel: _formatTimeRange(context),
                 overlay: widget.overlay,
+              );
+              final bool showFirstInteractionPulse =
+                  highlightOnFirstInteraction &&
+                  widget.enableInteractions &&
+                  firstInteractionPulseDuration > Duration.zero;
+              final Widget pulsingTaskBody = _TaskFirstInteractionPulse(
+                enabled: showFirstInteractionPulse,
+                duration: firstInteractionPulseDuration,
+                accentColor: accentColor,
+                child: taskBody,
               );
 
               final shape = RoundedSuperellipseBorder(
@@ -220,7 +241,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                 color: Colors.transparent,
                 shape: shape,
                 clipBehavior: Clip.antiAlias,
-                child: taskBody,
+                child: pulsingTaskBody,
               );
               final Widget animatedBody = AxiTapBounce(
                 enabled: widget.enableInteractions,
@@ -305,6 +326,13 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
 
   Offset get debugContextMenuNormalizedPosition =>
       _contextMenuNormalizedPosition;
+
+  Duration _firstInteractionPulseDuration(Duration animationDuration) {
+    if (animationDuration == Duration.zero) {
+      return Duration.zero;
+    }
+    return Duration(microseconds: animationDuration.inMicroseconds * 6);
+  }
 }
 
 class _TaskContextMenuWrapper extends StatelessWidget {
@@ -374,6 +402,7 @@ class _ResizableTaskBody extends StatelessWidget {
     required this.isPopoverOpen,
     required this.isSelectionMode,
     required this.isSelected,
+    required this.highlightOnFirstInteraction,
     required this.height,
     required this.width,
     required this.accentColor,
@@ -397,6 +426,7 @@ class _ResizableTaskBody extends StatelessWidget {
   final bool isPopoverOpen;
   final bool isSelectionMode;
   final bool isSelected;
+  final bool highlightOnFirstInteraction;
   final double height;
   final double width;
   final Color accentColor;
@@ -412,23 +442,32 @@ class _ResizableTaskBody extends StatelessWidget {
         enableInteractions &&
         (isPopoverOpen || isHovering || isResizing || isDragging);
     final highlightSelection = isSelectionMode && isSelected;
+    final highlightFirstInteraction =
+        enableInteractions && !isSelectionMode && highlightOnFirstInteraction;
     final isCompleted = task.isCompleted;
     final baseBlendAlpha = isCompleted ? 0.06 : 0.12;
     final activeBlendAlpha = isCompleted ? 0.1 : 0.18;
+    final firstInteractionBlendAlpha = isCompleted ? 0.14 : 0.22;
     final selectionBlendAlpha = highlightSelection
         ? (isCompleted ? 0.18 : 0.26)
-        : (showHoverEffects ? activeBlendAlpha : baseBlendAlpha);
+        : (highlightFirstInteraction
+              ? firstInteractionBlendAlpha
+              : (showHoverEffects ? activeBlendAlpha : baseBlendAlpha));
     final backgroundColor = Color.alphaBlend(
       accentColor.withValues(alpha: selectionBlendAlpha),
       calendarContainerColor,
     );
     final borderColor = highlightSelection
         ? accentColor
+        : highlightFirstInteraction
+        ? accentColor.withValues(alpha: 0.72)
         : showHoverEffects
         ? accentColor.withValues(alpha: 0.45)
         : Color.lerp(calendarBorderColor, accentColor, 0.18)!;
     final boxShadows = highlightSelection
         ? calendarMediumShadow
+        : highlightFirstInteraction
+        ? calendarLightShadow
         : showHoverEffects
         ? calendarLightShadow
         : const <BoxShadow>[];
@@ -441,6 +480,8 @@ class _ResizableTaskBody extends StatelessWidget {
       color: borderColor,
       width: highlightSelection
           ? 2.4
+          : highlightFirstInteraction
+          ? 2
           : isResizing
           ? 1.8
           : 1,
@@ -681,6 +722,119 @@ class _ResizableTaskOverlay extends StatelessWidget {
         Positioned(top: overlayInset, right: overlayInset, child: overlay!),
       ],
     );
+  }
+}
+
+class _TaskFirstInteractionPulse extends StatefulWidget {
+  const _TaskFirstInteractionPulse({
+    required this.enabled,
+    required this.duration,
+    required this.accentColor,
+    required this.child,
+  });
+
+  final bool enabled;
+  final Duration duration;
+  final Color accentColor;
+  final Widget child;
+
+  @override
+  State<_TaskFirstInteractionPulse> createState() =>
+      _TaskFirstInteractionPulseState();
+}
+
+class _TaskFirstInteractionPulseState extends State<_TaskFirstInteractionPulse>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(vsync: this);
+  late final Animation<double> _animation = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeInOut,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _syncPulse();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TaskFirstInteractionPulse oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncPulse();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool pulseEnabled = widget.enabled && widget.duration > Duration.zero;
+    if (!pulseEnabled) {
+      return widget.child;
+    }
+    return AnimatedBuilder(
+      animation: _animation,
+      child: widget.child,
+      builder: (context, child) {
+        final double progress = _animation.value;
+        final double alpha =
+            lerpDouble(
+              context.motion.tapHoverAlpha,
+              context.motion.tapFocusAlpha,
+              progress,
+            ) ??
+            context.motion.tapHoverAlpha;
+        final double borderWidth =
+            context.borderSide.width + (context.borderSide.width * progress);
+        return Stack(
+          fit: StackFit.passthrough,
+          children: [
+            child!,
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Padding(
+                  padding: EdgeInsets.all(context.spacing.xxs),
+                  child: DecoratedBox(
+                    decoration: ShapeDecoration(
+                      shape: SquircleBorder(
+                        cornerRadius: context.radii.squircle,
+                        side: BorderSide(
+                          color: widget.accentColor.withValues(alpha: alpha),
+                          width: borderWidth,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _syncPulse() {
+    final bool pulseEnabled = widget.enabled && widget.duration > Duration.zero;
+    if (!pulseEnabled) {
+      if (_controller.isAnimating) {
+        _controller.stop();
+      }
+      if (_controller.value != 0) {
+        _controller.value = 0;
+      }
+      return;
+    }
+    if (_controller.duration != widget.duration) {
+      _controller.duration = widget.duration;
+    }
+    if (_controller.isAnimating) {
+      return;
+    }
+    _controller.repeat(reverse: true);
   }
 }
 

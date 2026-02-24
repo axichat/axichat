@@ -52,6 +52,7 @@ class AxiNavigationRail extends StatelessWidget {
     this.toggleCollapsedTooltip,
     this.backgroundColor,
     this.footer,
+    this.showSelection = true,
   }) : assert(destinations.length > 0, 'Destinations cannot be empty');
 
   final List<AxiRailDestination> destinations;
@@ -64,6 +65,7 @@ class AxiNavigationRail extends StatelessWidget {
   final String? toggleCollapsedTooltip;
   final Color? backgroundColor;
   final Widget? footer;
+  final bool showSelection;
 
   @override
   Widget build(BuildContext context) {
@@ -77,9 +79,10 @@ class AxiNavigationRail extends StatelessWidget {
     const double expandedWidth = 216;
     const double collapsedWidth = 72;
     final double railWidth = collapsed ? collapsedWidth : expandedWidth;
-    final int safeIndex = destinations.isEmpty
-        ? 0
-        : selectedIndex.clamp(0, destinations.length - 1);
+    assert(
+      selectedIndex >= 0 && selectedIndex < destinations.length,
+      'selectedIndex must be within destinations bounds',
+    );
     final Color surfaceColor = backgroundColor ?? colors.background;
     final titleStyle = context.textTheme.h2.copyWith(
       fontWeight: _railTitleFontWeight,
@@ -144,7 +147,7 @@ class AxiNavigationRail extends StatelessWidget {
           ],
           ...List.generate(destinations.length, (index) {
             final destination = destinations[index];
-            final selected = index == safeIndex;
+            final selected = showSelection && index == selectedIndex;
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: _AxiNavigationRailItem(

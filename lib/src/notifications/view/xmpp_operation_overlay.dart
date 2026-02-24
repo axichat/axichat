@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -42,7 +43,12 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _syncOperations(context.read<XmppActivityCubit>().state.operations);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _syncOperations(context.read<XmppActivityCubit>().state.operations);
+    });
   }
 
   @override
@@ -57,12 +63,17 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   }
 
   void _syncOperations(List<XmppOperation> operations) {
-    final List<XmppOperation> coalesced = _coalesceOperations(operations);
+    final List<XmppOperation> visibleOperations = operations
+        .where(_shouldDisplayOperation)
+        .toList(growable: false);
+    final List<XmppOperation> coalesced = _coalesceOperations(
+      visibleOperations,
+    );
     final Map<String, XmppOperation> incoming = <String, XmppOperation>{
       for (final operation in coalesced) operation.id: operation,
     };
     final Set<String> rawOperationIds = {
-      for (final operation in operations) operation.id,
+      for (final operation in visibleOperations) operation.id,
     };
     var shouldRebuild = false;
     final List<String> removalQueue = <String>[];
@@ -107,21 +118,21 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     }
   }
 
-  void _insertEntry(XmppOperation operation) {
+  bool _insertEntry(XmppOperation operation) {
     if (operation.status != XmppOperationStatus.inProgress) {
-      return;
+      return true;
     }
     if (_entries.any((entry) => entry.operation.id == operation.id)) {
-      return;
+      return true;
+    }
+    final listState = _listKey.currentState;
+    if (listState == null) {
+      return false;
     }
     final index = _entries.length;
     _entries.add(_ToastEntry(operation: operation));
-    final listState = _listKey.currentState;
-    if (listState == null) {
-      setState(() {});
-      return;
-    }
     listState.insertItem(index, duration: _resolveAnimationDuration());
+    return true;
   }
 
   void _syncPendingInsertions(List<XmppOperation> operations) {
@@ -166,7 +177,18 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     }
     final XmppOperation operation = _pendingInsertions.removeAt(0);
     _isInsertAnimating = true;
-    _insertEntry(operation);
+    final inserted = _insertEntry(operation);
+    if (!inserted) {
+      _isInsertAnimating = false;
+      _pendingInsertions.insert(0, operation);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        _processInsertQueue();
+      });
+      return;
+    }
     _startInsertCooldown();
   }
 
@@ -284,6 +306,12 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    final openJid = context.select<ChatsCubit, String?>(
+      (cubit) => cubit.state.openJid,
+    );
+    final chatOpenOverlayFloorInset = openJid == null
+        ? 0.0
+        : context.spacing.xl;
     return BlocListener<XmppActivityCubit, XmppActivityState>(
       listener: (context, state) => _syncOperations(state.operations),
       child: IgnorePointer(
@@ -295,7 +323,10 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
               left: context.spacing.m + MediaQuery.of(context).viewPadding.left,
               right:
                   context.spacing.m + MediaQuery.of(context).viewPadding.right,
-              bottom: context.spacing.l + _resolveBottomInset(context),
+              bottom:
+                  context.spacing.l +
+                  _resolveBottomInset(context) +
+                  chatOpenOverlayFloorInset,
             ),
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -323,6 +354,18 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
         ),
       ),
     );
+  }
+
+  bool _shouldDisplayOperation(XmppOperation operation) {
+    if (operation.status == XmppOperationStatus.failure) {
+      return true;
+    }
+    return switch (operation.kind) {
+      XmppOperationKind.pubSubFetch => false,
+      XmppOperationKind.pubSubAvatarMetadata => false,
+      XmppOperationKind.mamFetch => false,
+      _ => true,
+    };
   }
 
   double _resolveBottomInset(BuildContext context) {

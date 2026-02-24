@@ -46,6 +46,58 @@ final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const EmailDemoRoute().location: const EmailDemoRoute(),
 });
 
+final List<_RouteLocationPattern> _routeLocationPatterns =
+    <_RouteLocationPattern>[
+      _RouteLocationPattern(
+        template: ArchivedChatRoute.path,
+        route: const ArchivedChatRoute(jid: ''),
+      ),
+    ];
+
+AuthenticationRouteData? resolveRouteLocation(String location) {
+  final direct = routeLocations[location];
+  if (direct != null) {
+    return direct;
+  }
+  final normalized = location.trim();
+  if (normalized.isEmpty) {
+    return null;
+  }
+  for (final pattern in _routeLocationPatterns) {
+    if (pattern.matches(normalized)) {
+      return pattern.route;
+    }
+  }
+  return null;
+}
+
+class _RouteLocationPattern {
+  _RouteLocationPattern({required this.template, required this.route})
+    : _regexp = _compileTemplate(template);
+
+  final String template;
+  final AuthenticationRouteData route;
+  final RegExp _regexp;
+
+  bool matches(String location) => _regexp.hasMatch(location);
+
+  static RegExp _compileTemplate(String template) {
+    final segments = template.split('/');
+    final encoded = segments
+        .map((segment) {
+          if (segment.isEmpty) {
+            return '';
+          }
+          if (segment.startsWith(':')) {
+            return '[^/]+';
+          }
+          return RegExp.escape(segment);
+        })
+        .join('/');
+    return RegExp('^$encoded\$');
+  }
+}
+
 class TransitionGoRouteData extends GoRouteData {
   const TransitionGoRouteData();
 
@@ -73,21 +125,41 @@ class TransitionGoRouteData extends GoRouteData {
   }
 }
 
-@TypedShellRoute<HomeShellRoute>(
-  routes: [
-    TypedGoRoute<HomeRoute>(path: HomeRoute.path),
-    TypedGoRoute<ProfileRoute>(path: ProfileRoute.path),
-    TypedGoRoute<ArchivesRoute>(path: ArchivesRoute.path),
-    TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path),
+@TypedStatefulShellRoute<HomeShellRoute>(
+  branches: <TypedStatefulShellBranch<StatefulShellBranchData>>[
+    TypedStatefulShellBranch<HomeShellBranchData>(
+      routes: <TypedRoute<RouteData>>[
+        TypedGoRoute<HomeRoute>(path: HomeRoute.path),
+      ],
+    ),
+    TypedStatefulShellBranch<ProfileShellBranchData>(
+      routes: <TypedRoute<RouteData>>[
+        TypedGoRoute<ProfileRoute>(path: ProfileRoute.path),
+        TypedGoRoute<ArchivesRoute>(path: ArchivesRoute.path),
+        TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path),
+      ],
+    ),
   ],
 )
-class HomeShellRoute extends ShellRouteData {
+class HomeShellRoute extends StatefulShellRouteData {
   const HomeShellRoute();
 
   @override
-  Widget builder(BuildContext context, GoRouterState state, Widget navigator) {
-    return HomeShellCalendarScope(child: navigator);
+  Widget builder(
+    BuildContext context,
+    GoRouterState state,
+    StatefulNavigationShell navigationShell,
+  ) {
+    return HomeShellCalendarScope(navigationShell: navigationShell);
   }
+}
+
+class HomeShellBranchData extends StatefulShellBranchData {
+  const HomeShellBranchData();
+}
+
+class ProfileShellBranchData extends StatefulShellBranchData {
+  const ProfileShellBranchData();
 }
 
 @TypedGoRoute<HomeRoute>(path: HomeRoute.path)

@@ -231,7 +231,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _horizontalGridController = ScrollController();
     _horizontalHeaderController.addListener(_handleHorizontalHeaderScroll);
     _horizontalGridController.addListener(_handleHorizontalGridScroll);
-    _taskInteractionController = TaskInteractionController();
+    _taskInteractionController = TaskInteractionController(
+      onTaskInteracted: _handleTaskInteractionAcknowledged,
+    );
     _gridContextMenuController = ShadPopoverController();
     _taskInteractionController.clipboard.addListener(_handleClipboardChanged);
     _taskPopoverController = TaskPopoverController();
@@ -783,6 +785,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _hydrateInteractedTaskBaseIds();
     _processFocusRequest(widget.focusRequest);
   }
 
@@ -1255,6 +1258,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didUpdateWidget(covariant CalendarGrid<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _hydrateInteractedTaskBaseIds();
     if (oldWidget.state.viewMode != widget.state.viewMode) {
       _dateSlideDirection = 0;
     } else if (!_isSameDay(
@@ -1317,6 +1321,22 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     _validateActivePopoverTarget(const <String>{});
+  }
+
+  void _hydrateInteractedTaskBaseIds() {
+    final Set<String> interactedTaskBaseIds = context
+        .read<T>()
+        .interactedTaskBaseIds;
+    _taskInteractionController.hydrateInteractedTaskBaseIds(
+      interactedTaskBaseIds,
+    );
+  }
+
+  void _handleTaskInteractionAcknowledged(String taskBaseId) {
+    if (!mounted) {
+      return;
+    }
+    context.read<T>().acknowledgeTaskInteraction(taskBaseId);
   }
 
   double _getHourHeight(BuildContext context, bool compact) {

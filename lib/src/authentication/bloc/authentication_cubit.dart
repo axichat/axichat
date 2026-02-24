@@ -18,10 +18,8 @@ import 'package:axichat/src/email/service/email_provisioning_client.dart'
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
-import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
@@ -109,7 +107,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required XmppService xmppService,
     EmailService? emailService,
     HomeRefreshSyncService? homeRefreshSyncService,
-    NotificationService? notificationService,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
@@ -150,30 +147,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return AppExitResponse.exit;
       },
       onStateChange: (lifeCycleState) async {
-        if (launchedFromNotification) {
-          launchedFromNotification = false;
-          final payload = takeLaunchedNotificationChatJid();
-          if (payload != null) {
-            final chatJid = await xmppService.resolveNotificationPayload(
-              payload,
-            );
-            if (chatJid != null) {
-              xmppService.openChat(chatJid);
-            }
-          } else {
-            final appLaunchDetails = await notificationService
-                ?.getAppNotificationAppLaunchDetails();
-            if (appLaunchDetails?.notificationResponse?.payload
-                case final launchPayload?) {
-              final chatJid = await xmppService.resolveNotificationPayload(
-                launchPayload,
-              );
-              if (chatJid != null) {
-                xmppService.openChat(chatJid);
-              }
-            }
-          }
-        }
         await _xmppService.setClientState(
           lifeCycleState == AppLifecycleState.resumed ||
               lifeCycleState == AppLifecycleState.inactive,

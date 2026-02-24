@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/omemo_activity/bloc/omemo_activity_cubit.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,12 @@ class OmemoOperationOverlay extends StatelessWidget {
         if (operations.isEmpty) {
           return const SizedBox.shrink();
         }
+        final openJid = context.select<ChatsCubit, String?>(
+          (cubit) => cubit.state.openJid,
+        );
+        final chatOpenOverlayFloorInset = openJid == null
+            ? 0.0
+            : context.spacing.xl;
         final bottomInset = MediaQuery.of(context).viewInsets.bottom;
         return IgnorePointer(
           ignoring: true,
@@ -27,7 +34,8 @@ class OmemoOperationOverlay extends StatelessWidget {
               padding: EdgeInsets.only(
                 left: context.spacing.m,
                 right: context.spacing.m,
-                bottom: context.spacing.l + bottomInset,
+                bottom:
+                    context.spacing.l + bottomInset + chatOpenOverlayFloorInset,
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(

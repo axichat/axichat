@@ -267,6 +267,10 @@ class ChatAttachmentPreview extends StatefulWidget {
 }
 
 class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
+  static final Map<String, bool> _fileExistsCacheByPath = <String, bool>{};
+  static final Map<int, FileTypeReport> _typeReportCacheByKey =
+      <int, FileTypeReport>{};
+
   Future<FileTypeReport>? _typeReportFuture;
   int? _typeReportKey;
   FileTypeReport? _resolvedTypeReport;
@@ -294,6 +298,12 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
     required File file,
   }) {
     final nextKey = _typeReportCacheKey(metadata: metadata, file: file);
+    final cachedReport = _typeReportCacheByKey[nextKey];
+    if (cachedReport != null) {
+      _resolvedTypeReport = cachedReport;
+      _resolvedTypeReportKey = nextKey;
+      return SynchronousFuture<FileTypeReport>(cachedReport);
+    }
     final cachedFuture = _typeReportFuture;
     if (cachedFuture != null && _typeReportKey == nextKey) {
       return cachedFuture;
@@ -308,6 +318,7 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
     unawaited(
       nextFuture.then<void>((report) {
         if (_typeReportKey != nextKey) return;
+        _typeReportCacheByKey[nextKey] = report;
         _resolvedTypeReport = report;
         _resolvedTypeReportKey = nextKey;
       }, onError: (Object error, StackTrace stackTrace) {}),
@@ -323,7 +334,15 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
   }
 
   Future<bool> _resolveFileExistsFuture(File file) {
-    final nextKey = file.path.hashCode;
+    final path = file.path;
+    final cachedExists = _fileExistsCacheByPath[path];
+    if (cachedExists != null) {
+      final nextKey = path.hashCode;
+      _resolvedFileExists = cachedExists;
+      _resolvedFileExistsKey = nextKey;
+      return SynchronousFuture<bool>(cachedExists);
+    }
+    final nextKey = path.hashCode;
     final cachedFuture = _fileExistsFuture;
     if (cachedFuture != null && _fileExistsKey == nextKey) {
       return cachedFuture;
@@ -334,6 +353,11 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
     unawaited(
       nextFuture.then<void>((exists) {
         if (_fileExistsKey != nextKey) return;
+        if (exists) {
+          _fileExistsCacheByPath[path] = true;
+        } else {
+          _fileExistsCacheByPath.remove(path);
+        }
         _resolvedFileExists = exists;
         _resolvedFileExistsKey = nextKey;
         if (!exists) {
@@ -383,21 +407,13 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
               final fileExistsKey = localFile.path.hashCode;
               final cachedHasLocalFile = _resolvedFileExistsKey == fileExistsKey
                   ? _resolvedFileExists
-                  : null;
+                  : _fileExistsCacheByPath[localFile.path];
               final existsFuture = _resolveFileExistsFuture(localFile);
               return FutureBuilder<bool>(
                 future: existsFuture,
-                initialData: cachedHasLocalFile,
+                initialData: cachedHasLocalFile ?? true,
                 builder: (context, existsSnapshot) {
-                  final hasLocalFile = existsSnapshot.data;
-                  if (existsSnapshot.connectionState != ConnectionState.done &&
-                      hasLocalFile == null) {
-                    return _AttachmentSurface(
-                      child: Center(
-                        child: AxiProgressIndicator(color: colors.primary),
-                      ),
-                    );
-                  }
+                  final hasLocalFile = existsSnapshot.data ?? true;
                   if (hasLocalFile != true) {
                     _clearTypeReportCache();
                   }
@@ -409,29 +425,17 @@ class _ChatAttachmentPreviewState extends State<ChatAttachmentPreview> {
                     final cachedTypeReport =
                         _resolvedTypeReportKey == typeReportKey
                         ? _resolvedTypeReport
-                        : null;
+                        : _typeReportCacheByKey[typeReportKey];
                     final typeReportFuture = _resolveTypeReportFuture(
                       metadata: metadata,
                       file: localFile,
                     );
                     return FutureBuilder<FileTypeReport>(
                       future: typeReportFuture,
-                      initialData: cachedTypeReport,
+                      initialData: cachedTypeReport ?? declaredReport,
                       builder: (context, typeSnapshot) {
-                        final report = typeSnapshot.data;
-                        if (typeSnapshot.connectionState !=
-                                ConnectionState.done &&
-                            report == null) {
-                          return _AttachmentSurface(
-                            child: Center(
-                              child: AxiProgressIndicator(
-                                color: colors.primary,
-                              ),
-                            ),
-                          );
-                        }
                         final FileTypeReport resolvedReport =
-                            report ?? declaredReport;
+                            typeSnapshot.data ?? declaredReport;
                         final bool useDeclaredFallback =
                             !resolvedReport.hasReliableDetection;
                         final bool isImage =

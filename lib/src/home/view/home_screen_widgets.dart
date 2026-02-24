@@ -232,6 +232,7 @@ class _NexusScaffold extends StatelessWidget {
             onDestinationSelected: onDestinationSelected,
             calendarAvailable: false,
             calendarActive: false,
+            profileActive: false,
             onCalendarSelected: () {},
             badgeCounts: badgeCounts,
             onCollapsedChanged: onToggleNavRail == null
@@ -663,12 +664,14 @@ class _HomeBottomTabItem extends StatelessWidget {
 class _HomeShellBottomBar extends StatelessWidget {
   const _HomeShellBottomBar({
     required this.calendarBottomDragSession,
-    required this.bottomNavIndex,
+    required this.selectedBottomIndex,
+    required this.onBottomNavSelected,
     required this.calendarAvailable,
   });
 
   final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
-  final ValueNotifier<int> bottomNavIndex;
+  final int selectedBottomIndex;
+  final ValueChanged<int> onBottomNavSelected;
   final bool calendarAvailable;
 
   @override
@@ -676,7 +679,8 @@ class _HomeShellBottomBar extends StatelessWidget {
     return _HomeShellDefaultBar(
       calendarAvailable: calendarAvailable,
       calendarBottomDragSession: calendarBottomDragSession,
-      bottomNavIndex: bottomNavIndex,
+      selectedBottomIndex: selectedBottomIndex,
+      onBottomNavSelected: onBottomNavSelected,
     );
   }
 }
@@ -685,12 +689,14 @@ class _HomeShellDefaultBar extends StatefulWidget {
   const _HomeShellDefaultBar({
     required this.calendarAvailable,
     required this.calendarBottomDragSession,
-    required this.bottomNavIndex,
+    required this.selectedBottomIndex,
+    required this.onBottomNavSelected,
   });
 
   final bool calendarAvailable;
   final ValueNotifier<CalendarBottomDragSession?> calendarBottomDragSession;
-  final ValueNotifier<int> bottomNavIndex;
+  final int selectedBottomIndex;
+  final ValueChanged<int> onBottomNavSelected;
 
   @override
   State<_HomeShellDefaultBar> createState() => _HomeShellDefaultBarState();
@@ -708,7 +714,6 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
   void initState() {
     super.initState();
     widget.calendarBottomDragSession.addListener(_handleCalendarDragSignal);
-    widget.bottomNavIndex.addListener(_handleCalendarDragSignal);
   }
 
   @override
@@ -727,17 +732,12 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
       );
       widget.calendarBottomDragSession.addListener(_handleCalendarDragSignal);
     }
-    if (oldWidget.bottomNavIndex != widget.bottomNavIndex) {
-      oldWidget.bottomNavIndex.removeListener(_handleCalendarDragSignal);
-      widget.bottomNavIndex.addListener(_handleCalendarDragSignal);
-    }
     _handleCalendarDragSignal();
   }
 
   @override
   void dispose() {
     widget.calendarBottomDragSession.removeListener(_handleCalendarDragSignal);
-    widget.bottomNavIndex.removeListener(_handleCalendarDragSignal);
     _cancelCalendarDragSwitchTimer();
     super.dispose();
   }
@@ -747,40 +747,19 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
   int _calendarTargetToBottomNavIndex(int calendarTabIndex) =>
       calendarTabIndex == 0 ? 1 : 2;
 
-  void _ensureHomeRoute() {
-    final String currentPath = GoRouterState.of(context).uri.path;
-    if (currentPath != HomeRoute.path) {
-      const HomeRoute().go(context);
-    }
-  }
-
   void _setBottomNavIndex(int index) {
-    final locate = context.read;
-    final int safeIndex = _clampBottomNavIndex(index);
-    final int previousIndex = _clampBottomNavIndex(widget.bottomNavIndex.value);
-    if (widget.bottomNavIndex.value != safeIndex) {
-      widget.bottomNavIndex.value = safeIndex;
-    }
-
-    if (safeIndex == 0) {
-      HomeShellScope.maybeOf(context)?.homeTabIndex.value = 0;
-      _ensureHomeRoute();
-      locate<ChatsCubit>().closeAllChats();
+    assert(index >= 0 && index <= 3, 'bottom nav index must be 0..3');
+    if (index < 0 || index > 3) {
       return;
     }
-
-    if (safeIndex == 1 || safeIndex == 2) {
-      _ensureHomeRoute();
+    widget.onBottomNavSelected(index);
+    if (index != 0) {
       return;
     }
-
-    context.push(const ProfileRoute().location).then((_) {
-      if (!mounted || widget.bottomNavIndex.value != 3) {
-        return;
-      }
-      final int restoredIndex = previousIndex == 3 ? 0 : previousIndex;
-      widget.bottomNavIndex.value = restoredIndex;
-    });
+    final scope = HomeShellScope.maybeOf(context);
+    if (scope?.bottomNavIndex.value == 0) {
+      scope?.homeTabIndex.value = 0;
+    }
   }
 
   int? _normalizeCalendarTabIndex(int? value) {
@@ -863,7 +842,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
       if (widget.calendarBottomDragSession.value == null) {
         return;
       }
-      final selectedIndex = _clampBottomNavIndex(widget.bottomNavIndex.value);
+      final selectedIndex = _clampBottomNavIndex(widget.selectedBottomIndex);
       final openCalendar = selectedIndex == 1 || selectedIndex == 2;
       final chatsState = locate<ChatsCubit>().state;
       final chatCalendarActive =
@@ -885,7 +864,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     }
     final CalendarBottomDragSession? dragSession =
         widget.calendarBottomDragSession.value;
-    final int selectedIndex = _clampBottomNavIndex(widget.bottomNavIndex.value);
+    final int selectedIndex = _clampBottomNavIndex(widget.selectedBottomIndex);
     final int? sourceTab = dragSession == null
         ? null
         : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
@@ -982,153 +961,147 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
           child: ValueListenableBuilder<CalendarBottomDragSession?>(
             valueListenable: widget.calendarBottomDragSession,
             builder: (context, dragSession, _) {
-              return ValueListenableBuilder<int>(
-                valueListenable: widget.bottomNavIndex,
-                builder: (context, selectedIndex, _) {
-                  final int safeSelectedIndex = _clampBottomNavIndex(
-                    selectedIndex,
-                  );
-                  final bool openCalendar =
-                      safeSelectedIndex == 1 || safeSelectedIndex == 2;
-                  final bool chatCalendarActive =
-                      chatsState.openJid != null &&
-                      chatsState.openChatRoute.isCalendar;
-                  final int safeCalendarTab = safeSelectedIndex == 2
-                      ? 1
-                      : safeSelectedIndex == 1
-                      ? 0
-                      : 0;
-                  final bool calendarDisabled = !widget.calendarAvailable;
-                  final Color disabledColor = colors.mutedForeground.withValues(
-                    alpha: 0.45,
-                  );
-                  final homeColor = safeSelectedIndex == 0
-                      ? colors.foreground
-                      : colors.mutedForeground;
-                  final scheduleColor = calendarDisabled
-                      ? disabledColor
-                      : safeSelectedIndex == 1
-                      ? colors.foreground
-                      : colors.mutedForeground;
-                  final tasksColor = calendarDisabled
-                      ? disabledColor
-                      : safeSelectedIndex == 2
-                      ? colors.foreground
-                      : colors.mutedForeground;
-                  final int? dragSourceTab = dragSession == null
-                      ? null
-                      : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
-                            safeCalendarTab;
-                  final bool dragHintActive =
-                      !lowMotion &&
-                      widget.calendarAvailable &&
-                      (openCalendar || chatCalendarActive) &&
-                      dragSourceTab != null;
-                  final bool shakeSchedule = dragHintActive;
-                  final bool shakeTasks = dragHintActive;
-                  final avatar = AxiAvatar(
-                    jid: profile.jid,
-                    subscription: m.Subscription.both,
-                    avatarPath: profile.avatarPath,
-                    presence: null,
-                    status: null,
-                    active: false,
-                    size: sizing.iconButtonIconSize + spacing.xxs,
-                  );
-                  return GNav(
-                    selectedIndex: safeSelectedIndex,
-                    duration: context.watch<SettingsCubit>().animationDuration,
-                    haptic: true,
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
-                    tabBorderRadius: context.radii.squircle,
-                    curve: Curves.easeInOutCubic,
-                    gap: spacing.s,
-                    iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                    color: colors.mutedForeground,
-                    activeColor: colors.foreground,
-                    textStyle: context.textTheme.small.strong,
-                    tabBackgroundColor: colors.secondary.withValues(
-                      alpha: context.motion.tapHoverAlpha,
-                    ),
-                    padding: EdgeInsets.symmetric(
-                      horizontal: spacing.s,
-                      vertical: spacing.s,
-                    ),
-                    onTabChange: (index) {
-                      final int safeIndex = _clampBottomNavIndex(index);
-                      if (safeIndex == safeSelectedIndex) {
-                        return;
-                      }
-                      if (!widget.calendarAvailable &&
-                          (safeIndex == 1 || safeIndex == 2)) {
-                        return;
-                      }
-                      _setBottomNavIndex(safeIndex);
-                    },
-                    tabs: [
-                      GButton(
-                        icon: LucideIcons.house,
-                        text: l10n.homeBottomNavHome,
-                        leading: _HomeBottomNavBadgeIcon(
-                          iconData: LucideIcons.house,
-                          badgeCount: chatsBadgeCount,
-                          color: homeColor,
-                          iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                        ),
-                        iconColor: colors.mutedForeground,
-                        iconActiveColor: colors.foreground,
-                      ),
-                      GButton(
-                        icon: LucideIcons.calendarClock,
-                        key: _scheduleTabKey,
-                        text: l10n.calendarScheduleLabel,
-                        leading: _BottomNavShake(
-                          enabled: shakeSchedule,
-                          child: _HomeBottomNavBadgeIcon(
-                            iconData: LucideIcons.calendarClock,
-                            badgeCount: scheduledAlertsCount,
-                            color: scheduleColor,
-                            iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                          ),
-                        ),
-                        iconColor: calendarDisabled
-                            ? disabledColor
-                            : colors.mutedForeground,
-                        iconActiveColor: calendarDisabled
-                            ? disabledColor
-                            : colors.foreground,
-                      ),
-                      GButton(
-                        icon: LucideIcons.squareCheck,
-                        key: _tasksTabKey,
-                        text: l10n.calendarFragmentTaskLabel,
-                        leading: _BottomNavShake(
-                          enabled: shakeTasks,
-                          child: _HomeBottomNavBadgeIcon(
-                            iconData: LucideIcons.squareCheck,
-                            badgeCount: unscheduledAlertsCount,
-                            color: tasksColor,
-                            iconSize: sizing.iconButtonIconSize + spacing.xxs,
-                          ),
-                        ),
-                        iconColor: calendarDisabled
-                            ? disabledColor
-                            : colors.mutedForeground,
-                        iconActiveColor: calendarDisabled
-                            ? disabledColor
-                            : colors.foreground,
-                      ),
-                      GButton(
-                        icon: LucideIcons.user,
-                        text: l10n.settingsButtonLabel,
-                        leading: avatar,
-                        iconColor: colors.mutedForeground,
-                        iconActiveColor: colors.foreground,
-                      ),
-                    ],
-                  );
+              final int safeSelectedIndex = _clampBottomNavIndex(
+                widget.selectedBottomIndex,
+              );
+              final bool openCalendar =
+                  safeSelectedIndex == 1 || safeSelectedIndex == 2;
+              final bool chatCalendarActive =
+                  chatsState.openJid != null &&
+                  chatsState.openChatRoute.isCalendar;
+              final int safeCalendarTab = safeSelectedIndex == 2
+                  ? 1
+                  : safeSelectedIndex == 1
+                  ? 0
+                  : 0;
+              final bool calendarDisabled = !widget.calendarAvailable;
+              final Color disabledColor = colors.mutedForeground.withValues(
+                alpha: 0.45,
+              );
+              final homeColor = safeSelectedIndex == 0
+                  ? colors.foreground
+                  : colors.mutedForeground;
+              final scheduleColor = calendarDisabled
+                  ? disabledColor
+                  : safeSelectedIndex == 1
+                  ? colors.foreground
+                  : colors.mutedForeground;
+              final tasksColor = calendarDisabled
+                  ? disabledColor
+                  : safeSelectedIndex == 2
+                  ? colors.foreground
+                  : colors.mutedForeground;
+              final int? dragSourceTab = dragSession == null
+                  ? null
+                  : _normalizeCalendarTabIndex(dragSession.sourceTab) ??
+                        safeCalendarTab;
+              final bool dragHintActive =
+                  !lowMotion &&
+                  widget.calendarAvailable &&
+                  (openCalendar || chatCalendarActive) &&
+                  dragSourceTab != null;
+              final bool shakeSchedule = dragHintActive;
+              final bool shakeTasks = dragHintActive;
+              final avatar = AxiAvatar(
+                jid: profile.jid,
+                subscription: m.Subscription.both,
+                avatarPath: profile.avatarPath,
+                presence: null,
+                status: null,
+                active: false,
+                size: sizing.iconButtonIconSize + spacing.xxs,
+              );
+              return GNav(
+                selectedIndex: safeSelectedIndex,
+                duration: context.watch<SettingsCubit>().animationDuration,
+                haptic: true,
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
+                tabBorderRadius: context.radii.squircle,
+                curve: Curves.easeInOutCubic,
+                gap: spacing.s,
+                iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                color: colors.mutedForeground,
+                activeColor: colors.foreground,
+                textStyle: context.textTheme.small.strong,
+                tabBackgroundColor: colors.secondary.withValues(
+                  alpha: context.motion.tapHoverAlpha,
+                ),
+                padding: EdgeInsets.symmetric(
+                  horizontal: spacing.s,
+                  vertical: spacing.s,
+                ),
+                onTabChange: (index) {
+                  assert(index >= 0 && index <= 3);
+                  if (index == safeSelectedIndex) {
+                    return;
+                  }
+                  if (!widget.calendarAvailable && (index == 1 || index == 2)) {
+                    return;
+                  }
+                  _setBottomNavIndex(index);
                 },
+                tabs: [
+                  GButton(
+                    icon: LucideIcons.house,
+                    text: l10n.homeBottomNavHome,
+                    leading: _HomeBottomNavBadgeIcon(
+                      iconData: LucideIcons.house,
+                      badgeCount: chatsBadgeCount,
+                      color: homeColor,
+                      iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                    ),
+                    iconColor: colors.mutedForeground,
+                    iconActiveColor: colors.foreground,
+                  ),
+                  GButton(
+                    icon: LucideIcons.calendarClock,
+                    key: _scheduleTabKey,
+                    text: l10n.calendarScheduleLabel,
+                    leading: _BottomNavShake(
+                      enabled: shakeSchedule,
+                      child: _HomeBottomNavBadgeIcon(
+                        iconData: LucideIcons.calendarClock,
+                        badgeCount: scheduledAlertsCount,
+                        color: scheduleColor,
+                        iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                      ),
+                    ),
+                    iconColor: calendarDisabled
+                        ? disabledColor
+                        : colors.mutedForeground,
+                    iconActiveColor: calendarDisabled
+                        ? disabledColor
+                        : colors.foreground,
+                  ),
+                  GButton(
+                    icon: LucideIcons.squareCheck,
+                    key: _tasksTabKey,
+                    text: l10n.calendarFragmentTaskLabel,
+                    leading: _BottomNavShake(
+                      enabled: shakeTasks,
+                      child: _HomeBottomNavBadgeIcon(
+                        iconData: LucideIcons.squareCheck,
+                        badgeCount: unscheduledAlertsCount,
+                        color: tasksColor,
+                        iconSize: sizing.iconButtonIconSize + spacing.xxs,
+                      ),
+                    ),
+                    iconColor: calendarDisabled
+                        ? disabledColor
+                        : colors.mutedForeground,
+                    iconActiveColor: calendarDisabled
+                        ? disabledColor
+                        : colors.foreground,
+                  ),
+                  GButton(
+                    icon: LucideIcons.user,
+                    text: l10n.settingsButtonLabel,
+                    leading: avatar,
+                    iconColor: colors.mutedForeground,
+                    iconActiveColor: colors.foreground,
+                  ),
+                ],
               );
             },
           ),
@@ -1240,9 +1213,11 @@ class _HomeShellRailLayout extends StatelessWidget {
     required this.tabs,
     required this.homeTabIndex,
     required this.bottomNavIndex,
+    required this.selectedBottomIndex,
     required this.calendarAvailable,
     required this.collapsed,
     required this.onCollapsedChanged,
+    required this.onBottomNavSelected,
     required this.badgeCounts,
     required this.child,
   });
@@ -1250,9 +1225,11 @@ class _HomeShellRailLayout extends StatelessWidget {
   final List<HomeTabEntry> tabs;
   final ValueNotifier<int> homeTabIndex;
   final ValueNotifier<int> bottomNavIndex;
+  final int selectedBottomIndex;
   final bool calendarAvailable;
   final bool collapsed;
   final ValueChanged<bool> onCollapsedChanged;
+  final ValueChanged<int> onBottomNavSelected;
   final Map<HomeTab, int> badgeCounts;
   final Widget child;
 
@@ -1261,33 +1238,34 @@ class _HomeShellRailLayout extends StatelessWidget {
     return ValueListenableBuilder<int>(
       valueListenable: homeTabIndex,
       builder: (context, selectedIndex, _) {
-        return ValueListenableBuilder<int>(
-          valueListenable: bottomNavIndex,
-          builder: (context, selectedBottomIndex, _) {
-            if (tabs.isEmpty) {
-              return child;
-            }
-            final int safeBottomIndex = selectedBottomIndex.clamp(0, 3).toInt();
-            final bool calendarActive =
-                safeBottomIndex == 1 || safeBottomIndex == 2;
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _HomeShellNavigationRail(
-                  tabs: tabs,
-                  selectedIndex: selectedIndex,
-                  homeTabIndex: homeTabIndex,
-                  bottomNavIndex: bottomNavIndex,
-                  collapsed: collapsed,
-                  calendarAvailable: calendarAvailable,
-                  calendarActive: calendarActive,
-                  onCollapsedChanged: onCollapsedChanged,
-                  badgeCounts: badgeCounts,
-                ),
-                Expanded(child: child),
-              ],
-            );
-          },
+        if (tabs.isEmpty) {
+          return child;
+        }
+        assert(
+          selectedBottomIndex >= 0 && selectedBottomIndex <= 3,
+          'bottom nav index must be 0..3',
+        );
+        final bool profileActive = selectedBottomIndex == 3;
+        final bool calendarActive =
+            selectedBottomIndex == 1 || selectedBottomIndex == 2;
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _HomeShellNavigationRail(
+              tabs: tabs,
+              selectedIndex: selectedIndex,
+              homeTabIndex: homeTabIndex,
+              bottomNavIndex: bottomNavIndex,
+              collapsed: collapsed,
+              calendarAvailable: calendarAvailable,
+              calendarActive: calendarActive,
+              profileActive: profileActive,
+              onBottomNavSelected: onBottomNavSelected,
+              onCollapsedChanged: onCollapsedChanged,
+              badgeCounts: badgeCounts,
+            ),
+            Expanded(child: child),
+          ],
         );
       },
     );
@@ -1303,6 +1281,8 @@ class _HomeShellNavigationRail extends StatelessWidget {
     required this.collapsed,
     required this.calendarAvailable,
     required this.calendarActive,
+    required this.profileActive,
+    required this.onBottomNavSelected,
     required this.onCollapsedChanged,
     required this.badgeCounts,
   });
@@ -1314,26 +1294,23 @@ class _HomeShellNavigationRail extends StatelessWidget {
   final bool collapsed;
   final bool calendarAvailable;
   final bool calendarActive;
+  final bool profileActive;
+  final ValueChanged<int> onBottomNavSelected;
   final ValueChanged<bool> onCollapsedChanged;
   final Map<HomeTab, int> badgeCounts;
 
-  void _ensureHomeRoute(BuildContext context) {
-    final String currentPath = GoRouterState.of(context).uri.path;
-    if (currentPath != HomeRoute.path) {
-      const HomeRoute().go(context);
-    }
-  }
-
   void _openCalendar(BuildContext context) {
-    final currentIndex = bottomNavIndex.value.clamp(0, 3).toInt();
-    bottomNavIndex.value = currentIndex == 2 ? 2 : 1;
-    _ensureHomeRoute(context);
+    assert(
+      bottomNavIndex.value >= 0 && bottomNavIndex.value <= 2,
+      'bottom nav index must be 0..2',
+    );
+    final currentIndex = bottomNavIndex.value;
+    onBottomNavSelected(currentIndex == 2 ? 2 : 1);
   }
 
   void _selectHomeTab(BuildContext context, int index) {
-    bottomNavIndex.value = 0;
+    onBottomNavSelected(0);
     homeTabIndex.value = index;
-    _ensureHomeRoute(context);
   }
 
   @override
@@ -1345,6 +1322,8 @@ class _HomeShellNavigationRail extends StatelessWidget {
       onDestinationSelected: (index) => _selectHomeTab(context, index),
       calendarAvailable: calendarAvailable,
       calendarActive: calendarActive,
+      profileActive: profileActive,
+      onBottomNavSelected: onBottomNavSelected,
       onCalendarSelected: () => _openCalendar(context),
       onCollapsedChanged: onCollapsedChanged,
       badgeCounts: badgeCounts,
@@ -1417,9 +1396,15 @@ class _AccessibilityFindActionRailItem extends StatelessWidget {
 }
 
 class _HomeNavigationRailFooter extends StatelessWidget {
-  const _HomeNavigationRailFooter({required this.collapsed});
+  const _HomeNavigationRailFooter({
+    required this.collapsed,
+    required this.profileActive,
+    required this.onBottomNavSelected,
+  });
 
   final bool collapsed;
+  final bool profileActive;
+  final ValueChanged<int>? onBottomNavSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1428,19 +1413,27 @@ class _HomeNavigationRailFooter extends StatelessWidget {
     if (items.isNotEmpty) {
       items.add(SizedBox(height: context.spacing.m));
     }
-    items.add(_ProfileRailItem(collapsed: collapsed));
+    items.add(
+      _ProfileRailItem(
+        collapsed: collapsed,
+        selected: profileActive,
+        onBottomNavSelected: onBottomNavSelected,
+      ),
+    );
     return Column(mainAxisSize: MainAxisSize.min, children: items);
   }
 }
 
 class _ProfileRailItem extends StatelessWidget {
-  const _ProfileRailItem({required this.collapsed});
+  const _ProfileRailItem({
+    required this.collapsed,
+    required this.selected,
+    required this.onBottomNavSelected,
+  });
 
   final bool collapsed;
-
-  void _openSettings(BuildContext context) {
-    context.push(const ProfileRoute().location);
-  }
+  final bool selected;
+  final ValueChanged<int>? onBottomNavSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -1465,16 +1458,23 @@ class _ProfileRailItem extends StatelessWidget {
             icon: avatar,
             tooltip: label,
             semanticLabel: label,
-            onPressed: () => _openSettings(context),
+            selected: selected,
+            onPressed: onBottomNavSelected == null
+                ? null
+                : () => onBottomNavSelected!(3),
           );
         }
         return AxiListButton(
+          selected: selected,
           collapsed: collapsed,
           collapsedIconData: LucideIcons.user,
           collapsedTooltip: label,
           collapsedSemanticLabel: label,
           semanticLabel: label,
           leading: avatar,
+          onPressed: onBottomNavSelected == null
+              ? null
+              : () => onBottomNavSelected!(3),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
@@ -1493,7 +1493,6 @@ class _ProfileRailItem extends StatelessWidget {
               ),
             ],
           ),
-          onPressed: () => _openSettings(context),
         );
       },
     );
@@ -1614,6 +1613,8 @@ class _HomeNavigationRail extends StatefulWidget {
     required this.onDestinationSelected,
     required this.calendarAvailable,
     required this.calendarActive,
+    required this.profileActive,
+    this.onBottomNavSelected,
     required this.onCalendarSelected,
     required this.badgeCounts,
     this.onCollapsedChanged,
@@ -1625,6 +1626,8 @@ class _HomeNavigationRail extends StatefulWidget {
   final ValueChanged<int> onDestinationSelected;
   final bool calendarAvailable;
   final bool calendarActive;
+  final bool profileActive;
+  final ValueChanged<int>? onBottomNavSelected;
   final VoidCallback onCalendarSelected;
   final Map<HomeTab, int> badgeCounts;
   final ValueChanged<bool>? onCollapsedChanged;
@@ -1677,20 +1680,26 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
         );
       }
     }
-    final safeTabIndex = selectedIndex.clamp(0, widget.tabs.length - 1).toInt();
-    final selectedRailIndex =
+    assert(
+      selectedIndex >= 0 && selectedIndex < widget.tabs.length,
+      'selectedIndex must be within tab bounds',
+    );
+    final effectiveSelectedIndex =
         widget.calendarActive && calendarDestinationIndex != null
         ? calendarDestinationIndex
-        : _destinationIndexForTab(safeTabIndex, calendarDestinationIndex);
-    final effectiveSelectedIndex = selectedRailIndex
-        .clamp(0, destinations.length - 1)
-        .toInt();
+        : _destinationIndexForTab(selectedIndex, calendarDestinationIndex);
+    assert(
+      effectiveSelectedIndex >= 0 &&
+          effectiveSelectedIndex < destinations.length,
+      'effectiveSelectedIndex must be within destination bounds',
+    );
     return SafeArea(
       left: false,
       right: false,
       child: AxiNavigationRail(
         destinations: destinations,
         selectedIndex: effectiveSelectedIndex,
+        showSelection: !widget.profileActive,
         collapsed: widget.collapsed,
         onToggleCollapse: widget.onCollapsedChanged == null
             ? null
@@ -1698,7 +1707,11 @@ class _HomeNavigationRailState extends State<_HomeNavigationRail> {
         toggleExpandedTooltip: l10n.homeRailHideMenu,
         toggleCollapsedTooltip: l10n.homeRailShowMenu,
         backgroundColor: context.colorScheme.background,
-        footer: _HomeNavigationRailFooter(collapsed: widget.collapsed),
+        footer: _HomeNavigationRailFooter(
+          collapsed: widget.collapsed,
+          profileActive: widget.profileActive,
+          onBottomNavSelected: widget.onBottomNavSelected,
+        ),
         onDestinationSelected: (index) {
           final calendarIndex = _calendarDestinationIndex();
           if (calendarIndex != null && index == calendarIndex) {

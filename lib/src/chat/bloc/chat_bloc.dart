@@ -3194,6 +3194,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           if (shouldSendCalendarTaskAttachment) {
             final sent = await _sendCalendarTaskEmailAttachment(
               task: effectiveTaskForEmail,
+              taskReadOnly: taskReadOnly,
               chat: chat,
               service: emailService,
               recipients: emailRecipients,
@@ -4371,6 +4372,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<bool> _sendCalendarTaskEmailAttachment({
     required CalendarTask task,
+    required bool taskReadOnly,
     required Chat chat,
     required EmailService service,
     required List<ComposerRecipient> recipients,
@@ -4380,6 +4382,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     String? caption,
     String? htmlCaption,
   }) async {
+    if (kEnableDemoChats && _messageService.demoOfflineMode) {
+      final sent = await _sendDemoCalendarTaskShare(
+        task: task,
+        taskReadOnly: taskReadOnly,
+        chat: chat,
+        recipients: recipients,
+        caption: caption,
+      );
+      if (!sent) {
+        emit(
+          state.copyWith(
+            composerError: ChatMessageKey.calendarTaskShareSendFailed,
+          ),
+        );
+        return false;
+      }
+      return true;
+    }
     final EmailAttachment? attachment = await _buildCalendarTaskEmailAttachment(
       task,
     );
@@ -4440,6 +4460,37 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return false;
     }
+  }
+
+  Future<bool> _sendDemoCalendarTaskShare({
+    required CalendarTask task,
+    required bool taskReadOnly,
+    required Chat chat,
+    required List<ComposerRecipient> recipients,
+    String? caption,
+  }) async {
+    final resolvedCaption = caption?.trim() ?? '';
+    final processed = <String>{};
+    for (final recipient in recipients) {
+      final targetChat = recipient.target.chat;
+      final targetJid = (targetChat?.jid ?? recipient.target.address)?.trim();
+      if (targetJid == null || targetJid.isEmpty) {
+        continue;
+      }
+      if (!processed.add(targetJid)) {
+        continue;
+      }
+      await _messageService.sendMessage(
+        jid: targetJid,
+        text: resolvedCaption,
+        encryptionProtocol:
+            targetChat?.encryptionProtocol ?? chat.encryptionProtocol,
+        calendarTaskIcs: task,
+        calendarTaskIcsReadOnly: taskReadOnly,
+        chatType: targetChat?.type ?? chat.type,
+      );
+    }
+    return processed.isNotEmpty;
   }
 
   Future<EmailAttachment> _bundlePendingAttachments({

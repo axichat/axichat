@@ -4845,7 +4845,11 @@ class EditableTextState extends State<EditableText>
       }
       _typingLayoutCallbackScheduled = false;
       _applyPendingTypingChanges();
-      _syncTypingCaretToSelection(animate: true);
+      if (_pendingTypingChanges.isNotEmpty ||
+          _typingCaretController.isAnimating) {
+        return;
+      }
+      _syncTypingCaretToSelection();
     });
   }
 
@@ -4912,26 +4916,25 @@ class EditableTextState extends State<EditableText>
       return;
     }
 
-    if (change.kind.isInsertion) {
-      final bool shouldAnimateTyping =
-          _typingAnimationsEnabled && !widget.readOnly;
-      if (shouldAnimateTyping) {
-        _animateTypingCaret(
-          startOffset ?? endOffset,
-          endOffset,
-          renderEditable,
-        );
-      } else {
-        _jumpTypingCaret(endOffset);
-      }
+    final bool shouldAnimateTyping =
+        _typingAnimationsEnabled && !widget.readOnly;
+    final bool textChanged =
+        change.previousValue.text != change.currentValue.text;
+    if (shouldAnimateTyping && textChanged) {
+      final Offset animationStart = startOffset ?? _typingCaretOffset;
+      _animateTypingCaret(animationStart, endOffset, renderEditable);
     } else {
       _jumpTypingCaret(endOffset);
     }
 
-    if (change.isSingleCharacterInsertion &&
-        _typingAnimationsEnabled &&
-        !widget.readOnly) {
-      _startTypingGlyphMorph(change, renderEditable);
+    if (!shouldAnimateTyping) {
+      return;
+    }
+    final TypingTextChange? insertionChange = change.isSingleCharacterInsertion
+        ? change
+        : _fallbackSingleCharacterInsertion(change);
+    if (insertionChange != null) {
+      _startTypingGlyphMorph(insertionChange, renderEditable);
     }
   }
 
@@ -5188,6 +5191,32 @@ class EditableTextState extends State<EditableText>
     final double micros =
         ui.lerpDouble(startMicros, endMicros, clamped) ?? startMicros;
     return Duration(microseconds: micros.round());
+  }
+
+  TypingTextChange? _fallbackSingleCharacterInsertion(TypingTextChange change) {
+    final int delta =
+        change.currentValue.text.length - change.previousValue.text.length;
+    if (delta != 1) {
+      return null;
+    }
+    final TextSelection selection = change.currentValue.selection;
+    if (!selection.isValid || !selection.isCollapsed) {
+      return null;
+    }
+    final int end = selection.extentOffset;
+    final int start = end - 1;
+    final String text = change.currentValue.text;
+    if (start < 0 || end > text.length) {
+      return null;
+    }
+    final TextRange range = TextRange(start: start, end: end);
+    return TypingTextChange(
+      kind: TypingTextChangeKind.insert,
+      previousValue: change.previousValue,
+      currentValue: change.currentValue,
+      insertedRange: range,
+      insertedText: text.substring(start, end),
+    );
   }
 
   void _jumpTypingCaret(Offset target) {

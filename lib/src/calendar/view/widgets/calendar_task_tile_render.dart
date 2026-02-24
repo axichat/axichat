@@ -412,6 +412,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     );
     final bool primaryButton = _isPrimaryButton(event);
     if (primaryButton) {
+      interactionController.acknowledgeTaskInteraction(task.id);
       onDragPointerDown?.call(_normalizedFromLocal(event.localPosition));
       final String? handle = _hitHandle(event.localPosition);
       if (_canResize && handle != null && !_resizeActive) {
@@ -790,6 +791,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _handleSemanticTap() {
+    interactionController.acknowledgeTaskInteraction(task.id);
     if (isSelectionMode) {
       onToggleSelection?.call();
       return;
@@ -833,6 +835,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _handleSemanticSelect() {
+    interactionController.acknowledgeTaskInteraction(task.id);
     onToggleSelection?.call();
   }
 }

@@ -26,9 +26,12 @@ import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
 import 'package:axichat/src/calendar/utils/calendar_transfer_service.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
+import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'base_calendar_bloc.dart';
@@ -615,7 +618,11 @@ class CalendarBloc extends BaseCalendarBloc {
           .where((chat) => !chat.defaultTransport.isEmail)
           .toList(growable: false);
       final emailService = _emailService;
-      if (emailTargets.isNotEmpty && emailService == null) {
+      final demoOfflineTaskShare =
+          kEnableDemoChats && _xmppService.demoOfflineMode;
+      if (emailTargets.isNotEmpty &&
+          emailService == null &&
+          !demoOfflineTaskShare) {
         completer.complete(
           const CalendarShareResult.failure(
             CalendarShareFailure.serviceUnavailable,
@@ -635,6 +642,16 @@ class CalendarBloc extends BaseCalendarBloc {
             return;
           }
         }
+      }
+      if (demoOfflineTaskShare) {
+        await _sendDemoTaskShare(
+          recipients: recipients,
+          task: event.task,
+          shareText: event.shareText,
+          readOnly: event.readOnly,
+        );
+        completer.complete(const CalendarShareResult.success());
+        return;
       }
       if (emailTargets.isNotEmpty) {
         final attachment = await _buildCalendarTaskAttachment(event.task);
@@ -782,6 +799,41 @@ class CalendarBloc extends BaseCalendarBloc {
         record: latestRecord,
       ),
     );
+  }
+
+  Future<void> _sendDemoTaskShare({
+    required List<FanOutTarget> recipients,
+    required CalendarTask task,
+    required String shareText,
+    required bool readOnly,
+  }) async {
+    final seenJids = <String>{};
+    for (final target in recipients) {
+      final targetChat = target.chat;
+      final targetJid = (targetChat?.jid ?? target.address)?.trim();
+      if (targetJid == null || targetJid.isEmpty) {
+        continue;
+      }
+      if (!seenJids.add(targetJid)) {
+        continue;
+      }
+      await _xmppService.sendMessage(
+        jid: targetJid,
+        text: shareText,
+        encryptionProtocol:
+            targetChat?.encryptionProtocol ?? EncryptionProtocol.none,
+        calendarTaskIcs: task,
+        calendarTaskIcsReadOnly: readOnly,
+        chatType: targetChat?.type ?? ChatType.chat,
+      );
+      _xmppService.notifyDemoOutboundAttachmentMessage(chatJid: targetJid);
+      if (!readOnly && targetChat != null) {
+        await _linkSharedTask(chat: targetChat, taskId: task.id);
+      }
+    }
+    if (seenJids.isEmpty) {
+      throw StateError('No recipients resolved for demo task share.');
+    }
   }
 
   Future<EmailAttachment?> _buildCalendarTaskAttachment(

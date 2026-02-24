@@ -81,8 +81,9 @@ class TaskResizeInteraction {
 }
 
 class TaskInteractionController extends ChangeNotifier {
-  TaskInteractionController()
-    : preview = ValueNotifier<DragPreview?>(null),
+  TaskInteractionController({ValueChanged<String>? onTaskInteracted})
+    : _onTaskInteracted = onTaskInteracted,
+      preview = ValueNotifier<DragPreview?>(null),
       clipboard = ValueNotifier<TaskClipboardState>(const TaskClipboardState()),
       feedbackHint = ValueNotifier<DragFeedbackHint>(
         const DragFeedbackHint(
@@ -95,6 +96,8 @@ class TaskInteractionController extends ChangeNotifier {
       hoveredTaskId = ValueNotifier<String?>(null),
       dropHoverTaskId = ValueNotifier<String?>(null),
       resizeInteraction = ValueNotifier<TaskResizeInteraction?>(null);
+
+  final ValueChanged<String>? _onTaskInteracted;
 
   final ValueNotifier<DragPreview?> preview;
   final ValueNotifier<TaskClipboardState> clipboard;
@@ -134,6 +137,7 @@ class TaskInteractionController extends ChangeNotifier {
   bool _suppressSurfaceTap = false;
 
   final Map<String, CalendarTask> _resizePreviews = {};
+  final Set<String> _interactedTaskBaseIds = <String>{};
 
   CalendarTask? get draggingTaskSnapshot => _draggingTaskSnapshot;
   String? get draggingTaskId => _draggingTaskId;
@@ -148,6 +152,42 @@ class TaskInteractionController extends ChangeNotifier {
   String? get currentHoveredTaskId => hoveredTaskId.value;
   String? get currentDropHoverTaskId => dropHoverTaskId.value;
   TaskResizeInteraction? get activeResizeInteraction => resizeInteraction.value;
+
+  bool shouldHighlightTaskForFirstInteraction(String taskId) {
+    final normalizedTaskId = _taskInteractionKey(taskId);
+    if (normalizedTaskId.isEmpty) {
+      return false;
+    }
+    return !_interactedTaskBaseIds.contains(normalizedTaskId);
+  }
+
+  void hydrateInteractedTaskBaseIds(Iterable<String> taskIds) {
+    var addedAny = false;
+    for (final taskId in taskIds) {
+      final normalizedTaskId = _taskInteractionKey(taskId);
+      if (normalizedTaskId.isEmpty) {
+        continue;
+      }
+      if (_interactedTaskBaseIds.add(normalizedTaskId)) {
+        addedAny = true;
+      }
+    }
+    if (addedAny) {
+      notifyListeners();
+    }
+  }
+
+  void acknowledgeTaskInteraction(String taskId) {
+    final normalizedTaskId = _taskInteractionKey(taskId);
+    if (normalizedTaskId.isEmpty) {
+      return;
+    }
+    if (!_interactedTaskBaseIds.add(normalizedTaskId)) {
+      return;
+    }
+    _onTaskInteracted?.call(normalizedTaskId);
+    notifyListeners();
+  }
 
   void setClipboardTemplate(CalendarTask template) {
     clipboard.value = TaskClipboardState(
@@ -183,6 +223,7 @@ class TaskInteractionController extends ChangeNotifier {
   }
 
   void setHoveringTask(String taskId) {
+    acknowledgeTaskInteraction(taskId);
     if (hoveredTaskId.value == taskId) {
       return;
     }
@@ -595,5 +636,9 @@ class TaskInteractionController extends ChangeNotifier {
     _pendingDragWidthTimer = null;
     _pendingDragWidth = null;
     _pendingDragForceCenter = false;
+  }
+
+  String _taskInteractionKey(String taskId) {
+    return baseTaskIdFrom(taskId).trim();
   }
 }

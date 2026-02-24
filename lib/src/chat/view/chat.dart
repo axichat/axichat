@@ -850,7 +850,7 @@ class _ChatState extends State<Chat> {
       _composerHasText || _pendingCalendarTaskIcs != null;
   String _lastSubjectValue = '';
   bool _subjectChangeSuppressed = false;
-  bool _collapseLongEmailMessages = true;
+  bool _collapseLongEmailMessages = false;
   List<ComposerRecipient> _recipients = const [];
   String? _recipientsChatJid;
   int? _expandedComposerDraftId;
@@ -4404,12 +4404,8 @@ class _ChatState extends State<Chat> {
                                   <AppBarActionItem>[
                                     if (isEmailBacked)
                                       AppBarActionItem(
-                                        label: _collapseLongEmailMessages
-                                            ? l10n.chatExpandLongEmails
-                                            : l10n.chatCollapseLongEmails,
-                                        iconData: _collapseLongEmailMessages
-                                            ? LucideIcons.maximize2
-                                            : LucideIcons.minimize2,
+                                        label: l10n.chatCollapseLongEmails,
+                                        iconData: LucideIcons.minimize2,
                                         selected: _collapseLongEmailMessages,
                                         onPressed: () {
                                           setState(() {
@@ -8295,20 +8291,18 @@ class _ChatState extends State<Chat> {
                                                                       selectableBubble,
                                                                     ],
                                                                   );
-                                                                  final measuredBubbleStack =
-                                                                      isSingleSelection
-                                                                      ? _SizeReportingWidget(
-                                                                          onSizeChange:
-                                                                              (
-                                                                                size,
-                                                                              ) => _updateMessageBubbleWidth(
-                                                                                messageModel.stanzaID,
-                                                                                size,
-                                                                              ),
-                                                                          child:
-                                                                              bubbleStack,
-                                                                        )
-                                                                      : bubbleStack;
+                                                                  final measuredBubbleStack = _SizeReportingWidget(
+                                                                    onSizeChange:
+                                                                        (
+                                                                          size,
+                                                                        ) => _updateMessageBubbleWidth(
+                                                                          messageModel
+                                                                              .stanzaID,
+                                                                          size,
+                                                                        ),
+                                                                    child:
+                                                                        bubbleStack,
+                                                                  );
                                                                   final shouldShowSenderLabel =
                                                                       isRenderableBubble &&
                                                                       !_chatMessagesShouldChain(
@@ -8427,17 +8421,16 @@ class _ChatState extends State<Chat> {
                                                                         )
                                                                       : messageRegion;
                                                                   final Widget
-                                                                  selectionRegion =
-                                                                      isSingleSelection
-                                                                      ? TapRegion(
-                                                                          groupId:
-                                                                              _selectionTapRegionGroup,
-                                                                          onTapOutside:
-                                                                              _armOutsideTapDismiss,
-                                                                          child:
-                                                                              messageArrival,
-                                                                        )
-                                                                      : messageArrival;
+                                                                  selectionRegion = TapRegion(
+                                                                    groupId:
+                                                                        _selectionTapRegionGroup,
+                                                                    onTapOutside:
+                                                                        isSingleSelection
+                                                                        ? _armOutsideTapDismiss
+                                                                        : null,
+                                                                    child:
+                                                                        messageArrival,
+                                                                  );
                                                                   final alignedMessage = SizedBox(
                                                                     width:
                                                                         messageRowMaxWidth,

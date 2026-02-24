@@ -105,6 +105,7 @@ class _SpamListBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final spacing = context.spacing;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
     final String? selfJid = resolvedProfileJid.isNotEmpty
@@ -128,7 +129,7 @@ class _SpamListBody extends StatelessWidget {
           return ColoredBox(
             color: context.colorScheme.background,
             child: ListView.builder(
-              padding: EdgeInsets.only(top: context.spacing.m),
+              padding: EdgeInsets.only(top: spacing.m, bottom: spacing.xxl),
               itemCount: items.length,
               itemBuilder: (context, index) {
                 final chat = items[index];

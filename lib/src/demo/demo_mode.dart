@@ -11,7 +11,8 @@ DateTime demoNow() {
   if (!kEnableDemoChats) return now;
   const int targetWeekday = DateTime.friday;
   final int deltaDays = targetWeekday - now.weekday;
-  return now.add(Duration(days: deltaDays));
+  final targetDate = now.add(Duration(days: deltaDays));
+  return DateTime(targetDate.year, targetDate.month, targetDate.day, 17, 31);
 }
 
 const String kDemoSelfJid = 'ben@axi.im';
