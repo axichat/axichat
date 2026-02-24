@@ -14,6 +14,11 @@ import 'package:equatable/equatable.dart';
 part 'roster_state.dart';
 
 class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
+  static const String itemsCacheKey = 'items';
+  static const String invitesCacheKey = 'invites';
+  static const String visibleItemsCacheKey = 'visibleItems';
+  static const String visibleInvitesCacheKey = 'visibleInvites';
+
   RosterCubit({required RosterService rosterService})
     : _rosterService = rosterService,
       super(const RosterState()) {
@@ -183,13 +188,13 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
   void _handleRoster(List<RosterItem> items) {
     _items = List<RosterItem>.unmodifiable(items);
     contacts = items.map((e) => e.jid).toSet();
-    cache['items'] = _items;
+    cache[itemsCacheKey] = _items;
     _emitViewState();
   }
 
   void _handleInvites(List<Invite> invites) {
     _invites = List<Invite>.unmodifiable(invites);
-    cache['invites'] = _invites;
+    cache[invitesCacheKey] = _invites;
     _emitViewState();
   }
 
@@ -204,6 +209,8 @@ class RosterCubit extends Cubit<RosterState> with BlocCache<RosterState> {
         : List<Invite>.unmodifiable(
             _applyInviteCriteria(_invites!, _invitesCriteria),
           );
+    cache[visibleItemsCacheKey] = visibleItems;
+    cache[visibleInvitesCacheKey] = visibleInvites;
     emit(
       state.copyWith(
         items: _items,

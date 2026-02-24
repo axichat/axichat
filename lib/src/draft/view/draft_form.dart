@@ -219,7 +219,8 @@ class _DraftFormState extends State<DraftForm> {
           builder: (context, rosterState) {
             final rosterItems =
                 rosterState.items ??
-                (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+                (locate<RosterCubit>()[RosterCubit.itemsCacheKey]
+                    as List<RosterItem>?) ??
                 const <RosterItem>[];
             return BlocBuilder<ChatsCubit, ChatsState>(
               bloc: locate<ChatsCubit>(),

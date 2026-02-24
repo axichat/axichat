@@ -67,6 +67,8 @@ class DraftXmppTarget extends Equatable {
 }
 
 class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
+  static const String itemsCacheKey = 'items';
+  static const String visibleItemsCacheKey = 'visibleItems';
   static const int _emailAttachmentBundleMinimumCount = 2;
 
   DraftCubit({
@@ -101,7 +103,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     super.onChange(change);
     final current = change.currentState;
     if (current is DraftsAvailable) {
-      cache['items'] = current.items;
+      cache[itemsCacheKey] = current.items;
+      cache[visibleItemsCacheKey] = current.visibleItems;
       _items = current.items;
     }
   }

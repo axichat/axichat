@@ -827,7 +827,8 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final spacing = context.spacing;
     final rosterItems =
         context.watch<RosterCubit>().state.items ??
-        (context.watch<RosterCubit>()['items'] as List<RosterItem>?) ??
+        (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
+            as List<RosterItem>?) ??
         const <RosterItem>[];
     final locate = context.read;
     final profileJid = context.watch<ProfileCubit>().state.jid;
