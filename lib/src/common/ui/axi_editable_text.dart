@@ -4918,24 +4918,16 @@ class EditableTextState extends State<EditableText>
 
     final bool shouldAnimateTyping =
         _typingAnimationsEnabled && !widget.readOnly;
-    final bool textChanged =
-        change.previousValue.text != change.currentValue.text;
-    if (shouldAnimateTyping && textChanged) {
-      final Offset animationStart = startOffset ?? _typingCaretOffset;
-      _animateTypingCaret(animationStart, endOffset, renderEditable);
-    } else {
-      _jumpTypingCaret(endOffset);
-    }
-
-    if (!shouldAnimateTyping) {
-      return;
-    }
     final TypingTextChange? insertionChange = change.isSingleCharacterInsertion
         ? change
         : _fallbackSingleCharacterInsertion(change);
-    if (insertionChange != null) {
+    if (shouldAnimateTyping && insertionChange != null) {
+      final Offset animationStart = startOffset ?? _typingCaretOffset;
+      _animateTypingCaret(animationStart, endOffset, renderEditable);
       _startTypingGlyphMorph(insertionChange, renderEditable);
+      return;
     }
+    _jumpTypingCaret(endOffset);
   }
 
   void _pruneTypingGlyphsForValue(TextEditingValue value) {

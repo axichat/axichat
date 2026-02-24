@@ -10,10 +10,8 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'controllers/task_interaction_controller.dart';
@@ -181,11 +179,10 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   @override
   Widget build(BuildContext context) {
     final TaskInteractionController controller = widget.interactionController;
-    final Duration animationDuration = context
-        .watch<SettingsCubit>()
-        .animationDuration;
+    final bool disableAnimations =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final Duration firstInteractionPulseDuration =
-        _firstInteractionPulseDuration(animationDuration);
+        _firstInteractionPulseDuration(disableAnimations: disableAnimations);
     return ValueListenableBuilder<String?>(
       valueListenable: controller.hoveredTaskId,
       builder: (context, hoveredTaskId, _) {
@@ -196,7 +193,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
             final bool isDragging = controller.draggingTaskId == task.id;
             final bool isHovering = hoveredTaskId == task.id;
             final bool highlightOnFirstInteraction = controller
-                .shouldHighlightTaskForFirstInteraction(task.id);
+                .shouldHighlightTaskForFirstInteraction(task);
             final TaskResizeInteraction? resizeSession =
                 controller.activeResizeInteraction;
             final bool isResizing =
@@ -327,11 +324,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   Offset get debugContextMenuNormalizedPosition =>
       _contextMenuNormalizedPosition;
 
-  Duration _firstInteractionPulseDuration(Duration animationDuration) {
-    if (animationDuration == Duration.zero) {
+  Duration _firstInteractionPulseDuration({required bool disableAnimations}) {
+    if (disableAnimations) {
       return Duration.zero;
     }
-    return Duration(microseconds: animationDuration.inMicroseconds * 6);
+    return Duration(microseconds: baseAnimationDuration.inMicroseconds * 6);
   }
 }
 
@@ -787,8 +784,9 @@ class _TaskFirstInteractionPulseState extends State<_TaskFirstInteractionPulse>
               progress,
             ) ??
             context.motion.tapHoverAlpha;
+        final double baseBorderWidth = context.borders.width;
         final double borderWidth =
-            context.borderSide.width + (context.borderSide.width * progress);
+            baseBorderWidth + (baseBorderWidth * progress);
         return Stack(
           fit: StackFit.passthrough,
           children: [

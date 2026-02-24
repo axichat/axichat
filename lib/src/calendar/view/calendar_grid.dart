@@ -785,7 +785,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _hydrateInteractedTaskBaseIds();
     _processFocusRequest(widget.focusRequest);
   }
 
@@ -1258,7 +1257,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   @override
   void didUpdateWidget(covariant CalendarGrid<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _hydrateInteractedTaskBaseIds();
     if (oldWidget.state.viewMode != widget.state.viewMode) {
       _dateSlideDirection = 0;
     } else if (!_isSameDay(
@@ -1321,15 +1319,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     }
 
     _validateActivePopoverTarget(const <String>{});
-  }
-
-  void _hydrateInteractedTaskBaseIds() {
-    final Set<String> interactedTaskBaseIds = context
-        .read<T>()
-        .interactedTaskBaseIds;
-    _taskInteractionController.hydrateInteractedTaskBaseIds(
-      interactedTaskBaseIds,
-    );
   }
 
   void _handleTaskInteractionAcknowledged(String taskBaseId) {

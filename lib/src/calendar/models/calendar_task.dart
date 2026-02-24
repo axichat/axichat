@@ -43,6 +43,7 @@ const int _recurrenceRuleUntilIsDateField = 18;
 const bool _recurrenceRuleUntilIsDateDefault = false;
 
 const int _calendarTaskIcsMetaField = 17;
+const int _calendarTaskReadField = 18;
 
 const List<CalendarDateTime> _emptyCalendarDateTimes = <CalendarDateTime>[];
 const List<CalendarRawProperty> _emptyCalendarRawProperties =
@@ -212,6 +213,9 @@ abstract class CalendarTask with _$CalendarTask implements CalendarItemBase {
     @Default([])
     List<TaskChecklistItem> checklist,
     @HiveField(_calendarTaskIcsMetaField) CalendarIcsMeta? icsMeta,
+    @HiveField(_calendarTaskReadField, defaultValue: false)
+    @Default(false)
+    bool isRead,
   }) = _CalendarTask;
 
   factory CalendarTask.fromJson(Map<String, dynamic> json) =>

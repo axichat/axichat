@@ -66,6 +66,10 @@ abstract class CalendarEvent with _$CalendarEvent {
   const factory CalendarEvent.taskUpdated({required CalendarTask task}) =
       CalendarTaskUpdated;
 
+  const factory CalendarEvent.taskInteractionAcknowledged({
+    required String taskId,
+  }) = CalendarTaskInteractionAcknowledged;
+
   const factory CalendarEvent.taskDeleted({required String taskId}) =
       CalendarTaskDeleted;
 

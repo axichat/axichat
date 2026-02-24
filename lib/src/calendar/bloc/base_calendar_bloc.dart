@@ -67,6 +67,7 @@ abstract class BaseCalendarBloc
     on<CalendarDataChanged>(_onDataChanged);
     on<CalendarTaskAdded>(_onTaskAdded);
     on<CalendarTaskUpdated>(_onTaskUpdated);
+    on<CalendarTaskInteractionAcknowledged>(_onTaskInteractionAcknowledged);
     on<CalendarTaskDeleted>(_onTaskDeleted);
     on<CalendarTaskCompleted>(_onTaskCompleted);
     on<CalendarTaskDropped>(_onTaskDropped);
@@ -118,7 +119,6 @@ abstract class BaseCalendarBloc
     on<CalendarCriticalPathTaskRemoved>(_onCriticalPathTaskRemoved);
     on<CalendarCriticalPathFocused>(_onCriticalPathFocused);
     on<CalendarCriticalPathReordered>(_onCriticalPathReordered);
-    _restoreInteractedTaskBaseIds();
   }
 
   final CalendarReminderController? _reminderController;
@@ -127,11 +127,8 @@ abstract class BaseCalendarBloc
   final String _storageId;
   final Storage _storage;
   final NlScheduleParserService _nlParserService;
-  final Set<String> _interactedTaskBaseIds = <String>{};
   Future<void> _pendingReminderSync = Future.value();
   static const int _undoHistoryLimit = 50;
-  static const String _taskInteractionStorageSuffix =
-      '__task_interaction_base_ids__';
   final ListQueue<_CalendarUndoSnapshot> _undoStack =
       ListQueue<_CalendarUndoSnapshot>();
   final List<_CalendarUndoSnapshot> _redoStack = <_CalendarUndoSnapshot>[];
@@ -342,56 +339,12 @@ abstract class BaseCalendarBloc
     return '$storagePrefix$trimmed';
   }
 
-  Set<String> get interactedTaskBaseIds =>
-      Set<String>.unmodifiable(_interactedTaskBaseIds);
-
-  void acknowledgeTaskInteraction(String taskBaseId) {
-    final String normalized = _normalizeTaskInteractionBaseId(taskBaseId);
+  void acknowledgeTaskInteraction(String taskId) {
+    final String normalized = baseTaskIdFrom(taskId).trim();
     if (normalized.isEmpty) {
       return;
     }
-    if (!_interactedTaskBaseIds.add(normalized)) {
-      return;
-    }
-    unawaited(_persistInteractedTaskBaseIds());
-  }
-
-  void _restoreInteractedTaskBaseIds() {
-    try {
-      final dynamic raw = _storage.read(_taskInteractionStorageKey);
-      if (raw is! List) {
-        return;
-      }
-      for (final dynamic item in raw) {
-        if (item is! String) {
-          continue;
-        }
-        final String normalized = _normalizeTaskInteractionBaseId(item);
-        if (normalized.isEmpty) {
-          continue;
-        }
-        _interactedTaskBaseIds.add(normalized);
-      }
-    } catch (error) {
-      logError('Failed to restore task interaction markers', error);
-    }
-  }
-
-  Future<void> _persistInteractedTaskBaseIds() async {
-    final List<String> payload = _interactedTaskBaseIds.toList(growable: false)
-      ..sort((a, b) => a.compareTo(b));
-    try {
-      await _storage.write(_taskInteractionStorageKey, payload);
-    } catch (error) {
-      logError('Failed to persist task interaction markers', error);
-    }
-  }
-
-  String get _taskInteractionStorageKey =>
-      '${id.trim()}$_taskInteractionStorageSuffix';
-
-  String _normalizeTaskInteractionBaseId(String taskBaseId) {
-    return baseTaskIdFrom(taskBaseId).trim();
+    add(CalendarEvent.taskInteractionAcknowledged(taskId: normalized));
   }
 
   void commitTaskInteraction(CalendarTask snapshot) {
@@ -717,6 +670,26 @@ abstract class BaseCalendarBloc
     } catch (error) {
       await _handleError(error, 'Failed to update task', emit);
     }
+  }
+
+  Future<void> _onTaskInteractionAcknowledged(
+    CalendarTaskInteractionAcknowledged event,
+    Emitter<CalendarState> emit,
+  ) async {
+    final String baseTaskId = baseTaskIdFrom(event.taskId).trim();
+    if (baseTaskId.isEmpty) {
+      return;
+    }
+    final CalendarTask? task = state.model.tasks[baseTaskId];
+    if (task == null || task.isRead) {
+      return;
+    }
+    final CalendarTask readTask = task.copyWith(
+      isRead: true,
+      modifiedAt: _now(),
+    );
+    final CalendarModel updatedModel = state.model.updateTask(readTask);
+    emitModel(updatedModel, emit, selectedDate: state.selectedDate);
   }
 
   Future<void> _onTaskDeleted(

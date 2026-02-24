@@ -137,7 +137,6 @@ class TaskInteractionController extends ChangeNotifier {
   bool _suppressSurfaceTap = false;
 
   final Map<String, CalendarTask> _resizePreviews = {};
-  final Set<String> _interactedTaskBaseIds = <String>{};
 
   CalendarTask? get draggingTaskSnapshot => _draggingTaskSnapshot;
   String? get draggingTaskId => _draggingTaskId;
@@ -153,40 +152,19 @@ class TaskInteractionController extends ChangeNotifier {
   String? get currentDropHoverTaskId => dropHoverTaskId.value;
   TaskResizeInteraction? get activeResizeInteraction => resizeInteraction.value;
 
-  bool shouldHighlightTaskForFirstInteraction(String taskId) {
-    final normalizedTaskId = _taskInteractionKey(taskId);
-    if (normalizedTaskId.isEmpty) {
-      return false;
-    }
-    return !_interactedTaskBaseIds.contains(normalizedTaskId);
+  bool shouldHighlightTaskForFirstInteraction(CalendarTask task) {
+    return !task.isRead;
   }
 
-  void hydrateInteractedTaskBaseIds(Iterable<String> taskIds) {
-    var addedAny = false;
-    for (final taskId in taskIds) {
-      final normalizedTaskId = _taskInteractionKey(taskId);
-      if (normalizedTaskId.isEmpty) {
-        continue;
-      }
-      if (_interactedTaskBaseIds.add(normalizedTaskId)) {
-        addedAny = true;
-      }
-    }
-    if (addedAny) {
-      notifyListeners();
-    }
-  }
-
-  void acknowledgeTaskInteraction(String taskId) {
-    final normalizedTaskId = _taskInteractionKey(taskId);
-    if (normalizedTaskId.isEmpty) {
+  void acknowledgeTaskInteraction(String taskId, {bool isRead = false}) {
+    if (isRead) {
       return;
     }
-    if (!_interactedTaskBaseIds.add(normalizedTaskId)) {
+    final normalizedTaskId = _taskInteractionKey(taskId);
+    if (normalizedTaskId.isEmpty) {
       return;
     }
     _onTaskInteracted?.call(normalizedTaskId);
-    notifyListeners();
   }
 
   void setClipboardTemplate(CalendarTask template) {
@@ -222,8 +200,8 @@ class TaskInteractionController extends ChangeNotifier {
     return true;
   }
 
-  void setHoveringTask(String taskId) {
-    acknowledgeTaskInteraction(taskId);
+  void setHoveringTask(String taskId, {bool isRead = false}) {
+    acknowledgeTaskInteraction(taskId, isRead: isRead);
     if (hoveredTaskId.value == taskId) {
       return;
     }

@@ -390,7 +390,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     if (isPopoverOpen || !enableInteractions) {
       return;
     }
-    interactionController.setHoveringTask(task.id);
+    interactionController.setHoveringTask(task.id, isRead: task.isRead);
   }
 
   void _handlePointerExit(PointerExitEvent event) {
@@ -412,7 +412,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     );
     final bool primaryButton = _isPrimaryButton(event);
     if (primaryButton) {
-      interactionController.acknowledgeTaskInteraction(task.id);
+      interactionController.acknowledgeTaskInteraction(
+        task.id,
+        isRead: task.isRead,
+      );
       onDragPointerDown?.call(_normalizedFromLocal(event.localPosition));
       final String? handle = _hitHandle(event.localPosition);
       if (_canResize && handle != null && !_resizeActive) {
@@ -791,7 +794,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _handleSemanticTap() {
-    interactionController.acknowledgeTaskInteraction(task.id);
+    interactionController.acknowledgeTaskInteraction(
+      task.id,
+      isRead: task.isRead,
+    );
     if (isSelectionMode) {
       onToggleSelection?.call();
       return;
@@ -835,7 +841,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _handleSemanticSelect() {
-    interactionController.acknowledgeTaskInteraction(task.id);
+    interactionController.acknowledgeTaskInteraction(
+      task.id,
+      isRead: task.isRead,
+    );
     onToggleSelection?.call();
   }
 }
