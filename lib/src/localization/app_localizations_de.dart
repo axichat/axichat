@@ -2354,7 +2354,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String chatAttachmentErrorTooltip(Object message, Object fileName) {
-    return '$message ($fileName)';
+    return '$message (Datei: $fileName)';
   }
 
   @override
@@ -2685,7 +2685,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get mucRoleVisitor => 'Besucher';
 
   @override
-  String get mucRoleModerator => 'Moderator';
+  String get mucRoleModerator => 'Moderation';
 
   @override
   String get mucActionKick => 'Rauswerfen';
@@ -4114,7 +4114,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String calendarReminderIn(Object duration) {
-    return 'In $duration';
+    return 'Innerhalb von $duration';
   }
 
   @override
@@ -5024,7 +5024,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String commonWeekdayDayLabel(String weekday, int day) {
-    return '$weekday $day';
+    return '$weekday, $day';
   }
 
   @override

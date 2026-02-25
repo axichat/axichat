@@ -1438,7 +1438,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get accessibilityNewContactLabel => '联系地址';
 
   @override
-  String get accessibilityNewContactHint => 'someone@example.com';
+  String get accessibilityNewContactHint => 'zhangsan@example.com';
 
   @override
   String get accessibilityStartChat => '开始聊天';
@@ -7212,7 +7212,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get accessibilityNewContactLabel => '聯絡地址';
 
   @override
-  String get accessibilityNewContactHint => 'someone@example.com';
+  String get accessibilityNewContactHint => 'chan@example.com';
 
   @override
   String get accessibilityStartChat => '開始聊天';

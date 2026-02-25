@@ -1780,7 +1780,13 @@ WHERE transport IS NULL
         Variable<int>(limit),
         Variable<int>(offset),
       ],
-      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
+      readsFrom: {
+        messages,
+        messageCopies,
+        messageShares,
+        messageParticipants,
+        messageAttachments,
+      },
     );
     return query.map((row) => messages.map(row.data));
   }

@@ -1247,7 +1247,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String signupErrorPrefix(Object message) {
-    return 'Error: $message';
+    return 'Error de registro: $message';
   }
 
   @override
@@ -2350,7 +2350,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String chatAttachmentErrorTooltip(Object message, Object fileName) {
-    return '$message ($fileName)';
+    return '$message (archivo: $fileName)';
   }
 
   @override
@@ -2488,7 +2488,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get calendarTaskUpdatedMessage => 'Tarea actualizada';
 
   @override
-  String get calendarErrorTitle => 'Error';
+  String get calendarErrorTitle => 'Se produjo un error';
 
   @override
   String get calendarErrorTaskNotFound => 'Tarea no encontrada';
@@ -5026,7 +5026,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String commonWeekdayDayLabel(String weekday, int day) {
-    return '$weekday $day';
+    return '$weekday, $day';
   }
 
   @override

@@ -667,7 +667,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get draftMessageSemantics => 'Corps du message';
 
   @override
-  String get draftMessageHint => 'Message';
+  String get draftMessageHint => 'Saisissez un message';
 
   @override
   String get draftSendingStatus => 'Envoi...';
@@ -1585,7 +1585,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get accessibilityInvitesEmpty => 'Aucune invitation en attente';
 
   @override
-  String get accessibilityMessagesTitle => 'Messages';
+  String get accessibilityMessagesTitle => 'Liste des messages';
 
   @override
   String get accessibilityNoConversationSelected =>
@@ -2359,7 +2359,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String chatAttachmentErrorTooltip(Object message, Object fileName) {
-    return '$message ($fileName)';
+    return '$message (fichier : $fileName)';
   }
 
   @override
@@ -2921,7 +2921,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get rosterAddTooltip => 'Ajouter au carnet d’adresses';
 
   @override
-  String get rosterAddLabel => 'Contact';
+  String get rosterAddLabel => 'Ajouter un contact';
 
   @override
   String get rosterAddTitle => 'Ajouter un contact';
@@ -3402,7 +3402,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatMessageStatusSent => 'Envoyé';
 
   @override
-  String get commonActions => 'Actions';
+  String get commonActions => 'Opérations';
 
   @override
   String get commonNext => 'Suivant';
@@ -3713,7 +3713,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get avatarTemplateGuitar => 'Guitare';
 
   @override
-  String get avatarTemplateMicrophone => 'Microphone';
+  String get avatarTemplateMicrophone => 'Micro';
 
   @override
   String get avatarTemplatePiano => 'Piano';
@@ -3800,7 +3800,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarOptionalDetails => 'Détails facultatifs';
 
   @override
-  String get calendarDates => 'Dates';
+  String get calendarDates => 'Plage de dates';
 
   @override
   String get calendarTaskTitleHint => 'Titre de la tâche';
@@ -3835,7 +3835,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarImportant => 'Essentiel';
 
   @override
-  String get calendarUrgent => 'Urgent';
+  String get calendarUrgent => 'Prioritaire';
 
   @override
   String get calendarClearSchedule => 'Effacer le planning';
@@ -4069,7 +4069,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatChooseTextToAdd => 'Choisir le texte à ajouter';
 
   @override
-  String get notificationChannelMessages => 'Messages';
+  String get notificationChannelMessages => 'Canal des messages';
 
   @override
   String get notificationNewMessageTitle => 'Nouveau message';
@@ -4158,8 +4158,8 @@ class AppLocalizationsFr extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# minutes',
-      one: '# minute',
+      other: '# min',
+      one: '# min',
     );
     return '$_temp0';
   }
@@ -5045,7 +5045,7 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String commonWeekdayDayLabel(String weekday, int day) {
-    return '$weekday $day';
+    return '$weekday, $day';
   }
 
   @override
@@ -5202,7 +5202,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarAlarmActionEmail => 'E-mail';
 
   @override
-  String get calendarAlarmActionProcedure => 'Procedure';
+  String get calendarAlarmActionProcedure => 'Procédure d’alarme';
 
   @override
   String get calendarAlarmActionProcedureHelper =>
@@ -5230,7 +5230,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarAlarmRelativeToEnd => 'Fin';
 
   @override
-  String get calendarAlarmDirectionLabel => 'Direction';
+  String get calendarAlarmDirectionLabel => 'Sens';
 
   @override
   String get calendarAlarmDirectionBefore => 'Avant';
@@ -5274,7 +5274,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get calendarAlarmAcknowledgedLabel => 'Confirme';
 
   @override
-  String get calendarAlarmUnitMinutes => 'Minutes';
+  String get calendarAlarmUnitMinutes => 'min';
 
   @override
   String get calendarAlarmUnitHours => 'Heures';

@@ -903,7 +903,7 @@
   "chatAttachmentHighRiskMessage": "Dieser Dateityp kann beim Öffnen gefährlich sein. Wir empfehlen, die Datei zu speichern und vor dem Öffnen zu prüfen. Trotzdem fortfahren?",
   "chatAttachmentUnknownSize": "Unbekannte Größe",
   "chatAttachmentNotDownloadedYet": "Noch nicht heruntergeladen",
-  "chatAttachmentErrorTooltip": "{message} ({fileName})",
+  "chatAttachmentErrorTooltip": "{message} (Datei: {fileName})",
   "@chatAttachmentErrorTooltip": {
     "placeholders": {
       "message": {},
@@ -1055,7 +1055,7 @@
   "mucRoleAdmin": "Administrator",
   "mucRoleMember": "Mitglied",
   "mucRoleVisitor": "Besucher",
-  "mucRoleModerator": "Moderator",
+  "mucRoleModerator": "Moderation",
   "mucActionKick": "Rauswerfen",
   "mucActionBan": "Sperren",
   "mucActionMakeMember": "Als Mitglied festlegen",
@@ -1691,7 +1691,7 @@
   "calendarReminderStartingNow": "Startet jetzt",
   "calendarReminderStartsIn": "Startet in {duration}",
   "calendarReminderHappeningToday": "Findet heute statt",
-  "calendarReminderIn": "In {duration}",
+  "calendarReminderIn": "Innerhalb von {duration}",
   "calendarReminderDurationDays": "{count, plural, one {# Tag} other {# Tage}}",
   "calendarReminderDurationHours": "{count, plural, one {# Stunde} other {# Stunden}}",
   "calendarReminderDurationMinutes": "{count, plural, one {# Minute} other {# Minuten}}",
@@ -2183,7 +2183,7 @@
   "calendarFreeBusyMarkFree": "Als frei markieren",
   "calendarFreeBusyMarkBusy": "Als belegt markieren",
   "calendarFreeBusyRangeLabel": "Zeitraum",
-  "commonWeekdayDayLabel": "{weekday} {day}",
+  "commonWeekdayDayLabel": "{weekday}, {day}",
   "@commonWeekdayDayLabel": {
     "placeholders": {
       "weekday": {

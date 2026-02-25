@@ -450,11 +450,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final Set<String> _shareContextAttemptedStanzaIds = <String>{};
   Future<void> _autoDownloadQueue = Future<void>.value();
   Completer<void>? _mamLoadingCompleter;
-  int? _attachmentMapsSignature;
-  Map<String, List<String>> _cachedAttachmentIdsByMessageId =
-      const <String, List<String>>{};
-  Map<String, String> _cachedAttachmentGroupLeaderByMessageId =
-      const <String, String>{};
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
   List<Chat> _roomChats = const <Chat>[];
   String? _roomSelfAvatarPath;
@@ -1256,9 +1251,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _emailUnreadBoundaryUnreadCount = null;
       _loadEarlierQueue = Future<void>.value();
       _lastOccupantTrackedStanzaId = null;
-      _attachmentMapsSignature = null;
-      _cachedAttachmentIdsByMessageId = const <String, List<String>>{};
-      _cachedAttachmentGroupLeaderByMessageId = const <String, String>{};
       _shareContextAttemptedStanzaIds.clear();
       _autoDownloadAttemptedMetadataIds.clear();
       _autoDownloadAttemptedEmailMessages.clear();
@@ -1279,10 +1271,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _resolveEmailUnreadBoundaryDeltaId(event.chat);
     }
     if (!resetContext && state.items.isNotEmpty) {
-      final boundary = _resolveUnreadBoundaryStanzaId(
+      final boundary = _resolveStickyUnreadBoundaryStanzaId(
         chat: event.chat,
         messages: state.items,
         emailBoundaryDeltaId: _emailUnreadBoundaryDeltaId,
+        previousBoundaryStanzaId: state.unreadBoundaryStanzaId,
       );
       if (boundary != state.unreadBoundaryStanzaId) {
         emit(state.copyWith(unreadBoundaryStanzaId: boundary));
@@ -1721,10 +1714,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       for (final message in loadedQuotes) message.stanzaID: message,
     };
     final emailBoundaryDeltaId = _emailUnreadBoundaryDeltaId;
-    final unreadBoundary = _resolveUnreadBoundaryStanzaId(
+    final unreadBoundary = _resolveStickyUnreadBoundaryStanzaId(
       chat: state.chat,
       messages: filteredItems,
       emailBoundaryDeltaId: emailBoundaryDeltaId,
+      previousBoundaryStanzaId: state.unreadBoundaryStanzaId,
     );
     final nextMetadataIds = _metadataIdsForState(
       messages: filteredItems,
@@ -1829,6 +1823,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (remaining <= 0) {
         final stanzaId = message.stanzaID.trim();
         return stanzaId.isEmpty ? null : stanzaId;
+      }
+    }
+    return null;
+  }
+
+  String? _resolveStickyUnreadBoundaryStanzaId({
+    required Chat? chat,
+    required List<Message> messages,
+    required int? emailBoundaryDeltaId,
+    required String? previousBoundaryStanzaId,
+  }) {
+    final boundary = _resolveUnreadBoundaryStanzaId(
+      chat: chat,
+      messages: messages,
+      emailBoundaryDeltaId: emailBoundaryDeltaId,
+    );
+    if (boundary != null) {
+      return boundary;
+    }
+    final previousBoundary = previousBoundaryStanzaId?.trim();
+    if (previousBoundary == null || previousBoundary.isEmpty) {
+      return null;
+    }
+    for (final message in messages) {
+      if (message.stanzaID == previousBoundary &&
+          _countsTowardUnread(message)) {
+        return previousBoundary;
       }
     }
     return null;
@@ -5163,7 +5184,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final emailService = _emailService;
     if (emailService == null) return;
     await emailService.downloadFullMessage(message);
-    _invalidateAttachmentMaps();
   }
 
   Future<bool> downloadInboundAttachment({
@@ -5176,21 +5196,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       metadataId: metadataId,
       stanzaId: stanzaId,
     );
-    if (downloadedPath?.trim().isNotEmpty == true) {
-      _invalidateAttachmentMaps();
-    }
     return downloadedPath?.trim().isNotEmpty == true;
   }
 
   Future<FileMetadataData?> reloadFileMetadata(String metadataId) async {
     final db = await _messageService.database;
     return db.getFileMetadata(metadataId);
-  }
-
-  void _invalidateAttachmentMaps() {
-    _attachmentMapsSignature = null;
-    _cachedAttachmentIdsByMessageId = const <String, List<String>>{};
-    _cachedAttachmentGroupLeaderByMessageId = const <String, String>{};
   }
 
   String? get selfJid => _chatsService.myJid;
@@ -5217,9 +5228,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   >
   _loadAttachmentMaps(List<Message> messages) async {
     if (messages.isEmpty) {
-      _attachmentMapsSignature = null;
-      _cachedAttachmentIdsByMessageId = const <String, List<String>>{};
-      _cachedAttachmentGroupLeaderByMessageId = const <String, String>{};
       return (
         attachmentsByMessageId: const <String, List<String>>{},
         groupLeaderByMessageId: const <String, String>{},
@@ -5229,22 +5237,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final messageIds = <String>[];
     final messageById = <String, Message>{};
     final messageIndex = <String, int>{};
-    var signature = messages.length;
     for (var index = 0; index < messages.length; index += 1) {
       final message = messages[index];
       final id = message.id;
-      final signatureKey = id ?? message.stanzaID;
-      signature = Object.hash(signature, signatureKey, message.fileMetadataID);
       if (id == null || id.isEmpty) continue;
       messageIds.add(id);
       messageById[id] = message;
       messageIndex[id] = index;
-    }
-    if (signature == _attachmentMapsSignature) {
-      return (
-        attachmentsByMessageId: _cachedAttachmentIdsByMessageId,
-        groupLeaderByMessageId: _cachedAttachmentGroupLeaderByMessageId,
-      );
     }
     final attachmentByMessageId = <String, List<String>>{};
     final groupLeaderByMessageId = <String, String>{};
@@ -5301,10 +5300,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         attachmentByMessageId[key] = [fallback];
       }
     }
-
-    _attachmentMapsSignature = signature;
-    _cachedAttachmentIdsByMessageId = attachmentByMessageId;
-    _cachedAttachmentGroupLeaderByMessageId = groupLeaderByMessageId;
     return (
       attachmentsByMessageId: attachmentByMessageId,
       groupLeaderByMessageId: groupLeaderByMessageId,

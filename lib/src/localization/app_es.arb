@@ -430,7 +430,7 @@
   "signupStepPassword": "Crea una contraseña",
   "signupStepCaptcha": "Verifica el captcha",
   "signupStepSetup": "Configuración",
-  "signupErrorPrefix": "Error: {message}",
+  "signupErrorPrefix": "Error de registro: {message}",
   "signupCaptchaUnavailable": "Captcha no disponible",
   "signupCaptchaChallenge": "Desafío captcha",
   "signupCaptchaFailed": "No se pudo cargar el captcha. Reintenta con recargar.",
@@ -906,7 +906,7 @@
   "chatAttachmentHighRiskMessage": "Este tipo de archivo puede ser peligroso al abrirlo. Recomendamos guardarlo y escanearlo antes de abrirlo. ¿Continuar?",
   "chatAttachmentUnknownSize": "Tamaño desconocido",
   "chatAttachmentNotDownloadedYet": "Aún no descargado",
-  "chatAttachmentErrorTooltip": "{message} ({fileName})",
+  "chatAttachmentErrorTooltip": "{message} (archivo: {fileName})",
   "@chatAttachmentErrorTooltip": {
     "placeholders": {
       "message": {},
@@ -974,7 +974,7 @@
   "calendarStatusPending": "Pendiente",
   "calendarTaskCompletedMessage": "¡Tarea completada!",
   "calendarTaskUpdatedMessage": "Tarea actualizada",
-  "calendarErrorTitle": "Error",
+  "calendarErrorTitle": "Se produjo un error",
   "calendarErrorTaskNotFound": "Tarea no encontrada",
   "calendarErrorTitleEmpty": "El título no puede estar vacío",
   "calendarErrorTitleTooLong": "Título demasiado largo",
@@ -2186,7 +2186,7 @@
   "calendarFreeBusyMarkFree": "Marcar como libre",
   "calendarFreeBusyMarkBusy": "Marcar como ocupado",
   "calendarFreeBusyRangeLabel": "Rango",
-  "commonWeekdayDayLabel": "{weekday} {day}",
+  "commonWeekdayDayLabel": "{weekday}, {day}",
   "@commonWeekdayDayLabel": {
     "placeholders": {
       "weekday": {

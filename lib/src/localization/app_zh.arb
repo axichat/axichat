@@ -521,7 +521,7 @@
   "calendarDayEventsEmpty": "此日期没有当天事件",
   "calendarDayEventsAdd": "添加日程事件",
   "accessibilityNewContactLabel": "联系地址",
-  "accessibilityNewContactHint": "someone@example.com",
+  "accessibilityNewContactHint": "zhangsan@example.com",
   "accessibilityStartChat": "开始聊天",
   "accessibilityStartChatHint": "提交此地址以开始对话。",
   "accessibilityMessagesEmpty": "暂无消息",
