@@ -306,10 +306,15 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
 
   @override
   Widget build(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    final isCompactDevice =
+        mediaQuery.size.shortestSide < compactDeviceBreakpoint;
+    final isCompactLayout =
+        isCompactDevice || mediaQuery.size.width < smallScreen;
     final openJid = context.select<ChatsCubit, String?>(
       (cubit) => cubit.state.openJid,
     );
-    final chatOpenOverlayFloorInset = openJid == null
+    final chatOpenOverlayFloorInset = openJid == null || !isCompactLayout
         ? 0.0
         : context.spacing.xl;
     return BlocListener<XmppActivityCubit, XmppActivityState>(
