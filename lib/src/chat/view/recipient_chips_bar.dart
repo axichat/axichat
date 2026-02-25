@@ -1868,7 +1868,6 @@ final class _RecipientAutocompleteOverlayState
                         ),
                         style: textStyle,
                         cursorHeight: textStyle.fontSize,
-                        strutStyle: StrutStyle.fromTextStyle(textStyle),
                         textInputAction: TextInputAction.done,
                         onEditingComplete: () =>
                             widget.focusNode.requestFocus(),

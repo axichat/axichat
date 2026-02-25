@@ -2890,7 +2890,7 @@
       }
     }
   },
-  "chatUnreadDividerLabel": "Unread",
+  "chatUnreadDividerLabel": "New",
   "@chatUnreadDividerLabel": {
     "description": "Label for the unread messages divider in chat history."
   },

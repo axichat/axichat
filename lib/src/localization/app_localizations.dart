@@ -9850,7 +9850,7 @@ abstract class AppLocalizations {
   /// Label for the unread messages divider in chat history.
   ///
   /// In en, this message translates to:
-  /// **'Unread'**
+  /// **'New'**
   String get chatUnreadDividerLabel;
 
   /// No description provided for @messageErrorServiceUnavailableTooltip.

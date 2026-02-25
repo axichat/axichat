@@ -862,7 +862,6 @@ class _ChatState extends State<Chat> {
   final _loadedEmailImageMessageIds = <String>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
-  var _chatOpenedAt = DateTime.now();
   static final Map<String, double> _scrollOffsetCache = {};
   String? _lastScrollStorageKey;
 
@@ -2147,33 +2146,22 @@ class _ChatState extends State<Chat> {
   }
 
   void _hydrateAnimatedMessages(List<Message> messages) {
-    final openedAt = _chatOpenedAt;
     _animatedMessageIds
       ..clear()
       ..addAll(
         messages
-            .where(
-              (message) =>
-                  message.timestamp == null ||
-                  !message.timestamp!.isAfter(openedAt),
-            )
-            .map((message) => message.stanzaID)
-            .whereType<String>()
+            .map((message) => (message.id ?? message.stanzaID).trim())
             .where((id) => id.isNotEmpty),
       );
     _hydratedAnimatedMessages = true;
   }
 
   bool _shouldAnimateMessage(Message message) {
-    final messageId = message.stanzaID;
-    if (messageId.isEmpty ||
-        messageId == _selectionSpacerMessageId ||
-        messageId == _emptyStateMessageId) {
+    if (!_hydratedAnimatedMessages) {
       return false;
     }
-    final timestamp = message.timestamp;
-    if (timestamp == null || !timestamp.isAfter(_chatOpenedAt)) {
-      _animatedMessageIds.add(messageId);
+    final messageId = (message.id ?? message.stanzaID).trim();
+    if (messageId.isEmpty) {
       return false;
     }
     if (_animatedMessageIds.contains(messageId)) {
@@ -2302,13 +2290,6 @@ class _ChatState extends State<Chat> {
       return false;
     }
     return context.read<XmppService>().demoOfflineMode;
-  }
-
-  DateTime _chatOpenedAnchorTime() {
-    if (_isDemoModeActive()) {
-      return demoNow();
-    }
-    return DateTime.now();
   }
 
   bool _isEmailComposerWatermarkOnly({
@@ -3544,7 +3525,6 @@ class _ChatState extends State<Chat> {
     _focusNode.onKeyEvent = _handleComposerKeyEvent;
     _textController.addListener(_typingListener);
     _subjectController.addListener(_handleSubjectChanged);
-    _chatOpenedAt = _chatOpenedAnchorTime();
     final chat = context.read<ChatBloc>().state.chat;
     _recipientsChatJid = chat?.jid;
     final settings = context.read<SettingsCubit>().state;
@@ -3811,7 +3791,6 @@ class _ChatState extends State<Chat> {
               listener: (_, state) {
                 _animatedMessageIds.clear();
                 _hydratedAnimatedMessages = false;
-                _chatOpenedAt = _chatOpenedAnchorTime();
                 _expandedComposerDraftId = null;
                 _expandingComposerDraft = false;
                 _expandedComposerSeed = null;
@@ -12464,7 +12443,7 @@ class _UnreadDivider extends StatelessWidget {
     final textTheme = context.textTheme;
     final borderSide = context.borderSide;
     final line = Expanded(
-      child: Container(height: borderSide.width, color: colors.primary),
+      child: Container(height: borderSide.width, color: colors.destructive),
     );
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.s),
@@ -12472,7 +12451,10 @@ class _UnreadDivider extends StatelessWidget {
         children: [
           line,
           SizedBox(width: spacing.s),
-          Text(label, style: textTheme.muted.copyWith(color: colors.primary)),
+          Text(
+            label,
+            style: textTheme.muted.copyWith(color: colors.destructive),
+          ),
           SizedBox(width: spacing.s),
           line,
         ],

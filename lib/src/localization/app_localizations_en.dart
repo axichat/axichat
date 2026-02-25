@@ -5729,7 +5729,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get chatUnreadDividerLabel => 'Unread';
+  String get chatUnreadDividerLabel => 'New';
 
   @override
   String get messageErrorServiceUnavailableTooltip =>
