@@ -460,6 +460,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   int? _emailUnreadBoundaryUnreadCount;
   String? _lastOccupantTrackedStanzaId;
   bool _needsUnreadBootstrap = false;
+  int? _pendingUnreadBoundaryCount;
   Future<void> _loadEarlierQueue = Future<void>.value();
 
   RestartableTimer? _typingTimer;
@@ -728,9 +729,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _ensureUnreadWindowLoaded({
     required Chat chat,
     required int desiredWindow,
+    required int unreadTargetCount,
     int? emailBoundaryDeltaId,
   }) async {
-    if (chat.unreadCount <= _emptyMessageCount) {
+    if (unreadTargetCount <= _emptyMessageCount) {
       return;
     }
     var localCount = await _archivedMessageCount(chat);
@@ -1187,6 +1189,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? forcedViewFilter
         : state.viewFilter;
     final unreadCount = event.chat.unreadCount;
+    final stagedUnreadCount = _chatsService.consumeOpenChatUnreadBoundarySeed(
+      event.chat.jid,
+    );
     emit(
       state.copyWith(
         chat: event.chat,
@@ -1239,9 +1244,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     _resetMamCursors(resetContext);
     if (resetContext) {
-      _needsUnreadBootstrap = unreadCount > _emptyMessageCount;
+      final seededUnreadCount =
+          _pendingUnreadBoundaryCount ?? stagedUnreadCount;
+      _needsUnreadBootstrap =
+          unreadCount > _emptyMessageCount ||
+          (seededUnreadCount != null && seededUnreadCount > _emptyMessageCount);
+      _pendingUnreadBoundaryCount = unreadCount > _emptyMessageCount
+          ? unreadCount
+          : seededUnreadCount;
     } else if (unreadCount <= _emptyMessageCount) {
-      _needsUnreadBootstrap = false;
+      if (_pendingUnreadBoundaryCount == null &&
+          stagedUnreadCount != null &&
+          stagedUnreadCount > _emptyMessageCount) {
+        _pendingUnreadBoundaryCount = stagedUnreadCount;
+        _needsUnreadBootstrap = true;
+      }
+      if (_pendingUnreadBoundaryCount == null) {
+        _needsUnreadBootstrap = false;
+      }
     }
     if (resetContext) {
       _lastReadMarkerStanzaId = null;
@@ -1271,14 +1291,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _resolveEmailUnreadBoundaryDeltaId(event.chat);
     }
     if (!resetContext && state.items.isNotEmpty) {
-      final boundary = _resolveStickyUnreadBoundaryStanzaId(
+      final rawBoundary = _resolveStickyUnreadBoundaryStanzaId(
         chat: event.chat,
         messages: state.items,
         emailBoundaryDeltaId: _emailUnreadBoundaryDeltaId,
         previousBoundaryStanzaId: state.unreadBoundaryStanzaId,
+        pendingUnreadBoundaryCount: _pendingUnreadBoundaryCount,
+      );
+      final boundary = _resolveVisibleUnreadBoundaryStanzaId(
+        boundaryStanzaId: rawBoundary,
+        messages: state.items,
+        groupLeaderByMessageId: state.attachmentGroupLeaderByMessageId,
       );
       if (boundary != state.unreadBoundaryStanzaId) {
         emit(state.copyWith(unreadBoundaryStanzaId: boundary));
+      }
+      if (boundary != null) {
+        _pendingUnreadBoundaryCount = null;
       }
     }
     if (typingContextChanged) {
@@ -1714,12 +1743,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       for (final message in loadedQuotes) message.stanzaID: message,
     };
     final emailBoundaryDeltaId = _emailUnreadBoundaryDeltaId;
-    final unreadBoundary = _resolveStickyUnreadBoundaryStanzaId(
+    final rawUnreadBoundary = _resolveStickyUnreadBoundaryStanzaId(
       chat: state.chat,
       messages: filteredItems,
       emailBoundaryDeltaId: emailBoundaryDeltaId,
       previousBoundaryStanzaId: state.unreadBoundaryStanzaId,
+      pendingUnreadBoundaryCount: _pendingUnreadBoundaryCount,
     );
+    final unreadBoundary = _resolveVisibleUnreadBoundaryStanzaId(
+      boundaryStanzaId: rawUnreadBoundary,
+      messages: filteredItems,
+      groupLeaderByMessageId: filtered.groupLeaderByMessageId,
+    );
+    if (unreadBoundary != null) {
+      _pendingUnreadBoundaryCount = null;
+    }
     final nextMetadataIds = _metadataIdsForState(
       messages: filteredItems,
       attachmentsByMessageId: filtered.attachmentsByMessageId,
@@ -1833,6 +1871,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<Message> messages,
     required int? emailBoundaryDeltaId,
     required String? previousBoundaryStanzaId,
+    required int? pendingUnreadBoundaryCount,
   }) {
     final boundary = _resolveUnreadBoundaryStanzaId(
       chat: chat,
@@ -1844,7 +1883,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final previousBoundary = previousBoundaryStanzaId?.trim();
     if (previousBoundary == null || previousBoundary.isEmpty) {
-      return null;
+      final pendingCount = pendingUnreadBoundaryCount;
+      if (pendingCount == null || pendingCount <= _emptyMessageCount) {
+        return null;
+      }
+      return _resolveUnreadBoundaryFromCount(
+        messages: messages,
+        unreadCount: pendingCount,
+      );
     }
     for (final message in messages) {
       if (message.stanzaID == previousBoundary &&
@@ -1853,6 +1899,67 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
     }
     return null;
+  }
+
+  String? _resolveUnreadBoundaryFromCount({
+    required List<Message> messages,
+    required int unreadCount,
+  }) {
+    if (unreadCount <= _emptyMessageCount) {
+      return null;
+    }
+    var remaining = unreadCount;
+    for (final message in messages) {
+      if (!_countsTowardUnread(message)) {
+        continue;
+      }
+      remaining -= 1;
+      if (remaining <= 0) {
+        final stanzaId = message.stanzaID.trim();
+        return stanzaId.isEmpty ? null : stanzaId;
+      }
+    }
+    return null;
+  }
+
+  String? _resolveVisibleUnreadBoundaryStanzaId({
+    required String? boundaryStanzaId,
+    required List<Message> messages,
+    required Map<String, String> groupLeaderByMessageId,
+  }) {
+    final boundary = boundaryStanzaId?.trim();
+    if (boundary == null || boundary.isEmpty) {
+      return null;
+    }
+    Message? boundaryMessage;
+    for (final message in messages) {
+      if (message.stanzaID == boundary) {
+        boundaryMessage = message;
+        break;
+      }
+    }
+    if (boundaryMessage == null) {
+      return boundary;
+    }
+    final boundaryMessageId = boundaryMessage.id;
+    if (boundaryMessageId == null || boundaryMessageId.isEmpty) {
+      return boundary;
+    }
+    final leaderId = groupLeaderByMessageId[boundaryMessageId];
+    if (leaderId == null || leaderId == boundaryMessageId) {
+      return boundary;
+    }
+    for (final message in messages) {
+      if (message.id != leaderId) {
+        continue;
+      }
+      final leaderBoundary = message.stanzaID.trim();
+      if (leaderBoundary.isEmpty) {
+        return boundary;
+      }
+      return leaderBoundary;
+    }
+    return boundary;
   }
 
   bool _countsTowardUnread(Message message) {
@@ -1912,12 +2019,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _needsUnreadBootstrap = false;
       return;
     }
-    if (chat.unreadCount <= _emptyMessageCount) {
+    final unreadTargetCount = _pendingUnreadBoundaryCount ?? chat.unreadCount;
+    if (unreadTargetCount <= _emptyMessageCount) {
       _needsUnreadBootstrap = false;
       return;
     }
     _needsUnreadBootstrap = false;
-    final desiredWindow = chat.unreadCount + filteredOutCount + pseudoCount;
+    final desiredWindow = unreadTargetCount + filteredOutCount + pseudoCount;
     final desiredLimit = desiredWindow > messageBatchSize
         ? desiredWindow
         : messageBatchSize;
@@ -1928,6 +2036,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _ensureUnreadWindowLoaded(
         chat: chat,
         desiredWindow: desiredLimit,
+        unreadTargetCount: unreadTargetCount,
         emailBoundaryDeltaId: _emailUnreadBoundaryDeltaId,
       );
     }

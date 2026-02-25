@@ -1054,18 +1054,15 @@ mixin MessageService
       final DateTime? lastTimestamp = messages.isNotEmpty
           ? messages.first.timestamp
           : null;
+      final now = DateTime.timestamp();
+      final nextCandidate = candidate.isAfter(now) ? candidate : now;
       if (lastTimestamp == null) {
-        return candidate;
+        return nextCandidate;
       }
-      if (candidate.isAfter(lastTimestamp)) {
-        return candidate;
+      if (nextCandidate.isAfter(lastTimestamp)) {
+        return nextCandidate;
       }
-      const hourStep = Duration(hours: 1);
-      var next = candidate;
-      while (!next.isAfter(lastTimestamp)) {
-        next = next.add(hourStep);
-      }
-      return next;
+      return lastTimestamp.add(const Duration(milliseconds: 1));
     });
   }
 

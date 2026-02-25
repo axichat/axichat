@@ -450,7 +450,16 @@ class ChatsCubit extends Cubit<ChatsState> {
     return null;
   }
 
+  void _stageOpenChatUnreadBoundarySeed(String jid) {
+    final unreadCount = _chatFor(jid)?.unreadCount ?? 0;
+    _chatsService.stageOpenChatUnreadBoundarySeed(
+      jid: jid,
+      unreadCount: unreadCount,
+    );
+  }
+
   Future<void> openChat({required String jid}) async {
+    _stageOpenChatUnreadBoundarySeed(jid);
     emit(
       state.copyWith(
         openStack: <String>[jid],
@@ -481,6 +490,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       await openChat(jid: jid);
       return;
     }
+    _stageOpenChatUnreadBoundarySeed(jid);
     final filtered = state.openStack
         .where((entry) => entry != jid)
         .toList(growable: false);
@@ -515,6 +525,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     if (nextOpen == null) {
       await _chatsService.closeChat();
     } else {
+      _stageOpenChatUnreadBoundarySeed(nextOpen);
       await _chatsService.openChat(nextOpen);
     }
   }
@@ -522,6 +533,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   Future<void> restoreChat() async {
     if (state.forwardStack.isEmpty) return;
     final restored = state.forwardStack.last;
+    _stageOpenChatUnreadBoundarySeed(restored);
     final nextForward = List<String>.of(state.forwardStack)..removeLast();
     final filteredStack = state.openStack
         .where((entry) => entry != restored)

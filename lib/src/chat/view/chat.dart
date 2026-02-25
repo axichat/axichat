@@ -2304,6 +2304,13 @@ class _ChatState extends State<Chat> {
     return context.read<XmppService>().demoOfflineMode;
   }
 
+  DateTime _chatOpenedAnchorTime() {
+    if (_isDemoModeActive()) {
+      return demoNow();
+    }
+    return DateTime.now();
+  }
+
   bool _isEmailComposerWatermarkOnly({
     required String text,
     required ChatState chatState,
@@ -3537,6 +3544,7 @@ class _ChatState extends State<Chat> {
     _focusNode.onKeyEvent = _handleComposerKeyEvent;
     _textController.addListener(_typingListener);
     _subjectController.addListener(_handleSubjectChanged);
+    _chatOpenedAt = _chatOpenedAnchorTime();
     final chat = context.read<ChatBloc>().state.chat;
     _recipientsChatJid = chat?.jid;
     final settings = context.read<SettingsCubit>().state;
@@ -3803,7 +3811,7 @@ class _ChatState extends State<Chat> {
               listener: (_, state) {
                 _animatedMessageIds.clear();
                 _hydratedAnimatedMessages = false;
-                _chatOpenedAt = DateTime.now();
+                _chatOpenedAt = _chatOpenedAnchorTime();
                 _expandedComposerDraftId = null;
                 _expandingComposerDraft = false;
                 _expandedComposerSeed = null;
@@ -8280,21 +8288,34 @@ class _ChatState extends State<Chat> {
                                                                           .stanzaID];
                                                                   final previewMaxWidth =
                                                                       resolvedBubbleMaxWidth;
-                                                                  final selectableBubble = GestureDetector(
-                                                                    behavior:
-                                                                        HitTestBehavior
-                                                                            .translucent,
-                                                                    onTap: () {
-                                                                      _toggleMessageSelection(
-                                                                        messageModel,
-                                                                      );
-                                                                    },
-                                                                    onLongPress:
-                                                                        null,
-                                                                    onSecondaryTapUp:
-                                                                        null,
-                                                                    child:
-                                                                        shadowedBubble,
+                                                                  final selectableBubble = MouseRegion(
+                                                                    cursor:
+                                                                        widget
+                                                                            .readOnly
+                                                                        ? SystemMouseCursors
+                                                                              .basic
+                                                                        : SystemMouseCursors
+                                                                              .click,
+                                                                    child: GestureDetector(
+                                                                      behavior:
+                                                                          HitTestBehavior
+                                                                              .translucent,
+                                                                      onTap:
+                                                                          widget
+                                                                              .readOnly
+                                                                          ? null
+                                                                          : () {
+                                                                              _toggleMessageSelection(
+                                                                                messageModel,
+                                                                              );
+                                                                            },
+                                                                      onLongPress:
+                                                                          null,
+                                                                      onSecondaryTapUp:
+                                                                          null,
+                                                                      child:
+                                                                          shadowedBubble,
+                                                                    ),
                                                                   );
                                                                   final bubbleStack = Column(
                                                                     mainAxisSize:
@@ -12602,9 +12623,6 @@ class _MessageArrivalAnimatorState extends State<_MessageArrivalAnimator>
       controller0
         ..value = 0
         ..forward();
-    } else if (!widget.animate && !completed) {
-      controller0.value = 1;
-      completed = true;
     }
   }
 

@@ -47,11 +47,35 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   final Map<String, Map<String, Timer>> _typingParticipantExpiry = {};
   final Map<String, StreamController<List<String>>> _typingParticipantStreams =
       {};
+  final Map<String, int> _openChatUnreadBoundarySeedByJid = {};
   Future<List<ConvItem>>? _conversationIndexLoginSync;
   List<Chat>? _cachedChatList;
   bool? _lastMarkerResponsive;
 
   List<Chat>? get cachedChatList => _cachedChatList;
+
+  void stageOpenChatUnreadBoundarySeed({
+    required String jid,
+    required int unreadCount,
+  }) {
+    final normalizedJid = normalizeAddress(jid);
+    if (normalizedJid == null || normalizedJid.isEmpty) {
+      return;
+    }
+    if (unreadCount <= 0) {
+      _openChatUnreadBoundarySeedByJid.remove(normalizedJid);
+      return;
+    }
+    _openChatUnreadBoundarySeedByJid[normalizedJid] = unreadCount;
+  }
+
+  int? consumeOpenChatUnreadBoundarySeed(String jid) {
+    final normalizedJid = normalizeAddress(jid);
+    if (normalizedJid == null || normalizedJid.isEmpty) {
+      return null;
+    }
+    return _openChatUnreadBoundarySeedByJid.remove(normalizedJid);
+  }
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
@@ -566,6 +590,16 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<void> openChat(String jid) async {
+    final unreadBeforeOpen = await _dbOpReturning<XmppDatabase, int?>((
+      db,
+    ) async {
+      final existing = await db.getChat(jid);
+      return existing?.unreadCount;
+    });
+    stageOpenChatUnreadBoundarySeed(
+      jid: jid,
+      unreadCount: unreadBeforeOpen ?? 0,
+    );
     final closed = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.openChat(jid),
     );

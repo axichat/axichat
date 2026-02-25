@@ -1703,22 +1703,26 @@ class EmailService {
     const delay = Duration(milliseconds: 1500);
     unawaited(
       Future<void>.delayed(delay, () async {
-        final now = demoNow();
         const generator = Uuid();
         final stanzaId = 'demo-email-${generator.v4()}';
+        final db = await _databaseBuilder();
+        final timestamp = await _resolveDemoTimestampForChat(
+          db: db,
+          jid: chat.jid,
+          candidate: demoNow(),
+        );
         final message = Message(
           stanzaID: stanzaId,
           originID: stanzaId,
           senderJid: DemoChats.contact1Jid,
           chatJid: chat.jid,
           body: 'Copied',
-          timestamp: now,
+          timestamp: timestamp,
           encryptionProtocol: EncryptionProtocol.none,
           acked: true,
           received: true,
           displayed: true,
         );
-        final db = await _databaseBuilder();
         await db.saveMessage(message);
       }),
     );
@@ -3410,10 +3414,15 @@ class EmailService {
         : (normalizedHtml == null
               ? ''
               : HtmlContentCodec.toPlainText(normalizedHtml));
-    final now = demoNow();
     const generator = Uuid();
     final stanzaId = 'demo-email-${generator.v4()}';
     final resolvedForwardedFrom = forwardedFromJid?.trim();
+    final db = await _databaseBuilder();
+    final timestamp = await _resolveDemoTimestampForChat(
+      db: db,
+      jid: chat.jid,
+      candidate: demoNow(),
+    );
     final message = Message(
       stanzaID: stanzaId,
       originID: stanzaId,
@@ -3422,7 +3431,7 @@ class EmailService {
       body: resolvedBody,
       htmlBody: normalizedHtml,
       subject: normalizedSubject,
-      timestamp: now,
+      timestamp: timestamp,
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
       received: false,
@@ -3436,7 +3445,6 @@ class EmailService {
             }
           : null,
     );
-    final db = await _databaseBuilder();
     await db.saveMessage(message);
     unawaited(
       Future<void>.delayed(
@@ -3444,7 +3452,7 @@ class EmailService {
         () => db.markMessageAcked(stanzaId),
       ),
     );
-    return now.millisecondsSinceEpoch;
+    return timestamp.millisecondsSinceEpoch;
   }
 
   Future<int> _sendDemoEmailAttachment({
@@ -3465,10 +3473,15 @@ class EmailService {
       subject: normalizedSubject,
       body: captionText,
     );
-    final now = demoNow();
     const generator = Uuid();
     final metadataId = attachment.metadataId ?? generator.v4();
     final stanzaId = 'demo-email-${generator.v4()}';
+    final db = await _databaseBuilder();
+    final timestamp = await _resolveDemoTimestampForChat(
+      db: db,
+      jid: chat.jid,
+      candidate: demoNow(),
+    );
     final metadata = FileMetadataData(
       id: metadataId,
       filename: attachment.fileName,
@@ -3488,7 +3501,7 @@ class EmailService {
       body: captionBody,
       htmlBody: normalizedHtml,
       subject: normalizedSubject,
-      timestamp: now,
+      timestamp: timestamp,
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
       received: false,
@@ -3503,7 +3516,6 @@ class EmailService {
             }
           : null,
     );
-    final db = await _databaseBuilder();
     await db.saveFileMetadata(metadata);
     await db.saveMessage(message);
     unawaited(
@@ -3512,7 +3524,22 @@ class EmailService {
         () => db.markMessageAcked(stanzaId),
       ),
     );
-    return now.millisecondsSinceEpoch;
+    return timestamp.millisecondsSinceEpoch;
+  }
+
+  Future<DateTime> _resolveDemoTimestampForChat({
+    required XmppDatabase db,
+    required String jid,
+    required DateTime candidate,
+  }) async {
+    final messages = await db.getChatMessages(jid, start: 0, end: 1);
+    final DateTime? lastTimestamp = messages.isNotEmpty
+        ? messages.first.timestamp
+        : null;
+    if (lastTimestamp == null || candidate.isAfter(lastTimestamp)) {
+      return candidate;
+    }
+    return lastTimestamp.add(const Duration(minutes: 1));
   }
 
   Future<String?> _notificationBody({

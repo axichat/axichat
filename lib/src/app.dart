@@ -412,6 +412,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   @override
   void initState() {
     super.initState();
+    _lifecycleListener;
     _router.routerDelegate.addListener(_handleRouteChange);
   }
 
