@@ -51,7 +51,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String homeSearchFilterLabel(Object filter) {
-    return 'Filter: $filter';
+    return 'Suchfilter: $filter';
   }
 
   @override
@@ -137,7 +137,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String filterTooltip(Object label) {
-    return 'Filter • $label';
+    return 'Suchfilter • $label';
   }
 
   @override
@@ -238,7 +238,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get attachmentGalleryImagesLabel => 'Bilder';
 
   @override
-  String get attachmentGalleryVideosLabel => 'Videos';
+  String get attachmentGalleryVideosLabel => 'Videodateien';
 
   @override
   String get attachmentGalleryFilesLabel => 'Dateien';
@@ -253,16 +253,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get attachmentGalleryMetaSeparator => ' - ';
 
   @override
-  String get attachmentGalleryLayoutGridLabel => 'Grid view';
+  String get attachmentGalleryLayoutGridLabel => 'Rasteransicht';
 
   @override
-  String get attachmentGalleryLayoutListLabel => 'List view';
+  String get attachmentGalleryLayoutListLabel => 'Listenansicht';
 
   @override
-  String get attachmentGallerySortNameAscLabel => 'Name A-Z';
+  String get attachmentGallerySortNameAscLabel => 'Name A bis Z';
 
   @override
-  String get attachmentGallerySortNameDescLabel => 'Name Z-A';
+  String get attachmentGallerySortNameDescLabel => 'Name Z bis A';
 
   @override
   String get attachmentGallerySortSizeAscLabel => 'Größe klein bis groß';
@@ -315,67 +315,71 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatInvitePermissionDenied =>
-      'You do not have permission to invite users to this room.';
+      'Du hast keine Berechtigung, Nutzer in diesen Raum einzuladen.';
 
   @override
   String get chatInviteDomainRestricted =>
-      'Invites are limited to the default domain.';
+      'Einladungen sind auf die Standarddomain beschränkt.';
 
   @override
-  String get chatInviteAlreadyMember => 'User is already a member.';
+  String get chatInviteAlreadyMember => 'Nutzer ist bereits Mitglied.';
 
   @override
-  String get chatInviteSent => 'Invite sent.';
+  String get chatInviteSent => 'Einladung gesendet.';
 
   @override
-  String get chatInviteSendFailed => 'Failed to send invite.';
+  String get chatInviteSendFailed => 'Einladung konnte nicht gesendet werden.';
 
   @override
   String get chatInviteRevoked => 'Einladung widerrufen';
 
   @override
-  String get chatInviteRevokeFailed => 'Failed to revoke invite.';
+  String get chatInviteRevokeFailed =>
+      'Einladung konnte nicht widerrufen werden.';
 
   @override
-  String get chatInviteJoinSuccess => 'Joined room.';
+  String get chatInviteJoinSuccess => 'Raum beigetreten.';
 
   @override
-  String get chatInviteJoinFailed => 'Could not join room.';
+  String get chatInviteJoinFailed => 'Beitritt zum Raum fehlgeschlagen.';
 
   @override
-  String get chatNicknameUpdated => 'Nickname updated.';
+  String get chatNicknameUpdated => 'Spitzname aktualisiert.';
 
   @override
-  String get chatNicknameUpdateFailed => 'Could not change nickname.';
+  String get chatNicknameUpdateFailed =>
+      'Spitzname konnte nicht geändert werden.';
 
   @override
   String get chatRoomAvatarPermissionDenied =>
-      'You do not have permission to update the room avatar.';
+      'Du hast keine Berechtigung, den Raum-Avatar zu aktualisieren.';
 
   @override
-  String get chatRoomAvatarUpdated => 'Room avatar updated.';
+  String get chatRoomAvatarUpdated => 'Raum-Avatar aktualisiert.';
 
   @override
-  String get chatRoomAvatarUpdateFailed => 'Could not update room avatar.';
+  String get chatRoomAvatarUpdateFailed =>
+      'Raum-Avatar konnte nicht aktualisiert werden.';
 
   @override
   String get chatPinPermissionDenied =>
-      'You do not have permission to pin messages in this room.';
+      'Du hast keine Berechtigung, Nachrichten in diesem Raum anzuheften.';
 
   @override
-  String get chatMessageForwarded => 'Message forwarded.';
+  String get chatMessageForwarded => 'Nachricht weitergeleitet.';
 
   @override
-  String get chatMessageForwardFailed => 'Unable to forward message.';
+  String get chatMessageForwardFailed =>
+      'Nachricht konnte nicht weitergeleitet werden.';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
-    return 'Requested $action for $nickname.';
+    return '$action für $nickname angefordert.';
   }
 
   @override
   String get chatModerationFailed =>
-      'Could not complete that action. Check permissions or connectivity.';
+      'Diese Aktion konnte nicht abgeschlossen werden. Prüfe Berechtigungen oder Verbindung.';
 
   @override
   String get chatAttachmentInaccessible =>
@@ -427,11 +431,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatComposerEmailWatermark => 'Sent from Axichat';
 
   @override
-  String get chatTransportChoiceTitle => 'Choose how to send';
+  String get chatTransportChoiceTitle => 'Sendeart wählen';
 
   @override
   String chatTransportChoiceMessage(Object address) {
-    return 'This address could be chat or email. How should Axichat send to $address?';
+    return 'Diese Adresse kann Chat oder E-Mail sein. Wie soll Axichat an $address senden?';
   }
 
   @override
@@ -794,17 +798,17 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatForwardDialogTitle => 'Weiterleiten an...';
 
   @override
-  String get chatForwardEmailWarningTitle => 'Forward email?';
+  String get chatForwardEmailWarningTitle => 'E-Mail weiterleiten?';
 
   @override
   String get chatForwardEmailWarningMessage =>
-      'Forwarding email can include original headers and external image links. Choose how to send.';
+      'Beim Weiterleiten von E-Mails können ursprüngliche Header und externe Bildlinks enthalten sein. Wähle, wie gesendet werden soll.';
 
   @override
-  String get chatForwardEmailOptionSafe => 'Forward as new message';
+  String get chatForwardEmailOptionSafe => 'Als neue Nachricht weiterleiten';
 
   @override
-  String get chatForwardEmailOptionOriginal => 'Forward original';
+  String get chatForwardEmailOptionOriginal => 'Original weiterleiten';
 
   @override
   String get chatComposerAttachmentWarning =>
@@ -854,22 +858,23 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatAttachmentTooltip => 'Anhänge';
 
   @override
-  String get chatPinnedMessagesTooltip => 'Pinned messages';
+  String get chatPinnedMessagesTooltip => 'Angeheftete Nachrichten';
 
   @override
-  String get chatPinnedMessagesTitle => 'Pinned messages';
+  String get chatPinnedMessagesTitle => 'Angeheftete Nachrichten';
 
   @override
-  String get chatPinMessage => 'Pin message';
+  String get chatPinMessage => 'Nachricht anheften';
 
   @override
-  String get chatUnpinMessage => 'Unpin message';
+  String get chatUnpinMessage => 'Anheften aufheben';
 
   @override
-  String get chatPinnedEmptyState => 'No pinned messages yet.';
+  String get chatPinnedEmptyState => 'Noch keine angehefteten Nachrichten.';
 
   @override
-  String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
+  String get chatPinnedMissingMessage =>
+      'Angeheftete Nachricht ist nicht verfügbar.';
 
   @override
   String get chatSendMessageTooltip => 'Nachricht senden';
@@ -884,10 +889,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatQuotedNoContent => '(kein Inhalt)';
 
   @override
-  String get chatReplyingTo => 'RE:';
+  String get chatReplyingTo => 'AW:';
 
   @override
-  String get chatForwardPrefix => 'FWD:';
+  String get chatForwardPrefix => 'WG:';
 
   @override
   String get chatCancelReply => 'Antwort abbrechen';
@@ -947,7 +952,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatGuestScriptWelcome =>
-      'Willkommen bei Axichat – Chat, E-Mail und Kalender an einem Ort.';
+      'Willkommen bei Axichat: Chat, E-Mail und Kalender an einem Ort.';
 
   @override
   String get chatGuestScriptExternalQuestion =>
@@ -955,7 +960,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatGuestScriptExternalAnswer =>
-      'Ja – sende chat-formattierte E-Mails an Gmail, Outlook, Tuta und mehr. Wenn beide Axichat nutzen, gibt es zusätzlich Gruppenchats, Reaktionen, Zustellbestätigungen und mehr.';
+      'Ja: sende chat-formattierte E-Mails an Gmail, Outlook, Tuta und mehr. Wenn beide Axichat nutzen, gibt es zusätzlich Gruppenchats, Reaktionen, Zustellbestätigungen und mehr.';
 
   @override
   String get chatGuestScriptOfflineQuestion =>
@@ -963,7 +968,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get chatGuestScriptOfflineAnswer =>
-      'Ja – Offline-Funktionalität ist eingebaut und der Kalender funktioniert auch im Gastmodus ohne Konto oder Internet.';
+      'Ja: Offline-Funktionalität ist eingebaut und der Kalender funktioniert auch im Gastmodus ohne Konto oder Internet.';
 
   @override
   String get chatGuestScriptKeepUpQuestion =>
@@ -972,6 +977,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get chatGuestScriptKeepUpAnswer =>
       'Unser Kalender bietet natürliche Spracheingabe, Eisenhower-Matrix, Drag-and-drop und Erinnerungen, damit du dich auf das Wesentliche konzentrieren kannst.';
+
+  @override
+  String get chatGuestScriptBubbleTip =>
+      'Tippe auf eine Nachrichtenblase, um Optionen wie Weiterleiten, Antworten und Reagieren zu öffnen.';
 
   @override
   String calendarParserUnavailable(Object errorType) {
@@ -1810,13 +1819,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileTitle => 'Profil';
 
   @override
-  String get profileJumpToTop => 'Back to top';
+  String get profileJumpToTop => 'Nach oben';
 
   @override
-  String get settingsWebsiteLabel => 'Website';
+  String get settingsWebsiteLabel => 'Webseite';
 
   @override
-  String get settingsDonateLabel => 'Donate';
+  String get settingsDonateLabel => 'Spenden';
 
   @override
   String get settingsMastodonLabel => 'Mastodon';
@@ -1845,7 +1854,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get profileEditAvatar => 'Avatar bearbeiten';
 
   @override
-  String get profileLinkedEmailAccounts => 'Email accounts';
+  String get profileLinkedEmailAccounts => 'E-Mail-Konten';
 
   @override
   String get profileChangePassword => 'Passwort ändern';
@@ -1855,7 +1864,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String profileExportActionLabel(Object label) {
-    return 'Export $label';
+    return '$label exportieren';
   }
 
   @override
@@ -1976,10 +1985,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsButtonLabel => 'Einstellungen';
 
   @override
-  String get settingsSectionAccount => 'Account';
+  String get settingsSectionAccount => 'Konto';
 
   @override
-  String get settingsSectionData => 'Data';
+  String get settingsSectionData => 'Daten';
 
   @override
   String get settingsSectionImportant => 'Wichtig';
@@ -1997,7 +2006,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsThemeMode => 'Designmodus';
 
   @override
-  String get settingsThemeModeSystem => 'System';
+  String get settingsThemeModeSystem => 'Systemmodus';
 
   @override
   String get settingsThemeModeLight => 'Hell';
@@ -2023,26 +2032,26 @@ class AppLocalizationsDe extends AppLocalizations {
       'Deaktiviert die meisten Animationen. Besser für langsame Geräte.';
 
   @override
-  String get settingsSectionChats => 'Chat preferences';
+  String get settingsSectionChats => 'Chat-Einstellungen';
 
   @override
-  String get settingsSectionEmail => 'Email preferences';
+  String get settingsSectionEmail => 'E-Mail-Einstellungen';
 
   @override
-  String get settingsSectionAbout => 'About';
+  String get settingsSectionAbout => 'Info';
 
   @override
-  String get settingsAboutAxichat => 'About Axichat';
+  String get settingsAboutAxichat => 'Über Axichat';
 
   @override
   String get settingsAboutLegalese =>
       'Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.';
 
   @override
-  String get settingsTermsLabel => 'Terms';
+  String get settingsTermsLabel => 'Nutzungsbedingungen';
 
   @override
-  String get settingsPrivacyLabel => 'Privacy';
+  String get settingsPrivacyLabel => 'Datenschutz';
 
   @override
   String get settingsLicenseAgpl => 'AGPLv3';
@@ -2119,7 +2128,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'XMPP/SMTP-Endpunkte überschreiben oder DNS-Abfragen aktivieren. Felder leer lassen, um Standardwerte zu behalten. Benutzerdefinierte Server müssen gemäß den Schritten auf https://github.com/axichat/server erstellt werden, sonst funktionieren sie wahrscheinlich nicht.';
 
   @override
-  String get authCustomServerDomainOrIp => 'Domain';
+  String get authCustomServerDomainOrIp => 'Domäne oder IP';
 
   @override
   String get authCustomServerXmppLabel => 'XMPP';
@@ -2140,7 +2149,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get authCustomServerXmppHostPlaceholder => 'XMPP-Host (optional)';
 
   @override
-  String get authCustomServerPortPlaceholder => 'Port';
+  String get authCustomServerPortPlaceholder => 'Portnummer';
 
   @override
   String get authCustomServerSmtpHostPlaceholder => 'SMTP-Host (optional)';
@@ -2174,14 +2183,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get authUnregisterTitle => 'Abmelden';
 
   @override
-  String get authUnregisterConfirmTitle => 'Delete account?';
+  String get authUnregisterConfirmTitle => 'Konto löschen?';
 
   @override
   String get authUnregisterConfirmMessage =>
-      'This will permanently delete your account and local data. This cannot be undone.';
+      'Dadurch werden dein Konto und lokale Daten dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden.';
 
   @override
-  String get authUnregisterConfirmAction => 'Delete account';
+  String get authUnregisterConfirmAction => 'Konto löschen';
 
   @override
   String get authUnregisterProgressLabel => 'Warten auf Kontolöschung';
@@ -2320,28 +2329,28 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get chatAttachmentTypeMismatchTitle => 'Attachment type mismatch';
+  String get chatAttachmentTypeMismatchTitle => 'Typkonflikt beim Anhang';
 
   @override
   String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
-    return 'This attachment says it is $declared, but the file looks like $detected. Opening it could be unsafe. Continue?';
+    return 'Dieser Anhang gibt sich als $declared aus, die Datei sieht jedoch wie $detected aus. Das Öffnen kann unsicher sein. Trotzdem fortfahren?';
   }
 
   @override
-  String get chatAttachmentTypeMismatchConfirm => 'Open anyway';
+  String get chatAttachmentTypeMismatchConfirm => 'Trotzdem öffnen';
 
   @override
-  String get chatAttachmentHighRiskTitle => 'Potentially unsafe file';
+  String get chatAttachmentHighRiskTitle => 'Potenziell unsichere Datei';
 
   @override
   String get chatAttachmentHighRiskMessage =>
-      'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?';
+      'Dieser Dateityp kann beim Öffnen gefährlich sein. Wir empfehlen, die Datei zu speichern und vor dem Öffnen zu prüfen. Trotzdem fortfahren?';
 
   @override
   String get chatAttachmentUnknownSize => 'Unbekannte Größe';
 
   @override
-  String get chatAttachmentNotDownloadedYet => 'Not downloaded yet';
+  String get chatAttachmentNotDownloadedYet => 'Noch nicht heruntergeladen';
 
   @override
   String chatAttachmentErrorTooltip(Object message, Object fileName) {
@@ -2652,7 +2661,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get mucSectionOwners => 'Eigentümer';
 
   @override
-  String get mucSectionAdmins => 'Admins';
+  String get mucSectionAdmins => 'Administratoren';
 
   @override
   String get mucSectionModerators => 'Moderatoren';
@@ -2667,7 +2676,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get mucRoleOwner => 'Eigentümer';
 
   @override
-  String get mucRoleAdmin => 'Admin';
+  String get mucRoleAdmin => 'Administrator';
 
   @override
   String get mucRoleMember => 'Mitglied';
@@ -2860,7 +2869,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatsCreateChatRoomAction => 'Raum erstellen';
 
   @override
-  String get chatsRoomNamePlaceholder => 'Name';
+  String get chatsRoomNamePlaceholder => 'Raumname';
 
   @override
   String get chatsRoomNameRequiredError => 'Der Raumname darf nicht leer sein.';
@@ -2942,7 +2951,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get jidInputInvalid => 'Gültige JID eingeben';
 
   @override
-  String get sessionCapabilityChat => 'Chat';
+  String get sessionCapabilityChat => 'Unterhaltung';
 
   @override
   String get sessionCapabilityEmail => 'E-Mail';
@@ -2957,7 +2966,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sessionCapabilityStatusError => 'Fehler';
 
   @override
-  String get sessionCapabilityStatusOffline => 'Offline';
+  String get sessionCapabilityStatusOffline => 'Nicht verbunden';
 
   @override
   String get sessionCapabilityStatusOff => 'Aus';
@@ -3010,10 +3019,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'XMPP-/SMTP-Endpunkte für dieses Konto konfigurieren.';
 
   @override
-  String get authEndpointDomainPlaceholder => 'Domain';
+  String get authEndpointDomainPlaceholder => 'Domäne';
 
   @override
-  String get authEndpointPortPlaceholder => 'Port';
+  String get authEndpointPortPlaceholder => 'Portnummer';
 
   @override
   String get authEndpointRequireDnssecLabel => 'DNSSEC erforderlich';
@@ -3080,7 +3089,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get calendarCriticalPathNamePlaceholder => 'Name des kritischen Pfads';
 
   @override
-  String get calendarCriticalPathNamePrompt => 'Name';
+  String get calendarCriticalPathNamePrompt => 'Bezeichnung';
 
   @override
   String get calendarCriticalPathTaskOrderTitle => 'Aufgaben anordnen';
@@ -3385,46 +3394,46 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatMessageStatusSent => 'Gesendet';
 
   @override
-  String get commonActions => 'Actions';
+  String get commonActions => 'Aktionen';
 
   @override
-  String get commonNext => 'Next';
+  String get commonNext => 'Weiter';
 
   @override
-  String get commonPrevious => 'Previous';
+  String get commonPrevious => 'Zurück';
 
   @override
   String emailDemoAccountLabel(Object account) {
-    return 'Account: $account';
+    return 'Konto: $account';
   }
 
   @override
-  String get emailDemoDefaultMessage => 'Hello from Axichat';
+  String get emailDemoDefaultMessage => 'Hallo von Axichat';
 
   @override
-  String get emailDemoDisplayNameSelf => 'Self';
+  String get emailDemoDisplayNameSelf => 'Ich';
 
   @override
-  String get emailDemoErrorMissingPassphrase => 'Missing database passphrase.';
+  String get emailDemoErrorMissingPassphrase => 'Datenbank-Passphrase fehlt.';
 
   @override
-  String get emailDemoErrorMissingPrefix => 'Missing database prefix.';
+  String get emailDemoErrorMissingPrefix => 'Datenbank-Präfix fehlt.';
 
   @override
   String get emailDemoErrorMissingProfile =>
-      'No primary profile found. Log in first.';
+      'Kein primäres Profil gefunden. Bitte zuerst anmelden.';
 
   @override
-  String get emailDemoMessageLabel => 'Demo message';
+  String get emailDemoMessageLabel => 'Demo-Nachricht';
 
   @override
-  String get emailDemoProvisionButton => 'Provision Email';
+  String get emailDemoProvisionButton => 'E-Mail einrichten';
 
   @override
-  String get emailDemoSendButton => 'Send Demo Message';
+  String get emailDemoSendButton => 'Demo-Nachricht senden';
 
   @override
-  String get emailDemoStatusIdle => 'Idle';
+  String get emailDemoStatusIdle => 'Leerlauf';
 
   @override
   String emailDemoStatusLabel(Object status) {
@@ -3432,81 +3441,82 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
-  String get emailDemoStatusLoginToProvision => 'Log in to provision email.';
+  String get emailDemoStatusLoginToProvision =>
+      'Melde dich an, um E-Mail einzurichten.';
 
   @override
-  String get emailDemoStatusNotProvisioned => 'Not provisioned';
+  String get emailDemoStatusNotProvisioned => 'Nicht eingerichtet';
 
   @override
   String emailDemoStatusProvisionFailed(Object error) {
-    return 'Provisioning failed: $error';
+    return 'Einrichtung fehlgeschlagen: $error';
   }
 
   @override
-  String get emailDemoStatusProvisionFirst => 'Provision an account first.';
+  String get emailDemoStatusProvisionFirst => 'Richte zuerst ein Konto ein.';
 
   @override
   String emailDemoStatusProvisioned(Object address) {
-    return 'Provisioned $address';
+    return 'Eingerichtet: $address';
   }
 
   @override
-  String get emailDemoStatusProvisioning => 'Provisioning email account…';
+  String get emailDemoStatusProvisioning => 'E-Mail-Konto wird eingerichtet…';
 
   @override
-  String get emailDemoStatusReady => 'Ready';
+  String get emailDemoStatusReady => 'Bereit';
 
   @override
   String emailDemoStatusSendFailed(Object error) {
-    return 'Send failed: $error';
+    return 'Senden fehlgeschlagen: $error';
   }
 
   @override
-  String get emailDemoStatusSending => 'Sending demo message…';
+  String get emailDemoStatusSending => 'Demo-Nachricht wird gesendet…';
 
   @override
   String emailDemoStatusSent(Object id) {
-    return 'Sent demo message (id=$id)';
+    return 'Demo-Nachricht gesendet (id=$id)';
   }
 
   @override
-  String get emailDemoTitle => 'Email Transport Demo';
+  String get emailDemoTitle => 'E-Mail-Transport-Demo';
 
   @override
-  String get verificationAddLabelPlaceholder => 'Add label';
+  String get verificationAddLabelPlaceholder => 'Label hinzufügen';
 
   @override
-  String get verificationCurrentDevice => 'Current device';
+  String get verificationCurrentDevice => 'Aktuelles Gerät';
 
   @override
   String verificationDeviceIdLabel(Object id) {
-    return 'ID: $id';
+    return 'Geräte-ID: $id';
   }
 
   @override
-  String get verificationNotTrusted => 'Not trusted';
+  String get verificationNotTrusted => 'Nicht vertrauenswürdig';
 
   @override
-  String get verificationRegenerateDevice => 'Regenerate device';
+  String get verificationRegenerateDevice => 'Gerät neu erzeugen';
 
   @override
   String get verificationRegenerateWarning =>
-      'Only do this if you are an expert.';
+      'Nur ausführen, wenn du dich gut auskennst.';
 
   @override
-  String get verificationTrustBlind => 'Blind trust';
+  String get verificationTrustBlind => 'Blindes Vertrauen';
 
   @override
-  String get verificationTrustNone => 'No trust';
+  String get verificationTrustNone => 'Kein Vertrauen';
 
   @override
-  String get verificationTrustVerified => 'Verified';
+  String get verificationTrustVerified => 'Verifiziert';
 
   @override
-  String get verificationTrusted => 'Trusted';
+  String get verificationTrusted => 'Vertrauenswürdig';
 
   @override
-  String get avatarSavedMessage => 'Avatar saved.';
+  String get avatarSavedMessage => 'Avatar gespeichert.';
 
   @override
   String get avatarOpenError => 'Datei konnte nicht geöffnet werden.';
@@ -3549,102 +3559,103 @@ class AppLocalizationsDe extends AppLocalizations {
       'Unerwarteter Fehler beim Hochladen des Avatars.';
 
   @override
-  String get avatarCropTitle => 'Crop & focus';
+  String get avatarCropTitle => 'Zuschneiden & Fokus';
 
   @override
   String get avatarCropDescription =>
-      'Drag or resize the square to set your crop. Reset to center and follow the circle to match the saved avatar.';
+      'Ziehe oder ändere die Größe des Quadrats, um den Zuschnitt festzulegen. Setze ihn auf die Mitte zurück und orientiere dich am Kreis, damit er zum gespeicherten Avatar passt.';
 
   @override
   String get avatarCropPlaceholder =>
-      'Add a photo or pick a default avatar to adjust the framing.';
+      'Füge ein Foto hinzu oder wähle einen Standard-Avatar, um den Ausschnitt anzupassen.';
 
   @override
   String avatarCropSizeLabel(Object pixels) {
-    return '$pixels px crop';
+    return 'Zuschnitt: $pixels px';
   }
 
   @override
-  String get avatarCropSavedSize => 'Saved at 256×256 • < 64 KB';
+  String get avatarCropSavedSize => 'Gespeichert mit 256×256 • < 64 KB';
 
   @override
-  String get avatarBackgroundTitle => 'Background color';
+  String get avatarBackgroundTitle => 'Hintergrundfarbe';
 
   @override
   String get avatarBackgroundDescription =>
-      'Use the wheel or presets to tint transparent avatars before saving.';
+      'Verwende das Farbrad oder Vorgaben, um transparente Avatare vor dem Speichern einzufärben.';
 
   @override
-  String get avatarBackgroundWheelTitle => 'Wheel & hex';
+  String get avatarBackgroundWheelTitle => 'Farbrad & Hex';
 
   @override
   String get avatarBackgroundWheelDescription =>
-      'Drag the wheel or enter a hex value.';
+      'Ziehe am Farbrad oder gib einen Hex-Wert ein.';
 
   @override
-  String get avatarBackgroundTransparent => 'Transparent';
+  String get avatarBackgroundTransparent => 'Durchsichtig';
 
   @override
-  String get avatarBackgroundPreview => 'Preview saved circle tint.';
+  String get avatarBackgroundPreview =>
+      'Vorschau der gespeicherten Kreisfärbung.';
 
   @override
-  String get avatarDefaultsTitle => 'Default avatars';
+  String get avatarDefaultsTitle => 'Standard-Avatare';
 
   @override
-  String get avatarCategoryAbstract => 'Abstract';
+  String get avatarCategoryAbstract => 'Abstrakt';
 
   @override
-  String get avatarCategoryStem => 'STEM';
+  String get avatarCategoryStem => 'MINT';
 
   @override
-  String get avatarCategorySports => 'Sports';
+  String get avatarCategorySports => 'Sport';
 
   @override
-  String get avatarCategoryMusic => 'Music';
+  String get avatarCategoryMusic => 'Musik';
 
   @override
-  String get avatarCategoryMisc => 'Hobbies & Games';
+  String get avatarCategoryMisc => 'Hobbys & Spiele';
 
   @override
   String avatarTemplateAbstract(Object index) {
-    return 'Abstract $index';
+    return 'Abstrakt $index';
   }
 
   @override
   String get avatarTemplateAtom => 'Atom';
 
   @override
-  String get avatarTemplateBeaker => 'Beaker';
+  String get avatarTemplateBeaker => 'Becherglas';
 
   @override
-  String get avatarTemplateCompass => 'Compass';
+  String get avatarTemplateCompass => 'Kompass';
 
   @override
   String get avatarTemplateCpu => 'CPU';
 
   @override
-  String get avatarTemplateGear => 'Gear';
+  String get avatarTemplateGear => 'Zahnrad';
 
   @override
-  String get avatarTemplateGlobe => 'Globe';
+  String get avatarTemplateGlobe => 'Globus';
 
   @override
-  String get avatarTemplateLaptop => 'Laptop';
+  String get avatarTemplateLaptop => 'Notebook';
 
   @override
-  String get avatarTemplateMicroscope => 'Microscope';
+  String get avatarTemplateMicroscope => 'Mikroskop';
 
   @override
-  String get avatarTemplateRobot => 'Robot';
+  String get avatarTemplateRobot => 'Roboter';
 
   @override
-  String get avatarTemplateStethoscope => 'Stethoscope';
+  String get avatarTemplateStethoscope => 'Stethoskop';
 
   @override
-  String get avatarTemplateTelescope => 'Telescope';
+  String get avatarTemplateTelescope => 'Teleskop';
 
   @override
-  String get avatarTemplateArchery => 'Archery';
+  String get avatarTemplateArchery => 'Bogenschießen';
 
   @override
   String get avatarTemplateBaseball => 'Baseball';
@@ -3653,13 +3664,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get avatarTemplateBasketball => 'Basketball';
 
   @override
-  String get avatarTemplateBoxing => 'Boxing';
+  String get avatarTemplateBoxing => 'Boxen';
 
   @override
-  String get avatarTemplateCycling => 'Cycling';
+  String get avatarTemplateCycling => 'Radsport';
 
   @override
-  String get avatarTemplateDarts => 'Darts';
+  String get avatarTemplateDarts => 'Dart';
 
   @override
   String get avatarTemplateFootball => 'Football';
@@ -3668,13 +3679,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get avatarTemplateGolf => 'Golf';
 
   @override
-  String get avatarTemplatePingPong => 'Ping Pong';
+  String get avatarTemplatePingPong => 'Tischtennis';
 
   @override
-  String get avatarTemplateSkiing => 'Skiing';
+  String get avatarTemplateSkiing => 'Skifahren';
 
   @override
-  String get avatarTemplateSoccer => 'Soccer';
+  String get avatarTemplateSoccer => 'Fußball';
 
   @override
   String get avatarTemplateTennis => 'Tennis';
@@ -3683,52 +3694,52 @@ class AppLocalizationsDe extends AppLocalizations {
   String get avatarTemplateVolleyball => 'Volleyball';
 
   @override
-  String get avatarTemplateDrums => 'Drums';
+  String get avatarTemplateDrums => 'Schlagzeug';
 
   @override
-  String get avatarTemplateElectricGuitar => 'Electric Guitar';
+  String get avatarTemplateElectricGuitar => 'E-Gitarre';
 
   @override
-  String get avatarTemplateGuitar => 'Guitar';
+  String get avatarTemplateGuitar => 'Gitarre';
 
   @override
-  String get avatarTemplateMicrophone => 'Microphone';
+  String get avatarTemplateMicrophone => 'Mikrofon';
 
   @override
-  String get avatarTemplatePiano => 'Piano';
+  String get avatarTemplatePiano => 'Klavier';
 
   @override
-  String get avatarTemplateSaxophone => 'Saxophone';
+  String get avatarTemplateSaxophone => 'Saxofon';
 
   @override
-  String get avatarTemplateViolin => 'Violin';
+  String get avatarTemplateViolin => 'Violine';
 
   @override
-  String get avatarTemplateCards => 'Cards';
+  String get avatarTemplateCards => 'Karten';
 
   @override
-  String get avatarTemplateChess => 'Chess';
+  String get avatarTemplateChess => 'Schach';
 
   @override
-  String get avatarTemplateChessAlt => 'Chess Alt';
+  String get avatarTemplateChessAlt => 'Schach Alt';
 
   @override
-  String get avatarTemplateDice => 'Dice';
+  String get avatarTemplateDice => 'Würfel';
 
   @override
-  String get avatarTemplateDiceAlt => 'Dice Alt';
+  String get avatarTemplateDiceAlt => 'Würfel Alt';
 
   @override
-  String get avatarTemplateEsports => 'Esports';
+  String get avatarTemplateEsports => 'E-Sport';
 
   @override
-  String get avatarTemplateSword => 'Sword';
+  String get avatarTemplateSword => 'Schwert';
 
   @override
-  String get avatarTemplateVideoGames => 'Video Games';
+  String get avatarTemplateVideoGames => 'Videospiele';
 
   @override
-  String get avatarTemplateVideoGamesAlt => 'Video Games Alt';
+  String get avatarTemplateVideoGamesAlt => 'Videospiele Alt';
 
   @override
   String get commonDone => 'Fertig';
@@ -3842,65 +3853,67 @@ class AppLocalizationsDe extends AppLocalizations {
       'Kann Ihre IP-Adresse an Absender preisgeben';
 
   @override
-  String get settingsAutoDownloadImages => 'Auto-download images';
+  String get settingsAutoDownloadImages => 'Bilder automatisch herunterladen';
 
   @override
   String get settingsAutoDownloadImagesDescription =>
-      'Applies when this chat allows automatic downloads.';
+      'Gilt, wenn dieser Chat automatische Downloads erlaubt.';
 
   @override
-  String get settingsAutoDownloadVideos => 'Auto-download videos';
+  String get settingsAutoDownloadVideos => 'Videos automatisch herunterladen';
 
   @override
   String get settingsAutoDownloadVideosDescription =>
-      'Applies when this chat allows automatic downloads.';
+      'Gilt, wenn dieser Chat automatische Downloads erlaubt.';
 
   @override
-  String get settingsAutoDownloadDocuments => 'Auto-download documents';
+  String get settingsAutoDownloadDocuments =>
+      'Dokumente automatisch herunterladen';
 
   @override
   String get settingsAutoDownloadDocumentsDescription =>
-      'Applies when this chat allows automatic downloads.';
+      'Gilt, wenn dieser Chat automatische Downloads erlaubt.';
 
   @override
-  String get settingsAutoDownloadArchives => 'Auto-download archives';
+  String get settingsAutoDownloadArchives =>
+      'Archive automatisch herunterladen';
 
   @override
   String get settingsAutoDownloadArchivesDescription =>
-      'Applies when this chat allows automatic downloads.';
+      'Gilt, wenn dieser Chat automatische Downloads erlaubt.';
 
   @override
-  String get settingsAutoDownloadScopeAlways => 'Always';
+  String get settingsAutoDownloadScopeAlways => 'Immer';
 
   @override
   String get settingsAutoDownloadScopeTrustedContacts =>
-      'Only for trusted contacts.';
+      'Nur für vertrauenswürdige Kontakte.';
 
   @override
-  String get emailContactsImportTitle => 'Import contacts';
+  String get emailContactsImportTitle => 'Kontakte importieren';
 
   @override
   String get emailContactsImportSubtitle =>
-      'Gmail, Outlook, Yahoo CSVs, or vCards.';
+      'Gmail-, Outlook-, Yahoo-CSVs oder vCards.';
 
   @override
   String get emailContactsImportFileAccessError =>
-      'Unable to access the selected file.';
+      'Auf die ausgewählte Datei kann nicht zugegriffen werden.';
 
   @override
-  String get emailContactsImportAction => 'Import';
+  String get emailContactsImportAction => 'Importieren';
 
   @override
-  String get emailContactsImportFormatLabel => 'Format';
+  String get emailContactsImportFormatLabel => 'Dateiformat';
 
   @override
-  String get emailContactsImportFileLabel => 'File';
+  String get emailContactsImportFileLabel => 'Datei';
 
   @override
-  String get emailContactsImportNoFile => 'No file selected';
+  String get emailContactsImportNoFile => 'Keine Datei ausgewählt';
 
   @override
-  String get emailContactsImportChooseFile => 'Choose file';
+  String get emailContactsImportChooseFile => 'Datei auswählen';
 
   @override
   String get emailContactsImportFormatGmail => 'Gmail CSV';
@@ -3912,40 +3925,44 @@ class AppLocalizationsDe extends AppLocalizations {
   String get emailContactsImportFormatYahoo => 'Yahoo CSV';
 
   @override
-  String get emailContactsImportFormatGenericCsv => 'Generic CSV';
+  String get emailContactsImportFormatGenericCsv => 'Allgemeines CSV';
 
   @override
   String get emailContactsImportFormatVcard => 'vCard (VCF)';
 
   @override
-  String get emailContactsImportNoValidContacts => 'No valid contacts found.';
+  String get emailContactsImportNoValidContacts =>
+      'Keine gültigen Kontakte gefunden.';
 
   @override
   String get emailContactsImportAccountRequired =>
-      'Set up email before importing contacts.';
+      'Richte E-Mail ein, bevor du Kontakte importierst.';
 
   @override
-  String get emailContactsImportEmptyFile => 'The selected file is empty.';
+  String get emailContactsImportEmptyFile => 'Die ausgewählte Datei ist leer.';
 
   @override
-  String get emailContactsImportReadFailure => 'Couldn\'t read that file.';
+  String get emailContactsImportReadFailure =>
+      'Diese Datei konnte nicht gelesen werden.';
 
   @override
   String get emailContactsImportFileTooLarge =>
-      'This file is too large to import.';
+      'Diese Datei ist zu groß zum Importieren.';
 
   @override
-  String get emailContactsImportUnsupportedFile => 'Unsupported file type.';
+  String get emailContactsImportUnsupportedFile =>
+      'Nicht unterstützter Dateityp.';
 
   @override
-  String get emailContactsImportNoContacts => 'No contacts found in that file.';
+  String get emailContactsImportNoContacts =>
+      'In dieser Datei wurden keine Kontakte gefunden.';
 
   @override
   String get emailContactsImportTooManyContacts =>
-      'This file contains too many contacts to import.';
+      'Diese Datei enthält zu viele Kontakte zum Importieren.';
 
   @override
-  String get emailContactsImportFailed => 'Import failed.';
+  String get emailContactsImportFailed => 'Import fehlgeschlagen.';
 
   @override
   String emailContactsImportSuccess(
@@ -3954,26 +3971,27 @@ class AppLocalizationsDe extends AppLocalizations {
     Object invalid,
     Object failed,
   ) {
-    return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
+    return 'Importiert: $imported Kontakte. $duplicates Duplikate, $invalid ungültig, $failed fehlgeschlagen.';
   }
 
   @override
-  String get fanOutErrorNoRecipients => 'Select at least one recipient.';
+  String get fanOutErrorNoRecipients => 'Wähle mindestens einen Empfänger aus.';
 
   @override
-  String get fanOutErrorResolveFailed => 'Couldn\'t resolve recipients.';
+  String get fanOutErrorResolveFailed =>
+      'Empfänger konnten nicht aufgelöst werden.';
 
   @override
   String fanOutErrorTooManyRecipients(int max) {
-    return 'Too many recipients (max $max).';
+    return 'Zu viele Empfänger (max. $max).';
   }
 
   @override
   String get fanOutErrorEmptyMessage =>
-      'Add a message or attachment before sending.';
+      'Füge vor dem Senden eine Nachricht oder einen Anhang hinzu.';
 
   @override
-  String get fanOutErrorInvalidShareToken => 'Share token is invalid.';
+  String get fanOutErrorInvalidShareToken => 'Share-Token ist ungültig.';
 
   @override
   String get emailForwardingGuideTitle => 'Vorhandene E-Mail verbinden';
@@ -4046,26 +4064,26 @@ class AppLocalizationsDe extends AppLocalizations {
   String get notificationOpenAction => 'Benachrichtigung öffnen';
 
   @override
-  String get notificationAttachmentLabel => 'Attachment';
+  String get notificationAttachmentLabel => 'Anhang';
 
   @override
   String notificationAttachmentLabelWithName(String filename) {
-    return 'Attachment: $filename';
+    return 'Anhang: $filename';
   }
 
   @override
-  String get notificationReactionFallback => 'New reaction';
+  String get notificationReactionFallback => 'Neue Reaktion';
 
   @override
   String notificationReactionLabel(String reaction) {
-    return 'Reaction: $reaction';
+    return 'Reaktion: $reaction';
   }
 
   @override
-  String get notificationWebxdcFallback => 'New update';
+  String get notificationWebxdcFallback => 'Neues Update';
 
   @override
-  String get shareTokenFooterLabel => 'Please do not remove:';
+  String get shareTokenFooterLabel => 'Bitte nicht entfernen:';
 
   @override
   String get notificationBackgroundConnectionDisabledTitle =>
@@ -4443,7 +4461,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get commonAll => 'Alle';
 
   @override
-  String get languageSystem => 'System';
+  String get languageSystem => 'Systemstandard';
 
   @override
   String get languageEnglish => 'Englisch';
@@ -4753,12 +4771,12 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String commonDurationMinutesShort(int count) {
-    return '${count}m';
+    return '$count Min.';
   }
 
   @override
   String commonDurationHoursShort(int count) {
-    return '${count}h';
+    return '$count Std.';
   }
 
   @override
@@ -4903,7 +4921,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Wähle einen freien Slot und teile Details.';
 
   @override
-  String get calendarAvailabilityRequestDetailsLabel => 'Details';
+  String get calendarAvailabilityRequestDetailsLabel => 'Einzelheiten';
 
   @override
   String get calendarAvailabilityRequestRangeLabel => 'Zeitraum';
@@ -5030,7 +5048,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String calendarFragmentReminderStartSummary(String summary) {
-    return 'Start: $summary';
+    return 'Beginn: $summary';
   }
 
   @override
@@ -5094,11 +5112,11 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String commonPercentLabel(int value) {
-    return '$value%';
+    return '$value %';
   }
 
   @override
-  String get commonStart => 'Start';
+  String get commonStart => 'Beginn';
 
   @override
   String get commonEnd => 'Ende';
@@ -5147,7 +5165,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String calendarAlarmItemLabel(int index) {
-    return 'Alarm $index';
+    return 'Erinnerung $index';
   }
 
   @override
@@ -5157,7 +5175,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get calendarAlarmActionDisplay => 'Anzeige';
 
   @override
-  String get calendarAlarmActionAudio => 'Audio';
+  String get calendarAlarmActionAudio => 'Ton';
 
   @override
   String get calendarAlarmActionEmail => 'E-Mail';
@@ -5185,7 +5203,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get calendarAlarmRelativeToLabel => 'Bezogen auf';
 
   @override
-  String get calendarAlarmRelativeToStart => 'Start';
+  String get calendarAlarmRelativeToStart => 'Beginn';
 
   @override
   String get calendarAlarmRelativeToEnd => 'Ende';
@@ -5747,7 +5765,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String chatAttachmentCaption(String filename, String size) {
-    return '📎 $filename ($size)';
+    return '📎 Datei: $filename ($size)';
   }
 
   @override
@@ -5895,223 +5913,245 @@ class AppLocalizationsDe extends AppLocalizations {
       'E-Mail konnte nicht erneut gesendet werden.';
 
   @override
-  String get authEnableXmppOrSmtp => 'Enable XMPP or SMTP to continue.';
+  String get authEnableXmppOrSmtp =>
+      'Aktiviere XMPP oder SMTP, um fortzufahren.';
 
   @override
   String get authUsernamePasswordMismatch =>
-      'Username and password have different nullness.';
+      'Benutzername und Passwort haben unterschiedliche Nullwerte.';
 
   @override
   String get authStoredCredentialsOutdated =>
-      'Stored credentials are outdated. Please log in manually.';
+      'Gespeicherte Anmeldedaten sind veraltet. Bitte manuell anmelden.';
 
   @override
   String get authMissingDatabaseSecrets =>
-      'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
+      'Lokale Datenbank-Geheimnisse fehlen für dieses Konto. Axichat kann deine bestehenden Chats nicht öffnen. Stelle die ursprüngliche Installation wieder her oder setze lokale Daten zurück, um fortzufahren.';
 
   @override
-  String get authInvalidCredentials => 'Incorrect username or password';
+  String get authInvalidCredentials =>
+      'Falscher Benutzername oder falsches Passwort';
 
   @override
-  String get authGenericError => 'Error. Please try again later.';
+  String get authGenericError => 'Fehler. Bitte später erneut versuchen.';
 
   @override
   String get authStorageLocked =>
-      'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
+      'Der Speicher ist durch eine andere Axichat-Instanz gesperrt. Schließe andere Fenster oder Prozesse und versuche es erneut.';
 
   @override
   String get authEmailServerUnreachable =>
-      'Unable to reach the email server. Please try again.';
+      'E-Mail-Server nicht erreichbar. Bitte versuche es erneut.';
 
   @override
-  String get authEmailSetupFailed => 'Email setup failed. Please try again.';
+  String get authEmailSetupFailed =>
+      'E-Mail-Einrichtung fehlgeschlagen. Bitte versuche es erneut.';
 
   @override
   String get authEmailPasswordMissing =>
-      'Stored email password missing. Please log in manually.';
+      'Gespeichertes E-Mail-Passwort fehlt. Bitte melde dich manuell an.';
 
   @override
   String get authEmailAuthFailed =>
-      'Email authentication failed. Please log in again.';
+      'E-Mail-Authentifizierung fehlgeschlagen. Bitte melde dich erneut an.';
 
   @override
   String get signupCleanupInProgress =>
-      'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online; try again once it finishes.';
+      'Dein vorheriger Registrierungsversuch wird bereinigt. Wir versuchen die Entfernung erneut, sobald du wieder online bist; versuche es erneut, wenn dies abgeschlossen ist.';
 
   @override
-  String get signupFailedTryAgain => 'Failed to register, try again later.';
+  String get signupFailedTryAgain =>
+      'Registrierung fehlgeschlagen, versuche es später erneut.';
 
   @override
-  String get authPasswordMismatch => 'New passwords do not match.';
+  String get authPasswordMismatch => 'Neue Passwörter stimmen nicht überein.';
 
   @override
   String get authPasswordChangeDisabled =>
-      'Password changes are disabled for this account.';
+      'Passwortänderungen sind für dieses Konto deaktiviert.';
 
   @override
   String get authPasswordChangeRejected =>
-      'Current password is incorrect, or the new password does not meet server requirements.';
+      'Aktuelles Passwort ist falsch oder das neue Passwort erfüllt die Serveranforderungen nicht.';
 
   @override
   String get authPasswordChangeFailed =>
-      'Unable to change password. Please try again later.';
+      'Passwort konnte nicht geändert werden. Bitte später erneut versuchen.';
 
   @override
-  String get authPasswordChangeSuccess => 'Password changed successfully.';
+  String get authPasswordChangeSuccess => 'Passwort erfolgreich geändert.';
 
   @override
-  String get authPasswordIncorrect => 'Incorrect password. Please try again.';
+  String get authPasswordIncorrect =>
+      'Falsches Passwort. Bitte versuche es erneut.';
 
   @override
-  String get authAccountNotFound => 'Account not found.';
+  String get authAccountNotFound => 'Konto nicht gefunden.';
 
   @override
   String get authAccountDeletionDisabled =>
-      'Account deletion is disabled for this account.';
+      'Kontolöschung ist für dieses Konto deaktiviert.';
 
   @override
   String get authAccountDeletionFailed =>
-      'Unable to delete account. Please try again later.';
+      'Konto konnte nicht gelöscht werden. Bitte später erneut versuchen.';
 
   @override
   String get authDemoModeFailed =>
-      'Failed to start demo mode. Please try again.';
+      'Demomodus konnte nicht gestartet werden. Bitte versuche es erneut.';
 
   @override
   String authLoginBackoff(Object seconds) {
-    return 'Too many attempts. Wait $seconds seconds before trying again.';
+    return 'Zu viele Versuche. Warte $seconds Sekunden, bevor du es erneut versuchst.';
   }
 
   @override
-  String get signupAvatarCropTitle => 'Crop & focus';
+  String get signupAvatarCropTitle => 'Zuschneiden & Fokus';
 
   @override
   String get signupAvatarCropHint =>
-      'Only the area inside the circle will appear in the final avatar.';
+      'Nur der Bereich innerhalb des Kreises erscheint im endgültigen Avatar.';
 
   @override
-  String get xmppOperationPubSubBookmarksStart => 'Syncing bookmarks...';
+  String get xmppOperationPubSubBookmarksStart =>
+      'Lesezeichen werden synchronisiert...';
 
   @override
-  String get xmppOperationPubSubBookmarksSuccess => 'Bookmarks synced';
+  String get xmppOperationPubSubBookmarksSuccess =>
+      'Lesezeichen synchronisiert';
 
   @override
-  String get xmppOperationPubSubBookmarksFailure => 'Bookmarks sync failed';
+  String get xmppOperationPubSubBookmarksFailure =>
+      'Synchronisierung der Lesezeichen fehlgeschlagen';
 
   @override
-  String get xmppOperationPubSubConversationsStart => 'Syncing chats list...';
+  String get xmppOperationPubSubConversationsStart =>
+      'Chatliste wird synchronisiert...';
 
   @override
-  String get xmppOperationPubSubConversationsSuccess => 'Chats list synced';
+  String get xmppOperationPubSubConversationsSuccess =>
+      'Chatliste synchronisiert';
 
   @override
   String get xmppOperationPubSubConversationsFailure =>
-      'Chats list sync failed';
+      'Synchronisierung der Chatliste fehlgeschlagen';
 
   @override
-  String get xmppOperationPubSubDraftsStart => 'Syncing drafts...';
+  String get xmppOperationPubSubDraftsStart =>
+      'Entwürfe werden synchronisiert...';
 
   @override
-  String get xmppOperationPubSubDraftsSuccess => 'Drafts synced';
+  String get xmppOperationPubSubDraftsSuccess => 'Entwürfe synchronisiert';
 
   @override
-  String get xmppOperationPubSubDraftsFailure => 'Drafts sync failed';
+  String get xmppOperationPubSubDraftsFailure =>
+      'Synchronisierung der Entwürfe fehlgeschlagen';
 
   @override
-  String get xmppOperationPubSubSpamStart => 'Syncing spam list...';
+  String get xmppOperationPubSubSpamStart => 'Spamliste wird synchronisiert...';
 
   @override
-  String get xmppOperationPubSubSpamSuccess => 'Spam list synced';
+  String get xmppOperationPubSubSpamSuccess => 'Spamliste synchronisiert';
 
   @override
-  String get xmppOperationPubSubSpamFailure => 'Spam list sync failed';
+  String get xmppOperationPubSubSpamFailure =>
+      'Synchronisierung der Spamliste fehlgeschlagen';
 
   @override
   String get xmppOperationPubSubEmailBlocklistStart =>
-      'Syncing email blocklist...';
+      'E-Mail-Sperrliste wird synchronisiert...';
 
   @override
   String get xmppOperationPubSubEmailBlocklistSuccess =>
-      'Email blocklist synced';
+      'E-Mail-Sperrliste synchronisiert';
 
   @override
   String get xmppOperationPubSubEmailBlocklistFailure =>
-      'Email blocklist sync failed';
+      'Synchronisierung der E-Mail-Sperrliste fehlgeschlagen';
 
   @override
   String get xmppOperationPubSubAvatarMetadataStart =>
-      'Syncing avatar details...';
+      'Avatardetails werden synchronisiert...';
 
   @override
   String get xmppOperationPubSubAvatarMetadataSuccess =>
-      'Avatar details synced';
+      'Avatardetails synchronisiert';
 
   @override
   String get xmppOperationPubSubAvatarMetadataFailure =>
-      'Avatar details sync failed';
+      'Synchronisierung der Avatardetails fehlgeschlagen';
 
   @override
-  String get xmppOperationPubSubFetchStart => 'Syncing account updates...';
+  String get xmppOperationPubSubFetchStart =>
+      'Kontoaktualisierungen werden synchronisiert...';
 
   @override
-  String get xmppOperationPubSubFetchSuccess => 'Account updates synced';
+  String get xmppOperationPubSubFetchSuccess =>
+      'Kontoaktualisierungen synchronisiert';
 
   @override
-  String get xmppOperationPubSubFetchFailure => 'Account updates sync failed';
+  String get xmppOperationPubSubFetchFailure =>
+      'Synchronisierung der Kontoaktualisierungen fehlgeschlagen';
 
   @override
-  String get xmppOperationMamLoginStart => 'Syncing messages...';
+  String get xmppOperationMamLoginStart =>
+      'Nachrichten werden synchronisiert...';
 
   @override
-  String get xmppOperationMamLoginSuccess => 'Messages synced';
+  String get xmppOperationMamLoginSuccess => 'Nachrichten synchronisiert';
 
   @override
-  String get xmppOperationMamLoginFailure => 'Message sync failed';
+  String get xmppOperationMamLoginFailure =>
+      'Nachrichtensynchronisierung fehlgeschlagen';
 
   @override
-  String get xmppOperationMamGlobalStart => 'Syncing full history...';
+  String get xmppOperationMamGlobalStart =>
+      'Gesamter Verlauf wird synchronisiert...';
 
   @override
-  String get xmppOperationMamGlobalSuccess => 'History synced';
+  String get xmppOperationMamGlobalSuccess => 'Verlauf synchronisiert';
 
   @override
-  String get xmppOperationMamGlobalFailure => 'History sync failed';
+  String get xmppOperationMamGlobalFailure =>
+      'Verlaufssynchronisierung fehlgeschlagen';
 
   @override
-  String get xmppOperationMamMucStart => 'Syncing room history...';
+  String get xmppOperationMamMucStart => 'Raumverlauf wird synchronisiert...';
 
   @override
-  String get xmppOperationMamMucSuccess => 'Room history synced';
+  String get xmppOperationMamMucSuccess => 'Raumverlauf synchronisiert';
 
   @override
-  String get xmppOperationMamMucFailure => 'Room history sync failed';
+  String get xmppOperationMamMucFailure =>
+      'Synchronisierung des Raumverlaufs fehlgeschlagen';
 
   @override
-  String get xmppOperationMamFetchStart => 'Fetching archived messages...';
+  String get xmppOperationMamFetchStart =>
+      'Archivierte Nachrichten werden abgerufen...';
 
   @override
-  String get xmppOperationMamFetchSuccess => 'Archive fetched';
+  String get xmppOperationMamFetchSuccess => 'Archiv abgerufen';
 
   @override
-  String get xmppOperationMamFetchFailure => 'Archive fetch failed';
+  String get xmppOperationMamFetchFailure => 'Abruf des Archivs fehlgeschlagen';
 
   @override
-  String get xmppOperationMucJoinStart => 'Joining room...';
+  String get xmppOperationMucJoinStart => 'Raum wird beigetreten...';
 
   @override
-  String get xmppOperationMucJoinSuccess => 'Room joined';
+  String get xmppOperationMucJoinSuccess => 'Raum beigetreten';
 
   @override
-  String get xmppOperationMucJoinFailure => 'Room join failed';
+  String get xmppOperationMucJoinFailure => 'Beitritt zum Raum fehlgeschlagen';
 
   @override
-  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+  String get chatSettingsCapabilitiesTitle => 'Funktionen';
 
   @override
   String chatSettingsCapabilitiesUpdated(Object timestamp) {
-    return 'Last checked: $timestamp';
+    return 'Zuletzt geprüft: $timestamp';
   }
 
   @override
-  String get chatSettingsCapabilitiesEmpty => 'No features reported';
+  String get chatSettingsCapabilitiesEmpty => 'Keine Funktionen gemeldet';
 }

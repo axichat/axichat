@@ -244,10 +244,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get attachmentGalleryMetaSeparator => ' - ';
 
   @override
-  String get attachmentGalleryLayoutGridLabel => 'Grid view';
+  String get attachmentGalleryLayoutGridLabel => '网格视图';
 
   @override
-  String get attachmentGalleryLayoutListLabel => 'List view';
+  String get attachmentGalleryLayoutListLabel => '列表视图';
 
   @override
   String get attachmentGallerySortNameAscLabel => '名称 A-Z';
@@ -303,68 +303,63 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatDraftSaveFailed => '无法保存草稿，请重试。';
 
   @override
-  String get chatInvitePermissionDenied =>
-      'You do not have permission to invite users to this room.';
+  String get chatInvitePermissionDenied => '你没有权限邀请用户加入此聊天室。';
 
   @override
-  String get chatInviteDomainRestricted =>
-      'Invites are limited to the default domain.';
+  String get chatInviteDomainRestricted => '邀请仅限默认域名。';
 
   @override
-  String get chatInviteAlreadyMember => 'User is already a member.';
+  String get chatInviteAlreadyMember => '该用户已是成员。';
 
   @override
-  String get chatInviteSent => 'Invite sent.';
+  String get chatInviteSent => '邀请已发送。';
 
   @override
-  String get chatInviteSendFailed => 'Failed to send invite.';
+  String get chatInviteSendFailed => '发送邀请失败。';
 
   @override
   String get chatInviteRevoked => '邀请已撤销';
 
   @override
-  String get chatInviteRevokeFailed => 'Failed to revoke invite.';
+  String get chatInviteRevokeFailed => '撤销邀请失败。';
 
   @override
-  String get chatInviteJoinSuccess => 'Joined room.';
+  String get chatInviteJoinSuccess => '已加入聊天室。';
 
   @override
-  String get chatInviteJoinFailed => 'Could not join room.';
+  String get chatInviteJoinFailed => '无法加入聊天室。';
 
   @override
-  String get chatNicknameUpdated => 'Nickname updated.';
+  String get chatNicknameUpdated => '昵称已更新。';
 
   @override
-  String get chatNicknameUpdateFailed => 'Could not change nickname.';
+  String get chatNicknameUpdateFailed => '无法更改昵称。';
 
   @override
-  String get chatRoomAvatarPermissionDenied =>
-      'You do not have permission to update the room avatar.';
+  String get chatRoomAvatarPermissionDenied => '你没有权限更新群组头像。';
 
   @override
-  String get chatRoomAvatarUpdated => 'Room avatar updated.';
+  String get chatRoomAvatarUpdated => '群组头像已更新。';
 
   @override
-  String get chatRoomAvatarUpdateFailed => 'Could not update room avatar.';
+  String get chatRoomAvatarUpdateFailed => '无法更新群组头像。';
 
   @override
-  String get chatPinPermissionDenied =>
-      'You do not have permission to pin messages in this room.';
+  String get chatPinPermissionDenied => '你没有权限在此群组中置顶消息。';
 
   @override
-  String get chatMessageForwarded => 'Message forwarded.';
+  String get chatMessageForwarded => '消息已转发。';
 
   @override
-  String get chatMessageForwardFailed => 'Unable to forward message.';
+  String get chatMessageForwardFailed => '无法转发消息。';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
-    return 'Requested $action for $nickname.';
+    return '已为 $nickname 请求执行 $action。';
   }
 
   @override
-  String get chatModerationFailed =>
-      'Could not complete that action. Check permissions or connectivity.';
+  String get chatModerationFailed => '无法完成该操作。请检查权限或网络连接。';
 
   @override
   String get chatAttachmentInaccessible => '所选文件无法访问。';
@@ -415,11 +410,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatComposerEmailWatermark => 'Sent from Axichat';
 
   @override
-  String get chatTransportChoiceTitle => 'Choose how to send';
+  String get chatTransportChoiceTitle => '选择发送方式';
 
   @override
   String chatTransportChoiceMessage(Object address) {
-    return 'This address could be chat or email. How should Axichat send to $address?';
+    return '这个地址既可能是聊天地址也可能是邮箱地址。Axichat 应该如何发送到 $address？';
   }
 
   @override
@@ -751,17 +746,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatForwardDialogTitle => '转发到...';
 
   @override
-  String get chatForwardEmailWarningTitle => 'Forward email?';
+  String get chatForwardEmailWarningTitle => '转发邮件？';
 
   @override
-  String get chatForwardEmailWarningMessage =>
-      'Forwarding email can include original headers and external image links. Choose how to send.';
+  String get chatForwardEmailWarningMessage => '转发邮件可能包含原始邮件头和外部图片链接。请选择发送方式。';
 
   @override
-  String get chatForwardEmailOptionSafe => 'Forward as new message';
+  String get chatForwardEmailOptionSafe => '作为新消息转发';
 
   @override
-  String get chatForwardEmailOptionOriginal => 'Forward original';
+  String get chatForwardEmailOptionOriginal => '转发原文';
 
   @override
   String get chatComposerAttachmentWarning => '大附件会分别发送给每个收件人，可能需要更长时间送达。';
@@ -810,22 +804,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentTooltip => '附件';
 
   @override
-  String get chatPinnedMessagesTooltip => 'Pinned messages';
+  String get chatPinnedMessagesTooltip => '置顶消息';
 
   @override
-  String get chatPinnedMessagesTitle => 'Pinned messages';
+  String get chatPinnedMessagesTitle => '置顶消息';
 
   @override
-  String get chatPinMessage => 'Pin message';
+  String get chatPinMessage => '置顶消息';
 
   @override
-  String get chatUnpinMessage => 'Unpin message';
+  String get chatUnpinMessage => '取消置顶';
 
   @override
-  String get chatPinnedEmptyState => 'No pinned messages yet.';
+  String get chatPinnedEmptyState => '暂无置顶消息。';
 
   @override
-  String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
+  String get chatPinnedMissingMessage => '置顶消息不可用。';
 
   @override
   String get chatSendMessageTooltip => '发送消息';
@@ -840,10 +834,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatQuotedNoContent => '（无内容）';
 
   @override
-  String get chatReplyingTo => 'RE:';
+  String get chatReplyingTo => '回复：';
 
   @override
-  String get chatForwardPrefix => 'FWD:';
+  String get chatForwardPrefix => '转发：';
 
   @override
   String get chatCancelReply => '取消回复';
@@ -901,21 +895,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get recipientsAddHint => '添加...';
 
   @override
-  String get chatGuestScriptWelcome => '欢迎使用 Axichat——在一个地方处理聊天、邮件和日历。';
+  String get chatGuestScriptWelcome => '欢迎使用 Axichat：在一个地方处理聊天、邮件和日历。';
 
   @override
   String get chatGuestScriptExternalQuestion => '看起来很简洁。我能给不用 Axichat 的人发消息吗？';
 
   @override
   String get chatGuestScriptExternalAnswer =>
-      '可以——把聊天格式的邮件发送到 Gmail、Outlook、Tuta 等。如果双方都用 Axichat，还能获得群聊、表情反馈、送达回执等。';
+      '可以：把聊天格式的邮件发送到 Gmail、Outlook、Tuta 等。如果双方都用 Axichat，还能获得群聊、表情反馈、送达回执等。';
 
   @override
   String get chatGuestScriptOfflineQuestion => '离线或访客模式可以用吗？';
 
   @override
-  String get chatGuestScriptOfflineAnswer =>
-      '可以——离线功能内置，日历在访客模式下也能在无账号、无网络时工作。';
+  String get chatGuestScriptOfflineAnswer => '可以：离线功能内置，日历在访客模式下也能在无账号、无网络时工作。';
 
   @override
   String get chatGuestScriptKeepUpQuestion => '它如何帮助我跟进所有事情？';
@@ -923,6 +916,9 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get chatGuestScriptKeepUpAnswer =>
       '我们的日历支持自然语言排程、艾森豪威尔矩阵、拖拽和提醒，让你专注重要事项。';
+
+  @override
+  String get chatGuestScriptBubbleTip => '点按消息气泡可打开转发、回复和表情回应等选项。';
 
   @override
   String calendarParserUnavailable(Object errorType) {
@@ -1719,13 +1715,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileTitle => '个人资料';
 
   @override
-  String get profileJumpToTop => 'Back to top';
+  String get profileJumpToTop => '返回顶部';
 
   @override
-  String get settingsWebsiteLabel => 'Website';
+  String get settingsWebsiteLabel => '网站';
 
   @override
-  String get settingsDonateLabel => 'Donate';
+  String get settingsDonateLabel => '捐赠';
 
   @override
   String get settingsMastodonLabel => 'Mastodon';
@@ -1754,7 +1750,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileEditAvatar => '编辑头像';
 
   @override
-  String get profileLinkedEmailAccounts => 'Email accounts';
+  String get profileLinkedEmailAccounts => '邮箱账户';
 
   @override
   String get profileChangePassword => '更改密码';
@@ -1882,10 +1878,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsButtonLabel => '设置';
 
   @override
-  String get settingsSectionAccount => 'Account';
+  String get settingsSectionAccount => '账号';
 
   @override
-  String get settingsSectionData => 'Data';
+  String get settingsSectionData => '数据';
 
   @override
   String get settingsSectionImportant => '重要';
@@ -1927,26 +1923,26 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsLowMotionDescription => '禁用大部分动画，更适合性能较慢的设备。';
 
   @override
-  String get settingsSectionChats => 'Chat preferences';
+  String get settingsSectionChats => '聊天偏好';
 
   @override
-  String get settingsSectionEmail => 'Email preferences';
+  String get settingsSectionEmail => '邮件偏好';
 
   @override
-  String get settingsSectionAbout => 'About';
+  String get settingsSectionAbout => '关于';
 
   @override
-  String get settingsAboutAxichat => 'About Axichat';
+  String get settingsAboutAxichat => '关于 Axichat';
 
   @override
   String get settingsAboutLegalese =>
       'Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.';
 
   @override
-  String get settingsTermsLabel => 'Terms';
+  String get settingsTermsLabel => '条款';
 
   @override
-  String get settingsPrivacyLabel => 'Privacy';
+  String get settingsPrivacyLabel => '隐私';
 
   @override
   String get settingsLicenseAgpl => 'AGPLv3';
@@ -2071,14 +2067,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authUnregisterTitle => '注销';
 
   @override
-  String get authUnregisterConfirmTitle => 'Delete account?';
+  String get authUnregisterConfirmTitle => '删除账号？';
 
   @override
-  String get authUnregisterConfirmMessage =>
-      'This will permanently delete your account and local data. This cannot be undone.';
+  String get authUnregisterConfirmMessage => '这将永久删除你的账号和本地数据。此操作无法撤销。';
 
   @override
-  String get authUnregisterConfirmAction => 'Delete account';
+  String get authUnregisterConfirmAction => '删除账号';
 
   @override
   String get authUnregisterProgressLabel => '正在等待删除账户';
@@ -2209,28 +2204,28 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get chatAttachmentTypeMismatchTitle => 'Attachment type mismatch';
+  String get chatAttachmentTypeMismatchTitle => '附件类型不匹配';
 
   @override
   String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
-    return 'This attachment says it is $declared, but the file looks like $detected. Opening it could be unsafe. Continue?';
+    return '此附件声明类型为 $declared，但文件看起来像 $detected。打开它可能不安全。要继续吗？';
   }
 
   @override
-  String get chatAttachmentTypeMismatchConfirm => 'Open anyway';
+  String get chatAttachmentTypeMismatchConfirm => '仍要打开';
 
   @override
-  String get chatAttachmentHighRiskTitle => 'Potentially unsafe file';
+  String get chatAttachmentHighRiskTitle => '可能不安全的文件';
 
   @override
   String get chatAttachmentHighRiskMessage =>
-      'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?';
+      '此文件类型在打开时可能有风险。建议先保存并扫描后再打开。要继续吗？';
 
   @override
   String get chatAttachmentUnknownSize => '大小未知';
 
   @override
-  String get chatAttachmentNotDownloadedYet => 'Not downloaded yet';
+  String get chatAttachmentNotDownloadedYet => '尚未下载';
 
   @override
   String chatAttachmentErrorTooltip(Object message, Object fileName) {
@@ -3231,128 +3226,126 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatMessageStatusSent => '已发送';
 
   @override
-  String get commonActions => 'Actions';
+  String get commonActions => '操作';
 
   @override
-  String get commonNext => 'Next';
+  String get commonNext => '下一步';
 
   @override
-  String get commonPrevious => 'Previous';
+  String get commonPrevious => '上一步';
 
   @override
   String emailDemoAccountLabel(Object account) {
-    return 'Account: $account';
+    return '账号：$account';
   }
 
   @override
-  String get emailDemoDefaultMessage => 'Hello from Axichat';
+  String get emailDemoDefaultMessage => '来自 Axichat 的问候';
 
   @override
-  String get emailDemoDisplayNameSelf => 'Self';
+  String get emailDemoDisplayNameSelf => '自己';
 
   @override
-  String get emailDemoErrorMissingPassphrase => 'Missing database passphrase.';
+  String get emailDemoErrorMissingPassphrase => '缺少数据库口令。';
 
   @override
-  String get emailDemoErrorMissingPrefix => 'Missing database prefix.';
+  String get emailDemoErrorMissingPrefix => '缺少数据库前缀。';
 
   @override
-  String get emailDemoErrorMissingProfile =>
-      'No primary profile found. Log in first.';
+  String get emailDemoErrorMissingProfile => '未找到主配置文件。请先登录。';
 
   @override
-  String get emailDemoMessageLabel => 'Demo message';
+  String get emailDemoMessageLabel => '演示消息';
 
   @override
-  String get emailDemoProvisionButton => 'Provision Email';
+  String get emailDemoProvisionButton => '配置邮箱';
 
   @override
-  String get emailDemoSendButton => 'Send Demo Message';
+  String get emailDemoSendButton => '发送演示消息';
 
   @override
-  String get emailDemoStatusIdle => 'Idle';
+  String get emailDemoStatusIdle => '空闲';
 
   @override
   String emailDemoStatusLabel(Object status) {
-    return 'Status: $status';
+    return '状态：$status';
   }
 
   @override
-  String get emailDemoStatusLoginToProvision => 'Log in to provision email.';
+  String get emailDemoStatusLoginToProvision => '请先登录以配置邮箱。';
 
   @override
-  String get emailDemoStatusNotProvisioned => 'Not provisioned';
+  String get emailDemoStatusNotProvisioned => '未配置';
 
   @override
   String emailDemoStatusProvisionFailed(Object error) {
-    return 'Provisioning failed: $error';
+    return '配置失败：$error';
   }
 
   @override
-  String get emailDemoStatusProvisionFirst => 'Provision an account first.';
+  String get emailDemoStatusProvisionFirst => '请先配置一个账号。';
 
   @override
   String emailDemoStatusProvisioned(Object address) {
-    return 'Provisioned $address';
+    return '已配置 $address';
   }
 
   @override
-  String get emailDemoStatusProvisioning => 'Provisioning email account…';
+  String get emailDemoStatusProvisioning => '正在配置邮箱账号…';
 
   @override
-  String get emailDemoStatusReady => 'Ready';
+  String get emailDemoStatusReady => '就绪';
 
   @override
   String emailDemoStatusSendFailed(Object error) {
-    return 'Send failed: $error';
+    return '发送失败：$error';
   }
 
   @override
-  String get emailDemoStatusSending => 'Sending demo message…';
+  String get emailDemoStatusSending => '正在发送演示消息…';
 
   @override
   String emailDemoStatusSent(Object id) {
-    return 'Sent demo message (id=$id)';
+    return '演示消息已发送（id=$id）';
   }
 
   @override
-  String get emailDemoTitle => 'Email Transport Demo';
+  String get emailDemoTitle => '邮件传输演示';
 
   @override
-  String get verificationAddLabelPlaceholder => 'Add label';
+  String get verificationAddLabelPlaceholder => '添加标签';
 
   @override
-  String get verificationCurrentDevice => 'Current device';
+  String get verificationCurrentDevice => '当前设备';
 
   @override
   String verificationDeviceIdLabel(Object id) {
-    return 'ID: $id';
+    return 'ID：$id';
   }
 
   @override
-  String get verificationNotTrusted => 'Not trusted';
+  String get verificationNotTrusted => '不受信任';
 
   @override
-  String get verificationRegenerateDevice => 'Regenerate device';
+  String get verificationRegenerateDevice => '重新生成设备';
 
   @override
-  String get verificationRegenerateWarning =>
-      'Only do this if you are an expert.';
+  String get verificationRegenerateWarning => '仅在你是高级用户时才执行此操作。';
 
   @override
-  String get verificationTrustBlind => 'Blind trust';
+  String get verificationTrustBlind => '盲目信任';
 
   @override
-  String get verificationTrustNone => 'No trust';
+  String get verificationTrustNone => '不信任';
 
   @override
-  String get verificationTrustVerified => 'Verified';
+  String get verificationTrustVerified => '已验证';
 
   @override
-  String get verificationTrusted => 'Trusted';
+  String get verificationTrusted => '受信任';
 
   @override
-  String get avatarSavedMessage => 'Avatar saved.';
+  String get avatarSavedMessage => '头像已保存。';
 
   @override
   String get avatarOpenError => '无法打开该文件。';
@@ -3388,186 +3381,183 @@ class AppLocalizationsZh extends AppLocalizations {
   String get avatarPublishUnexpectedError => '上传头像时发生意外错误。';
 
   @override
-  String get avatarCropTitle => 'Crop & focus';
+  String get avatarCropTitle => '裁剪与聚焦';
 
   @override
   String get avatarCropDescription =>
-      'Drag or resize the square to set your crop. Reset to center and follow the circle to match the saved avatar.';
+      '拖动或调整方框大小以设置裁剪区域。重置到中心并参照圆形，使其与保存后的头像一致。';
 
   @override
-  String get avatarCropPlaceholder =>
-      'Add a photo or pick a default avatar to adjust the framing.';
+  String get avatarCropPlaceholder => '添加照片或选择默认头像以调整构图。';
 
   @override
   String avatarCropSizeLabel(Object pixels) {
-    return '$pixels px crop';
+    return '$pixels 像素裁剪';
   }
 
   @override
-  String get avatarCropSavedSize => 'Saved at 256×256 • < 64 KB';
+  String get avatarCropSavedSize => '已保存为 256×256 • < 64 KB';
 
   @override
-  String get avatarBackgroundTitle => 'Background color';
+  String get avatarBackgroundTitle => '背景颜色';
 
   @override
-  String get avatarBackgroundDescription =>
-      'Use the wheel or presets to tint transparent avatars before saving.';
+  String get avatarBackgroundDescription => '保存前可使用色轮或预设为透明头像着色。';
 
   @override
-  String get avatarBackgroundWheelTitle => 'Wheel & hex';
+  String get avatarBackgroundWheelTitle => '色轮与十六进制';
 
   @override
-  String get avatarBackgroundWheelDescription =>
-      'Drag the wheel or enter a hex value.';
+  String get avatarBackgroundWheelDescription => '拖动色轮或输入十六进制值。';
 
   @override
-  String get avatarBackgroundTransparent => 'Transparent';
+  String get avatarBackgroundTransparent => '透明';
 
   @override
-  String get avatarBackgroundPreview => 'Preview saved circle tint.';
+  String get avatarBackgroundPreview => '预览保存后的圆形着色效果。';
 
   @override
-  String get avatarDefaultsTitle => 'Default avatars';
+  String get avatarDefaultsTitle => '默认头像';
 
   @override
-  String get avatarCategoryAbstract => 'Abstract';
+  String get avatarCategoryAbstract => '抽象';
 
   @override
   String get avatarCategoryStem => 'STEM';
 
   @override
-  String get avatarCategorySports => 'Sports';
+  String get avatarCategorySports => '体育';
 
   @override
-  String get avatarCategoryMusic => 'Music';
+  String get avatarCategoryMusic => '音乐';
 
   @override
-  String get avatarCategoryMisc => 'Hobbies & Games';
+  String get avatarCategoryMisc => '爱好与游戏';
 
   @override
   String avatarTemplateAbstract(Object index) {
-    return 'Abstract $index';
+    return '抽象 $index';
   }
 
   @override
-  String get avatarTemplateAtom => 'Atom';
+  String get avatarTemplateAtom => '原子';
 
   @override
-  String get avatarTemplateBeaker => 'Beaker';
+  String get avatarTemplateBeaker => '烧杯';
 
   @override
-  String get avatarTemplateCompass => 'Compass';
+  String get avatarTemplateCompass => '指南针';
 
   @override
   String get avatarTemplateCpu => 'CPU';
 
   @override
-  String get avatarTemplateGear => 'Gear';
+  String get avatarTemplateGear => '齿轮';
 
   @override
-  String get avatarTemplateGlobe => 'Globe';
+  String get avatarTemplateGlobe => '地球';
 
   @override
-  String get avatarTemplateLaptop => 'Laptop';
+  String get avatarTemplateLaptop => '笔记本电脑';
 
   @override
-  String get avatarTemplateMicroscope => 'Microscope';
+  String get avatarTemplateMicroscope => '显微镜';
 
   @override
-  String get avatarTemplateRobot => 'Robot';
+  String get avatarTemplateRobot => '机器人';
 
   @override
-  String get avatarTemplateStethoscope => 'Stethoscope';
+  String get avatarTemplateStethoscope => '听诊器';
 
   @override
-  String get avatarTemplateTelescope => 'Telescope';
+  String get avatarTemplateTelescope => '望远镜';
 
   @override
-  String get avatarTemplateArchery => 'Archery';
+  String get avatarTemplateArchery => '射箭';
 
   @override
-  String get avatarTemplateBaseball => 'Baseball';
+  String get avatarTemplateBaseball => '棒球';
 
   @override
-  String get avatarTemplateBasketball => 'Basketball';
+  String get avatarTemplateBasketball => '篮球';
 
   @override
-  String get avatarTemplateBoxing => 'Boxing';
+  String get avatarTemplateBoxing => '拳击';
 
   @override
-  String get avatarTemplateCycling => 'Cycling';
+  String get avatarTemplateCycling => '自行车';
 
   @override
-  String get avatarTemplateDarts => 'Darts';
+  String get avatarTemplateDarts => '飞镖';
 
   @override
-  String get avatarTemplateFootball => 'Football';
+  String get avatarTemplateFootball => '美式橄榄球';
 
   @override
-  String get avatarTemplateGolf => 'Golf';
+  String get avatarTemplateGolf => '高尔夫';
 
   @override
-  String get avatarTemplatePingPong => 'Ping Pong';
+  String get avatarTemplatePingPong => '乒乓球';
 
   @override
-  String get avatarTemplateSkiing => 'Skiing';
+  String get avatarTemplateSkiing => '滑雪';
 
   @override
-  String get avatarTemplateSoccer => 'Soccer';
+  String get avatarTemplateSoccer => '足球';
 
   @override
-  String get avatarTemplateTennis => 'Tennis';
+  String get avatarTemplateTennis => '网球';
 
   @override
-  String get avatarTemplateVolleyball => 'Volleyball';
+  String get avatarTemplateVolleyball => '排球';
 
   @override
-  String get avatarTemplateDrums => 'Drums';
+  String get avatarTemplateDrums => '鼓';
 
   @override
-  String get avatarTemplateElectricGuitar => 'Electric Guitar';
+  String get avatarTemplateElectricGuitar => '电吉他';
 
   @override
-  String get avatarTemplateGuitar => 'Guitar';
+  String get avatarTemplateGuitar => '吉他';
 
   @override
-  String get avatarTemplateMicrophone => 'Microphone';
+  String get avatarTemplateMicrophone => '麦克风';
 
   @override
-  String get avatarTemplatePiano => 'Piano';
+  String get avatarTemplatePiano => '钢琴';
 
   @override
-  String get avatarTemplateSaxophone => 'Saxophone';
+  String get avatarTemplateSaxophone => '萨克斯';
 
   @override
-  String get avatarTemplateViolin => 'Violin';
+  String get avatarTemplateViolin => '小提琴';
 
   @override
-  String get avatarTemplateCards => 'Cards';
+  String get avatarTemplateCards => '纸牌';
 
   @override
-  String get avatarTemplateChess => 'Chess';
+  String get avatarTemplateChess => '国际象棋';
 
   @override
-  String get avatarTemplateChessAlt => 'Chess Alt';
+  String get avatarTemplateChessAlt => '国际象棋（替代）';
 
   @override
-  String get avatarTemplateDice => 'Dice';
+  String get avatarTemplateDice => '骰子';
 
   @override
-  String get avatarTemplateDiceAlt => 'Dice Alt';
+  String get avatarTemplateDiceAlt => '骰子（替代）';
 
   @override
-  String get avatarTemplateEsports => 'Esports';
+  String get avatarTemplateEsports => '电子竞技';
 
   @override
-  String get avatarTemplateSword => 'Sword';
+  String get avatarTemplateSword => '剑';
 
   @override
-  String get avatarTemplateVideoGames => 'Video Games';
+  String get avatarTemplateVideoGames => '电子游戏';
 
   @override
-  String get avatarTemplateVideoGamesAlt => 'Video Games Alt';
+  String get avatarTemplateVideoGamesAlt => '电子游戏（替代）';
 
   @override
   String get commonDone => '完成';
@@ -3678,65 +3668,59 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsAutoLoadEmailImagesDescription => '可能会向发件人泄露您的IP地址';
 
   @override
-  String get settingsAutoDownloadImages => 'Auto-download images';
+  String get settingsAutoDownloadImages => '自动下载图片';
 
   @override
-  String get settingsAutoDownloadImagesDescription =>
-      'Applies when this chat allows automatic downloads.';
+  String get settingsAutoDownloadImagesDescription => '当此聊天允许自动下载时生效。';
 
   @override
-  String get settingsAutoDownloadVideos => 'Auto-download videos';
+  String get settingsAutoDownloadVideos => '自动下载视频';
 
   @override
-  String get settingsAutoDownloadVideosDescription =>
-      'Applies when this chat allows automatic downloads.';
+  String get settingsAutoDownloadVideosDescription => '当此聊天允许自动下载时生效。';
 
   @override
-  String get settingsAutoDownloadDocuments => 'Auto-download documents';
+  String get settingsAutoDownloadDocuments => '自动下载文档';
 
   @override
-  String get settingsAutoDownloadDocumentsDescription =>
-      'Applies when this chat allows automatic downloads.';
+  String get settingsAutoDownloadDocumentsDescription => '当此聊天允许自动下载时生效。';
 
   @override
-  String get settingsAutoDownloadArchives => 'Auto-download archives';
+  String get settingsAutoDownloadArchives => '自动下载压缩包';
 
   @override
-  String get settingsAutoDownloadArchivesDescription =>
-      'Applies when this chat allows automatic downloads.';
+  String get settingsAutoDownloadArchivesDescription => '当此聊天允许自动下载时生效。';
 
   @override
-  String get settingsAutoDownloadScopeAlways => 'Always';
+  String get settingsAutoDownloadScopeAlways => '始终';
 
   @override
-  String get settingsAutoDownloadScopeTrustedContacts =>
-      'Only for trusted contacts.';
+  String get settingsAutoDownloadScopeTrustedContacts => '仅限可信联系人。';
 
   @override
-  String get emailContactsImportTitle => 'Import contacts';
+  String get emailContactsImportTitle => '导入联系人';
 
   @override
   String get emailContactsImportSubtitle =>
-      'Gmail, Outlook, Yahoo CSVs, or vCards.';
+      'Gmail、Outlook、Yahoo 的 CSV 或 vCard。';
 
   @override
-  String get emailContactsImportFileAccessError =>
-      'Unable to access the selected file.';
+  String get emailContactsImportFileAccessError => '无法访问所选文件。';
 
   @override
-  String get emailContactsImportAction => 'Import';
+  String get emailContactsImportAction => '导入';
 
   @override
-  String get emailContactsImportFormatLabel => 'Format';
+  String get emailContactsImportFormatLabel => '格式';
 
   @override
-  String get emailContactsImportFileLabel => 'File';
+  String get emailContactsImportFileLabel => '文件';
 
   @override
-  String get emailContactsImportNoFile => 'No file selected';
+  String get emailContactsImportNoFile => '未选择文件';
 
   @override
-  String get emailContactsImportChooseFile => 'Choose file';
+  String get emailContactsImportChooseFile => '选择文件';
 
   @override
   String get emailContactsImportFormatGmail => 'Gmail CSV';
@@ -3748,40 +3732,37 @@ class AppLocalizationsZh extends AppLocalizations {
   String get emailContactsImportFormatYahoo => 'Yahoo CSV';
 
   @override
-  String get emailContactsImportFormatGenericCsv => 'Generic CSV';
+  String get emailContactsImportFormatGenericCsv => '通用 CSV';
 
   @override
   String get emailContactsImportFormatVcard => 'vCard (VCF)';
 
   @override
-  String get emailContactsImportNoValidContacts => 'No valid contacts found.';
+  String get emailContactsImportNoValidContacts => '未找到有效联系人。';
 
   @override
-  String get emailContactsImportAccountRequired =>
-      'Set up email before importing contacts.';
+  String get emailContactsImportAccountRequired => '请先配置邮箱，再导入联系人。';
 
   @override
-  String get emailContactsImportEmptyFile => 'The selected file is empty.';
+  String get emailContactsImportEmptyFile => '所选文件为空。';
 
   @override
-  String get emailContactsImportReadFailure => 'Couldn\'t read that file.';
+  String get emailContactsImportReadFailure => '无法读取该文件。';
 
   @override
-  String get emailContactsImportFileTooLarge =>
-      'This file is too large to import.';
+  String get emailContactsImportFileTooLarge => '该文件过大，无法导入。';
 
   @override
-  String get emailContactsImportUnsupportedFile => 'Unsupported file type.';
+  String get emailContactsImportUnsupportedFile => '不支持的文件类型。';
 
   @override
-  String get emailContactsImportNoContacts => 'No contacts found in that file.';
+  String get emailContactsImportNoContacts => '该文件中未找到联系人。';
 
   @override
-  String get emailContactsImportTooManyContacts =>
-      'This file contains too many contacts to import.';
+  String get emailContactsImportTooManyContacts => '该文件包含的联系人过多，无法导入。';
 
   @override
-  String get emailContactsImportFailed => 'Import failed.';
+  String get emailContactsImportFailed => '导入失败。';
 
   @override
   String emailContactsImportSuccess(
@@ -3790,26 +3771,25 @@ class AppLocalizationsZh extends AppLocalizations {
     Object invalid,
     Object failed,
   ) {
-    return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
+    return '已导入 $imported 个联系人。重复 $duplicates 个，无效 $invalid 个，失败 $failed 个。';
   }
 
   @override
-  String get fanOutErrorNoRecipients => 'Select at least one recipient.';
+  String get fanOutErrorNoRecipients => '请至少选择一个收件人。';
 
   @override
-  String get fanOutErrorResolveFailed => 'Couldn\'t resolve recipients.';
+  String get fanOutErrorResolveFailed => '无法解析收件人。';
 
   @override
   String fanOutErrorTooManyRecipients(int max) {
-    return 'Too many recipients (max $max).';
+    return '收件人过多（最多 $max）。';
   }
 
   @override
-  String get fanOutErrorEmptyMessage =>
-      'Add a message or attachment before sending.';
+  String get fanOutErrorEmptyMessage => '发送前请添加消息或附件。';
 
   @override
-  String get fanOutErrorInvalidShareToken => 'Share token is invalid.';
+  String get fanOutErrorInvalidShareToken => '分享令牌无效。';
 
   @override
   String get emailForwardingGuideTitle => '连接现有邮箱';
@@ -3874,26 +3854,26 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationOpenAction => '打开通知';
 
   @override
-  String get notificationAttachmentLabel => 'Attachment';
+  String get notificationAttachmentLabel => '附件';
 
   @override
   String notificationAttachmentLabelWithName(String filename) {
-    return 'Attachment: $filename';
+    return '附件：$filename';
   }
 
   @override
-  String get notificationReactionFallback => 'New reaction';
+  String get notificationReactionFallback => '新反应';
 
   @override
   String notificationReactionLabel(String reaction) {
-    return 'Reaction: $reaction';
+    return '反应：$reaction';
   }
 
   @override
-  String get notificationWebxdcFallback => 'New update';
+  String get notificationWebxdcFallback => '新更新';
 
   @override
-  String get shareTokenFooterLabel => 'Please do not remove:';
+  String get shareTokenFooterLabel => '请勿删除：';
 
   @override
   String get notificationBackgroundConnectionDisabledTitle => '后台连接已禁用';
@@ -4525,12 +4505,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String commonDurationMinutesShort(int count) {
-    return '${count}m';
+    return '$count分';
   }
 
   @override
   String commonDurationHoursShort(int count) {
-    return '${count}h';
+    return '$count小时';
   }
 
   @override
@@ -4753,7 +4733,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String commonWeekdayDayLabel(String weekday, int day) {
-    return '$weekday $day';
+    return '$weekday $day日';
   }
 
   @override
@@ -5382,13 +5362,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatMessageDetailsHeadersUnavailableLabel => '头信息不可用。';
 
   @override
-  String get chatMessageDetailsStanzaIdLabel => 'Stanza ID';
+  String get chatMessageDetailsStanzaIdLabel => '消息节 ID';
 
   @override
-  String get chatMessageDetailsOriginIdLabel => 'Origin ID';
+  String get chatMessageDetailsOriginIdLabel => '来源 ID';
 
   @override
-  String get chatMessageDetailsOccupantIdLabel => 'Occupant ID';
+  String get chatMessageDetailsOccupantIdLabel => '成员 ID';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'Delta 消息 ID';
@@ -5606,225 +5586,204 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatEmailResendFailedDetails => '无法重新发送邮件。';
 
   @override
-  String get authEnableXmppOrSmtp => 'Enable XMPP or SMTP to continue.';
+  String get authEnableXmppOrSmtp => '请启用 XMPP 或 SMTP 后继续。';
 
   @override
-  String get authUsernamePasswordMismatch =>
-      'Username and password have different nullness.';
+  String get authUsernamePasswordMismatch => '用户名和密码的空值状态不一致。';
 
   @override
-  String get authStoredCredentialsOutdated =>
-      'Stored credentials are outdated. Please log in manually.';
+  String get authStoredCredentialsOutdated => '已保存的凭据已过期。请手动登录。';
 
   @override
   String get authMissingDatabaseSecrets =>
-      'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
+      '此账号缺少本地数据库密钥。Axichat 无法打开你现有的聊天。请恢复原安装或重置本地数据后继续。';
 
   @override
-  String get authInvalidCredentials => 'Incorrect username or password';
+  String get authInvalidCredentials => '用户名或密码错误';
 
   @override
-  String get authGenericError => 'Error. Please try again later.';
+  String get authGenericError => '发生错误。请稍后重试。';
 
   @override
-  String get authStorageLocked =>
-      'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
+  String get authStorageLocked => '存储被另一个 Axichat 实例锁定。请关闭其他窗口或进程后重试。';
 
   @override
-  String get authEmailServerUnreachable =>
-      'Unable to reach the email server. Please try again.';
+  String get authEmailServerUnreachable => '无法连接到邮件服务器。请重试。';
 
   @override
-  String get authEmailSetupFailed => 'Email setup failed. Please try again.';
+  String get authEmailSetupFailed => '邮件设置失败。请重试。';
 
   @override
-  String get authEmailPasswordMissing =>
-      'Stored email password missing. Please log in manually.';
+  String get authEmailPasswordMissing => '缺少已保存的邮件密码。请手动登录。';
 
   @override
-  String get authEmailAuthFailed =>
-      'Email authentication failed. Please log in again.';
+  String get authEmailAuthFailed => '邮件身份验证失败。请重新登录。';
 
   @override
-  String get signupCleanupInProgress =>
-      'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online; try again once it finishes.';
+  String get signupCleanupInProgress => '正在清理你之前的注册尝试。恢复联网后我们会重试删除；完成后请再试一次。';
 
   @override
-  String get signupFailedTryAgain => 'Failed to register, try again later.';
+  String get signupFailedTryAgain => '注册失败，请稍后重试。';
 
   @override
-  String get authPasswordMismatch => 'New passwords do not match.';
+  String get authPasswordMismatch => '两次输入的新密码不一致。';
 
   @override
-  String get authPasswordChangeDisabled =>
-      'Password changes are disabled for this account.';
+  String get authPasswordChangeDisabled => '此账号已禁用密码修改。';
 
   @override
-  String get authPasswordChangeRejected =>
-      'Current password is incorrect, or the new password does not meet server requirements.';
+  String get authPasswordChangeRejected => '当前密码不正确，或新密码不符合服务器要求。';
 
   @override
-  String get authPasswordChangeFailed =>
-      'Unable to change password. Please try again later.';
+  String get authPasswordChangeFailed => '无法修改密码。请稍后重试。';
 
   @override
-  String get authPasswordChangeSuccess => 'Password changed successfully.';
+  String get authPasswordChangeSuccess => '密码修改成功。';
 
   @override
-  String get authPasswordIncorrect => 'Incorrect password. Please try again.';
+  String get authPasswordIncorrect => '密码错误。请重试。';
 
   @override
-  String get authAccountNotFound => 'Account not found.';
+  String get authAccountNotFound => '未找到账号。';
 
   @override
-  String get authAccountDeletionDisabled =>
-      'Account deletion is disabled for this account.';
+  String get authAccountDeletionDisabled => '此账号已禁用账号删除。';
 
   @override
-  String get authAccountDeletionFailed =>
-      'Unable to delete account. Please try again later.';
+  String get authAccountDeletionFailed => '无法删除账号。请稍后重试。';
 
   @override
-  String get authDemoModeFailed =>
-      'Failed to start demo mode. Please try again.';
+  String get authDemoModeFailed => '启动演示模式失败。请重试。';
 
   @override
   String authLoginBackoff(Object seconds) {
-    return 'Too many attempts. Wait $seconds seconds before trying again.';
+    return '尝试次数过多。请等待 $seconds 秒后重试。';
   }
 
   @override
-  String get signupAvatarCropTitle => 'Crop & focus';
+  String get signupAvatarCropTitle => '裁剪与聚焦';
 
   @override
-  String get signupAvatarCropHint =>
-      'Only the area inside the circle will appear in the final avatar.';
+  String get signupAvatarCropHint => '最终头像只会显示圆圈内的区域。';
 
   @override
-  String get xmppOperationPubSubBookmarksStart => 'Syncing bookmarks...';
+  String get xmppOperationPubSubBookmarksStart => '正在同步书签...';
 
   @override
-  String get xmppOperationPubSubBookmarksSuccess => 'Bookmarks synced';
+  String get xmppOperationPubSubBookmarksSuccess => '书签已同步';
 
   @override
-  String get xmppOperationPubSubBookmarksFailure => 'Bookmarks sync failed';
+  String get xmppOperationPubSubBookmarksFailure => '书签同步失败';
 
   @override
-  String get xmppOperationPubSubConversationsStart => 'Syncing chats list...';
+  String get xmppOperationPubSubConversationsStart => '正在同步聊天列表...';
 
   @override
-  String get xmppOperationPubSubConversationsSuccess => 'Chats list synced';
+  String get xmppOperationPubSubConversationsSuccess => '聊天列表已同步';
 
   @override
-  String get xmppOperationPubSubConversationsFailure =>
-      'Chats list sync failed';
+  String get xmppOperationPubSubConversationsFailure => '聊天列表同步失败';
 
   @override
-  String get xmppOperationPubSubDraftsStart => 'Syncing drafts...';
+  String get xmppOperationPubSubDraftsStart => '正在同步草稿...';
 
   @override
-  String get xmppOperationPubSubDraftsSuccess => 'Drafts synced';
+  String get xmppOperationPubSubDraftsSuccess => '草稿已同步';
 
   @override
-  String get xmppOperationPubSubDraftsFailure => 'Drafts sync failed';
+  String get xmppOperationPubSubDraftsFailure => '草稿同步失败';
 
   @override
-  String get xmppOperationPubSubSpamStart => 'Syncing spam list...';
+  String get xmppOperationPubSubSpamStart => '正在同步垃圾信息列表...';
 
   @override
-  String get xmppOperationPubSubSpamSuccess => 'Spam list synced';
+  String get xmppOperationPubSubSpamSuccess => '垃圾信息列表已同步';
 
   @override
-  String get xmppOperationPubSubSpamFailure => 'Spam list sync failed';
+  String get xmppOperationPubSubSpamFailure => '垃圾信息列表同步失败';
 
   @override
-  String get xmppOperationPubSubEmailBlocklistStart =>
-      'Syncing email blocklist...';
+  String get xmppOperationPubSubEmailBlocklistStart => '正在同步邮箱屏蔽列表...';
 
   @override
-  String get xmppOperationPubSubEmailBlocklistSuccess =>
-      'Email blocklist synced';
+  String get xmppOperationPubSubEmailBlocklistSuccess => '邮箱屏蔽列表已同步';
 
   @override
-  String get xmppOperationPubSubEmailBlocklistFailure =>
-      'Email blocklist sync failed';
+  String get xmppOperationPubSubEmailBlocklistFailure => '邮箱屏蔽列表同步失败';
 
   @override
-  String get xmppOperationPubSubAvatarMetadataStart =>
-      'Syncing avatar details...';
+  String get xmppOperationPubSubAvatarMetadataStart => '正在同步头像详情...';
 
   @override
-  String get xmppOperationPubSubAvatarMetadataSuccess =>
-      'Avatar details synced';
+  String get xmppOperationPubSubAvatarMetadataSuccess => '头像详情已同步';
 
   @override
-  String get xmppOperationPubSubAvatarMetadataFailure =>
-      'Avatar details sync failed';
+  String get xmppOperationPubSubAvatarMetadataFailure => '头像详情同步失败';
 
   @override
-  String get xmppOperationPubSubFetchStart => 'Syncing account updates...';
+  String get xmppOperationPubSubFetchStart => '正在同步账户更新...';
 
   @override
-  String get xmppOperationPubSubFetchSuccess => 'Account updates synced';
+  String get xmppOperationPubSubFetchSuccess => '账户更新已同步';
 
   @override
-  String get xmppOperationPubSubFetchFailure => 'Account updates sync failed';
+  String get xmppOperationPubSubFetchFailure => '账户更新同步失败';
 
   @override
-  String get xmppOperationMamLoginStart => 'Syncing messages...';
+  String get xmppOperationMamLoginStart => '正在同步消息...';
 
   @override
-  String get xmppOperationMamLoginSuccess => 'Messages synced';
+  String get xmppOperationMamLoginSuccess => '消息已同步';
 
   @override
-  String get xmppOperationMamLoginFailure => 'Message sync failed';
+  String get xmppOperationMamLoginFailure => '消息同步失败';
 
   @override
-  String get xmppOperationMamGlobalStart => 'Syncing full history...';
+  String get xmppOperationMamGlobalStart => '正在同步完整历史记录...';
 
   @override
-  String get xmppOperationMamGlobalSuccess => 'History synced';
+  String get xmppOperationMamGlobalSuccess => '历史记录已同步';
 
   @override
-  String get xmppOperationMamGlobalFailure => 'History sync failed';
+  String get xmppOperationMamGlobalFailure => '历史记录同步失败';
 
   @override
-  String get xmppOperationMamMucStart => 'Syncing room history...';
+  String get xmppOperationMamMucStart => '正在同步群组历史记录...';
 
   @override
-  String get xmppOperationMamMucSuccess => 'Room history synced';
+  String get xmppOperationMamMucSuccess => '群组历史记录已同步';
 
   @override
-  String get xmppOperationMamMucFailure => 'Room history sync failed';
+  String get xmppOperationMamMucFailure => '群组历史记录同步失败';
 
   @override
-  String get xmppOperationMamFetchStart => 'Fetching archived messages...';
+  String get xmppOperationMamFetchStart => '正在获取归档消息...';
 
   @override
-  String get xmppOperationMamFetchSuccess => 'Archive fetched';
+  String get xmppOperationMamFetchSuccess => '归档已获取';
 
   @override
-  String get xmppOperationMamFetchFailure => 'Archive fetch failed';
+  String get xmppOperationMamFetchFailure => '归档获取失败';
 
   @override
-  String get xmppOperationMucJoinStart => 'Joining room...';
+  String get xmppOperationMucJoinStart => '正在加入群组...';
 
   @override
-  String get xmppOperationMucJoinSuccess => 'Room joined';
+  String get xmppOperationMucJoinSuccess => '已加入群组';
 
   @override
-  String get xmppOperationMucJoinFailure => 'Room join failed';
+  String get xmppOperationMucJoinFailure => '加入群组失败';
 
   @override
-  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+  String get chatSettingsCapabilitiesTitle => '功能';
 
   @override
   String chatSettingsCapabilitiesUpdated(Object timestamp) {
-    return 'Last checked: $timestamp';
+    return '上次检查：$timestamp';
   }
 
   @override
-  String get chatSettingsCapabilitiesEmpty => 'No features reported';
+  String get chatSettingsCapabilitiesEmpty => '未报告任何功能';
 }
 
 /// The translations for Chinese, as used in Hong Kong (`zh_HK`).
@@ -6067,10 +6026,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get attachmentGalleryMetaSeparator => ' - ';
 
   @override
-  String get attachmentGalleryLayoutGridLabel => 'Grid view';
+  String get attachmentGalleryLayoutGridLabel => '網格檢視';
 
   @override
-  String get attachmentGalleryLayoutListLabel => 'List view';
+  String get attachmentGalleryLayoutListLabel => '清單檢視';
 
   @override
   String get attachmentGallerySortNameAscLabel => '名稱 A-Z';
@@ -6126,68 +6085,63 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatDraftSaveFailed => '無法儲存草稿，請再試一次。';
 
   @override
-  String get chatInvitePermissionDenied =>
-      'You do not have permission to invite users to this room.';
+  String get chatInvitePermissionDenied => '你沒有權限邀請用戶加入此聊天室。';
 
   @override
-  String get chatInviteDomainRestricted =>
-      'Invites are limited to the default domain.';
+  String get chatInviteDomainRestricted => '邀請僅限預設網域。';
 
   @override
-  String get chatInviteAlreadyMember => 'User is already a member.';
+  String get chatInviteAlreadyMember => '該用戶已是成員。';
 
   @override
-  String get chatInviteSent => 'Invite sent.';
+  String get chatInviteSent => '邀請已發送。';
 
   @override
-  String get chatInviteSendFailed => 'Failed to send invite.';
+  String get chatInviteSendFailed => '發送邀請失敗。';
 
   @override
   String get chatInviteRevoked => '邀請已撤銷';
 
   @override
-  String get chatInviteRevokeFailed => 'Failed to revoke invite.';
+  String get chatInviteRevokeFailed => '撤銷邀請失敗。';
 
   @override
-  String get chatInviteJoinSuccess => 'Joined room.';
+  String get chatInviteJoinSuccess => '已加入聊天室。';
 
   @override
-  String get chatInviteJoinFailed => 'Could not join room.';
+  String get chatInviteJoinFailed => '無法加入聊天室。';
 
   @override
-  String get chatNicknameUpdated => 'Nickname updated.';
+  String get chatNicknameUpdated => '暱稱已更新。';
 
   @override
-  String get chatNicknameUpdateFailed => 'Could not change nickname.';
+  String get chatNicknameUpdateFailed => '無法變更暱稱。';
 
   @override
-  String get chatRoomAvatarPermissionDenied =>
-      'You do not have permission to update the room avatar.';
+  String get chatRoomAvatarPermissionDenied => '你沒有權限更新聊天室頭像。';
 
   @override
-  String get chatRoomAvatarUpdated => 'Room avatar updated.';
+  String get chatRoomAvatarUpdated => '聊天室頭像已更新。';
 
   @override
-  String get chatRoomAvatarUpdateFailed => 'Could not update room avatar.';
+  String get chatRoomAvatarUpdateFailed => '無法更新聊天室頭像。';
 
   @override
-  String get chatPinPermissionDenied =>
-      'You do not have permission to pin messages in this room.';
+  String get chatPinPermissionDenied => '你沒有權限在此聊天室釘選訊息。';
 
   @override
-  String get chatMessageForwarded => 'Message forwarded.';
+  String get chatMessageForwarded => '訊息已轉發。';
 
   @override
-  String get chatMessageForwardFailed => 'Unable to forward message.';
+  String get chatMessageForwardFailed => '無法轉發訊息。';
 
   @override
   String chatModerationRequested(Object action, Object nickname) {
-    return 'Requested $action for $nickname.';
+    return '已為 $nickname 請求執行 $action。';
   }
 
   @override
-  String get chatModerationFailed =>
-      'Could not complete that action. Check permissions or connectivity.';
+  String get chatModerationFailed => '無法完成此操作。請檢查權限或連線。';
 
   @override
   String get chatAttachmentInaccessible => '所選檔案無法存取。';
@@ -6235,11 +6189,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatComposerEmailHint => '傳送電郵訊息';
 
   @override
-  String get chatTransportChoiceTitle => 'Choose how to send';
+  String get chatTransportChoiceTitle => '選擇傳送方式';
 
   @override
   String chatTransportChoiceMessage(Object address) {
-    return 'This address could be chat or email. How should Axichat send to $address?';
+    return '這個地址可能是聊天地址或電郵地址。Axichat 應該如何傳送到 $address？';
   }
 
   @override
@@ -6571,17 +6525,16 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatForwardDialogTitle => '轉寄到...';
 
   @override
-  String get chatForwardEmailWarningTitle => 'Forward email?';
+  String get chatForwardEmailWarningTitle => '轉發電郵？';
 
   @override
-  String get chatForwardEmailWarningMessage =>
-      'Forwarding email can include original headers and external image links. Choose how to send.';
+  String get chatForwardEmailWarningMessage => '轉發電郵可能包含原始標頭與外部圖片連結。請選擇傳送方式。';
 
   @override
-  String get chatForwardEmailOptionSafe => 'Forward as new message';
+  String get chatForwardEmailOptionSafe => '以新訊息轉發';
 
   @override
-  String get chatForwardEmailOptionOriginal => 'Forward original';
+  String get chatForwardEmailOptionOriginal => '轉發原文';
 
   @override
   String get chatComposerAttachmentWarning => '大型附件會分別傳送給每位收件者，可能需要更長時間。';
@@ -6624,22 +6577,22 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatAttachmentTooltip => '附件';
 
   @override
-  String get chatPinnedMessagesTooltip => 'Pinned messages';
+  String get chatPinnedMessagesTooltip => '置頂訊息';
 
   @override
-  String get chatPinnedMessagesTitle => 'Pinned messages';
+  String get chatPinnedMessagesTitle => '置頂訊息';
 
   @override
-  String get chatPinMessage => 'Pin message';
+  String get chatPinMessage => '置頂訊息';
 
   @override
-  String get chatUnpinMessage => 'Unpin message';
+  String get chatUnpinMessage => '取消置頂';
 
   @override
-  String get chatPinnedEmptyState => 'No pinned messages yet.';
+  String get chatPinnedEmptyState => '暫無置頂訊息。';
 
   @override
-  String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
+  String get chatPinnedMissingMessage => '置頂訊息不可用。';
 
   @override
   String get chatSendMessageTooltip => '傳送訊息';
@@ -6654,10 +6607,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatQuotedNoContent => '（無內容）';
 
   @override
-  String get chatReplyingTo => 'RE:';
+  String get chatReplyingTo => '回覆：';
 
   @override
-  String get chatForwardPrefix => 'FWD:';
+  String get chatForwardPrefix => '轉發：';
 
   @override
   String get chatCancelReply => '取消回覆';
@@ -6715,21 +6668,21 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get recipientsAddHint => '新增...';
 
   @override
-  String get chatGuestScriptWelcome => '歡迎使用 Axichat——在同一個地方處理聊天、電子郵件與行事曆。';
+  String get chatGuestScriptWelcome => '歡迎使用 Axichat：在同一個地方處理聊天、電子郵件與行事曆。';
 
   @override
   String get chatGuestScriptExternalQuestion => '看起來很清爽。可以傳訊給沒有用 Axichat 的人嗎？';
 
   @override
   String get chatGuestScriptExternalAnswer =>
-      '可以——把聊天格式的郵件發送到 Gmail、Outlook、Tuta 等。如果雙方都用 Axichat，還有群組聊天、表情回應、送達回條等功能。';
+      '可以：把聊天格式的郵件發送到 Gmail、Outlook、Tuta 等。如果雙方都用 Axichat，還有群組聊天、表情回應、送達回條等功能。';
 
   @override
   String get chatGuestScriptOfflineQuestion => '離線或訪客模式可以用嗎？';
 
   @override
   String get chatGuestScriptOfflineAnswer =>
-      '可以——內建離線功能，行事曆在訪客模式下即使沒有帳號或網路也能使用。';
+      '可以：內建離線功能，行事曆在訪客模式下即使沒有帳號或網路也能使用。';
 
   @override
   String get chatGuestScriptKeepUpQuestion => '它如何幫助我掌握所有事情？';
@@ -6737,6 +6690,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   @override
   String get chatGuestScriptKeepUpAnswer =>
       '我們的行事曆支援自然語言排程、艾森豪矩陣、拖放與提醒，讓你專注重要事項。';
+
+  @override
+  String get chatGuestScriptBubbleTip => '點按訊息氣泡可開啟轉發、回覆與表情回應等選項。';
 
   @override
   String calendarParserUnavailable(Object errorType) {
@@ -7533,13 +7489,13 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get profileTitle => '個人資料';
 
   @override
-  String get profileJumpToTop => 'Back to top';
+  String get profileJumpToTop => '返回頂部';
 
   @override
-  String get settingsWebsiteLabel => 'Website';
+  String get settingsWebsiteLabel => '網站';
 
   @override
-  String get settingsDonateLabel => 'Donate';
+  String get settingsDonateLabel => '捐贈';
 
   @override
   String get settingsMastodonLabel => 'Mastodon';
@@ -7568,7 +7524,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get profileEditAvatar => '編輯頭像';
 
   @override
-  String get profileLinkedEmailAccounts => 'Email accounts';
+  String get profileLinkedEmailAccounts => '電郵帳戶';
 
   @override
   String get profileChangePassword => '更改密碼';
@@ -7696,10 +7652,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsButtonLabel => '設定';
 
   @override
-  String get settingsSectionAccount => 'Account';
+  String get settingsSectionAccount => '帳號';
 
   @override
-  String get settingsSectionData => 'Data';
+  String get settingsSectionData => '資料';
 
   @override
   String get settingsSectionImportant => '重要';
@@ -7741,26 +7697,26 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsLowMotionDescription => '停用大部分動畫，更適合較慢的裝置。';
 
   @override
-  String get settingsSectionChats => 'Chat preferences';
+  String get settingsSectionChats => '聊天偏好';
 
   @override
-  String get settingsSectionEmail => 'Email preferences';
+  String get settingsSectionEmail => '電郵偏好';
 
   @override
-  String get settingsSectionAbout => 'About';
+  String get settingsSectionAbout => '關於';
 
   @override
-  String get settingsAboutAxichat => 'About Axichat';
+  String get settingsAboutAxichat => '關於 Axichat';
 
   @override
   String get settingsAboutLegalese =>
       'Copyright (C) 2025 Axichat LLC\n\nThis program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.\n\nThis program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.\n\nYou should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.';
 
   @override
-  String get settingsTermsLabel => 'Terms';
+  String get settingsTermsLabel => '條款';
 
   @override
-  String get settingsPrivacyLabel => 'Privacy';
+  String get settingsPrivacyLabel => '私隱';
 
   @override
   String get settingsLicenseAgpl => 'AGPLv3';
@@ -7878,14 +7834,13 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get authUnregisterTitle => '註銷';
 
   @override
-  String get authUnregisterConfirmTitle => 'Delete account?';
+  String get authUnregisterConfirmTitle => '刪除帳號？';
 
   @override
-  String get authUnregisterConfirmMessage =>
-      'This will permanently delete your account and local data. This cannot be undone.';
+  String get authUnregisterConfirmMessage => '這將永久刪除你的帳號和本機資料。此操作無法復原。';
 
   @override
-  String get authUnregisterConfirmAction => 'Delete account';
+  String get authUnregisterConfirmAction => '刪除帳號';
 
   @override
   String get authUnregisterProgressLabel => '正在等待刪除帳戶';
@@ -8016,28 +7971,28 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   }
 
   @override
-  String get chatAttachmentTypeMismatchTitle => 'Attachment type mismatch';
+  String get chatAttachmentTypeMismatchTitle => '附件類型不相符';
 
   @override
   String chatAttachmentTypeMismatchMessage(Object declared, Object detected) {
-    return 'This attachment says it is $declared, but the file looks like $detected. Opening it could be unsafe. Continue?';
+    return '此附件顯示為 $declared，但檔案看起來像 $detected。開啟可能不安全。要繼續嗎？';
   }
 
   @override
-  String get chatAttachmentTypeMismatchConfirm => 'Open anyway';
+  String get chatAttachmentTypeMismatchConfirm => '仍要開啟';
 
   @override
-  String get chatAttachmentHighRiskTitle => 'Potentially unsafe file';
+  String get chatAttachmentHighRiskTitle => '可能不安全的檔案';
 
   @override
   String get chatAttachmentHighRiskMessage =>
-      'This file type can be dangerous to open. We recommend saving it and scanning it before opening. Continue?';
+      '此檔案類型在開啟時可能有風險。建議先儲存並掃描後再開啟。要繼續嗎？';
 
   @override
   String get chatAttachmentUnknownSize => '大小未知';
 
   @override
-  String get chatAttachmentNotDownloadedYet => 'Not downloaded yet';
+  String get chatAttachmentNotDownloadedYet => '尚未下載';
 
   @override
   String chatAttachmentErrorTooltip(Object message, Object fileName) {
@@ -9038,128 +8993,126 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatMessageStatusSent => '已傳送';
 
   @override
-  String get commonActions => 'Actions';
+  String get commonActions => '操作';
 
   @override
-  String get commonNext => 'Next';
+  String get commonNext => '下一步';
 
   @override
-  String get commonPrevious => 'Previous';
+  String get commonPrevious => '上一步';
 
   @override
   String emailDemoAccountLabel(Object account) {
-    return 'Account: $account';
+    return '帳號：$account';
   }
 
   @override
-  String get emailDemoDefaultMessage => 'Hello from Axichat';
+  String get emailDemoDefaultMessage => '來自 Axichat 的問候';
 
   @override
-  String get emailDemoDisplayNameSelf => 'Self';
+  String get emailDemoDisplayNameSelf => '自己';
 
   @override
-  String get emailDemoErrorMissingPassphrase => 'Missing database passphrase.';
+  String get emailDemoErrorMissingPassphrase => '缺少資料庫密碼短語。';
 
   @override
-  String get emailDemoErrorMissingPrefix => 'Missing database prefix.';
+  String get emailDemoErrorMissingPrefix => '缺少資料庫前綴。';
 
   @override
-  String get emailDemoErrorMissingProfile =>
-      'No primary profile found. Log in first.';
+  String get emailDemoErrorMissingProfile => '找不到主要個人檔案。請先登入。';
 
   @override
-  String get emailDemoMessageLabel => 'Demo message';
+  String get emailDemoMessageLabel => '示範訊息';
 
   @override
-  String get emailDemoProvisionButton => 'Provision Email';
+  String get emailDemoProvisionButton => '設定電郵';
 
   @override
-  String get emailDemoSendButton => 'Send Demo Message';
+  String get emailDemoSendButton => '傳送示範訊息';
 
   @override
-  String get emailDemoStatusIdle => 'Idle';
+  String get emailDemoStatusIdle => '閒置';
 
   @override
   String emailDemoStatusLabel(Object status) {
-    return 'Status: $status';
+    return '狀態：$status';
   }
 
   @override
-  String get emailDemoStatusLoginToProvision => 'Log in to provision email.';
+  String get emailDemoStatusLoginToProvision => '請先登入以設定電郵。';
 
   @override
-  String get emailDemoStatusNotProvisioned => 'Not provisioned';
+  String get emailDemoStatusNotProvisioned => '未設定';
 
   @override
   String emailDemoStatusProvisionFailed(Object error) {
-    return 'Provisioning failed: $error';
+    return '設定失敗：$error';
   }
 
   @override
-  String get emailDemoStatusProvisionFirst => 'Provision an account first.';
+  String get emailDemoStatusProvisionFirst => '請先設定一個帳號。';
 
   @override
   String emailDemoStatusProvisioned(Object address) {
-    return 'Provisioned $address';
+    return '已設定 $address';
   }
 
   @override
-  String get emailDemoStatusProvisioning => 'Provisioning email account…';
+  String get emailDemoStatusProvisioning => '正在設定電郵帳號…';
 
   @override
-  String get emailDemoStatusReady => 'Ready';
+  String get emailDemoStatusReady => '就緒';
 
   @override
   String emailDemoStatusSendFailed(Object error) {
-    return 'Send failed: $error';
+    return '傳送失敗：$error';
   }
 
   @override
-  String get emailDemoStatusSending => 'Sending demo message…';
+  String get emailDemoStatusSending => '正在傳送示範訊息…';
 
   @override
   String emailDemoStatusSent(Object id) {
-    return 'Sent demo message (id=$id)';
+    return '示範訊息已傳送（id=$id）';
   }
 
   @override
-  String get emailDemoTitle => 'Email Transport Demo';
+  String get emailDemoTitle => '電郵傳輸示範';
 
   @override
-  String get verificationAddLabelPlaceholder => 'Add label';
+  String get verificationAddLabelPlaceholder => '新增標籤';
 
   @override
-  String get verificationCurrentDevice => 'Current device';
+  String get verificationCurrentDevice => '目前裝置';
 
   @override
   String verificationDeviceIdLabel(Object id) {
-    return 'ID: $id';
+    return 'ID：$id';
   }
 
   @override
-  String get verificationNotTrusted => 'Not trusted';
+  String get verificationNotTrusted => '不受信任';
 
   @override
-  String get verificationRegenerateDevice => 'Regenerate device';
+  String get verificationRegenerateDevice => '重新產生裝置';
 
   @override
-  String get verificationRegenerateWarning =>
-      'Only do this if you are an expert.';
+  String get verificationRegenerateWarning => '只在你是進階使用者時才這樣做。';
 
   @override
-  String get verificationTrustBlind => 'Blind trust';
+  String get verificationTrustBlind => '盲目信任';
 
   @override
-  String get verificationTrustNone => 'No trust';
+  String get verificationTrustNone => '不信任';
 
   @override
-  String get verificationTrustVerified => 'Verified';
+  String get verificationTrustVerified => '已驗證';
 
   @override
-  String get verificationTrusted => 'Trusted';
+  String get verificationTrusted => '受信任';
 
   @override
-  String get avatarSavedMessage => 'Avatar saved.';
+  String get avatarSavedMessage => '頭像已儲存。';
 
   @override
   String get avatarOpenError => '無法開啟該檔案。';
@@ -9195,186 +9148,183 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get avatarPublishUnexpectedError => '上傳頭像時發生意外錯誤。';
 
   @override
-  String get avatarCropTitle => 'Crop & focus';
+  String get avatarCropTitle => '裁剪與聚焦';
 
   @override
   String get avatarCropDescription =>
-      'Drag or resize the square to set your crop. Reset to center and follow the circle to match the saved avatar.';
+      '拖曳或調整方框大小以設定裁剪範圍。重設到中央並依照圓形，讓它與已儲存的頭像一致。';
 
   @override
-  String get avatarCropPlaceholder =>
-      'Add a photo or pick a default avatar to adjust the framing.';
+  String get avatarCropPlaceholder => '加入相片或選擇預設頭像以調整構圖。';
 
   @override
   String avatarCropSizeLabel(Object pixels) {
-    return '$pixels px crop';
+    return '$pixels 像素裁剪';
   }
 
   @override
-  String get avatarCropSavedSize => 'Saved at 256×256 • < 64 KB';
+  String get avatarCropSavedSize => '已儲存為 256×256 • < 64 KB';
 
   @override
-  String get avatarBackgroundTitle => 'Background color';
+  String get avatarBackgroundTitle => '背景顏色';
 
   @override
-  String get avatarBackgroundDescription =>
-      'Use the wheel or presets to tint transparent avatars before saving.';
+  String get avatarBackgroundDescription => '儲存前可使用色輪或預設為透明頭像著色。';
 
   @override
-  String get avatarBackgroundWheelTitle => 'Wheel & hex';
+  String get avatarBackgroundWheelTitle => '色輪與十六進位';
 
   @override
-  String get avatarBackgroundWheelDescription =>
-      'Drag the wheel or enter a hex value.';
+  String get avatarBackgroundWheelDescription => '拖曳色輪或輸入十六進位值。';
 
   @override
-  String get avatarBackgroundTransparent => 'Transparent';
+  String get avatarBackgroundTransparent => '透明';
 
   @override
-  String get avatarBackgroundPreview => 'Preview saved circle tint.';
+  String get avatarBackgroundPreview => '預覽已儲存的圓形著色效果。';
 
   @override
-  String get avatarDefaultsTitle => 'Default avatars';
+  String get avatarDefaultsTitle => '預設頭像';
 
   @override
-  String get avatarCategoryAbstract => 'Abstract';
+  String get avatarCategoryAbstract => '抽象';
 
   @override
   String get avatarCategoryStem => 'STEM';
 
   @override
-  String get avatarCategorySports => 'Sports';
+  String get avatarCategorySports => '體育';
 
   @override
-  String get avatarCategoryMusic => 'Music';
+  String get avatarCategoryMusic => '音樂';
 
   @override
-  String get avatarCategoryMisc => 'Hobbies & Games';
+  String get avatarCategoryMisc => '興趣與遊戲';
 
   @override
   String avatarTemplateAbstract(Object index) {
-    return 'Abstract $index';
+    return '抽象 $index';
   }
 
   @override
-  String get avatarTemplateAtom => 'Atom';
+  String get avatarTemplateAtom => '原子';
 
   @override
-  String get avatarTemplateBeaker => 'Beaker';
+  String get avatarTemplateBeaker => '燒杯';
 
   @override
-  String get avatarTemplateCompass => 'Compass';
+  String get avatarTemplateCompass => '指南針';
 
   @override
   String get avatarTemplateCpu => 'CPU';
 
   @override
-  String get avatarTemplateGear => 'Gear';
+  String get avatarTemplateGear => '齒輪';
 
   @override
-  String get avatarTemplateGlobe => 'Globe';
+  String get avatarTemplateGlobe => '地球';
 
   @override
-  String get avatarTemplateLaptop => 'Laptop';
+  String get avatarTemplateLaptop => '手提電腦';
 
   @override
-  String get avatarTemplateMicroscope => 'Microscope';
+  String get avatarTemplateMicroscope => '顯微鏡';
 
   @override
-  String get avatarTemplateRobot => 'Robot';
+  String get avatarTemplateRobot => '機械人';
 
   @override
-  String get avatarTemplateStethoscope => 'Stethoscope';
+  String get avatarTemplateStethoscope => '聽診器';
 
   @override
-  String get avatarTemplateTelescope => 'Telescope';
+  String get avatarTemplateTelescope => '望遠鏡';
 
   @override
-  String get avatarTemplateArchery => 'Archery';
+  String get avatarTemplateArchery => '射箭';
 
   @override
-  String get avatarTemplateBaseball => 'Baseball';
+  String get avatarTemplateBaseball => '棒球';
 
   @override
-  String get avatarTemplateBasketball => 'Basketball';
+  String get avatarTemplateBasketball => '籃球';
 
   @override
-  String get avatarTemplateBoxing => 'Boxing';
+  String get avatarTemplateBoxing => '拳擊';
 
   @override
-  String get avatarTemplateCycling => 'Cycling';
+  String get avatarTemplateCycling => '單車';
 
   @override
-  String get avatarTemplateDarts => 'Darts';
+  String get avatarTemplateDarts => '飛鏢';
 
   @override
-  String get avatarTemplateFootball => 'Football';
+  String get avatarTemplateFootball => '美式足球';
 
   @override
-  String get avatarTemplateGolf => 'Golf';
+  String get avatarTemplateGolf => '高爾夫';
 
   @override
-  String get avatarTemplatePingPong => 'Ping Pong';
+  String get avatarTemplatePingPong => '乒乓球';
 
   @override
-  String get avatarTemplateSkiing => 'Skiing';
+  String get avatarTemplateSkiing => '滑雪';
 
   @override
-  String get avatarTemplateSoccer => 'Soccer';
+  String get avatarTemplateSoccer => '足球';
 
   @override
-  String get avatarTemplateTennis => 'Tennis';
+  String get avatarTemplateTennis => '網球';
 
   @override
-  String get avatarTemplateVolleyball => 'Volleyball';
+  String get avatarTemplateVolleyball => '排球';
 
   @override
-  String get avatarTemplateDrums => 'Drums';
+  String get avatarTemplateDrums => '鼓';
 
   @override
-  String get avatarTemplateElectricGuitar => 'Electric Guitar';
+  String get avatarTemplateElectricGuitar => '電吉他';
 
   @override
-  String get avatarTemplateGuitar => 'Guitar';
+  String get avatarTemplateGuitar => '吉他';
 
   @override
-  String get avatarTemplateMicrophone => 'Microphone';
+  String get avatarTemplateMicrophone => '麥克風';
 
   @override
-  String get avatarTemplatePiano => 'Piano';
+  String get avatarTemplatePiano => '鋼琴';
 
   @override
-  String get avatarTemplateSaxophone => 'Saxophone';
+  String get avatarTemplateSaxophone => '薩克斯風';
 
   @override
-  String get avatarTemplateViolin => 'Violin';
+  String get avatarTemplateViolin => '小提琴';
 
   @override
-  String get avatarTemplateCards => 'Cards';
+  String get avatarTemplateCards => '紙牌';
 
   @override
-  String get avatarTemplateChess => 'Chess';
+  String get avatarTemplateChess => '國際象棋';
 
   @override
-  String get avatarTemplateChessAlt => 'Chess Alt';
+  String get avatarTemplateChessAlt => '國際象棋（替代）';
 
   @override
-  String get avatarTemplateDice => 'Dice';
+  String get avatarTemplateDice => '骰子';
 
   @override
-  String get avatarTemplateDiceAlt => 'Dice Alt';
+  String get avatarTemplateDiceAlt => '骰子（替代）';
 
   @override
-  String get avatarTemplateEsports => 'Esports';
+  String get avatarTemplateEsports => '電競';
 
   @override
-  String get avatarTemplateSword => 'Sword';
+  String get avatarTemplateSword => '劍';
 
   @override
-  String get avatarTemplateVideoGames => 'Video Games';
+  String get avatarTemplateVideoGames => '電子遊戲';
 
   @override
-  String get avatarTemplateVideoGamesAlt => 'Video Games Alt';
+  String get avatarTemplateVideoGamesAlt => '電子遊戲（替代）';
 
   @override
   String get commonDone => '完成';
@@ -9485,65 +9435,59 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get settingsAutoLoadEmailImagesDescription => '可能會向寄件人洩露您的IP地址';
 
   @override
-  String get settingsAutoDownloadImages => 'Auto-download images';
+  String get settingsAutoDownloadImages => '自動下載圖片';
 
   @override
-  String get settingsAutoDownloadImagesDescription =>
-      'Applies when this chat allows automatic downloads.';
+  String get settingsAutoDownloadImagesDescription => '當此聊天允許自動下載時適用。';
 
   @override
-  String get settingsAutoDownloadVideos => 'Auto-download videos';
+  String get settingsAutoDownloadVideos => '自動下載影片';
 
   @override
-  String get settingsAutoDownloadVideosDescription =>
-      'Applies when this chat allows automatic downloads.';
+  String get settingsAutoDownloadVideosDescription => '當此聊天允許自動下載時適用。';
 
   @override
-  String get settingsAutoDownloadDocuments => 'Auto-download documents';
+  String get settingsAutoDownloadDocuments => '自動下載文件';
 
   @override
-  String get settingsAutoDownloadDocumentsDescription =>
-      'Applies when this chat allows automatic downloads.';
+  String get settingsAutoDownloadDocumentsDescription => '當此聊天允許自動下載時適用。';
 
   @override
-  String get settingsAutoDownloadArchives => 'Auto-download archives';
+  String get settingsAutoDownloadArchives => '自動下載壓縮檔';
 
   @override
-  String get settingsAutoDownloadArchivesDescription =>
-      'Applies when this chat allows automatic downloads.';
+  String get settingsAutoDownloadArchivesDescription => '當此聊天允許自動下載時適用。';
 
   @override
-  String get settingsAutoDownloadScopeAlways => 'Always';
+  String get settingsAutoDownloadScopeAlways => '始終';
 
   @override
-  String get settingsAutoDownloadScopeTrustedContacts =>
-      'Only for trusted contacts.';
+  String get settingsAutoDownloadScopeTrustedContacts => '僅限受信任聯絡人。';
 
   @override
-  String get emailContactsImportTitle => 'Import contacts';
+  String get emailContactsImportTitle => '匯入聯絡人';
 
   @override
   String get emailContactsImportSubtitle =>
-      'Gmail, Outlook, Yahoo CSVs, or vCards.';
+      'Gmail、Outlook、Yahoo 的 CSV 或 vCard。';
 
   @override
-  String get emailContactsImportFileAccessError =>
-      'Unable to access the selected file.';
+  String get emailContactsImportFileAccessError => '無法存取所選檔案。';
 
   @override
-  String get emailContactsImportAction => 'Import';
+  String get emailContactsImportAction => '匯入';
 
   @override
-  String get emailContactsImportFormatLabel => 'Format';
+  String get emailContactsImportFormatLabel => '格式';
 
   @override
-  String get emailContactsImportFileLabel => 'File';
+  String get emailContactsImportFileLabel => '檔案';
 
   @override
-  String get emailContactsImportNoFile => 'No file selected';
+  String get emailContactsImportNoFile => '未選擇檔案';
 
   @override
-  String get emailContactsImportChooseFile => 'Choose file';
+  String get emailContactsImportChooseFile => '選擇檔案';
 
   @override
   String get emailContactsImportFormatGmail => 'Gmail CSV';
@@ -9555,40 +9499,37 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get emailContactsImportFormatYahoo => 'Yahoo CSV';
 
   @override
-  String get emailContactsImportFormatGenericCsv => 'Generic CSV';
+  String get emailContactsImportFormatGenericCsv => '通用 CSV';
 
   @override
   String get emailContactsImportFormatVcard => 'vCard (VCF)';
 
   @override
-  String get emailContactsImportNoValidContacts => 'No valid contacts found.';
+  String get emailContactsImportNoValidContacts => '找不到有效聯絡人。';
 
   @override
-  String get emailContactsImportAccountRequired =>
-      'Set up email before importing contacts.';
+  String get emailContactsImportAccountRequired => '請先設定電郵，再匯入聯絡人。';
 
   @override
-  String get emailContactsImportEmptyFile => 'The selected file is empty.';
+  String get emailContactsImportEmptyFile => '所選檔案為空。';
 
   @override
-  String get emailContactsImportReadFailure => 'Couldn\'t read that file.';
+  String get emailContactsImportReadFailure => '無法讀取該檔案。';
 
   @override
-  String get emailContactsImportFileTooLarge =>
-      'This file is too large to import.';
+  String get emailContactsImportFileTooLarge => '此檔案過大，無法匯入。';
 
   @override
-  String get emailContactsImportUnsupportedFile => 'Unsupported file type.';
+  String get emailContactsImportUnsupportedFile => '不支援的檔案類型。';
 
   @override
-  String get emailContactsImportNoContacts => 'No contacts found in that file.';
+  String get emailContactsImportNoContacts => '該檔案中找不到聯絡人。';
 
   @override
-  String get emailContactsImportTooManyContacts =>
-      'This file contains too many contacts to import.';
+  String get emailContactsImportTooManyContacts => '此檔案包含太多聯絡人，無法匯入。';
 
   @override
-  String get emailContactsImportFailed => 'Import failed.';
+  String get emailContactsImportFailed => '匯入失敗。';
 
   @override
   String emailContactsImportSuccess(
@@ -9597,26 +9538,25 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
     Object invalid,
     Object failed,
   ) {
-    return 'Imported $imported contacts. $duplicates duplicates, $invalid invalid, $failed failed.';
+    return '已匯入 $imported 個聯絡人。重複 $duplicates 個、無效 $invalid 個、失敗 $failed 個。';
   }
 
   @override
-  String get fanOutErrorNoRecipients => 'Select at least one recipient.';
+  String get fanOutErrorNoRecipients => '請至少選擇一位收件人。';
 
   @override
-  String get fanOutErrorResolveFailed => 'Couldn\'t resolve recipients.';
+  String get fanOutErrorResolveFailed => '無法解析收件人。';
 
   @override
   String fanOutErrorTooManyRecipients(int max) {
-    return 'Too many recipients (max $max).';
+    return '收件人過多（最多 $max 位）。';
   }
 
   @override
-  String get fanOutErrorEmptyMessage =>
-      'Add a message or attachment before sending.';
+  String get fanOutErrorEmptyMessage => '傳送前請加入訊息或附件。';
 
   @override
-  String get fanOutErrorInvalidShareToken => 'Share token is invalid.';
+  String get fanOutErrorInvalidShareToken => '分享權杖無效。';
 
   @override
   String get emailForwardingGuideTitle => '連結現有電郵';
@@ -9674,26 +9614,26 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get notificationOpenAction => '開啟通知';
 
   @override
-  String get notificationAttachmentLabel => 'Attachment';
+  String get notificationAttachmentLabel => '附件';
 
   @override
   String notificationAttachmentLabelWithName(String filename) {
-    return 'Attachment: $filename';
+    return '附件：$filename';
   }
 
   @override
-  String get notificationReactionFallback => 'New reaction';
+  String get notificationReactionFallback => '新反應';
 
   @override
   String notificationReactionLabel(String reaction) {
-    return 'Reaction: $reaction';
+    return '反應：$reaction';
   }
 
   @override
-  String get notificationWebxdcFallback => 'New update';
+  String get notificationWebxdcFallback => '新更新';
 
   @override
-  String get shareTokenFooterLabel => 'Please do not remove:';
+  String get shareTokenFooterLabel => '請勿移除：';
 
   @override
   String get notificationBackgroundConnectionDisabledTitle => '背景連線已停用';
@@ -10325,12 +10265,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String commonDurationMinutesShort(int count) {
-    return '${count}m';
+    return '$count分';
   }
 
   @override
   String commonDurationHoursShort(int count) {
-    return '${count}h';
+    return '$count小時';
   }
 
   @override
@@ -10553,7 +10493,7 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String commonWeekdayDayLabel(String weekday, int day) {
-    return '$weekday $day';
+    return '$weekday $day日';
   }
 
   @override
@@ -11182,13 +11122,13 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatMessageDetailsHeadersUnavailableLabel => '標頭不可用。';
 
   @override
-  String get chatMessageDetailsStanzaIdLabel => 'Stanza ID';
+  String get chatMessageDetailsStanzaIdLabel => '訊節 ID';
 
   @override
-  String get chatMessageDetailsOriginIdLabel => 'Origin ID';
+  String get chatMessageDetailsOriginIdLabel => '來源 ID';
 
   @override
-  String get chatMessageDetailsOccupantIdLabel => 'Occupant ID';
+  String get chatMessageDetailsOccupantIdLabel => '成員 ID';
 
   @override
   String get chatMessageDetailsDeltaIdLabel => 'Delta 訊息 ID';
@@ -11406,223 +11346,202 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatEmailResendFailedDetails => '無法重新傳送電郵。';
 
   @override
-  String get authEnableXmppOrSmtp => 'Enable XMPP or SMTP to continue.';
+  String get authEnableXmppOrSmtp => '請啟用 XMPP 或 SMTP 後繼續。';
 
   @override
-  String get authUsernamePasswordMismatch =>
-      'Username and password have different nullness.';
+  String get authUsernamePasswordMismatch => '使用者名稱與密碼的空值狀態不一致。';
 
   @override
-  String get authStoredCredentialsOutdated =>
-      'Stored credentials are outdated. Please log in manually.';
+  String get authStoredCredentialsOutdated => '已儲存的憑證已過期。請手動登入。';
 
   @override
   String get authMissingDatabaseSecrets =>
-      'Local database secrets are missing for this account. Axichat cannot open your existing chats. Restore the original install or reset local data to continue.';
+      '此帳號缺少本機資料庫密鑰。Axichat 無法開啟你現有的聊天。請還原原始安裝或重設本機資料後繼續。';
 
   @override
-  String get authInvalidCredentials => 'Incorrect username or password';
+  String get authInvalidCredentials => '使用者名稱或密碼錯誤';
 
   @override
-  String get authGenericError => 'Error. Please try again later.';
+  String get authGenericError => '發生錯誤。請稍後再試。';
 
   @override
-  String get authStorageLocked =>
-      'Storage is locked by another Axichat instance. Close other windows or processes and try again.';
+  String get authStorageLocked => '儲存空間被另一個 Axichat 實例鎖定。請關閉其他視窗或程序後再試。';
 
   @override
-  String get authEmailServerUnreachable =>
-      'Unable to reach the email server. Please try again.';
+  String get authEmailServerUnreachable => '無法連線到電郵伺服器。請再試一次。';
 
   @override
-  String get authEmailSetupFailed => 'Email setup failed. Please try again.';
+  String get authEmailSetupFailed => '電郵設定失敗。請再試一次。';
 
   @override
-  String get authEmailPasswordMissing =>
-      'Stored email password missing. Please log in manually.';
+  String get authEmailPasswordMissing => '缺少已儲存的電郵密碼。請手動登入。';
 
   @override
-  String get authEmailAuthFailed =>
-      'Email authentication failed. Please log in again.';
+  String get authEmailAuthFailed => '電郵驗證失敗。請重新登入。';
 
   @override
-  String get signupCleanupInProgress =>
-      'Cleaning up your previous signup attempt. We will retry the removal as soon as you are back online; try again once it finishes.';
+  String get signupCleanupInProgress => '正在清理你先前的註冊嘗試。你重新上線後我們會重試刪除；完成後請再試一次。';
 
   @override
-  String get signupFailedTryAgain => 'Failed to register, try again later.';
+  String get signupFailedTryAgain => '註冊失敗，請稍後再試。';
 
   @override
-  String get authPasswordMismatch => 'New passwords do not match.';
+  String get authPasswordMismatch => '兩次輸入的新密碼不一致。';
 
   @override
-  String get authPasswordChangeDisabled =>
-      'Password changes are disabled for this account.';
+  String get authPasswordChangeDisabled => '此帳號已停用密碼變更。';
 
   @override
-  String get authPasswordChangeRejected =>
-      'Current password is incorrect, or the new password does not meet server requirements.';
+  String get authPasswordChangeRejected => '目前密碼不正確，或新密碼不符合伺服器要求。';
 
   @override
-  String get authPasswordChangeFailed =>
-      'Unable to change password. Please try again later.';
+  String get authPasswordChangeFailed => '無法變更密碼。請稍後再試。';
 
   @override
-  String get authPasswordChangeSuccess => 'Password changed successfully.';
+  String get authPasswordChangeSuccess => '密碼已成功變更。';
 
   @override
-  String get authPasswordIncorrect => 'Incorrect password. Please try again.';
+  String get authPasswordIncorrect => '密碼錯誤。請再試一次。';
 
   @override
-  String get authAccountNotFound => 'Account not found.';
+  String get authAccountNotFound => '找不到帳號。';
 
   @override
-  String get authAccountDeletionDisabled =>
-      'Account deletion is disabled for this account.';
+  String get authAccountDeletionDisabled => '此帳號已停用刪除功能。';
 
   @override
-  String get authAccountDeletionFailed =>
-      'Unable to delete account. Please try again later.';
+  String get authAccountDeletionFailed => '無法刪除帳號。請稍後再試。';
 
   @override
-  String get authDemoModeFailed =>
-      'Failed to start demo mode. Please try again.';
+  String get authDemoModeFailed => '啟動示範模式失敗。請再試一次。';
 
   @override
   String authLoginBackoff(Object seconds) {
-    return 'Too many attempts. Wait $seconds seconds before trying again.';
+    return '嘗試次數過多。請等待 $seconds 秒後再試。';
   }
 
   @override
-  String get signupAvatarCropTitle => 'Crop & focus';
+  String get signupAvatarCropTitle => '裁剪與聚焦';
 
   @override
-  String get signupAvatarCropHint =>
-      'Only the area inside the circle will appear in the final avatar.';
+  String get signupAvatarCropHint => '最終頭像只會顯示圓圈內的區域。';
 
   @override
-  String get xmppOperationPubSubBookmarksStart => 'Syncing bookmarks...';
+  String get xmppOperationPubSubBookmarksStart => '正在同步書籤...';
 
   @override
-  String get xmppOperationPubSubBookmarksSuccess => 'Bookmarks synced';
+  String get xmppOperationPubSubBookmarksSuccess => '書籤已同步';
 
   @override
-  String get xmppOperationPubSubBookmarksFailure => 'Bookmarks sync failed';
+  String get xmppOperationPubSubBookmarksFailure => '書籤同步失敗';
 
   @override
-  String get xmppOperationPubSubConversationsStart => 'Syncing chats list...';
+  String get xmppOperationPubSubConversationsStart => '正在同步聊天清單...';
 
   @override
-  String get xmppOperationPubSubConversationsSuccess => 'Chats list synced';
+  String get xmppOperationPubSubConversationsSuccess => '聊天清單已同步';
 
   @override
-  String get xmppOperationPubSubConversationsFailure =>
-      'Chats list sync failed';
+  String get xmppOperationPubSubConversationsFailure => '聊天清單同步失敗';
 
   @override
-  String get xmppOperationPubSubDraftsStart => 'Syncing drafts...';
+  String get xmppOperationPubSubDraftsStart => '正在同步草稿...';
 
   @override
-  String get xmppOperationPubSubDraftsSuccess => 'Drafts synced';
+  String get xmppOperationPubSubDraftsSuccess => '草稿已同步';
 
   @override
-  String get xmppOperationPubSubDraftsFailure => 'Drafts sync failed';
+  String get xmppOperationPubSubDraftsFailure => '草稿同步失敗';
 
   @override
-  String get xmppOperationPubSubSpamStart => 'Syncing spam list...';
+  String get xmppOperationPubSubSpamStart => '正在同步垃圾訊息清單...';
 
   @override
-  String get xmppOperationPubSubSpamSuccess => 'Spam list synced';
+  String get xmppOperationPubSubSpamSuccess => '垃圾訊息清單已同步';
 
   @override
-  String get xmppOperationPubSubSpamFailure => 'Spam list sync failed';
+  String get xmppOperationPubSubSpamFailure => '垃圾訊息清單同步失敗';
 
   @override
-  String get xmppOperationPubSubEmailBlocklistStart =>
-      'Syncing email blocklist...';
+  String get xmppOperationPubSubEmailBlocklistStart => '正在同步電郵封鎖清單...';
 
   @override
-  String get xmppOperationPubSubEmailBlocklistSuccess =>
-      'Email blocklist synced';
+  String get xmppOperationPubSubEmailBlocklistSuccess => '電郵封鎖清單已同步';
 
   @override
-  String get xmppOperationPubSubEmailBlocklistFailure =>
-      'Email blocklist sync failed';
+  String get xmppOperationPubSubEmailBlocklistFailure => '電郵封鎖清單同步失敗';
 
   @override
-  String get xmppOperationPubSubAvatarMetadataStart =>
-      'Syncing avatar details...';
+  String get xmppOperationPubSubAvatarMetadataStart => '正在同步頭像詳細資料...';
 
   @override
-  String get xmppOperationPubSubAvatarMetadataSuccess =>
-      'Avatar details synced';
+  String get xmppOperationPubSubAvatarMetadataSuccess => '頭像詳細資料已同步';
 
   @override
-  String get xmppOperationPubSubAvatarMetadataFailure =>
-      'Avatar details sync failed';
+  String get xmppOperationPubSubAvatarMetadataFailure => '頭像詳細資料同步失敗';
 
   @override
-  String get xmppOperationPubSubFetchStart => 'Syncing account updates...';
+  String get xmppOperationPubSubFetchStart => '正在同步帳戶更新...';
 
   @override
-  String get xmppOperationPubSubFetchSuccess => 'Account updates synced';
+  String get xmppOperationPubSubFetchSuccess => '帳戶更新已同步';
 
   @override
-  String get xmppOperationPubSubFetchFailure => 'Account updates sync failed';
+  String get xmppOperationPubSubFetchFailure => '帳戶更新同步失敗';
 
   @override
-  String get xmppOperationMamLoginStart => 'Syncing messages...';
+  String get xmppOperationMamLoginStart => '正在同步訊息...';
 
   @override
-  String get xmppOperationMamLoginSuccess => 'Messages synced';
+  String get xmppOperationMamLoginSuccess => '訊息已同步';
 
   @override
-  String get xmppOperationMamLoginFailure => 'Message sync failed';
+  String get xmppOperationMamLoginFailure => '訊息同步失敗';
 
   @override
-  String get xmppOperationMamGlobalStart => 'Syncing full history...';
+  String get xmppOperationMamGlobalStart => '正在同步完整歷史記錄...';
 
   @override
-  String get xmppOperationMamGlobalSuccess => 'History synced';
+  String get xmppOperationMamGlobalSuccess => '歷史記錄已同步';
 
   @override
-  String get xmppOperationMamGlobalFailure => 'History sync failed';
+  String get xmppOperationMamGlobalFailure => '歷史記錄同步失敗';
 
   @override
-  String get xmppOperationMamMucStart => 'Syncing room history...';
+  String get xmppOperationMamMucStart => '正在同步聊天室歷史記錄...';
 
   @override
-  String get xmppOperationMamMucSuccess => 'Room history synced';
+  String get xmppOperationMamMucSuccess => '聊天室歷史記錄已同步';
 
   @override
-  String get xmppOperationMamMucFailure => 'Room history sync failed';
+  String get xmppOperationMamMucFailure => '聊天室歷史記錄同步失敗';
 
   @override
-  String get xmppOperationMamFetchStart => 'Fetching archived messages...';
+  String get xmppOperationMamFetchStart => '正在擷取封存訊息...';
 
   @override
-  String get xmppOperationMamFetchSuccess => 'Archive fetched';
+  String get xmppOperationMamFetchSuccess => '封存已擷取';
 
   @override
-  String get xmppOperationMamFetchFailure => 'Archive fetch failed';
+  String get xmppOperationMamFetchFailure => '封存擷取失敗';
 
   @override
-  String get xmppOperationMucJoinStart => 'Joining room...';
+  String get xmppOperationMucJoinStart => '正在加入聊天室...';
 
   @override
-  String get xmppOperationMucJoinSuccess => 'Room joined';
+  String get xmppOperationMucJoinSuccess => '已加入聊天室';
 
   @override
-  String get xmppOperationMucJoinFailure => 'Room join failed';
+  String get xmppOperationMucJoinFailure => '加入聊天室失敗';
 
   @override
-  String get chatSettingsCapabilitiesTitle => 'Capabilities';
+  String get chatSettingsCapabilitiesTitle => '功能';
 
   @override
   String chatSettingsCapabilitiesUpdated(Object timestamp) {
-    return 'Last checked: $timestamp';
+    return '上次檢查：$timestamp';
   }
 
   @override
-  String get chatSettingsCapabilitiesEmpty => 'No features reported';
+  String get chatSettingsCapabilitiesEmpty => '未回報任何功能';
 }

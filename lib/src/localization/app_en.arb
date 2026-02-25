@@ -407,13 +407,14 @@
   "recipientsHeaderTitle": "Send to...",
   "recipientsFallbackLabel": "Recipient",
   "recipientsAddHint": "Add...",
-  "chatGuestScriptWelcome": "Welcome to Axichat—chat, email, and calendar in one place.",
+  "chatGuestScriptWelcome": "Welcome to Axichat: chat, email, and calendar in one place.",
   "chatGuestScriptExternalQuestion": "Looks clean. Can I message people who aren't on Axichat?",
-  "chatGuestScriptExternalAnswer": "Yep—send chat-formatted email to Gmail, Outlook, Tuta, and more. If both of you use Axichat you also get groupchats, reactions, delivery receipts, and more.",
+  "chatGuestScriptExternalAnswer": "Yep: send chat-formatted email to Gmail, Outlook, Tuta, and more. If both of you use Axichat you also get groupchats, reactions, delivery receipts, and more.",
   "chatGuestScriptOfflineQuestion": "Does it work offline or in guest mode?",
-  "chatGuestScriptOfflineAnswer": "Yes—offline functionality is built in, and the calendar even works in Guest Mode without an account or internet.",
+  "chatGuestScriptOfflineAnswer": "Yes: offline functionality is built in, and the calendar even works in Guest Mode without an account or internet.",
   "chatGuestScriptKeepUpQuestion": "How does it help me keep up with everything?",
   "chatGuestScriptKeepUpAnswer": "Our calendar does natural language scheduling, Eisenhower Matrix triage, drag-and-drop, and reminders so you can focus on what matters.",
+  "chatGuestScriptBubbleTip": "Press a message bubble to open options like forwarding, replying, and reacting.",
   "calendarParserUnavailable": "Parser unavailable ({errorType})",
   "@calendarParserUnavailable": {
     "placeholders": {

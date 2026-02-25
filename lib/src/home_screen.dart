@@ -203,6 +203,13 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
+  void _closeChatsForPrimaryHomeSelection() {
+    if (EnvScope.of(context).navPlacement != NavPlacement.bottom) {
+      return;
+    }
+    context.read<ChatsCubit>().closeAllChats();
+  }
+
   void _handleBottomNavIndexSelection() {
     if (!mounted) {
       return;
@@ -217,7 +224,7 @@ class _HomeShellState extends State<HomeShell> {
       return;
     }
     if (index == 0) {
-      context.read<ChatsCubit>().closeAllChats();
+      _closeChatsForPrimaryHomeSelection();
     }
   }
 
@@ -247,12 +254,12 @@ class _HomeShellState extends State<HomeShell> {
     if (widget.navigationShell.currentIndex != _homeBranchIndex) {
       widget.navigationShell.goBranch(_homeBranchIndex);
       if (safeIndex == 0) {
-        context.read<ChatsCubit>().closeAllChats();
+        _closeChatsForPrimaryHomeSelection();
       }
       return;
     }
     if (safeIndex == 0) {
-      context.read<ChatsCubit>().closeAllChats();
+      _closeChatsForPrimaryHomeSelection();
     }
   }
 

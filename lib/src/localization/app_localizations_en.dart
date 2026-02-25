@@ -930,7 +930,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatGuestScriptWelcome =>
-      'Welcome to Axichat—chat, email, and calendar in one place.';
+      'Welcome to Axichat: chat, email, and calendar in one place.';
 
   @override
   String get chatGuestScriptExternalQuestion =>
@@ -938,7 +938,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatGuestScriptExternalAnswer =>
-      'Yep—send chat-formatted email to Gmail, Outlook, Tuta, and more. If both of you use Axichat you also get groupchats, reactions, delivery receipts, and more.';
+      'Yep: send chat-formatted email to Gmail, Outlook, Tuta, and more. If both of you use Axichat you also get groupchats, reactions, delivery receipts, and more.';
 
   @override
   String get chatGuestScriptOfflineQuestion =>
@@ -946,7 +946,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatGuestScriptOfflineAnswer =>
-      'Yes—offline functionality is built in, and the calendar even works in Guest Mode without an account or internet.';
+      'Yes: offline functionality is built in, and the calendar even works in Guest Mode without an account or internet.';
 
   @override
   String get chatGuestScriptKeepUpQuestion =>
@@ -955,6 +955,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get chatGuestScriptKeepUpAnswer =>
       'Our calendar does natural language scheduling, Eisenhower Matrix triage, drag-and-drop, and reminders so you can focus on what matters.';
+
+  @override
+  String get chatGuestScriptBubbleTip =>
+      'Press a message bubble to open options like forwarding, replying, and reacting.';
 
   @override
   String calendarParserUnavailable(Object errorType) {

@@ -39,7 +39,8 @@ class RosterList extends StatelessWidget {
           final cachedVisibleItems =
               context.read<RosterCubit>()[RosterCubit.visibleItemsCacheKey]
                   as List<RosterItem>?;
-          final items = state.visibleItems ??
+          final items =
+              state.visibleItems ??
               cachedVisibleItems ??
               state.items ??
               cachedItems;

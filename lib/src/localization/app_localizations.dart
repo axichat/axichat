@@ -1744,7 +1744,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatGuestScriptWelcome.
   ///
   /// In en, this message translates to:
-  /// **'Welcome to Axichat—chat, email, and calendar in one place.'**
+  /// **'Welcome to Axichat: chat, email, and calendar in one place.'**
   String get chatGuestScriptWelcome;
 
   /// No description provided for @chatGuestScriptExternalQuestion.
@@ -1756,7 +1756,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatGuestScriptExternalAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Yep—send chat-formatted email to Gmail, Outlook, Tuta, and more. If both of you use Axichat you also get groupchats, reactions, delivery receipts, and more.'**
+  /// **'Yep: send chat-formatted email to Gmail, Outlook, Tuta, and more. If both of you use Axichat you also get groupchats, reactions, delivery receipts, and more.'**
   String get chatGuestScriptExternalAnswer;
 
   /// No description provided for @chatGuestScriptOfflineQuestion.
@@ -1768,7 +1768,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatGuestScriptOfflineAnswer.
   ///
   /// In en, this message translates to:
-  /// **'Yes—offline functionality is built in, and the calendar even works in Guest Mode without an account or internet.'**
+  /// **'Yes: offline functionality is built in, and the calendar even works in Guest Mode without an account or internet.'**
   String get chatGuestScriptOfflineAnswer;
 
   /// No description provided for @chatGuestScriptKeepUpQuestion.
@@ -1782,6 +1782,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Our calendar does natural language scheduling, Eisenhower Matrix triage, drag-and-drop, and reminders so you can focus on what matters.'**
   String get chatGuestScriptKeepUpAnswer;
+
+  /// No description provided for @chatGuestScriptBubbleTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Press a message bubble to open options like forwarding, replying, and reacting.'**
+  String get chatGuestScriptBubbleTip;
 
   /// No description provided for @calendarParserUnavailable.
   ///

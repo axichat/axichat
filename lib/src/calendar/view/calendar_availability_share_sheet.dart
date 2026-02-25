@@ -1003,7 +1003,8 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rosterCubit = context.watch<RosterCubit>();
-    final rosterItems = rosterCubit.state.items ??
+    final rosterItems =
+        rosterCubit.state.items ??
         (rosterCubit[RosterCubit.itemsCacheKey] as List<RosterItem>?) ??
         const <RosterItem>[];
     final chatsSelfJid = locate<ChatsCubit>().selfJid;

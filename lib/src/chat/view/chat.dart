@@ -546,7 +546,8 @@ class _UnknownSenderBanner extends StatelessWidget {
         return BlocBuilder<RosterCubit, RosterState>(
           buildWhen: (previous, current) => previous.items != current.items,
           builder: (context, rosterState) {
-            final rosterItems = rosterState.items ??
+            final rosterItems =
+                rosterState.items ??
                 (context.read<RosterCubit>()[RosterCubit.itemsCacheKey]
                     as List<RosterItem>?) ??
                 const <RosterItem>[];
@@ -2801,6 +2802,20 @@ class _ChatState extends State<Chat> {
     final body = _textController.text;
     final subject = _subjectController.text;
     final trimmedSubject = subject.trim();
+    if (body.trim().isEmpty && trimmedSubject.isEmpty && attachments.isEmpty) {
+      _dismissTextInputFocus();
+      setState(() {
+        _expandedComposerDraftId = null;
+        _expandedComposerSeed = ComposeDraftSeed(
+          id: null,
+          jids: recipients,
+          body: body,
+          subject: subject,
+          attachmentMetadataIds: const <String>[],
+        );
+      });
+      return;
+    }
     setState(() {
       _expandingComposerDraft = true;
     });
@@ -4255,7 +4270,8 @@ class _ChatState extends State<Chat> {
                                 final rosterItems =
                                     rosterState.items ??
                                     (context.read<RosterCubit>()[RosterCubit
-                                        .itemsCacheKey] as List<RosterItem>?) ??
+                                            .itemsCacheKey]
+                                        as List<RosterItem>?) ??
                                     const <RosterItem>[];
                                 final item = rosterItems
                                     .where((entry) => entry.jid == jid)
@@ -14360,6 +14376,12 @@ class _GuestChatState extends State<GuestChat> {
     _GuestScriptEntry(
       text: l10n.chatGuestScriptKeepUpAnswer,
       offset: const Duration(minutes: 4),
+      isSelf: false,
+      status: MessageStatus.read,
+    ),
+    _GuestScriptEntry(
+      text: l10n.chatGuestScriptBubbleTip,
+      offset: const Duration(minutes: 3),
       isSelf: false,
       status: MessageStatus.read,
     ),

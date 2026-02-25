@@ -46,12 +46,14 @@ class _BlocklistListState extends State<BlocklistList> {
       listener: _syncSearchState,
       child: BlocBuilder<BlocklistCubit, BlocklistState>(
         builder: (context, state) {
-          final cachedItems = context
-                  .read<BlocklistCubit>()[BlocklistCubit.blocklistItemsCacheKey]
-              as List<BlocklistEntry>?;
-          final cachedVisibleItems = context.read<BlocklistCubit>()[
-                  BlocklistCubit.blocklistVisibleItemsCacheKey]
-              as List<BlocklistEntry>?;
+          final cachedItems =
+              context.read<BlocklistCubit>()[BlocklistCubit
+                      .blocklistItemsCacheKey]
+                  as List<BlocklistEntry>?;
+          final cachedVisibleItems =
+              context.read<BlocklistCubit>()[BlocklistCubit
+                      .blocklistVisibleItemsCacheKey]
+                  as List<BlocklistEntry>?;
           final items = state.items ?? cachedItems;
           if (items == null) {
             return Center(
@@ -65,7 +67,8 @@ class _BlocklistListState extends State<BlocklistList> {
           return BlocBuilder<RosterCubit, RosterState>(
             buildWhen: (previous, current) => previous.items != current.items,
             builder: (context, rosterState) {
-              final cachedRosterItems = rosterState.items ??
+              final cachedRosterItems =
+                  rosterState.items ??
                   (context.read<RosterCubit>()[RosterCubit.itemsCacheKey]
                       as List<RosterItem>?);
               final avatarPathsByJid = <String, String>{};

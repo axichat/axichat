@@ -48,8 +48,9 @@ class _DraftsListState extends State<DraftsList> {
         buildWhen: (_, current) => current is DraftsAvailable,
         builder: (context, state) {
           final l10n = context.l10n;
-          final cachedItems = context
-              .read<DraftCubit>()[DraftCubit.itemsCacheKey] as List<Draft>?;
+          final cachedItems =
+              context.read<DraftCubit>()[DraftCubit.itemsCacheKey]
+                  as List<Draft>?;
           final cachedVisibleItems =
               context.read<DraftCubit>()[DraftCubit.visibleItemsCacheKey]
                   as List<Draft>?;
