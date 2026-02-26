@@ -8,10 +8,13 @@ import 'package:axichat/src/calendar/view/widgets/calendar_task_geometry.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_task_surface.dart';
 import 'package:axichat/src/calendar/view/resizable_task_widget.dart';
 import 'package:axichat/src/calendar/utils/recurrence_utils.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -224,12 +227,12 @@ void main() {
     await tester.pump();
     expect(menuFinder, findsNothing);
     await gesture.up();
-    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    await _pumpUntilMenuVisible(tester, menuFinder);
 
     expect(menuFinder, findsOneWidget);
 
     await tester.tapAt(const Offset(5, 5));
-    await tester.pumpAndSettle(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 200));
     expect(menuFinder, findsNothing);
   });
 
@@ -251,7 +254,7 @@ void main() {
         reason: 'menu unexpectedly visible before release on attempt $attempt',
       );
       await gesture.up();
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      await _pumpUntilMenuVisible(tester, menuFinder);
       expect(
         menuFinder,
         findsOneWidget,
@@ -259,7 +262,7 @@ void main() {
       );
 
       await tester.tapAt(const Offset(5, 5));
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 200));
       expect(
         menuFinder,
         findsNothing,
@@ -283,7 +286,7 @@ void main() {
       );
       await tester.pump();
       await gesture.up();
-      await tester.pumpAndSettle(const Duration(milliseconds: 500));
+      await _pumpUntilMenuVisible(tester, menuFinder);
 
       expect(
         menuFinder,
@@ -301,7 +304,7 @@ void main() {
       );
 
       await tester.tapAt(const Offset(5, 5));
-      await tester.pumpAndSettle(const Duration(milliseconds: 200));
+      await tester.pump(const Duration(milliseconds: 200));
       expect(
         menuFinder,
         findsNothing,
@@ -314,6 +317,72 @@ void main() {
     await expectMenuAt(
       Offset(taskRect.center.dx, taskRect.bottom - 6),
       'bottom',
+    );
+  });
+
+  testWidgets(
+    'task context menu prefers side placement when horizontal room is available',
+    (tester) async {
+      final Finder taskFinder = await _pumpWideContextMenuSurface(tester);
+      final Finder menuFinder = find.text('Copy Task');
+
+      final TestGesture gesture = await tester.startGesture(
+        tester.getCenter(taskFinder),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await tester.pump();
+      await gesture.up();
+      await _pumpUntilMenuVisible(tester, menuFinder);
+
+      expect(menuFinder, findsOneWidget);
+
+      final Rect taskRect = tester.getRect(taskFinder);
+      final Rect menuRect = tester.getRect(menuFinder.first);
+      final bool opensToRight = menuRect.center.dx >= taskRect.right;
+      final bool opensToLeft = menuRect.center.dx <= taskRect.left;
+      expect(
+        opensToRight || opensToLeft,
+        isTrue,
+        reason:
+            'Menu should open to either side when horizontal room exists. '
+            'task=$taskRect menu=$menuRect',
+      );
+      expect(
+        (menuRect.center.dy - taskRect.center.dy).abs(),
+        lessThan(120),
+        reason: 'Side placement should stay vertically aligned to the task.',
+      );
+    },
+  );
+
+  testWidgets('opening a second task context menu closes the previous menu', (
+    tester,
+  ) async {
+    final finders = await _pumpNestedContextMenuSurfaces(tester);
+    final Finder topTaskFinder = finders['top']!;
+    final Finder bottomTaskFinder = finders['bottom']!;
+    final Finder menuFinder = find.text('Copy Task');
+
+    Future<void> openMenu(Finder taskFinder) async {
+      final TestGesture gesture = await tester.startGesture(
+        tester.getCenter(taskFinder),
+        kind: PointerDeviceKind.mouse,
+        buttons: kSecondaryButton,
+      );
+      await tester.pump();
+      await gesture.up();
+      await _pumpUntilMenuVisible(tester, menuFinder);
+    }
+
+    await openMenu(topTaskFinder);
+    expect(menuFinder, findsOneWidget);
+
+    await openMenu(bottomTaskFinder);
+    expect(
+      menuFinder,
+      findsOneWidget,
+      reason: 'Opening a new task context menu should close the previous one.',
     );
   });
 
@@ -334,7 +403,7 @@ void main() {
         await tester.pump();
         await gesture.up();
         await tester.pump();
-        await tester.pumpAndSettle(const Duration(milliseconds: 100));
+        await tester.pump(const Duration(milliseconds: 100));
         await _pumpUntilMenuVisible(tester, menuFinder);
         final Rect menuRect = tester.getRect(menuFinder.first);
         return menuRect.top;
@@ -342,7 +411,7 @@ void main() {
 
       final double topMenuOffset = await openMenu(topTaskFinder);
       await tester.tapAt(const Offset(5, 5));
-      await tester.pumpAndSettle(const Duration(milliseconds: 150));
+      await tester.pump(const Duration(milliseconds: 150));
 
       final double bottomMenuOffset = await openMenu(bottomTaskFinder);
       expect(
@@ -353,7 +422,7 @@ void main() {
       );
 
       await tester.tapAt(const Offset(5, 5));
-      await tester.pumpAndSettle(const Duration(milliseconds: 150));
+      await tester.pump(const Duration(milliseconds: 150));
     },
   );
 
@@ -372,7 +441,7 @@ void main() {
     await tester.pump();
     await gesture.up();
     await tester.pump();
-    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
     await _pumpUntilMenuVisible(tester, menuFinder);
 
     final Rect menuRect = tester.getRect(menuFinder.first);
@@ -392,7 +461,7 @@ void main() {
 
     await tester.sendEventToBinding(hoverPointer.removePointer());
     await tester.tapAt(const Offset(5, 5));
-    await tester.pumpAndSettle(const Duration(milliseconds: 150));
+    await tester.pump(const Duration(milliseconds: 150));
     expect(menuFinder, findsNothing);
   });
 
@@ -579,42 +648,86 @@ Future<Finder> _pumpContextMenuSurface(WidgetTester tester) async {
   );
 
   await tester.pumpWidget(
-    MaterialApp(
-      home: ShadTheme(
-        data: ShadThemeData(
-          colorScheme: const ShadSlateColorScheme.light(),
-          brightness: Brightness.light,
-        ),
-        child: Scaffold(
-          body: Center(
-            child: SizedBox(
-              width: 300,
-              height: 240,
-              child: Stack(
-                children: [
-                  Positioned(
-                    left: 20,
-                    top: 40,
-                    width: 240,
-                    height: 120,
-                    child: CalendarTaskSurface(
-                      key: const ValueKey('surface-task-context-menu'),
-                      task: task,
-                      isDayView: true,
-                      bindings: bindings,
-                    ),
-                  ),
-                ],
+    _contextMenuTestApp(
+      child: Center(
+        child: SizedBox(
+          width: 300,
+          height: 240,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 20,
+                top: 40,
+                width: 240,
+                height: 120,
+                child: CalendarTaskSurface(
+                  key: const ValueKey('surface-task-context-menu'),
+                  task: task,
+                  isDayView: true,
+                  bindings: bindings,
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
 
   return find.byKey(const ValueKey('task-context-menu'));
+}
+
+Future<Finder> _pumpWideContextMenuSurface(WidgetTester tester) async {
+  final task = CalendarTestData.scheduled(
+    'task-context-menu-wide',
+    'Wide Context Menu Task',
+    DateTime(2024, 1, 15, 10),
+  );
+  final interactionController = TaskInteractionController();
+  final bindings = _buildTestBindings(
+    controller: interactionController,
+    groupId: const ValueKey('test-task-menu'),
+    builderFactory: (controller) =>
+        (context, request) => [
+          ShadContextMenuItem(
+            onPressed: () => controller.hide(),
+            child: const Text('Copy Task'),
+          ),
+        ],
+  );
+
+  await tester.pumpWidget(
+    _contextMenuTestApp(
+      child: Center(
+        child: SizedBox(
+          width: 920,
+          height: 360,
+          child: Stack(
+            children: [
+              Positioned(
+                left: 340,
+                top: 120,
+                width: 240,
+                height: 120,
+                child: CalendarTaskSurface(
+                  key: const ValueKey('surface-task-context-menu-wide'),
+                  task: task,
+                  isDayView: true,
+                  bindings: bindings,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
+
+  return find.byKey(const ValueKey('task-context-menu-wide'));
 }
 
 CalendarTaskTileCallbacks _testTileCallbacks() => CalendarTaskTileCallbacks(
@@ -702,70 +815,57 @@ Future<Map<String, Finder>> _pumpNestedContextMenuSurfaces(
   );
 
   await tester.pumpWidget(
-    MaterialApp(
-      home: Navigator(
+    _contextMenuTestApp(
+      child: Navigator(
         onGenerateRoute: (_) => MaterialPageRoute(
           builder: (_) => Navigator(
             onGenerateRoute: (_) => MaterialPageRoute(
-              builder: (_) => Scaffold(
-                body: ShadTheme(
-                  data: ShadThemeData(
-                    colorScheme: const ShadSlateColorScheme.light(),
-                    brightness: Brightness.light,
-                  ),
-                  child: Center(
-                    child: SizedBox(
-                      width: 360,
-                      height: 680,
-                      child: Stack(
-                        children: [
-                          Positioned(
-                            left: 40,
-                            top: 24,
-                            width: 240,
-                            height: 140,
-                            child: CalendarTaskSurface(
-                              key: ValueKey('surface-${topTask.id}'),
-                              task: topTask,
-                              isDayView: true,
-                              bindings: _buildTestBindings(
-                                controller: topController,
-                                groupId: groupId,
-                                builderFactory: builderFactory,
-                                geometryRect: const Rect.fromLTWH(
-                                  40,
-                                  24,
-                                  240,
-                                  140,
-                                ),
-                              ),
-                            ),
+              builder: (_) => Center(
+                child: SizedBox(
+                  width: 360,
+                  height: 680,
+                  child: Stack(
+                    children: [
+                      Positioned(
+                        left: 40,
+                        top: 24,
+                        width: 240,
+                        height: 140,
+                        child: CalendarTaskSurface(
+                          key: ValueKey('surface-${topTask.id}'),
+                          task: topTask,
+                          isDayView: true,
+                          bindings: _buildTestBindings(
+                            controller: topController,
+                            groupId: groupId,
+                            builderFactory: builderFactory,
+                            geometryRect: const Rect.fromLTWH(40, 24, 240, 140),
                           ),
-                          Positioned(
-                            left: 40,
-                            top: 420,
-                            width: 240,
-                            height: 140,
-                            child: CalendarTaskSurface(
-                              key: ValueKey('surface-${bottomTask.id}'),
-                              task: bottomTask,
-                              isDayView: true,
-                              bindings: _buildTestBindings(
-                                controller: bottomController,
-                                groupId: groupId,
-                                builderFactory: builderFactory,
-                                geometryRect: const Rect.fromLTWH(
-                                  40,
-                                  420,
-                                  240,
-                                  140,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
+                      Positioned(
+                        left: 40,
+                        top: 420,
+                        width: 240,
+                        height: 140,
+                        child: CalendarTaskSurface(
+                          key: ValueKey('surface-${bottomTask.id}'),
+                          task: bottomTask,
+                          isDayView: true,
+                          bindings: _buildTestBindings(
+                            controller: bottomController,
+                            groupId: groupId,
+                            builderFactory: builderFactory,
+                            geometryRect: const Rect.fromLTWH(
+                              40,
+                              420,
+                              240,
+                              140,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -775,7 +875,8 @@ Future<Map<String, Finder>> _pumpNestedContextMenuSurfaces(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 50));
 
   return {
     'top': find.byKey(ValueKey(topTask.id)),
@@ -799,3 +900,28 @@ Future<void> _pumpUntilMenuVisible(
     reason: 'Context menu should appear after secondary tap.',
   );
 }
+
+Widget _contextMenuTestApp({required Widget child}) {
+  final settingsCubit = _MockSettingsCubit();
+  when(() => settingsCubit.state).thenReturn(const SettingsState());
+  when(
+    () => settingsCubit.stream,
+  ).thenAnswer((_) => const Stream<SettingsState>.empty());
+  when(() => settingsCubit.animationDuration).thenReturn(Duration.zero);
+  return MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: BlocProvider<SettingsCubit>.value(
+      value: settingsCubit,
+      child: ShadTheme(
+        data: ShadThemeData(
+          colorScheme: const ShadSlateColorScheme.light(),
+          brightness: Brightness.light,
+        ),
+        child: Scaffold(body: child),
+      ),
+    ),
+  );
+}
+
+class _MockSettingsCubit extends Mock implements SettingsCubit {}

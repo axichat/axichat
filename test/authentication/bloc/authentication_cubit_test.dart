@@ -22,6 +22,7 @@ import '../../mocks.dart';
 
 const validUsername = 'validUsername';
 const validJid = '$validUsername@${EndpointConfig.defaultDomain}';
+const validFullJid = '$validUsername@example.com';
 const validPassword = 'validPassword';
 const saltedPassword = 'saltedPassword';
 const invalidUsername = 'invalidUsername';
@@ -247,6 +248,17 @@ void main() {
           endpoint: any(named: 'endpoint'),
         ),
       ).thenAnswer((_) async => saltedPassword);
+      when(
+        () => mockXmppService.connect(
+          jid: validFullJid,
+          password: validPassword,
+          databasePrefix: any(named: 'databasePrefix'),
+          databasePassphrase: any(named: 'databasePassphrase'),
+          preHashed: any(named: 'preHashed'),
+          reuseExistingSession: any(named: 'reuseExistingSession'),
+          endpoint: any(named: 'endpoint'),
+        ),
+      ).thenAnswer((_) async => saltedPassword);
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -275,6 +287,25 @@ void main() {
           () => mockCredentialStore.write(
             key: bloc.passwordPreHashedStorageKey,
             value: true.toString(),
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Given a full JID username, logs in without appending endpoint domain.',
+      build: () => bloc,
+      act: (bloc) =>
+          bloc.login(username: validFullJid, password: validPassword),
+      expect: () => [
+        const AuthenticationLogInInProgress(),
+        const AuthenticationComplete(),
+      ],
+      verify: (bloc) {
+        verify(
+          () => mockCredentialStore.write(
+            key: bloc.jidStorageKey,
+            value: validFullJid,
           ),
         ).called(1);
       },

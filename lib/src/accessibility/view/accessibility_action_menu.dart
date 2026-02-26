@@ -947,180 +947,188 @@ class _AccessibilityMenuScaffoldState extends State<_AccessibilityMenuScaffold>
             child: ColoredBox(color: scrimColor),
           ),
         ),
-        Center(
-          child: Shortcuts(
-            shortcuts: shortcuts,
-            child: Actions(
-              actions: {
-                _AccessibilityDismissIntent:
-                    CallbackAction<_AccessibilityDismissIntent>(
-                      onInvoke: (_) {
-                        final shouldWarn = _shouldWarnOnExit(widget.state);
-                        if (shouldWarn && !widget.state.discardWarningActive) {
-                          context.read<AccessibilityActionBloc>().add(
-                            const AccessibilityDiscardWarningRequested(),
-                          );
+        SafeArea(
+          child: Center(
+            child: Shortcuts(
+              shortcuts: shortcuts,
+              child: Actions(
+                actions: {
+                  _AccessibilityDismissIntent:
+                      CallbackAction<_AccessibilityDismissIntent>(
+                        onInvoke: (_) {
+                          final shouldWarn = _shouldWarnOnExit(widget.state);
+                          if (shouldWarn &&
+                              !widget.state.discardWarningActive) {
+                            context.read<AccessibilityActionBloc>().add(
+                              const AccessibilityDiscardWarningRequested(),
+                            );
+                            return null;
+                          }
+                          if (widget.state.stack.length > 1) {
+                            context.read<AccessibilityActionBloc>().add(
+                              const AccessibilityMenuBack(),
+                            );
+                          } else {
+                            context.read<AccessibilityActionBloc>().add(
+                              const AccessibilityMenuClosed(),
+                            );
+                          }
                           return null;
-                        }
-                        if (widget.state.stack.length > 1) {
-                          context.read<AccessibilityActionBloc>().add(
-                            const AccessibilityMenuBack(),
-                          );
-                        } else {
-                          context.read<AccessibilityActionBloc>().add(
-                            const AccessibilityMenuClosed(),
-                          );
-                        }
+                        },
+                      ),
+                  _NextItemIntent: CallbackAction<_NextItemIntent>(
+                    onInvoke: (_) => _handleDirectionalMove(forward: true),
+                  ),
+                  _PreviousItemIntent: CallbackAction<_PreviousItemIntent>(
+                    onInvoke: (_) => _handleDirectionalMove(forward: false),
+                  ),
+                  _NextGroupIntent: CallbackAction<_NextGroupIntent>(
+                    onInvoke: (_) => _focusNextGroup(),
+                  ),
+                  _PreviousGroupIntent: CallbackAction<_PreviousGroupIntent>(
+                    onInvoke: (_) => _focusPreviousGroup(),
+                  ),
+                  _FirstItemIntent: CallbackAction<_FirstItemIntent>(
+                    onInvoke: (_) {
+                      if (_currentGroup() == _messageCarouselKey) {
+                        _messageCarousel?.firstMessage();
                         return null;
-                      },
-                    ),
-                _NextItemIntent: CallbackAction<_NextItemIntent>(
-                  onInvoke: (_) => _handleDirectionalMove(forward: true),
-                ),
-                _PreviousItemIntent: CallbackAction<_PreviousItemIntent>(
-                  onInvoke: (_) => _handleDirectionalMove(forward: false),
-                ),
-                _NextGroupIntent: CallbackAction<_NextGroupIntent>(
-                  onInvoke: (_) => _focusNextGroup(),
-                ),
-                _PreviousGroupIntent: CallbackAction<_PreviousGroupIntent>(
-                  onInvoke: (_) => _focusPreviousGroup(),
-                ),
-                _FirstItemIntent: CallbackAction<_FirstItemIntent>(
-                  onInvoke: (_) {
-                    if (_currentGroup() == _messageCarouselKey) {
-                      _messageCarousel?.firstMessage();
+                      }
+                      _withList((list) => list.focusFirstItem());
                       return null;
-                    }
-                    _withList((list) => list.focusFirstItem());
-                    return null;
-                  },
-                ),
-                _LastItemIntent: CallbackAction<_LastItemIntent>(
-                  onInvoke: (_) {
-                    if (_currentGroup() == _messageCarouselKey) {
-                      _messageCarousel?.lastMessage();
+                    },
+                  ),
+                  _LastItemIntent: CallbackAction<_LastItemIntent>(
+                    onInvoke: (_) {
+                      if (_currentGroup() == _messageCarouselKey) {
+                        _messageCarousel?.lastMessage();
+                        return null;
+                      }
+                      _withList((list) => list.focusLastItem());
                       return null;
-                    }
-                    _withList((list) => list.focusLastItem());
-                    return null;
-                  },
-                ),
-                _ActivateItemIntent: CallbackAction<_ActivateItemIntent>(
-                  onInvoke: (_) {
-                    if (_currentGroup() == _messageCarouselKey) {
+                    },
+                  ),
+                  _ActivateItemIntent: CallbackAction<_ActivateItemIntent>(
+                    onInvoke: (_) {
+                      if (_currentGroup() == _messageCarouselKey) {
+                        return null;
+                      }
+                      _withList((list) => list.activateFocused());
                       return null;
-                    }
-                    _withList((list) => list.activateFocused());
-                    return null;
-                  },
-                ),
-              },
-              child: FocusScope(
-                node: _focusScopeNode,
-                autofocus: true,
-                child: Builder(
-                  builder: (context) {
-                    final viewSize = MediaQuery.sizeOf(context);
-                    final spacing = context.spacing;
-                    final modalMinHeightValue =
-                        context.sizing.menuItemHeight * 7;
-                    final modalMaxWidthValue = context.sizing.dialogMaxWidth;
-                    final modalVerticalMargin =
-                        context.sizing.menuItemHeight * 2;
-                    final modalMinHeight = viewSize.height < modalMinHeightValue
-                        ? viewSize.height
-                        : modalMinHeightValue;
-                    final rawTargetHeight =
-                        viewSize.height - modalVerticalMargin;
-                    final modalHeight = rawTargetHeight
-                        .clamp(modalMinHeight, viewSize.height)
-                        .toDouble();
-                    return ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: modalMaxWidthValue),
-                      child: SizedBox(
-                        height: modalHeight,
-                        child: AxiModalSurface(
-                          padding: EdgeInsets.zero,
-                          child: Material(
-                            type: MaterialType.transparency,
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                final viewportHeight = constraints.maxHeight;
-                                return Semantics(
-                                  scopesRoute: true,
-                                  namesRoute: true,
-                                  label: context.l10n.accessibilityDialogLabel,
-                                  hint: context.l10n.accessibilityDialogHint,
-                                  explicitChildNodes: true,
-                                  child: Scrollbar(
-                                    controller: _scrollController,
-                                    child: SingleChildScrollView(
+                    },
+                  ),
+                },
+                child: FocusScope(
+                  node: _focusScopeNode,
+                  autofocus: true,
+                  child: LayoutBuilder(
+                    builder: (context, safeConstraints) {
+                      final spacing = context.spacing;
+                      final modalMinHeightValue =
+                          context.sizing.menuItemHeight * 7;
+                      final modalMaxWidthValue = context.sizing.dialogMaxWidth;
+                      final modalVerticalMargin =
+                          context.sizing.menuItemHeight * 2;
+                      final availableHeight = safeConstraints.maxHeight;
+                      final modalMinHeight =
+                          availableHeight < modalMinHeightValue
+                          ? availableHeight
+                          : modalMinHeightValue;
+                      final rawTargetHeight =
+                          availableHeight - modalVerticalMargin;
+                      final modalHeight = rawTargetHeight
+                          .clamp(modalMinHeight, availableHeight)
+                          .toDouble();
+                      return ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: modalMaxWidthValue,
+                        ),
+                        child: SizedBox(
+                          height: modalHeight,
+                          child: AxiModalSurface(
+                            padding: EdgeInsets.zero,
+                            child: Material(
+                              type: MaterialType.transparency,
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final viewportHeight = constraints.maxHeight;
+                                  return Semantics(
+                                    scopesRoute: true,
+                                    namesRoute: true,
+                                    label:
+                                        context.l10n.accessibilityDialogLabel,
+                                    hint: context.l10n.accessibilityDialogHint,
+                                    explicitChildNodes: true,
+                                    child: Scrollbar(
                                       controller: _scrollController,
-                                      physics: const ClampingScrollPhysics(),
-                                      padding: EdgeInsets.all(spacing.m),
-                                      clipBehavior: Clip.hardEdge,
-                                      child: ConstrainedBox(
-                                        constraints: BoxConstraints(
-                                          minHeight: viewportHeight,
-                                        ),
-                                        child: FocusTraversalGroup(
-                                          policy: OrderedTraversalPolicy(),
-                                          child: _AccessibilityChatScope(
-                                            state: widget.state,
-                                            builder: (context, chatState) =>
-                                                _AccessibilityActionContent(
-                                                  state: widget.state,
-                                                  chatState: chatState,
-                                                  sectionsListKey:
-                                                      _sectionsListKey,
-                                                  actionsListKey:
-                                                      _actionsListKey,
-                                                  enableActivationShortcut:
-                                                      !_isEditingText,
-                                                  legendFocusNode:
-                                                      _shortcutLegendFocusNode,
-                                                  messageFocusNode:
-                                                      _messageFocusNode,
-                                                  composerFocusNode:
-                                                      _composerFocusNode,
-                                                  newContactFocusNode:
-                                                      _newContactFocusNode,
-                                                  legendGroupKey:
-                                                      _legendGroupKey,
-                                                  messageCarouselKey:
-                                                      _messageCarouselKey,
-                                                  composerGroupKey:
-                                                      _composerGroupKey,
-                                                  actionsGroupKey:
-                                                      _actionsGroupKey,
-                                                  actionsFocusNode:
-                                                      _actionsFocusNode,
-                                                  newContactGroupKey:
-                                                      _newContactGroupKey,
-                                                  viewportHeight:
-                                                      viewportHeight,
-                                                  activateItemActivator:
-                                                      activateItemActivator,
-                                                  nextGroupActivator:
-                                                      nextGroupActivator,
-                                                  previousGroupActivator:
-                                                      previousGroupActivator,
-                                                  chatLocate: widget.chatLocate,
-                                                ),
+                                      child: SingleChildScrollView(
+                                        controller: _scrollController,
+                                        physics: const ClampingScrollPhysics(),
+                                        padding: EdgeInsets.all(spacing.m),
+                                        clipBehavior: Clip.hardEdge,
+                                        child: ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            minHeight: viewportHeight,
+                                          ),
+                                          child: FocusTraversalGroup(
+                                            policy: OrderedTraversalPolicy(),
+                                            child: _AccessibilityChatScope(
+                                              state: widget.state,
+                                              builder: (context, chatState) =>
+                                                  _AccessibilityActionContent(
+                                                    state: widget.state,
+                                                    chatState: chatState,
+                                                    sectionsListKey:
+                                                        _sectionsListKey,
+                                                    actionsListKey:
+                                                        _actionsListKey,
+                                                    enableActivationShortcut:
+                                                        !_isEditingText,
+                                                    legendFocusNode:
+                                                        _shortcutLegendFocusNode,
+                                                    messageFocusNode:
+                                                        _messageFocusNode,
+                                                    composerFocusNode:
+                                                        _composerFocusNode,
+                                                    newContactFocusNode:
+                                                        _newContactFocusNode,
+                                                    legendGroupKey:
+                                                        _legendGroupKey,
+                                                    messageCarouselKey:
+                                                        _messageCarouselKey,
+                                                    composerGroupKey:
+                                                        _composerGroupKey,
+                                                    actionsGroupKey:
+                                                        _actionsGroupKey,
+                                                    actionsFocusNode:
+                                                        _actionsFocusNode,
+                                                    newContactGroupKey:
+                                                        _newContactGroupKey,
+                                                    viewportHeight:
+                                                        viewportHeight,
+                                                    activateItemActivator:
+                                                        activateItemActivator,
+                                                    nextGroupActivator:
+                                                        nextGroupActivator,
+                                                    previousGroupActivator:
+                                                        previousGroupActivator,
+                                                    chatLocate:
+                                                        widget.chatLocate,
+                                                  ),
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              },
+                                  );
+                                },
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),

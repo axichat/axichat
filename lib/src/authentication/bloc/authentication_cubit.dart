@@ -634,6 +634,19 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
+  String _resolveLoginJid({
+    required String username,
+    required String fallbackDomain,
+  }) {
+    final normalizedUsername = normalizeAddress(username) ?? username;
+    final bareUsername = bareAddress(normalizedUsername) ?? normalizedUsername;
+    final hasDomain = addressDomainPart(bareUsername) != null;
+    if (hasDomain) {
+      return bareUsername;
+    }
+    return '$bareUsername@$fallbackDomain';
+  }
+
   Future<void> persistRememberMeChoice(bool rememberMe) async {
     await _credentialStore.write(
       key: rememberMeChoiceKey,
@@ -1164,7 +1177,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       passwordPreHashed = loginFromStore.passwordPreHashed ?? false;
     } else {
-      resolvedJid = '$username@${config.domain}';
+      resolvedJid = _resolveLoginJid(
+        username: username!,
+        fallbackDomain: config.domain,
+      );
       resolvedPassword = password!;
     }
 

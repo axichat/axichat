@@ -77,6 +77,8 @@ class _SignupFormState extends State<SignupForm>
   int _allowInsecureResetTick = 0;
   Timer? _captchaRetryTimer;
   bool _captchaImageLoaded = false;
+  bool _captchaImageFailed = false;
+  bool _captchaAutoRetryConsumed = false;
   String? _lastCaptchaServer;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
@@ -276,20 +278,29 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _reloadCaptcha() {
+    _reloadCaptchaInternal(resetAutoRetryState: true);
+  }
+
+  void _reloadCaptchaInternal({required bool resetAutoRetryState}) {
     _captchaRetryTimer?.cancel();
     _captchaRetryTimer = null;
     _captchaTextController.clear();
     if (!mounted) return;
     setState(() {
       _captchaImageLoaded = false;
+      _captchaImageFailed = false;
+      if (resetAutoRetryState) {
+        _captchaAutoRetryConsumed = false;
+      }
       _captchaSrc = _loadCaptchaSrc();
     });
   }
 
   void _scheduleInitialCaptchaRetry() {
-    if (_captchaRetryTimer != null) {
+    if (_captchaRetryTimer != null || _captchaAutoRetryConsumed) {
       return;
     }
+    _captchaAutoRetryConsumed = true;
     _captchaRetryTimer = Timer(Duration.zero, () {
       if (!mounted) {
         _captchaRetryTimer?.cancel();
@@ -297,7 +308,7 @@ class _SignupFormState extends State<SignupForm>
         return;
       }
       _captchaRetryTimer = null;
-      _reloadCaptcha();
+      _reloadCaptchaInternal(resetAutoRetryState: false);
     });
   }
 
@@ -307,6 +318,28 @@ class _SignupFormState extends State<SignupForm>
     }
     setState(() {
       _captchaImageLoaded = true;
+      _captchaImageFailed = false;
+    });
+  }
+
+  void _handleCaptchaImageError() {
+    if (!mounted) {
+      return;
+    }
+    if (!_captchaAutoRetryConsumed) {
+      _scheduleInitialCaptchaRetry();
+      return;
+    }
+    if (_captchaImageFailed) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _captchaImageFailed) {
+        return;
+      }
+      setState(() {
+        _captchaImageFailed = true;
+      });
     });
   }
 
@@ -900,16 +933,27 @@ class _SignupFormState extends State<SignupForm>
                                         final encounteredError =
                                             snapshot.hasError ||
                                             (snapshot.hasData && !hasValidUrl);
+                                        final shouldAutoRetry =
+                                            encounteredError &&
+                                            !_captchaAutoRetryConsumed;
+                                        final imageLoading =
+                                            hasValidUrl &&
+                                            !_captchaImageLoaded &&
+                                            !_captchaImageFailed;
                                         final captchaLoading =
-                                            encounteredError ||
                                             !snapshot.hasData ||
-                                            !_captchaImageLoaded;
-                                        if (encounteredError) {
+                                            shouldAutoRetry ||
+                                            imageLoading;
+                                        if (shouldAutoRetry) {
                                           _scheduleInitialCaptchaRetry();
                                           captchaSurface = _CaptchaSkeleton(
                                             animationDuration:
                                                 animationDuration,
                                           );
+                                        } else if (encounteredError ||
+                                            _captchaImageFailed) {
+                                          captchaSurface =
+                                              const _CaptchaErrorSurface();
                                         } else if (!snapshot.hasData) {
                                           captchaSurface = _CaptchaSkeleton(
                                             animationDuration:
@@ -923,8 +967,7 @@ class _SignupFormState extends State<SignupForm>
                                             animationDuration:
                                                 animationDuration,
                                             onLoaded: _markCaptchaImageLoaded,
-                                            onRetry:
-                                                _scheduleInitialCaptchaRetry,
+                                            onError: _handleCaptchaImageError,
                                           );
                                         }
                                         return Align(
@@ -1445,13 +1488,13 @@ class _CaptchaImage extends StatefulWidget {
     required this.url,
     required this.animationDuration,
     required this.onLoaded,
-    required this.onRetry,
+    required this.onError,
   });
 
   final String url;
   final Duration animationDuration;
   final VoidCallback onLoaded;
-  final VoidCallback onRetry;
+  final VoidCallback onError;
 
   @override
   State<_CaptchaImage> createState() => _CaptchaImageState();
@@ -1501,7 +1544,7 @@ class _CaptchaImageState extends State<_CaptchaImage> {
         return child;
       },
       errorBuilder: (context, error, stackTrace) {
-        widget.onRetry();
+        widget.onError();
         return _CaptchaSkeleton(animationDuration: widget.animationDuration);
       },
     );
@@ -1531,6 +1574,30 @@ class _CaptchaSkeleton extends StatefulWidget {
 
   @override
   State<_CaptchaSkeleton> createState() => _CaptchaSkeletonState();
+}
+
+class _CaptchaErrorSurface extends StatelessWidget {
+  const _CaptchaErrorSurface();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final textTheme = context.textTheme;
+    return ColoredBox(
+      color: colors.card,
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.all(spacing.s),
+          child: Text(
+            context.l10n.signupCaptchaFailed,
+            textAlign: TextAlign.center,
+            style: textTheme.small,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _CaptchaSkeletonState extends State<_CaptchaSkeleton>

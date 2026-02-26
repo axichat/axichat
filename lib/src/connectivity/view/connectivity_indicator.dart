@@ -21,10 +21,18 @@ class ConnectivityIndicator extends StatefulWidget {
   State<ConnectivityIndicator> createState() => _ConnectivityIndicatorState();
 }
 
+enum _ConnectivityIndicatorDisplay {
+  hidden,
+  connecting,
+  connected,
+  notConnected,
+  error,
+}
+
 class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
   Timer? _connectedSuccessTimer;
   ConnectivityState? _connectivityState;
-  bool _showConnectedSuccess = false;
+  _ConnectivityIndicatorDisplay _display = _ConnectivityIndicatorDisplay.hidden;
 
   @override
   void initState() {
@@ -42,9 +50,16 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
         emailState: EmailSyncState.ready(),
         emailEnabled: true,
       );
+      _display = _ConnectivityIndicatorDisplay.notConnected;
       return;
     }
-    _connectivityState = context.read<ConnectivityCubit>().state;
+    final initialState = context.read<ConnectivityCubit>().state;
+    _connectivityState = initialState;
+    _display = _displayFor(
+      state: initialState,
+      previousState: null,
+      previousDisplay: _ConnectivityIndicatorDisplay.hidden,
+    );
   }
 
   @override
@@ -53,53 +68,76 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
     super.dispose();
   }
 
+  void _startConnectedSuccessTimer() {
+    _connectedSuccessTimer?.cancel();
+    _connectedSuccessTimer = Timer(
+      context.motion.statusBannerSuccessDuration,
+      () {
+        if (!mounted) return;
+        if (_display != _ConnectivityIndicatorDisplay.connected) return;
+        if (_connectivityState is! ConnectivityConnected) return;
+        setState(() {
+          _display = _ConnectivityIndicatorDisplay.hidden;
+        });
+      },
+    );
+  }
+
+  _ConnectivityIndicatorDisplay _displayFor({
+    required ConnectivityState state,
+    required ConnectivityState? previousState,
+    required _ConnectivityIndicatorDisplay previousDisplay,
+  }) {
+    if (state is ConnectivityConnected) {
+      final enteredFromConnecting = previousState is ConnectivityConnecting;
+      if (enteredFromConnecting ||
+          previousDisplay == _ConnectivityIndicatorDisplay.connected) {
+        return _ConnectivityIndicatorDisplay.connected;
+      }
+      return _ConnectivityIndicatorDisplay.hidden;
+    }
+    if (state is ConnectivityConnecting) {
+      return _ConnectivityIndicatorDisplay.connecting;
+    }
+    if (state is ConnectivityNotConnected) {
+      return _ConnectivityIndicatorDisplay.notConnected;
+    }
+    return _ConnectivityIndicatorDisplay.error;
+  }
+
   void _handleConnectivityState(ConnectivityState state) {
     final previous = _connectivityState;
     if (previous == null) {
       setState(() {
         _connectivityState = state;
-        _showConnectedSuccess = false;
+        _display = _displayFor(
+          state: state,
+          previousState: null,
+          previousDisplay: _display,
+        );
       });
       return;
     }
-    _connectedSuccessTimer?.cancel();
-    _connectedSuccessTimer = null;
 
-    final nextShowConnectedSuccess =
-        previous is ConnectivityConnecting && state is ConnectivityConnected;
-
-    if (nextShowConnectedSuccess) {
-      _connectedSuccessTimer = Timer(
-        context.motion.statusBannerSuccessDuration,
-        () {
-          if (!mounted) return;
-          if (_connectivityState is! ConnectivityConnected) return;
-          setState(() {
-            _showConnectedSuccess = false;
-          });
-        },
-      );
+    final nextDisplay = _displayFor(
+      state: state,
+      previousState: previous,
+      previousDisplay: _display,
+    );
+    if (nextDisplay == _ConnectivityIndicatorDisplay.connected) {
+      _startConnectedSuccessTimer();
+    } else {
+      _connectedSuccessTimer?.cancel();
+      _connectedSuccessTimer = null;
     }
-
-    if (previous.runtimeType == state.runtimeType &&
-        _showConnectedSuccess == nextShowConnectedSuccess) {
-      return;
-    }
-
-    setState(() {
-      _connectivityState = state;
-      _showConnectedSuccess = nextShowConnectedSuccess;
-    });
+    _connectivityState = state;
+    if (_display == nextDisplay) return;
+    setState(() => _display = nextDisplay);
   }
 
   @override
   Widget build(BuildContext context) {
     if (kEnableDemoChats) {
-      return const SizedBox.shrink();
-    }
-
-    final connectivityState = _connectivityState;
-    if (connectivityState == null) {
       return const SizedBox.shrink();
     }
 
@@ -109,30 +147,30 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
         ? colors.background
         : colors.foreground;
     final l10n = context.l10n;
-    final presentation = switch (connectivityState) {
-      ConnectivityConnected() => _ConnectivityIndicatorPresentation(
-        show: _showConnectedSuccess,
-        color: colors.green,
-        foregroundColor: darkForeground,
-        iconData: LucideIcons.cloud,
-        text: l10n.connectivityStatusConnected,
-      ),
-      ConnectivityConnecting() => _ConnectivityIndicatorPresentation(
-        show: true,
-        color: colors.primary,
-        foregroundColor: colors.primaryForeground,
-        iconData: LucideIcons.cloudCog,
-        text: l10n.connectivityStatusConnecting,
-      ),
-      ConnectivityNotConnected() => _ConnectivityIndicatorPresentation(
-        show: true,
-        color: colors.warning,
-        foregroundColor: darkForeground,
-        iconData: LucideIcons.cloudOff,
-        text: l10n.connectivityStatusNotConnected,
-      ),
-      ConnectivityError() => _ConnectivityIndicatorPresentation(
-        show: true,
+    final presentation = switch (_display) {
+      _ConnectivityIndicatorDisplay.hidden => null,
+      _ConnectivityIndicatorDisplay.connected =>
+        _ConnectivityIndicatorPresentation(
+          color: colors.green,
+          foregroundColor: darkForeground,
+          iconData: LucideIcons.cloud,
+          text: l10n.connectivityStatusConnected,
+        ),
+      _ConnectivityIndicatorDisplay.connecting =>
+        _ConnectivityIndicatorPresentation(
+          color: colors.primary,
+          foregroundColor: colors.primaryForeground,
+          iconData: LucideIcons.cloudCog,
+          text: l10n.connectivityStatusConnecting,
+        ),
+      _ConnectivityIndicatorDisplay.notConnected =>
+        _ConnectivityIndicatorPresentation(
+          color: colors.warning,
+          foregroundColor: darkForeground,
+          iconData: LucideIcons.cloudOff,
+          text: l10n.connectivityStatusNotConnected,
+        ),
+      _ConnectivityIndicatorDisplay.error => _ConnectivityIndicatorPresentation(
         color: colors.destructive,
         foregroundColor: colors.destructiveForeground,
         iconData: LucideIcons.cloudOff,
@@ -143,12 +181,8 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
     return BlocListener<ConnectivityCubit, ConnectivityState>(
       listener: (context, state) => _handleConnectivityState(state),
       child: ConnectivityIndicatorContainer(
-        show: presentation.show,
+        presentation: presentation,
         duration: context.watch<SettingsCubit>().animationDuration,
-        color: presentation.color,
-        foregroundColor: presentation.foregroundColor,
-        iconData: presentation.iconData,
-        text: presentation.text,
       ),
     );
   }
@@ -156,14 +190,12 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
 
 class _ConnectivityIndicatorPresentation {
   const _ConnectivityIndicatorPresentation({
-    required this.show,
     required this.color,
     required this.foregroundColor,
     required this.iconData,
     required this.text,
   });
 
-  final bool show;
   final Color color;
   final Color foregroundColor;
   final IconData iconData;
@@ -173,33 +205,25 @@ class _ConnectivityIndicatorPresentation {
 class ConnectivityIndicatorContainer extends StatelessWidget {
   const ConnectivityIndicatorContainer({
     super.key,
-    required this.color,
-    required this.foregroundColor,
-    required this.iconData,
-    required this.text,
-    this.show = false,
+    required this.presentation,
     required this.duration,
   });
 
-  final Color color;
-  final Color foregroundColor;
-  final IconData iconData;
-  final String text;
-  final bool show;
+  final _ConnectivityIndicatorPresentation? presentation;
   final Duration duration;
 
   @override
   Widget build(BuildContext context) {
     final motion = context.motion;
-    final Widget child = show
-        ? _ConnectivityIndicatorBanner(
-            key: ValueKey<String>(text),
-            color: color,
-            foregroundColor: foregroundColor,
-            iconData: iconData,
-            text: text,
-          )
-        : const SizedBox.shrink(key: ValueKey<String>('hidden'));
+    final Widget child = presentation == null
+        ? const SizedBox.shrink(key: ValueKey<String>('hidden'))
+        : _ConnectivityIndicatorBanner(
+            key: ValueKey<String>(presentation!.text),
+            color: presentation!.color,
+            foregroundColor: presentation!.foregroundColor,
+            iconData: presentation!.iconData,
+            text: presentation!.text,
+          );
     return AnimatedSwitcher(
       duration: duration,
       switchInCurve: Curves.easeOutCubic,

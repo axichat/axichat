@@ -29,6 +29,7 @@ class AxiContextMenu extends StatelessWidget {
     this.onTapInside,
     this.onTapUpInside,
     this.onTapUpOutside,
+    this.popoverReverseDuration,
   });
 
   final Widget child;
@@ -47,6 +48,7 @@ class AxiContextMenu extends StatelessWidget {
   final TapRegionCallback? onTapInside;
   final TapRegionUpCallback? onTapUpInside;
   final TapRegionUpCallback? onTapUpOutside;
+  final Duration? popoverReverseDuration;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +76,7 @@ class AxiContextMenu extends StatelessWidget {
       onTapInside: onTapInside,
       onTapUpInside: onTapUpInside,
       onTapUpOutside: onTapUpOutside,
+      popoverReverseDuration: popoverReverseDuration,
       child: child,
     );
   }
@@ -104,6 +107,10 @@ class AxiContextMenuRegion extends StatefulWidget {
 }
 
 class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
+  static final Object _defaultMenuGroupId = Object();
+  static final Map<Object, _AxiContextMenuRegionState> _openMenuByGroup =
+      <Object, _AxiContextMenuRegionState>{};
+
   ShadContextMenuController? _controller;
   ShadContextMenuController? _attachedController;
   ShadContextMenuController get controller =>
@@ -117,6 +124,7 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
   final bool _isContextMenuAlreadyDisabled =
       kIsWeb && !BrowserContextMenu.enabled;
   var _controllerOpen = false;
+  Object get _menuGroupId => widget.groupId ?? _defaultMenuGroupId;
 
   @override
   void initState() {
@@ -130,6 +138,13 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
     if (widget.visible != null) {
       controller.setOpen(widget.visible!);
     }
+    if (oldWidget.groupId != widget.groupId) {
+      _unregisterMenuGroup(oldWidget.groupId ?? _defaultMenuGroupId);
+      if (_controllerOpen) {
+        _closeOpenMenuForCurrentGroup();
+        _openMenuByGroup[_menuGroupId] = this;
+      }
+    }
     if (oldWidget.controller != widget.controller) {
       _attachControllerListener(force: true);
     } else {
@@ -139,6 +154,7 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
 
   @override
   void dispose() {
+    _unregisterMenuGroup(_menuGroupId);
     _attachedController?.removeListener(_handleControllerChanged);
     _controller?.dispose();
     super.dispose();
@@ -146,6 +162,7 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
 
   void _showAtOffset(Offset offset) {
     if (!mounted || widget.items.isEmpty) return;
+    _closeOpenMenuForCurrentGroup();
     setState(() {
       _anchor = _edgeAwareAnchor(offset);
     });
@@ -173,10 +190,35 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
   void _updateOpenState(bool open) {
     if (_controllerOpen == open) return;
     _controllerOpen = open;
+    if (open) {
+      _openMenuByGroup[_menuGroupId] = this;
+    } else {
+      _unregisterMenuGroup(_menuGroupId);
+    }
     widget.onMenuVisibilityChanged?.call(open);
   }
 
-  ShadAnchorAuto _edgeAwareAnchor(Offset globalPosition) {
+  void _closeOpenMenuForCurrentGroup() {
+    final existing = _openMenuByGroup[_menuGroupId];
+    if (existing == null) {
+      return;
+    }
+    if (!existing.mounted) {
+      _openMenuByGroup.remove(_menuGroupId);
+      return;
+    }
+    if (!identical(existing, this)) {
+      existing.controller.hide();
+    }
+  }
+
+  void _unregisterMenuGroup(Object groupId) {
+    if (identical(_openMenuByGroup[groupId], this)) {
+      _openMenuByGroup.remove(groupId);
+    }
+  }
+
+  ShadAnchorBase _edgeAwareAnchor(Offset globalPosition) {
     final size = MediaQuery.sizeOf(context);
     if (size.isEmpty) {
       return const ShadAnchorAuto(offset: Offset(0, 4));
@@ -192,38 +234,46 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
     final usableTop = safeTop + 16;
     final usableBottom = size.height - safeBottom - 16;
 
-    final clampedDx = globalPosition.dx.clamp(usableLeft, usableRight);
-    final clampedDy = globalPosition.dy.clamp(usableTop, usableBottom);
+    final clampedPosition = Offset(
+      globalPosition.dx.clamp(usableLeft, usableRight).toDouble(),
+      globalPosition.dy.clamp(usableTop, usableBottom).toDouble(),
+    );
 
-    final aboveSpace = clampedDy - safeTop;
-    final belowSpace = (size.height - safeBottom) - clampedDy;
-    const edgeThreshold = 128.0;
-    const menuClearance = 240.0;
-    final nearTopEdge = aboveSpace < edgeThreshold;
-    final nearBottomEdge = belowSpace < edgeThreshold;
-    final fitsBelow = belowSpace >= menuClearance;
-    final fitsAbove = aboveSpace >= menuClearance;
-    final preferBelow = switch ((nearTopEdge, nearBottomEdge)) {
-      (true, false) => true,
-      (false, true) => false,
-      _ when fitsBelow != fitsAbove => fitsBelow,
-      _ => belowSpace >= aboveSpace,
+    final RenderObject? renderObject = context.findRenderObject();
+    final Rect targetRect = switch (renderObject) {
+      RenderBox box when box.hasSize => Rect.fromLTWH(
+        box.localToGlobal(Offset.zero).dx,
+        box.localToGlobal(Offset.zero).dy,
+        box.size.width,
+        box.size.height,
+      ),
+      _ => Rect.fromCenter(center: clampedPosition, width: 0, height: 0),
     };
 
-    const snapThreshold = 96.0;
-    final leftSpace = clampedDx - safeLeft;
-    final rightSpace = (size.width - safeRight) - clampedDx;
-    final horizontal = leftSpace < snapThreshold
-        ? _MenuHorizontal.left
-        : rightSpace < snapThreshold
-        ? _MenuHorizontal.right
-        : _MenuHorizontal.center;
+    final leftSpace = targetRect.left - usableLeft;
+    final rightSpace = usableRight - targetRect.right;
+    const sideClearance = 220.0;
+    if (math.max(leftSpace, rightSpace) >= sideClearance) {
+      final openToRight = rightSpace >= leftSpace;
+      final vertical = _verticalAnchor(
+        topSpace: targetRect.top - usableTop,
+        bottomSpace: usableBottom - targetRect.bottom,
+      );
+      final alignmentY = switch (vertical) {
+        _MenuVertical.top => -1.0,
+        _MenuVertical.center => 0.0,
+        _MenuVertical.bottom => 1.0,
+      };
+      final targetX = openToRight ? 1.0 : -1.0;
+      final followerX = targetX;
+      return ShadAnchorAuto(
+        offset: Offset(openToRight ? 8 : -8, 0),
+        followerAnchor: Alignment(followerX, alignmentY),
+        targetAnchor: Alignment(targetX, alignmentY),
+      );
+    }
 
-    return ShadAnchorAuto(
-      offset: _anchorOffset(preferBelow, horizontal),
-      followerAnchor: _followerAlignment(preferBelow, horizontal),
-      targetAnchor: _targetAlignment(preferBelow, horizontal),
-    );
+    return ShadGlobalAnchor(clampedPosition);
   }
 
   @override
@@ -232,7 +282,7 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
       return widget.child;
     }
 
-    final platform = Theme.of(context).platform;
+    final platform = defaultTargetPlatform;
     final effectiveLongPressEnabled =
         widget.longPressEnabled ??
         (platform == TargetPlatform.android || platform == TargetPlatform.iOS);
@@ -244,6 +294,9 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
       controller: controller,
       items: widget.items,
       groupId: widget.groupId,
+      popoverReverseDuration: Duration.zero,
+      onTapOutside: (_) => _hide(),
+      onTapUpOutside: (_) => _hide(),
       child: ShadGestureDetector(
         onTapDown: (_) => _hide(),
         onSecondaryTapDown: (details) async {
@@ -279,38 +332,21 @@ class _AxiContextMenuRegionState extends State<AxiContextMenuRegion> {
     );
   }
 
-  Alignment _targetAlignment(bool preferBelow, _MenuHorizontal horizontal) {
-    final y = preferBelow ? 1.0 : -1.0;
-    final x = _alignmentX(horizontal);
-    return Alignment(x, y);
-  }
-
-  Alignment _followerAlignment(bool preferBelow, _MenuHorizontal horizontal) {
-    final y = preferBelow ? -1.0 : 1.0;
-    final x = _alignmentX(horizontal);
-    return Alignment(x, y);
-  }
-
-  double _alignmentX(_MenuHorizontal horizontal) {
-    switch (horizontal) {
-      case _MenuHorizontal.left:
-        return -1.0;
-      case _MenuHorizontal.center:
-        return 0.0;
-      case _MenuHorizontal.right:
-        return 1.0;
+  _MenuVertical _verticalAnchor({
+    required double topSpace,
+    required double bottomSpace,
+  }) {
+    const edgeThreshold = 96.0;
+    final constrainedTop = topSpace < edgeThreshold;
+    final constrainedBottom = bottomSpace < edgeThreshold;
+    if (constrainedTop && !constrainedBottom) {
+      return _MenuVertical.top;
     }
-  }
-
-  Offset _anchorOffset(bool preferBelow, _MenuHorizontal horizontal) {
-    final dy = preferBelow ? 8.0 : -8.0;
-    final dx = switch (horizontal) {
-      _MenuHorizontal.left => 12.0,
-      _MenuHorizontal.center => 0.0,
-      _MenuHorizontal.right => -12.0,
-    };
-    return Offset(dx, dy);
+    if (constrainedBottom && !constrainedTop) {
+      return _MenuVertical.bottom;
+    }
+    return _MenuVertical.center;
   }
 }
 
-enum _MenuHorizontal { left, center, right }
+enum _MenuVertical { top, center, bottom }
