@@ -1749,7 +1749,7 @@
   "emailForwardingWelcomeSetupFrom": "Setup forwarding from:",
   "emailForwardingWelcomeOtherProviderHint": "If you use another provider, their website should have instructions as well.",
   "emailForwardingGuideNotificationsTitle": "Message notifications",
-  "emailForwardingGuideSettingsHint": "This can be done later in settings.",
+  "emailForwardingGuideSettingsHint": "You can do this later in settings.",
   "emailForwardingGuideSkipLabel": "Skip for now",
   "emailForwardingProviderGmail": "Gmail",
   "emailForwardingProviderOutlook": "Outlook",

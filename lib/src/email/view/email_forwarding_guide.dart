@@ -154,6 +154,7 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final spacing = context.spacing;
     return Dialog(
       insetPadding: EdgeInsets.symmetric(
@@ -169,17 +170,28 @@ class EmailForwardingWelcomeDialog extends StatelessWidget {
           padding: EdgeInsets.zero,
           child: AxiSheetScaffold.scroll(
             header: AxiSheetHeader(
-              title: Text(context.l10n.emailForwardingWelcomeTitle),
+              title: Text(l10n.emailForwardingWelcomeTitle),
               onClose: () => context.pop(),
             ),
             footer: Padding(
               padding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.m),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: AxiButton.outline(
-                  onPressed: () => context.pop(),
-                  child: Text(context.l10n.commonClose),
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    l10n.emailForwardingGuideSettingsHint,
+                    style: context.textTheme.muted,
+                  ),
+                  SizedBox(height: spacing.s),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: AxiButton.outline(
+                      onPressed: () => context.pop(),
+                      child: Text(l10n.emailForwardingGuideSkipLabel),
+                    ),
+                  ),
+                ],
               ),
             ),
             children: const [EmailForwardingWelcomeContent()],

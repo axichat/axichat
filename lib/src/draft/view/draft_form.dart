@@ -201,6 +201,7 @@ class _DraftFormState extends State<DraftForm> {
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final sectionSpacing = spacing.m;
     final smallGap = spacing.s;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
 
     return BlocBuilder<ProfileCubit, ProfileState>(
       bloc: locate<ProfileCubit>(),
@@ -561,7 +562,8 @@ class _DraftFormState extends State<DraftForm> {
                                         ),
                                       ],
                                     ),
-                                    SizedBox(height: sectionSpacing),
+                                    if (!keyboardVisible)
+                                      SizedBox(height: sectionSpacing),
                                   ],
                                 ),
                               ),

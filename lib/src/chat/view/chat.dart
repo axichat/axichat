@@ -11726,10 +11726,12 @@ class _InlineExpandedDraftComposerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     return SafeArea(
       top: false,
       left: false,
       right: false,
+      bottom: !keyboardVisible,
       child: ColoredBox(
         color: colors.background,
         child: DecoratedBox(

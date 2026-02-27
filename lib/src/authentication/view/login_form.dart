@@ -25,6 +25,7 @@ class LoginForm extends StatefulWidget {
 }
 
 class _LoginFormState extends State<LoginForm> {
+  final _formKey = GlobalKey<FormState>();
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
@@ -57,9 +58,12 @@ class _LoginFormState extends State<LoginForm> {
     super.dispose();
   }
 
-  void _onPressed(BuildContext context) async {
+  void _onPressed() async {
     FocusManager.instance.primaryFocus?.unfocus();
-    if (!Form.of(context).mounted || !Form.of(context).validate()) return;
+    final formState = _formKey.currentState;
+    if (formState == null || !formState.validate()) {
+      return;
+    }
     widget.onSubmitStart?.call();
     await context.read<AuthenticationCubit>().login(
       username: _jidTextController.value.text,
@@ -99,6 +103,7 @@ class _LoginFormState extends State<LoginForm> {
             ? state.message.resolve(context.l10n)
             : null;
         return Form(
+          key: _formKey,
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
@@ -197,7 +202,7 @@ class _LoginFormState extends State<LoginForm> {
                         child: AxiButton.primary(
                           key: loginSubmitKey,
                           loading: isBusy,
-                          onPressed: isBusy ? null : () => _onPressed(context),
+                          onPressed: isBusy ? null : _onPressed,
                           child: Text(context.l10n.authLogin),
                         ),
                       ),

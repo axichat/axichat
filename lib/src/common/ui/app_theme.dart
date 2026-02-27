@@ -181,6 +181,14 @@ class AppTheme {
         hoverForegroundColor: patchedScheme.primary,
         pressedForegroundColor: patchedScheme.primary,
       ),
+      primaryDialogTheme: const ShadDialogTheme(
+        actionsAxis: Axis.horizontal,
+        expandActionsWhenTiny: false,
+      ),
+      alertDialogTheme: const ShadDialogTheme(
+        actionsAxis: Axis.horizontal,
+        expandActionsWhenTiny: false,
+      ),
       decoration: ShadDecoration(
         errorPadding: inputSubtextInsets,
         border: ShadBorder.fromBorderSide(

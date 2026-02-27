@@ -1847,9 +1847,6 @@ final class _RecipientAutocompleteOverlayState
                         keyboardType: TextInputType.emailAddress,
                         textCapitalization: TextCapitalization.none,
                         autocorrect: false,
-                        smartDashesType: SmartDashesType.disabled,
-                        smartQuotesType: SmartQuotesType.disabled,
-                        enableSuggestions: false,
                         autofillHints: const [AutofillHints.email],
                         inputFormatters: [
                           FilteringTextInputFormatter.deny(RegExp(r'\\s')),

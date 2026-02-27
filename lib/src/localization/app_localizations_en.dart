@@ -3997,7 +3997,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emailForwardingGuideSettingsHint =>
-      'This can be done later in settings.';
+      'You can do this later in settings.';
 
   @override
   String get emailForwardingGuideSkipLabel => 'Skip for now';

@@ -21,6 +21,7 @@ class ComposeScreen extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final sizing = context.sizing;
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
@@ -52,7 +53,12 @@ class ComposeScreen extends StatelessWidget {
       body: Align(
         alignment: Alignment.topCenter,
         child: Padding(
-          padding: EdgeInsets.all(spacing.m),
+          padding: EdgeInsets.fromLTRB(
+            spacing.m,
+            spacing.m,
+            spacing.m,
+            keyboardVisible ? 0 : spacing.m,
+          ),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: sizing.composeWindowExpandedWidth,

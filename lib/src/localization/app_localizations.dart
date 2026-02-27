@@ -7136,7 +7136,7 @@ abstract class AppLocalizations {
   /// No description provided for @emailForwardingGuideSettingsHint.
   ///
   /// In en, this message translates to:
-  /// **'This can be done later in settings.'**
+  /// **'You can do this later in settings.'**
   String get emailForwardingGuideSettingsHint;
 
   /// No description provided for @emailForwardingGuideSkipLabel.
