@@ -6,6 +6,7 @@ import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 const Color _defaultDialogBarrierColor = Color(0xcc000000);
 
@@ -15,7 +16,7 @@ Future<T?> showFadeScaleDialog<T>({
   bool barrierDismissible = true,
   Color? barrierColor,
   String? barrierLabel,
-  bool useRootNavigator = true,
+  bool useRootNavigator = false,
   RouteSettings? routeSettings,
   Offset? anchorPoint,
   bool useSafeArea = true,
@@ -29,11 +30,15 @@ Future<T?> showFadeScaleDialog<T>({
       MaterialLocalizations.of(context).modalBarrierDismissLabel;
   final Duration resolvedDuration =
       transitionDuration ?? context.read<SettingsCubit>().animationDuration;
+  final ShadThemeData shadTheme = ShadTheme.of(context, listen: false);
 
   return showGeneralDialog<T>(
     context: context,
     pageBuilder: (dialogContext, animation, secondaryAnimation) {
-      final Widget child = KeyboardPopScope(child: builder(dialogContext));
+      final Widget child = ShadTheme(
+        data: shadTheme,
+        child: KeyboardPopScope(child: builder(dialogContext)),
+      );
       if (!useSafeArea) return child;
       return SafeArea(child: child);
     },

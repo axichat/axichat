@@ -406,6 +406,11 @@ class _LoginScreenState extends State<LoginScreen>
           final showProgressBar = progress.isVisible;
           final formsDisabled = showProgressBar;
           final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+          final authFormContent = _AuthFormContent(
+            selectedFlow: _selectedFlow,
+            formsDisabled: formsDisabled,
+            onSubmitStart: _handleSubmissionRequested,
+          );
           return Scaffold(
             resizeToAvoidBottomInset: false,
             body: SafeArea(
@@ -455,85 +460,17 @@ class _LoginScreenState extends State<LoginScreen>
                               child: Column(
                                 children: [
                                   Expanded(
-                                    child: SingleChildScrollView(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.center,
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          const ShorebirdChecker(),
-                                          AxiAnimatedSize(
-                                            duration: context
-                                                .watch<SettingsCubit>()
-                                                .animationDuration,
-                                            curve: Curves.easeInOut,
-                                            child: AnimatedCrossFade(
-                                              firstCurve: Curves.easeInOut,
-                                              secondCurve: Curves.easeInOut,
-                                              sizeCurve: Curves.easeInOut,
-                                              duration: context
-                                                  .watch<SettingsCubit>()
-                                                  .animationDuration,
-                                              crossFadeState:
-                                                  _selectedFlow ==
-                                                      _AuthFlow.login
-                                                  ? CrossFadeState.showFirst
-                                                  : CrossFadeState.showSecond,
-                                              firstChild: IgnorePointer(
-                                                ignoring:
-                                                    formsDisabled ||
-                                                    _selectedFlow !=
-                                                        _AuthFlow.login,
-                                                child: Padding(
-                                                  padding: EdgeInsets.all(
-                                                    spacing.m,
-                                                  ),
-                                                  child: LoginForm(
-                                                    key: const ValueKey(
-                                                      'login-form',
-                                                    ),
-                                                    busy: formsDisabled,
-                                                    onSubmitStart: () =>
-                                                        _handleSubmissionRequested(
-                                                          _AuthFlow.login,
-                                                        ),
-                                                  ),
-                                                ),
-                                              ),
-                                              secondChild: IgnorePointer(
-                                                ignoring:
-                                                    formsDisabled ||
-                                                    _selectedFlow !=
-                                                        _AuthFlow.signup,
-                                                child: Padding(
-                                                  padding: EdgeInsets.all(
-                                                    spacing.m,
-                                                  ),
-                                                  child: BlocProvider(
-                                                    create: (_) =>
-                                                        SignupAvatarCubit(),
-                                                    child: SignupForm(
-                                                      key: const ValueKey(
-                                                        'signup-form',
-                                                      ),
-                                                      visible:
-                                                          _selectedFlow ==
-                                                          _AuthFlow.signup,
-                                                      busy: formsDisabled,
-                                                      onSubmitStart: () =>
-                                                          _handleSubmissionRequested(
-                                                            _AuthFlow.signup,
-                                                          ),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
+                                    child: keyboardInset > 0
+                                        ? SingleChildScrollView(
+                                            keyboardDismissBehavior:
+                                                ScrollViewKeyboardDismissBehavior
+                                                    .onDrag,
+                                            child: authFormContent,
+                                          )
+                                        : Align(
+                                            alignment: Alignment.bottomCenter,
+                                            child: authFormContent,
                                           ),
-                                        ],
-                                      ),
-                                    ),
                                   ),
                                   SizedBox(height: spacing.s),
                                   AnimatedSwitcher(
@@ -659,6 +596,70 @@ class _LoginScreenState extends State<LoginScreen>
           );
         },
       ),
+    );
+  }
+}
+
+class _AuthFormContent extends StatelessWidget {
+  const _AuthFormContent({
+    required this.selectedFlow,
+    required this.formsDisabled,
+    required this.onSubmitStart,
+  });
+
+  final _AuthFlow selectedFlow;
+  final bool formsDisabled;
+  final ValueChanged<_AuthFlow> onSubmitStart;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const ShorebirdChecker(),
+        AxiAnimatedSize(
+          duration: animationDuration,
+          curve: Curves.easeInOut,
+          child: AnimatedCrossFade(
+            firstCurve: Curves.easeInOut,
+            secondCurve: Curves.easeInOut,
+            sizeCurve: Curves.easeInOut,
+            duration: animationDuration,
+            crossFadeState: selectedFlow == _AuthFlow.login
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: IgnorePointer(
+              ignoring: formsDisabled || selectedFlow != _AuthFlow.login,
+              child: Padding(
+                padding: EdgeInsets.all(spacing.m),
+                child: LoginForm(
+                  key: const ValueKey('login-form'),
+                  busy: formsDisabled,
+                  onSubmitStart: () => onSubmitStart(_AuthFlow.login),
+                ),
+              ),
+            ),
+            secondChild: IgnorePointer(
+              ignoring: formsDisabled || selectedFlow != _AuthFlow.signup,
+              child: Padding(
+                padding: EdgeInsets.all(spacing.m),
+                child: BlocProvider(
+                  create: (_) => SignupAvatarCubit(),
+                  child: SignupForm(
+                    key: const ValueKey('signup-form'),
+                    visible: selectedFlow == _AuthFlow.signup,
+                    busy: formsDisabled,
+                    onSubmitStart: () => onSubmitStart(_AuthFlow.signup),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

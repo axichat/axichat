@@ -2721,6 +2721,7 @@ class XmppService extends XmppBase
   void _updateHttpUploadSupport(HttpUploadSupport support) {
     if (_httpUploadSupport == support) return;
     _httpUploadSupport = support;
+    if (_httpUploadSupportController.isClosed) return;
     _httpUploadSupportController.add(support);
   }
 

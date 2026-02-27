@@ -47,7 +47,7 @@ Future<MessageTransport?> showTransportChoiceDialog(
         constraints: BoxConstraints(
           maxWidth: dialogContext.sizing.dialogMaxWidth,
         ),
-        title: Text(title, style: context.modalHeaderTextStyle),
+        title: Text(title, style: dialogContext.modalHeaderTextStyle),
         actions: [
           AxiButton.outline(
             onPressed: () => pop(null),
@@ -58,7 +58,7 @@ Future<MessageTransport?> showTransportChoiceDialog(
         ],
         child: Text(
           message,
-          style: context.textTheme.small,
+          style: dialogContext.textTheme.small,
           textAlign: TextAlign.start,
         ),
       );

@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
@@ -30,6 +31,8 @@ import 'package:axichat/src/chats/view/chats_add_button.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/file_type_detector.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -44,6 +47,8 @@ import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
+import 'package:axichat/src/email/models/email_attachment.dart';
+import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
@@ -59,6 +64,7 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/view/session_capability_indicators.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/share/bloc/share_intent_cubit.dart';
 import 'package:axichat/src/spam/view/spam_list.dart';
 import 'package:axichat/src/storage/models.dart' as m;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -70,6 +76,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_nav_bar/google_nav_bar.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
+import 'package:path/path.dart' as p;
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 part 'home/view/home_screen_widgets.dart';
@@ -422,14 +429,35 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const String _shareFileSchemePrefix = 'file://';
+  static const String _emptyShareBody = '';
+  static const List<String> _emptyShareJids = [''];
+  static const int _shareAttachmentUnknownSizeBytes = 0;
+  static const int _shareAttachmentMinSizeBytes = 1;
+
   final FocusNode _shortcutFocusNode = FocusNode(debugLabel: 'home_shortcuts');
   bool _railCollapsed = true;
+  final StreamController<void> _shareIntentRequests = StreamController<void>(
+    sync: true,
+  );
+  late final StreamSubscription<void> _shareIntentRequestSubscription =
+      _shareIntentRequests.stream
+          .asyncMap((_) {
+            return fireAndForget(
+              _handleShareIntent,
+              operationName: 'HomeScreen.handleShareIntent',
+              loggerName: 'HomeScreen',
+            );
+          })
+          .listen((_) {});
   LocalHistoryEntry? _openChatHistoryEntry;
   LocalHistoryEntry? _openCalendarHistoryEntry;
   ValueNotifier<int>? _bottomNavIndexNotifier;
 
   @override
   void dispose() {
+    unawaited(_shareIntentRequestSubscription.cancel());
+    unawaited(_shareIntentRequests.close());
     _shortcutFocusNode.dispose();
     _clearOpenChatHistoryEntry();
     _clearOpenCalendarHistoryEntry();
@@ -543,6 +571,159 @@ class _HomeScreenState extends State<HomeScreen> {
     _updateOpenCalendarHistoryEntry();
   }
 
+  void _queueShareIntentHandling() {
+    if (_shareIntentRequests.isClosed) {
+      return;
+    }
+    _shareIntentRequests.add(null);
+  }
+
+  Future<void> _handleShareIntent() async {
+    if (!mounted) {
+      return;
+    }
+    final shareState = context.read<ShareIntentCubit>().state;
+    if (shareState.hasPayload != true) {
+      return;
+    }
+    final payload = shareState.payload;
+    if (payload == null) {
+      return;
+    }
+    final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
+    final bool hasBody = resolvedBody.isNotEmpty;
+    final messageService = context.read<MessageService>();
+    final List<String> attachmentMetadataIds = await _persistSharedAttachments(
+      messageService: messageService,
+      attachments: payload.attachments,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (!hasBody && attachmentMetadataIds.isEmpty) {
+      await _consumeSharePayload(payload);
+      return;
+    }
+    openComposeDraft(
+      context,
+      body: resolvedBody,
+      jids: _emptyShareJids,
+      attachmentMetadataIds: attachmentMetadataIds,
+    );
+    await _consumeSharePayload(payload);
+  }
+
+  Future<void> _consumeSharePayload(SharePayload payload) async {
+    final shareCubit = context.read<ShareIntentCubit>();
+    if (!identical(shareCubit.state.payload, payload)) {
+      return;
+    }
+    await shareCubit.consume();
+  }
+
+  Future<List<String>> _persistSharedAttachments({
+    required MessageService messageService,
+    required List<ShareAttachmentPayload> attachments,
+  }) async {
+    final List<EmailAttachment> prepared = await _prepareSharedAttachments(
+      attachments: attachments,
+      optimize: true,
+    );
+    if (prepared.isEmpty) {
+      return const <String>[];
+    }
+    return messageService.persistDraftAttachmentMetadata(prepared);
+  }
+
+  Future<List<EmailAttachment>> _prepareSharedAttachments({
+    required List<ShareAttachmentPayload> attachments,
+    required bool optimize,
+  }) async {
+    if (attachments.isEmpty) {
+      return const <EmailAttachment>[];
+    }
+    final List<EmailAttachment> prepared = <EmailAttachment>[];
+    for (final ShareAttachmentPayload attachment in attachments) {
+      final String normalizedPath = _normalizeSharedAttachmentPath(
+        attachment.path,
+      );
+      if (normalizedPath.isEmpty) {
+        continue;
+      }
+      final File file = File(normalizedPath);
+      if (!await file.exists()) {
+        continue;
+      }
+      final String fileName = _resolveSharedAttachmentFileName(normalizedPath);
+      final int sizeBytes = await _resolveSharedAttachmentSizeBytes(file);
+      final int resolvedSizeBytes = sizeBytes >= _shareAttachmentMinSizeBytes
+          ? sizeBytes
+          : _shareAttachmentUnknownSizeBytes;
+      final String mimeType = await _resolveSharedAttachmentMimeType(
+        fileName: fileName,
+        path: normalizedPath,
+        attachment: attachment,
+      );
+      EmailAttachment emailAttachment = EmailAttachment(
+        path: normalizedPath,
+        fileName: fileName,
+        sizeBytes: resolvedSizeBytes,
+        mimeType: mimeType,
+      );
+      if (optimize) {
+        emailAttachment = await EmailAttachmentOptimizer.optimize(
+          emailAttachment,
+        );
+      }
+      prepared.add(emailAttachment);
+    }
+    return List<EmailAttachment>.unmodifiable(prepared);
+  }
+
+  String _normalizeSharedAttachmentPath(String path) {
+    final String trimmed = path.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+    if (!trimmed.startsWith(_shareFileSchemePrefix)) {
+      return trimmed;
+    }
+    final String? resolved = Uri.tryParse(trimmed)?.toFilePath();
+    if (resolved == null || resolved.isEmpty) {
+      return trimmed;
+    }
+    return resolved;
+  }
+
+  String _resolveSharedAttachmentFileName(String path) {
+    final String baseName = p.basename(path);
+    if (baseName.isNotEmpty) {
+      return baseName;
+    }
+    return path;
+  }
+
+  Future<String> _resolveSharedAttachmentMimeType({
+    required String fileName,
+    required String path,
+    required ShareAttachmentPayload attachment,
+  }) async {
+    final String? resolvedMimeType = await resolveMimeTypeFromPath(
+      path: path,
+      fileName: fileName,
+      declaredMimeType: attachment.type.mimeTypeFallback,
+    );
+    return resolvedMimeType ?? attachment.type.mimeTypeFallback;
+  }
+
+  Future<int> _resolveSharedAttachmentSizeBytes(File file) async {
+    try {
+      return await file.length();
+    } on Exception {
+      return _shareAttachmentUnknownSizeBytes;
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -555,6 +736,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final locate = context.read;
     final chatsState = locate<ChatsCubit>().state;
     _syncHomeHistoryEntries(chatsState);
+    _queueShareIntentHandling();
   }
 
   KeyEventResult _handleHomeKeyEvent(FocusNode node, KeyEvent event) {
@@ -574,28 +756,33 @@ class _HomeScreenState extends State<HomeScreen> {
     )?.calendarBottomDragSession;
     final tabs =
         HomeShellScope.maybeOf(context)?.tabs ?? const <HomeTabEntry>[];
-    return _HomeExitPopGuard(
-      homeTabIndex: homeTabIndex,
-      bottomNavIndex: bottomNavIndex,
-      child: _HomeContent(
-        storageManager: storageManager,
-        shortcutFocusNode: _shortcutFocusNode,
+    return BlocListener<ShareIntentCubit, ShareIntentState>(
+      listener: (context, _) {
+        _queueShareIntentHandling();
+      },
+      child: _HomeExitPopGuard(
+        homeTabIndex: homeTabIndex,
         bottomNavIndex: bottomNavIndex,
-        calendarBottomDragSession: calendarBottomDragSession,
-        tabs: tabs,
-        railCollapsed: _railCollapsed,
-        onToggleNavRail: () {
-          setState(() {
-            _railCollapsed = !_railCollapsed;
-          });
-        },
-        onRailCollapsedChanged: (value) {
-          setState(() {
-            _railCollapsed = value;
-          });
-        },
-        onSyncHomeHistoryEntries: _syncHomeHistoryEntries,
-        onHomeKeyEvent: _handleHomeKeyEvent,
+        child: _HomeContent(
+          storageManager: storageManager,
+          shortcutFocusNode: _shortcutFocusNode,
+          bottomNavIndex: bottomNavIndex,
+          calendarBottomDragSession: calendarBottomDragSession,
+          tabs: tabs,
+          railCollapsed: _railCollapsed,
+          onToggleNavRail: () {
+            setState(() {
+              _railCollapsed = !_railCollapsed;
+            });
+          },
+          onRailCollapsedChanged: (value) {
+            setState(() {
+              _railCollapsed = value;
+            });
+          },
+          onSyncHomeHistoryEntries: _syncHomeHistoryEntries,
+          onHomeKeyEvent: _handleHomeKeyEvent,
+        ),
       ),
     );
   }
