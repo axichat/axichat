@@ -22,7 +22,6 @@ import '../../mocks.dart';
 
 const validUsername = 'validUsername';
 const validJid = '$validUsername@${EndpointConfig.defaultDomain}';
-const validFullJid = '$validUsername@example.com';
 const validPassword = 'validPassword';
 const saltedPassword = 'saltedPassword';
 const invalidUsername = 'invalidUsername';
@@ -248,17 +247,6 @@ void main() {
           endpoint: any(named: 'endpoint'),
         ),
       ).thenAnswer((_) async => saltedPassword);
-      when(
-        () => mockXmppService.connect(
-          jid: validFullJid,
-          password: validPassword,
-          databasePrefix: any(named: 'databasePrefix'),
-          databasePassphrase: any(named: 'databasePassphrase'),
-          preHashed: any(named: 'preHashed'),
-          reuseExistingSession: any(named: 'reuseExistingSession'),
-          endpoint: any(named: 'endpoint'),
-        ),
-      ).thenAnswer((_) async => saltedPassword);
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -287,25 +275,6 @@ void main() {
           () => mockCredentialStore.write(
             key: bloc.passwordPreHashedStorageKey,
             value: true.toString(),
-          ),
-        ).called(1);
-      },
-    );
-
-    blocTest<AuthenticationCubit, AuthenticationState>(
-      'Given a full JID username, logs in without appending endpoint domain.',
-      build: () => bloc,
-      act: (bloc) =>
-          bloc.login(username: validFullJid, password: validPassword),
-      expect: () => [
-        const AuthenticationLogInInProgress(),
-        const AuthenticationComplete(),
-      ],
-      verify: (bloc) {
-        verify(
-          () => mockCredentialStore.write(
-            key: bloc.jidStorageKey,
-            value: validFullJid,
           ),
         ).called(1);
       },
@@ -675,7 +644,7 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Given saved invalid credentials, automatic login emits [AuthenticationFailure].',
+      'Given saved invalid credentials, automatic login emits [AuthenticationNone].',
       setUp: () {
         when(
           () => mockCredentialStore.read(key: bloc.jidStorageKey),
@@ -690,9 +659,7 @@ void main() {
       act: (bloc) => bloc.login(),
       expect: () => [
         const AuthenticationLogInInProgress(),
-        const AuthenticationFailure(
-          AuthKeyMessage(AuthMessageKey.invalidCredentials),
-        ),
+        const AuthenticationNone(),
       ],
       verify: (bloc) {
         verifyNever(
@@ -708,6 +675,31 @@ void main() {
           ),
         );
       },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'After auto-login invalid credentials, manual login starts immediately.',
+      setUp: () {
+        when(
+          () => mockCredentialStore.read(key: bloc.jidStorageKey),
+        ).thenAnswer((_) async => validJid);
+        when(
+          () => mockCredentialStore.read(key: bloc.passwordStorageKey),
+        ).thenAnswer((_) async => invalidPassword);
+        credentialStorage['${validJid}_database_prefix'] = 'prefix';
+        credentialStorage['prefix_database_passphrase'] = 'passphrase';
+      },
+      build: () => bloc,
+      act: (bloc) async {
+        await bloc.login();
+        await bloc.login(username: validUsername, password: validPassword);
+      },
+      expect: () => const [
+        AuthenticationLogInInProgress(),
+        AuthenticationNone(),
+        AuthenticationLogInInProgress(),
+        AuthenticationComplete(),
+      ],
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(

@@ -92,17 +92,11 @@ Future<T?> showAdaptiveBottomSheet<T>({
           data: windowMediaQuery,
           child: Padding(
             padding: EdgeInsets.only(top: topInset),
-            child: SafeArea(
-              top: false,
-              bottom: useSafeArea,
-              left: false,
-              right: false,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: windowMediaQuery.size.height - topInset,
-                ),
-                child: scopedSurface,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: windowMediaQuery.size.height - topInset,
               ),
+              child: scopedSurface,
             ),
           ),
         );

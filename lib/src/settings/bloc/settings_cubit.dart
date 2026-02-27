@@ -82,6 +82,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(emailSendOnEnter: enabled));
   }
 
+  void toggleEmailSendConfirmation(bool enabled) {
+    emit(state.copyWith(emailSendConfirmationEnabled: enabled));
+  }
+
   void toggleColorfulAvatars(bool colorfulAvatars) {
     emit(state.copyWith(colorfulAvatars: colorfulAvatars));
   }
@@ -187,6 +191,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'emailReadReceipts': 'email_read_receipts',
         'chatSendOnEnter': 'chat_send_on_enter',
         'emailSendOnEnter': 'email_send_on_enter',
+        'emailSendConfirmationEnabled': 'email_send_confirmation_enabled',
         'indicateTyping': 'indicate_typing',
         'lowMotion': 'low_motion',
         'colorfulAvatars': 'colorful_avatars',

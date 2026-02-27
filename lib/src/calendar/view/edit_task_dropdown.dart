@@ -587,6 +587,15 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       }),
                     ),
                     SizedBox(height: context.spacing.s),
+                    _EditTaskCompletionToggle(
+                      value: _isCompleted,
+                      enabled: allowsFullEdits,
+                      onChanged: (value) => _updateDraft(() {
+                        _markTouched(_TaskEditField.completion);
+                        _isCompleted = value;
+                      }),
+                    ),
+                    SizedBox(height: context.spacing.s),
                     _EditTaskDescriptionField(
                       controller: _descriptionController,
                       onChanged: _handleDescriptionChanged,
@@ -700,15 +709,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       CalendarIcsDiagnosticsSection(icsMeta: icsMeta),
                     ],
                     TaskSectionDivider(verticalPadding: context.spacing.m),
-                    _EditTaskCompletionToggle(
-                      value: _isCompleted,
-                      enabled: allowsFullEdits,
-                      onChanged: (value) => _updateDraft(() {
-                        _markTouched(_TaskEditField.completion);
-                        _isCompleted = value;
-                      }),
-                    ),
-                    SizedBox(height: context.spacing.s),
                     if (!allowsFullEdits)
                       IgnorePointer(
                         child: _TaskCriticalPathMembership<B>(
@@ -732,7 +732,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                     color: context.borderSide.color,
                     thickness: context.borderSide.width,
                   ),
-                  SafeArea(top: false, bottom: true, child: footerActionRow),
+                  footerActionRow,
                 ],
               ),
           ],
@@ -1810,8 +1810,11 @@ class _EditTaskActionsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return TaskFormActionsRow(
       includeTopBorder: includeTopBorder,
-      padding: EdgeInsets.all(context.spacing.m),
-      gap: 8,
+      padding: EdgeInsets.symmetric(
+        horizontal: context.spacing.m,
+        vertical: context.spacing.s,
+      ),
+      gap: context.spacing.s,
       children: [
         if (showDelete)
           TaskDestructiveButton(

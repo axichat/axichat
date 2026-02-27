@@ -157,156 +157,149 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
             final dialogMaxHeight =
                 MediaQuery.sizeOf(context).height *
                 sizing.dialogMaxHeightFraction;
-            final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
             return AxiInputDialog(
               title: Text(l10n.chatsCreateChatRoomTitle),
               maxWidth: sizing.dialogMaxWidth,
-              content: Padding(
-                padding: EdgeInsets.only(bottom: keyboardInset),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: dialogMaxHeight),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
+              content: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: dialogMaxHeight),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: fieldPadding,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            AbsorbPointer(
+                              absorbing: loading,
+                              child: SignupAvatarSelector(
+                                bytes: avatarState.displayedBytes,
+                                username: _title,
+                                processing: avatarState.isBusy,
+                                animationDuration: animationDuration,
+                                onTap: _openAvatarEditor,
+                              ),
+                            ),
+                            SizedBox(width: spacing.s),
+                            Expanded(
+                              child: AxiTextFormField(
+                                placeholder: Text(
+                                  l10n.chatsRoomNamePlaceholder,
+                                ),
+                                enabled: !loading,
+                                onChanged: _handleTitleChanged,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (avatarErrorText != null)
                         Padding(
-                          padding: fieldPadding,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            children: [
-                              AbsorbPointer(
-                                absorbing: loading,
-                                child: SignupAvatarSelector(
-                                  bytes: avatarState.displayedBytes,
-                                  username: _title,
-                                  processing: avatarState.isBusy,
-                                  animationDuration: animationDuration,
-                                  onTap: _openAvatarEditor,
-                                ),
+                          padding: errorPadding,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              avatarErrorText,
+                              style: context.textTheme.small.copyWith(
+                                color: context.colorScheme.destructive,
                               ),
-                              SizedBox(width: spacing.s),
-                              Expanded(
-                                child: AxiTextFormField(
-                                  placeholder: Text(
-                                    l10n.chatsRoomNamePlaceholder,
-                                  ),
-                                  enabled: !loading,
-                                  onChanged: _handleTitleChanged,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
-                        if (avatarErrorText != null)
-                          Padding(
-                            padding: errorPadding,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                avatarErrorText,
-                                style: context.textTheme.small.copyWith(
-                                  color: context.colorScheme.destructive,
-                                ),
+                      if (_validationError != null)
+                        Padding(
+                          padding: errorPadding,
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              _validationError!,
+                              style: context.textTheme.small.copyWith(
+                                color: context.colorScheme.destructive,
                               ),
                             ),
                           ),
-                        if (_validationError != null)
-                          Padding(
-                            padding: errorPadding,
-                            child: Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                _validationError!,
-                                style: context.textTheme.small.copyWith(
-                                  color: context.colorScheme.destructive,
-                                ),
+                        ),
+                      if (_showAvatarEditor)
+                        Padding(
+                          padding: EdgeInsets.only(top: spacing.s),
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(
+                                maxWidth: previewWidth,
                               ),
-                            ),
-                          ),
-                        if (_showAvatarEditor)
-                          Padding(
-                            padding: EdgeInsets.only(top: spacing.s),
-                            child: Center(
-                              child: ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  maxWidth: previewWidth,
-                                ),
-                                child: Stack(
-                                  children: [
-                                    AbsorbPointer(
-                                      absorbing: loading,
-                                      child: SignupAvatarEditorPanel(
-                                        mode: avatarState.editorMode,
-                                        avatarBytes: avatarState.displayedBytes,
-                                        animationDuration: animationDuration,
-                                        cropBytes: avatarState
-                                            .draftAvatar
-                                            ?.sourceBytes,
-                                        cropRect:
-                                            avatarState.draftAvatar?.cropRect,
-                                        imageWidth: avatarState
-                                            .draftAvatar
-                                            ?.sourceWidth
-                                            ?.toDouble(),
-                                        imageHeight: avatarState
-                                            .draftAvatar
-                                            ?.sourceHeight
-                                            ?.toDouble(),
-                                        onCropChanged: (rect) => context
-                                            .read<AvatarEditorCubit>()
-                                            .updateCropRect(rect),
-                                        onCropReset: () => context
-                                            .read<AvatarEditorCubit>()
-                                            .resetCrop(),
-                                        onCropCommitted: (rect) => context
-                                            .read<AvatarEditorCubit>()
-                                            .commitCrop(rect),
-                                        onShuffle: () => context
-                                            .read<AvatarEditorCubit>()
-                                            .shuffleCarousel(
-                                              context.colorScheme,
-                                            ),
-                                        onUpload: () => context
-                                            .read<AvatarEditorCubit>()
-                                            .pickImage(),
-                                        onUseCurrent: () => context
-                                            .read<AvatarEditorCubit>()
-                                            .selectCarouselAvatar(),
-                                        useActionEnabled: useActionEnabled,
-                                        hasUserSelectedAvatar:
-                                            avatarState.hasUserSelectedAvatar,
-                                        canShuffleBackground:
-                                            avatarState.hasCarouselPreview &&
-                                            avatarState.canShuffleBackground,
-                                        onShuffleBackground:
-                                            avatarState.hasCarouselPreview &&
-                                                avatarState.canShuffleBackground
-                                            ? () => context
-                                                  .read<AvatarEditorCubit>()
-                                                  .shuffleCarouselBackground(
-                                                    context.colorScheme,
-                                                  )
-                                            : null,
-                                        descriptionText:
-                                            l10n.mucAvatarMenuDescription,
-                                      ),
+                              child: Stack(
+                                children: [
+                                  AbsorbPointer(
+                                    absorbing: loading,
+                                    child: SignupAvatarEditorPanel(
+                                      mode: avatarState.editorMode,
+                                      avatarBytes: avatarState.displayedBytes,
+                                      animationDuration: animationDuration,
+                                      cropBytes:
+                                          avatarState.draftAvatar?.sourceBytes,
+                                      cropRect:
+                                          avatarState.draftAvatar?.cropRect,
+                                      imageWidth: avatarState
+                                          .draftAvatar
+                                          ?.sourceWidth
+                                          ?.toDouble(),
+                                      imageHeight: avatarState
+                                          .draftAvatar
+                                          ?.sourceHeight
+                                          ?.toDouble(),
+                                      onCropChanged: (rect) => context
+                                          .read<AvatarEditorCubit>()
+                                          .updateCropRect(rect),
+                                      onCropReset: () => context
+                                          .read<AvatarEditorCubit>()
+                                          .resetCrop(),
+                                      onCropCommitted: (rect) => context
+                                          .read<AvatarEditorCubit>()
+                                          .commitCrop(rect),
+                                      onShuffle: () => context
+                                          .read<AvatarEditorCubit>()
+                                          .shuffleCarousel(context.colorScheme),
+                                      onUpload: () => context
+                                          .read<AvatarEditorCubit>()
+                                          .pickImage(),
+                                      onUseCurrent: () => context
+                                          .read<AvatarEditorCubit>()
+                                          .selectCarouselAvatar(),
+                                      useActionEnabled: useActionEnabled,
+                                      hasUserSelectedAvatar:
+                                          avatarState.hasUserSelectedAvatar,
+                                      canShuffleBackground:
+                                          avatarState.hasCarouselPreview &&
+                                          avatarState.canShuffleBackground,
+                                      onShuffleBackground:
+                                          avatarState.hasCarouselPreview &&
+                                              avatarState.canShuffleBackground
+                                          ? () => context
+                                                .read<AvatarEditorCubit>()
+                                                .shuffleCarouselBackground(
+                                                  context.colorScheme,
+                                                )
+                                          : null,
+                                      descriptionText:
+                                          l10n.mucAvatarMenuDescription,
                                     ),
-                                    Positioned(
-                                      top: spacing.xs,
-                                      right: spacing.xs,
-                                      child: AxiIconButton(
-                                        iconData: LucideIcons.x,
-                                        tooltip: l10n.commonClose,
-                                        onPressed: _closeAvatarEditor,
-                                      ),
+                                  ),
+                                  Positioned(
+                                    top: spacing.xs,
+                                    right: spacing.xs,
+                                    child: AxiIconButton(
+                                      iconData: LucideIcons.x,
+                                      tooltip: l10n.commonClose,
+                                      onPressed: _closeAvatarEditor,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                      ],
-                    ),
+                        ),
+                    ],
                   ),
                 ),
               ),

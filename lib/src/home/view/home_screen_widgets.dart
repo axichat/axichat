@@ -212,11 +212,27 @@ class _NexusScaffold extends StatelessWidget {
       badgeCounts: badgeCounts,
     );
     final bottomArea = _NexusBottomArea(selectedChats: selectedChats);
+    final HomeTab? activeTab;
+    if (tabs.isEmpty) {
+      activeTab = null;
+    } else {
+      final safeSelectedIndex = selectedIndex.clamp(0, tabs.length - 1).toInt();
+      activeTab = tabs[safeSelectedIndex].id;
+    }
+    final tabContent = _NexusPullToRefresh(
+      navPlacement: navPlacement,
+      activeTab: activeTab,
+      child: Column(
+        children: [
+          topTabs,
+          Expanded(child: tabViews),
+        ],
+      ),
+    );
     final column = Column(
       children: [
         header,
-        topTabs,
-        Expanded(child: tabViews),
+        Expanded(child: tabContent),
         bottomArea,
       ],
     );
@@ -450,6 +466,112 @@ class _NexusBottomArea extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return ChatSelectionActionBar(selectedChats: selectedChats);
+  }
+}
+
+class _NexusPullToRefresh extends StatelessWidget {
+  const _NexusPullToRefresh({
+    required this.navPlacement,
+    required this.activeTab,
+    required this.child,
+  });
+
+  final NavPlacement navPlacement;
+  final HomeTab? activeTab;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (navPlacement != NavPlacement.bottom || activeTab != HomeTab.chats) {
+      return child;
+    }
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final refreshSpinnerExtent = sizing.buttonHeightLg + spacing.s;
+    final refreshSpinnerDimension = sizing.progressIndicatorSize + spacing.xs;
+    final refreshOffsetToArmed = spacing.xxl;
+    final refreshRevealThreshold = context.motion.tapHoverAlpha;
+    final refreshIndicatorPadding = spacing.m;
+    return CustomRefreshIndicator(
+      onRefresh: () => context.read<ChatsCubit>().refreshHomeSync(),
+      offsetToArmed: refreshOffsetToArmed,
+      triggerMode: IndicatorTriggerMode.anywhere,
+      notificationPredicate: (notification) =>
+          notification.metrics.axis == Axis.vertical,
+      leadingScrollIndicatorVisible: true,
+      builder: (context, child, controller) {
+        final clamped = controller.value.clamp(0.0, 1.0).toDouble();
+        final isLeadingPull = controller.hasEdge && controller.edge!.isLeading;
+        final isActive =
+            controller.isLoading || (isLeadingPull && !controller.state.isIdle);
+        final isRevealed = isActive && (controller.isLoading || clamped > 0.0);
+        final revealFactor = isRevealed
+            ? (controller.isLoading ? 1.0 : clamped)
+            : 0.0;
+
+        final revealedExtent = refreshSpinnerExtent * revealFactor;
+        final isArmed = controller.state.isArmed;
+        final showIndicator =
+            isLeadingPull &&
+            (controller.isLoading || clamped > refreshRevealThreshold);
+        final indicatorContent = !showIndicator
+            ? const SizedBox.shrink()
+            : controller.isLoading
+            ? AxiProgressIndicator(color: context.colorScheme.primary)
+            : AnimatedRotation(
+                turns: isArmed ? 0.5 : 0.0,
+                duration: baseAnimationDuration,
+                curve: Curves.easeOutCubic,
+                child: Icon(
+                  LucideIcons.arrowDown,
+                  size: refreshSpinnerDimension,
+                  color: context.colorScheme.primary,
+                ),
+              );
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: IgnorePointer(
+                child: ClipRect(
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    heightFactor: revealFactor,
+                    child: SizedBox(
+                      height: refreshSpinnerExtent,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: context.colorScheme.card,
+                          border: Border(bottom: context.borderSide),
+                        ),
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              bottom: refreshIndicatorPadding,
+                            ),
+                            child: indicatorContent,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Transform.translate(
+              offset: Offset(0, revealedExtent),
+              child: child,
+            ),
+          ],
+        );
+      },
+      child: child,
+    );
   }
 }
 

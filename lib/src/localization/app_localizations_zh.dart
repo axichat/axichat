@@ -636,6 +636,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get draftSend => '发送草稿';
 
   @override
+  String get emailSendConfirmTitle => 'Review email before sending';
+
+  @override
+  String get emailSendConfirmMessage =>
+      'Confirm the recipients and body below before sending.';
+
+  @override
+  String get emailSendConfirmRecipientsLabel => 'Recipients';
+
+  @override
+  String get emailSendConfirmBodyLabel => 'Body';
+
+  @override
+  String get emailSendConfirmEmptyBody => '(No body)';
+
+  @override
+  String get emailSendConfirmDontShowAgain => 'Don\'t show this again';
+
+  @override
   String get draftDiscard => '丢弃';
 
   @override
@@ -1986,6 +2005,13 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get settingsEmailSendOnEnterDescription =>
       '开启后，按 Enter 发送邮件消息；按 Shift+Enter 插入新行。';
+
+  @override
+  String get settingsEmailSendConfirmation => 'Confirm before sending email';
+
+  @override
+  String get settingsEmailSendConfirmationDescription =>
+      'Show a review prompt with recipients and body before each email send.';
 
   @override
   String get settingsEmailComposerWatermark => 'Prepopulate email watermark';

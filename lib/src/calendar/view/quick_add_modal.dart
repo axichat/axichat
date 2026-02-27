@@ -1608,14 +1608,12 @@ Future<void> showQuickAddModal({
   }
 
   final commandSurface = resolveCommandSurface(context);
-  final colors = context.colorScheme;
   final bool isDesktop =
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
           defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux);
   final bool useSheet = !isDesktop && commandSurface == CommandSurface.sheet;
-  final Color scrimColor = colors.foreground.withValues(alpha: 0.5);
   final surface = useSheet
       ? QuickAddModalSurface.bottomSheet
       : QuickAddModalSurface.dialog;
@@ -1623,7 +1621,6 @@ Future<void> showQuickAddModal({
   if (!useSheet) {
     return showFadeScaleDialog<void>(
       context: context,
-      barrierColor: scrimColor,
       useRootNavigator: _calendarUseRootNavigator,
       builder: (dialogContext) {
         final bool hasBloc = resolveBloc() != null;
@@ -1653,7 +1650,6 @@ Future<void> showQuickAddModal({
     isScrollControlled: true,
     showDragHandle: useSheet,
     isDismissible: true,
-    barrierColor: scrimColor,
     backgroundColor: Colors.transparent,
     surfacePadding: EdgeInsets.zero,
     dialogMaxWidth: 760,

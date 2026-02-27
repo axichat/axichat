@@ -1868,7 +1868,7 @@ final class _RecipientAutocompleteOverlayState
                         ),
                         style: textStyle,
                         cursorHeight: textStyle.fontSize,
-                        textInputAction: TextInputAction.done,
+                        textInputAction: TextInputAction.go,
                         onEditingComplete: () =>
                             widget.focusNode.requestFocus(),
                         textAlignVertical: TextAlignVertical.center,

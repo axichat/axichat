@@ -2665,6 +2665,14 @@ class _ChatState extends State<Chat> {
     if (chat == null) {
       return;
     }
+    final shouldSend = await _confirmEmailSendIfNeeded(
+      chatState: chatState,
+      chat: chat,
+      body: resolvedText,
+    );
+    if (!shouldSend || !mounted) {
+      return;
+    }
     final calendarTaskShareText = _pendingCalendarTaskIcs?.toShareText(l10n);
     context.read<ChatBloc>().add(
       ChatMessageSent(
@@ -2683,6 +2691,39 @@ class _ChatState extends State<Chat> {
         calendarTaskShareText: calendarTaskShareText,
       ),
     );
+  }
+
+  Future<bool> _confirmEmailSendIfNeeded({
+    required ChatState chatState,
+    required chat_models.Chat chat,
+    required String body,
+  }) async {
+    if (!_isEmailComposerActive(
+      chatState: chatState,
+      recipients: _recipients,
+    )) {
+      return true;
+    }
+    final settingsCubit = context.read<SettingsCubit>();
+    if (!settingsCubit.state.emailSendConfirmationEnabled) {
+      return true;
+    }
+    final recipients = _resolveDraftRecipients(
+      chat: chat,
+      recipients: _recipients,
+    );
+    final decision = await confirmEmailSend(
+      context,
+      recipients: recipients,
+      body: body,
+    );
+    if (!mounted || decision == null || !decision.confirmed) {
+      return false;
+    }
+    if (decision.dontShowAgain) {
+      settingsCubit.toggleEmailSendConfirmation(false);
+    }
+    return true;
   }
 
   Future<bool> _confirmMediaMetadataIfNeeded(
@@ -6454,7 +6495,7 @@ class _ChatState extends State<Chat> {
                                                                               .textTheme;
                                                                       final baseSubjectStyle =
                                                                           textTheme
-                                                                              .lead;
+                                                                              .small;
                                                                       final subjectStyle = baseSubjectStyle.copyWith(
                                                                         color:
                                                                             textColor,

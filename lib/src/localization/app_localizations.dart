@@ -1287,6 +1287,42 @@ abstract class AppLocalizations {
   /// **'Send draft'**
   String get draftSend;
 
+  /// No description provided for @emailSendConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Review email before sending'**
+  String get emailSendConfirmTitle;
+
+  /// No description provided for @emailSendConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the recipients and body below before sending.'**
+  String get emailSendConfirmMessage;
+
+  /// No description provided for @emailSendConfirmRecipientsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Recipients'**
+  String get emailSendConfirmRecipientsLabel;
+
+  /// No description provided for @emailSendConfirmBodyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Body'**
+  String get emailSendConfirmBodyLabel;
+
+  /// No description provided for @emailSendConfirmEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'(No body)'**
+  String get emailSendConfirmEmptyBody;
+
+  /// No description provided for @emailSendConfirmDontShowAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t show this again'**
+  String get emailSendConfirmDontShowAgain;
+
   /// No description provided for @draftDiscard.
   ///
   /// In en, this message translates to:
@@ -3725,6 +3761,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'When on, pressing Enter sends email messages. Shift+Enter inserts a new line.'**
   String get settingsEmailSendOnEnterDescription;
+
+  /// No description provided for @settingsEmailSendConfirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm before sending email'**
+  String get settingsEmailSendConfirmation;
+
+  /// No description provided for @settingsEmailSendConfirmationDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a review prompt with recipients and body before each email send.'**
+  String get settingsEmailSendConfirmationDescription;
 
   /// No description provided for @settingsEmailComposerWatermark.
   ///

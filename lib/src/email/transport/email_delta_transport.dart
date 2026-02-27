@@ -1470,9 +1470,6 @@ class EmailDeltaTransport implements ChatTransport {
       fileMetadataID: metadata?.id,
     );
     await db.saveMessage(message);
-    await db.updateChat(
-      resolvedChat.copyWith(lastChangeTimestamp: resolvedTimestamp),
-    );
     if (shareId != null && resolvedMsgId != null) {
       await db.insertMessageCopy(
         shareId: shareId,

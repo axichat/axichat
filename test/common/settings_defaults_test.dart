@@ -14,5 +14,14 @@ void main() {
       const expectAutoDownloadArchives = false;
       expect(state.autoDownloadArchives, expectAutoDownloadArchives);
     });
+
+    test('keeps send on enter disabled by default', () {
+      expect(state.chatSendOnEnter, isFalse);
+      expect(state.emailSendOnEnter, isFalse);
+    });
+
+    test('requires email send confirmation by default', () {
+      expect(state.emailSendConfirmationEnabled, isTrue);
+    });
   });
 }

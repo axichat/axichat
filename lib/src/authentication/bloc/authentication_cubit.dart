@@ -634,19 +634,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
   }
 
-  String _resolveLoginJid({
-    required String username,
-    required String fallbackDomain,
-  }) {
-    final normalizedUsername = normalizeAddress(username) ?? username;
-    final bareUsername = bareAddress(normalizedUsername) ?? normalizedUsername;
-    final hasDomain = addressDomainPart(bareUsername) != null;
-    if (hasDomain) {
-      return bareUsername;
-    }
-    return '$bareUsername@$fallbackDomain';
-  }
-
   Future<void> persistRememberMeChoice(bool rememberMe) async {
     await _credentialStore.write(
       key: rememberMeChoiceKey,
@@ -1177,10 +1164,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       passwordPreHashed = loginFromStore.passwordPreHashed ?? false;
     } else {
-      resolvedJid = _resolveLoginJid(
-        username: username!,
-        fallbackDomain: config.domain,
-      );
+      resolvedJid = '$username@${config.domain}';
       resolvedPassword = password!;
     }
 
@@ -1282,12 +1266,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         } on XmppAuthenticationException catch (_) {
           credentialDisposition = _CredentialDisposition.wipeLoginCredentials;
           await _updateAuthTransactionCredentialClearance(true);
+          await _xmppService.disconnect();
+          if (usingStoredCredentials && !wasAuthenticated) {
+            _emit(const AuthenticationNone());
+            return;
+          }
           _emit(
             const AuthenticationFailure(
               AuthKeyMessage(AuthMessageKey.invalidCredentials),
             ),
           );
-          await _xmppService.disconnect();
           return;
         } on XmppNetworkException catch (error) {
           final canResumeOffline =

@@ -21,12 +21,20 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
        _failedRetention = failedRetention,
        super(const XmppActivityState()) {
     _subscription = _xmppBase.xmppOperationStream.listen(_handleEvent);
+    _staleOperationTimer = Timer.periodic(
+      _staleOperationCheckInterval,
+      (_) => _reconcileStaleOperations(),
+    );
   }
 
   static const Duration _minimumInProgressDuration = Duration(
     milliseconds: 350,
   );
   static const Duration _idleCompletionDelay = Duration(milliseconds: 300);
+  static const Duration _staleOperationCheckInterval = Duration(seconds: 1);
+  static const Duration _defaultOperationTimeout = Duration(minutes: 2);
+  static const Duration _mamMucSyncTimeout = Duration(minutes: 10);
+  static const Duration _longMamSyncTimeout = Duration(minutes: 20);
 
   final XmppBase _xmppBase;
   final Duration _completedRetention;
@@ -35,6 +43,7 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   final Map<String, Timer> _retentionTimers = {};
   final Map<String, Timer> _completionTimers = {};
   late final StreamSubscription<XmppOperationEvent> _subscription;
+  late final Timer _staleOperationTimer;
 
   static final _logger = Logger('XmppActivityCubit');
 
@@ -57,7 +66,9 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
       if (batch.pendingCount == 0) {
         batch
           ..hadFailure = false
-          ..hadSuccess = false;
+          ..hadSuccess = false
+          ..startedAt = now;
+        _refreshOperationStartTime(operationId, startedAt: now);
       }
       batch
         ..operationId = operationId
@@ -201,8 +212,103 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
     timer?.cancel();
   }
 
+  void _refreshOperationStartTime(String id, {required DateTime startedAt}) {
+    final operations = List<XmppOperation>.of(state.operations);
+    final index = operations.indexWhere((item) => item.id == id);
+    if (index == -1) {
+      return;
+    }
+    final operation = operations[index];
+    if (operation.startedAt == startedAt) {
+      return;
+    }
+    operations[index] = operation.copyWith(startedAt: startedAt);
+    emit(state.copyWith(operations: List.unmodifiable(operations)));
+  }
+
+  DateTime _startedAtForOperation(XmppOperation operation) {
+    final key = _XmppOperationKey(kind: operation.kind);
+    final activeBatch = _activeOperations[key];
+    if (activeBatch == null || activeBatch.operationId != operation.id) {
+      return operation.startedAt;
+    }
+    return activeBatch.startedAt;
+  }
+
+  Duration _maxDurationForOperationKind(XmppOperationKind kind) {
+    return switch (kind) {
+      XmppOperationKind.mamLoginSync ||
+      XmppOperationKind.mamGlobalSync => _longMamSyncTimeout,
+      XmppOperationKind.mamMucSync => _mamMucSyncTimeout,
+      _ => _defaultOperationTimeout,
+    };
+  }
+
+  void _reconcileStaleOperations() {
+    final operations = state.operations;
+    if (operations.isEmpty) {
+      return;
+    }
+    final now = DateTime.now();
+    final List<String> staleIds = <String>[];
+    final Map<String, XmppOperation> staleById = <String, XmppOperation>{};
+    for (final operation in operations) {
+      if (operation.status != XmppOperationStatus.inProgress) {
+        continue;
+      }
+      final timeout = _maxDurationForOperationKind(operation.kind);
+      final elapsed = now.difference(_startedAtForOperation(operation));
+      if (elapsed <= timeout) {
+        continue;
+      }
+      staleIds.add(operation.id);
+      staleById[operation.id] = operation;
+    }
+    if (staleIds.isEmpty) {
+      return;
+    }
+
+    for (final id in staleIds) {
+      _cancelCompletion(id);
+      _cancelRetention(id);
+      _removeFromActiveOperationsIfCurrent(staleById[id]);
+    }
+
+    final updatedOperations = List<XmppOperation>.of(operations);
+    var hasUpdates = false;
+    for (var index = 0; index < updatedOperations.length; index += 1) {
+      final operation = updatedOperations[index];
+      if (!staleById.containsKey(operation.id)) {
+        continue;
+      }
+      final failed = operation.copyWith(status: XmppOperationStatus.failure);
+      updatedOperations[index] = failed;
+      _scheduleTeardown(failed);
+      hasUpdates = true;
+    }
+    if (hasUpdates) {
+      _logger.warning(
+        'Marking stale XMPP operations as failed: ${staleIds.join(', ')}.',
+      );
+      emit(state.copyWith(operations: List.unmodifiable(updatedOperations)));
+    }
+  }
+
+  void _removeFromActiveOperationsIfCurrent(XmppOperation? operation) {
+    if (operation == null) {
+      return;
+    }
+    final key = _XmppOperationKey(kind: operation.kind);
+    final current = _activeOperations[key];
+    if (current == null || current.operationId != operation.id) {
+      return;
+    }
+    _activeOperations.remove(key);
+  }
+
   @override
   Future<void> close() async {
+    _staleOperationTimer.cancel();
     for (final timer in _completionTimers.values) {
       timer.cancel();
     }
@@ -243,7 +349,7 @@ class _XmppOperationBatch {
   int pendingCount;
   bool hadFailure;
   bool hadSuccess;
-  final DateTime startedAt;
+  DateTime startedAt;
   int completionToken;
 
   int bumpCompletionToken() {

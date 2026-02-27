@@ -119,7 +119,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
       horizontal: context.spacing.m,
       vertical: context.spacing.m,
     );
-    final EdgeInsets viewInsets = MediaQuery.viewInsetsOf(context);
     final spacing = context.spacing;
     final header = AxiSheetHeader(
       title: Text(l10n.calendarTaskShareTitle),
@@ -128,7 +127,6 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     );
     return AxiSheetScaffold.scroll(
       header: header,
-      bodyPadding: EdgeInsets.only(bottom: viewInsets.bottom),
       children: [
         if (widget.availableChats.isEmpty)
           Padding(

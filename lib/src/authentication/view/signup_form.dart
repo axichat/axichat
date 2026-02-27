@@ -42,6 +42,8 @@ enum _PasswordStrengthLevel { empty, weak, medium, stronger }
 
 enum _InsecurePasswordReason { weak, breached }
 
+enum _CaptchaLoadState { idle, loading, ready, failed }
+
 class _SignupFormState extends State<SignupForm>
     with AutomaticKeepAliveClientMixin {
   static const Size _captchaFrameSize = Size(180, 70);
@@ -75,18 +77,16 @@ class _SignupFormState extends State<SignupForm>
   bool _showBreachedError = false;
   String _lastPasswordValue = '';
   int _allowInsecureResetTick = 0;
-  Timer? _captchaRetryTimer;
-  bool _captchaImageLoaded = false;
-  bool _captchaImageFailed = false;
-  bool _captchaAutoRetryConsumed = false;
+  _CaptchaLoadState _captchaLoadState = _CaptchaLoadState.idle;
+  String? _captchaSrcUrl;
+  int _captchaAutoRetryAttempts = 0;
+  int _captchaRequestSerial = 0;
   String? _lastCaptchaServer;
   bool _showAvatarEditor = false;
   double? _usernameDescriptionHeight;
 
   var _currentIndex = 0;
   String? _errorText;
-  late Future<String> _captchaSrc;
-  bool _captchaSrcInitialized = false;
 
   @override
   void initState() {
@@ -127,7 +127,6 @@ class _SignupFormState extends State<SignupForm>
     _captchaTextController
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
-    _captchaRetryTimer?.cancel();
     super.dispose();
   }
 
@@ -143,12 +142,10 @@ class _SignupFormState extends State<SignupForm>
       text: context.l10n.authUsernameCaseInsensitive,
       style: context.textTheme.small,
     );
-    if (_captchaSrcInitialized) {
+    if (_captchaLoadState != _CaptchaLoadState.idle) {
       return;
     }
-    _lastCaptchaServer = context.read<AuthenticationCubit>().state.server;
-    _captchaSrc = _loadCaptchaSrc();
-    _captchaSrcInitialized = true;
+    _reloadCaptcha();
   }
 
   void _handleFieldProgressChanged() {
@@ -225,7 +222,7 @@ class _SignupFormState extends State<SignupForm>
   void _onPressed(BuildContext context) async {
     if (context.read<SignupAvatarCubit>().state.processing) return;
     FocusManager.instance.primaryFocus?.unfocus();
-    final captchaSrc = await _captchaSrc;
+    final captchaSrc = _captchaSrcUrl?.trim() ?? '';
     if (!context.mounted || _formKeys.last.currentState?.validate() == false) {
       return;
     }
@@ -278,68 +275,75 @@ class _SignupFormState extends State<SignupForm>
   }
 
   void _reloadCaptcha() {
-    _reloadCaptchaInternal(resetAutoRetryState: true);
-  }
-
-  void _reloadCaptchaInternal({required bool resetAutoRetryState}) {
-    _captchaRetryTimer?.cancel();
-    _captchaRetryTimer = null;
     _captchaTextController.clear();
-    if (!mounted) return;
-    setState(() {
-      _captchaImageLoaded = false;
-      _captchaImageFailed = false;
-      if (resetAutoRetryState) {
-        _captchaAutoRetryConsumed = false;
-      }
-      _captchaSrc = _loadCaptchaSrc();
-    });
+    unawaited(_startCaptchaLoad(resetAutoRetry: true));
   }
 
-  void _scheduleInitialCaptchaRetry() {
-    if (_captchaRetryTimer != null || _captchaAutoRetryConsumed) {
-      return;
+  Future<void> _startCaptchaLoad({required bool resetAutoRetry}) async {
+    final requestSerial = ++_captchaRequestSerial;
+    if (resetAutoRetry) {
+      _captchaAutoRetryAttempts = 0;
     }
-    _captchaAutoRetryConsumed = true;
-    _captchaRetryTimer = Timer(Duration.zero, () {
-      if (!mounted) {
-        _captchaRetryTimer?.cancel();
-        _captchaRetryTimer = null;
-        return;
-      }
-      _captchaRetryTimer = null;
-      _reloadCaptchaInternal(resetAutoRetryState: false);
-    });
-  }
-
-  void _markCaptchaImageLoaded() {
-    if (_captchaImageLoaded || !mounted) {
-      return;
-    }
-    setState(() {
-      _captchaImageLoaded = true;
-      _captchaImageFailed = false;
-    });
-  }
-
-  void _handleCaptchaImageError() {
     if (!mounted) {
       return;
     }
-    if (!_captchaAutoRetryConsumed) {
-      _scheduleInitialCaptchaRetry();
+    setState(() {
+      _captchaLoadState = _CaptchaLoadState.loading;
+      _captchaSrcUrl = null;
+    });
+    final src = await _loadCaptchaSrc();
+    if (!mounted || requestSerial != _captchaRequestSerial) {
       return;
     }
-    if (_captchaImageFailed) {
+    final resolvedSrc = src.trim();
+    if (resolvedSrc.isEmpty) {
+      await _handleCaptchaLoadFailure(requestSerial: requestSerial);
+      return;
+    }
+    setState(() {
+      _captchaLoadState = _CaptchaLoadState.loading;
+      _captchaSrcUrl = resolvedSrc;
+    });
+  }
+
+  Future<void> _handleCaptchaLoadFailure({int? requestSerial}) async {
+    if (!mounted) {
+      return;
+    }
+    if (requestSerial != null && requestSerial != _captchaRequestSerial) {
+      return;
+    }
+    if (_captchaAutoRetryAttempts == 0) {
+      _captchaAutoRetryAttempts = 1;
+      await _startCaptchaLoad(resetAutoRetry: false);
+      return;
+    }
+    setState(() {
+      _captchaLoadState = _CaptchaLoadState.failed;
+      _captchaSrcUrl = null;
+    });
+  }
+
+  void _markCaptchaImageLoaded(String loadedUrl) {
+    if (!mounted ||
+        _captchaLoadState == _CaptchaLoadState.ready ||
+        _captchaSrcUrl != loadedUrl) {
+      return;
+    }
+    setState(() {
+      _captchaLoadState = _CaptchaLoadState.ready;
+    });
+  }
+
+  void _handleCaptchaImageError(String failingUrl) {
+    if (!mounted || _captchaSrcUrl != failingUrl) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _captchaImageFailed) {
+      if (!mounted || _captchaSrcUrl != failingUrl) {
         return;
       }
-      setState(() {
-        _captchaImageFailed = true;
-      });
+      unawaited(_handleCaptchaLoadFailure());
     });
   }
 
@@ -922,54 +926,38 @@ class _SignupFormState extends State<SignupForm>
                                     padding:
                                         fieldSpacing +
                                         EdgeInsets.only(top: spacing.m),
-                                    child: FutureBuilder<String>(
-                                      future: _captchaSrc,
-                                      builder: (context, snapshot) {
-                                        Widget captchaSurface;
-                                        final hasValidUrl =
-                                            snapshot.hasData &&
-                                            (snapshot.data?.trim().isNotEmpty ??
-                                                false);
-                                        final encounteredError =
-                                            snapshot.hasError ||
-                                            (snapshot.hasData && !hasValidUrl);
-                                        final shouldAutoRetry =
-                                            encounteredError &&
-                                            !_captchaAutoRetryConsumed;
-                                        final imageLoading =
-                                            hasValidUrl &&
-                                            !_captchaImageLoaded &&
-                                            !_captchaImageFailed;
+                                    child: Builder(
+                                      builder: (context) {
                                         final captchaLoading =
-                                            !snapshot.hasData ||
-                                            shouldAutoRetry ||
-                                            imageLoading;
-                                        if (shouldAutoRetry) {
-                                          _scheduleInitialCaptchaRetry();
-                                          captchaSurface = _CaptchaSkeleton(
-                                            animationDuration:
-                                                animationDuration,
-                                          );
-                                        } else if (encounteredError ||
-                                            _captchaImageFailed) {
-                                          captchaSurface =
-                                              const _CaptchaErrorSurface();
-                                        } else if (!snapshot.hasData) {
-                                          captchaSurface = _CaptchaSkeleton(
-                                            animationDuration:
-                                                animationDuration,
-                                          );
-                                        } else {
-                                          final url = snapshot.requireData
-                                              .trim();
-                                          captchaSurface = _CaptchaImage(
-                                            url: url,
-                                            animationDuration:
-                                                animationDuration,
-                                            onLoaded: _markCaptchaImageLoaded,
-                                            onError: _handleCaptchaImageError,
-                                          );
-                                        }
+                                            _captchaLoadState ==
+                                            _CaptchaLoadState.loading;
+                                        final captchaUrl = _captchaSrcUrl;
+                                        final captchaSurface =
+                                            switch (_captchaLoadState) {
+                                              _CaptchaLoadState.failed =>
+                                                const _CaptchaErrorSurface(),
+                                              _CaptchaLoadState.ready ||
+                                              _CaptchaLoadState.loading ||
+                                              _CaptchaLoadState.idle =>
+                                                captchaUrl == null
+                                                    ? _CaptchaSkeleton(
+                                                        animationDuration:
+                                                            animationDuration,
+                                                      )
+                                                    : _CaptchaImage(
+                                                        url: captchaUrl,
+                                                        animationDuration:
+                                                            animationDuration,
+                                                        onLoaded: () =>
+                                                            _markCaptchaImageLoaded(
+                                                              captchaUrl,
+                                                            ),
+                                                        onError: () =>
+                                                            _handleCaptchaImageError(
+                                                              captchaUrl,
+                                                            ),
+                                                      ),
+                                            };
                                         return Align(
                                           alignment: Alignment.centerLeft,
                                           child: Row(

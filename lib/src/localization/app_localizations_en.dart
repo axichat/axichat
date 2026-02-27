@@ -664,6 +664,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get draftSend => 'Send draft';
 
   @override
+  String get emailSendConfirmTitle => 'Review email before sending';
+
+  @override
+  String get emailSendConfirmMessage =>
+      'Confirm the recipients and body below before sending.';
+
+  @override
+  String get emailSendConfirmRecipientsLabel => 'Recipients';
+
+  @override
+  String get emailSendConfirmBodyLabel => 'Body';
+
+  @override
+  String get emailSendConfirmEmptyBody => '(No body)';
+
+  @override
+  String get emailSendConfirmDontShowAgain => 'Don\'t show this again';
+
+  @override
   String get draftDiscard => 'Discard';
 
   @override
@@ -2059,6 +2078,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsEmailSendOnEnterDescription =>
       'When on, pressing Enter sends email messages. Shift+Enter inserts a new line.';
+
+  @override
+  String get settingsEmailSendConfirmation => 'Confirm before sending email';
+
+  @override
+  String get settingsEmailSendConfirmationDescription =>
+      'Show a review prompt with recipients and body before each email send.';
 
   @override
   String get settingsEmailComposerWatermark => 'Prepopulate email watermark';

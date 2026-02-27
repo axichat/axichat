@@ -24,7 +24,6 @@ import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:custom_refresh_indicator/custom_refresh_indicator.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -149,8 +148,6 @@ class _ChatsListBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final showToast = ShadToaster.maybeOf(context)?.show;
-    final spacing = context.spacing;
-    final sizing = context.sizing;
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final resolvedProfileJid = profileJid.trim();
     final String? selfJid = resolvedProfileJid.isNotEmpty
@@ -160,11 +157,6 @@ class _ChatsListBody extends StatelessWidget {
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
     );
-    final refreshSpinnerExtent = sizing.buttonHeightLg + spacing.s;
-    final refreshSpinnerDimension = sizing.progressIndicatorSize + spacing.xs;
-    final refreshOffsetToArmed = spacing.xxl;
-    final refreshRevealThreshold = context.motion.tapHoverAlpha;
-    final refreshIndicatorPadding = spacing.m;
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>
           previous.creationStatus != current.creationStatus ||
@@ -266,91 +258,7 @@ class _ChatsListBody extends StatelessWidget {
             );
           }
 
-          final animated = child;
-          final env = EnvScope.of(context);
-          final enableRefresh = env.navPlacement == NavPlacement.bottom;
-          if (!enableRefresh) return animated;
-
-          return CustomRefreshIndicator(
-            onRefresh: () => context.read<ChatsCubit>().refreshHomeSync(),
-            offsetToArmed: refreshOffsetToArmed,
-            triggerMode: IndicatorTriggerMode.anywhere,
-            leadingScrollIndicatorVisible: true,
-            builder: (context, child, controller) {
-              final clamped = controller.value.clamp(0.0, 1.0).toDouble();
-              final isLeadingPull =
-                  controller.hasEdge && controller.edge!.isLeading;
-              final isActive =
-                  controller.isLoading ||
-                  (isLeadingPull && !controller.state.isIdle);
-              final isRevealed =
-                  isActive && (controller.isLoading || clamped > 0.0);
-              final revealFactor = isRevealed
-                  ? (controller.isLoading ? 1.0 : clamped)
-                  : 0.0;
-
-              final revealedExtent = refreshSpinnerExtent * revealFactor;
-              final isArmed = controller.state.isArmed;
-              final showIndicator =
-                  isLeadingPull &&
-                  (controller.isLoading || clamped > refreshRevealThreshold);
-              final indicatorContent = !showIndicator
-                  ? const SizedBox.shrink()
-                  : controller.isLoading
-                  ? AxiProgressIndicator(color: context.colorScheme.primary)
-                  : AnimatedRotation(
-                      turns: isArmed ? 0.5 : 0.0,
-                      duration: baseAnimationDuration,
-                      curve: Curves.easeOutCubic,
-                      child: Icon(
-                        LucideIcons.arrowDown,
-                        size: refreshSpinnerDimension,
-                        color: context.colorScheme.primary,
-                      ),
-                    );
-
-              return Stack(
-                children: [
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: IgnorePointer(
-                      child: ClipRect(
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          heightFactor: revealFactor,
-                          child: SizedBox(
-                            height: refreshSpinnerExtent,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: context.colorScheme.card,
-                                border: Border(bottom: context.borderSide),
-                              ),
-                              child: Align(
-                                alignment: Alignment.bottomCenter,
-                                child: Padding(
-                                  padding: EdgeInsets.only(
-                                    bottom: refreshIndicatorPadding,
-                                  ),
-                                  child: indicatorContent,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Transform.translate(
-                    offset: Offset(0, revealedExtent),
-                    child: child,
-                  ),
-                ],
-              );
-            },
-            child: animated,
-          );
+          return child;
         },
       ),
     );

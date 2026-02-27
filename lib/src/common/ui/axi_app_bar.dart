@@ -29,11 +29,9 @@ class AxiAppBar extends StatelessWidget {
       fontFamilyFallback: gabaritoFontFallback,
       fontWeight: appBarTitleFontWeight,
     );
-    final trailingContent = ClipRect(
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: trailing ?? const AxiVersion(),
-      ),
+    final trailingContent = Align(
+      alignment: Alignment.centerRight,
+      child: trailing ?? const AxiVersion(),
     );
     return Container(
       height: context.sizing.appBarHeight,
@@ -72,15 +70,13 @@ class AxiAppBar extends StatelessWidget {
                 trailingContent,
               ],
             )
-          : ClipRect(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (hasLeading)
-                    Align(alignment: Alignment.centerLeft, child: leading!),
-                  trailingContent,
-                ],
-              ),
+          : Stack(
+              alignment: Alignment.center,
+              children: [
+                if (hasLeading)
+                  Align(alignment: Alignment.centerLeft, child: leading!),
+                trailingContent,
+              ],
             ),
     );
   }

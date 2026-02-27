@@ -23,6 +23,7 @@ class XmppOperationOverlay extends StatefulWidget {
 
 class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   static const _completionExitDelay = Duration(seconds: 1);
+  static const _reconciliationInterval = Duration(seconds: 1);
   static const _toastSlideOffset = Offset(0.22, 0.0);
 
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
@@ -33,11 +34,18 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
   bool _isInsertAnimating = false;
   final List<String> _pendingRemovals = <String>[];
   Timer? _removalCooldownTimer;
+  Timer? _reconciliationTimer;
   bool _isRemoving = false;
 
   @override
   void initState() {
     super.initState();
+    _reconciliationTimer = Timer.periodic(_reconciliationInterval, (_) {
+      if (!mounted) {
+        return;
+      }
+      _runPeriodicReconciliation();
+    });
   }
 
   @override
@@ -59,7 +67,20 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
     _exitTimers.clear();
     _insertCooldownTimer?.cancel();
     _removalCooldownTimer?.cancel();
+    _reconciliationTimer?.cancel();
     super.dispose();
+  }
+
+  void _runPeriodicReconciliation() {
+    _syncOperations(context.read<XmppActivityCubit>().state.operations);
+    _pendingRemovals.removeWhere((id) {
+      return _entries.indexWhere((entry) => entry.operation.id == id) == -1;
+    });
+    _pendingInsertions.removeWhere((pending) {
+      return _entries.any((entry) => entry.operation.id == pending.id);
+    });
+    _processInsertQueue();
+    _processRemovalQueue();
   }
 
   void _syncOperations(List<XmppOperation> operations) {

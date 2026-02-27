@@ -2418,12 +2418,12 @@ mixin MessageService
   }) async {
     var success = false;
     emitXmppOperation(_mamFetchStartEvent);
-    final mamManager = _connection.getManager<mox.MAMManager>();
-    if (mamManager == null) {
-      _log.warning('MAM manager unavailable; ensure it is registered.');
-      throw XmppMessageException();
-    }
     try {
+      final mamManager = _connection.getManager<mox.MAMManager>();
+      if (mamManager == null) {
+        _log.warning('MAM manager unavailable; ensure it is registered.');
+        throw XmppMessageException();
+      }
       final options = mox.MAMQueryOptions(
         withJid: null,
         start: start,
@@ -4099,12 +4099,12 @@ mixin MessageService
     }
     var success = false;
     emitXmppOperation(_mamFetchStartEvent);
-    final mamManager = _connection.getManager<mox.MAMManager>();
-    if (mamManager == null) {
-      _log.warning('MAM manager unavailable; ensure it is registered.');
-      throw XmppMessageException();
-    }
     try {
+      final mamManager = _connection.getManager<mox.MAMManager>();
+      if (mamManager == null) {
+        _log.warning('MAM manager unavailable; ensure it is registered.');
+        throw XmppMessageException();
+      }
       final peerJid = mox.JID.fromString(jid);
       final options = mox.MAMQueryOptions(
         withJid: isMuc ? null : peerJid,

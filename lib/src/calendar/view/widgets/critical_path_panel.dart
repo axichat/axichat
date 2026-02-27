@@ -1223,9 +1223,8 @@ Future<String?> promptCriticalPathName({
     showCloseButton: false,
     builder: (dialogContext) {
       return StatefulBuilder(
-        builder: (context, setState) {
+        builder: (context, _) {
           final textTheme = context.textTheme;
-          final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
           FocusScope.of(dialogContext).requestFocus(focusNode);
           return ShadForm(
             key: formKey,
@@ -1243,7 +1242,6 @@ Future<String?> promptCriticalPathName({
                 Flexible(
                   fit: FlexFit.loose,
                   child: SingleChildScrollView(
-                    padding: EdgeInsets.only(bottom: keyboardInset),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
@@ -1280,30 +1278,25 @@ Future<String?> promptCriticalPathName({
                   ),
                 ),
                 SizedBox(height: context.spacing.m),
-                Padding(
-                  padding: EdgeInsets.only(bottom: keyboardInset),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      AxiButton.outline(
-                        onPressed: () => Navigator.of(dialogContext).maybePop(),
-                        child: Text(context.l10n.commonCancel),
-                      ),
-                      SizedBox(width: context.spacing.xxs),
-                      AxiButton.primary(
-                        onPressed: () {
-                          if (!(formKey.currentState?.validate() ?? false)) {
-                            focusNode.requestFocus();
-                            return;
-                          }
-                          Navigator.of(
-                            dialogContext,
-                          ).pop(controller.text.trim());
-                        },
-                        child: Text(context.l10n.commonSave),
-                      ),
-                    ],
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    AxiButton.outline(
+                      onPressed: () => Navigator.of(dialogContext).maybePop(),
+                      child: Text(context.l10n.commonCancel),
+                    ),
+                    SizedBox(width: context.spacing.xxs),
+                    AxiButton.primary(
+                      onPressed: () {
+                        if (!(formKey.currentState?.validate() ?? false)) {
+                          focusNode.requestFocus();
+                          return;
+                        }
+                        Navigator.of(dialogContext).pop(controller.text.trim());
+                      },
+                      child: Text(context.l10n.commonSave),
+                    ),
+                  ],
                 ),
               ],
             ),

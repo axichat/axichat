@@ -81,7 +81,7 @@ class _LoginFormState extends State<LoginForm> {
             .animationDuration;
         final spacing = context.spacing;
         final sizing = context.sizing;
-        final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._@+-]');
+        final usernameCharactersPattern = RegExp(r'[a-zA-Z0-9._-]');
         final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.s);
         final errorPadding = EdgeInsets.fromLTRB(
           spacing.s,
@@ -123,7 +123,9 @@ class _LoginFormState extends State<LoginForm> {
                             label: context.l10n.signupErrorPrefix(errorText),
                             child: Text(
                               errorText,
-                              style: context.textTheme.small,
+                              style: context.textTheme.small.copyWith(
+                                color: context.colorScheme.destructive,
+                              ),
                             ),
                           ),
                   ),

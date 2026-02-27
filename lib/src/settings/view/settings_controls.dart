@@ -632,6 +632,21 @@ class SettingsControls extends StatelessWidget {
                         : null,
                   ),
                 ),
+                Padding(
+                  padding: switchPadding,
+                  child: ShadSwitch(
+                    label: Text(context.l10n.settingsEmailSendConfirmation),
+                    sublabel: Text(
+                      context.l10n.settingsEmailSendConfirmationDescription,
+                    ),
+                    value: state.emailSendConfirmationEnabled,
+                    onChanged: emailEnabled
+                        ? (enabled) => context
+                              .read<SettingsCubit>()
+                              .toggleEmailSendConfirmation(enabled)
+                        : null,
+                  ),
+                ),
                 anchors?.aboutKey == null
                     ? _SettingsSectionHeader(
                         label: context.l10n.settingsSectionAbout,

@@ -641,7 +641,6 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final headerPadding = EdgeInsets.fromLTRB(
       spacing.m,
       spacing.m,
@@ -678,113 +677,106 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
           ],
         );
         return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: keyboardInset),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Flexible(
-                  fit: FlexFit.loose,
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.zero,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Padding(
-                          padding: headerPadding,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  l10n.mucEditAvatar,
-                                  style: titleStyle,
-                                ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Flexible(
+                fit: FlexFit.loose,
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.zero,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: headerPadding,
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                l10n.mucEditAvatar,
+                                style: titleStyle,
                               ),
-                              AxiIconButton(
-                                iconData: LucideIcons.x,
-                                tooltip: l10n.commonClose,
-                                onPressed: widget.onCancel,
-                              ),
-                            ],
-                          ),
+                            ),
+                            AxiIconButton(
+                              iconData: LucideIcons.x,
+                              tooltip: l10n.commonClose,
+                              onPressed: widget.onCancel,
+                            ),
+                          ],
                         ),
-                        Padding(
-                          padding: contentPadding,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              SignupAvatarEditorPanel(
-                                mode: avatarState.editorMode,
-                                avatarBytes: avatarState.displayedBytes,
-                                animationDuration: animationDuration,
-                                cropBytes: avatarState.draftAvatar?.sourceBytes,
-                                cropRect: avatarState.draftAvatar?.cropRect,
-                                imageWidth: avatarState.draftAvatar?.sourceWidth
-                                    ?.toDouble(),
-                                imageHeight: avatarState
-                                    .draftAvatar
-                                    ?.sourceHeight
-                                    ?.toDouble(),
-                                onCropChanged: (rect) => context
-                                    .read<AvatarEditorCubit>()
-                                    .updateCropRect(rect),
-                                onCropReset: () => context
-                                    .read<AvatarEditorCubit>()
-                                    .resetCrop(),
-                                onCropCommitted: (rect) => context
-                                    .read<AvatarEditorCubit>()
-                                    .commitCrop(rect),
-                                onShuffle: () => context
-                                    .read<AvatarEditorCubit>()
-                                    .shuffleCarousel(context.colorScheme),
-                                onUpload: () => context
-                                    .read<AvatarEditorCubit>()
-                                    .pickImage(),
-                                onUseCurrent: () => context
-                                    .read<AvatarEditorCubit>()
-                                    .selectCarouselAvatar(),
-                                useActionEnabled: useActionEnabled,
-                                hasUserSelectedAvatar:
-                                    avatarState.hasUserSelectedAvatar,
-                                canShuffleBackground:
-                                    avatarState.hasCarouselPreview &&
-                                    avatarState.canShuffleBackground,
-                                onShuffleBackground:
-                                    avatarState.hasCarouselPreview &&
-                                        avatarState.canShuffleBackground
-                                    ? () => context
-                                          .read<AvatarEditorCubit>()
-                                          .shuffleCarouselBackground(
-                                            context.colorScheme,
-                                          )
-                                    : null,
-                                descriptionText: l10n.mucAvatarMenuDescription,
-                              ),
-                              if (errorText != null) ...[
-                                SizedBox(height: spacing.s),
-                                Text(
-                                  errorText,
-                                  style: context.textTheme.small.copyWith(
-                                    color: context.colorScheme.destructive,
-                                  ),
-                                ),
-                              ],
+                      ),
+                      Padding(
+                        padding: contentPadding,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            SignupAvatarEditorPanel(
+                              mode: avatarState.editorMode,
+                              avatarBytes: avatarState.displayedBytes,
+                              animationDuration: animationDuration,
+                              cropBytes: avatarState.draftAvatar?.sourceBytes,
+                              cropRect: avatarState.draftAvatar?.cropRect,
+                              imageWidth: avatarState.draftAvatar?.sourceWidth
+                                  ?.toDouble(),
+                              imageHeight: avatarState.draftAvatar?.sourceHeight
+                                  ?.toDouble(),
+                              onCropChanged: (rect) => context
+                                  .read<AvatarEditorCubit>()
+                                  .updateCropRect(rect),
+                              onCropReset: () =>
+                                  context.read<AvatarEditorCubit>().resetCrop(),
+                              onCropCommitted: (rect) => context
+                                  .read<AvatarEditorCubit>()
+                                  .commitCrop(rect),
+                              onShuffle: () => context
+                                  .read<AvatarEditorCubit>()
+                                  .shuffleCarousel(context.colorScheme),
+                              onUpload: () =>
+                                  context.read<AvatarEditorCubit>().pickImage(),
+                              onUseCurrent: () => context
+                                  .read<AvatarEditorCubit>()
+                                  .selectCarouselAvatar(),
+                              useActionEnabled: useActionEnabled,
+                              hasUserSelectedAvatar:
+                                  avatarState.hasUserSelectedAvatar,
+                              canShuffleBackground:
+                                  avatarState.hasCarouselPreview &&
+                                  avatarState.canShuffleBackground,
+                              onShuffleBackground:
+                                  avatarState.hasCarouselPreview &&
+                                      avatarState.canShuffleBackground
+                                  ? () => context
+                                        .read<AvatarEditorCubit>()
+                                        .shuffleCarouselBackground(
+                                          context.colorScheme,
+                                        )
+                                  : null,
+                              descriptionText: l10n.mucAvatarMenuDescription,
+                            ),
+                            if (errorText != null) ...[
                               SizedBox(height: spacing.s),
+                              Text(
+                                errorText,
+                                style: context.textTheme.small.copyWith(
+                                  color: context.colorScheme.destructive,
+                                ),
+                              ),
                             ],
-                          ),
+                            SizedBox(height: spacing.s),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-                SafeArea(
-                  top: false,
-                  bottom: true,
-                  child: Padding(padding: actionsPadding, child: actions),
-                ),
-              ],
-            ),
+              ),
+              SafeArea(
+                top: false,
+                bottom: true,
+                child: Padding(padding: actionsPadding, child: actions),
+              ),
+            ],
           ),
         );
       },

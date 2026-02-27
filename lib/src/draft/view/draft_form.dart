@@ -297,13 +297,6 @@ class _DraftFormState extends State<DraftForm> {
                         );
                         final split = _splitRecipients();
                         final hasActiveRecipients = split.hasActiveRecipients;
-                        final hasEmailTargets = split.emailTargets.isNotEmpty;
-                        final hasXmppTargets = split.xmppTargets.isNotEmpty;
-                        final sendOnEnter = _resolveSendOnEnter(
-                          hasEmailTargets: hasEmailTargets,
-                          hasXmppTargets: hasXmppTargets,
-                          settings: settingsState,
-                        );
                         final hasContent = _hasContent(
                           hasAttachments: hasAttachments,
                         );
@@ -505,49 +498,14 @@ class _DraftFormState extends State<DraftForm> {
                                 child: Semantics(
                                   label: l10n.draftMessageSemantics,
                                   textField: true,
-                                  child: Shortcuts(
-                                    shortcuts: readyToSend && sendOnEnter
-                                        ? const <ShortcutActivator, Intent>{
-                                            SingleActivator(
-                                              LogicalKeyboardKey.enter,
-                                            ): _SendDraftIntent(),
-                                          }
-                                        : const <ShortcutActivator, Intent>{},
-                                    child: Actions(
-                                      actions: <Type, Action<Intent>>{
-                                        _SendDraftIntent:
-                                            CallbackAction<_SendDraftIntent>(
-                                              onInvoke: (_) {
-                                                if (readyToSend &&
-                                                    sendOnEnter &&
-                                                    enabled) {
-                                                  unawaited(_handleSendDraft());
-                                                }
-                                                return null;
-                                              },
-                                            ),
-                                      },
-                                      child: AxiTextFormField(
-                                        controller: _bodyTextController,
-                                        focusNode: _bodyFocusNode,
-                                        enabled: enabled,
-                                        minLines: 7,
-                                        maxLines: null,
-                                        textInputAction: sendOnEnter
-                                            ? TextInputAction.send
-                                            : TextInputAction.newline,
-                                        onSubmitted: (_) {
-                                          if (readyToSend &&
-                                              sendOnEnter &&
-                                              enabled) {
-                                            unawaited(_handleSendDraft());
-                                          }
-                                        },
-                                        placeholder: Text(
-                                          l10n.draftMessageHint,
-                                        ),
-                                      ),
-                                    ),
+                                  child: AxiTextFormField(
+                                    controller: _bodyTextController,
+                                    focusNode: _bodyFocusNode,
+                                    enabled: enabled,
+                                    minLines: 7,
+                                    maxLines: null,
+                                    textInputAction: TextInputAction.newline,
+                                    placeholder: Text(l10n.draftMessageHint),
                                   ),
                                 ),
                               ),
@@ -1197,6 +1155,28 @@ class _DraftFormState extends State<DraftForm> {
     }
   }
 
+  Future<bool> _confirmEmailSendIfNeeded({
+    required SettingsCubit settingsCubit,
+    required List<String> recipients,
+    required String body,
+  }) async {
+    if (!settingsCubit.state.emailSendConfirmationEnabled) {
+      return true;
+    }
+    final decision = await confirmEmailSend(
+      context,
+      recipients: recipients,
+      body: body,
+    );
+    if (!mounted || decision == null || !decision.confirmed) {
+      return false;
+    }
+    if (decision.dontShowAgain) {
+      settingsCubit.toggleEmailSendConfirmation(false);
+    }
+    return true;
+  }
+
   Future<void> _handleSendDraft() async {
     _autosaveTimer?.cancel();
     _invalidatePendingSaves();
@@ -1211,13 +1191,12 @@ class _DraftFormState extends State<DraftForm> {
     final transportsReady = await _ensureRecipientTransports();
     if (!mounted) return;
     if (!transportsReady) return;
+    final settingsCubit = widget.locate<SettingsCubit>();
+    final settingsState = settingsCubit.state;
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
-    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
-    final shareTokenSignatureEnabled = widget
-        .locate<SettingsCubit>()
-        .state
-        .shareTokenSignatureEnabled;
+    final endpointConfig = settingsState.endpointConfig;
+    final shareTokenSignatureEnabled = settingsState.shareTokenSignatureEnabled;
     final xmppTargets = split.xmppTargets
         .map((recipient) {
           final jid = _resolveXmppJid(recipient);
@@ -1257,6 +1236,16 @@ class _DraftFormState extends State<DraftForm> {
     );
     final formValid = _formKey.currentState?.validate() ?? false;
     if (validationMessage != null || !formValid) return;
+    if (emailTargets.isNotEmpty) {
+      final shouldSend = await _confirmEmailSendIfNeeded(
+        settingsCubit: settingsCubit,
+        recipients: _recipientStrings(),
+        body: _bodyTextController.text,
+      );
+      if (!mounted || !shouldSend) {
+        return;
+      }
+    }
     if (mounted) {
       setState(() {
         _sendingDraft = true;
@@ -1385,20 +1374,6 @@ class _DraftFormState extends State<DraftForm> {
       xmppTargets: xmppTargets,
       hasActiveRecipients: hasActiveRecipients,
     );
-  }
-
-  bool _resolveSendOnEnter({
-    required bool hasEmailTargets,
-    required bool hasXmppTargets,
-    required SettingsState settings,
-  }) {
-    if (hasEmailTargets && hasXmppTargets) {
-      return settings.chatSendOnEnter && settings.emailSendOnEnter;
-    }
-    if (hasEmailTargets) {
-      return settings.emailSendOnEnter;
-    }
-    return settings.chatSendOnEnter;
   }
 
   String? _resolveXmppJid(ComposerRecipient recipient) {
@@ -1589,10 +1564,6 @@ class _DraftFormState extends State<DraftForm> {
       },
     );
   }
-}
-
-class _SendDraftIntent extends Intent {
-  const _SendDraftIntent();
 }
 
 class _DraftTaskDropRegion extends StatefulWidget {
