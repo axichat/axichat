@@ -15,6 +15,31 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+val ciStorePath = System.getenv()["CM_KEYSTORE_PATH"]
+val ciStoreFile = ciStorePath?.let { file(it) }
+val ciStorePassword = System.getenv()["CM_KEYSTORE_PASSWORD"]
+val ciKeyAlias = System.getenv()["CM_KEY_ALIAS"]
+val ciKeyPassword = System.getenv()["CM_KEY_PASSWORD"]
+val hasCiReleaseSigning =
+    System.getenv()["CI"].toBoolean() &&
+        ciStoreFile?.exists() == true &&
+        !ciStorePassword.isNullOrBlank() &&
+        !ciKeyAlias.isNullOrBlank() &&
+        !ciKeyPassword.isNullOrBlank()
+
+val localStorePath = keystoreProperties.getProperty("storeFile")
+val localStoreFile = localStorePath?.let { file(it) }
+val localStorePassword = keystoreProperties.getProperty("storePassword")
+val localKeyAlias = keystoreProperties.getProperty("keyAlias")
+val localKeyPassword = keystoreProperties.getProperty("keyPassword")
+val hasLocalReleaseSigning =
+    localStoreFile?.exists() == true &&
+        !localStorePassword.isNullOrBlank() &&
+        !localKeyAlias.isNullOrBlank() &&
+        !localKeyPassword.isNullOrBlank()
+
+val hasReleaseSigningConfig = hasCiReleaseSigning || hasLocalReleaseSigning
+
 android {
     namespace = "im.axi.axichat"
     compileSdk = flutter.compileSdkVersion
@@ -43,16 +68,16 @@ android {
 
     signingConfigs {
         create("release") {
-            if (System.getenv()["CI"].toBoolean()) { // CI=true is exported by Codemagic
-                storeFile = System.getenv()["CM_KEYSTORE_PATH"]?.let { file(it) }
-                storePassword = System.getenv()["CM_KEYSTORE_PASSWORD"]
-                keyAlias = System.getenv()["CM_KEY_ALIAS"]
-                keyPassword = System.getenv()["CM_KEY_PASSWORD"]
-            } else {
-                keyAlias = keystoreProperties["keyAlias"] as? String
-                keyPassword = keystoreProperties["keyPassword"] as? String
-                storeFile = keystoreProperties["storeFile"]?.let { file(it) }
-                storePassword = keystoreProperties["storePassword"] as? String
+            if (hasCiReleaseSigning) {
+                storeFile = ciStoreFile
+                storePassword = ciStorePassword
+                keyAlias = ciKeyAlias
+                keyPassword = ciKeyPassword
+            } else if (hasLocalReleaseSigning) {
+                storeFile = localStoreFile
+                storePassword = localStorePassword
+                keyAlias = localKeyAlias
+                keyPassword = localKeyPassword
             }
         }
     }
@@ -84,9 +109,9 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("release")
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }

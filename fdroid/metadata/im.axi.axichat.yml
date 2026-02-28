@@ -25,9 +25,9 @@ Description: |
   .
 
 Builds:
-  - versionName: 0.4.0
-    versionCode: 40 # Match the build number from pubspec.yaml
-    commit: v0.4.0 # Tag or commit in the Axichat repo
+  - versionName: 0.6.0
+    versionCode: 1 # Match pubspec.yaml version: 0.6.0+1
+    commit: v0.6.0 # Replace with the exact release tag/commit submitted to F-Droid.
     subdir: .
     output: build/app/outputs/flutter-apk/app-production-release.apk
     prebuild:
@@ -44,8 +44,8 @@ Builds:
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.4.0
-CurrentVersionCode: 40
+CurrentVersion: 0.6.0
+CurrentVersionCode: 1
 
 # When bumping versions, update versionName/versionCode/commit fields above and
 # keep --dart-define=ENABLE_SHOREBIRD=false so the F-Droid build ships without
