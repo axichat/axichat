@@ -49,10 +49,10 @@ class _DraftsListState extends State<DraftsList> {
         builder: (context, state) {
           final l10n = context.l10n;
           final cachedItems =
-              context.read<DraftCubit>()[DraftCubit.itemsCacheKey]
+              context.watch<DraftCubit>()[DraftCubit.itemsCacheKey]
                   as List<Draft>?;
           final cachedVisibleItems =
-              context.read<DraftCubit>()[DraftCubit.visibleItemsCacheKey]
+              context.watch<DraftCubit>()[DraftCubit.visibleItemsCacheKey]
                   as List<Draft>?;
           final List<Draft>? items =
               state.items ?? cachedItems ?? cachedVisibleItems;
@@ -70,7 +70,7 @@ class _DraftsListState extends State<DraftsList> {
             builder: (context, rosterState) {
               final rosterItems =
                   rosterState.items ??
-                  (context.read<RosterCubit>()[RosterCubit.itemsCacheKey]
+                  (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
                       as List<RosterItem>?) ??
                   const <RosterItem>[];
               final avatarByJid = <String, String?>{

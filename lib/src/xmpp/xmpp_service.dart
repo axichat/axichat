@@ -2577,21 +2577,41 @@ class XmppService extends XmppBase
   }
 
   Future<void> _resetStreamControllers() async {
-    await _closeStreamControllers();
-    _httpUploadSupportController =
-        StreamController<HttpUploadSupport>.broadcast();
-    _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
-    _streamReadyController = StreamController<XmppStreamReady>.broadcast();
-    _databaseReloadController = StreamController<void>.broadcast();
-    _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
-    _xmppOperationController = StreamController<XmppOperationEvent>.broadcast();
-    _omemoActivityController =
-        StreamController<mox.OmemoActivityEvent>.broadcast();
-    _spamSyncUpdateController =
-        StreamController<anti_abuse.SpamSyncUpdate>.broadcast();
-    _emailBlocklistSyncUpdateController =
-        StreamController<anti_abuse.EmailBlocklistSyncUpdate>.broadcast();
-    _connectivityStream = StreamController<ConnectionState>.broadcast();
+    if (_httpUploadSupportController.isClosed) {
+      _httpUploadSupportController =
+          StreamController<HttpUploadSupport>.broadcast();
+    }
+    if (_pubSubSupportController.isClosed) {
+      _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
+    }
+    if (_streamReadyController.isClosed) {
+      _streamReadyController = StreamController<XmppStreamReady>.broadcast();
+    }
+    if (_databaseReloadController.isClosed) {
+      _databaseReloadController = StreamController<void>.broadcast();
+    }
+    if (_selfAvatarController.isClosed) {
+      _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
+    }
+    if (_xmppOperationController.isClosed) {
+      _xmppOperationController =
+          StreamController<XmppOperationEvent>.broadcast();
+    }
+    if (_omemoActivityController.isClosed) {
+      _omemoActivityController =
+          StreamController<mox.OmemoActivityEvent>.broadcast();
+    }
+    if (_spamSyncUpdateController.isClosed) {
+      _spamSyncUpdateController =
+          StreamController<anti_abuse.SpamSyncUpdate>.broadcast();
+    }
+    if (_emailBlocklistSyncUpdateController.isClosed) {
+      _emailBlocklistSyncUpdateController =
+          StreamController<anti_abuse.EmailBlocklistSyncUpdate>.broadcast();
+    }
+    if (_connectivityStream.isClosed) {
+      _connectivityStream = StreamController<ConnectionState>.broadcast();
+    }
   }
 
   Future<void> _closeStreamControllers() async {

@@ -89,12 +89,13 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
     required _ConnectivityIndicatorDisplay previousDisplay,
   }) {
     if (state is ConnectivityConnected) {
-      final enteredFromConnecting = previousState is ConnectivityConnecting;
-      if (enteredFromConnecting ||
-          previousDisplay == _ConnectivityIndicatorDisplay.connected) {
-        return _ConnectivityIndicatorDisplay.connected;
+      if (previousState == null) {
+        return _ConnectivityIndicatorDisplay.hidden;
       }
-      return _ConnectivityIndicatorDisplay.hidden;
+      if (previousState is ConnectivityConnected) {
+        return previousDisplay;
+      }
+      return _ConnectivityIndicatorDisplay.connected;
     }
     if (state is ConnectivityConnecting) {
       return _ConnectivityIndicatorDisplay.connecting;

@@ -1424,9 +1424,9 @@ class DeltaEventConsumer {
     if (trimmedBody?.isNotEmpty == true) {
       return trimmedBody;
     }
-    final String? trimmedSubject = message.subject?.trim();
-    if (trimmedSubject?.isNotEmpty == true) {
-      return sanitizeEmailHeaderValue(trimmedSubject);
+    final sanitizedSubject = sanitizeEmailSubjectValue(message.subject);
+    if (sanitizedSubject != null) {
+      return sanitizedSubject;
     }
     if (message.hasFile) {
       final metadataId = deltaFileMetadataId(message.id);
@@ -1642,7 +1642,7 @@ class DeltaEventConsumer {
     final rawText = clampMessageText(msg.text);
     final rawHtml = clampMessageHtml(msg.html);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(rawHtml);
-    final sanitizedSubject = sanitizeEmailHeaderValue(msg.subject);
+    final sanitizedSubject = sanitizeEmailSubjectValue(msg.subject);
     final resolvedBody = rawText?.trim().isNotEmpty == true
         ? rawText
         : (normalizedHtml == null

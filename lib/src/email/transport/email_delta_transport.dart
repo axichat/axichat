@@ -1227,7 +1227,8 @@ class EmailDeltaTransport implements ChatTransport {
       accountId: resolvedAccountId,
       context: context,
     );
-    final sanitizedSubject = sanitizeEmailHeaderValue(subject);
+    final sanitizedSubject = sanitizeEmailSubjectValue(subject);
+    final coreSubject = subjectForDeltaCore(subject);
     final DateTime sentAt = DateTime.timestamp();
     final String pendingStanzaId = _pendingOutgoingStanzaId();
     await _recordOutgoing(
@@ -1247,7 +1248,7 @@ class EmailDeltaTransport implements ChatTransport {
       msgId = await context.sendText(
         chatId: chatId,
         message: body,
-        subject: sanitizedSubject,
+        subject: coreSubject,
         html: htmlBody,
       );
     } on Exception {
@@ -1290,7 +1291,8 @@ class EmailDeltaTransport implements ChatTransport {
       accountId: resolvedAccountId,
       context: context,
     );
-    final sanitizedSubject = sanitizeEmailHeaderValue(subject);
+    final sanitizedSubject = sanitizeEmailSubjectValue(subject);
+    final coreSubject = subjectForDeltaCore(subject);
     final sanitizedFileName = sanitizeEmailAttachmentFilename(
       attachment.fileName,
       fallbackPath: attachment.path,
@@ -1324,7 +1326,7 @@ class EmailDeltaTransport implements ChatTransport {
         fileName: sanitizedFileName,
         mimeType: sanitizedMimeType,
         text: attachment.caption,
-        subject: sanitizedSubject,
+        subject: coreSubject,
         html: htmlCaption,
       );
     } on Exception {
@@ -2232,7 +2234,8 @@ class EmailDeltaTransport implements ChatTransport {
       accountId: resolvedAccountId,
       context: context,
     );
-    final sanitizedSubject = sanitizeEmailHeaderValue(subject);
+    final sanitizedSubject = sanitizeEmailSubjectValue(subject);
+    final coreSubject = subjectForDeltaCore(subject);
     final DateTime sentAt = DateTime.timestamp();
     final String pendingStanzaId = _pendingOutgoingStanzaId();
     await _recordOutgoing(
@@ -2251,7 +2254,7 @@ class EmailDeltaTransport implements ChatTransport {
         chatId: chatId,
         message: body,
         quotedMessageId: quotedMessageId,
-        subject: sanitizedSubject,
+        subject: coreSubject,
         html: htmlBody,
       );
     } on Exception {

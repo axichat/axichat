@@ -405,14 +405,7 @@ class _LoginScreenState extends State<LoginScreen>
         builder: (context, progress, _) {
           final showProgressBar = progress.isVisible;
           final formsDisabled = showProgressBar;
-          final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-          final authFormContent = _AuthFormContent(
-            selectedFlow: _selectedFlow,
-            formsDisabled: formsDisabled,
-            onSubmitStart: _handleSubmissionRequested,
-          );
           return Scaffold(
-            resizeToAvoidBottomInset: false,
             body: SafeArea(
               child: Column(
                 children: [
@@ -434,43 +427,87 @@ class _LoginScreenState extends State<LoginScreen>
                     ),
                   ),
                   Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(bottom: keyboardInset),
-                      child: Container(
-                        margin: containerMargin,
-                        width: double.infinity,
-                        color: colors.background,
-                        child: AxiAdaptiveLayout(
-                          primaryFlex: 4,
-                          secondaryFlex: 6,
-                          centerPrimary: false,
-                          primaryPadding: EdgeInsets.symmetric(
-                            horizontal: spacing.m,
-                          ),
-                          secondaryPadding: EdgeInsets.zero,
-                          centerSecondary: false,
-                          primaryAlignment: Alignment.topCenter,
-                          secondaryAlignment: Alignment.topLeft,
-                          primaryChild: Align(
-                            alignment: Alignment.topCenter,
-                            child: ConstrainedBox(
-                              constraints: BoxConstraints(
-                                maxWidth: sizing.composeWindowWidth,
-                              ),
+                    child: Container(
+                      margin: containerMargin,
+                      width: double.infinity,
+                      color: colors.background,
+                      child: AxiAdaptiveLayout(
+                        primaryFlex: 4,
+                        secondaryFlex: 6,
+                        primaryPadding: EdgeInsets.symmetric(
+                          horizontal: spacing.m,
+                        ),
+                        secondaryPadding: EdgeInsets.zero,
+                        centerSecondary: false,
+                        secondaryAlignment: Alignment.topLeft,
+                        primaryChild: Center(
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: sizing.composeWindowWidth,
+                            ),
+                            child: SingleChildScrollView(
                               child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Expanded(
-                                    child: keyboardInset > 0
-                                        ? SingleChildScrollView(
-                                            keyboardDismissBehavior:
-                                                ScrollViewKeyboardDismissBehavior
-                                                    .onDrag,
-                                            child: authFormContent,
-                                          )
-                                        : Align(
-                                            alignment: Alignment.bottomCenter,
-                                            child: authFormContent,
+                                  const ShorebirdChecker(),
+                                  AxiAnimatedSize(
+                                    duration: context
+                                        .watch<SettingsCubit>()
+                                        .animationDuration,
+                                    curve: Curves.easeInOut,
+                                    child: AnimatedCrossFade(
+                                      firstCurve: Curves.easeInOut,
+                                      secondCurve: Curves.easeInOut,
+                                      sizeCurve: Curves.easeInOut,
+                                      duration: context
+                                          .watch<SettingsCubit>()
+                                          .animationDuration,
+                                      crossFadeState:
+                                          _selectedFlow == _AuthFlow.login
+                                          ? CrossFadeState.showFirst
+                                          : CrossFadeState.showSecond,
+                                      firstChild: IgnorePointer(
+                                        ignoring:
+                                            formsDisabled ||
+                                            _selectedFlow != _AuthFlow.login,
+                                        child: Padding(
+                                          padding: EdgeInsets.all(spacing.m),
+                                          child: LoginForm(
+                                            key: const ValueKey('login-form'),
+                                            busy: formsDisabled,
+                                            onSubmitStart: () =>
+                                                _handleSubmissionRequested(
+                                                  _AuthFlow.login,
+                                                ),
                                           ),
+                                        ),
+                                      ),
+                                      secondChild: IgnorePointer(
+                                        ignoring:
+                                            formsDisabled ||
+                                            _selectedFlow != _AuthFlow.signup,
+                                        child: Padding(
+                                          padding: EdgeInsets.all(spacing.m),
+                                          child: BlocProvider(
+                                            create: (_) => SignupAvatarCubit(),
+                                            child: SignupForm(
+                                              key: const ValueKey(
+                                                'signup-form',
+                                              ),
+                                              visible:
+                                                  _selectedFlow ==
+                                                  _AuthFlow.signup,
+                                              busy: formsDisabled,
+                                              onSubmitStart: () =>
+                                                  _handleSubmissionRequested(
+                                                    _AuthFlow.signup,
+                                                  ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                   SizedBox(height: spacing.s),
                                   AnimatedSwitcher(
@@ -508,85 +545,61 @@ class _LoginScreenState extends State<LoginScreen>
                                             key: const ValueKey(
                                               'auth-toggle-button',
                                             ),
-                                            child: Padding(
-                                              padding: EdgeInsets.symmetric(
-                                                horizontal: spacing.m,
-                                              ),
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Padding(
-                                                    padding:
-                                                        EdgeInsets.symmetric(
-                                                          vertical: spacing.m,
-                                                        ),
-                                                    child: Container(
-                                                      width: double.infinity,
-                                                      height: borderSide.width,
-                                                      color: borderSide.color,
-                                                    ),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Padding(
+                                                  padding: EdgeInsets.symmetric(
+                                                    vertical: spacing.m,
                                                   ),
-                                                  Padding(
-                                                    padding: EdgeInsets.only(
-                                                      top: spacing.m,
-                                                    ),
-                                                    child: AxiButton.ghost(
-                                                      onPressed: () {
-                                                        final nextLogin =
-                                                            _selectedFlow ==
-                                                                _AuthFlow.login
-                                                            ? _AuthFlow.signup
-                                                            : _AuthFlow.login;
-                                                        setState(() {
-                                                          _selectedFlow =
-                                                              nextLogin;
-                                                        });
-                                                      },
-                                                      child: Text(
+                                                  child: Container(
+                                                    width: double.infinity,
+                                                    height: borderSide.width,
+                                                    color: borderSide.color,
+                                                  ),
+                                                ),
+                                                AxiButton.ghost(
+                                                  onPressed: () {
+                                                    final nextLogin =
                                                         _selectedFlow ==
-                                                                _AuthFlow.login
-                                                            ? l10n.authToggleSignup
-                                                            : l10n.authToggleLogin,
-                                                      ),
-                                                    ),
+                                                            _AuthFlow.login
+                                                        ? _AuthFlow.signup
+                                                        : _AuthFlow.login;
+                                                    setState(() {
+                                                      _selectedFlow = nextLogin;
+                                                    });
+                                                  },
+                                                  child: Text(
+                                                    _selectedFlow ==
+                                                            _AuthFlow.login
+                                                        ? l10n.authToggleSignup
+                                                        : l10n.authToggleLogin,
                                                   ),
-                                                ],
-                                              ),
+                                                ),
+                                              ],
                                             ),
                                           ),
                                   ),
+                                  SizedBox(height: spacing.m),
+                                  AxiButton.outline(
+                                    onPressed: () =>
+                                        context.go('/guest-calendar'),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.calendar_today),
+                                        SizedBox(width: spacing.s),
+                                        Text(l10n.authGuestCalendarCta),
+                                      ],
+                                    ),
+                                  ),
+                                  SizedBox(height: spacing.m),
                                 ],
                               ),
                             ),
                           ),
-                          secondaryChild: const GuestChat(),
                         ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      spacing.m,
-                      spacing.s,
-                      spacing.m,
-                      spacing.l,
-                    ),
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: sizing.composeWindowWidth,
-                        ),
-                        child: AxiButton.outline(
-                          onPressed: () => context.go('/guest-calendar'),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.calendar_today),
-                              SizedBox(width: spacing.s),
-                              Text(l10n.authGuestCalendarCta),
-                            ],
-                          ),
-                        ),
+                        secondaryChild: const GuestChat(),
                       ),
                     ),
                   ),
@@ -596,70 +609,6 @@ class _LoginScreenState extends State<LoginScreen>
           );
         },
       ),
-    );
-  }
-}
-
-class _AuthFormContent extends StatelessWidget {
-  const _AuthFormContent({
-    required this.selectedFlow,
-    required this.formsDisabled,
-    required this.onSubmitStart,
-  });
-
-  final _AuthFlow selectedFlow;
-  final bool formsDisabled;
-  final ValueChanged<_AuthFlow> onSubmitStart;
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final animationDuration = context.watch<SettingsCubit>().animationDuration;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const ShorebirdChecker(),
-        AxiAnimatedSize(
-          duration: animationDuration,
-          curve: Curves.easeInOut,
-          child: AnimatedCrossFade(
-            firstCurve: Curves.easeInOut,
-            secondCurve: Curves.easeInOut,
-            sizeCurve: Curves.easeInOut,
-            duration: animationDuration,
-            crossFadeState: selectedFlow == _AuthFlow.login
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            firstChild: IgnorePointer(
-              ignoring: formsDisabled || selectedFlow != _AuthFlow.login,
-              child: Padding(
-                padding: EdgeInsets.all(spacing.m),
-                child: LoginForm(
-                  key: const ValueKey('login-form'),
-                  busy: formsDisabled,
-                  onSubmitStart: () => onSubmitStart(_AuthFlow.login),
-                ),
-              ),
-            ),
-            secondChild: IgnorePointer(
-              ignoring: formsDisabled || selectedFlow != _AuthFlow.signup,
-              child: Padding(
-                padding: EdgeInsets.all(spacing.m),
-                child: BlocProvider(
-                  create: (_) => SignupAvatarCubit(),
-                  child: SignupForm(
-                    key: const ValueKey('signup-form'),
-                    visible: selectedFlow == _AuthFlow.signup,
-                    busy: formsDisabled,
-                    onSubmitStart: () => onSubmitStart(_AuthFlow.signup),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

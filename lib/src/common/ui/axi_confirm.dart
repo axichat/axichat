@@ -79,11 +79,15 @@ Future<EmailSendConfirmationDecision?> confirmEmailSend(
   BuildContext context, {
   required List<String> recipients,
   required String body,
+  required List<String> attachmentNames,
 }) {
   return showFadeScaleDialog<EmailSendConfirmationDecision>(
     context: context,
-    builder: (dialogContext) =>
-        _EmailSendConfirmationDialog(recipients: recipients, body: body),
+    builder: (dialogContext) => _EmailSendConfirmationDialog(
+      recipients: recipients,
+      body: body,
+      attachmentNames: attachmentNames,
+    ),
   );
 }
 
@@ -91,10 +95,12 @@ class _EmailSendConfirmationDialog extends StatefulWidget {
   const _EmailSendConfirmationDialog({
     required this.recipients,
     required this.body,
+    required this.attachmentNames,
   });
 
   final List<String> recipients;
   final String body;
+  final List<String> attachmentNames;
 
   @override
   State<_EmailSendConfirmationDialog> createState() =>
@@ -117,6 +123,13 @@ class _EmailSendConfirmationDialogState
     final bodyText = widget.body.trim().isEmpty
         ? l10n.emailSendConfirmEmptyBody
         : widget.body;
+    final attachmentLines = widget.attachmentNames
+        .map((name) => name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList(growable: false);
+    final attachmentsText = attachmentLines.isEmpty
+        ? l10n.draftNoAttachments
+        : attachmentLines.join('\n');
     final maxPreviewHeight = context.sizing.menuItemHeight * 5;
     final pop = Navigator.of(context).pop;
     return ShadDialog(
@@ -159,6 +172,11 @@ class _EmailSendConfirmationDialogState
           _EmailSendPreview(
             label: l10n.emailSendConfirmBodyLabel,
             value: bodyText,
+            maxHeight: maxPreviewHeight,
+          ),
+          _EmailSendPreview(
+            label: l10n.draftAttachmentsLabel,
+            value: attachmentsText,
             maxHeight: maxPreviewHeight,
           ),
           AxiCheckboxFormField(

@@ -100,6 +100,7 @@ class _DraftFormState extends State<DraftForm> {
   DateTime? _lastAutosaveAt;
   bool _autosaveInFlight = false;
   int _saveEpoch = 0;
+  DraftCubit? _draftCubit;
 
   @override
   void initState() {
@@ -126,7 +127,10 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void dispose() {
     if (_shouldCleanupSeedAttachments) {
-      unawaited(_cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>()));
+      final draftCubit = _draftCubit;
+      if (draftCubit != null) {
+        unawaited(_cleanupSeedAttachmentMetadata(draftCubit));
+      }
     }
     _autosaveTimer?.cancel();
     _bodyTextController.removeListener(_bodyListener);
@@ -175,6 +179,7 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _draftCubit ??= context.read<DraftCubit>();
     if (_hydrationScheduled || widget.attachmentMetadataIds.isEmpty) {
       return;
     }
@@ -197,7 +202,7 @@ class _DraftFormState extends State<DraftForm> {
     final spacing = context.spacing;
     final settingsState = context.watch<SettingsCubit>().state;
     final endpointConfig = settingsState.endpointConfig;
-    final locate = widget.locate;
+    final locate = context.read;
     final horizontalPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final sectionSpacing = spacing.m;
     final smallGap = spacing.s;
@@ -610,8 +615,8 @@ class _DraftFormState extends State<DraftForm> {
               chat: match,
               shareSignatureEnabled:
                   match.shareSignatureEnabled ??
-                  widget
-                      .locate<SettingsCubit>()
+                  context
+                      .read<SettingsCubit>()
                       .state
                       .shareTokenSignatureEnabled,
             ),
@@ -622,8 +627,8 @@ class _DraftFormState extends State<DraftForm> {
           ComposerRecipient(
             target: FanOutTarget.address(
               address: trimmed,
-              shareSignatureEnabled: widget
-                  .locate<SettingsCubit>()
+              shareSignatureEnabled: context
+                  .read<SettingsCubit>()
                   .state
                   .shareTokenSignatureEnabled,
             ),
@@ -656,7 +661,7 @@ class _DraftFormState extends State<DraftForm> {
     Iterable<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    final hydrated = await widget.locate<DraftCubit>().loadDraftAttachments(
+    final hydrated = await context.read<DraftCubit>().loadDraftAttachments(
       metadataIds.toList(),
     );
     final List<PendingAttachment> pending = <PendingAttachment>[];
@@ -756,7 +761,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
-    final endpointConfig = widget.locate<SettingsCubit>().state.endpointConfig;
+    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final supportsEmail = endpointConfig.smtpEnabled;
     final supportsXmpp = endpointConfig.xmppEnabled;
     if (supportsEmail && !supportsXmpp) {
@@ -855,7 +860,7 @@ class _DraftFormState extends State<DraftForm> {
         }
       }
       if (!mounted) return;
-      attachment = await widget.locate<DraftCubit>().optimizeAttachment(
+      attachment = await context.read<DraftCubit>().optimizeAttachment(
         attachment,
       );
       if (!mounted) return;
@@ -920,7 +925,7 @@ class _DraftFormState extends State<DraftForm> {
         .map((pending) => pending.id)
         .toList();
     final List<String> recipients = _recipientStrings();
-    final DraftSaveResult result = await widget.locate<DraftCubit>().saveDraft(
+    final DraftSaveResult result = await context.read<DraftCubit>().saveDraft(
       id: id,
       jids: recipients,
       body: _bodyTextController.text,
@@ -1112,11 +1117,11 @@ class _DraftFormState extends State<DraftForm> {
     _invalidatePendingSaves();
     try {
       if (id != null) {
-        await widget.locate<DraftCubit>().deleteDraft(id: id!);
+        await context.read<DraftCubit>().deleteDraft(id: id!);
       }
       if (!mounted) return;
       if (shouldCleanupSeedAttachments) {
-        await _cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>());
+        await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
       }
       if (!mounted) return;
       setState(() {
@@ -1161,6 +1166,7 @@ class _DraftFormState extends State<DraftForm> {
     required SettingsCubit settingsCubit,
     required List<String> recipients,
     required String body,
+    required List<String> attachmentNames,
   }) async {
     if (!settingsCubit.state.emailSendConfirmationEnabled) {
       return true;
@@ -1169,6 +1175,7 @@ class _DraftFormState extends State<DraftForm> {
       context,
       recipients: recipients,
       body: body,
+      attachmentNames: attachmentNames,
     );
     if (!mounted || decision == null || !decision.confirmed) {
       return false;
@@ -1193,7 +1200,7 @@ class _DraftFormState extends State<DraftForm> {
     final transportsReady = await _ensureRecipientTransports();
     if (!mounted) return;
     if (!transportsReady) return;
-    final settingsCubit = widget.locate<SettingsCubit>();
+    final settingsCubit = context.read<SettingsCubit>();
     final settingsState = settingsCubit.state;
     final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
@@ -1243,6 +1250,9 @@ class _DraftFormState extends State<DraftForm> {
         settingsCubit: settingsCubit,
         recipients: _recipientStrings(),
         body: _bodyTextController.text,
+        attachmentNames: _currentAttachments()
+            .map((attachment) => attachment.fileName)
+            .toList(growable: false),
       );
       if (!mounted || !shouldSend) {
         return;
@@ -1264,7 +1274,7 @@ class _DraftFormState extends State<DraftForm> {
     }
     var succeeded = false;
     try {
-      succeeded = await widget.locate<DraftCubit>().sendDraft(
+      succeeded = await context.read<DraftCubit>().sendDraft(
         id: id,
         xmppTargets: xmppTargets,
         emailTargets: emailTargets,
@@ -1316,7 +1326,7 @@ class _DraftFormState extends State<DraftForm> {
       context,
     )?.show(FeedbackToast.success(title: context.l10n.draftSent));
     if (shouldCleanupSeedAttachments) {
-      await _cleanupSeedAttachmentMetadata(widget.locate<DraftCubit>());
+      await _cleanupSeedAttachmentMetadata(context.read<DraftCubit>());
     }
     if (!mounted) {
       return;

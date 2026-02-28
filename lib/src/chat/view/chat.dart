@@ -2669,6 +2669,9 @@ class _ChatState extends State<Chat> {
       chatState: chatState,
       chat: chat,
       body: resolvedText,
+      attachmentNames: queuedAttachments
+          .map((pending) => pending.attachment.fileName)
+          .toList(growable: false),
     );
     if (!shouldSend || !mounted) {
       return;
@@ -2697,6 +2700,7 @@ class _ChatState extends State<Chat> {
     required ChatState chatState,
     required chat_models.Chat chat,
     required String body,
+    required List<String> attachmentNames,
   }) async {
     if (!_isEmailComposerActive(
       chatState: chatState,
@@ -2716,6 +2720,7 @@ class _ChatState extends State<Chat> {
       context,
       recipients: recipients,
       body: body,
+      attachmentNames: attachmentNames,
     );
     if (!mounted || decision == null || !decision.confirmed) {
       return false;
@@ -8602,7 +8607,15 @@ class _ChatState extends State<Chat> {
                                             ],
                                           ),
                                         ),
-                                        bottomSection,
+                                        ConstrainedBox(
+                                          constraints: BoxConstraints(
+                                            maxHeight: constraints.maxHeight,
+                                          ),
+                                          child: SingleChildScrollView(
+                                            primary: false,
+                                            child: bottomSection,
+                                          ),
+                                        ),
                                       ],
                                     );
                                   },

@@ -17,6 +17,7 @@ const int _emailMimeTypeMaxBytes = 128;
 const int _emailRawHeadersMaxBytes = 64 * 1024;
 const String _emailAttachmentFilenameFallback = 'attachment';
 const String _emailRawHeaderLineBreak = '\n';
+const String _emailDeltaEmptySubjectSentinel = '\u2060';
 final RegExp _emailRawHeaderLineBreakPattern = RegExp(r'\r\n?');
 
 String? sanitizeEmailHeaderValue(String? value) {
@@ -25,6 +26,18 @@ String? sanitizeEmailHeaderValue(String? value) {
   if (trimmed.isEmpty) return null;
   final sanitized = trimmed.replaceAll(_emailHeaderCrlfPattern, '');
   return clampUtf8Value(sanitized, maxBytes: _emailHeaderMaxBytes);
+}
+
+String? sanitizeEmailSubjectValue(String? value) {
+  final sanitized = sanitizeEmailHeaderValue(value);
+  if (sanitized == _emailDeltaEmptySubjectSentinel) {
+    return null;
+  }
+  return sanitized;
+}
+
+String subjectForDeltaCore(String? subject) {
+  return sanitizeEmailSubjectValue(subject) ?? _emailDeltaEmptySubjectSentinel;
 }
 
 String sanitizeEmailAttachmentFilename(

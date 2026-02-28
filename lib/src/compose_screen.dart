@@ -59,18 +59,23 @@ class ComposeScreen extends StatelessWidget {
             spacing.m,
             keyboardVisible ? 0 : spacing.m,
           ),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: sizing.composeWindowExpandedWidth,
-            ),
-            child: AxiModalSurface(
-              child: ComposeDraftContent(
-                seed: seed,
-                locate: locate,
-                onClosed: () => Navigator.maybePop(context),
-                onDiscarded: () => Navigator.maybePop(context),
-              ),
-            ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: sizing.composeWindowExpandedWidth,
+                  minHeight: constraints.maxHeight,
+                ),
+                child: AxiModalSurface(
+                  child: ComposeDraftContent(
+                    seed: seed,
+                    locate: locate,
+                    onClosed: () => Navigator.maybePop(context),
+                    onDiscarded: () => Navigator.maybePop(context),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),

@@ -47,11 +47,11 @@ class _BlocklistListState extends State<BlocklistList> {
       child: BlocBuilder<BlocklistCubit, BlocklistState>(
         builder: (context, state) {
           final cachedItems =
-              context.read<BlocklistCubit>()[BlocklistCubit
+              context.watch<BlocklistCubit>()[BlocklistCubit
                       .blocklistItemsCacheKey]
                   as List<BlocklistEntry>?;
           final cachedVisibleItems =
-              context.read<BlocklistCubit>()[BlocklistCubit
+              context.watch<BlocklistCubit>()[BlocklistCubit
                       .blocklistVisibleItemsCacheKey]
                   as List<BlocklistEntry>?;
           final items = state.items ?? cachedItems;
@@ -69,7 +69,7 @@ class _BlocklistListState extends State<BlocklistList> {
             builder: (context, rosterState) {
               final cachedRosterItems =
                   rosterState.items ??
-                  (context.read<RosterCubit>()[RosterCubit.itemsCacheKey]
+                  (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
                       as List<RosterItem>?);
               final avatarPathsByJid = <String, String>{};
               if (cachedRosterItems != null) {
