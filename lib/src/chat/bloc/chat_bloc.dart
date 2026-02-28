@@ -1805,7 +1805,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _hydrateShareContexts(filteredItems, emit);
       await _hydrateShareReplies(filteredItems, emit);
     }
-    _maybeAutofillEmailSubject(filteredItems, emit);
     _queueAutoDownloadAttachments(
       messages: filteredItems,
       attachmentsByMessageId: filtered.attachmentsByMessageId,
@@ -5576,45 +5575,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emailSubjectAutofilled: false,
       ),
     );
-  }
-
-  void _maybeAutofillEmailSubject(
-    List<Message> messages,
-    Emitter<ChatState> emit,
-  ) {
-    final chat = state.chat;
-    if (chat == null || !chat.isEmailBacked) {
-      return;
-    }
-    if (!state.emailSubjectAutofillEligible) {
-      return;
-    }
-    final currentSubject = state.emailSubject?.trim();
-    if (currentSubject?.isNotEmpty == true) {
-      return;
-    }
-    final subject = _latestEmailSubject(messages);
-    if (subject == null) {
-      return;
-    }
-    emit(
-      state.copyWith(
-        emailSubject: subject,
-        emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
-        emailSubjectHydrationText: subject,
-        emailSubjectAutofilled: true,
-      ),
-    );
-  }
-
-  String? _latestEmailSubject(List<Message> messages) {
-    for (final message in messages) {
-      final subject = message.subject?.trim();
-      if (subject?.isNotEmpty == true) {
-        return subject;
-      }
-    }
-    return null;
   }
 
   String _composeEmailBody(String body, Message? quoted) {

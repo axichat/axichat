@@ -391,6 +391,8 @@ class _HomeShellState extends State<HomeShell> {
               isChatOpen &&
               safeSelectedBottomIndex == 0 &&
               !isChatCalendarRoute;
+          final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+          final hideBottomBar = hideBottomBarForChat || keyboardVisible;
           return Column(
             children: [
               Expanded(
@@ -399,14 +401,14 @@ class _HomeShellState extends State<HomeShell> {
                     final mediaQuery = MediaQuery.of(context);
                     return MediaQuery(
                       data: mediaQuery.removePadding(
-                        removeBottom: !hideBottomBarForChat,
+                        removeBottom: !hideBottomBar,
                       ),
                       child: widget.navigationShell,
                     );
                   },
                 ),
               ),
-              if (!hideBottomBarForChat)
+              if (!hideBottomBar)
                 _HomeShellBottomBar(
                   calendarBottomDragSession: _calendarBottomDragSession,
                   selectedBottomIndex: safeSelectedBottomIndex,
