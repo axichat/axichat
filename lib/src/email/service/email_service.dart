@@ -744,27 +744,27 @@ class EmailService {
     var credentialsMutated = false;
     final shouldPersistCredentials = persistCredentials;
 
-    final resolvedAddress =
+    final selectedAddress =
         (normalizedOverrideAddress != null &&
             normalizedOverrideAddress.isNotEmpty)
         ? normalizedOverrideAddress
         : ((address != null && address.isNotEmpty)
               ? address
               : preferredAddress);
-    if (resolvedAddress == null || resolvedAddress.isEmpty) {
+    if (selectedAddress == null || selectedAddress.isEmpty) {
       throw const EmailProvisioningException(
         EmailProvisioningFailure.missingAddress,
       );
     }
-    if (address == null || address != resolvedAddress) {
-      address = resolvedAddress;
+    if (address == null || address != selectedAddress) {
+      address = selectedAddress;
       credentialsMutated = true;
       if (shouldPersistCredentials) {
         await _credentialStore.write(key: addressKey, value: address);
       }
     }
 
-    final connectionOverrides = _buildConnectionConfig(resolvedAddress);
+    final connectionOverrides = _buildConnectionConfig(selectedAddress);
 
     if (passwordOverride != null &&
         passwordOverride.isNotEmpty &&
@@ -858,20 +858,18 @@ class EmailService {
       await stop();
     }
 
-    final normalizedAddress = address;
     if (needsProvisioning && !hasPassword) {
       throw const EmailProvisioningException(
         EmailProvisioningFailure.missingPassword,
       );
     }
-    final normalizedPassword = password;
 
     if (needsProvisioning) {
       _log.info('Configuring email account credentials');
       try {
         await _transport.configureAccount(
-          address: normalizedAddress,
-          password: normalizedPassword!,
+          address: address,
+          password: password!,
           displayName: displayName,
           additional: connectionOverrides,
           accountId: deltaAccountId,
@@ -957,7 +955,7 @@ class EmailService {
     }
 
     await _hydrateAccountAddress(
-      address: normalizedAddress,
+      address: address,
       deltaAccountId: deltaAccountId,
     );
     await start();
@@ -965,8 +963,8 @@ class EmailService {
     await _applyPendingPushToken();
 
     final account = EmailAccount(
-      address: normalizedAddress,
-      password: normalizedPassword ?? _unknownEmailPassword,
+      address: address,
+      password: password ?? _unknownEmailPassword,
     );
     _activeAccount = account;
     _ephemeralProvisionedScopes.add(scope);
@@ -1198,7 +1196,7 @@ class EmailService {
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     final trimmedBody = body.trim();
-    final resolvedBody = trimmedBody.isNotEmpty
+    final effectiveBody = trimmedBody.isNotEmpty
         ? trimmedBody
         : (normalizedHtml == null
               ? ''
@@ -1236,16 +1234,16 @@ class EmailService {
             token: subjectToken,
             body: _composeSubjectEnvelope(
               subject: normalizedSubject,
-              body: resolvedBody,
+              body: effectiveBody,
             ),
           )
         : _composeSubjectEnvelope(
             subject: normalizedSubject,
-            body: resolvedBody,
+            body: effectiveBody,
           );
     final localBodyOverride = trimmedBody.isNotEmpty
         ? trimmedBody
-        : resolvedBody;
+        : effectiveBody;
     final msgId = await _guardDeltaOperation(
       operation: 'send email message',
       body: () => _transport.sendText(
@@ -1407,13 +1405,13 @@ class EmailService {
         FanOutValidationFailure.noRecipients,
       );
     }
-    final resolvedTargets = await _resolveFanOutTargets(targets);
-    if (resolvedTargets.isEmpty) {
+    final targetChatsByJid = await _resolveFanOutTargets(targets);
+    if (targetChatsByJid.isEmpty) {
       throw const FanOutValidationException(
         FanOutValidationFailure.resolveFailed,
       );
     }
-    if (resolvedTargets.length > _maxFanOutRecipients) {
+    if (targetChatsByJid.length > _maxFanOutRecipients) {
       throw const FanOutValidationException(
         FanOutValidationFailure.tooManyRecipients,
         maxRecipients: _maxFanOutRecipients,
@@ -1446,70 +1444,66 @@ class EmailService {
         await db.getParticipantsForShare(existingShareId),
       );
     }
-    final resolvedShareId =
+    final effectiveShareId =
         shareId ?? existingShare?.shareId ?? ShareTokenCodec.generateShareId();
-    final shouldUseToken = useSubjectToken && resolvedTargets.length > 1;
-    final resolvedToken =
+    final shouldUseToken = useSubjectToken && targetChatsByJid.length > 1;
+    final subjectShareToken =
         existingShare?.subjectToken ??
-        (shouldUseToken ? _shareTokenForShare(resolvedShareId) : null);
-    final resolvedSubject = normalizedSubject ?? existingShare?.subject;
-    final resolvedHtmlBody = resolvedToken == null
+        (shouldUseToken ? _shareTokenForShare(effectiveShareId) : null);
+    final effectiveSubject = normalizedSubject ?? existingShare?.subject;
+    final htmlBodyWithToken = subjectShareToken == null
         ? normalizedHtmlBody
         : ShareTokenHtmlCodec.injectToken(
             html: normalizedHtmlBody,
-            token: resolvedToken,
+            token: subjectShareToken,
             asSignature: tokenAsSignature,
             footerLabel: _l10n.shareTokenFooterLabel,
           );
-    final resolvedHtmlCaption = resolvedToken == null
+    final htmlCaptionWithToken = subjectShareToken == null
         ? normalizedHtmlCaption
         : ShareTokenHtmlCodec.injectToken(
             html: normalizedHtmlCaption,
-            token: resolvedToken,
+            token: subjectShareToken,
             asSignature: tokenAsSignature,
             footerLabel: _l10n.shareTokenFooterLabel,
           );
 
-    final transmitBody = resolvedToken != null
+    final transmitBody = subjectShareToken != null
         ? ShareTokenCodec.injectToken(
-            token: resolvedToken,
+            token: subjectShareToken,
             body: _composeSubjectEnvelope(
-              subject: resolvedSubject,
+              subject: effectiveSubject,
               body: bodyText,
             ),
             asSignature: tokenAsSignature,
             footerLabel: _l10n.shareTokenFooterLabel,
           )
-        : _composeSubjectEnvelope(subject: resolvedSubject, body: bodyText);
-    final sanitizedBody = bodyText;
-
+        : _composeSubjectEnvelope(subject: effectiveSubject, body: bodyText);
     var captionText = attachment?.caption?.trim() ?? '';
     if (captionText.isEmpty && normalizedHtmlCaption != null) {
       captionText = HtmlContentCodec.toPlainText(normalizedHtmlCaption);
     }
-    final transmitCaption = resolvedToken != null
+    final transmitCaption = subjectShareToken != null
         ? ShareTokenCodec.injectToken(
-            token: resolvedToken,
+            token: subjectShareToken,
             body: _composeSubjectEnvelope(
-              subject: resolvedSubject,
+              subject: effectiveSubject,
               body: captionText,
             ),
             asSignature: tokenAsSignature,
             footerLabel: _l10n.shareTokenFooterLabel,
           )
-        : _composeSubjectEnvelope(subject: resolvedSubject, body: captionText);
-    final sanitizedCaption = captionText;
-
+        : _composeSubjectEnvelope(subject: effectiveSubject, body: captionText);
     final participants = await _shareParticipants(
-      shareId: resolvedShareId,
-      chats: resolvedTargets.values,
+      shareId: effectiveShareId,
+      chats: targetChatsByJid.values,
       existingParticipants: existingParticipants,
     );
     final shareRecord = MessageShareData(
-      shareId: resolvedShareId,
+      shareId: effectiveShareId,
       originatorDcMsgId: existingShare?.originatorDcMsgId,
-      subjectToken: resolvedToken,
-      subject: resolvedSubject,
+      subjectToken: subjectShareToken,
+      subject: effectiveSubject,
       createdAt: existingShare?.createdAt ?? DateTime.timestamp(),
       participantCount: participants.length,
     );
@@ -1534,10 +1528,10 @@ class EmailService {
             body: () => _transport.sendAttachment(
               chatId: chatId,
               attachment: updatedAttachment,
-              subject: resolvedSubject,
-              shareId: resolvedShareId,
-              captionOverride: sanitizedCaption,
-              htmlCaption: resolvedHtmlCaption,
+              subject: effectiveSubject,
+              shareId: effectiveShareId,
+              captionOverride: captionText,
+              htmlCaption: htmlCaptionWithToken,
               accountId: context.account.deltaAccountId,
             ),
           );
@@ -1547,10 +1541,10 @@ class EmailService {
             body: () => _transport.sendText(
               chatId: chatId,
               body: transmitBody,
-              subject: resolvedSubject,
-              shareId: resolvedShareId,
-              localBodyOverride: sanitizedBody,
-              htmlBody: resolvedHtmlBody,
+              subject: effectiveSubject,
+              shareId: effectiveShareId,
+              localBodyOverride: bodyText,
+              htmlBody: htmlBodyWithToken,
               accountId: context.account.deltaAccountId,
             ),
           );
@@ -1584,7 +1578,7 @@ class EmailService {
     }
 
     final results = <(FanOutRecipientStatus, int?)>[];
-    final targetsToSend = resolvedTargets.values.toList(growable: false);
+    final targetsToSend = targetChatsByJid.values.toList(growable: false);
     for (
       var index = 0;
       index < targetsToSend.length;
@@ -1608,20 +1602,20 @@ class EmailService {
 
     if (!originatorAlreadyCaptured && originatorMsgId != null) {
       await db.assignShareOriginator(
-        shareId: resolvedShareId,
+        shareId: effectiveShareId,
         originatorDcMsgId: originatorMsgId,
       );
     }
 
     final attachmentWarning =
         hasAttachment &&
-        resolvedTargets.length > 1 &&
+        targetChatsByJid.length > 1 &&
         attachment.sizeBytes > _attachmentFanOutWarningBytes;
 
     return FanOutSendReport(
-      shareId: resolvedShareId,
-      subjectToken: resolvedToken,
-      subject: resolvedSubject,
+      shareId: effectiveShareId,
+      subjectToken: subjectShareToken,
+      subject: effectiveSubject,
       statuses: statuses,
       attachmentWarning: attachmentWarning,
     );
@@ -1641,30 +1635,32 @@ class EmailService {
         FanOutValidationFailure.noRecipients,
       );
     }
-    final resolvedShareId = shareId ?? ShareTokenCodec.generateShareId();
+    final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
     final statuses = <FanOutRecipientStatus>[];
     for (final target in targets) {
       try {
         final chat = _demoChatForTarget(target);
         if (attachment != null) {
-          final resolved = attachment.copyWith(caption: htmlCaption ?? body);
+          final captionedAttachment = attachment.copyWith(
+            caption: htmlCaption ?? body,
+          );
           await _sendDemoEmailAttachment(
             chat: chat,
-            attachment: resolved,
+            attachment: captionedAttachment,
             subject: subject,
             htmlCaption: htmlCaption,
           );
           _scheduleDemoCopiedReply(chat);
         } else {
           final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
-          final resolvedBody =
+          final effectiveBody =
               body ??
               (normalizedHtml == null
                   ? ''
                   : HtmlContentCodec.toPlainText(normalizedHtml));
           await _sendDemoEmailMessage(
             chat: chat,
-            body: resolvedBody,
+            body: effectiveBody,
             subject: subject,
             htmlBody: htmlBody,
           );
@@ -1688,7 +1684,7 @@ class EmailService {
       }
     }
     return FanOutSendReport(
-      shareId: resolvedShareId,
+      shareId: effectiveShareId,
       statuses: statuses,
       subject: subject,
     );
@@ -1729,18 +1725,17 @@ class EmailService {
     if (target.chat != null) {
       return target.chat!;
     }
-    final String resolvedAddress = address?.isNotEmpty == true
+    final String selectedAddress = address?.isNotEmpty == true
         ? address!
         : kDemoSelfJid;
     final displayName = target.displayName?.trim();
     final String resolvedTitle = displayName?.isNotEmpty == true
         ? displayName!
-        : resolvedAddress;
-    final String resolvedDisplayName = resolvedTitle;
-    return Chat.fromJid(resolvedAddress).copyWith(
+        : selectedAddress;
+    return Chat.fromJid(selectedAddress).copyWith(
       title: resolvedTitle,
-      contactDisplayName: resolvedDisplayName,
-      emailAddress: resolvedAddress,
+      contactDisplayName: resolvedTitle,
+      emailAddress: selectedAddress,
       transport: MessageTransport.email,
       lastChangeTimestamp: demoNow(),
     );
@@ -1862,7 +1857,7 @@ class EmailService {
     }
     final orderedIds = LinkedHashSet<String>.from(metadataIds);
     if (orderedIds.isEmpty) return const [];
-    final resolved = <EmailAttachment>[];
+    final attachments = <EmailAttachment>[];
     final metadataList = await db.getFileMetadataForIds(orderedIds);
     final metadataById = {
       for (final metadata in metadataList) metadata.id: metadata,
@@ -1878,7 +1873,7 @@ class EmailService {
         continue;
       }
       final size = metadata.sizeBytes ?? await file.length();
-      resolved.add(
+      attachments.add(
         EmailAttachment(
           path: path,
           fileName: metadata.filename,
@@ -1890,7 +1885,7 @@ class EmailService {
         ),
       );
     }
-    return resolved;
+    return attachments;
   }
 
   Future<EmailAttachment?> attachmentForMessage(Message message) async {
@@ -2113,9 +2108,9 @@ class EmailService {
       if (chat == null) {
         continue;
       }
-      final resolvedName = contact.name?.trim();
-      final displayName = resolvedName?.isNotEmpty == true
-          ? resolvedName
+      final trimmedName = contact.name?.trim();
+      final displayName = trimmedName?.isNotEmpty == true
+          ? trimmedName
           : chat.contactDisplayName;
       final updated = chat.copyWith(
         contactDisplayName: displayName,
@@ -2851,16 +2846,16 @@ class EmailService {
   Future<void> _confirmConnectivityDowngrade(int fallbackConnectivity) async {
     try {
       final connectivity = await _transport.connectivity();
-      final resolved = connectivity ?? fallbackConnectivity;
+      final connectivityLevel = connectivity ?? fallbackConnectivity;
       _recordConnectivitySample(
-        connectivity: resolved,
+        connectivity: connectivityLevel,
         source: _EmailSyncSource.connectivityConfirm,
       );
-      if (resolved >= _connectivityConnectedMin) {
+      if (connectivityLevel >= _connectivityConnectedMin) {
         return;
       }
       _applyConnectivityState(
-        resolved,
+        connectivityLevel,
         source: _EmailSyncSource.connectivityConfirm,
       );
     } on Exception catch (error, stackTrace) {
@@ -3405,14 +3400,14 @@ class EmailService {
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     final trimmedBody = body.trim();
-    final resolvedBody = trimmedBody.isNotEmpty
+    final effectiveBody = trimmedBody.isNotEmpty
         ? trimmedBody
         : (normalizedHtml == null
               ? ''
               : HtmlContentCodec.toPlainText(normalizedHtml));
     const generator = Uuid();
     final stanzaId = 'demo-email-${generator.v4()}';
-    final resolvedForwardedFrom = forwardedFromJid?.trim();
+    final forwardedFromNormalized = forwardedFromJid?.trim();
     final db = await _databaseBuilder();
     final timestamp = await _resolveDemoTimestampForChat(
       db: db,
@@ -3424,7 +3419,7 @@ class EmailService {
       originID: stanzaId,
       senderJid: kDemoSelfJid,
       chatJid: chat.jid,
-      body: resolvedBody,
+      body: effectiveBody,
       htmlBody: normalizedHtml,
       subject: normalizedSubject,
       timestamp: timestamp,
@@ -3435,9 +3430,9 @@ class EmailService {
       pseudoMessageData: forwarded
           ? <String, dynamic>{
               'forwarded': true,
-              if (resolvedForwardedFrom != null &&
-                  resolvedForwardedFrom.isNotEmpty)
-                'forwardedFromJid': resolvedForwardedFrom,
+              if (forwardedFromNormalized != null &&
+                  forwardedFromNormalized.isNotEmpty)
+                'forwardedFromJid': forwardedFromNormalized,
             }
           : null,
     );
@@ -3488,7 +3483,7 @@ class EmailService {
       height: attachment.height,
       sourceUrls: [Uri.file(attachment.path).toString()],
     );
-    final resolvedForwardedFrom = forwardedFromJid?.trim();
+    final forwardedFromNormalized = forwardedFromJid?.trim();
     final message = Message(
       stanzaID: stanzaId,
       originID: stanzaId,
@@ -3506,9 +3501,9 @@ class EmailService {
       pseudoMessageData: forwarded
           ? <String, dynamic>{
               'forwarded': true,
-              if (resolvedForwardedFrom != null &&
-                  resolvedForwardedFrom.isNotEmpty)
-                'forwardedFromJid': resolvedForwardedFrom,
+              if (forwardedFromNormalized != null &&
+                  forwardedFromNormalized.isNotEmpty)
+                'forwardedFromJid': forwardedFromNormalized,
             }
           : null,
     );
@@ -3592,7 +3587,7 @@ class EmailService {
   Future<Map<String, Chat>> _resolveFanOutTargets(
     List<FanOutTarget> targets,
   ) async {
-    final resolvedByJid = <String, Chat>{};
+    final chatByJid = <String, Chat>{};
     final pending = <String, Future<Chat>>{};
     for (final target in targets) {
       if (target.chat != null) {
@@ -3622,13 +3617,13 @@ class EmailService {
       );
       for (final result in results) {
         final chat = result.value;
-        if (resolvedByJid.containsKey(chat.jid)) {
+        if (chatByJid.containsKey(chat.jid)) {
           continue;
         }
-        resolvedByJid.putIfAbsent(chat.jid, () => chat);
+        chatByJid.putIfAbsent(chat.jid, () => chat);
       }
     }
-    return resolvedByJid;
+    return chatByJid;
   }
 
   Future<List<MessageParticipantData>> _shareParticipants({
@@ -3641,11 +3636,11 @@ class EmailService {
     for (final participant in existingParticipants) {
       participants[participant.contactJid] = participant;
     }
-    final resolvedSenderJid = _senderParticipantJid(senderJid: senderJid);
-    if (resolvedSenderJid != null && resolvedSenderJid.isNotEmpty) {
-      participants[resolvedSenderJid] = MessageParticipantData(
+    final senderParticipantJid = _senderParticipantJid(senderJid: senderJid);
+    if (senderParticipantJid != null && senderParticipantJid.isNotEmpty) {
+      participants[senderParticipantJid] = MessageParticipantData(
         shareId: shareId,
-        contactJid: resolvedSenderJid,
+        contactJid: senderParticipantJid,
         role: MessageParticipantRole.sender,
       );
     }
@@ -3722,10 +3717,10 @@ class EmailService {
     final smtpHost = config.smtpHost?.trim();
     final imapHost = config.imapHost?.trim();
     final fallbackHost = _connectionHostFor(normalizedAddress, config);
-    final resolvedSendHost = (smtpHost != null && smtpHost.isNotEmpty)
+    final sendHost = (smtpHost != null && smtpHost.isNotEmpty)
         ? smtpHost
         : fallbackHost;
-    final resolvedMailHost = (imapHost != null && imapHost.isNotEmpty)
+    final mailHost = (imapHost != null && imapHost.isNotEmpty)
         ? imapHost
         : fallbackHost;
     final sendPortValue = config.smtpPort > _portUnsetValue
@@ -3736,7 +3731,7 @@ class EmailService {
       implicitTlsPort: EndpointConfig.defaultSmtpPort,
     );
     configValues
-      ..[_sendServerConfigKey] = resolvedSendHost
+      ..[_sendServerConfigKey] = sendHost
       ..[_sendPortConfigKey] = sendPortValue.toString()
       ..[_sendSecurityConfigKey] = sendSecurityMode
       ..[_sendUserConfigKey] = localPart;
@@ -3748,7 +3743,7 @@ class EmailService {
       implicitTlsPort: EndpointConfig.defaultImapPort,
     );
     configValues
-      ..[_mailServerConfigKey] = resolvedMailHost
+      ..[_mailServerConfigKey] = mailHost
       ..[_mailPortConfigKey] = mailPortValue.toString()
       ..[_mailSecurityConfigKey] = mailSecurityMode
       ..[_mailUserConfigKey] = localPart;
@@ -3964,17 +3959,19 @@ class EmailService {
     required String scope,
     String? fromAddress,
   }) async {
-    var resolved = _normalizeLinkedAccountAddress(fromAddress ?? '');
-    if (resolved.isEmpty) {
-      resolved = _normalizeLinkedAccountAddress(_activeAccount?.address ?? '');
+    var normalizedAddress = _normalizeLinkedAccountAddress(fromAddress ?? '');
+    if (normalizedAddress.isEmpty) {
+      normalizedAddress = _normalizeLinkedAccountAddress(
+        _activeAccount?.address ?? '',
+      );
     }
-    if (resolved.isEmpty) {
+    if (normalizedAddress.isEmpty) {
       final String? storedAddress = await _credentialStore.read(
         key: _addressKeyForScope(scope),
       );
-      resolved = _normalizeLinkedAccountAddress(storedAddress ?? '');
+      normalizedAddress = _normalizeLinkedAccountAddress(storedAddress ?? '');
     }
-    if (resolved.isEmpty) {
+    if (normalizedAddress.isEmpty) {
       throw const EmailProvisioningException(
         EmailProvisioningFailure.missingAddress,
       );
@@ -3983,23 +3980,23 @@ class EmailService {
       createIfMissing: false,
     );
     await _hydrateAccountAddress(
-      address: resolved,
+      address: normalizedAddress,
       deltaAccountId: deltaAccountId,
     );
     return _ResolvedEmailAccount(
-      address: resolved,
+      address: normalizedAddress,
       deltaAccountId: deltaAccountId,
     );
   }
 
   Future<_ResolvedEmailAccount> _resolveAccountForChat(Chat chat) async {
     final String scope = _requireActiveScope();
-    final resolved = await _resolveAccountForAddress(
+    final accountResolution = await _resolveAccountForAddress(
       scope: scope,
       fromAddress: chat.emailFromAddress,
     );
-    await _updateChatEmailFromAddress(chat, resolved.address);
-    return resolved;
+    await _updateChatEmailFromAddress(chat, accountResolution.address);
+    return accountResolution;
   }
 
   Future<void> _ensureAccountConfigured({
@@ -4612,7 +4609,7 @@ class EmailService {
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     final trimmedBody = body.trim();
-    final resolvedBody = trimmedBody.isNotEmpty
+    final effectiveBody = trimmedBody.isNotEmpty
         ? trimmedBody
         : (normalizedHtml == null
               ? ''
@@ -4621,7 +4618,7 @@ class EmailService {
       operation: 'send reply',
       body: () => _transport.sendTextWithQuote(
         chatId: chatId,
-        body: resolvedBody,
+        body: effectiveBody,
         quotedMessageId: quotedMsgId,
         subject: normalizedSubject,
         htmlBody: normalizedHtml,
@@ -4765,8 +4762,10 @@ class EmailService {
           .skip(index)
           .take(_contactHydrationConcurrentOps)
           .toList();
-      final resolved = await Future.wait(chunk.map(_transport.getContact));
-      for (final contact in resolved) {
+      final hydratedContacts = await Future.wait(
+        chunk.map(_transport.getContact),
+      );
+      for (final contact in hydratedContacts) {
         if (contact != null) {
           contacts.add(contact);
         }

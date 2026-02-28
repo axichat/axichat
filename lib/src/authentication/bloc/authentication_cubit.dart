@@ -569,11 +569,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _clearLoginSecrets({String? jid}) async {
-    final resolvedJid = await _resolveLoginClearJid(jid);
+    final accountJid = await _resolveLoginClearJid(jid);
     await _credentialStore.delete(key: jidStorageKey);
     await _clearStoredPassword();
-    if (resolvedJid != null) {
-      await _clearDatabaseSecretsForJid(resolvedJid);
+    if (accountJid != null) {
+      await _clearDatabaseSecretsForJid(accountJid);
     }
   }
 
@@ -805,9 +805,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       sessionPassword = normalizeCredential(sessionCredentials.password);
       sessionAddress = normalizeCredential(sessionCredentials.address);
     }
-    final resolvedPassword =
+    final provisioningPasswordCandidate =
         storedPassword ?? sessionPassword ?? activePassword;
-    final resolvedAddress = storedAddress ?? sessionAddress ?? activeAddress;
+    final provisioningAddressCandidate =
+        storedAddress ?? sessionAddress ?? activeAddress;
     final displayName = addressLocalPart(jid) ?? jid;
     final rememberMe = await loadRememberMeChoice();
     await _ensureEmailProvisioned(
@@ -818,8 +819,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       enforceProvisioning: false,
       allowOfflineOnRecoverable: true,
       mode: _EmailProvisioningMode.deferred,
-      emailPassword: resolvedPassword,
-      addressOverride: resolvedAddress,
+      emailPassword: provisioningPasswordCandidate,
+      addressOverride: provisioningAddressCandidate,
       persistCredentials: rememberMe,
     );
     final fatalError = _lastEmailProvisioningError;
@@ -1092,13 +1093,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _lastEmailProvisioningError = null;
     final AuthenticationState previousState = state;
     final wasAuthenticated = previousState is AuthenticationComplete;
-    final configBeforeRecovery = currentConfig;
     final loginState = _activeSignupCredentialKey != null
-        ? AuthenticationLogInInProgress(
-            fromSignup: true,
-            config: configBeforeRecovery,
-          )
-        : AuthenticationLogInInProgress(config: configBeforeRecovery);
+        ? AuthenticationLogInInProgress(fromSignup: true, config: currentConfig)
+        : AuthenticationLogInInProgress(config: currentConfig);
     if ((!wasAuthenticated || !usingStoredCredentials) &&
         previousState is! AuthenticationLogInInProgress) {
       _emit(loginState);
@@ -1137,13 +1134,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     storedLogin ??= await _readStoredLoginCredentials();
     var credentialDisposition = _CredentialDisposition.keep;
 
-    late final String resolvedJid;
-    late final String resolvedPassword;
+    late final String accountJid;
+    late final String provisioningPasswordCandidate;
     bool passwordPreHashed = false;
     if (usingStoredCredentials) {
       final loginFromStore = storedLogin;
-      resolvedJid = loginFromStore.jid!;
-      resolvedPassword = loginFromStore.password!;
+      accountJid = loginFromStore.jid!;
+      provisioningPasswordCandidate = loginFromStore.password!;
       if (!loginFromStore.hasPreHashedFlag) {
         if (!wasAuthenticated) {
           await persistRememberMeChoice(false);
@@ -1164,13 +1161,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       passwordPreHashed = loginFromStore.passwordPreHashed ?? false;
     } else {
-      resolvedJid = '$username@${config.domain}';
-      resolvedPassword = password!;
+      accountJid = '$username@${config.domain}';
+      provisioningPasswordCandidate = password!;
     }
 
-    final storedSecrets = await _readDatabaseSecrets(resolvedJid);
+    final storedSecrets = await _readDatabaseSecrets(accountJid);
     final bool hasStoredDatabaseSecrets = storedSecrets.hasSecrets;
-    final bool hasStoredLoginForJid = storedLogin.matches(resolvedJid);
+    final bool hasStoredLoginForJid = storedLogin.matches(accountJid);
     if (hasStoredLoginForJid && !hasStoredDatabaseSecrets) {
       _log.warning(
         'Stored login credentials found without database secrets; blocking auto-login.',
@@ -1189,9 +1186,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     final String? fallbackEmailPassword = passwordPreHashed
         ? null
-        : resolvedPassword;
+        : provisioningPasswordCandidate;
     String? emailPassword = emailCredentials?.password ?? fallbackEmailPassword;
-    final String displayName = addressLocalPart(resolvedJid) ?? resolvedJid;
+    final String displayName = addressLocalPart(accountJid) ?? accountJid;
 
     final String ensuredDatabasePrefix =
         storedSecrets.prefix ?? generateRandomString(length: 8);
@@ -1207,11 +1204,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final String ensuredDatabasePassphrase =
         storedSecrets.passphrase ?? generateRandomString();
 
-    final String xmppPassword = resolvedPassword;
-    String? effectivePassword = xmppPassword;
+    String? effectivePassword = provisioningPasswordCandidate;
 
     await _startAuthTransaction(
-      jid: resolvedJid,
+      jid: accountJid,
       clearCredentialsOnFailure: credentialDisposition.shouldWipe,
     );
 
@@ -1219,11 +1215,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     try {
       final emailService = smtpEnabled ? _emailService : null;
       if (emailPassword == null && emailService != null) {
-        final existing = await emailService.currentAccount(resolvedJid);
+        final existing = await emailService.currentAccount(accountJid);
         emailPassword = existing?.password;
       }
       if (smtpEnabled) {
-        final sessionEmailAddress = emailCredentials?.email ?? resolvedJid;
+        final sessionEmailAddress = emailCredentials?.email ?? accountJid;
         emailService?.cacheSessionCredentials(
           address: sessionEmailAddress,
           password: emailPassword,
@@ -1239,8 +1235,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           : _EmailProvisioningMode.deferred;
 
       final reuseExistingSession =
-          _xmppService.databasesInitialized &&
-          _xmppService.myJid == resolvedJid;
+          _xmppService.databasesInitialized && _xmppService.myJid == accountJid;
 
       EndpointOverride? xmppEndpoint;
       if (xmppEnabled) {
@@ -1253,8 +1248,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (xmppEnabled) {
         try {
           effectivePassword = await _xmppService.connect(
-            jid: resolvedJid,
-            password: xmppPassword,
+            jid: accountJid,
+            password: provisioningPasswordCandidate,
             databasePrefix: ensuredDatabasePrefix,
             databasePassphrase: ensuredDatabasePassphrase,
             preHashed: passwordPreHashed,
@@ -1282,7 +1277,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               usingStoredCredentials && hasStoredDatabaseSecrets;
           if (canResumeOffline) {
             final resumeResult = await _resumeOfflineLogin(
-              jid: resolvedJid,
+              jid: accountJid,
               displayName: displayName,
               databasePrefix: ensuredDatabasePrefix,
               databasePassphrase: ensuredDatabasePassphrase,
@@ -1322,7 +1317,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             effectivePassword = saltedPassword;
             passwordPreHashed = true;
           } else {
-            effectivePassword = resolvedPassword;
+            effectivePassword = provisioningPasswordCandidate;
           }
         } on Exception catch (error) {
           if (_looksLikeStorageLock(error)) {
@@ -1341,7 +1336,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               _looksLikeConnectivityError(error);
           if (canResumeOffline) {
             final resumeResult = await _resumeOfflineLogin(
-              jid: resolvedJid,
+              jid: accountJid,
               displayName: displayName,
               databasePrefix: ensuredDatabasePrefix,
               databasePassphrase: ensuredDatabasePassphrase,
@@ -1376,18 +1371,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
       } else {
         await _xmppService.resumeOfflineSession(
-          jid: resolvedJid,
+          jid: accountJid,
           databasePrefix: ensuredDatabasePrefix,
           databasePassphrase: ensuredDatabasePassphrase,
         );
         await _markXmppConnected();
-        effectivePassword = resolvedPassword;
+        effectivePassword = provisioningPasswordCandidate;
       }
 
       final allowOfflineEmail = !requireEmailProvisioned;
       if (emailProvisioningMode.isDeferred) {
         await _finalizeAuthentication(
-          jid: resolvedJid,
+          jid: accountJid,
           rememberMe: rememberMe,
           password: effectivePassword,
           passwordPreHashed: passwordPreHashed,
@@ -1404,7 +1399,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               displayName: displayName,
               databasePrefix: ensuredDatabasePrefix,
               databasePassphrase: ensuredDatabasePassphrase,
-              jid: resolvedJid,
+              jid: accountJid,
               enforceProvisioning: enforceEmailProvisioning,
               emailPassword: emailPassword,
               emailCredentials: emailCredentials,
@@ -1428,7 +1423,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         displayName: displayName,
         databasePrefix: ensuredDatabasePrefix,
         databasePassphrase: ensuredDatabasePassphrase,
-        jid: resolvedJid,
+        jid: accountJid,
         enforceProvisioning: enforceEmailProvisioning,
         emailPassword: emailPassword,
         emailCredentials: emailCredentials,
@@ -1466,7 +1461,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
 
       await _finalizeAuthentication(
-        jid: resolvedJid,
+        jid: accountJid,
         rememberMe: rememberMe,
         password: effectivePassword,
         passwordPreHashed: passwordPreHashed,
@@ -1481,7 +1476,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (!authenticationCommitted) {
         await _rollbackAuthTransaction(
           clearCredentials: credentialDisposition.shouldWipe,
-          jid: resolvedJid,
+          jid: accountJid,
         );
       }
     }
@@ -1727,7 +1722,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       return _ProvisioningStatus.blockedTransient;
     }
-    final resolvedAddressOverride = addressOverride ?? emailCredentials?.email;
+    final addressOverrideValue = addressOverride ?? emailCredentials?.email;
     try {
       await emailService.ensureProvisioned(
         displayName: displayName,
@@ -1735,7 +1730,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePassphrase: databasePassphrase,
         jid: jid,
         passwordOverride: provisioningPassword,
-        addressOverride: resolvedAddressOverride,
+        addressOverride: addressOverrideValue,
         persistCredentials: persistCredentials,
       );
       _lastEmailProvisioningError = null;
@@ -2278,8 +2273,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return '';
     }
     final host = endpointConfig.domain.trim();
-    final resolvedHost = host.isEmpty ? EndpointConfig.defaultDomain : host;
-    final hostSubstituted = trimmed.replaceAll('@HOST@', resolvedHost);
+    final effectiveHost = host.isEmpty ? EndpointConfig.defaultDomain : host;
+    final hostSubstituted = trimmed.replaceAll('@HOST@', effectiveHost);
     final parsed = Uri.tryParse(hostSubstituted);
     if (parsed == null) {
       return hostSubstituted;
@@ -2364,8 +2359,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _emit(const AuthenticationPasswordChangeInProgress());
     final normalizedUsername = username.trim();
     final configuredHost = endpointConfig.domain.trim();
-    final resolvedHost = configuredHost.isEmpty ? host.trim() : configuredHost;
-    if (normalizedUsername.isEmpty || resolvedHost.isEmpty) {
+    final effectiveHost = configuredHost.isEmpty ? host.trim() : configuredHost;
+    if (normalizedUsername.isEmpty || effectiveHost.isEmpty) {
       _emit(
         const AuthenticationPasswordChangeFailure(
           AuthKeyMessage(AuthMessageKey.passwordChangeFailed),
@@ -2373,18 +2368,18 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       return;
     }
-    final resolvedJid = '$normalizedUsername@$resolvedHost';
+    final accountJid = '$normalizedUsername@$effectiveHost';
     final shouldChangeXmppPassword = endpointConfig.xmppEnabled;
     final shouldChangeEmailPassword = endpointConfig.smtpEnabled;
-    final resolvedEmail = shouldChangeEmailPassword
+    final emailAddress = shouldChangeEmailPassword
         ? await _resolveEmailAddress(
             username: normalizedUsername,
-            host: resolvedHost,
+            host: effectiveHost,
           )
         : null;
     try {
       if (!shouldChangeXmppPassword) {
-        if (!shouldChangeEmailPassword || resolvedEmail == null) {
+        if (!shouldChangeEmailPassword || emailAddress == null) {
           _emit(
             const AuthenticationPasswordChangeFailure(
               AuthKeyMessage(AuthMessageKey.passwordChangeDisabled),
@@ -2393,7 +2388,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           return;
         }
         final emailError = await _changeProvisionedEmailPassword(
-          email: resolvedEmail,
+          email: emailAddress,
           oldPassword: oldPassword,
           newPassword: password,
         );
@@ -2404,7 +2399,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         const bool passwordIsPreHashed = false;
         final rememberMe = await loadRememberMeChoice();
         await _updateStoredPasswords(
-          jid: resolvedJid,
+          jid: accountJid,
           newPassword: password,
           rememberMe: rememberMe,
           passwordPreHashed: passwordIsPreHashed,
@@ -2422,7 +2417,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         fallback: _buildChangePasswordLegacyUrl(),
         body: {
           _registerBodyKeyUsername: normalizedUsername,
-          _registerBodyKeyHost: resolvedHost,
+          _registerBodyKeyHost: effectiveHost,
           _registerBodyKeyPassword: password,
           _registerBodyKeyPassword2: password2,
           _registerBodyKeyPasswordOld: oldPassword,
@@ -2430,16 +2425,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         },
       );
       if (response.statusCode == 200) {
-        if (shouldChangeEmailPassword && resolvedEmail != null) {
+        if (shouldChangeEmailPassword && emailAddress != null) {
           final emailError = await _changeProvisionedEmailPassword(
-            email: resolvedEmail,
+            email: emailAddress,
             oldPassword: oldPassword,
             newPassword: password,
           );
           if (emailError != null) {
             final rollbackSucceeded = await _attemptXmppPasswordRollback(
               username: normalizedUsername,
-              host: resolvedHost,
+              host: effectiveHost,
               oldPassword: oldPassword,
               newPassword: password,
             );
@@ -2454,7 +2449,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         const bool passwordIsPreHashed = false;
         final rememberMe = await loadRememberMeChoice();
         await _updateStoredPasswords(
-          jid: resolvedJid,
+          jid: accountJid,
           newPassword: password,
           rememberMe: rememberMe,
           passwordPreHashed: passwordIsPreHashed,
@@ -2590,8 +2585,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _emit(const AuthenticationUnregisterInProgress());
     final normalizedUsername = username.trim();
     final configuredHost = endpointConfig.domain.trim();
-    final resolvedHost = configuredHost.isEmpty ? host.trim() : configuredHost;
-    if (normalizedUsername.isEmpty || resolvedHost.isEmpty) {
+    final effectiveHost = configuredHost.isEmpty ? host.trim() : configuredHost;
+    if (normalizedUsername.isEmpty || effectiveHost.isEmpty) {
       _emit(
         const AuthenticationUnregisterFailure(
           AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
@@ -2613,10 +2608,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       if (shouldDeleteEmailAccount) {
         final email = await _resolveEmailAddress(
           username: normalizedUsername,
-          host: resolvedHost,
+          host: effectiveHost,
         );
         final emailDeletionError = await _deleteProvisionedEmailAccount(
-          email: email ?? '$normalizedUsername@$resolvedHost',
+          email: email ?? '$normalizedUsername@$effectiveHost',
           password: password,
           logContext: 'during unregister',
         );
@@ -2628,13 +2623,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
       if (!shouldDeleteXmppAccount) {
         await logout(severity: LogoutSeverity.burn);
-        await _removeCompletedAccountRecord(normalizedUsername, resolvedHost);
+        await _removeCompletedAccountRecord(normalizedUsername, effectiveHost);
         return;
       }
 
       final response = await _requestAccountDeletion(
         username: normalizedUsername,
-        host: resolvedHost,
+        host: effectiveHost,
         password: password,
         logContext: 'during unregister',
       );
@@ -2648,7 +2643,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       if (response.statusCode == 200) {
         await logout(severity: LogoutSeverity.burn);
-        await _removeCompletedAccountRecord(normalizedUsername, resolvedHost);
+        await _removeCompletedAccountRecord(normalizedUsername, effectiveHost);
         return;
       }
       if (response.statusCode == 404) {
@@ -3318,7 +3313,7 @@ class _PendingAccountDeletion {
     final createdAt = (rawCreatedAt?.trim().isNotEmpty ?? false)
         ? rawCreatedAt!.trim()
         : DateTime.now().toIso8601String();
-    final resolvedExpiry = _resolveExpiry(
+    final expiryIso = _resolveExpiry(
       createdAt: createdAt,
       expiresAt: json[_expiresAtJsonKey] as String?,
     );
@@ -3328,7 +3323,7 @@ class _PendingAccountDeletion {
       password: json[_passwordJsonKey] as String? ?? '',
       email: rawEmail.trim().isEmpty ? null : rawEmail.trim(),
       createdAt: createdAt,
-      expiresAt: resolvedExpiry,
+      expiresAt: expiryIso,
     );
   }
 

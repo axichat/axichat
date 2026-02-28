@@ -593,10 +593,10 @@ final class _PinnedMessageSyncPayload {
       return null;
     }
     final rawMessageId = node.attributes[_pinMessageIdAttr]?.toString().trim();
-    final resolvedMessageId = rawMessageId == null || rawMessageId.isEmpty
+    final messageId = rawMessageId == null || rawMessageId.isEmpty
         ? itemId?.trim()
         : rawMessageId;
-    if (resolvedMessageId == null || resolvedMessageId.isEmpty) {
+    if (messageId == null || messageId.isEmpty) {
       return null;
     }
     final rawPinnedAt = node.attributes[_pinPinnedAtAttr]?.toString().trim();
@@ -615,7 +615,7 @@ final class _PinnedMessageSyncPayload {
       }
     }
     return _PinnedMessageSyncPayload(
-      messageStanzaId: resolvedMessageId,
+      messageStanzaId: messageId,
       chatJid: normalizedChat,
       pinnedAt: parsedPinnedAt.toUtc(),
     );
@@ -752,11 +752,13 @@ const Set<String> _allowedHttpUploadPutHeaders = {
 };
 
 class XmppPeerCapabilities {
-  XmppPeerCapabilities({required List<String> features, this.resolvedAt})
-    : features = List<String>.unmodifiable(features);
+  XmppPeerCapabilities({
+    required List<String> features,
+    this.capabilitiesResolvedAt,
+  }) : features = List<String>.unmodifiable(features);
 
   final List<String> features;
-  final DateTime? resolvedAt;
+  final DateTime? capabilitiesResolvedAt;
 
   bool get supportsMarkers => features.contains(mox.chatMarkersXmlns);
 
@@ -768,19 +770,20 @@ class _PeerCapabilities {
     required this.supportsMarkers,
     required this.supportsReceipts,
     required this.features,
-    this.resolvedAt,
+    this.capabilitiesResolvedAt,
   });
 
   final bool supportsMarkers;
   final bool supportsReceipts;
   final List<String> features;
-  final DateTime? resolvedAt;
+  final DateTime? capabilitiesResolvedAt;
 
   Map<String, Object> toJson() => {
     'markers': supportsMarkers,
     'receipts': supportsReceipts,
     'features': features,
-    if (resolvedAt != null) 'resolvedAt': resolvedAt!.millisecondsSinceEpoch,
+    if (capabilitiesResolvedAt != null)
+      'capabilitiesResolvedAt': capabilitiesResolvedAt!.millisecondsSinceEpoch,
   };
 
   static _PeerCapabilities fromJson(Map<dynamic, dynamic> json) =>
@@ -790,7 +793,7 @@ class _PeerCapabilities {
         features: List<String>.from(
           json['features'] as List<dynamic>? ?? const <String>[],
         ),
-        resolvedAt: switch (json['resolvedAt']) {
+        capabilitiesResolvedAt: switch (json['capabilitiesResolvedAt']) {
           final int timestamp => DateTime.fromMillisecondsSinceEpoch(timestamp),
           _ => null,
         },
@@ -843,7 +846,7 @@ _PeerCapabilities _demoPeerCapabilities() {
     supportsMarkers: true,
     supportsReceipts: true,
     features: features,
-    resolvedAt: DateTime.now(),
+    capabilitiesResolvedAt: DateTime.now(),
   );
 }
 
@@ -2801,7 +2804,7 @@ mixin MessageService
     final storePreference = storeLocally ?? true;
     final shouldStore = storePreference && !noStore;
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
-    final resolvedText = text.isNotEmpty
+    final messageText = text.isNotEmpty
         ? text
         : (normalizedHtml == null
               ? ''
@@ -2867,7 +2870,7 @@ mixin MessageService
       originID: _connection.generateId(),
       senderJid: senderJid,
       chatJid: jid,
-      body: resolvedText,
+      body: messageText,
       htmlBody: normalizedHtml,
       encryptionProtocol: resolvedEncryptionProtocol,
       noStore: noStore,
@@ -2880,7 +2883,7 @@ mixin MessageService
       pseudoMessageData: resolvedPseudoData,
     );
     _log.info(
-      'Sending message ${message.stanzaID} (length=${resolvedText.length} chars)',
+      'Sending message ${message.stanzaID} (length=${messageText.length} chars)',
     );
     _rememberReadOnlyTaskShare(message);
     if (shouldStore) {
@@ -3098,25 +3101,26 @@ mixin MessageService
         : accountJid;
     final metadataId =
         upload?.metadata.id ?? attachment.metadataId ?? uuid.v4();
-    final resolvedAttachment = attachment.metadataId == metadataId
+    final attachmentWithMetadataId = attachment.metadataId == metadataId
         ? attachment
         : attachment.copyWith(metadataId: metadataId);
     final metadata =
-        upload?.metadata ?? await _seedAttachmentMetadata(resolvedAttachment);
+        upload?.metadata ??
+        await _seedAttachmentMetadata(attachmentWithMetadataId);
     if (upload != null) {
       await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
     }
     final size = metadata.sizeBytes ?? _attachmentSizeFallbackBytes;
     final filename = metadata.filename;
     final normalizedHtmlCaption = HtmlContentCodec.normalizeHtml(htmlCaption);
-    final captionText = resolvedAttachment.caption?.trim() ?? '';
-    final resolvedCaption = captionText.isNotEmpty
+    final captionText = attachmentWithMetadataId.caption?.trim() ?? '';
+    final caption = captionText.isNotEmpty
         ? captionText
         : (normalizedHtmlCaption == null
               ? ''
               : HtmlContentCodec.toPlainText(normalizedHtmlCaption));
-    final body = resolvedCaption.isNotEmpty
-        ? resolvedCaption
+    final body = caption.isNotEmpty
+        ? caption
         : _attachmentLabel(filename, size);
     final String? resolvedForwardedFrom = forwardedFromJid?.trim();
     final DateTime timestamp = demoOfflineMode
@@ -3212,7 +3216,8 @@ mixin MessageService
     }
     late final XmppAttachmentUpload resolvedUpload;
     try {
-      resolvedUpload = upload ?? await _uploadAttachment(resolvedAttachment);
+      resolvedUpload =
+          upload ?? await _uploadAttachment(attachmentWithMetadataId);
     } on XmppException {
       if (shouldStore) {
         await _dbOp<XmppDatabase>(
@@ -3971,8 +3976,8 @@ mixin MessageService
       (db) => db.getMessageByStanzaID(stanzaID),
     );
     final normalizedHtml = message?.normalizedHtmlBody;
-    final resolvedBody = message?.plainText ?? '';
-    if (message == null || (resolvedBody.isEmpty && normalizedHtml == null)) {
+    final messageBody = message?.plainText ?? '';
+    if (message == null || (messageBody.isEmpty && normalizedHtml == null)) {
       return;
     }
     final CalendarFragment? fragment = message.calendarFragment;
@@ -3980,7 +3985,7 @@ mixin MessageService
     final bool taskIcsReadOnly = message.calendarTaskIcsReadOnly;
     final CalendarAvailabilityMessage? availabilityMessage =
         message.calendarAvailabilityMessage;
-    final resolvedChatType =
+    final targetChatType =
         chatType ??
         await _dbOpReturning<XmppDatabase, ChatType?>(
           (db) async => (await db.getChat(message.chatJid))?.type,
@@ -3994,7 +3999,7 @@ mixin MessageService
     }
     await sendMessage(
       jid: message.chatJid,
-      text: resolvedBody,
+      text: messageBody,
       htmlBody: normalizedHtml,
       encryptionProtocol: message.encryptionProtocol,
       quotedMessage: quoted,
@@ -4002,7 +4007,7 @@ mixin MessageService
       calendarTaskIcs: taskIcs,
       calendarTaskIcsReadOnly: taskIcsReadOnly,
       calendarAvailabilityMessage: availabilityMessage,
-      chatType: resolvedChatType,
+      chatType: targetChatType,
     );
   }
 
@@ -4173,11 +4178,11 @@ mixin MessageService
       existingRecipients:
           existingDraft?.draftRecipients ?? const <DraftRecipientData>[],
     );
-    final resolvedSyncId = existingDraft?.draftSyncId.trim().isNotEmpty == true
+    final draftSyncId = existingDraft?.draftSyncId.trim().isNotEmpty == true
         ? existingDraft!.draftSyncId
         : uuid.v4();
-    final resolvedSourceId = await _ensureDraftSourceId();
-    final resolvedUpdatedAt = DateTime.timestamp().toUtc();
+    final draftSourceId = await _ensureDraftSourceId();
+    final draftUpdatedAt = DateTime.timestamp().toUtc();
     final metadataIds = <String>[];
     for (final attachment in attachments) {
       final metadataId = await _persistDraftAttachmentMetadata(attachment);
@@ -4188,9 +4193,9 @@ mixin MessageService
         id: id,
         jids: jids,
         body: body,
-        draftSyncId: resolvedSyncId,
-        draftUpdatedAt: resolvedUpdatedAt,
-        draftSourceId: resolvedSourceId,
+        draftSyncId: draftSyncId,
+        draftUpdatedAt: draftUpdatedAt,
+        draftSourceId: draftSourceId,
         draftRecipients: draftRecipients,
         subject: subject,
         quotingStanzaId: quotingStanzaId,
@@ -4204,9 +4209,8 @@ mixin MessageService
       await _deleteAttachmentMetadata(staleMetadataIds);
     }
     final savedDraft = await _dbOpReturning<XmppDatabase, Draft?>(
-      (db) => savedId > 0
-          ? db.getDraft(savedId)
-          : db.getDraftBySyncId(resolvedSyncId),
+      (db) =>
+          savedId > 0 ? db.getDraft(savedId) : db.getDraftBySyncId(draftSyncId),
     );
     final int resolvedDraftId = savedDraft?.id ?? savedId;
     if (savedDraft != null) {
@@ -4264,11 +4268,11 @@ mixin MessageService
           continue;
         }
       }
-      final resolvedFile = File(path);
-      if (!await resolvedFile.exists()) {
+      final sourceFile = File(path);
+      if (!await sourceFile.exists()) {
         continue;
       }
-      final size = metadata.sizeBytes ?? await resolvedFile.length();
+      final size = metadata.sizeBytes ?? await sourceFile.length();
       attachments.add(
         EmailAttachment(
           path: path,
@@ -4325,26 +4329,26 @@ mixin MessageService
   Future<FileMetadataData> _seedAttachmentMetadata(
     EmailAttachment attachment,
   ) async {
-    final resolvedId = attachment.metadataId ?? uuid.v4();
+    final metadataId = attachment.metadataId ?? uuid.v4();
     final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
-      (db) => db.getFileMetadata(resolvedId),
+      (db) => db.getFileMetadata(metadataId),
     );
-    final resolvedFilename = attachment.fileName.isNotEmpty
+    final fileName = attachment.fileName.isNotEmpty
         ? attachment.fileName
         : existing?.filename ?? p.basename(attachment.path);
-    final resolvedSizeBytes = attachment.sizeBytes > 0
+    final fileSizeBytes = attachment.sizeBytes > 0
         ? attachment.sizeBytes
         : existing?.sizeBytes;
-    final resolvedMimeType = attachment.mimeType?.trim().isNotEmpty == true
+    final mimeType = attachment.mimeType?.trim().isNotEmpty == true
         ? attachment.mimeType
         : existing?.mimeType;
     final metadata = FileMetadataData(
-      id: resolvedId,
-      filename: resolvedFilename,
+      id: metadataId,
+      filename: fileName,
       path: attachment.path,
       sourceUrls: existing?.sourceUrls,
-      mimeType: resolvedMimeType,
-      sizeBytes: resolvedSizeBytes,
+      mimeType: mimeType,
+      sizeBytes: fileSizeBytes,
       width: attachment.width ?? existing?.width,
       height: attachment.height ?? existing?.height,
       encryptionKey: existing?.encryptionKey,
@@ -4362,23 +4366,23 @@ mixin MessageService
   Future<String> _persistDraftAttachmentMetadata(
     EmailAttachment attachment,
   ) async {
-    final resolvedId = attachment.metadataId ?? uuid.v4();
+    final metadataId = attachment.metadataId ?? uuid.v4();
     final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
-      (db) => db.getFileMetadata(resolvedId),
+      (db) => db.getFileMetadata(metadataId),
     );
-    final resolvedFilename = attachment.fileName.isNotEmpty
+    final fileName = attachment.fileName.isNotEmpty
         ? attachment.fileName
         : existing?.filename ?? p.basename(attachment.path);
-    final resolvedSizeBytes = attachment.sizeBytes > 0
+    final fileSizeBytes = attachment.sizeBytes > 0
         ? attachment.sizeBytes
         : existing?.sizeBytes;
     final metadata = FileMetadataData(
-      id: resolvedId,
-      filename: resolvedFilename,
+      id: metadataId,
+      filename: fileName,
       path: attachment.path,
       sourceUrls: existing?.sourceUrls,
       mimeType: attachment.mimeType ?? existing?.mimeType,
-      sizeBytes: resolvedSizeBytes,
+      sizeBytes: fileSizeBytes,
       width: attachment.width ?? existing?.width,
       height: attachment.height ?? existing?.height,
       encryptionKey: existing?.encryptionKey,
@@ -4506,15 +4510,15 @@ mixin MessageService
     );
     return XmppPeerCapabilities(
       features: capabilities.features,
-      resolvedAt: capabilities.resolvedAt,
+      capabilitiesResolvedAt: capabilities.capabilitiesResolvedAt,
     );
   }
 
   bool _isCapabilityStale(_PeerCapabilities capabilities) {
-    final resolvedAt = capabilities.resolvedAt;
-    if (resolvedAt == null) return true;
+    final capabilitiesResolvedAt = capabilities.capabilitiesResolvedAt;
+    if (capabilitiesResolvedAt == null) return true;
     const ttl = Duration(days: 7);
-    return DateTime.now().difference(resolvedAt) > ttl;
+    return DateTime.now().difference(capabilitiesResolvedAt) > ttl;
   }
 
   _PeerCapabilities _peerCapabilitiesFromInfo(mox.DiscoInfo info) {
@@ -4523,7 +4527,7 @@ mixin MessageService
       supportsMarkers: featureList.contains(mox.chatMarkersXmlns),
       supportsReceipts: featureList.contains(mox.deliveryXmlns),
       features: featureList,
-      resolvedAt: DateTime.now(),
+      capabilitiesResolvedAt: DateTime.now(),
     );
   }
 
@@ -4539,7 +4543,7 @@ mixin MessageService
       if (capabilities.features.contains(feature)) {
         return const CapabilityDecision(CapabilityDecisionKind.allowed);
       }
-      if (capabilities.resolvedAt == null) {
+      if (capabilities.capabilitiesResolvedAt == null) {
         return const CapabilityDecision(CapabilityDecisionKind.unknown);
       }
       return const CapabilityDecision(CapabilityDecisionKind.unsupported);
@@ -4554,12 +4558,12 @@ mixin MessageService
 
   CapabilityDecision _decisionFromCapabilityFlag({
     required bool supported,
-    required DateTime? resolvedAt,
+    required DateTime? capabilitiesResolvedAt,
   }) {
     if (supported) {
       return const CapabilityDecision(CapabilityDecisionKind.allowed);
     }
-    if (resolvedAt == null) {
+    if (capabilitiesResolvedAt == null) {
       return const CapabilityDecision(CapabilityDecisionKind.unknown);
     }
     return const CapabilityDecision(CapabilityDecisionKind.unsupported);
@@ -4748,7 +4752,7 @@ mixin MessageService
     if (markable) {
       final decision = _decisionFromCapabilityFlag(
         supported: capabilities.supportsMarkers,
-        resolvedAt: capabilities.resolvedAt,
+        capabilitiesResolvedAt: capabilities.capabilitiesResolvedAt,
       );
       if (!decision.isAllowed) {
         if (!decision.isUnsupported) {
@@ -4776,7 +4780,7 @@ mixin MessageService
     if (deliveryReceiptRequested) {
       final decision = _decisionFromCapabilityFlag(
         supported: capabilities.supportsReceipts,
-        resolvedAt: capabilities.resolvedAt,
+        capabilitiesResolvedAt: capabilities.capabilitiesResolvedAt,
       );
       if (!decision.isAllowed) {
         if (!decision.isUnsupported) {
@@ -5717,12 +5721,12 @@ mixin MessageService
     final inlineData = syncMessage.data;
     final hasInlineData = inlineData != null && inlineData.isNotEmpty;
     if (!hasUrl && metadata == null && hasInlineData) {
-      final resolvedChecksum =
+      final snapshotChecksum =
           syncMessage.snapshotChecksum ?? syncMessage.checksum;
       final inlineMessage = syncMessage.copyWith(
         type: CalendarSyncType.snapshot,
         isSnapshot: true,
-        snapshotChecksum: resolvedChecksum,
+        snapshotChecksum: snapshotChecksum,
       );
       final applied = await onMessageDecoded(inlineMessage, event);
       if (applied && _calendarMamRehydrateInFlight) {
@@ -6327,14 +6331,14 @@ mixin MessageService
         final name = fun.metadata.name;
         final fallbackName =
             oobName ?? (oobUrl == null ? null : _filenameFromUrl(oobUrl));
-        final resolvedName = _sanitizeAttachmentFilename(
+        final sanitizedName = _sanitizeAttachmentFilename(
           name ?? fallbackName ?? _attachmentFallbackName,
         );
         final mimeType = _sanitizeAttachmentMimeType(fun.metadata.mediaType);
         return FileMetadataData(
           id: uuid.v4(),
           sourceUrls: oobUrl == null ? null : [oobUrl],
-          filename: resolvedName,
+          filename: sanitizedName,
           mimeType: mimeType,
           sizeBytes: fun.metadata.size,
           width: fun.metadata.width,
@@ -6369,7 +6373,7 @@ mixin MessageService
         break;
       }
       if (encryptedUrl != null && encryptedSource != null) {
-        final resolvedName = _sanitizeAttachmentFilename(
+        final sanitizedName = _sanitizeAttachmentFilename(
           statelessData.metadata.name ?? p.basename(encryptedUrl),
         );
         final mimeType = _sanitizeAttachmentMimeType(
@@ -6378,7 +6382,7 @@ mixin MessageService
         return FileMetadataData(
           id: uuid.v4(),
           sourceUrls: [encryptedUrl],
-          filename: resolvedName,
+          filename: sanitizedName,
           mimeType: mimeType,
           encryptionKey: base64Encode(encryptedSource.key),
           encryptionIV: base64Encode(encryptedSource.iv),
@@ -6410,7 +6414,7 @@ mixin MessageService
       _log.warning('Attachment source list exceeded safe limits');
     }
     if (urls.isNotEmpty) {
-      final resolvedName = _sanitizeAttachmentFilename(
+      final sanitizedName = _sanitizeAttachmentFilename(
         statelessData.metadata.name ?? p.basename(urls.first),
       );
       final mimeType = _sanitizeAttachmentMimeType(
@@ -6419,7 +6423,7 @@ mixin MessageService
       return FileMetadataData(
         id: uuid.v4(),
         sourceUrls: urls,
-        filename: resolvedName,
+        filename: sanitizedName,
         mimeType: mimeType,
         sizeBytes: statelessData.metadata.size,
         width: statelessData.metadata.width,
@@ -6582,16 +6586,16 @@ mixin MessageService
       final allowHttpOverrideEnabled = allowHttpOverride == true;
       final allowInsecureHostsOverrideEnabled =
           allowInsecureHostsOverride == true;
-      final resolvedAllowHttp =
+      final allowHttp =
           !kReleaseMode && (allowHttpOverrideEnabled || allowInsecureDownloads);
-      final resolvedAllowInsecureHosts =
+      final allowInsecureHosts =
           !kReleaseMode &&
           (allowInsecureHostsOverrideEnabled || allowInsecureDownloads);
 
       await _validateInboundAttachmentDownloadUri(
         uri,
-        allowHttp: resolvedAllowHttp,
-        allowInsecureHosts: resolvedAllowInsecureHosts,
+        allowHttp: allowHttp,
+        allowInsecureHosts: allowInsecureHosts,
       );
 
       final directory = await _attachmentCacheDirectory();
@@ -6607,11 +6611,11 @@ mixin MessageService
         uri: uri,
         destination: tmpFile,
         maxBytes: maxBytes,
-        allowHttp: resolvedAllowHttp,
-        allowInsecureHosts: resolvedAllowInsecureHosts,
+        allowHttp: allowHttp,
+        allowInsecureHosts: allowInsecureHosts,
       );
 
-      late final int resolvedSizeBytes;
+      late final int fileSizeBytes;
       if (encrypted) {
         final cipherBytes = await tmpFile.readAsBytes();
         await _verifySha256Hash(
@@ -6626,7 +6630,7 @@ mixin MessageService
           expected: metadata.plainTextHashes,
           bytes: plainBytes,
         );
-        resolvedSizeBytes = plainBytes.length;
+        fileSizeBytes = plainBytes.length;
         decryptedTmp = File(
           p.join(directory.path, '.${metadata.id}.decrypted'),
         );
@@ -6640,18 +6644,18 @@ mixin MessageService
         );
         await _replaceFile(source: tmpFile, destination: finalFile);
         tmpFile = null;
-        resolvedSizeBytes = await finalFile.length();
+        fileSizeBytes = await finalFile.length();
       }
 
-      final resolvedMime = metadata.mimeType?.trim().isNotEmpty == true
+      final downloadMimeType = metadata.mimeType?.trim().isNotEmpty == true
           ? metadata.mimeType
           : responseMimeType?.trim().isNotEmpty == true
           ? responseMimeType
           : null;
       final updatedMetadata = metadata.copyWith(
         path: finalFile.path,
-        mimeType: resolvedMime,
-        sizeBytes: resolvedSizeBytes,
+        mimeType: downloadMimeType,
+        sizeBytes: fileSizeBytes,
       );
       await _dbOp<XmppDatabase>(
         (db) => db.saveFileMetadata(updatedMetadata),
@@ -6660,7 +6664,7 @@ mixin MessageService
       fireAndForget(
         () => _enforceAttachmentCacheLimit(
           exemptPaths: {finalFile.path},
-          addedBytes: resolvedSizeBytes,
+          addedBytes: fileSizeBytes,
         ),
         operationName: 'MessageService.enforceAttachmentCacheLimit',
       );

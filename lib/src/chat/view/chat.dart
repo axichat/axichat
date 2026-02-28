@@ -1035,13 +1035,13 @@ class _ChatState extends State<Chat> {
         address.isNotEmpty) {
       _resolveAddressTransport(address).then((transport) {
         if (!mounted || transport == null) return;
-        final resolved = FanOutTarget.address(
+        final transportResolvedTarget = FanOutTarget.address(
           address: address,
           displayName: target.displayName,
           shareSignatureEnabled: target.shareSignatureEnabled,
           transport: transport,
         );
-        _applyRecipient(resolved);
+        _applyRecipient(transportResolvedTarget);
       });
       return;
     }
@@ -2297,9 +2297,9 @@ class _ChatState extends State<Chat> {
     required ChatState chatState,
     SettingsState? settings,
   }) {
-    final resolvedSettings = settings ?? context.read<SettingsCubit>().state;
+    final settingsState = settings ?? context.read<SettingsCubit>().state;
     final isEmailComposer = _isEmailComposerActive(chatState: chatState);
-    if (!isEmailComposer || !resolvedSettings.emailComposerWatermarkEnabled) {
+    if (!isEmailComposer || !settingsState.emailComposerWatermarkEnabled) {
       return false;
     }
     final watermarkLabel = _emailComposerWatermarkLabel();
@@ -2325,7 +2325,7 @@ class _ChatState extends State<Chat> {
     SettingsState? settings,
     bool forceInsert = false,
   }) {
-    final resolvedSettings = settings ?? context.read<SettingsCubit>().state;
+    final settingsState = settings ?? context.read<SettingsCubit>().state;
     final currentText = _textController.text;
     final watermarkLabel = _emailComposerWatermarkLabel();
     final watermarkSuffix = _emailComposerWatermarkSuffix();
@@ -2334,7 +2334,7 @@ class _ChatState extends State<Chat> {
     if (_isDemoModeActive()) {
       return;
     }
-    if (!isEmailComposer || !resolvedSettings.emailComposerWatermarkEnabled) {
+    if (!isEmailComposer || !settingsState.emailComposerWatermarkEnabled) {
       if (currentText == watermarkLabel ||
           currentText == watermarkSuffix ||
           currentText == legacyWatermarkSuffix) {
@@ -2940,21 +2940,21 @@ class _ChatState extends State<Chat> {
     if (recipients.isEmpty) {
       return [chat.jid];
     }
-    final resolved = <String>{};
+    final recipientIds = <String>{};
     for (final recipient in recipients) {
       if (!recipient.included) continue;
       final chatJid = recipient.target.chat?.jid;
       final address = recipient.target.address;
       if (chatJid != null && chatJid.isNotEmpty) {
-        resolved.add(chatJid);
+        recipientIds.add(chatJid);
       } else if (address != null && address.isNotEmpty) {
-        resolved.add(address);
+        recipientIds.add(address);
       }
     }
-    if (resolved.isEmpty) {
+    if (recipientIds.isEmpty) {
       return [chat.jid];
     }
-    return resolved.toList();
+    return recipientIds.toList();
   }
 
   Future<void> _handleEditMessage(Message message) async {
@@ -3424,13 +3424,10 @@ class _ChatState extends State<Chat> {
       normalizedSelfJids.add(normalizedEmailSelfJid);
     }
     if (normalizedSelfJids.isNotEmpty && selfAvatarPath?.isNotEmpty == true) {
-      final resolvedSelfAvatarPath = selfAvatarPath!;
+      final selfAvatarPathValue = selfAvatarPath!;
       for (final selfJid in normalizedSelfJids) {
-        rosterAvatarPathsByJid.putIfAbsent(
-          selfJid,
-          () => resolvedSelfAvatarPath,
-        );
-        chatAvatarPathsByJid.putIfAbsent(selfJid, () => resolvedSelfAvatarPath);
+        rosterAvatarPathsByJid.putIfAbsent(selfJid, () => selfAvatarPathValue);
+        chatAvatarPathsByJid.putIfAbsent(selfJid, () => selfAvatarPathValue);
       }
     }
     _cachedRosterItems = rosterItems;
@@ -3531,19 +3528,19 @@ class _ChatState extends State<Chat> {
   List<Message> _collectSelectedMessages(List<Message> orderedMessages) {
     if (_multiSelectedMessageIds.isEmpty) return const [];
     final selected = <Message>[];
-    final resolvedIds = <String>{};
+    final presentIds = <String>{};
     for (final message in orderedMessages) {
       final id = message.stanzaID;
       if (_multiSelectedMessageIds.contains(id)) {
         selected.add(message);
-        resolvedIds.add(id);
+        presentIds.add(id);
       }
     }
     if (selected.length == _multiSelectedMessageIds.length) {
       return selected;
     }
     for (final id in _multiSelectedMessageIds) {
-      if (resolvedIds.contains(id)) continue;
+      if (presentIds.contains(id)) continue;
       final snapshot = _selectedMessageSnapshots[id];
       if (snapshot != null) {
         selected.add(snapshot);
@@ -3663,9 +3660,9 @@ class _ChatState extends State<Chat> {
             searchState.active && (trimmedQuery.isNotEmpty || hasSubjectFilter);
         final searchResults = searchState.results;
         final profileJid = context.watch<ProfileCubit>().state.jid;
-        final resolvedProfileJid = profileJid.trim();
-        final String? selfJid = resolvedProfileJid.isNotEmpty
-            ? resolvedProfileJid
+        final trimmedProfileJid = profileJid.trim();
+        final String? selfJid = trimmedProfileJid.isNotEmpty
+            ? trimmedProfileJid
             : null;
         final selfIdentity = SelfIdentitySnapshot(
           selfJid: selfJid,
@@ -3765,14 +3762,14 @@ class _ChatState extends State<Chat> {
                 final l10n = context.l10n;
                 const actionLabel = null;
                 const VoidCallback? onAction = null;
-                final resolvedTitle =
+                final toastTitle =
                     toast.title ??
                     switch (toast.variant) {
                       ChatToastVariant.destructive => l10n.toastWhoopsTitle,
                       ChatToastVariant.warning => l10n.toastHeadsUpTitle,
                       ChatToastVariant.info => l10n.toastAllSetTitle,
                     };
-                final resolvedMessage =
+                final toastMessage =
                     toast.messageText ??
                     toast.message?.label(
                       l10n,
@@ -3781,20 +3778,20 @@ class _ChatState extends State<Chat> {
                     );
                 final toastWidget = switch (toast.variant) {
                   ChatToastVariant.destructive => FeedbackToast.error(
-                    title: resolvedTitle,
-                    message: resolvedMessage,
+                    title: toastTitle,
+                    message: toastMessage,
                     actionLabel: actionLabel,
                     onAction: onAction,
                   ),
                   ChatToastVariant.warning => FeedbackToast.warning(
-                    title: resolvedTitle,
-                    message: resolvedMessage,
+                    title: toastTitle,
+                    message: toastMessage,
                     actionLabel: actionLabel,
                     onAction: onAction,
                   ),
                   ChatToastVariant.info => FeedbackToast.success(
-                    title: resolvedTitle,
-                    message: resolvedMessage,
+                    title: toastTitle,
+                    message: toastMessage,
                     actionLabel: actionLabel,
                     onAction: onAction,
                   ),
@@ -3948,9 +3945,9 @@ class _ChatState extends State<Chat> {
               final currentUserId = isDefaultEmail
                   ? (resolvedEmailSelfJid ?? profileState()?.jid ?? '')
                   : (profileState()?.jid ?? resolvedEmailSelfJid ?? '');
-              final String? resolvedProfileJid = profileState()?.jid.trim();
-              final String? selfXmppJid = resolvedProfileJid?.isNotEmpty == true
-                  ? resolvedProfileJid
+              final String? trimmedProfileJid = profileState()?.jid.trim();
+              final String? selfXmppJid = trimmedProfileJid?.isNotEmpty == true
+                  ? trimmedProfileJid
                   : null;
               final String? accountJidForPins = isDefaultEmail
                   ? (resolvedEmailSelfJid ?? selfXmppJid)
@@ -4856,7 +4853,7 @@ class _ChatState extends State<Chat> {
                                       final unknownRoomFallbackLabel = context
                                           .l10n
                                           .chatInviteRoomFallbackLabel;
-                                      final resolvedInviteRoomName =
+                                      final inviteRoomDisplayName =
                                           inviteRoomName?.isNotEmpty == true
                                           ? inviteRoomName!
                                           : unknownRoomFallbackLabel;
@@ -4869,7 +4866,7 @@ class _ChatState extends State<Chat> {
                                           : inviteRevokedBodyLabel;
                                       final inviteActionLabel = context.l10n
                                           .chatInviteActionLabel(
-                                            resolvedInviteRoomName,
+                                            inviteRoomDisplayName,
                                           );
                                       final inviteRevoked =
                                           inviteToken != null &&
@@ -5888,7 +5885,7 @@ class _ChatState extends State<Chat> {
                                                                         message
                                                                             .text
                                                                             .trim();
-                                                                    final resolvedFallback =
+                                                                    final fallbackMessage =
                                                                         fallbackText
                                                                             .isNotEmpty
                                                                         ? fallbackText
@@ -5930,7 +5927,7 @@ class _ChatState extends State<Chat> {
                                                                                 vertical: spacing.s,
                                                                               ),
                                                                               child: Text(
-                                                                                resolvedFallback,
+                                                                                fallbackMessage,
                                                                                 style: baseTextStyle,
                                                                               ),
                                                                             ),
@@ -6312,7 +6309,7 @@ class _ChatState extends State<Chat> {
                                                                     spacing,
                                                                     Key? key,
                                                                   }) {
-                                                                    final resolvedSpacing =
+                                                                    final extraGap =
                                                                         spacing ??
                                                                         extraSpacing;
                                                                     final extraKey =
@@ -6349,7 +6346,7 @@ class _ChatState extends State<Chat> {
                                                                             key:
                                                                                 gapKey,
                                                                             height:
-                                                                                resolvedSpacing,
+                                                                                extraGap,
                                                                           ),
                                                                         )
                                                                         ..add(
@@ -6359,7 +6356,7 @@ class _ChatState extends State<Chat> {
                                                                     }
                                                                     if (bubbleTextChildren
                                                                             .isNotEmpty &&
-                                                                        resolvedSpacing >
+                                                                        extraGap >
                                                                             0) {
                                                                       final gapKey =
                                                                           ValueKey(
@@ -6372,7 +6369,7 @@ class _ChatState extends State<Chat> {
                                                                           key:
                                                                               gapKey,
                                                                           height:
-                                                                              resolvedSpacing,
+                                                                              extraGap,
                                                                         ),
                                                                       );
                                                                     }
@@ -6968,20 +6965,20 @@ class _ChatState extends State<Chat> {
                                                                         collapsedEmailPreviewText !=
                                                                             fullEmailPreviewText;
                                                                     if (hasAttachmentCaption) {
-                                                                      final resolvedMetadataId =
+                                                                      final metadataId =
                                                                           metadataIdForCaption;
                                                                       final metadata = _metadataFor(
                                                                         state:
                                                                             state,
                                                                         metadataId:
-                                                                            resolvedMetadataId,
+                                                                            metadataId,
                                                                       );
                                                                       final filename =
                                                                           metadata
                                                                               ?.filename
                                                                               .trim() ??
                                                                           '';
-                                                                      final resolvedFilename =
+                                                                      final displayFilename =
                                                                           filename
                                                                               .isNotEmpty
                                                                           ? filename
@@ -7000,7 +6997,7 @@ class _ChatState extends State<Chat> {
                                                                             )
                                                                           : l10n.chatAttachmentUnknownSize;
                                                                       final caption = l10n.chatAttachmentCaption(
-                                                                        resolvedFilename,
+                                                                        displayFilename,
                                                                         sizeLabel,
                                                                       );
                                                                       bubbleTextChildren.add(
@@ -7465,14 +7462,14 @@ class _ChatState extends State<Chat> {
                                                                           selectionAllowance,
                                                                     ),
                                                                   );
-                                                                  final resolvedBubbleMaxWidth =
+                                                                  final bubbleMaxWidthForLayout =
                                                                       isSingleSelection
                                                                       ? expandedBubbleWidth
                                                                       : cappedBubbleWidth;
                                                                   final bubbleTextConstraints =
                                                                       BoxConstraints(
                                                                         maxWidth:
-                                                                            resolvedBubbleMaxWidth,
+                                                                            bubbleMaxWidthForLayout,
                                                                       );
                                                                   final bubbleExtraConstraints =
                                                                       BoxConstraints(
@@ -8065,19 +8062,19 @@ class _ChatState extends State<Chat> {
                                                                   final measuredBubbleWidth =
                                                                       _bubbleWidthByMessageId[messageModel
                                                                           .stanzaID];
-                                                                  final resolvedMeasuredBubbleWidth =
+                                                                  final clampedMeasuredBubbleWidth =
                                                                       measuredBubbleWidth
                                                                           ?.clamp(
                                                                             0.0,
-                                                                            resolvedBubbleMaxWidth,
+                                                                            bubbleMaxWidthForLayout,
                                                                           )
                                                                           .toDouble();
                                                                   final bubbleIsVisuallyFullWidth =
                                                                       isSingleSelection &&
-                                                                      resolvedMeasuredBubbleWidth !=
+                                                                      clampedMeasuredBubbleWidth !=
                                                                           null &&
-                                                                      resolvedMeasuredBubbleWidth >=
-                                                                          resolvedBubbleMaxWidth -
+                                                                      clampedMeasuredBubbleWidth >=
+                                                                          bubbleMaxWidthForLayout -
                                                                               context.borderSide.width;
                                                                   final selectionExtrasMaxWidth =
                                                                       bubbleIsVisuallyFullWidth
@@ -8217,11 +8214,11 @@ class _ChatState extends State<Chat> {
                                                                                       _nickFromSender(
                                                                                         quotedModel.senderJid,
                                                                                       );
-                                                                                  final resolved =
+                                                                                  final normalizedNick =
                                                                                       nick?.trim() ??
                                                                                       '';
-                                                                                  return resolved.isNotEmpty
-                                                                                      ? resolved
+                                                                                  return normalizedNick.isNotEmpty
+                                                                                      ? normalizedNick
                                                                                       : quotedModel.senderJid;
                                                                                 }();
                                                                           return _QuotedMessagePreview(
@@ -8340,7 +8337,7 @@ class _ChatState extends State<Chat> {
                                                                       _messageKeys[messageModel
                                                                           .stanzaID];
                                                                   final previewMaxWidth =
-                                                                      resolvedBubbleMaxWidth;
+                                                                      bubbleMaxWidthForLayout;
                                                                   final selectableBubble = MouseRegion(
                                                                     cursor:
                                                                         widget
@@ -8981,13 +8978,13 @@ class _ChatState extends State<Chat> {
       return;
     }
     final unknownRoomFallbackLabel = l10n.chatInviteRoomFallbackLabel;
-    final resolvedRoomName = roomName?.isNotEmpty == true
+    final roomDisplayName = roomName?.isNotEmpty == true
         ? roomName!
         : unknownRoomFallbackLabel;
     final accepted = await confirm(
       context,
       title: l10n.chatInviteConfirmTitle,
-      message: l10n.chatInviteConfirmMessage(resolvedRoomName),
+      message: l10n.chatInviteConfirmMessage(roomDisplayName),
       confirmLabel: l10n.chatInviteConfirmLabel,
       destructiveConfirm: false,
     );
@@ -9721,8 +9718,8 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedChat = widget.chat;
-    if (resolvedChat == null) {
+    final currentChat = widget.chat;
+    if (currentChat == null) {
       return const SizedBox.shrink();
     }
     final l10n = context.l10n;
@@ -9767,7 +9764,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
               final item = widget.pinnedMessages[index];
               return _PinnedMessageTile(
                 item: item,
-                chat: resolvedChat,
+                chat: currentChat,
                 roomState: widget.roomState,
                 canTogglePins: widget.canTogglePins,
                 canShowCalendarTasks: widget.canShowCalendarTasks,
@@ -9928,12 +9925,12 @@ class _PinnedMessageTile extends StatelessWidget {
       }
       return senderNick == trimmedSelfNick;
     }
-    final resolvedAccountJid = accountJid?.trim();
-    if (resolvedAccountJid == null || resolvedAccountJid.isEmpty) {
+    final accountJidTrimmed = accountJid?.trim();
+    if (accountJidTrimmed == null || accountJidTrimmed.isEmpty) {
       return false;
     }
     try {
-      return message.authorized(mox.JID.fromString(resolvedAccountJid));
+      return message.authorized(mox.JID.fromString(accountJidTrimmed));
     } on Exception {
       return false;
     }
@@ -11063,9 +11060,7 @@ class _RecipientAvatarBadge extends StatelessWidget {
     final recipientAvatarSize = spacing.l;
     final shape = SquircleBorder(cornerRadius: context.radii.squircle);
     final avatarPath = (chat.avatarPath ?? chat.contactAvatarPath)?.trim();
-    final resolvedAvatarPath = avatarPath?.isNotEmpty == true
-        ? avatarPath
-        : null;
+    final avatarImagePath = avatarPath?.isNotEmpty == true ? avatarPath : null;
     return SizedBox(
       width: recipientAvatarSize,
       height: recipientAvatarSize,
@@ -11076,7 +11071,7 @@ class _RecipientAvatarBadge extends StatelessWidget {
           child: AxiAvatar(
             jid: chat.avatarIdentifier,
             size: recipientAvatarSize - (borderWidth * 2),
-            avatarPath: resolvedAvatarPath,
+            avatarPath: avatarImagePath,
           ),
         ),
       ),
@@ -11930,7 +11925,6 @@ class _ChatComposerSection extends StatelessWidget {
       expandDraftEnabled: expandDraftEnabled,
       onExpandDraftPressed: onExpandDraftPressed,
     );
-    final Widget header = subjectHeader;
     final showAttachmentTray = pendingAttachments.isNotEmpty;
     final commandSurface = resolveCommandSurface(context);
     final useDesktopMenu = commandSurface == CommandSurface.menu;
@@ -11986,7 +11980,7 @@ class _ChatComposerSection extends StatelessWidget {
                       maxLines: composerMaxLines,
                       semanticsLabel: context.l10n.chatComposerSemantics,
                       onSend: onSend,
-                      header: header,
+                      header: subjectHeader,
                       actions: buildComposerAccessories(canSend: sendEnabled),
                       sendEnabled: sendEnabled,
                       sendOnEnter: sendOnEnter,
@@ -12035,13 +12029,12 @@ class _ChatComposerSection extends StatelessWidget {
                 label,
               )
             : l10n.chatFanOutFailure(failedCount, label);
-        final retryAction = onFanOutRetry;
         notices.add(
           _ComposerNotice(
             type: _ComposerNoticeType.info,
             message: failureMessage,
-            actionLabel: retryAction == null ? null : l10n.chatFanOutRetry,
-            onAction: retryAction,
+            actionLabel: onFanOutRetry == null ? null : l10n.chatFanOutRetry,
+            onAction: onFanOutRetry,
           ),
         );
       }
@@ -12172,7 +12165,6 @@ class _SubjectTextField extends StatelessWidget {
       fontWeight: FontWeight.w600,
       color: colors.foreground,
     );
-    final subjectLabelStyle = subjectStyle;
     final subjectStrutStyle = StrutStyle.fromTextStyle(
       subjectStyle,
       forceStrutHeight: true,
@@ -12211,10 +12203,7 @@ class _SubjectTextField extends StatelessWidget {
               child: Align(
                 alignment: Alignment.centerLeft,
                 widthFactor: 1,
-                child: Text(
-                  '${l10n.chatSubjectHint}: ',
-                  style: subjectLabelStyle,
-                ),
+                child: Text('${l10n.chatSubjectHint}: ', style: subjectStyle),
               ),
             ),
             prefixIconConstraints: const BoxConstraints(
@@ -13210,11 +13199,11 @@ class _ChatCapabilitiesSection extends StatelessWidget {
     final spacing = context.spacing;
     final textTheme = context.textTheme;
     final sizing = context.sizing;
-    final resolvedAt = capabilities?.resolvedAt;
-    final String subtitle = resolvedAt == null
+    final capabilitiesResolvedAt = capabilities?.capabilitiesResolvedAt;
+    final String subtitle = capabilitiesResolvedAt == null
         ? l10n.commonUnknownLabel
         : l10n.chatSettingsCapabilitiesUpdated(
-            TimeFormatter.formatFriendlyDateTime(l10n, resolvedAt),
+            TimeFormatter.formatFriendlyDateTime(l10n, capabilitiesResolvedAt),
           );
     final features = capabilities?.features ?? const <String>[];
     final List<_CapabilityEntry> entries = features
@@ -13553,8 +13542,8 @@ class _ReactionManagerState extends State<_ReactionManager> {
   }
 
   void _refreshSorted({int? signature}) {
-    final resolved = signature ?? _reactionsSignature(widget.reactions);
-    _signature = resolved;
+    final nextSignature = signature ?? _reactionsSignature(widget.reactions);
+    _signature = nextSignature;
     _sorted = widget.reactions.toList()
       ..sort((a, b) => b.count.compareTo(a.count));
   }
@@ -13720,7 +13709,7 @@ class _QuotedMessagePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedSenderLabel = senderLabel.trim();
+    final senderLabelTrimmed = senderLabel.trim();
     return Builder(
       builder: (context) {
         final split = ChatSubjectCodec.splitXmppBody(message.body);
@@ -13738,7 +13727,7 @@ class _QuotedMessagePreview extends StatelessWidget {
             : context.l10n.chatQuotedNoContent;
         final quotedPreview = '"$previewText"';
         return _ReplyingToPreviewText(
-          senderLabel: resolvedSenderLabel,
+          senderLabel: senderLabelTrimmed,
           quotedPreview: quotedPreview,
           isSelf: isSelf,
         );
@@ -15297,9 +15286,9 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     final sectionSpacing = spacing.m;
     final contentPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final profileJid = context.watch<ProfileCubit>().state.jid;
-    final resolvedProfileJid = profileJid.trim();
-    final String? selfJid = resolvedProfileJid.isNotEmpty
-        ? resolvedProfileJid
+    final trimmedProfileJid = profileJid.trim();
+    final String? selfJid = trimmedProfileJid.isNotEmpty
+        ? trimmedProfileJid
         : null;
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,

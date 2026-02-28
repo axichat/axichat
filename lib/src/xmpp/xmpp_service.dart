@@ -2444,7 +2444,6 @@ class XmppService extends XmppBase
   @override
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
-    _synchronousConnection = Completer<void>();
 
     _setConnectionState(ConnectionState.notConnected);
     _pingController.stop();
@@ -2538,6 +2537,7 @@ class XmppService extends XmppBase
     _database = ImpatientCompleter(Completer<XmppDatabase>());
 
     _myJid = null;
+    _synchronousConnection = Completer<void>();
     _streamResumptionAttempted = false;
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;

@@ -15,7 +15,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ConnectivityIndicator extends StatefulWidget {
-  const ConnectivityIndicator({super.key});
+  const ConnectivityIndicator({
+    super.key,
+    this.reserveTopInsetWhenHidden = false,
+  });
+
+  final bool reserveTopInsetWhenHidden;
 
   @override
   State<ConnectivityIndicator> createState() => _ConnectivityIndicatorState();
@@ -138,8 +143,13 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
 
   @override
   Widget build(BuildContext context) {
+    final duration = context.watch<SettingsCubit>().animationDuration;
     if (kEnableDemoChats) {
-      return const SizedBox.shrink();
+      return _ConnectivityIndicatorContainer(
+        presentation: null,
+        duration: duration,
+        reserveTopInsetWhenHidden: widget.reserveTopInsetWhenHidden,
+      );
     }
 
     final colors = context.colorScheme;
@@ -181,9 +191,10 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
 
     return BlocListener<ConnectivityCubit, ConnectivityState>(
       listener: (context, state) => _handleConnectivityState(state),
-      child: ConnectivityIndicatorContainer(
+      child: _ConnectivityIndicatorContainer(
         presentation: presentation,
-        duration: context.watch<SettingsCubit>().animationDuration,
+        duration: duration,
+        reserveTopInsetWhenHidden: widget.reserveTopInsetWhenHidden,
       ),
     );
   }
@@ -203,47 +214,59 @@ class _ConnectivityIndicatorPresentation {
   final String text;
 }
 
-class ConnectivityIndicatorContainer extends StatelessWidget {
-  const ConnectivityIndicatorContainer({
-    super.key,
+class _ConnectivityIndicatorContainer extends StatelessWidget {
+  const _ConnectivityIndicatorContainer({
     required this.presentation,
     required this.duration,
+    required this.reserveTopInsetWhenHidden,
   });
 
   final _ConnectivityIndicatorPresentation? presentation;
   final Duration duration;
+  final bool reserveTopInsetWhenHidden;
 
   @override
   Widget build(BuildContext context) {
     final motion = context.motion;
-    final Widget child = presentation == null
-        ? const SizedBox.shrink(key: ValueKey<String>('hidden'))
-        : _ConnectivityIndicatorBanner(
+    final topInset = MediaQuery.paddingOf(context).top;
+    final hasBanner = presentation != null;
+    const hiddenKey = ValueKey<String>('hidden');
+    final Widget child = hasBanner
+        ? _ConnectivityIndicatorBanner(
             key: ValueKey<String>(presentation!.text),
             color: presentation!.color,
             foregroundColor: presentation!.foregroundColor,
             iconData: presentation!.iconData,
             text: presentation!.text,
+            topInset: topInset,
+          )
+        : SizedBox(
+            key: hiddenKey,
+            height: reserveTopInsetWhenHidden ? topInset : 0.0,
           );
-    return AnimatedSwitcher(
+    return AnimatedSize(
       duration: duration,
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      transitionBuilder: (child, animation) {
-        final slideAnimation = Tween<Offset>(
-          begin: motion.statusBannerSlideOffset,
-          end: Offset.zero,
-        ).animate(animation);
-        return SizeTransition(
-          sizeFactor: animation,
-          axisAlignment: -1.0,
-          child: FadeTransition(
-            opacity: animation,
-            child: SlideTransition(position: slideAnimation, child: child),
+      curve: Curves.easeInOutCubic,
+      alignment: Alignment.topCenter,
+      child: AnimatedSlide(
+        offset: hasBanner ? Offset.zero : motion.statusBannerSlideOffset,
+        duration: duration,
+        curve: Curves.easeInOutCubic,
+        child: AnimatedSwitcher(
+          duration: duration,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          layoutBuilder: (currentChild, previousChildren) => Stack(
+            alignment: Alignment.topCenter,
+            children: currentChild == null
+                ? previousChildren
+                : <Widget>[...previousChildren, currentChild],
           ),
-        );
-      },
-      child: child,
+          transitionBuilder: (child, animation) =>
+              FadeTransition(opacity: animation, child: child),
+          child: child,
+        ),
+      ),
     );
   }
 }
@@ -255,12 +278,14 @@ class _ConnectivityIndicatorBanner extends StatelessWidget {
     required this.foregroundColor,
     required this.iconData,
     required this.text,
+    required this.topInset,
   });
 
   final Color color;
   final Color foregroundColor;
   final IconData iconData;
   final String text;
+  final double topInset;
 
   @override
   Widget build(BuildContext context) {
@@ -271,22 +296,24 @@ class _ConnectivityIndicatorBanner extends StatelessWidget {
       color: color,
       child: SizedBox(
         width: double.infinity,
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: EdgeInsets.all(spacing.xs),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  iconData,
-                  color: foregroundColor,
-                  size: sizing.iconButtonIconSize,
-                ),
-                SizedBox.square(dimension: spacing.s),
-                Text(text, style: textStyle),
-              ],
-            ),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            spacing.xs,
+            topInset + spacing.xs,
+            spacing.xs,
+            spacing.xs,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                iconData,
+                color: foregroundColor,
+                size: sizing.iconButtonIconSize,
+              ),
+              SizedBox.square(dimension: spacing.s),
+              Text(text, style: textStyle),
+            ],
           ),
         ),
       ),

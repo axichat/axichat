@@ -211,38 +211,51 @@ class _ProfileBodyState extends State<_ProfileBody> {
                   ),
               ],
             ),
-            body: SafeArea(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWideLayout =
-                      constraints.maxWidth >= _profileWideLayoutMinWidth;
-                  final Duration animationDuration = context
-                      .watch<SettingsCubit>()
-                      .animationDuration;
-                  return AxiFadeIndexedStack(
-                    index: _profileRoute.index,
-                    duration: animationDuration,
-                    curve: _profileFadeCurve,
-                    children: [
-                      _ProfileMainView(
-                        isWideLayout: isWideLayout,
-                        connectivityState: connectivityState,
-                        demoOffline: demoOffline,
-                        applicationVersion: _applicationVersion,
-                        sidebarColor: profileSidebarColor,
-                        settingsAnchors: _settingsAnchors,
-                        settingsScrollController: _settingsScrollController,
-                        profileScrollController: _profileScrollController,
-                        settingsScrollOffset: _settingsScrollOffset,
-                        locate: widget.locate,
-                        onNavigate: _setRoute,
-                      ),
-                      const _ProfileFormPage(child: ChangePasswordForm()),
-                      const _ProfileFormPage(child: UnregisterForm()),
-                    ],
-                  );
-                },
-              ),
+            body: Column(
+              children: [
+                MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  child: const ConnectivityIndicator(),
+                ),
+                Expanded(
+                  child: SafeArea(
+                    top: false,
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isWideLayout =
+                            constraints.maxWidth >= _profileWideLayoutMinWidth;
+                        final Duration animationDuration = context
+                            .watch<SettingsCubit>()
+                            .animationDuration;
+                        return AxiFadeIndexedStack(
+                          index: _profileRoute.index,
+                          duration: animationDuration,
+                          curve: _profileFadeCurve,
+                          children: [
+                            _ProfileMainView(
+                              isWideLayout: isWideLayout,
+                              connectivityState: connectivityState,
+                              demoOffline: demoOffline,
+                              applicationVersion: _applicationVersion,
+                              sidebarColor: profileSidebarColor,
+                              settingsAnchors: _settingsAnchors,
+                              settingsScrollController:
+                                  _settingsScrollController,
+                              profileScrollController: _profileScrollController,
+                              settingsScrollOffset: _settingsScrollOffset,
+                              locate: widget.locate,
+                              onNavigate: _setRoute,
+                            ),
+                            const _ProfileFormPage(child: ChangePasswordForm()),
+                            const _ProfileFormPage(child: UnregisterForm()),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -615,17 +628,7 @@ class _ProfileStatusHeader extends StatelessWidget {
   const _ProfileStatusHeader();
 
   @override
-  Widget build(BuildContext context) {
-    return const Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ConnectivityIndicator(),
-        SizedBox(height: _profileIndicatorSpacing),
-        ShorebirdChecker(),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => const ShorebirdChecker();
 }
 
 class _EditableAvatarButton extends StatefulWidget {

@@ -963,12 +963,6 @@ class _HomeContent extends StatelessWidget {
     final settings = context.watch<SettingsCubit>().state;
     final endpointConfig = settings.endpointConfig;
     final bool emailEnabled = endpointConfig.smtpEnabled;
-    final bool demoOffline =
-        kEnableDemoChats &&
-        context.select<ProfileCubit, String>(
-              (stateOwner) => stateOwner.state.jid,
-            ) ==
-            kDemoSelfJid;
     final env = EnvScope.of(context);
     final navPlacement = env.navPlacement;
     final Storage? calendarStorage = storageManager.authStorage;
@@ -994,7 +988,7 @@ class _HomeContent extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const ConnectivityIndicator(),
+                const ConnectivityIndicator(reserveTopInsetWhenHidden: true),
                 Expanded(
                   child: BlocBuilder<ConnectivityCubit, ConnectivityState>(
                     builder: (context, state) {
@@ -1090,7 +1084,7 @@ class _HomeContent extends StatelessWidget {
                           );
                         }
                         return SafeArea(
-                          top: state is ConnectivityConnected || demoOffline,
+                          top: false,
                           bottom: navPlacement != NavPlacement.bottom,
                           child: body,
                         );

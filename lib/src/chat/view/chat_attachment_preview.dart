@@ -1344,92 +1344,110 @@ class _ImageAttachmentPreviewDialog extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final ghostColors = _previewGhostColors(context);
-    final double maxWidth = math.max(0.0, mediaSize.width - spacing.xl);
-    final double maxHeight = math.max(0.0, mediaSize.height - spacing.xl);
-    final fallbackWidth = math.min(maxWidth, sizing.dialogMaxWidth);
-    final fallbackHeight = math.min(
-      maxHeight,
-      fallbackWidth * sizing.dialogMaxHeightFraction,
-    );
     final intrinsic = _intrinsicSizeFrom(metadata);
-    final targetSize = _fitWithinBounds(
-      intrinsicSize: intrinsic,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
-      fallbackWidth: fallbackWidth,
-      fallbackHeight: fallbackHeight,
-    );
     final l10n = context.l10n;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: targetSize.width,
-            height: targetSize.height,
-            child: InteractiveViewer(
-              maxScale: sizing.mediaPreviewMaxScale,
-              child: Image.file(file, fit: BoxFit.contain),
-            ),
-          ),
-          SizedBox(height: spacing.s),
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : mediaSize.width;
+        final double availableHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : mediaSize.height;
+        final double maxWidth = math.max(0.0, availableWidth - spacing.xl);
+        final double maxHeight = math.max(0.0, availableHeight - spacing.xl);
+        final double actionRowHeight = sizing.iconButtonTapTarget;
+        final double previewMaxHeight = math.max(
+          0.0,
+          maxHeight - spacing.s - actionRowHeight,
+        );
+        final double fallbackWidth = math.min(maxWidth, sizing.dialogMaxWidth);
+        final double fallbackHeight = math.min(
+          previewMaxHeight,
+          fallbackWidth * sizing.dialogMaxHeightFraction,
+        );
+        final Size targetSize = _fitWithinBounds(
+          intrinsicSize: intrinsic,
+          maxWidth: maxWidth,
+          maxHeight: previewMaxHeight,
+          fallbackWidth: fallbackWidth,
+          fallbackHeight: fallbackHeight,
+        );
+        return Center(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AxiIconButton.ghost(
-                iconData: LucideIcons.save,
-                color: ghostColors.foreground,
-                backgroundColor: ghostColors.background,
-                onPressed: () async {
-                  final FileTypeReport report =
-                      typeReport ?? metadata.declaredTypeReport;
-                  final bool allowed = await confirmExportAllowed(
-                    context,
-                    metadata: metadata,
-                    report: report,
-                    confirmLabel: l10n.chatAttachmentExportConfirm,
-                  );
-                  if (!context.mounted || !allowed) return;
-                  await saveAttachmentToDevice(
-                    context,
-                    file: file,
-                    filename: metadata.filename,
-                  );
-                },
+              SizedBox(
+                width: targetSize.width,
+                height: targetSize.height,
+                child: InteractiveViewer(
+                  maxScale: sizing.mediaPreviewMaxScale,
+                  child: Image.file(file, fit: BoxFit.contain),
+                ),
               ),
-              SizedBox(width: spacing.xs),
-              AxiIconButton.ghost(
-                iconData: LucideIcons.share2,
-                color: ghostColors.foreground,
-                backgroundColor: ghostColors.background,
-                onPressed: () async {
-                  final FileTypeReport report =
-                      typeReport ?? metadata.declaredTypeReport;
-                  final bool allowed = await confirmExportAllowed(
-                    context,
-                    metadata: metadata,
-                    report: report,
-                    confirmLabel: l10n.chatActionShare,
-                  );
-                  if (!context.mounted || !allowed) return;
-                  await shareAttachmentFromFile(
-                    context,
-                    file: file,
-                    filename: metadata.filename,
-                  );
-                },
-              ),
-              SizedBox(width: spacing.xs),
-              AxiIconButton.ghost(
-                iconData: LucideIcons.x,
-                color: ghostColors.foreground,
-                backgroundColor: ghostColors.background,
-                onPressed: () => Navigator.of(context).pop(),
+              SizedBox(height: spacing.s),
+              SizedBox(
+                height: actionRowHeight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AxiIconButton.ghost(
+                      iconData: LucideIcons.save,
+                      color: ghostColors.foreground,
+                      backgroundColor: ghostColors.background,
+                      onPressed: () async {
+                        final FileTypeReport report =
+                            typeReport ?? metadata.declaredTypeReport;
+                        final bool allowed = await confirmExportAllowed(
+                          context,
+                          metadata: metadata,
+                          report: report,
+                          confirmLabel: l10n.chatAttachmentExportConfirm,
+                        );
+                        if (!context.mounted || !allowed) return;
+                        await saveAttachmentToDevice(
+                          context,
+                          file: file,
+                          filename: metadata.filename,
+                        );
+                      },
+                    ),
+                    SizedBox(width: spacing.xs),
+                    AxiIconButton.ghost(
+                      iconData: LucideIcons.share2,
+                      color: ghostColors.foreground,
+                      backgroundColor: ghostColors.background,
+                      onPressed: () async {
+                        final FileTypeReport report =
+                            typeReport ?? metadata.declaredTypeReport;
+                        final bool allowed = await confirmExportAllowed(
+                          context,
+                          metadata: metadata,
+                          report: report,
+                          confirmLabel: l10n.chatActionShare,
+                        );
+                        if (!context.mounted || !allowed) return;
+                        await shareAttachmentFromFile(
+                          context,
+                          file: file,
+                          filename: metadata.filename,
+                        );
+                      },
+                    ),
+                    SizedBox(width: spacing.xs),
+                    AxiIconButton.ghost(
+                      iconData: LucideIcons.x,
+                      color: ghostColors.foreground,
+                      backgroundColor: ghostColors.background,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
