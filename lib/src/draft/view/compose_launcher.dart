@@ -12,7 +12,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 void openComposeDraft(
   BuildContext context, {
-  NavigatorState? navigator,
   int? id,
   List<String> jids = const [''],
   String body = '',
@@ -39,8 +38,8 @@ void openComposeDraft(
     return;
   }
 
-  final resolvedNavigator = navigator ?? Navigator.maybeOf(context);
-  if (resolvedNavigator == null) {
+  final navigatorState = Navigator.maybeOf(context);
+  if (navigatorState == null) {
     context.read<ComposeWindowCubit>().openDraft(
       id: id,
       jids: jids,
@@ -63,7 +62,7 @@ void openComposeDraft(
       .read<SettingsCubit>()
       .animationDuration;
   if (scaleFromBottom) {
-    resolvedNavigator.push<void>(
+    navigatorState.push<void>(
       PageRouteBuilder<void>(
         transitionDuration: animationDuration,
         reverseTransitionDuration: animationDuration,
@@ -97,7 +96,7 @@ void openComposeDraft(
     return;
   }
 
-  resolvedNavigator.push<void>(
+  navigatorState.push<void>(
     AxiFadePageRoute<void>(
       duration: animationDuration,
       builder: (_) => ComposeScreen(seed: seed, locate: locate),

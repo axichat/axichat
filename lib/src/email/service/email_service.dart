@@ -766,11 +766,10 @@ class EmailService {
 
     final connectionOverrides = _buildConnectionConfig(resolvedAddress);
 
-    final resolvedPasswordOverride = passwordOverride;
-    if (resolvedPasswordOverride != null &&
-        resolvedPasswordOverride.isNotEmpty &&
-        (password == null || password != resolvedPasswordOverride)) {
-      password = resolvedPasswordOverride;
+    if (passwordOverride != null &&
+        passwordOverride.isNotEmpty &&
+        (password == null || password != passwordOverride)) {
+      password = passwordOverride;
       credentialsMutated = true;
       if (shouldPersistCredentials) {
         await _credentialStore.write(key: passwordKey, value: password);
@@ -1422,11 +1421,11 @@ class EmailService {
     }
     final trimmedBody = body?.trim() ?? '';
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(htmlBody);
-    var resolvedBodyText = trimmedBody;
-    if (resolvedBodyText.isEmpty && normalizedHtmlBody != null) {
-      resolvedBodyText = HtmlContentCodec.toPlainText(normalizedHtmlBody);
+    var bodyText = trimmedBody;
+    if (bodyText.isEmpty && normalizedHtmlBody != null) {
+      bodyText = HtmlContentCodec.toPlainText(normalizedHtmlBody);
     }
-    final hasBody = resolvedBodyText.isNotEmpty;
+    final hasBody = bodyText.isNotEmpty;
     final normalizedSubject = _normalizeSubject(subject);
     final hasSubject = normalizedSubject != null;
     final hasAttachment = attachment != null;
@@ -1476,16 +1475,13 @@ class EmailService {
             token: resolvedToken,
             body: _composeSubjectEnvelope(
               subject: resolvedSubject,
-              body: resolvedBodyText,
+              body: bodyText,
             ),
             asSignature: tokenAsSignature,
             footerLabel: _l10n.shareTokenFooterLabel,
           )
-        : _composeSubjectEnvelope(
-            subject: resolvedSubject,
-            body: resolvedBodyText,
-          );
-    final sanitizedBody = resolvedBodyText;
+        : _composeSubjectEnvelope(subject: resolvedSubject, body: bodyText);
+    final sanitizedBody = bodyText;
 
     var captionText = attachment?.caption?.trim() ?? '';
     if (captionText.isEmpty && normalizedHtmlCaption != null) {

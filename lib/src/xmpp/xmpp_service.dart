@@ -825,9 +825,6 @@ class XmppService extends XmppBase
         }
       })
       ..registerHandler<mox.StanzaAckedEvent>((event) async {
-        _repairConnectionStateFromTraffic(
-          reason: _connectivityRepairReasonStanzaAcked,
-        );
         if (event.stanza.id == null) return;
         await _dbOp<XmppDatabase>(
           (db) => db.markMessageAcked(event.stanza.id!),
@@ -1028,7 +1025,6 @@ class XmppService extends XmppBase
   StreamController<ConnectionState> _connectivityStream =
       StreamController<ConnectionState>.broadcast();
 
-  static const _connectivityRepairReasonStanzaAcked = 'stanza acked';
   static const _connectivityRepairReasonStreamNegotiationsDone =
       'stream negotiations done';
   static const _postNegotiationsSetupOperationName =
@@ -1103,6 +1099,12 @@ class XmppService extends XmppBase
   }
 
   void _repairConnectionStateFromTraffic({required String reason}) {
+    if (!_synchronousConnection.isCompleted) {
+      return;
+    }
+    if (!_connection.hasConnectionSettings) {
+      return;
+    }
     if (_connectionState == ConnectionState.connected) {
       return;
     }
@@ -2442,6 +2444,7 @@ class XmppService extends XmppBase
   @override
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
+    _synchronousConnection = Completer<void>();
 
     _setConnectionState(ConnectionState.notConnected);
     _pingController.stop();
@@ -2535,7 +2538,6 @@ class XmppService extends XmppBase
     _database = ImpatientCompleter(Completer<XmppDatabase>());
 
     _myJid = null;
-    _synchronousConnection = Completer<void>();
     _streamResumptionAttempted = false;
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;

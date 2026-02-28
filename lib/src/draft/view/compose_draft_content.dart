@@ -16,6 +16,7 @@ class ComposeDraftContent extends StatelessWidget {
     super.key,
     required this.seed,
     required this.locate,
+    this.recipientCountAdjustment = 0,
     this.subjectTrailing,
     this.onClosed,
     this.onDiscarded,
@@ -24,6 +25,7 @@ class ComposeDraftContent extends StatelessWidget {
 
   final ComposeDraftSeed seed;
   final T Function<T>() locate;
+  final int recipientCountAdjustment;
   final Widget? subjectTrailing;
   final VoidCallback? onClosed;
   final VoidCallback? onDiscarded;
@@ -58,6 +60,7 @@ class ComposeDraftContent extends StatelessWidget {
           suggestionAddresses: suggestionAddresses,
           suggestionDomains: suggestionDomains,
           locate: locate,
+          recipientCountAdjustment: recipientCountAdjustment,
           subjectTrailing: subjectTrailing,
           onClosed: onClosed,
           onDiscarded: onDiscarded,

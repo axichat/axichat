@@ -50,6 +50,7 @@ class DraftForm extends StatefulWidget {
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
     required this.locate,
+    this.recipientCountAdjustment = 0,
     this.subjectTrailing,
     this.onClosed,
     this.onDiscarded,
@@ -64,6 +65,7 @@ class DraftForm extends StatefulWidget {
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
   final T Function<T>() locate;
+  final int recipientCountAdjustment;
   final Widget? subjectTrailing;
   final VoidCallback? onClosed;
   final VoidCallback? onDiscarded;
@@ -179,7 +181,7 @@ class _DraftFormState extends State<DraftForm> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _draftCubit ??= context.read<DraftCubit>();
+    _draftCubit = context.read<DraftCubit>();
     if (_hydrationScheduled || widget.attachmentMetadataIds.isEmpty) {
       return;
     }
@@ -303,19 +305,26 @@ class _DraftFormState extends State<DraftForm> {
                         );
                         final split = _splitRecipients();
                         final hasActiveRecipients = split.hasActiveRecipients;
-                        final hasContent = _hasContent(
-                          hasAttachments: hasAttachments,
-                        );
+                        final hasContent = _hasContent();
+                        final recipientCount = _recipientStrings().length;
+                        var effectiveRecipientCount =
+                            recipientCount - widget.recipientCountAdjustment;
+                        if (effectiveRecipientCount < 0) {
+                          effectiveRecipientCount = 0;
+                        }
+                        final recipientOnlyDraftAllowed =
+                            effectiveRecipientCount > 0;
                         final canSave =
                             enabled &&
-                            (hasActiveRecipients ||
-                                bodyText.isNotEmpty ||
+                            (recipientOnlyDraftAllowed ||
+                                _hasMeaningfulBodyText(bodyText) ||
                                 subjectText.isNotEmpty ||
                                 hasAttachments);
                         final canDiscard =
                             enabled &&
                             (id != null ||
-                                bodyText.isNotEmpty ||
+                                recipientOnlyDraftAllowed ||
+                                _hasMeaningfulBodyText(bodyText) ||
                                 subjectText.isNotEmpty ||
                                 hasAttachments);
                         final sendBlocker = _sendValidationMessage(
@@ -1028,9 +1037,15 @@ class _DraftFormState extends State<DraftForm> {
     final String body = _bodyTextController.text.trim();
     final String subject = _subjectTextController.text.trim();
     final bool hasAttachments = _pendingAttachments.isNotEmpty;
-    final bool hasRecipients = _recipientStrings().isNotEmpty;
+    final recipientCount = _recipientStrings().length;
+    var effectiveRecipientCount =
+        recipientCount - widget.recipientCountAdjustment;
+    if (effectiveRecipientCount < 0) {
+      effectiveRecipientCount = 0;
+    }
+    final bool hasRecipients = effectiveRecipientCount > 0;
     return hasRecipients ||
-        body.isNotEmpty ||
+        _hasMeaningfulBodyText(body) ||
         subject.isNotEmpty ||
         hasAttachments;
   }
@@ -1239,7 +1254,7 @@ class _DraftFormState extends State<DraftForm> {
     }).toList();
     final validationMessage = _sendValidationMessage(
       hasActiveRecipients: split.hasActiveRecipients,
-      hasContent: _hasContent(hasAttachments: hasAttachments),
+      hasContent: _hasContent(),
       emailRecipientsUnavailable:
           !endpointConfig.smtpEnabled && split.emailTargets.isNotEmpty,
     );
@@ -1453,13 +1468,24 @@ class _DraftFormState extends State<DraftForm> {
   String _nextPendingAttachmentId() =>
       'draft-pending-${_pendingAttachmentSeed++}';
 
-  bool _hasContent({required bool hasAttachments}) {
-    return _bodyTextController.text.trim().isNotEmpty ||
+  bool _hasContent() {
+    return _hasMeaningfulBodyText(_bodyTextController.text.trim()) ||
         _subjectTextController.text.trim().isNotEmpty ||
-        hasAttachments ||
+        _pendingAttachments.isNotEmpty ||
         _pendingAttachments.any(
           (attachment) => attachment.status == PendingAttachmentStatus.queued,
         );
+  }
+
+  bool _hasMeaningfulBodyText(String trimmedBody) {
+    if (trimmedBody.isEmpty) {
+      return false;
+    }
+    final watermark = context.l10n.chatComposerEmailWatermark.trim();
+    if (watermark.isEmpty) {
+      return true;
+    }
+    return trimmedBody != watermark;
   }
 
   String? _sendValidationMessage({

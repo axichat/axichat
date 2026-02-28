@@ -173,8 +173,7 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
     );
     try {
       if (kEnableDemoChats) {
-        final resolvedTarget = demoTarget;
-        if (resolvedTarget == null) {
+        if (demoTarget == null) {
           emit(
             state.copyWith(
               status: EmailDemoStatus.sendFailed,
@@ -185,7 +184,7 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
           return;
         }
         final report = await _emailService.fanOutSend(
-          targets: [resolvedTarget],
+          targets: [demoTarget],
           body: body,
         );
         if (report.hasFailures) {

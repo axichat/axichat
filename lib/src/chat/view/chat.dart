@@ -2310,6 +2310,16 @@ class _ChatState extends State<Chat> {
         text == legacyWatermarkSuffix;
   }
 
+  String _normalizedInlineDraftBody({
+    required String text,
+    required ChatState chatState,
+  }) {
+    if (_isEmailComposerWatermarkOnly(text: text, chatState: chatState)) {
+      return _emptyText;
+    }
+    return text;
+  }
+
   void _syncEmailComposerWatermark({
     required ChatState chatState,
     SettingsState? settings,
@@ -2508,9 +2518,8 @@ class _ChatState extends State<Chat> {
     required chat_models.Chat? chat,
   }) {
     if (isSelf) return true;
-    final resolvedChat = chat;
-    if (resolvedChat == null) return false;
-    return (resolvedChat.attachmentAutoDownload ??
+    if (chat == null) return false;
+    return (chat.attachmentAutoDownload ??
             context
                 .watch<SettingsCubit>()
                 .state
@@ -2786,23 +2795,32 @@ class _ChatState extends State<Chat> {
 
   Future<void> _saveComposerAsDraft() async {
     final l10n = context.l10n;
-    if (context.read<ChatBloc>().state.chat == null) {
+    final chatState = context.read<ChatBloc>().state;
+    final chat = chatState.chat;
+    if (chat == null) {
       _showSnackbar(l10n.chatDraftUnavailable);
       return;
     }
-    final body = _textController.text;
+    final body = _normalizedInlineDraftBody(
+      text: _textController.text,
+      chatState: chatState,
+    );
     final subject = _subjectController.text;
     final trimmedSubject = subject.trim();
-    final attachments = context
-        .read<ChatBloc>()
-        .state
-        .pendingAttachments
+    final attachments = chatState.pendingAttachments
         .map((pending) => pending.attachment)
         .toList();
     final recipients = _resolveDraftRecipients(
-      chat: context.read<ChatBloc>().state.chat!,
+      chat: chat,
       recipients: _recipients,
     );
+    final allowRecipientOnlyDraft = recipients.length - 1 > 0;
+    if (body.trim().isEmpty && trimmedSubject.isEmpty && attachments.isEmpty) {
+      if (!allowRecipientOnlyDraft) {
+        _showSnackbar(l10n.chatDraftMissingContent);
+        return;
+      }
+    }
     try {
       await context.read<DraftCubit>().saveDraft(
         id: null,
@@ -2833,7 +2851,10 @@ class _ChatState extends State<Chat> {
     final attachments = chatState.pendingAttachments
         .map((pending) => pending.attachment)
         .toList(growable: false);
-    final body = _textController.text;
+    final body = _normalizedInlineDraftBody(
+      text: _textController.text,
+      chatState: chatState,
+    );
     final subject = _subjectController.text;
     final trimmedSubject = subject.trim();
     if (body.trim().isEmpty && trimmedSubject.isEmpty && attachments.isEmpty) {
@@ -3799,6 +3820,10 @@ class _ChatState extends State<Chat> {
               listener: (_, _) {
                 _textController.clear();
                 _composerHasText = false;
+                _subjectChangeSuppressed = true;
+                _subjectController.clear();
+                _lastSubjectValue = _emptyText;
+                _subjectChangeSuppressed = false;
                 _expandedComposerDraftId = null;
                 _expandingComposerDraft = false;
                 _expandedComposerSeed = null;
@@ -3818,9 +3843,8 @@ class _ChatState extends State<Chat> {
             ),
             BlocListener<ChatBloc, ChatState>(
               listenWhen: (previous, current) =>
-                  current.emailSubjectHydrationId != 0 &&
                   previous.emailSubjectHydrationId !=
-                      current.emailSubjectHydrationId,
+                  current.emailSubjectHydrationId,
               listener: (context, state) {
                 final subject = state.emailSubjectHydrationText ?? '';
                 _subjectChangeSuppressed = true;
@@ -3837,6 +3861,10 @@ class _ChatState extends State<Chat> {
               listener: (_, state) {
                 _animatedMessageIds.clear();
                 _hydratedAnimatedMessages = false;
+                _subjectChangeSuppressed = true;
+                _subjectController.clear();
+                _lastSubjectValue = _emptyText;
+                _subjectChangeSuppressed = false;
                 _expandedComposerDraftId = null;
                 _expandingComposerDraft = false;
                 _expandedComposerSeed = null;
@@ -9920,18 +9948,18 @@ class _PinnedMessageTile extends StatelessWidget {
   }
 
   Occupant? resolveOccupantForMessage(Message message) {
-    final resolvedRoomState = roomState;
-    if (resolvedRoomState == null) {
+    final room = roomState;
+    if (room == null) {
       return null;
     }
     final occupantId = message.occupantID?.trim();
     if (occupantId != null && occupantId.isNotEmpty) {
-      final occupant = resolvedRoomState.occupants[occupantId];
+      final occupant = room.occupants[occupantId];
       if (occupant != null) {
         return occupant;
       }
     }
-    final direct = resolvedRoomState.occupants[message.senderJid];
+    final direct = room.occupants[message.senderJid];
     if (direct != null) {
       return direct;
     }
@@ -9939,7 +9967,7 @@ class _PinnedMessageTile extends StatelessWidget {
     if (nick == null) {
       return null;
     }
-    for (final occupant in resolvedRoomState.occupants.values) {
+    for (final occupant in room.occupants.values) {
       if (occupant.nick == nick) {
         return occupant;
       }
@@ -10112,13 +10140,12 @@ class _PinnedMessageTile extends StatelessWidget {
               ),
       );
     }
-    final resolvedCriticalPath = criticalPathFragment;
-    if (resolvedCriticalPath != null) {
+    if (criticalPathFragment != null) {
       contentChildren.add(SizedBox(height: spacing.s));
       contentChildren.add(
         ChatCalendarCriticalPathCard(
-          path: resolvedCriticalPath.path,
-          tasks: resolvedCriticalPath.tasks,
+          path: criticalPathFragment.path,
+          tasks: criticalPathFragment.tasks,
           footerDetails: _emptyInlineSpans,
           canAddToPersonal: canAddToPersonalCalendar,
           canAddToChat: canAddToChatCalendar,
@@ -10220,22 +10247,22 @@ class _ChatCalendarScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedChat = chat;
-    final resolvedCoordinator = coordinator;
-    final resolvedStorage = storage;
+    final currentChat = chat;
+    final currentCoordinator = coordinator;
+    final currentStorage = storage;
     if (!calendarAvailable ||
-        resolvedChat == null ||
-        resolvedCoordinator == null ||
-        resolvedStorage == null) {
+        currentChat == null ||
+        currentCoordinator == null ||
+        currentStorage == null) {
       return child;
     }
     return BlocProvider<ChatCalendarBloc>(
-      key: ValueKey('chat-calendar-${resolvedChat.jid}'),
+      key: ValueKey('chat-calendar-${currentChat.jid}'),
       create: (context) => ChatCalendarBloc(
-        chatJid: resolvedChat.jid,
-        chatType: resolvedChat.type,
-        coordinator: resolvedCoordinator,
-        storage: resolvedStorage,
+        chatJid: currentChat.jid,
+        chatType: currentChat.type,
+        coordinator: currentCoordinator,
+        storage: currentStorage,
         xmppService: xmppService,
         emailService: emailService,
         reminderController: reminderController,
@@ -10257,13 +10284,13 @@ class _ChatCalendarPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedChat = chat;
-    if (!calendarAvailable || resolvedChat == null) {
+    final currentChat = chat;
+    if (!calendarAvailable || currentChat == null) {
       return const SizedBox.shrink();
     }
     return BlocProvider<CalendarBloc>.value(
       value: context.watch<ChatCalendarBloc>(),
-      child: ChatCalendarWidget(chat: resolvedChat, showHeader: true),
+      child: ChatCalendarWidget(chat: currentChat, showHeader: true),
     );
   }
 }
@@ -10357,8 +10384,8 @@ class _ChatGalleryOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedChat = chat;
-    if (resolvedChat == null) {
+    final currentChat = chat;
+    if (currentChat == null) {
       return const SizedBox.shrink();
     }
     return BlocProvider(
@@ -10373,8 +10400,8 @@ class _ChatGalleryOverlay extends StatelessWidget {
         return AttachmentGalleryBloc(
           xmppService: context.read<XmppService>(),
           emailService: emailService,
-          chatJid: resolvedChat.jid,
-          chatOverride: resolvedChat,
+          chatJid: currentChat.jid,
+          chatOverride: currentChat,
           showChatLabel: false,
         );
       },
@@ -10383,7 +10410,7 @@ class _ChatGalleryOverlay extends StatelessWidget {
         child: SafeArea(
           top: false,
           child: AttachmentGalleryView(
-            chatOverride: resolvedChat,
+            chatOverride: currentChat,
             showChatLabel: false,
           ),
         ),
@@ -10404,8 +10431,8 @@ class _ChatCalendarOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedChat = chat;
-    if (!calendarAvailable || resolvedChat == null) {
+    final currentChat = chat;
+    if (!calendarAvailable || currentChat == null) {
       return const SizedBox.shrink();
     }
     return ColoredBox(
@@ -10413,7 +10440,7 @@ class _ChatCalendarOverlay extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: _ChatCalendarPanel(
-          chat: resolvedChat,
+          chat: currentChat,
           calendarAvailable: calendarAvailable,
         ),
       ),
@@ -11754,6 +11781,7 @@ class _InlineExpandedDraftComposerSection extends StatelessWidget {
           child: ComposeDraftContent(
             seed: seed,
             locate: locate,
+            recipientCountAdjustment: 1,
             subjectTrailing: AxiIconButton.secondary(
               iconData: LucideIcons.minimize2,
               tooltip: context.l10n.draftMinimize,

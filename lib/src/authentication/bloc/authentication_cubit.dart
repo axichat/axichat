@@ -1707,15 +1707,15 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (emailService == null) {
       return _ProvisioningStatus.ready;
     }
-    var resolvedPassword = emailPassword;
-    if (resolvedPassword != null && resolvedPassword.isEmpty) {
-      resolvedPassword = null;
+    var provisioningPassword = emailPassword;
+    if (provisioningPassword != null && provisioningPassword.isEmpty) {
+      provisioningPassword = null;
     }
-    if (resolvedPassword == null) {
+    if (provisioningPassword == null) {
       final existing = await emailService.currentAccount(jid);
-      resolvedPassword = existing?.password;
+      provisioningPassword = existing?.password;
     }
-    if (resolvedPassword == null && enforceProvisioning) {
+    if (provisioningPassword == null && enforceProvisioning) {
       if (mode.isBlocking && !_stickyAuthActive) {
         _emit(
           const AuthenticationFailure(
@@ -1734,7 +1734,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePrefix: databasePrefix,
         databasePassphrase: databasePassphrase,
         jid: jid,
-        passwordOverride: resolvedPassword,
+        passwordOverride: provisioningPassword,
         addressOverride: resolvedAddressOverride,
         persistCredentials: persistCredentials,
       );

@@ -946,7 +946,6 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
       );
     }
 
-    final resolvedLocalFile = localFile;
     final colors = context.colorScheme;
     final controller = _controller;
     final initialized = controller?.value.isInitialized == true;
@@ -966,7 +965,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
             onPressed: _downloading
                 ? null
                 : () async {
-                    await _handleSaveAttachment(resolvedLocalFile);
+                    await _handleSaveAttachment(localFile);
                   },
           ),
           SizedBox(width: spacing.s),
@@ -975,7 +974,7 @@ class _VideoAttachmentState extends State<_VideoAttachment> {
             onPressed: _downloading
                 ? null
                 : () async {
-                    await _handleShareAttachment(resolvedLocalFile);
+                    await _handleShareAttachment(localFile);
                   },
           ),
         ],
