@@ -59,6 +59,7 @@ enum _EmailSyncSource {
   bootstrapStart,
   bootstrapRetry,
   bootstrapComplete,
+  reconnectCatchUp,
 }
 
 extension _EmailSyncSourceLabels on _EmailSyncSource {
@@ -3349,6 +3350,12 @@ class EmailService {
         return;
       }
       await refreshChatlistFromCore();
+      if (!_running) {
+        return;
+      }
+      await _refreshConnectivityState(
+        source: _EmailSyncSource.reconnectCatchUp,
+      );
     });
   }
 
