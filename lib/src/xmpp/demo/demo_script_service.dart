@@ -152,9 +152,14 @@ mixin DemoScriptService on XmppBase, MessageService {
         });
       case _DemoInteractivePhase.waitingForThirdReply:
         _demoInteractivePhase = _DemoInteractivePhase.waitingForFinalReply;
-        _scheduleDemoTimer(responseDelay, () async {
-          await _sendDemoContact1Message(body: 'Sounds good');
-        });
+        _scheduleDemoTimer(
+          responseDelay + const Duration(seconds: 3),
+          () async {
+            await _sendDemoContact1Message(
+              body: 'Sounds good. Copied it to my calendar',
+            );
+          },
+        );
       case _DemoInteractivePhase.waitingForFinalReply:
         _demoInteractivePhase = _DemoInteractivePhase.completed;
         return;

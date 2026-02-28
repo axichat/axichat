@@ -559,6 +559,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .where((message) => !message.displayed)
         .where((message) => _bareJid(message.senderJid) != selfBare)
         .toList(growable: false);
+    if (kEnableDemoChats && _messageService.demoOfflineMode) {
+      if (seenCandidates.isNotEmpty) {
+        await _markEmailMessagesDisplayedLocally(seenCandidates);
+      }
+      return;
+    }
+    if (!emailService.hasInMemoryReconnectContext) {
+      return;
+    }
     final hasUnread = chat.unreadCount > 0;
     final latestSeenCandidateId = seenCandidates.isNotEmpty
         ? seenCandidates.last.stanzaID
