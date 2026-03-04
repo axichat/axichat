@@ -254,8 +254,9 @@ mixin MucService on XmppBase, BaseStreamService {
       await controller.close();
     }
     _roomStreams.clear();
-    for (final controller
-        in _roomSubjectStreams.values.toList(growable: false)) {
+    for (final controller in _roomSubjectStreams.values.toList(
+      growable: false,
+    )) {
       await controller.close();
     }
     _roomSubjectStreams.clear();

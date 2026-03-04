@@ -714,7 +714,9 @@ class TypingCaretPainter extends RenderEditablePainter {
   @override
   void dispose() {
     _disposed = true;
-    for (final _TypingGlyphRaster raster in _glyphRasters.values) {
+    for (final _TypingGlyphRaster raster in _glyphRasters.values.toList(
+      growable: false,
+    )) {
       raster.dispose();
     }
     _glyphRasters.clear();

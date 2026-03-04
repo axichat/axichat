@@ -366,14 +366,16 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
   @override
   Future<void> _reset() async {
-    for (final controller
-        in _typingParticipantStreams.values.toList(growable: false)) {
+    for (final controller in _typingParticipantStreams.values.toList(
+      growable: false,
+    )) {
       await controller.close();
     }
     _typingParticipantStreams.clear();
     _typingParticipants.clear();
-    for (final timers
-        in _typingParticipantExpiry.values.toList(growable: false)) {
+    for (final timers in _typingParticipantExpiry.values.toList(
+      growable: false,
+    )) {
       for (final timer in timers.values.toList(growable: false)) {
         timer.cancel();
       }

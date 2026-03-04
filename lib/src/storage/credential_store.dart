@@ -130,7 +130,7 @@ class CredentialStore
     required Map<RegisteredCredentialKey, String?> data,
   }) async {
     try {
-      for (final entry in data.entries) {
+      for (final entry in data.entries.toList(growable: false)) {
         await _secureStorage.write(key: entry.key.value, value: entry.value);
       }
       return true;
@@ -200,7 +200,7 @@ class _DemoCredentialStore extends CredentialStore {
   Future<bool> writeAll({
     required Map<RegisteredCredentialKey, String?> data,
   }) async {
-    for (final entry in data.entries) {
+    for (final entry in data.entries.toList(growable: false)) {
       _values[entry.key.value] = entry.value;
     }
     return true;

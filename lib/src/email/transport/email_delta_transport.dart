@@ -493,8 +493,9 @@ class EmailDeltaTransport implements ChatTransport {
   @override
   Future<void> stop() async {
     await _cancelAccountsEventSubscription();
-    for (final subscription
-        in _eventSubscriptions.values.toList(growable: false)) {
+    for (final subscription in _eventSubscriptions.values.toList(
+      growable: false,
+    )) {
       await subscription.cancel();
     }
     _eventSubscriptions.clear();
@@ -997,8 +998,9 @@ class EmailDeltaTransport implements ChatTransport {
 
   Future<void> _clearSessions() async {
     await _cancelAccountsEventSubscription();
-    for (final subscription
-        in _eventSubscriptions.values.toList(growable: false)) {
+    for (final subscription in _eventSubscriptions.values.toList(
+      growable: false,
+    )) {
       await subscription.cancel();
     }
     _eventSubscriptions.clear();

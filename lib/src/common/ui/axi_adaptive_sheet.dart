@@ -60,13 +60,11 @@ Future<T?> showAdaptiveBottomSheet<T>({
       barrierColor: barrierColor,
       useRootNavigator: useRootNavigator,
       builder: (sheetContext) {
-        final MediaQueryData windowMediaQuery = MediaQueryData.fromView(
-          View.of(sheetContext),
-        );
+        final MediaQueryData mediaQuery = MediaQuery.of(sheetContext);
         final bool transparentSurface = resolvedBackground.a == 0;
         const double zeroInset = 0;
         final double topInset = useSafeArea
-            ? windowMediaQuery.viewPadding.top
+            ? mediaQuery.viewPadding.top
             : zeroInset;
         final Widget child = _AxiSheetChrome(
           showDragHandle: showDragHandle,
@@ -88,16 +86,13 @@ Future<T?> showAdaptiveBottomSheet<T>({
           ),
         );
         final Widget scopedSurface = KeyboardPopScope(child: surface);
-        return MediaQuery(
-          data: windowMediaQuery,
-          child: Padding(
-            padding: EdgeInsets.only(top: topInset),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: windowMediaQuery.size.height - topInset,
-              ),
-              child: scopedSurface,
+        return Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: mediaQuery.size.height - topInset,
             ),
+            child: scopedSurface,
           ),
         );
       },

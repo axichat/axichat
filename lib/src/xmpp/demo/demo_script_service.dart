@@ -46,8 +46,8 @@ mixin DemoScriptService on XmppBase, MessageService {
       timer.cancel();
     }
     _demoTimers.clear();
-    for (final queues in _demoOperationTimers.values) {
-      for (final timer in queues) {
+    for (final queues in _demoOperationTimers.values.toList(growable: false)) {
+      for (final timer in queues.toList(growable: false)) {
         timer.cancel();
       }
     }

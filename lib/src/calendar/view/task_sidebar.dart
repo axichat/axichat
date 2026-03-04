@@ -610,7 +610,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     _selectionReminderAnchorNotifier.dispose();
     _sidebarAutoScrollTicker?.dispose();
     _parserDebounce?.cancel();
-    for (final controller in _popoverControllersByAnchor.values) {
+    for (final controller in _popoverControllersByAnchor.values.toList(
+      growable: false,
+    )) {
       controller.dispose();
     }
     _popoverControllersByAnchor.clear();

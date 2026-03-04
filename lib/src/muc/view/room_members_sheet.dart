@@ -798,19 +798,12 @@ class _InviteChipsSheet extends StatefulWidget {
 }
 
 class _InviteChipsSheetState extends State<_InviteChipsSheet> {
-  final ScrollController _scrollController = ScrollController();
   late List<ComposerRecipient> _recipients;
 
   @override
   void initState() {
     super.initState();
     _recipients = List<ComposerRecipient>.from(widget.initialRecipients);
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
   }
 
   @override
@@ -832,7 +825,6 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
     );
-    final chipsListPadding = EdgeInsets.only(bottom: spacing.m);
     final actionsPadding = EdgeInsets.fromLTRB(
       spacing.m,
       0,
@@ -865,41 +857,32 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
         ),
       ],
     );
-    return AxiSheetScaffold(
+    return AxiSheetScaffold.scroll(
       header: AxiSheetHeader(
         title: Text(l10n.mucInviteUsers),
         onClose: widget.onClose,
       ),
-      body: Scrollbar(
-        controller: _scrollController,
-        thumbVisibility: true,
-        child: ListView(
-          controller: _scrollController,
-          padding: chipsListPadding,
-          children: [
-            BlocSelector<ChatsCubit, ChatsState, List<String>>(
-              bloc: locate<ChatsCubit>(),
-              selector: (state) => state.recipientAddressSuggestions,
-              builder: (context, recipientAddressSuggestions) =>
-                  RecipientChipsBar(
-                    recipients: _recipients,
-                    availableChats: const <chat_models.Chat>[],
-                    rosterItems: rosterItems,
-                    databaseSuggestionAddresses: recipientAddressSuggestions,
-                    selfJid: locate<ChatsCubit>().selfJid,
-                    selfIdentity: selfIdentity,
-                    latestStatuses: const {},
-                    onRecipientAdded: _addRecipient,
-                    onRecipientRemoved: _removeRecipient,
-                    onRecipientToggled: _toggleRecipient,
-                    collapsedByDefault: false,
-                  ),
-            ),
-            SizedBox(height: spacing.s),
-          ],
-        ),
-      ),
+      bodyPadding: EdgeInsets.zero,
       footer: Padding(padding: actionsPadding, child: actions),
+      children: [
+        BlocSelector<ChatsCubit, ChatsState, List<String>>(
+          bloc: locate<ChatsCubit>(),
+          selector: (state) => state.recipientAddressSuggestions,
+          builder: (context, recipientAddressSuggestions) => RecipientChipsBar(
+            recipients: _recipients,
+            availableChats: const <chat_models.Chat>[],
+            rosterItems: rosterItems,
+            databaseSuggestionAddresses: recipientAddressSuggestions,
+            selfJid: locate<ChatsCubit>().selfJid,
+            selfIdentity: selfIdentity,
+            latestStatuses: const {},
+            onRecipientAdded: _addRecipient,
+            onRecipientRemoved: _removeRecipient,
+            onRecipientToggled: _toggleRecipient,
+            collapsedByDefault: false,
+          ),
+        ),
+      ],
     );
   }
 
@@ -967,21 +950,24 @@ class _NicknameSheet extends StatelessWidget {
         ),
       ],
     );
-    return AxiSheetScaffold(
+    return AxiSheetScaffold.scroll(
       header: AxiSheetHeader(
         title: Text(l10n.mucChangeNicknameTitle),
         onClose: onCancel,
       ),
-      body: Padding(
-        padding: contentPadding,
-        child: AxiTextFormField(
-          controller: controller,
-          autofocus: true,
-          placeholder: Text(l10n.mucEnterNicknamePlaceholder),
-          onSubmitted: onSubmit,
-        ),
-      ),
+      bodyPadding: EdgeInsets.zero,
       footer: Padding(padding: contentPadding, child: actions),
+      children: [
+        Padding(
+          padding: contentPadding,
+          child: AxiTextFormField(
+            controller: controller,
+            autofocus: true,
+            placeholder: Text(l10n.mucEnterNicknamePlaceholder),
+            onSubmitted: onSubmit,
+          ),
+        ),
+      ],
     );
   }
 }
