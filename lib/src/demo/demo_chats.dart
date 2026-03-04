@@ -5,6 +5,8 @@ import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 
 class DemoAttachmentAsset {
   const DemoAttachmentAsset({
@@ -198,6 +200,27 @@ class DemoChats {
       received: true,
       displayed: true,
     );
+
+    Message taskShareMessage({
+      required String stanzaId,
+      required String senderJid,
+      required String chatJid,
+      required String body,
+      required DateTime timestamp,
+      required CalendarTask task,
+      String? occupantId,
+    }) =>
+        message(
+          stanzaId: stanzaId,
+          senderJid: senderJid,
+          chatJid: chatJid,
+          body: body,
+          timestamp: timestamp,
+          occupantId: occupantId,
+        ).copyWith(
+          pseudoMessageType: PseudoMessageType.calendarTaskIcs,
+          pseudoMessageData: CalendarTaskIcsMessage(task: task).toJson(),
+        );
 
     final washingtonMessages = [
       message(
@@ -408,6 +431,60 @@ class DemoChats {
       ),
     };
 
+    final progressTaskTimestamp = now.subtract(const Duration(minutes: 24));
+    final progressTask = CalendarTask(
+      id: 'demo-group-task-progress',
+      title: 'Release hardening backlog',
+      createdAt: progressTaskTimestamp,
+      modifiedAt: progressTaskTimestamp,
+      priority: TaskPriority.critical,
+      checklist: const <TaskChecklistItem>[
+        TaskChecklistItem(
+          id: 'demo-group-task-progress-check-1',
+          label: 'Regression sweep',
+          isCompleted: true,
+        ),
+        TaskChecklistItem(
+          id: 'demo-group-task-progress-check-2',
+          label: 'Crash triage',
+          isCompleted: true,
+        ),
+        TaskChecklistItem(
+          id: 'demo-group-task-progress-check-3',
+          label: 'QA sign-off prep',
+          isCompleted: true,
+        ),
+        TaskChecklistItem(
+          id: 'demo-group-task-progress-check-4',
+          label: 'Release notes review',
+        ),
+        TaskChecklistItem(
+          id: 'demo-group-task-progress-check-5',
+          label: 'Launch checklist final pass',
+        ),
+      ],
+    );
+    final planningTaskTimestamp = now.subtract(const Duration(minutes: 23));
+    final planningStart = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      18,
+      30,
+    ).add(const Duration(days: 1));
+    final planningTask = CalendarTask(
+      id: 'demo-group-task-next-meet',
+      title: 'Team rollout sync meeting',
+      description: 'Finalize rollout tasks and assignments.',
+      scheduledTime: planningStart,
+      duration: const Duration(minutes: 45),
+      endDate: planningStart.add(const Duration(minutes: 45)),
+      location: 'Axi HQ, Room Atlas',
+      createdAt: planningTaskTimestamp,
+      modifiedAt: planningTaskTimestamp,
+      priority: TaskPriority.important,
+    );
+
     final groupMessages = [
       message(
         stanzaId: 'demo-group-6',
@@ -466,11 +543,40 @@ class DemoChats {
         timestamp: now.subtract(const Duration(minutes: 35)),
         occupantId: '$groupJid/Thomas',
       ),
+      taskShareMessage(
+        stanzaId: 'demo-group-task-share-1',
+        senderJid: '$groupJid/Ben',
+        chatJid: groupJid,
+        body:
+            'Progress update: hardening backlog is about 60% complete; finishing the remaining checkpoints now.',
+        timestamp: progressTaskTimestamp,
+        occupantId: '$groupJid/Ben',
+        task: progressTask,
+      ),
+      taskShareMessage(
+        stanzaId: 'demo-group-task-share-2',
+        senderJid: '$groupJid/Ben',
+        chatJid: groupJid,
+        body: 'When and where should we meet next to finalize the rollout?',
+        timestamp: planningTaskTimestamp,
+        occupantId: '$groupJid/Ben',
+        task: planningTask,
+      ),
     ];
 
-    final latestGroupMessage = groupMessages.firstWhere(
-      (message) => (message.body ?? '').trim().isNotEmpty,
-      orElse: () => groupMessages.first,
+    final latestGroupMessage = groupMessages.fold<Message>(
+      groupMessages.first,
+      (latest, current) {
+        final latestTimestamp = latest.timestamp;
+        final currentTimestamp = current.timestamp;
+        if (latestTimestamp == null) {
+          return current;
+        }
+        if (currentTimestamp == null) {
+          return latest;
+        }
+        return currentTimestamp.isAfter(latestTimestamp) ? current : latest;
+      },
     );
     final groupChat = Chat(
       jid: groupJid,
