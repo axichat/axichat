@@ -1623,6 +1623,18 @@ class XmppService extends XmppBase
                 emailAddress: script.chat.emailAddress,
               );
             }
+            final latestSeededMessage = await _seedDemoMessagesForChat(
+              db: db,
+              script: script,
+            );
+            final latestSeededTimestamp = latestSeededMessage?.timestamp;
+            if (latestSeededTimestamp != null &&
+                updated.lastChangeTimestamp.isBefore(latestSeededTimestamp)) {
+              updated = updated.copyWith(
+                lastChangeTimestamp: latestSeededTimestamp,
+                lastMessage: latestSeededMessage?.body,
+              );
+            }
             if (updated != existingChat) {
               await db.updateChat(updated);
             }
@@ -1653,11 +1665,11 @@ class XmppService extends XmppBase
         await db.saveFileMetadata(seeded);
       }
     }
-    if (messages.isNotEmpty) {
-      for (final message in messages) {
-        await db.saveMessage(message, chatType: chat.type);
-      }
-      final latestMessage = messages.first;
+    final latestMessage = await _seedDemoMessagesForChat(
+      db: db,
+      script: script,
+    );
+    if (latestMessage != null) {
       await db.updateChat(
         chat.copyWith(
           unreadCount: 0,
@@ -1681,6 +1693,41 @@ class XmppService extends XmppBase
         );
       }
     }
+  }
+
+  Future<Message?> _seedDemoMessagesForChat({
+    required XmppDatabase db,
+    required DemoChatScript script,
+  }) async {
+    final messages = script.messages;
+    if (messages.isEmpty) {
+      return null;
+    }
+    Message latest = messages.first;
+    for (final message in messages) {
+      final existing = await db.getMessageByStanzaID(message.stanzaID);
+      if (existing == null) {
+        await db.saveMessage(message, chatType: script.chat.type);
+      } else {
+        final seeded = message.copyWith(id: existing.id);
+        if (existing != seeded) {
+          await db.updateMessage(seeded);
+        }
+      }
+      final latestTimestamp = latest.timestamp;
+      final messageTimestamp = message.timestamp;
+      if (latestTimestamp == null) {
+        latest = message;
+        continue;
+      }
+      if (messageTimestamp == null) {
+        continue;
+      }
+      if (messageTimestamp.isAfter(latestTimestamp)) {
+        latest = message;
+      }
+    }
+    return latest;
   }
 
   Future<FileMetadataData?> _seedDemoAttachment(
