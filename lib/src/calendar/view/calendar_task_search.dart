@@ -435,6 +435,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
   void _toggleFilter(_QuickFilter filter, bool enabled) {
     setState(() {
       if (enabled) {
+        _filters.removeAll(filter.mutuallyExclusiveFilters);
         _filters.add(filter);
       } else {
         _filters.remove(filter);
@@ -794,8 +795,25 @@ extension _QuickFilterLabelX on _QuickFilter {
   };
 }
 
+extension _QuickFilterBehaviorX on _QuickFilter {
+  Set<_QuickFilter> get mutuallyExclusiveFilters => switch (this) {
+    _QuickFilter.scheduled => const <_QuickFilter>{_QuickFilter.unscheduled},
+    _QuickFilter.unscheduled => const <_QuickFilter>{_QuickFilter.scheduled},
+    _QuickFilter.open => const <_QuickFilter>{_QuickFilter.completed},
+    _QuickFilter.completed => const <_QuickFilter>{_QuickFilter.open},
+    _QuickFilter.reminders => const <_QuickFilter>{},
+  };
+}
+
 class _QuickFilterEvaluator {
   const _QuickFilterEvaluator._();
+
+  static bool _hasReminders(CalendarTask task) {
+    if (task.effectiveReminders.isEnabled) {
+      return true;
+    }
+    return task.icsMeta?.alarms.isNotEmpty ?? false;
+  }
 
   static bool matches(CalendarTask task, Set<_QuickFilter> filters) {
     if (filters.isEmpty) {
@@ -810,7 +828,7 @@ class _QuickFilterEvaluator {
           if (!task.isUnscheduled) return false;
           break;
         case _QuickFilter.reminders:
-          if (!task.isReminder) return false;
+          if (!_hasReminders(task)) return false;
           break;
         case _QuickFilter.open:
           if (task.isCompleted) return false;

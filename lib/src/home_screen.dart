@@ -384,38 +384,50 @@ class _HomeShellState extends State<HomeShell> {
       ValueListenableBuilder<int>(
         valueListenable: _bottomNavIndex,
         builder: (context, homeBottomIndex, _) {
-          final safeSelectedBottomIndex = _selectedBottomNavIndex(
-            homeBottomIndex,
-          );
-          final hideBottomBarForChat =
-              isChatOpen &&
-              safeSelectedBottomIndex == 0 &&
-              !isChatCalendarRoute;
-          final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
-          final hideBottomBar = hideBottomBarForChat || keyboardVisible;
-          return Column(
-            children: [
-              Expanded(
-                child: Builder(
-                  builder: (context) {
-                    final mediaQuery = MediaQuery.of(context);
-                    return MediaQuery(
-                      data: mediaQuery.removePadding(
-                        removeBottom: !hideBottomBar,
-                      ),
-                      child: widget.navigationShell,
-                    );
-                  },
-                ),
-              ),
-              if (!hideBottomBar)
-                _HomeShellBottomBar(
-                  calendarBottomDragSession: _calendarBottomDragSession,
-                  selectedBottomIndex: safeSelectedBottomIndex,
-                  onBottomNavSelected: _onBottomNavSelected,
-                  calendarAvailable: calendarAvailable,
-                ),
-            ],
+          return ValueListenableBuilder<int>(
+            valueListenable: composeScreenRouteDepth,
+            builder: (context, composeRouteDepth, _) {
+              final safeSelectedBottomIndex = _selectedBottomNavIndex(
+                homeBottomIndex,
+              );
+              final hideBottomBarForChat =
+                  isChatOpen &&
+                  safeSelectedBottomIndex == 0 &&
+                  !isChatCalendarRoute;
+              final keyboardVisible =
+                  MediaQuery.viewInsetsOf(context).bottom > 0;
+              final composeRouteVisible = composeRouteDepth > 0;
+              final hideBottomBar =
+                  hideBottomBarForChat ||
+                  keyboardVisible ||
+                  composeRouteVisible;
+              final removeBranchBottomPadding =
+                  !hideBottomBar || keyboardVisible;
+              return Column(
+                children: [
+                  Expanded(
+                    child: Builder(
+                      builder: (context) {
+                        final mediaQuery = MediaQuery.of(context);
+                        return MediaQuery(
+                          data: mediaQuery.removePadding(
+                            removeBottom: removeBranchBottomPadding,
+                          ),
+                          child: widget.navigationShell,
+                        );
+                      },
+                    ),
+                  ),
+                  if (!hideBottomBar)
+                    _HomeShellBottomBar(
+                      calendarBottomDragSession: _calendarBottomDragSession,
+                      selectedBottomIndex: safeSelectedBottomIndex,
+                      onBottomNavSelected: _onBottomNavSelected,
+                      calendarAvailable: calendarAvailable,
+                    ),
+                ],
+              );
+            },
           );
         },
       ),

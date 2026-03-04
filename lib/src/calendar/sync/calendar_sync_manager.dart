@@ -47,6 +47,7 @@ const String _calendarSyncOperationAdd = 'add';
 const String _calendarSyncOperationUpdate = 'update';
 const String _calendarSyncOperationDelete = 'delete';
 const int _calendarSequenceDefault = 0;
+const Duration _calendarSyncFutureTimestampTolerance = Duration(minutes: 2);
 
 class CalendarSyncManager {
   CalendarSyncManager({
@@ -149,10 +150,11 @@ class CalendarSyncManager {
       }
 
       if (snapshotChecksum != null && localModel.checksum == snapshotChecksum) {
-        final state = _readSyncState().resetCounter().copyWith(
-          lastAppliedTimestamp: inbound.appliedTimestamp,
-          lastAppliedStanzaId: inbound.stanzaId,
-          lastSnapshotChecksum: snapshotChecksum,
+        final CalendarSyncState state = _stateWithAdvancedCursor(
+          _readSyncState().resetCounter().copyWith(
+            lastSnapshotChecksum: snapshotChecksum,
+          ),
+          inbound,
         );
         await _writeSyncState(state);
         return true;
@@ -163,10 +165,11 @@ class CalendarSyncManager {
       );
       await _applyModel(mergedModel);
 
-      final state = _readSyncState().resetCounter().copyWith(
-        lastAppliedTimestamp: inbound.appliedTimestamp,
-        lastAppliedStanzaId: inbound.stanzaId,
-        lastSnapshotChecksum: snapshotChecksum,
+      final CalendarSyncState state = _stateWithAdvancedCursor(
+        _readSyncState().resetCounter().copyWith(
+          lastSnapshotChecksum: snapshotChecksum,
+        ),
+        inbound,
       );
       await _writeSyncState(state);
       return true;
@@ -206,7 +209,7 @@ class CalendarSyncManager {
 
       if (localChecksum == remoteChecksum) {
         SafeLogging.debugLog('Calendars already in sync - no changes needed');
-        await _recordAppliedMessage(message, inbound: inbound);
+        await _recordAppliedMessage(inbound: inbound);
         return true;
       }
 
@@ -217,7 +220,7 @@ class CalendarSyncManager {
         localModel.mergeWith(remoteModel),
       );
       await _applyModel(mergedModel);
-      await _recordAppliedMessage(message, inbound: inbound);
+      await _recordAppliedMessage(inbound: inbound);
       return true;
     } catch (e) {
       SafeLogging.debugLog('Error handling full calendar message: $e');
@@ -235,50 +238,33 @@ class CalendarSyncManager {
       bool applied = false;
       final String operation =
           message.operation ?? _calendarSyncOperationUpdate;
-      final DateTime messageTimestamp = _normalizeSyncInstant(
-        message.timestamp,
-      );
       switch (message.entity) {
         case _calendarSyncEntityDayEvent:
           final DayEvent event = DayEvent.fromJson(message.data!);
-          applied = await _mergeDayEvent(
-            event,
-            operation,
-            messageTimestamp: messageTimestamp,
-          );
+          applied = await _mergeDayEvent(event, operation);
           break;
         case _calendarSyncEntityCriticalPath:
           final path = CalendarCriticalPath.fromJson(message.data!);
-          applied = await _mergeCriticalPath(
-            path,
-            operation,
-            messageTimestamp: messageTimestamp,
-          );
+          applied = await _mergeCriticalPath(path, operation);
           break;
         case _calendarSyncEntityJournal:
           final CalendarJournal journal = CalendarJournal.fromJson(
             message.data!,
           );
-          applied = await _mergeJournal(
-            journal,
-            operation,
-            messageTimestamp: messageTimestamp,
-          );
+          applied = await _mergeJournal(journal, operation);
           break;
         default:
           final task = CalendarTask.fromJson(message.data!);
-          applied = await _mergeTask(
-            task,
-            operation,
-            messageTimestamp: messageTimestamp,
-          );
+          applied = await _mergeTask(task, operation);
           break;
       }
 
-      await _incrementCounterAndMaybeSnapshot(
-        allowSnapshot: !inbound.isFromMam,
-      );
-      await _recordAppliedMessage(message, inbound: inbound);
+      if (applied) {
+        await _incrementCounterAndMaybeSnapshot(
+          allowSnapshot: !inbound.isFromMam,
+        );
+        await _recordAppliedMessage(inbound: inbound);
+      }
       return applied;
     } catch (e) {
       SafeLogging.debugLog('Error handling calendar update: $e');
@@ -287,15 +273,46 @@ class CalendarSyncManager {
   }
 
   /// Records that a message was applied, updating the sync state.
-  Future<void> _recordAppliedMessage(
-    CalendarSyncMessage message, {
+  Future<void> _recordAppliedMessage({
     required CalendarSyncInbound inbound,
   }) async {
-    final state = _readSyncState().copyWith(
-      lastAppliedTimestamp: inbound.appliedTimestamp,
+    final CalendarSyncState previous = _readSyncState();
+    final CalendarSyncState state = _stateWithAdvancedCursor(previous, inbound);
+    if (state == previous) {
+      return;
+    }
+    await _writeSyncState(state);
+  }
+
+  CalendarSyncState _stateWithAdvancedCursor(
+    CalendarSyncState state,
+    CalendarSyncInbound inbound,
+  ) {
+    final DateTime? rawPrevious = state.lastAppliedTimestamp;
+    final DateTime? previous = rawPrevious == null
+        ? null
+        : _boundSyncInstant(rawPrevious);
+    final CalendarSyncState normalizedState =
+        previous == null ||
+            (rawPrevious != null &&
+                _compareSyncInstants(previous, rawPrevious) == 0)
+        ? state
+        : state.copyWith(lastAppliedTimestamp: previous);
+    final DateTime candidate = _trustedInboundCursorTimestamp(inbound);
+    if (previous != null && !_isSyncInstantAfter(candidate, previous)) {
+      return normalizedState;
+    }
+    return normalizedState.copyWith(
+      lastAppliedTimestamp: candidate,
       lastAppliedStanzaId: inbound.stanzaId,
     );
-    await _writeSyncState(state);
+  }
+
+  DateTime _trustedInboundCursorTimestamp(CalendarSyncInbound inbound) {
+    final DateTime trustedTimestamp = inbound.receivedAt == null
+        ? _syncNowUtc()
+        : inbound.receivedAt!.toUtc();
+    return _boundSyncInstant(trustedTimestamp);
   }
 
   /// Increments the update counter and sends a snapshot if threshold reached.
@@ -421,10 +438,7 @@ class CalendarSyncManager {
     _queueUpdate(
       payloadId: normalizedTask.id,
       operation: operation,
-      timestamp: _resolveRemoteModifiedAt(
-        messageTimestamp: normalizedTask.modifiedAt,
-        entityModifiedAt: normalizedTask.modifiedAt,
-      ),
+      timestamp: _resolveRemoteModifiedAt(normalizedTask.modifiedAt),
       data: normalizedTask.toJson(),
       entity: _calendarSyncEntityTask,
     );
@@ -436,10 +450,7 @@ class CalendarSyncManager {
     _queueUpdate(
       payloadId: normalizedEvent.id,
       operation: operation,
-      timestamp: _resolveRemoteModifiedAt(
-        messageTimestamp: normalizedEvent.modifiedAt,
-        entityModifiedAt: normalizedEvent.modifiedAt,
-      ),
+      timestamp: _resolveRemoteModifiedAt(normalizedEvent.modifiedAt),
       data: normalizedEvent.toJson(),
       entity: _calendarSyncEntityDayEvent,
     );
@@ -454,10 +465,7 @@ class CalendarSyncManager {
     _queueUpdate(
       payloadId: normalizedJournal.id,
       operation: operation,
-      timestamp: _resolveRemoteModifiedAt(
-        messageTimestamp: normalizedJournal.modifiedAt,
-        entityModifiedAt: normalizedJournal.modifiedAt,
-      ),
+      timestamp: _resolveRemoteModifiedAt(normalizedJournal.modifiedAt),
       data: normalizedJournal.toJson(),
       entity: _calendarSyncEntityJournal,
     );
@@ -473,10 +481,7 @@ class CalendarSyncManager {
     _queueUpdate(
       payloadId: normalizedPath.id,
       operation: operation,
-      timestamp: _resolveRemoteModifiedAt(
-        messageTimestamp: normalizedPath.modifiedAt,
-        entityModifiedAt: normalizedPath.modifiedAt,
-      ),
+      timestamp: _resolveRemoteModifiedAt(normalizedPath.modifiedAt),
       data: normalizedPath.toJson(),
       entity: _calendarSyncEntityCriticalPath,
     );
@@ -546,16 +551,11 @@ class CalendarSyncManager {
     return remoteSequence > localSequence;
   }
 
-  Future<bool> _mergeTask(
-    CalendarTask remoteTask,
-    String operation, {
-    required DateTime messageTimestamp,
-  }) async {
+  Future<bool> _mergeTask(CalendarTask remoteTask, String operation) async {
     final CalendarModel currentModel = _readModel();
     final CalendarTask normalizedRemoteTask = _normalizeTaskForSync(remoteTask);
     final DateTime remoteModifiedAt = _resolveRemoteModifiedAt(
-      messageTimestamp: messageTimestamp,
-      entityModifiedAt: normalizedRemoteTask.modifiedAt,
+      normalizedRemoteTask.modifiedAt,
     );
     final CalendarTask resolvedRemoteTask =
         _compareSyncInstants(
@@ -655,18 +655,13 @@ class CalendarSyncManager {
     return true;
   }
 
-  Future<bool> _mergeDayEvent(
-    DayEvent remoteEvent,
-    String operation, {
-    required DateTime messageTimestamp,
-  }) async {
+  Future<bool> _mergeDayEvent(DayEvent remoteEvent, String operation) async {
     final CalendarModel currentModel = _readModel();
     final DayEvent normalizedRemoteEvent = _normalizeDayEventForSync(
       remoteEvent,
     );
     final DateTime remoteModifiedAt = _resolveRemoteModifiedAt(
-      messageTimestamp: messageTimestamp,
-      entityModifiedAt: normalizedRemoteEvent.modifiedAt,
+      normalizedRemoteEvent.modifiedAt,
     );
     final DayEvent resolvedRemoteEvent =
         _compareSyncInstants(
@@ -770,16 +765,14 @@ class CalendarSyncManager {
 
   Future<bool> _mergeCriticalPath(
     CalendarCriticalPath remotePath,
-    String operation, {
-    required DateTime messageTimestamp,
-  }) async {
+    String operation,
+  ) async {
     final CalendarModel currentModel = _readModel();
     final CalendarCriticalPath normalizedRemotePath = _normalizePathForSync(
       remotePath,
     );
     final DateTime remoteModifiedAt = _resolveRemoteModifiedAt(
-      messageTimestamp: messageTimestamp,
-      entityModifiedAt: normalizedRemotePath.modifiedAt,
+      normalizedRemotePath.modifiedAt,
     );
     final CalendarCriticalPath resolvedRemotePath =
         _compareSyncInstants(
@@ -874,16 +867,14 @@ class CalendarSyncManager {
 
   Future<bool> _mergeJournal(
     CalendarJournal remoteJournal,
-    String operation, {
-    required DateTime messageTimestamp,
-  }) async {
+    String operation,
+  ) async {
     final CalendarModel currentModel = _readModel();
     final CalendarJournal normalizedRemoteJournal = _normalizeJournalForSync(
       remoteJournal,
     );
     final DateTime remoteModifiedAt = _resolveRemoteModifiedAt(
-      messageTimestamp: messageTimestamp,
-      entityModifiedAt: normalizedRemoteJournal.modifiedAt,
+      normalizedRemoteJournal.modifiedAt,
     );
     final CalendarJournal resolvedRemoteJournal =
         _compareSyncInstants(
@@ -1088,23 +1079,18 @@ int _compareSyncInstants(DateTime first, DateTime second) {
 bool _isSyncInstantAfter(DateTime candidate, DateTime reference) =>
     _compareSyncInstants(candidate, reference) > 0;
 
-DateTime _resolveRemoteModifiedAt({
-  required DateTime messageTimestamp,
-  required DateTime entityModifiedAt,
-}) {
-  final DateTime normalizedMessageTimestamp = _normalizeSyncInstant(
-    messageTimestamp,
-  );
-  final DateTime normalizedEntityModifiedAt = _normalizeSyncInstant(
-    entityModifiedAt,
-  );
-  return _isSyncInstantAfter(
-        normalizedEntityModifiedAt,
-        normalizedMessageTimestamp,
-      )
-      ? normalizedEntityModifiedAt
-      : normalizedMessageTimestamp;
+DateTime _boundSyncInstant(DateTime value) {
+  final DateTime normalized = _normalizeSyncInstant(value);
+  final DateTime now = _syncNowUtc();
+  final DateTime maxFuture = now.add(_calendarSyncFutureTimestampTolerance);
+  if (_isSyncInstantAfter(normalized, maxFuture)) {
+    return now;
+  }
+  return normalized;
 }
+
+DateTime _resolveRemoteModifiedAt(DateTime entityModifiedAt) =>
+    _normalizeSyncInstant(entityModifiedAt);
 
 CalendarIcsMeta? _normalizeIcsMetaForSync(CalendarIcsMeta? meta) {
   if (meta == null) {

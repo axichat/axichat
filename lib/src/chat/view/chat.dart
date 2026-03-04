@@ -4692,6 +4692,8 @@ class _ChatState extends State<Chat> {
                                         spacing.l;
                                     const compactBubbleWidthFraction = 0.7;
                                     const regularBubbleWidthFraction = 0.7;
+                                    const selectionExtrasPreferredMaxWidth =
+                                        500.0;
                                     final selectionCutoutDepth = spacing.m;
                                     final selectionOuterInset =
                                         selectionCutoutDepth +
@@ -8076,10 +8078,23 @@ class _ChatState extends State<Chat> {
                                                                       clampedMeasuredBubbleWidth >=
                                                                           bubbleMaxWidthForLayout -
                                                                               context.borderSide.width;
-                                                                  final selectionExtrasMaxWidth =
-                                                                      bubbleIsVisuallyFullWidth
-                                                                      ? messageRowMaxWidth
-                                                                      : cappedBubbleWidth;
+                                                                  final legacySelectionExtrasMaxWidth =
+                                                                      math.min(
+                                                                        availableWidth,
+                                                                        selectionExtrasPreferredMaxWidth,
+                                                                      );
+                                                                  final selectionExtrasMaxWidth = math
+                                                                      .max(
+                                                                        legacySelectionExtrasMaxWidth,
+                                                                        bubbleIsVisuallyFullWidth
+                                                                            ? bubbleMaxWidthForLayout
+                                                                            : 0.0,
+                                                                      )
+                                                                      .clamp(
+                                                                        0.0,
+                                                                        messageRowMaxWidth,
+                                                                      )
+                                                                      .toDouble();
                                                                   final selectionExtrasChild = Align(
                                                                     alignment:
                                                                         self

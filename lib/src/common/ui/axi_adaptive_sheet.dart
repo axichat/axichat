@@ -61,10 +61,13 @@ Future<T?> showAdaptiveBottomSheet<T>({
       useRootNavigator: useRootNavigator,
       builder: (sheetContext) {
         final MediaQueryData mediaQuery = MediaQuery.of(sheetContext);
+        final MediaQueryData viewMediaQuery = MediaQueryData.fromView(
+          View.of(sheetContext),
+        );
         final bool transparentSurface = resolvedBackground.a == 0;
         const double zeroInset = 0;
         final double topInset = useSafeArea
-            ? mediaQuery.viewPadding.top
+            ? viewMediaQuery.viewPadding.top
             : zeroInset;
         final Widget child = _AxiSheetChrome(
           showDragHandle: showDragHandle,

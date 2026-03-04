@@ -2558,7 +2558,9 @@ abstract class BaseCalendarBloc
             : state.focusedCriticalPathId,
         focusedCriticalPathSpecified: true,
       );
-      await onCriticalPathDeleted(existingPath);
+      final CalendarCriticalPath? archivedPath =
+          updatedModel.criticalPaths[event.pathId];
+      await onCriticalPathDeleted(archivedPath ?? existingPath);
     } catch (error) {
       await _handleError(error, 'Failed to delete critical path', emit);
     }
