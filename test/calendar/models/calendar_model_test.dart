@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_journal.dart';
@@ -538,7 +539,7 @@ void main() {
         final CalendarModel merged = localModel.mergeWith(remoteModel);
 
         expect(merged.tasks.containsKey(taskId), isFalse);
-        expect(merged.deletedTaskIds[taskId], equals(deletedAt));
+        expect(merged.deletedTaskIds[taskId], equals(deletedAt.toUtc()));
       });
 
       test('prefers newer day event over tombstone', () {
@@ -587,7 +588,10 @@ void main() {
         final CalendarModel merged = localModel.mergeWith(remoteModel);
 
         expect(merged.dayEvents.containsKey(dayEventId), isFalse);
-        expect(merged.deletedDayEventIds[dayEventId], equals(deletedAt));
+        expect(
+          merged.deletedDayEventIds[dayEventId],
+          equals(deletedAt.toUtc()),
+        );
       });
 
       test('prefers newer journal over tombstone', () {
@@ -638,7 +642,7 @@ void main() {
         final CalendarModel merged = localModel.mergeWith(remoteModel);
 
         expect(merged.journals.containsKey(journalId), isFalse);
-        expect(merged.deletedJournalIds[journalId], equals(deletedAt));
+        expect(merged.deletedJournalIds[journalId], equals(deletedAt.toUtc()));
       });
 
       test('prefers newer critical path over tombstone', () {
@@ -690,8 +694,74 @@ void main() {
         expect(merged.criticalPaths.containsKey(criticalPathId), isFalse);
         expect(
           merged.deletedCriticalPathIds[criticalPathId],
-          equals(deletedAt),
+          equals(deletedAt.toUtc()),
         );
+      });
+
+      test(
+        'keeps local availability when both entries have no ICS timestamps',
+        () {
+          final CalendarAvailability localAvailability = CalendarAvailability(
+            id: 'availability',
+            start: CalendarDateTime(value: testTime),
+            end: CalendarDateTime(
+              value: testTime.add(const Duration(hours: 1)),
+            ),
+            summary: 'Local availability',
+          );
+          final CalendarAvailability remoteAvailability = CalendarAvailability(
+            id: 'availability',
+            start: CalendarDateTime(value: testTime),
+            end: CalendarDateTime(
+              value: testTime.add(const Duration(hours: 1)),
+            ),
+            summary: 'Remote availability',
+          );
+          final CalendarModel localModel = CalendarModel.empty()
+              .upsertAvailability(localAvailability);
+          final CalendarModel remoteModel = CalendarModel.empty()
+              .upsertAvailability(remoteAvailability);
+
+          final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+          expect(
+            merged.availability['availability']?.summary,
+            equals('Local availability'),
+          );
+        },
+      );
+
+      test('keeps local availability overlay when both sides define it', () {
+        final CalendarAvailabilityOverlay localOverlay =
+            CalendarAvailabilityOverlay(
+              owner: 'local-owner',
+              rangeStart: CalendarDateTime(value: testTime),
+              rangeEnd: CalendarDateTime(
+                value: testTime.add(const Duration(hours: 1)),
+              ),
+            );
+        final CalendarAvailabilityOverlay remoteOverlay =
+            CalendarAvailabilityOverlay(
+              owner: 'remote-owner',
+              rangeStart: CalendarDateTime(value: testTime),
+              rangeEnd: CalendarDateTime(
+                value: testTime.add(const Duration(hours: 1)),
+              ),
+            );
+        final CalendarModel localModel = CalendarModel.empty()
+            .upsertAvailabilityOverlay(
+              overlayId: 'overlay',
+              overlay: localOverlay,
+            );
+        final CalendarModel remoteModel = CalendarModel.empty()
+            .upsertAvailabilityOverlay(
+              overlayId: 'overlay',
+              overlay: remoteOverlay,
+            );
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.availabilityOverlays['overlay']?.owner, 'local-owner');
       });
     });
   });

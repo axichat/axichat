@@ -10,6 +10,8 @@ import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'package:axichat/src/calendar/models/calendar_availability.dart';
+import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/calendar_exceptions.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_journal.dart';
@@ -156,7 +158,9 @@ class CalendarSyncManager {
         return true;
       }
 
-      final mergedModel = localModel.mergeWith(remoteModel);
+      final mergedModel = _normalizeModelForSync(
+        localModel.mergeWith(remoteModel),
+      );
       await _applyModel(mergedModel);
 
       final state = _readSyncState().resetCounter().copyWith(
@@ -209,7 +213,9 @@ class CalendarSyncManager {
       SafeLogging.debugLog(
         'Calendar conflict detected - merging models (local: $localChecksum, remote: $remoteChecksum)',
       );
-      final mergedModel = localModel.mergeWith(remoteModel);
+      final mergedModel = _normalizeModelForSync(
+        localModel.mergeWith(remoteModel),
+      );
       await _applyModel(mergedModel);
       await _recordAppliedMessage(message, inbound: inbound);
       return true;
@@ -229,24 +235,43 @@ class CalendarSyncManager {
       bool applied = false;
       final String operation =
           message.operation ?? _calendarSyncOperationUpdate;
+      final DateTime messageTimestamp = _normalizeSyncInstant(
+        message.timestamp,
+      );
       switch (message.entity) {
         case _calendarSyncEntityDayEvent:
           final DayEvent event = DayEvent.fromJson(message.data!);
-          applied = await _mergeDayEvent(event, operation);
+          applied = await _mergeDayEvent(
+            event,
+            operation,
+            messageTimestamp: messageTimestamp,
+          );
           break;
         case _calendarSyncEntityCriticalPath:
           final path = CalendarCriticalPath.fromJson(message.data!);
-          applied = await _mergeCriticalPath(path, operation);
+          applied = await _mergeCriticalPath(
+            path,
+            operation,
+            messageTimestamp: messageTimestamp,
+          );
           break;
         case _calendarSyncEntityJournal:
           final CalendarJournal journal = CalendarJournal.fromJson(
             message.data!,
           );
-          applied = await _mergeJournal(journal, operation);
+          applied = await _mergeJournal(
+            journal,
+            operation,
+            messageTimestamp: messageTimestamp,
+          );
           break;
         default:
           final task = CalendarTask.fromJson(message.data!);
-          applied = await _mergeTask(task, operation);
+          applied = await _mergeTask(
+            task,
+            operation,
+            messageTimestamp: messageTimestamp,
+          );
           break;
       }
 
@@ -288,7 +313,7 @@ class CalendarSyncManager {
 
   /// Sends a snapshot if the calendar has content and snapshot sending is available.
   Future<bool> _maybeSendSnapshot() async {
-    final model = _readModel();
+    final CalendarModel model = _normalizeModelForSync(_readModel());
     if (!model.hasCalendarData) {
       return false;
     }
@@ -359,7 +384,7 @@ class CalendarSyncManager {
       final checksum = CalendarSnapshotCodec.computeChecksum(model);
       final syncMessage = CalendarSyncMessage(
         type: CalendarSyncType.snapshot,
-        timestamp: DateTime.now(),
+        timestamp: _syncNowUtc(),
         data: model.toJson(),
         checksum: checksum,
         isSnapshot: true,
@@ -392,20 +417,30 @@ class CalendarSyncManager {
 
   /// Send task update to other devices
   Future<void> sendTaskUpdate(CalendarTask task, String operation) async {
+    final CalendarTask normalizedTask = _normalizeTaskForSync(task);
     _queueUpdate(
-      payloadId: task.id,
+      payloadId: normalizedTask.id,
       operation: operation,
-      data: task.toJson(),
+      timestamp: _resolveRemoteModifiedAt(
+        messageTimestamp: normalizedTask.modifiedAt,
+        entityModifiedAt: normalizedTask.modifiedAt,
+      ),
+      data: normalizedTask.toJson(),
       entity: _calendarSyncEntityTask,
     );
     await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
   }
 
   Future<void> sendDayEventUpdate(DayEvent event, String operation) async {
+    final DayEvent normalizedEvent = _normalizeDayEventForSync(event);
     _queueUpdate(
-      payloadId: event.id,
+      payloadId: normalizedEvent.id,
       operation: operation,
-      data: event.toJson(),
+      timestamp: _resolveRemoteModifiedAt(
+        messageTimestamp: normalizedEvent.modifiedAt,
+        entityModifiedAt: normalizedEvent.modifiedAt,
+      ),
+      data: normalizedEvent.toJson(),
       entity: _calendarSyncEntityDayEvent,
     );
     await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
@@ -415,10 +450,15 @@ class CalendarSyncManager {
     CalendarJournal journal,
     String operation,
   ) async {
+    final CalendarJournal normalizedJournal = _normalizeJournalForSync(journal);
     _queueUpdate(
-      payloadId: journal.id,
+      payloadId: normalizedJournal.id,
       operation: operation,
-      data: journal.toJson(),
+      timestamp: _resolveRemoteModifiedAt(
+        messageTimestamp: normalizedJournal.modifiedAt,
+        entityModifiedAt: normalizedJournal.modifiedAt,
+      ),
+      data: normalizedJournal.toJson(),
       entity: _calendarSyncEntityJournal,
     );
     await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
@@ -429,10 +469,15 @@ class CalendarSyncManager {
     CalendarCriticalPath path,
     String operation,
   ) async {
+    final CalendarCriticalPath normalizedPath = _normalizePathForSync(path);
     _queueUpdate(
-      payloadId: path.id,
+      payloadId: normalizedPath.id,
       operation: operation,
-      data: path.toJson(),
+      timestamp: _resolveRemoteModifiedAt(
+        messageTimestamp: normalizedPath.modifiedAt,
+        entityModifiedAt: normalizedPath.modifiedAt,
+      ),
+      data: normalizedPath.toJson(),
       entity: _calendarSyncEntityCriticalPath,
     );
     await _incrementCounterAndMaybeSnapshot(allowSnapshot: true);
@@ -456,14 +501,17 @@ class CalendarSyncManager {
   void _queueUpdate({
     required String payloadId,
     required String operation,
+    required DateTime timestamp,
     required Map<String, dynamic> data,
     required String entity,
   }) {
-    final CalendarSyncMessage syncMessage = CalendarSyncMessage.update(
+    final CalendarSyncMessage syncMessage = CalendarSyncMessage(
+      type: CalendarSyncType.update,
+      timestamp: _normalizeSyncInstant(timestamp),
       taskId: payloadId,
       operation: operation,
       data: data,
-      entity: entity,
+      entity: entity.trim().isEmpty ? _calendarSyncEntityTask : entity,
     );
 
     final String messageJson = jsonEncode({
@@ -485,70 +533,118 @@ class CalendarSyncManager {
     required int localSequence,
     required int remoteSequence,
   }) {
-    if (remoteModifiedAt.isAfter(localModifiedAt)) {
+    final int timestampComparison = _compareSyncInstants(
+      remoteModifiedAt,
+      localModifiedAt,
+    );
+    if (timestampComparison > 0) {
       return true;
     }
-    if (localModifiedAt.isAfter(remoteModifiedAt)) {
+    if (timestampComparison < 0) {
       return false;
     }
     return remoteSequence > localSequence;
   }
 
-  Future<bool> _mergeTask(CalendarTask remoteTask, String operation) async {
-    final currentModel = _readModel();
+  Future<bool> _mergeTask(
+    CalendarTask remoteTask,
+    String operation, {
+    required DateTime messageTimestamp,
+  }) async {
+    final CalendarModel currentModel = _readModel();
+    final CalendarTask normalizedRemoteTask = _normalizeTaskForSync(remoteTask);
+    final DateTime remoteModifiedAt = _resolveRemoteModifiedAt(
+      messageTimestamp: messageTimestamp,
+      entityModifiedAt: normalizedRemoteTask.modifiedAt,
+    );
+    final CalendarTask resolvedRemoteTask =
+        _compareSyncInstants(
+              normalizedRemoteTask.modifiedAt,
+              remoteModifiedAt,
+            ) ==
+            0
+        ? normalizedRemoteTask
+        : normalizedRemoteTask.copyWith(modifiedAt: remoteModifiedAt);
 
     CalendarModel updatedModel;
     switch (operation) {
       case _calendarSyncOperationAdd:
       case _calendarSyncOperationUpdate:
-        final localTask = currentModel.tasks[remoteTask.id];
+        final CalendarTask? localTask =
+            currentModel.tasks[resolvedRemoteTask.id];
         if (localTask == null) {
           final DateTime? deletedAt =
-              currentModel.deletedTaskIds[remoteTask.id];
-          if (deletedAt != null && !remoteTask.modifiedAt.isAfter(deletedAt)) {
+              currentModel.deletedTaskIds[resolvedRemoteTask.id];
+          if (deletedAt != null &&
+              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
             return false;
           }
           final Map<String, DateTime> updatedDeletedTaskIds =
               deletedAt == null
                     ? currentModel.deletedTaskIds
                     : Map<String, DateTime>.from(currentModel.deletedTaskIds)
-                ..remove(remoteTask.id);
+                ..remove(resolvedRemoteTask.id);
           final CalendarModel baseModel = deletedAt == null
               ? currentModel
               : currentModel.copyWith(deletedTaskIds: updatedDeletedTaskIds);
-          updatedModel = baseModel.addTask(remoteTask);
+          updatedModel = baseModel.addTask(resolvedRemoteTask);
           break;
         }
         final bool preferRemote = _shouldPreferRemote(
           localModifiedAt: localTask.modifiedAt,
-          remoteModifiedAt: remoteTask.modifiedAt,
+          remoteModifiedAt: remoteModifiedAt,
           localSequence:
               localTask.icsMeta?.sequence ?? _calendarSequenceDefault,
           remoteSequence:
-              remoteTask.icsMeta?.sequence ?? _calendarSequenceDefault,
+              resolvedRemoteTask.icsMeta?.sequence ?? _calendarSequenceDefault,
         );
         if (preferRemote) {
-          updatedModel = currentModel.updateTask(remoteTask);
+          updatedModel = currentModel.updateTask(resolvedRemoteTask);
         } else {
           return false;
         }
         break;
       case _calendarSyncOperationDelete:
-        final existing = currentModel.tasks[remoteTask.id];
+        final CalendarTask? existing =
+            currentModel.tasks[resolvedRemoteTask.id];
         if (existing != null) {
           final bool preferRemote = _shouldPreferRemote(
             localModifiedAt: existing.modifiedAt,
-            remoteModifiedAt: remoteTask.modifiedAt,
+            remoteModifiedAt: remoteModifiedAt,
             localSequence:
                 existing.icsMeta?.sequence ?? _calendarSequenceDefault,
             remoteSequence:
-                remoteTask.icsMeta?.sequence ?? _calendarSequenceDefault,
+                resolvedRemoteTask.icsMeta?.sequence ??
+                _calendarSequenceDefault,
           );
           if (!preferRemote) {
             return false;
           }
+        } else {
+          final DateTime? deletedAt =
+              currentModel.deletedTaskIds[resolvedRemoteTask.id];
+          if (deletedAt != null &&
+              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
+            return false;
+          }
         }
-        updatedModel = currentModel.deleteTask(remoteTask.id);
+        CalendarModel baseModel = existing == null
+            ? currentModel
+            : currentModel.deleteTask(resolvedRemoteTask.id);
+        if (existing != null) {
+          baseModel = baseModel.copyWith(
+            deletedTaskIds: Map<String, DateTime>.from(baseModel.deletedTaskIds)
+              ..remove(resolvedRemoteTask.id),
+          );
+        }
+        updatedModel = _withTaskTombstone(
+          baseModel,
+          resolvedRemoteTask.id,
+          remoteModifiedAt,
+        );
+        if (identical(updatedModel, currentModel)) {
+          return false;
+        }
         break;
       default:
         SafeLogging.debugLog('Unknown task operation: $operation');
@@ -559,45 +655,109 @@ class CalendarSyncManager {
     return true;
   }
 
-  Future<bool> _mergeDayEvent(DayEvent remoteEvent, String operation) async {
+  Future<bool> _mergeDayEvent(
+    DayEvent remoteEvent,
+    String operation, {
+    required DateTime messageTimestamp,
+  }) async {
     final CalendarModel currentModel = _readModel();
+    final DayEvent normalizedRemoteEvent = _normalizeDayEventForSync(
+      remoteEvent,
+    );
+    final DateTime remoteModifiedAt = _resolveRemoteModifiedAt(
+      messageTimestamp: messageTimestamp,
+      entityModifiedAt: normalizedRemoteEvent.modifiedAt,
+    );
+    final DayEvent resolvedRemoteEvent =
+        _compareSyncInstants(
+              normalizedRemoteEvent.modifiedAt,
+              remoteModifiedAt,
+            ) ==
+            0
+        ? normalizedRemoteEvent
+        : normalizedRemoteEvent.copyWith(modifiedAt: remoteModifiedAt);
 
     CalendarModel updatedModel;
     switch (operation) {
       case _calendarSyncOperationAdd:
       case _calendarSyncOperationUpdate:
-        final DayEvent? localEvent = currentModel.dayEvents[remoteEvent.id];
+        final DayEvent? localEvent =
+            currentModel.dayEvents[resolvedRemoteEvent.id];
         if (localEvent == null) {
-          updatedModel = currentModel.addDayEvent(remoteEvent);
+          final DateTime? deletedAt =
+              currentModel.deletedDayEventIds[resolvedRemoteEvent.id];
+          if (deletedAt != null &&
+              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
+            return false;
+          }
+          final Map<String, DateTime> updatedDeletedDayEventIds =
+              deletedAt == null
+                    ? currentModel.deletedDayEventIds
+                    : Map<String, DateTime>.from(
+                        currentModel.deletedDayEventIds,
+                      )
+                ..remove(resolvedRemoteEvent.id);
+          final CalendarModel baseModel = deletedAt == null
+              ? currentModel
+              : currentModel.copyWith(
+                  deletedDayEventIds: updatedDeletedDayEventIds,
+                );
+          updatedModel = baseModel.addDayEvent(resolvedRemoteEvent);
         } else if (_shouldPreferRemote(
           localModifiedAt: localEvent.modifiedAt,
-          remoteModifiedAt: remoteEvent.modifiedAt,
+          remoteModifiedAt: remoteModifiedAt,
           localSequence:
               localEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
           remoteSequence:
-              remoteEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
+              resolvedRemoteEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
         )) {
-          updatedModel = currentModel.updateDayEvent(remoteEvent);
+          updatedModel = currentModel.updateDayEvent(resolvedRemoteEvent);
         } else {
           return false;
         }
         break;
       case _calendarSyncOperationDelete:
-        final DayEvent? existing = currentModel.dayEvents[remoteEvent.id];
+        final DayEvent? existing =
+            currentModel.dayEvents[resolvedRemoteEvent.id];
         if (existing != null) {
           final bool preferRemote = _shouldPreferRemote(
             localModifiedAt: existing.modifiedAt,
-            remoteModifiedAt: remoteEvent.modifiedAt,
+            remoteModifiedAt: remoteModifiedAt,
             localSequence:
                 existing.icsMeta?.sequence ?? _calendarSequenceDefault,
             remoteSequence:
-                remoteEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
+                resolvedRemoteEvent.icsMeta?.sequence ??
+                _calendarSequenceDefault,
           );
           if (!preferRemote) {
             return false;
           }
+        } else {
+          final DateTime? deletedAt =
+              currentModel.deletedDayEventIds[resolvedRemoteEvent.id];
+          if (deletedAt != null &&
+              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
+            return false;
+          }
         }
-        updatedModel = currentModel.deleteDayEvent(remoteEvent.id);
+        CalendarModel baseModel = existing == null
+            ? currentModel
+            : currentModel.deleteDayEvent(resolvedRemoteEvent.id);
+        if (existing != null) {
+          baseModel = baseModel.copyWith(
+            deletedDayEventIds: Map<String, DateTime>.from(
+              baseModel.deletedDayEventIds,
+            )..remove(resolvedRemoteEvent.id),
+          );
+        }
+        updatedModel = _withDayEventTombstone(
+          baseModel,
+          resolvedRemoteEvent.id,
+          remoteModifiedAt,
+        );
+        if (identical(updatedModel, currentModel)) {
+          return false;
+        }
         break;
       default:
         SafeLogging.debugLog('Unknown day event operation: $operation');
@@ -610,30 +770,98 @@ class CalendarSyncManager {
 
   Future<bool> _mergeCriticalPath(
     CalendarCriticalPath remotePath,
-    String operation,
-  ) async {
-    final currentModel = _readModel();
+    String operation, {
+    required DateTime messageTimestamp,
+  }) async {
+    final CalendarModel currentModel = _readModel();
+    final CalendarCriticalPath normalizedRemotePath = _normalizePathForSync(
+      remotePath,
+    );
+    final DateTime remoteModifiedAt = _resolveRemoteModifiedAt(
+      messageTimestamp: messageTimestamp,
+      entityModifiedAt: normalizedRemotePath.modifiedAt,
+    );
+    final CalendarCriticalPath resolvedRemotePath =
+        _compareSyncInstants(
+              normalizedRemotePath.modifiedAt,
+              remoteModifiedAt,
+            ) ==
+            0
+        ? normalizedRemotePath
+        : normalizedRemotePath.copyWith(modifiedAt: remoteModifiedAt);
 
     CalendarModel updatedModel;
     switch (operation) {
       case _calendarSyncOperationAdd:
       case _calendarSyncOperationUpdate:
-        final localPath = currentModel.criticalPaths[remotePath.id];
+        final CalendarCriticalPath? localPath =
+            currentModel.criticalPaths[resolvedRemotePath.id];
         if (localPath == null) {
-          updatedModel = currentModel.addCriticalPath(remotePath);
-        } else if (remotePath.modifiedAt.isAfter(localPath.modifiedAt)) {
-          updatedModel = currentModel.updateCriticalPath(remotePath);
+          final DateTime? deletedAt =
+              currentModel.deletedCriticalPathIds[resolvedRemotePath.id];
+          if (deletedAt != null &&
+              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
+            return false;
+          }
+          final Map<String, DateTime> updatedDeletedCriticalPathIds =
+              deletedAt == null
+                    ? currentModel.deletedCriticalPathIds
+                    : Map<String, DateTime>.from(
+                        currentModel.deletedCriticalPathIds,
+                      )
+                ..remove(resolvedRemotePath.id);
+          final CalendarModel baseModel = deletedAt == null
+              ? currentModel
+              : currentModel.copyWith(
+                  deletedCriticalPathIds: updatedDeletedCriticalPathIds,
+                );
+          updatedModel = baseModel.addCriticalPath(resolvedRemotePath);
+        } else if (_isSyncInstantAfter(
+          remoteModifiedAt,
+          localPath.modifiedAt,
+        )) {
+          updatedModel = currentModel.updateCriticalPath(resolvedRemotePath);
         } else {
           return false;
         }
         break;
       case _calendarSyncOperationDelete:
-        final existing = currentModel.criticalPaths[remotePath.id];
+        final CalendarCriticalPath? existing =
+            currentModel.criticalPaths[resolvedRemotePath.id];
         if (existing != null &&
-            existing.modifiedAt.isAfter(remotePath.modifiedAt)) {
+            !_isSyncInstantAfter(remoteModifiedAt, existing.modifiedAt)) {
           return false;
         }
-        updatedModel = currentModel.removeCriticalPath(remotePath.id);
+        if (existing == null) {
+          final DateTime? deletedAt =
+              currentModel.deletedCriticalPathIds[resolvedRemotePath.id];
+          if (deletedAt != null &&
+              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
+            return false;
+          }
+        }
+        CalendarModel baseModel = currentModel;
+        if (existing != null) {
+          final Map<String, CalendarCriticalPath> updatedPaths =
+              Map<String, CalendarCriticalPath>.from(currentModel.criticalPaths)
+                ..[resolvedRemotePath.id] = existing.copyWith(
+                  isArchived: true,
+                  modifiedAt: remoteModifiedAt,
+                );
+          final CalendarModel changed = currentModel.copyWith(
+            criticalPaths: updatedPaths,
+            lastModified: _syncNowUtc(),
+          );
+          baseModel = changed.copyWith(checksum: changed.calculateChecksum());
+        }
+        updatedModel = _withCriticalPathTombstone(
+          baseModel,
+          resolvedRemotePath.id,
+          remoteModifiedAt,
+        );
+        if (identical(updatedModel, currentModel)) {
+          return false;
+        }
         break;
       default:
         SafeLogging.debugLog('Unknown critical path operation: $operation');
@@ -646,48 +874,106 @@ class CalendarSyncManager {
 
   Future<bool> _mergeJournal(
     CalendarJournal remoteJournal,
-    String operation,
-  ) async {
+    String operation, {
+    required DateTime messageTimestamp,
+  }) async {
     final CalendarModel currentModel = _readModel();
+    final CalendarJournal normalizedRemoteJournal = _normalizeJournalForSync(
+      remoteJournal,
+    );
+    final DateTime remoteModifiedAt = _resolveRemoteModifiedAt(
+      messageTimestamp: messageTimestamp,
+      entityModifiedAt: normalizedRemoteJournal.modifiedAt,
+    );
+    final CalendarJournal resolvedRemoteJournal =
+        _compareSyncInstants(
+              normalizedRemoteJournal.modifiedAt,
+              remoteModifiedAt,
+            ) ==
+            0
+        ? normalizedRemoteJournal
+        : normalizedRemoteJournal.copyWith(modifiedAt: remoteModifiedAt);
 
     CalendarModel updatedModel;
     switch (operation) {
       case _calendarSyncOperationAdd:
       case _calendarSyncOperationUpdate:
         final CalendarJournal? localJournal =
-            currentModel.journals[remoteJournal.id];
+            currentModel.journals[resolvedRemoteJournal.id];
         if (localJournal == null) {
-          updatedModel = currentModel.addJournal(remoteJournal);
+          final DateTime? deletedAt =
+              currentModel.deletedJournalIds[resolvedRemoteJournal.id];
+          if (deletedAt != null &&
+              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
+            return false;
+          }
+          final Map<String, DateTime> updatedDeletedJournalIds =
+              deletedAt == null
+                    ? currentModel.deletedJournalIds
+                    : Map<String, DateTime>.from(currentModel.deletedJournalIds)
+                ..remove(resolvedRemoteJournal.id);
+          final CalendarModel baseModel = deletedAt == null
+              ? currentModel
+              : currentModel.copyWith(
+                  deletedJournalIds: updatedDeletedJournalIds,
+                );
+          updatedModel = baseModel.addJournal(resolvedRemoteJournal);
         } else if (_shouldPreferRemote(
           localModifiedAt: localJournal.modifiedAt,
-          remoteModifiedAt: remoteJournal.modifiedAt,
+          remoteModifiedAt: remoteModifiedAt,
           localSequence:
               localJournal.icsMeta?.sequence ?? _calendarSequenceDefault,
           remoteSequence:
-              remoteJournal.icsMeta?.sequence ?? _calendarSequenceDefault,
+              resolvedRemoteJournal.icsMeta?.sequence ??
+              _calendarSequenceDefault,
         )) {
-          updatedModel = currentModel.updateJournal(remoteJournal);
+          updatedModel = currentModel.updateJournal(resolvedRemoteJournal);
         } else {
           return false;
         }
         break;
       case _calendarSyncOperationDelete:
         final CalendarJournal? existing =
-            currentModel.journals[remoteJournal.id];
+            currentModel.journals[resolvedRemoteJournal.id];
         if (existing != null) {
           final bool preferRemote = _shouldPreferRemote(
             localModifiedAt: existing.modifiedAt,
-            remoteModifiedAt: remoteJournal.modifiedAt,
+            remoteModifiedAt: remoteModifiedAt,
             localSequence:
                 existing.icsMeta?.sequence ?? _calendarSequenceDefault,
             remoteSequence:
-                remoteJournal.icsMeta?.sequence ?? _calendarSequenceDefault,
+                resolvedRemoteJournal.icsMeta?.sequence ??
+                _calendarSequenceDefault,
           );
           if (!preferRemote) {
             return false;
           }
+        } else {
+          final DateTime? deletedAt =
+              currentModel.deletedJournalIds[resolvedRemoteJournal.id];
+          if (deletedAt != null &&
+              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
+            return false;
+          }
         }
-        updatedModel = currentModel.deleteJournal(remoteJournal.id);
+        CalendarModel baseModel = existing == null
+            ? currentModel
+            : currentModel.deleteJournal(resolvedRemoteJournal.id);
+        if (existing != null) {
+          baseModel = baseModel.copyWith(
+            deletedJournalIds: Map<String, DateTime>.from(
+              baseModel.deletedJournalIds,
+            )..remove(resolvedRemoteJournal.id),
+          );
+        }
+        updatedModel = _withJournalTombstone(
+          baseModel,
+          resolvedRemoteJournal.id,
+          remoteModifiedAt,
+        );
+        if (identical(updatedModel, currentModel)) {
+          return false;
+        }
         break;
       default:
         SafeLogging.debugLog('Unknown journal operation: $operation');
@@ -781,4 +1067,224 @@ class CalendarSyncManager {
       }
     }
   }
+}
+
+DateTime _syncNowUtc() => DateTime.now().toUtc();
+
+DateTime _normalizeSyncInstant(DateTime value) => value.toUtc();
+
+int _compareSyncInstants(DateTime first, DateTime second) {
+  final int firstMicros = _normalizeSyncInstant(first).microsecondsSinceEpoch;
+  final int secondMicros = _normalizeSyncInstant(second).microsecondsSinceEpoch;
+  if (firstMicros > secondMicros) {
+    return 1;
+  }
+  if (firstMicros < secondMicros) {
+    return -1;
+  }
+  return 0;
+}
+
+bool _isSyncInstantAfter(DateTime candidate, DateTime reference) =>
+    _compareSyncInstants(candidate, reference) > 0;
+
+DateTime _resolveRemoteModifiedAt({
+  required DateTime messageTimestamp,
+  required DateTime entityModifiedAt,
+}) {
+  final DateTime normalizedMessageTimestamp = _normalizeSyncInstant(
+    messageTimestamp,
+  );
+  final DateTime normalizedEntityModifiedAt = _normalizeSyncInstant(
+    entityModifiedAt,
+  );
+  return _isSyncInstantAfter(
+        normalizedEntityModifiedAt,
+        normalizedMessageTimestamp,
+      )
+      ? normalizedEntityModifiedAt
+      : normalizedMessageTimestamp;
+}
+
+CalendarIcsMeta? _normalizeIcsMetaForSync(CalendarIcsMeta? meta) {
+  if (meta == null) {
+    return null;
+  }
+  return meta.copyWith(
+    dtStamp: meta.dtStamp == null ? null : _normalizeSyncInstant(meta.dtStamp!),
+    created: meta.created == null ? null : _normalizeSyncInstant(meta.created!),
+    lastModified: meta.lastModified == null
+        ? null
+        : _normalizeSyncInstant(meta.lastModified!),
+  );
+}
+
+CalendarTask _normalizeTaskForSync(CalendarTask task) {
+  return task.copyWith(
+    createdAt: _normalizeSyncInstant(task.createdAt),
+    modifiedAt: _normalizeSyncInstant(task.modifiedAt),
+    icsMeta: _normalizeIcsMetaForSync(task.icsMeta),
+  );
+}
+
+DayEvent _normalizeDayEventForSync(DayEvent event) {
+  return event.copyWith(
+    createdAt: _normalizeSyncInstant(event.createdAt),
+    modifiedAt: _normalizeSyncInstant(event.modifiedAt),
+    icsMeta: _normalizeIcsMetaForSync(event.icsMeta),
+  );
+}
+
+CalendarJournal _normalizeJournalForSync(CalendarJournal journal) {
+  return journal.copyWith(
+    createdAt: _normalizeSyncInstant(journal.createdAt),
+    modifiedAt: _normalizeSyncInstant(journal.modifiedAt),
+    icsMeta: _normalizeIcsMetaForSync(journal.icsMeta),
+  );
+}
+
+CalendarCriticalPath _normalizePathForSync(CalendarCriticalPath path) {
+  return path.copyWith(
+    createdAt: _normalizeSyncInstant(path.createdAt),
+    modifiedAt: _normalizeSyncInstant(path.modifiedAt),
+  );
+}
+
+CalendarAvailability _normalizeAvailabilityForSync(CalendarAvailability value) {
+  return value.copyWith(icsMeta: _normalizeIcsMetaForSync(value.icsMeta));
+}
+
+Map<String, DateTime> _normalizeTimestampMap(Map<String, DateTime> source) {
+  final Map<String, DateTime> normalized = <String, DateTime>{};
+  for (final MapEntry<String, DateTime> entry in source.entries) {
+    normalized[entry.key] = _normalizeSyncInstant(entry.value);
+  }
+  return normalized;
+}
+
+CalendarModel _normalizeModelForSync(CalendarModel model) {
+  final Map<String, CalendarTask> normalizedTasks = <String, CalendarTask>{};
+  for (final MapEntry<String, CalendarTask> entry in model.tasks.entries) {
+    normalizedTasks[entry.key] = _normalizeTaskForSync(entry.value);
+  }
+  final Map<String, DayEvent> normalizedDayEvents = <String, DayEvent>{};
+  for (final MapEntry<String, DayEvent> entry in model.dayEvents.entries) {
+    normalizedDayEvents[entry.key] = _normalizeDayEventForSync(entry.value);
+  }
+  final Map<String, CalendarJournal> normalizedJournals =
+      <String, CalendarJournal>{};
+  for (final MapEntry<String, CalendarJournal> entry
+      in model.journals.entries) {
+    normalizedJournals[entry.key] = _normalizeJournalForSync(entry.value);
+  }
+  final Map<String, CalendarCriticalPath> normalizedPaths =
+      <String, CalendarCriticalPath>{};
+  for (final MapEntry<String, CalendarCriticalPath> entry
+      in model.criticalPaths.entries) {
+    normalizedPaths[entry.key] = _normalizePathForSync(entry.value);
+  }
+  final Map<String, CalendarAvailability> normalizedAvailability =
+      <String, CalendarAvailability>{};
+  for (final MapEntry<String, CalendarAvailability> entry
+      in model.availability.entries) {
+    normalizedAvailability[entry.key] = _normalizeAvailabilityForSync(
+      entry.value,
+    );
+  }
+
+  final CalendarModel normalized = model.copyWith(
+    tasks: normalizedTasks,
+    dayEvents: normalizedDayEvents,
+    journals: normalizedJournals,
+    criticalPaths: normalizedPaths,
+    availability: normalizedAvailability,
+    deletedTaskIds: _normalizeTimestampMap(model.deletedTaskIds),
+    deletedDayEventIds: _normalizeTimestampMap(model.deletedDayEventIds),
+    deletedJournalIds: _normalizeTimestampMap(model.deletedJournalIds),
+    deletedCriticalPathIds: _normalizeTimestampMap(
+      model.deletedCriticalPathIds,
+    ),
+    lastModified: _normalizeSyncInstant(model.lastModified),
+  );
+  return normalized.copyWith(checksum: normalized.calculateChecksum());
+}
+
+CalendarModel _withTaskTombstone(
+  CalendarModel model,
+  String taskId,
+  DateTime deletedAt,
+) {
+  final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
+  final DateTime? existing = model.deletedTaskIds[taskId];
+  if (existing != null && !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
+    return model;
+  }
+  final Map<String, DateTime> updatedDeletedTaskIds =
+      Map<String, DateTime>.from(model.deletedTaskIds)
+        ..[taskId] = normalizedDeletedAt;
+  final CalendarModel updated = model.copyWith(
+    deletedTaskIds: updatedDeletedTaskIds,
+    lastModified: _syncNowUtc(),
+  );
+  return updated.copyWith(checksum: updated.calculateChecksum());
+}
+
+CalendarModel _withDayEventTombstone(
+  CalendarModel model,
+  String eventId,
+  DateTime deletedAt,
+) {
+  final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
+  final DateTime? existing = model.deletedDayEventIds[eventId];
+  if (existing != null && !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
+    return model;
+  }
+  final Map<String, DateTime> updatedDeletedDayEventIds =
+      Map<String, DateTime>.from(model.deletedDayEventIds)
+        ..[eventId] = normalizedDeletedAt;
+  final CalendarModel updated = model.copyWith(
+    deletedDayEventIds: updatedDeletedDayEventIds,
+    lastModified: _syncNowUtc(),
+  );
+  return updated.copyWith(checksum: updated.calculateChecksum());
+}
+
+CalendarModel _withJournalTombstone(
+  CalendarModel model,
+  String journalId,
+  DateTime deletedAt,
+) {
+  final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
+  final DateTime? existing = model.deletedJournalIds[journalId];
+  if (existing != null && !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
+    return model;
+  }
+  final Map<String, DateTime> updatedDeletedJournalIds =
+      Map<String, DateTime>.from(model.deletedJournalIds)
+        ..[journalId] = normalizedDeletedAt;
+  final CalendarModel updated = model.copyWith(
+    deletedJournalIds: updatedDeletedJournalIds,
+    lastModified: _syncNowUtc(),
+  );
+  return updated.copyWith(checksum: updated.calculateChecksum());
+}
+
+CalendarModel _withCriticalPathTombstone(
+  CalendarModel model,
+  String pathId,
+  DateTime deletedAt,
+) {
+  final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
+  final DateTime? existing = model.deletedCriticalPathIds[pathId];
+  if (existing != null && !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
+    return model;
+  }
+  final Map<String, DateTime> updatedDeletedPathIds =
+      Map<String, DateTime>.from(model.deletedCriticalPathIds)
+        ..[pathId] = normalizedDeletedAt;
+  final CalendarModel updated = model.copyWith(
+    deletedCriticalPathIds: updatedDeletedPathIds,
+    lastModified: _syncNowUtc(),
+  );
+  return updated.copyWith(checksum: updated.calculateChecksum());
 }

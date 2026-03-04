@@ -539,14 +539,33 @@ abstract class CalendarModel with _$CalendarModel {
   }
 }
 
+DateTime _normalizeSyncInstant(DateTime value) => value.toUtc();
+
+int _compareSyncInstants(DateTime first, DateTime second) {
+  final int firstMicros = _normalizeSyncInstant(first).microsecondsSinceEpoch;
+  final int secondMicros = _normalizeSyncInstant(second).microsecondsSinceEpoch;
+  if (firstMicros > secondMicros) {
+    return 1;
+  }
+  if (firstMicros < secondMicros) {
+    return -1;
+  }
+  return 0;
+}
+
+bool _isSyncInstantAfter(DateTime candidate, DateTime reference) =>
+    _compareSyncInstants(candidate, reference) > 0;
+
 DateTime? _latestTimestamp(DateTime? localTime, DateTime? remoteTime) {
   if (localTime == null) {
-    return remoteTime;
+    return remoteTime == null ? null : _normalizeSyncInstant(remoteTime);
   }
   if (remoteTime == null) {
-    return localTime;
+    return _normalizeSyncInstant(localTime);
   }
-  return remoteTime.isAfter(localTime) ? remoteTime : localTime;
+  return _isSyncInstantAfter(remoteTime, localTime)
+      ? _normalizeSyncInstant(remoteTime)
+      : _normalizeSyncInstant(localTime);
 }
 
 CalendarCollection? _mergeCollections(
@@ -588,7 +607,7 @@ Map<String, CalendarAvailability> _mergeAvailability(
       final localStamp = _availabilityTimestamp(localAvailability);
       final remoteStamp = _availabilityTimestamp(remoteAvailability);
       if (localStamp == null && remoteStamp == null) {
-        merged[id] = remoteAvailability;
+        merged[id] = localAvailability;
         continue;
       }
       if (localStamp == null && remoteStamp != null) {
@@ -599,7 +618,7 @@ Map<String, CalendarAvailability> _mergeAvailability(
         merged[id] = localAvailability;
         continue;
       }
-      merged[id] = remoteStamp!.isAfter(localStamp!)
+      merged[id] = _isSyncInstantAfter(remoteStamp!, localStamp!)
           ? remoteAvailability
           : localAvailability;
     }
@@ -625,7 +644,7 @@ Map<String, CalendarAvailabilityOverlay> _mergeAvailabilityOverlays(
       continue;
     }
     if (localOverlay != null && remoteOverlay != null) {
-      merged[id] = remoteOverlay;
+      merged[id] = localOverlay;
     }
   }
   return merged;
@@ -637,10 +656,14 @@ bool _shouldPreferRemote({
   required CalendarIcsMeta? localMeta,
   required CalendarIcsMeta? remoteMeta,
 }) {
-  if (remoteModifiedAt.isAfter(localModifiedAt)) {
+  final int timestampComparison = _compareSyncInstants(
+    remoteModifiedAt,
+    localModifiedAt,
+  );
+  if (timestampComparison > 0) {
     return true;
   }
-  if (localModifiedAt.isAfter(remoteModifiedAt)) {
+  if (timestampComparison < 0) {
     return false;
   }
   final int localSequence = localMeta?.sequence ?? _calendarSequenceDefault;
@@ -686,13 +709,14 @@ extension CalendarModelMerge on CalendarModel {
 
       if (selectedTask == null) {
         if (deletedAt != null) {
-          mergedDeletedTaskIds[id] = deletedAt;
+          mergedDeletedTaskIds[id] = _normalizeSyncInstant(deletedAt);
         }
         continue;
       }
 
-      if (deletedAt != null && !selectedTask.modifiedAt.isAfter(deletedAt)) {
-        mergedDeletedTaskIds[id] = deletedAt;
+      if (deletedAt != null &&
+          !_isSyncInstantAfter(selectedTask.modifiedAt, deletedAt)) {
+        mergedDeletedTaskIds[id] = _normalizeSyncInstant(deletedAt);
         continue;
       }
 
@@ -735,13 +759,14 @@ extension CalendarModelMerge on CalendarModel {
 
       if (selectedEvent == null) {
         if (deletedAt != null) {
-          mergedDeletedDayEventIds[id] = deletedAt;
+          mergedDeletedDayEventIds[id] = _normalizeSyncInstant(deletedAt);
         }
         continue;
       }
 
-      if (deletedAt != null && !selectedEvent.modifiedAt.isAfter(deletedAt)) {
-        mergedDeletedDayEventIds[id] = deletedAt;
+      if (deletedAt != null &&
+          !_isSyncInstantAfter(selectedEvent.modifiedAt, deletedAt)) {
+        mergedDeletedDayEventIds[id] = _normalizeSyncInstant(deletedAt);
         continue;
       }
 
@@ -784,13 +809,14 @@ extension CalendarModelMerge on CalendarModel {
 
       if (selectedJournal == null) {
         if (deletedAt != null) {
-          mergedDeletedJournalIds[id] = deletedAt;
+          mergedDeletedJournalIds[id] = _normalizeSyncInstant(deletedAt);
         }
         continue;
       }
 
-      if (deletedAt != null && !selectedJournal.modifiedAt.isAfter(deletedAt)) {
-        mergedDeletedJournalIds[id] = deletedAt;
+      if (deletedAt != null &&
+          !_isSyncInstantAfter(selectedJournal.modifiedAt, deletedAt)) {
+        mergedDeletedJournalIds[id] = _normalizeSyncInstant(deletedAt);
         continue;
       }
 
@@ -822,20 +848,22 @@ extension CalendarModelMerge on CalendarModel {
       } else if (remotePath == null) {
         selectedPath = localPath;
       } else {
-        selectedPath = remotePath.modifiedAt.isAfter(localPath.modifiedAt)
+        selectedPath =
+            _isSyncInstantAfter(remotePath.modifiedAt, localPath.modifiedAt)
             ? remotePath
             : localPath;
       }
 
       if (selectedPath == null) {
         if (deletedAt != null) {
-          mergedDeletedCriticalPathIds[id] = deletedAt;
+          mergedDeletedCriticalPathIds[id] = _normalizeSyncInstant(deletedAt);
         }
         continue;
       }
 
-      if (deletedAt != null && !selectedPath.modifiedAt.isAfter(deletedAt)) {
-        mergedDeletedCriticalPathIds[id] = deletedAt;
+      if (deletedAt != null &&
+          !_isSyncInstantAfter(selectedPath.modifiedAt, deletedAt)) {
+        mergedDeletedCriticalPathIds[id] = _normalizeSyncInstant(deletedAt);
         continue;
       }
 
@@ -851,7 +879,7 @@ extension CalendarModelMerge on CalendarModel {
       remote.availabilityOverlays,
     );
     final mergedCollection = _mergeCollections(collection, remote.collection);
-    final now = DateTime.now();
+    final DateTime now = DateTime.now().toUtc();
     final merged = CalendarModel(
       tasks: mergedTasks,
       dayEvents: mergedDayEvents,

@@ -376,11 +376,17 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                     ),
                   ),
                   if (results.isEmpty)
-                    SliverToBoxAdapter(
-                      child: _EmptySearchState(
-                        key: const ValueKey('empty-search'),
-                        showHint: query.isEmpty,
-                        isCompact: isCompact,
+                    SliverPadding(
+                      padding: EdgeInsets.only(
+                        top: spacing.xxs,
+                        bottom: spacing.xs + keyboardInset,
+                      ),
+                      sliver: SliverToBoxAdapter(
+                        child: _EmptySearchState(
+                          key: const ValueKey('empty-search'),
+                          showHint: query.isEmpty,
+                          isCompact: isCompact,
+                        ),
                       ),
                     )
                   else

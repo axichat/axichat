@@ -6026,7 +6026,10 @@ mixin MessageService
   }
 
   DateTime? _calendarSyncTimestamp(mox.MessageEvent event) {
-    return event.extensions.get<mox.DelayedDeliveryData>()?.timestamp;
+    final DateTime? timestamp = event.extensions
+        .get<mox.DelayedDeliveryData>()
+        ?.timestamp;
+    return timestamp?.toUtc();
   }
 
   String _calendarSyncChatJid(mox.MessageEvent event, String? accountJid) {

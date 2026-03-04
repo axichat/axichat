@@ -64,7 +64,7 @@ class CalendarSyncInbound {
   final DateTime? receivedAt;
   final bool isFromMam;
 
-  DateTime get appliedTimestamp => receivedAt ?? message.timestamp;
+  DateTime get appliedTimestamp => (receivedAt ?? message.timestamp).toUtc();
 }
 
 @freezed
@@ -99,7 +99,7 @@ abstract class CalendarSyncMessage with _$CalendarSyncMessage {
 
   factory CalendarSyncMessage.request() => CalendarSyncMessage(
     type: CalendarSyncType.request,
-    timestamp: DateTime.now(),
+    timestamp: _calendarSyncNowUtc(),
   );
 
   factory CalendarSyncMessage.full({
@@ -109,7 +109,7 @@ abstract class CalendarSyncMessage with _$CalendarSyncMessage {
     type: CalendarSyncType.full,
     data: data,
     checksum: checksum,
-    timestamp: DateTime.now(),
+    timestamp: _calendarSyncNowUtc(),
   );
 
   factory CalendarSyncMessage.update({
@@ -120,7 +120,7 @@ abstract class CalendarSyncMessage with _$CalendarSyncMessage {
   }) => CalendarSyncMessage(
     type: CalendarSyncType.update,
     data: data,
-    timestamp: DateTime.now(),
+    timestamp: _calendarSyncNowUtc(),
     taskId: taskId,
     operation: operation,
     entity: entity,
@@ -133,7 +133,7 @@ abstract class CalendarSyncMessage with _$CalendarSyncMessage {
     required String snapshotUrl,
   }) => CalendarSyncMessage(
     type: CalendarSyncType.snapshot,
-    timestamp: DateTime.now(),
+    timestamp: _calendarSyncNowUtc(),
     isSnapshot: true,
     snapshotChecksum: snapshotChecksum,
     snapshotVersion: snapshotVersion,
@@ -147,7 +147,8 @@ abstract class CalendarSyncMessage with _$CalendarSyncMessage {
 
     element.children.addAll([
       XmlElement(XmlName('type'))..innerText = type,
-      XmlElement(XmlName('timestamp'))..innerText = timestamp.toIso8601String(),
+      XmlElement(XmlName('timestamp'))
+        ..innerText = timestamp.toUtc().toIso8601String(),
     ]);
 
     element.children.add(XmlElement(XmlName('entity'))..innerText = entity);
@@ -229,7 +230,7 @@ abstract class CalendarSyncMessage with _$CalendarSyncMessage {
       throw ArgumentError('Missing timestamp');
     }
 
-    final timestamp = DateTime.parse(timestampStr);
+    final timestamp = DateTime.parse(timestampStr).toUtc();
     final checksum = _trimmedBoundedText(
       getText('checksum'),
       _calendarSyncChecksumMaxLength,
@@ -304,7 +305,10 @@ abstract class CalendarSyncMessage with _$CalendarSyncMessage {
       if (payload is! Map<String, dynamic>) {
         return null;
       }
-      final message = CalendarSyncMessage.fromJson(payload);
+      final CalendarSyncMessage parsed = CalendarSyncMessage.fromJson(payload);
+      final CalendarSyncMessage message = parsed.copyWith(
+        timestamp: parsed.timestamp.toUtc(),
+      );
       if (!_isCalendarSyncMessageValid(message)) {
         return null;
       }
@@ -377,3 +381,5 @@ bool _isCalendarSyncMessageValid(CalendarSyncMessage message) {
 
 bool _exceedsMaxLength(String? value, int maxLength) =>
     value != null && value.length > maxLength;
+
+DateTime _calendarSyncNowUtc() => DateTime.now().toUtc();

@@ -41,7 +41,8 @@ class CalendarSyncState {
   }) {
     return CalendarSyncState(
       updatesSinceSnapshot: updatesSinceSnapshot ?? this.updatesSinceSnapshot,
-      lastAppliedTimestamp: lastAppliedTimestamp ?? this.lastAppliedTimestamp,
+      lastAppliedTimestamp: (lastAppliedTimestamp ?? this.lastAppliedTimestamp)
+          ?.toUtc(),
       lastAppliedStanzaId: lastAppliedStanzaId ?? this.lastAppliedStanzaId,
       lastSnapshotChecksum: lastSnapshotChecksum ?? this.lastSnapshotChecksum,
     );
@@ -69,7 +70,7 @@ class CalendarSyncState {
   String toJson() {
     return jsonEncode(<String, dynamic>{
       'updatesSinceSnapshot': updatesSinceSnapshot,
-      'lastAppliedTimestamp': lastAppliedTimestamp?.toIso8601String(),
+      'lastAppliedTimestamp': lastAppliedTimestamp?.toUtc().toIso8601String(),
       'lastAppliedStanzaId': lastAppliedStanzaId,
       'lastSnapshotChecksum': lastSnapshotChecksum,
     });
@@ -81,7 +82,7 @@ class CalendarSyncState {
     return CalendarSyncState(
       updatesSinceSnapshot: map['updatesSinceSnapshot'] as int? ?? 0,
       lastAppliedTimestamp: map['lastAppliedTimestamp'] != null
-          ? DateTime.parse(map['lastAppliedTimestamp'] as String)
+          ? DateTime.parse(map['lastAppliedTimestamp'] as String).toUtc()
           : null,
       lastAppliedStanzaId: map['lastAppliedStanzaId'] as String?,
       lastSnapshotChecksum: map['lastSnapshotChecksum'] as String?,
