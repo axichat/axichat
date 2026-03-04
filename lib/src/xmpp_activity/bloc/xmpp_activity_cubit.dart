@@ -309,11 +309,11 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
   @override
   Future<void> close() async {
     _staleOperationTimer.cancel();
-    for (final timer in _completionTimers.values) {
+    for (final timer in _completionTimers.values.toList(growable: false)) {
       timer.cancel();
     }
     _completionTimers.clear();
-    for (final timer in _retentionTimers.values) {
+    for (final timer in _retentionTimers.values.toList(growable: false)) {
       timer.cancel();
     }
     _retentionTimers.clear();

@@ -832,7 +832,8 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
     );
-    final contentPadding = EdgeInsets.fromLTRB(
+    final chipsListPadding = EdgeInsets.only(bottom: spacing.m);
+    final actionsPadding = EdgeInsets.fromLTRB(
       spacing.m,
       0,
       spacing.m,
@@ -874,7 +875,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
         thumbVisibility: true,
         child: ListView(
           controller: _scrollController,
-          padding: contentPadding,
+          padding: chipsListPadding,
           children: [
             BlocSelector<ChatsCubit, ChatsState, List<String>>(
               bloc: locate<ChatsCubit>(),
@@ -898,7 +899,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
           ],
         ),
       ),
-      footer: Padding(padding: contentPadding, child: actions),
+      footer: Padding(padding: actionsPadding, child: actions),
     );
   }
 

@@ -56,7 +56,7 @@ class CalendarStorageRegistry implements Storage {
   @override
   Future<void> clear() async {
     final processed = <Storage>{};
-    for (final storage in _prefixToStorage.values) {
+    for (final storage in _prefixToStorage.values.toList(growable: false)) {
       if (processed.add(storage)) {
         await storage.clear();
       }
@@ -69,7 +69,7 @@ class CalendarStorageRegistry implements Storage {
   @override
   Future<void> close() async {
     final processed = <Storage>{};
-    for (final storage in _prefixToStorage.values) {
+    for (final storage in _prefixToStorage.values.toList(growable: false)) {
       if (processed.add(storage)) {
         await storage.close();
       }

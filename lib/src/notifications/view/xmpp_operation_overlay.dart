@@ -61,7 +61,7 @@ class _XmppOperationOverlayState extends State<XmppOperationOverlay> {
 
   @override
   void dispose() {
-    for (final timer in _exitTimers.values) {
+    for (final timer in _exitTimers.values.toList(growable: false)) {
       timer.cancel();
     }
     _exitTimers.clear();

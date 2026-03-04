@@ -250,11 +250,12 @@ mixin MucService on XmppBase, BaseStreamService {
 
   @override
   Future<void> _reset() async {
-    for (final controller in _roomStreams.values) {
+    for (final controller in _roomStreams.values.toList(growable: false)) {
       await controller.close();
     }
     _roomStreams.clear();
-    for (final controller in _roomSubjectStreams.values) {
+    for (final controller
+        in _roomSubjectStreams.values.toList(growable: false)) {
       await controller.close();
     }
     _roomSubjectStreams.clear();
@@ -737,7 +738,7 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<void> _clearSelfPresenceOnDisconnect() async {
     if (_roomStates.isEmpty) return;
     _roomsNeedingJoin.clear();
-    for (final entry in _roomStates.entries) {
+    for (final entry in _roomStates.entries.toList(growable: false)) {
       final room = entry.value;
       await _setMucManagerJoinedState(roomJid: entry.key, joined: false);
       if (room.selfPresenceStatusCodes.isEmpty &&

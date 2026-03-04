@@ -127,6 +127,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     );
     return AxiSheetScaffold.scroll(
       header: header,
+      bodyPadding: EdgeInsets.zero,
       children: [
         if (widget.availableChats.isEmpty)
           Padding(

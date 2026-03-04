@@ -654,7 +654,7 @@ class OmemoActivityCubit extends Cubit<OmemoActivityState> {
 
   @override
   Future<void> close() async {
-    for (final timer in _retentionTimers.values) {
+    for (final timer in _retentionTimers.values.toList(growable: false)) {
       timer.cancel();
     }
     _retentionTimers.clear();
