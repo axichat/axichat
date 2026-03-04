@@ -1709,9 +1709,12 @@ class XmppService extends XmppBase
       if (existing == null) {
         await db.saveMessage(message, chatType: script.chat.type);
       } else {
-        final seeded = message.copyWith(id: existing.id);
-        if (existing != seeded) {
-          await db.updateMessage(seeded);
+        final existingId = existing.id;
+        if (existingId != null) {
+          final seeded = message.copyWith(id: existingId);
+          if (existing != seeded) {
+            await db.updateMessage(seeded);
+          }
         }
       }
       final latestTimestamp = latest.timestamp;

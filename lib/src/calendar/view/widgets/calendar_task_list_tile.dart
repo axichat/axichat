@@ -44,9 +44,10 @@ class CalendarTaskListTile extends StatelessWidget {
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisSize: MainAxisSize.max,
+            mainAxisSize: fillWidth ? MainAxisSize.max : MainAxisSize.min,
             children: [
-              Expanded(
+              Flexible(
+                fit: fillWidth ? FlexFit.tight : FlexFit.loose,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
