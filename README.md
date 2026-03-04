@@ -9,6 +9,24 @@
 </div>
 
 <div align="center">
+  <div style="display: block; width: 100%; max-width: 800px; margin: 0 auto; border-radius: 16px; overflow: hidden;">
+    <video
+      controls
+      autoplay
+      loop
+      muted
+      playsinline
+      preload="metadata"
+      width="800"
+      style="display: block; width: 100%; height: auto;"
+    >
+      <source src="/assets/readme/Axichat_demo_24fps.mp4" type="video/mp4" />
+      Your browser does not support HTML video.
+    </video>
+  </div>
+</div>
+
+<div align="center">
   <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
     <img alt="Download the Android APK" src="https://img.shields.io/badge/Download%20the%20APK-1BA5FF?style=for-the-badge&logo=android&logoColor=white" />
   </a>
@@ -139,10 +157,10 @@
 
 ### Feature highlights:
 
-- 🌓 Dark and light modes with brand color schemes
+- 🚀 1st-party push notifications and offline sync
 - 🧭 Unified inbox for chat + email side by side
 - 👥 Group chats and per-conversation settings
-- 🔁 Quick quote-reply
+- 🔁 Easy forwarding and replying
 - 😀 Emoji reactions
 - ✅ Delivery and read receipts with typing indicators
 - 🔄 Stream management with automatic reconnect to stop messages dropping
@@ -152,7 +170,6 @@
 - 🔍 Fast search across chats, mail, and calendar
 - 🗂️ Collaborative calendars with per-event permissions and owner/assignee roles
 - 🕒 Availability sharing that shows overlaps before you schedule
-- 🚀 1st-party push notifications and offline sync
 - 📅 Natural-language scheduling with drag+drop calendar editing
 - ➕ One-tap add-to-calendar from simple text messages
 - 🗓️ Tasks, reminders, and calendar in one view
@@ -160,10 +177,30 @@
 - ⚡ Critical paths and agenda focus to surface what’s next
 - 🦾 Accessibility-friendly modals and flows (keyboard/touch/reader aware)
 - 🌍 Translated UI (English, Spanish, German, French, Chinese)
+- 🌓 Dark and light modes with brand color schemes
 - 🔄 Sync across all your devices (Android, Linux, Windows)
 - 🖥️ Desktop + mobile parity with keyboard shortcuts and touch affordances
 - 🔔 Smart notifications (muting, per-chat overrides, do-not-disturb)
 - 🌐 Works without Google/Firebase; pure XMPP + SMTP/IMAP core
+
+## Roadmap
+
+### Completed
+
+- [x] 2024: Core XMPP messenger foundation (presence, chat, open-protocol architecture)
+- [x] 2024: First-party notifications and offline-friendly messaging baseline
+- [x] 2025: Cross-platform desktop/mobile support (Android, Linux, Windows)
+- [x] 2025: Calendar + task system foundation (natural-language scheduling and drag/drop planning)
+- [x] 2025: Unified email integration via DeltaChat Core Rust
+- [x] 2025: Group chats (MUC) and richer conversation UX (receipts/reactions/reply flows)
+- [x] 2025: File attachments and media sharing in chat/email flows
+- [x] 2025: Shared availability and collaborative calendar workflows
+
+### Upcoming
+
+- [ ] 2026: Voice and video calling
+- [ ] 2026: End-to-end encryption
+- [ ] 2026: 3rd-party email OAuth
 
 <hr />
 
@@ -200,8 +237,6 @@
     - **Windows** – Extract the archive and run `Axichat.exe`.
     - **Linux** – Extract into a directory and launch `./axichat` (see `linux/axichat.desktop` for
       desktop entry guidance).
-
-
 
 <hr />
 
