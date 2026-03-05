@@ -1,59 +1,59 @@
-**Hinweis:** Axichat wird noch aktiv entwickelt, daher kann es zu Problemen kommen.
+**Hinweis:** Axichat wird noch aktiv entwickelt, daher können Dinge kaputtgehen.
 
 Website: https://axi.chat
 Quellcode: https://gitlab.com/axichat/axichat
 Issue-Tracker: https://gitlab.com/axichat/axichat/-/issues
 Lizenz: AGPL-3.0-or-later
 
-Axichat ist ein hochmoderner E-Mail- und XMPP-Client, vollstaendig Open Source, mit First-Party-Push-Benachrichtigungen (niemals FCM) und ohne Abhaengigkeiten von Drittanbietern.
+Axichat ist ein hochmoderner E-Mail- und XMPP-Client, vollständig Open Source, mit First-Party-Push-Benachrichtigungen (niemals FCM) und ohne Abhängigkeiten von Drittanbietern.
 
 Funktionshighlights:
-- Einheitlicher Posteingang fuer Chat und E-Mail.
+- Einheitlicher Posteingang für Chat und E-Mail.
 - Gruppenchats und Einstellungen pro Unterhaltung.
-- Zitatantworten, Reaktionen sowie Zustell- und Lesebestaetigungen.
-- Umfangreiche Anhaenge und Inline-Vorschauen.
-- Schnelle Suche ueber Chat, Mail und Kalender.
+- Zitatantworten, Reaktionen sowie Zustell- und Lesebestätigungen.
+- Umfangreiche Anhänge und Inline-Vorschauen.
+- Schnelle Suche über Chat, Mail und Kalender.
 - Kollaborativer Kalender mit Erinnerungen und Aufgaben.
-- Planung per natuerlicher Sprache (ohne KI).
-- Verfuegbarkeitsfreigabe fuer schnellere Terminfindung.
+- Planung per natürlicher Sprache (ohne KI).
+- Verfügbarkeitsfreigabe für schnellere Terminfindung.
 - Kritischer Pfad und Agenda-Fokus.
 - Smarte Benachrichtigungen mit Chat-spezifischer Steuerung.
-- Gastmodus fuer Offline-Planung.
+- Gastmodus für Offline-Planung.
 - First-Party-Push und Offline-Synchronisierung.
 - Funktioniert ohne Google, Firebase oder FCM.
 
 Warum Axichat?
-- Werkzeuge sind wichtig: Kommunikation sollte sich wie ein aufgeraeumter Schreibtisch anfuehlen, nicht wie ein chaotischer Posteingang.
+- Werkzeuge sind wichtig: Kommunikation sollte sich wie ein aufgeräumter Schreibtisch anfühlen, nicht wie ein chaotischer Posteingang.
 - Zeit ist wichtig: Axichat reduziert Kontextwechsel mit chatartigem E-Mail-Workflow und integrierter Planung.
-- Zusammenarbeit ist wichtig: Kalender, Verfuegbarkeiten und Nachrichten bleiben an einem Ort.
+- Zusammenarbeit ist wichtig: Kalender, Verfügbarkeiten und Nachrichten bleiben an einem Ort.
 
 Was Axichat bietet:
 
-Beste Chat-Oberflaeche:
-- Nachrichten und E-Mails in einer gespraechszentrierten UI lesen und senden.
-- Personen auf normalen E-Mail-Diensten erreichen (z. B. Gmail, Outlook, Tuta), waehrend dein Workflow in Axichat bleibt.
-- Erweiterte XMPP-Funktionen nutzen, wenn beide Seiten sie unterstuetzen.
+Beste Chat-Oberfläche:
+- Nachrichten und E-Mails in einer gesprächszentrierten UI lesen und senden.
+- Personen auf normalen E-Mail-Diensten erreichen (z. B. Gmail, Outlook, Tuta), während dein Workflow in Axichat bleibt.
+- Erweiterte XMPP-Funktionen nutzen, wenn beide Seiten sie unterstützen.
 
 Bester Kalender der Welt:
-- Aufgaben und Termine in natuerlicher Sprache eingeben und schnell einplanen.
+- Aufgaben und Termine in natürlicher Sprache eingeben und schnell einplanen.
 - Ungeplante Elemente in einer Inbox behalten, bis sie eingeplant werden.
-- Planung mit Drag-and-drop, Groessenanpassung, Copy/Paste und Batch-Bearbeitung.
-- Erinnerungen, Fristen, Prioritaeten und Wiederholungen verwalten.
-- Gastmodus fuer lokale Planung ohne Account.
+- Planung mit Drag-and-drop, Größenanpassung, Copy/Paste und Batch-Bearbeitung.
+- Erinnerungen, Fristen, Prioritäten und Wiederholungen verwalten.
+- Gastmodus für lokale Planung ohne Account.
 
-Datenschutz und Unabhaengigkeit:
+Datenschutz und Unabhängigkeit:
 - Keine Tracker.
 - Keine Werbung.
 - Kein Datenverkauf.
 - Kein zentraler Vendor-Lock-in.
 - Offene Protokolle und Open-Source-Code.
 
-Erklaerung der Android-Berechtigungen:
+Erklärung der Android-Berechtigungen:
 - INTERNET: Senden und Empfangen von Chat-/E-Mail-Daten.
 - POST_NOTIFICATIONS: Anzeige von Nachrichten- und Erinnerungsbenachrichtigungen.
-- FOREGROUND_SERVICE und zugehoerige Data-Sync-Berechtigungen: zuverlaessige Hintergrundnachrichten.
+- FOREGROUND_SERVICE und zugehörige Data-Sync-Berechtigungen: zuverlässige Hintergrundnachrichten.
 - RECEIVE_BOOT_COMPLETED: Hintergrundnachrichten nach Neustart wiederherstellen.
-- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: optionale Abfrage fuer bessere Zustellzuverlaessigkeit.
+- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: optionale Abfrage für bessere Zustellzuverlässigkeit.
 - VIBRATE: haptische Benachrichtigungen.
 
 Support und Updates:

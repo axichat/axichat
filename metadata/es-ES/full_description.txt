@@ -1,63 +1,63 @@
-**Aviso:** Axichat sigue en desarrollo activo, por lo que algunas cosas pueden fallar.
+**Aviso:** Axichat sigue en desarrollo activo, por lo que algunas funciones pueden fallar.
 
 Sitio web: https://axi.chat
-Codigo fuente: https://gitlab.com/axichat/axichat
+Código fuente: https://gitlab.com/axichat/axichat
 Seguimiento de errores: https://gitlab.com/axichat/axichat/-/issues
 Licencia: AGPL-3.0-or-later
 
-Axichat es un cliente de correo y XMPP de ultima generacion, totalmente de codigo abierto, con notificaciones push de primera parte (nunca FCM) y sin dependencias de terceros.
+Axichat es un cliente de correo y XMPP de última generación, totalmente de código abierto, con notificaciones push de primera parte (nunca FCM) y sin dependencias de terceros.
 
-Caracteristicas destacadas:
+Características destacadas:
 - Bandeja unificada para chat y correo lado a lado.
-- Chats de grupo y ajustes por conversacion.
+- Chats de grupo y ajustes por conversación.
 - Respuesta con cita, reacciones y confirmaciones de entrega/lectura.
 - Adjuntos avanzados y previsualizaciones integradas.
-- Busqueda rapida en chat, correo y calendario.
+- Búsqueda rápida en chat, correo y calendario.
 - Calendario colaborativo con recordatorios y tareas.
-- Planificacion en lenguaje natural (sin IA).
-- Compartir disponibilidad para agendar mas rapido.
-- Ruta critica y enfoque de agenda.
+- Planificación en lenguaje natural (sin IA).
+- Compartir disponibilidad para agendar más rápido.
+- Ruta crítica y enfoque de agenda.
 - Notificaciones inteligentes por chat.
-- Modo invitado para planificar sin conexion.
-- Push de primera parte y sincronizacion offline.
+- Modo invitado para planificar sin conexión.
+- Push de primera parte y sincronización offline.
 - Funciona sin Google, Firebase ni FCM.
 
-Por que Axichat?
-- Las herramientas importan: la comunicacion debe sentirse como un escritorio ordenado, no como una bandeja caotica.
-- El tiempo importa: Axichat reduce cambios de contexto con flujo de correo estilo chat y planificacion integrada.
-- La colaboracion importa: calendario, disponibilidad y mensajeria en un solo lugar.
+¿Por qué Axichat?
+- Las herramientas importan: la comunicación debe sentirse como un escritorio ordenado, no como una bandeja caótica.
+- El tiempo importa: Axichat reduce cambios de contexto con flujo de correo estilo chat y planificación integrada.
+- La colaboración importa: calendario, disponibilidad y mensajería en un solo lugar.
 
-Que hace Axichat:
+Qué hace Axichat:
 
 Mejor interfaz de chat:
-- Lee y envia mensajes y correos en una interfaz centrada en conversaciones.
+- Lee y envía mensajes y correos en una interfaz centrada en conversaciones.
 - Llega a personas en proveedores de correo comunes (por ejemplo Gmail, Outlook, Tuta) manteniendo tu flujo en Axichat.
 - Usa funciones XMPP avanzadas cuando ambos lados las soportan.
 
 El mejor calendario del mundo:
-- Escribe tareas y eventos en lenguaje natural y programalos rapido.
-- Manten elementos sin programar en una bandeja hasta ubicarlos.
-- Planifica con arrastrar y soltar, redimensionar, copiar/pegar y edicion por lotes.
+- Escribe tareas y eventos en lenguaje natural y prográmalos rápido.
+- Mantén elementos sin programar en una bandeja hasta ubicarlos.
+- Planifica con arrastrar y soltar, redimensionar, copiar/pegar y edición por lotes.
 - Gestiona recordatorios, vencimientos, prioridades y recurrencias.
-- Usa el modo invitado para planificacion local sin cuenta.
+- Usa el modo invitado para planificación local sin cuenta.
 
 Privacidad e independencia:
 - Sin rastreadores.
 - Sin anuncios.
 - Sin venta de datos.
 - Sin bloqueo por proveedor.
-- Protocolos abiertos y codigo abierto.
+- Protocolos abiertos y código abierto.
 
 Permisos de Android explicados:
 - INTERNET: enviar y recibir datos de chat/correo.
 - POST_NOTIFICATIONS: mostrar notificaciones de mensajes y recordatorios.
-- FOREGROUND_SERVICE y permisos relacionados: mantener mensajeria fiable en segundo plano.
-- RECEIVE_BOOT_COMPLETED: restaurar mensajeria tras reinicio.
+- FOREGROUND_SERVICE y permisos relacionados: mantener mensajería fiable en segundo plano.
+- RECEIVE_BOOT_COMPLETED: restaurar mensajería tras reinicio.
 - REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: solicitud opcional para mejorar la fiabilidad.
-- VIBRATE: vibracion en notificaciones.
+- VIBRATE: vibración en notificaciones.
 
 Soporte y actualizaciones:
 - Sitio web: https://axi.chat
-- Notas de version: https://gitlab.com/axichat/axichat/-/releases
-- Codigo fuente y errores enlazados arriba.
+- Notas de versión: https://gitlab.com/axichat/axichat/-/releases
+- Código fuente y errores enlazados arriba.
 - Donaciones: https://axi.chat/support

@@ -1,63 +1,63 @@
-**Avertissement :** Axichat est encore en developpement actif, donc certaines fonctions peuvent casser.
+**Avertissement :** Axichat est encore en développement actif ; certaines fonctions peuvent donc ne pas fonctionner correctement.
 
 Site web: https://axi.chat
 Code source: https://gitlab.com/axichat/axichat
 Suivi des bugs: https://gitlab.com/axichat/axichat/-/issues
 Licence: AGPL-3.0-or-later
 
-Axichat est un client e-mail et XMPP de pointe, entierement open source, avec des notifications push de premiere partie (jamais FCM) et sans dependances tierces.
+Axichat est un client e-mail et XMPP de pointe, entièrement open source, avec des notifications push de première partie (jamais FCM) et sans dépendances tierces.
 
 Points forts:
-- Boite unifiee: chat et e-mail cote a cote.
-- Discussions de groupe et reglages par conversation.
-- Reponse par citation, reactions et accuses de reception/lecture.
-- Pieces jointes riches et apercus integres.
+- Boîte unifiée : chat et e-mail côte à côte.
+- Discussions de groupe et réglages par conversation.
+- Réponse par citation, réactions et accusés de réception/lecture.
+- Pièces jointes riches et aperçus intégrés.
 - Recherche rapide dans chat, mail et calendrier.
-- Calendrier collaboratif avec rappels et taches.
+- Calendrier collaboratif avec rappels et tâches.
 - Planification en langage naturel (sans IA).
-- Partage de disponibilites pour planifier plus vite.
+- Partage de disponibilités pour planifier plus vite.
 - Chemin critique et focus agenda.
 - Notifications intelligentes par conversation.
-- Mode invite pour planifier hors ligne.
-- Push de premiere partie et synchronisation hors ligne.
+- Mode invité pour planifier hors ligne.
+- Push de première partie et synchronisation hors ligne.
 - Fonctionne sans Google, Firebase ni FCM.
 
 Pourquoi Axichat ?
-- Les outils comptent: la communication doit ressembler a un bureau clair, pas a une boite de reception surchargee.
-- Le temps compte: Axichat reduit les changements de contexte grace a un flux e-mail type chat et une planification integree.
-- La collaboration compte: calendrier, disponibilites et messages au meme endroit.
+- Les outils comptent : la communication doit ressembler à un bureau clair, pas à une boîte de réception surchargée.
+- Le temps compte : Axichat réduit les changements de contexte grâce à un flux e-mail type chat et une planification intégrée.
+- La collaboration compte : calendrier, disponibilités et messages au même endroit.
 
-Ce que fait Axichat:
+Ce que fait Axichat :
 
 Meilleure interface de chat:
-- Lire et envoyer messages et e-mails dans une interface centree conversation.
+- Lire et envoyer messages et e-mails dans une interface centrée conversation.
 - Contacter des personnes sur des services e-mail classiques (par ex. Gmail, Outlook, Tuta) tout en gardant votre flux dans Axichat.
-- Utiliser des fonctions XMPP avancees quand les deux cotes les prennent en charge.
+- Utiliser des fonctions XMPP avancées quand les deux côtés les prennent en charge.
 
 Le meilleur calendrier du monde:
-- Saisir taches et evenements en langage naturel et planifier vite.
-- Garder les elements non planifies en inbox jusqu'a leur placement.
-- Planifier par glisser-deposer, redimensionnement, copier/coller, edition par lot.
-- Suivre rappels, echeances, priorites et recurrences.
-- Utiliser le mode invite pour une planification locale sans compte.
+- Saisir tâches et événements en langage naturel et planifier vite.
+- Garder les éléments non planifiés en inbox jusqu'à leur placement.
+- Planifier par glisser-déposer, redimensionnement, copier/coller, édition par lot.
+- Suivre rappels, échéances, priorités et récurrences.
+- Utiliser le mode invité pour une planification locale sans compte.
 
-Vie privee et independance:
+Vie privée et indépendance:
 - Aucun traqueur.
-- Aucune publicite.
-- Aucune revente de donnees.
+- Aucune publicité.
+- Aucune revente de données.
 - Aucun verrouillage fournisseur.
 - Protocoles ouverts et code open source.
 
-Permissions Android expliquees:
-- INTERNET: envoyer et recevoir les donnees chat/e-mail.
+Permissions Android expliquées:
+- INTERNET: envoyer et recevoir les données chat/e-mail.
 - POST_NOTIFICATIONS: afficher les notifications de messages et rappels.
-- FOREGROUND_SERVICE et permissions de synchronisation associees: maintenir une messagerie fiable en arriere-plan.
-- RECEIVE_BOOT_COMPLETED: restaurer la messagerie apres redemarrage.
-- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: demande optionnelle pour ameliorer la fiabilite.
+- FOREGROUND_SERVICE et permissions de synchronisation associées: maintenir une messagerie fiable en arrière-plan.
+- RECEIVE_BOOT_COMPLETED: restaurer la messagerie après redémarrage.
+- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: demande optionnelle pour améliorer la fiabilité.
 - VIBRATE: retour haptique des notifications.
 
-Support et mises a jour:
+Support et mises à jour:
 - Site web: https://axi.chat
 - Notes de version: https://gitlab.com/axichat/axichat/-/releases
-- Code source et tickets sont lies ci-dessus.
+- Code source et tickets sont liés ci-dessus.
 - Dons: https://axi.chat/support
