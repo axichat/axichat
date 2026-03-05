@@ -2359,6 +2359,36 @@ abstract class AppLocalizations {
   /// **'Continue'**
   String get signupContinue;
 
+  /// No description provided for @signupSkipPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip password'**
+  String get signupSkipPassword;
+
+  /// No description provided for @signupSkipPasswordConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip password setup?'**
+  String get signupSkipPasswordConfirmTitle;
+
+  /// No description provided for @signupSkipPasswordConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Axichat will create a secure password and keep it only on this device. You will not be able to sign in or sync this account on any other device unless you later set a password you know in Settings. If you lose this device or delete the app, you will lose this account and all data permanently.'**
+  String get signupSkipPasswordConfirmMessage;
+
+  /// No description provided for @signupSkipPasswordConfirmAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip and continue'**
+  String get signupSkipPasswordConfirmAction;
+
+  /// No description provided for @signupDeviceOnlyRememberMeLocked.
+  ///
+  /// In en, this message translates to:
+  /// **'Remember me is required while using a device-managed password.'**
+  String get signupDeviceOnlyRememberMeLocked;
+
   /// No description provided for @signupProgressLabel.
   ///
   /// In en, this message translates to:
@@ -3971,6 +4001,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm new password'**
   String get authPasswordConfirmNewPlaceholder;
+
+  /// No description provided for @authDeviceOnlyPasswordManagedChangeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This account uses a device-managed password. Current password is not required on this device.'**
+  String get authDeviceOnlyPasswordManagedChangeHint;
+
+  /// No description provided for @authDeviceOnlyPasswordManagedDeleteHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This account uses a device-managed password. Axichat will use it automatically to confirm deletion.'**
+  String get authDeviceOnlyPasswordManagedDeleteHint;
 
   /// No description provided for @authChangePasswordProgressLabel.
   ///
@@ -10212,6 +10254,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Incorrect password. Please try again.'**
   String get authPasswordIncorrect;
+
+  /// No description provided for @authDeviceOnlyPasswordUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Device-managed password is unavailable on this device. Account recovery is not possible.'**
+  String get authDeviceOnlyPasswordUnavailable;
 
   /// No description provided for @authAccountNotFound.
   ///

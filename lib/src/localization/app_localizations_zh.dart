@@ -1233,6 +1233,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get signupContinue => '继续';
 
   @override
+  String get signupSkipPassword => '跳过密码';
+
+  @override
+  String get signupSkipPasswordConfirmTitle => '跳过密码设置？';
+
+  @override
+  String get signupSkipPasswordConfirmMessage =>
+      'Axichat 会创建一个安全密码，并且只保存在这台设备上。除非你之后在设置里改成自己知道的密码，否则你无法在其他设备登录或同步这个账号。如果你丢失这台设备或删除应用，你将永久失去这个账号和所有数据。';
+
+  @override
+  String get signupSkipPasswordConfirmAction => '跳过并继续';
+
+  @override
+  String get signupDeviceOnlyRememberMeLocked => '使用设备托管密码时，必须保持“记住我”开启。';
+
+  @override
   String get signupProgressLabel => '注册进度';
 
   @override
@@ -2115,6 +2131,14 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authPasswordConfirmNewPlaceholder => '确认新密码';
+
+  @override
+  String get authDeviceOnlyPasswordManagedChangeHint =>
+      '此账号使用设备托管密码。在此设备上修改密码时不需要输入当前密码。';
+
+  @override
+  String get authDeviceOnlyPasswordManagedDeleteHint =>
+      '此账号使用设备托管密码。删除账号时，Axichat 会自动使用该密码进行确认。';
 
   @override
   String get authChangePasswordProgressLabel => '正在等待修改密码';
@@ -5668,6 +5692,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authPasswordIncorrect => '密码错误。请重试。';
+
+  @override
+  String get authDeviceOnlyPasswordUnavailable => '此设备上的设备托管密码不可用，无法恢复该账号。';
 
   @override
   String get authAccountNotFound => '未找到账号。';

@@ -1,0 +1,1 @@
+Cliente XMPP y correo libre con calendario, sin FCM ni rastreadores.

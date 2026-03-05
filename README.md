@@ -17,11 +17,11 @@
 </div>
 
 <div align="center">
-  <p><a href="https://gitlab.com/axichat/axichat/-/raw/master/assets/readme/Axichat_demo_24fps.mp4"><strong>Watch the Axichat demo video (MP4)</strong></a></p>
+  <p><a href="assets/readme/Axichat_demo_24fps.mp4"><strong>Watch the Axichat demo video (MP4)</strong></a></p>
 </div>
 
 <div align="center">
-  <a href="https://gitlab.com/axichat/axichat/-/raw/master/assets/readme/Axichat_demo_24fps.mp4">
+  <a href="assets/readme/Axichat_demo_24fps.mp4">
     <img
       src="assets/readme/Axichat_demo_24fps.mp4.png"
       alt="Axichat demo video preview"

@@ -1,1 +1,1 @@
-The best of instant messaging, email, and calendar in one app.
+Open-source XMPP + email messenger with calendar, no FCM or trackers.

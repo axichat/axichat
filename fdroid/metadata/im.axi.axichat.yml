@@ -8,21 +8,35 @@ Categories:
 
 License: AGPL-3.0-or-later
 AuthorName: Axichat Developers
-WebSite: https://gitlab.com/axichat/axichat
+WebSite: https://axi.chat
 SourceCode: https://gitlab.com/axichat/axichat
 IssueTracker: https://gitlab.com/axichat/axichat/-/issues
+Changelog: https://gitlab.com/axichat/axichat/-/releases
+Donate: https://axi.chat/support
 
 RepoType: git
 Repo: https://gitlab.com/axichat/axichat.git
-Summary: Free XMPP and email messenger with an integrated calendar.
+Summary: Open-source XMPP + email messenger with calendar and no FCM.
 
 Description: |
-  Axichat is a free, open-source XMPP messenger that also speaks email and ships
-  a powerful calendar and task system. It stores credentials securely with
-  SQLCipher and never depends on Firebase or proprietary services. Features
-  include drag-and-drop scheduling, DeltaChat-compatible email transport, and
-  offline-friendly messaging with end-to-end encryption on your device.
+  **Warning:** Axichat is still under active development, so things may break.
   .
+  Axichat is a cutting-edge email and XMPP client that is fully open source with
+  1st party push notifications (no FCM ever) and no 3rd party dependencies.
+  .
+  Website: https://axi.chat
+  License: AGPL-3.0-or-later
+  .
+  Highlights:
+  - Unified chat + email inbox
+  - Built-in collaborative calendar and tasks
+  - Natural-language scheduling
+  - Works without Google/Firebase/FCM
+  - Offline-friendly sync and notifications
+  .
+  Android permissions are used only for messaging reliability and user-visible
+  notifications (internet, notifications, foreground service, boot restore, and
+  vibration).
 
 Builds:
   - versionName: 0.6.0

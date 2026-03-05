@@ -1304,6 +1304,24 @@ class AppLocalizationsDe extends AppLocalizations {
   String get signupContinue => 'Weiter';
 
   @override
+  String get signupSkipPassword => 'Passwort überspringen';
+
+  @override
+  String get signupSkipPasswordConfirmTitle =>
+      'Passwort-Einrichtung überspringen?';
+
+  @override
+  String get signupSkipPasswordConfirmMessage =>
+      'Axichat erstellt ein sicheres Passwort und speichert es nur auf diesem Gerät. Du kannst dieses Konto auf keinem anderen Gerät anmelden oder synchronisieren, solange du später in den Einstellungen kein eigenes Passwort setzt. Wenn du dieses Gerät verlierst oder die App löschst, verlierst du dieses Konto und alle Daten dauerhaft.';
+
+  @override
+  String get signupSkipPasswordConfirmAction => 'Überspringen und fortfahren';
+
+  @override
+  String get signupDeviceOnlyRememberMeLocked =>
+      'Bei einem geräteverwalteten Passwort muss „Angemeldet bleiben“ aktiviert sein.';
+
+  @override
   String get signupProgressLabel => 'Registrierungsfortschritt';
 
   @override
@@ -2232,6 +2250,14 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get authPasswordConfirmNewPlaceholder => 'Neues Passwort bestätigen';
+
+  @override
+  String get authDeviceOnlyPasswordManagedChangeHint =>
+      'Dieses Konto nutzt ein geräteverwaltetes Passwort. Auf diesem Gerät ist das aktuelle Passwort zum Ändern nicht erforderlich.';
+
+  @override
+  String get authDeviceOnlyPasswordManagedDeleteHint =>
+      'Dieses Konto nutzt ein geräteverwaltetes Passwort. Axichat verwendet es automatisch, um die Löschung zu bestätigen.';
 
   @override
   String get authChangePasswordProgressLabel => 'Warten auf Passwortänderung';
@@ -6010,6 +6036,10 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get authPasswordIncorrect =>
       'Falsches Passwort. Bitte versuche es erneut.';
+
+  @override
+  String get authDeviceOnlyPasswordUnavailable =>
+      'Das geräteverwaltete Passwort ist auf diesem Gerät nicht verfügbar. Eine Kontowiederherstellung ist nicht möglich.';
 
   @override
   String get authAccountNotFound => 'Konto nicht gefunden.';

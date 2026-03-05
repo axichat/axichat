@@ -1,0 +1,63 @@
+**Aviso:** Axichat sigue en desarrollo activo, por lo que algunas cosas pueden fallar.
+
+Sitio web: https://axi.chat
+Codigo fuente: https://gitlab.com/axichat/axichat
+Seguimiento de errores: https://gitlab.com/axichat/axichat/-/issues
+Licencia: AGPL-3.0-or-later
+
+Axichat es un cliente de correo y XMPP de ultima generacion, totalmente de codigo abierto, con notificaciones push de primera parte (nunca FCM) y sin dependencias de terceros.
+
+Caracteristicas destacadas:
+- Bandeja unificada para chat y correo lado a lado.
+- Chats de grupo y ajustes por conversacion.
+- Respuesta con cita, reacciones y confirmaciones de entrega/lectura.
+- Adjuntos avanzados y previsualizaciones integradas.
+- Busqueda rapida en chat, correo y calendario.
+- Calendario colaborativo con recordatorios y tareas.
+- Planificacion en lenguaje natural (sin IA).
+- Compartir disponibilidad para agendar mas rapido.
+- Ruta critica y enfoque de agenda.
+- Notificaciones inteligentes por chat.
+- Modo invitado para planificar sin conexion.
+- Push de primera parte y sincronizacion offline.
+- Funciona sin Google, Firebase ni FCM.
+
+Por que Axichat?
+- Las herramientas importan: la comunicacion debe sentirse como un escritorio ordenado, no como una bandeja caotica.
+- El tiempo importa: Axichat reduce cambios de contexto con flujo de correo estilo chat y planificacion integrada.
+- La colaboracion importa: calendario, disponibilidad y mensajeria en un solo lugar.
+
+Que hace Axichat:
+
+Mejor interfaz de chat:
+- Lee y envia mensajes y correos en una interfaz centrada en conversaciones.
+- Llega a personas en proveedores de correo comunes (por ejemplo Gmail, Outlook, Tuta) manteniendo tu flujo en Axichat.
+- Usa funciones XMPP avanzadas cuando ambos lados las soportan.
+
+El mejor calendario del mundo:
+- Escribe tareas y eventos en lenguaje natural y programalos rapido.
+- Manten elementos sin programar en una bandeja hasta ubicarlos.
+- Planifica con arrastrar y soltar, redimensionar, copiar/pegar y edicion por lotes.
+- Gestiona recordatorios, vencimientos, prioridades y recurrencias.
+- Usa el modo invitado para planificacion local sin cuenta.
+
+Privacidad e independencia:
+- Sin rastreadores.
+- Sin anuncios.
+- Sin venta de datos.
+- Sin bloqueo por proveedor.
+- Protocolos abiertos y codigo abierto.
+
+Permisos de Android explicados:
+- INTERNET: enviar y recibir datos de chat/correo.
+- POST_NOTIFICATIONS: mostrar notificaciones de mensajes y recordatorios.
+- FOREGROUND_SERVICE y permisos relacionados: mantener mensajeria fiable en segundo plano.
+- RECEIVE_BOOT_COMPLETED: restaurar mensajeria tras reinicio.
+- REQUEST_IGNORE_BATTERY_OPTIMIZATIONS: solicitud opcional para mejorar la fiabilidad.
+- VIBRATE: vibracion en notificaciones.
+
+Soporte y actualizaciones:
+- Sitio web: https://axi.chat
+- Notas de version: https://gitlab.com/axichat/axichat/-/releases
+- Codigo fuente y errores enlazados arriba.
+- Donaciones: https://axi.chat/support

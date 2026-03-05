@@ -1305,6 +1305,23 @@ class AppLocalizationsFr extends AppLocalizations {
   String get signupContinue => 'Continuer';
 
   @override
+  String get signupSkipPassword => 'Skip password';
+
+  @override
+  String get signupSkipPasswordConfirmTitle => 'Skip password setup?';
+
+  @override
+  String get signupSkipPasswordConfirmMessage =>
+      'Axichat will create a secure password and keep it only on this device. You will not be able to sign in or sync this account on any other device unless you later set a password you know in Settings. If you lose this device or delete the app, you will lose this account and all data permanently.';
+
+  @override
+  String get signupSkipPasswordConfirmAction => 'Skip and continue';
+
+  @override
+  String get signupDeviceOnlyRememberMeLocked =>
+      'Remember me is required while using a device-managed password.';
+
+  @override
   String get signupProgressLabel => 'Progression de l’inscription';
 
   @override
@@ -2234,6 +2251,14 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get authPasswordConfirmNewPlaceholder =>
       'Confirmer le nouveau mot de passe';
+
+  @override
+  String get authDeviceOnlyPasswordManagedChangeHint =>
+      'This account uses a device-managed password. Current password is not required on this device.';
+
+  @override
+  String get authDeviceOnlyPasswordManagedDeleteHint =>
+      'This account uses a device-managed password. Axichat will use it automatically to confirm deletion.';
 
   @override
   String get authChangePasswordProgressLabel =>
@@ -6029,6 +6054,10 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get authPasswordIncorrect =>
       'Mot de passe incorrect. Veuillez réessayer.';
+
+  @override
+  String get authDeviceOnlyPasswordUnavailable =>
+      'Device-managed password is unavailable on this device. Account recovery is not possible.';
 
   @override
   String get authAccountNotFound => 'Compte introuvable.';

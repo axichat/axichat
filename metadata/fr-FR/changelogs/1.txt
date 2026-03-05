@@ -1,0 +1,1 @@
+Première version F-Droid : boîte unifiée chat/e-mail, calendrier/tâches, synchro hors ligne, sans FCM.
