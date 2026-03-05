@@ -9,6 +9,10 @@
 </div>
 
 <div align="center">
+  <p><strong>Warning:</strong> Axichat is under active development, so things may break.</p>
+</div>
+
+<div align="center">
   <div style="display: block; width: 100%; max-width: 800px; margin: 0 auto; border-radius: 16px; overflow: hidden;">
     <video
       controls
@@ -20,7 +24,7 @@
       width="800"
       style="display: block; width: 100%; height: auto;"
     >
-      <source src="/assets/readme/Axichat_demo_24fps.mp4" type="video/mp4" />
+      <source src="https://gitlab.com/axichat/axichat/-/raw/master/assets/readme/Axichat_demo_24fps.mp4" type="video/mp4" />
       Your browser does not support HTML video.
     </video>
   </div>
@@ -41,38 +45,29 @@
 ## Screenshots
 
 <div align="center">
-  <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop1.png" width="740" alt="Axichat desktop screenshot 1" />
+  <a href="metadata/en-US/images/mockups/01.png">
+    <img src="metadata/en-US/images/mockups/01.png" width="320" hspace="10" alt="Axichat mockup 1" />
+  </a>
+  <a href="metadata/en-US/images/mockups/02.png">
+    <img src="metadata/en-US/images/mockups/02.png" width="320" hspace="10" alt="Axichat mockup 2" />
   </a>
 </div>
 
 <div align="center">
-  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_muc.png" width="320" hspace="10" alt="Axichat mobile chat screenshot" />
-  </a><!--
-  --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_email.png" width="320" hspace="10" alt="Axichat mobile email screenshot" />
+  <a href="metadata/en-US/images/mockups/03.png">
+    <img src="metadata/en-US/images/mockups/03.png" width="320" hspace="10" alt="Axichat mockup 3" />
+  </a>
+  <a href="metadata/en-US/images/mockups/04.png">
+    <img src="metadata/en-US/images/mockups/04.png" width="320" hspace="10" alt="Axichat mockup 4" />
   </a>
 </div>
 
 <div align="center">
-  <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop2.png" width="740" alt="Axichat desktop screenshot 2" />
+  <a href="metadata/en-US/images/mockups/05.png">
+    <img src="metadata/en-US/images/mockups/05.png" width="320" hspace="10" alt="Axichat mockup 5" />
   </a>
-</div>
-
-<div align="center">
-  <a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar.png" width="320" hspace="10" alt="Axichat mobile calendar screenshot" />
-  </a><!--
-  --><a href="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png">
-    <img src="/metadata/en-US/images/phoneScreenshots/axichat_mobile_calendar_alt.png" width="320" hspace="10" alt="Axichat mobile calendar alt screenshot" />
-  </a>
-</div>
-
-<div align="center">
-  <a href="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png">
-    <img src="/metadata/en-US/images/desktopScreenshots/axichat_desktop_calendar.png" width="740" alt="Axichat calendar screenshot" />
+  <a href="metadata/en-US/images/mockups/06.png">
+    <img src="metadata/en-US/images/mockups/06.png" width="320" hspace="10" alt="Axichat mockup 6" />
   </a>
 </div>
 <br />
