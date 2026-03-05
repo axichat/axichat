@@ -13063,7 +13063,10 @@ class _ChatSettingsButtons extends StatelessWidget {
       if (showXmppCapabilities)
         Padding(
           padding: itemPadding,
-          child: _ChatCapabilitiesSection(capabilities: state.xmppCapabilities),
+          child: _ChatCapabilitiesSection(
+            capabilities: state.xmppCapabilities,
+            isGroupChat: chat.type == ChatType.groupChat,
+          ),
         ),
       if (showAttachmentToggle)
         Padding(
@@ -13156,9 +13159,13 @@ class _ChatSettingsButtons extends StatelessWidget {
 }
 
 class _ChatCapabilitiesSection extends StatelessWidget {
-  const _ChatCapabilitiesSection({required this.capabilities});
+  const _ChatCapabilitiesSection({
+    required this.capabilities,
+    required this.isGroupChat,
+  });
 
   final XmppPeerCapabilities? capabilities;
+  final bool isGroupChat;
 
   String _formatFeatureLabel(String feature) {
     final trimmed = feature.trim();
@@ -13195,7 +13202,6 @@ class _ChatCapabilitiesSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final textTheme = context.textTheme;
     final sizing = context.sizing;
     final capabilitiesResolvedAt = capabilities?.capabilitiesResolvedAt;
     final String subtitle = capabilitiesResolvedAt == null
@@ -13203,30 +13209,52 @@ class _ChatCapabilitiesSection extends StatelessWidget {
         : l10n.chatSettingsCapabilitiesUpdated(
             TimeFormatter.formatFriendlyDateTime(l10n, capabilitiesResolvedAt),
           );
-    final features = capabilities?.features ?? const <String>[];
-    final List<_CapabilityEntry> entries = features
-        .map(
-          (feature) => _CapabilityEntry(
-            label: _formatFeatureLabel(feature),
-            raw: feature,
-          ),
-        )
-        .toList();
+    final featureSet = capabilities?.features.toSet() ?? const <String>{};
+    final List<_CapabilityEntry> entries = [
+      if (featureSet.contains(mox.chatMarkersXmlns) ||
+          featureSet.contains(mox.deliveryXmlns))
+        _CapabilityEntry(
+          label: l10n.settingsChatReadReceipts,
+          detail: l10n.settingsChatReadReceiptsDescription,
+        ),
+      if (featureSet.contains(mox.chatStateXmlns))
+        _CapabilityEntry(
+          label: l10n.settingsTypingIndicators,
+          detail: l10n.settingsTypingIndicatorsDescription,
+        ),
+      if (featureSet.contains(mox.messageReactionsXmlns))
+        _CapabilityEntry(
+          label: _formatFeatureLabel(mox.messageReactionsXmlns),
+          detail: l10n.chatReactionsPrompt,
+        ),
+      if (featureSet.contains(mox.mamXmlns))
+        _CapabilityEntry(label: _formatFeatureLabel(mox.mamXmlns)),
+      if (isGroupChat && featureSet.contains(mox.mucXmlns))
+        _CapabilityEntry(label: _formatFeatureLabel(mox.mucXmlns)),
+      if (isGroupChat && featureSet.contains(mox.mucXmlns))
+        _CapabilityEntry(label: l10n.mucSectionModerators),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(l10n.chatSettingsCapabilitiesTitle),
         SizedBox(height: spacing.xs),
-        Text(subtitle, style: textTheme.muted),
+        Text(subtitle, style: context.textTheme.muted),
         SizedBox(height: spacing.s),
         if (entries.isEmpty)
-          Text(l10n.chatSettingsCapabilitiesEmpty, style: textTheme.muted)
+          Text(
+            l10n.chatSettingsCapabilitiesEmpty,
+            style: context.textTheme.muted,
+          )
         else
           LayoutBuilder(
             builder: (context, constraints) {
               final availableWidth = constraints.maxWidth;
-              final minTileWidth = sizing.menuMinWidth;
+              final minTileWidth = math.max(
+                sizing.menuMinWidth,
+                sizing.menuItemHeight * 6,
+              );
               final double spacingWidth = spacing.s;
               final int columns = math.max(
                 1,
@@ -13244,7 +13272,7 @@ class _ChatCapabilitiesSection extends StatelessWidget {
                         width: tileWidth,
                         child: _CapabilityTile(
                           label: entry.label,
-                          raw: entry.raw,
+                          detail: entry.detail,
                         ),
                       ),
                     )
@@ -13258,17 +13286,17 @@ class _ChatCapabilitiesSection extends StatelessWidget {
 }
 
 class _CapabilityEntry {
-  const _CapabilityEntry({required this.label, required this.raw});
+  const _CapabilityEntry({required this.label, this.detail});
 
   final String label;
-  final String raw;
+  final String? detail;
 }
 
 class _CapabilityTile extends StatelessWidget {
-  const _CapabilityTile({required this.label, required this.raw});
+  const _CapabilityTile({required this.label, required this.detail});
 
   final String label;
-  final String raw;
+  final String? detail;
 
   @override
   Widget build(BuildContext context) {
@@ -13280,8 +13308,10 @@ class _CapabilityTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label),
-          SizedBox(height: spacing.xs),
-          Text(raw, style: textTheme.muted),
+          if (detail != null) ...[
+            SizedBox(height: spacing.xs),
+            Text(detail!, style: textTheme.muted),
+          ],
         ],
       ),
     );

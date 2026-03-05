@@ -230,17 +230,32 @@ mixin MucService on XmppBase, BaseStreamService {
     final resolved = candidate?.isNotEmpty == true
         ? candidate!
         : mucServiceHost;
-    if (resolved.trim().isEmpty) {
+    final probeJid = _mucCapabilityProbeJid(resolved);
+    if (probeJid == null) {
       return const CapabilityDecision(CapabilityDecisionKind.unknown);
     }
     if (this is MessageService) {
       return (this as MessageService).decideFeatureSupport(
-        jid: resolved,
+        jid: probeJid,
         feature: _mucDiscoFeature,
         featureLabel: 'MUC',
       );
     }
     return const CapabilityDecision(CapabilityDecisionKind.unknown);
+  }
+
+  String? _mucCapabilityProbeJid(String? jid) {
+    final trimmed = jid?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    try {
+      final parsed = mox.JID.fromString(trimmed);
+      if (parsed.local.isNotEmpty || parsed.resource.isNotEmpty) {
+        return parsed.domain;
+      }
+      return parsed.toBare().toString();
+    } on Exception {
+      return trimmed;
+    }
   }
 
   Future<bool> _ensureMucSupported({String? jid}) async {
