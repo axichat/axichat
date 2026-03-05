@@ -17,10 +17,19 @@
 </div>
 
 <div align="center">
-  <p><a href="assets/readme/Axichat_demo_24fps.mp4"><strong>Watch the Axichat demo video (MP4)</strong></a></p>
+  <p><a href="https://gitlab.com/axichat/axichat/-/raw/master/assets/readme/Axichat_demo_24fps.mp4"><strong>Watch the Axichat demo video (MP4)</strong></a></p>
 </div>
 
-![Axichat demo video](assets/readme/Axichat_demo_24fps.mp4)
+<div align="center">
+  <a href="https://gitlab.com/axichat/axichat/-/raw/master/assets/readme/Axichat_demo_24fps.mp4">
+    <img
+      src="assets/readme/Axichat_demo_24fps.mp4.png"
+      alt="Axichat demo video preview"
+      style="display: block; width: 100%; max-width: 960px; margin: 0 auto; border-radius: 16px;"
+    />
+  </a>
+  <p><em>Click the preview to play/download the MP4.</em></p>
+</div>
 
 <div align="center">
   <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
@@ -81,17 +90,64 @@
 <table width="100%">
   <tr>
     <td width="50%" align="center">
-      <a href="metadata/en-US/images/mockups/03.png">
-        <img src="metadata/en-US/images/mockups/03.png" width="100%" alt="Recipient address dropdown" />
-      </a>
-    </td>
-    <td width="50%" align="center">
       <a href="metadata/en-US/images/mockups/06.png">
         <img src="metadata/en-US/images/mockups/06.png" width="100%" alt="Home screen conversation list" />
       </a>
     </td>
+    <td width="50%" align="center">
+      <a href="metadata/en-US/images/mockups/03.png">
+        <img src="metadata/en-US/images/mockups/03.png" width="100%" alt="Recipient address dropdown" />
+      </a>
+    </td>
   </tr>
 </table>
+
+### Feature highlights:
+
+- 1st-party push notifications and offline sync
+- Unified inbox for chat + email side by side
+- Group chats and per-conversation settings
+- Easy forwarding and replying
+- Emoji reactions
+- Delivery and read receipts with typing indicators
+- Stream management with automatic reconnect to stop messages dropping
+- Upload your own avatar or use one of our cool defaults
+- Message drafts, starred items, and pinned messages
+- Rich attachments and inline previews
+- Fast search across chats, mail, and calendar
+- Collaborative calendars with per-event permissions and owner/assignee roles
+- Availability sharing that shows overlaps before you schedule
+- Natural-language scheduling with drag+drop calendar editing
+- One-tap add-to-calendar from simple text messages
+- Tasks, reminders, and calendar in one view
+- Calendar export/import for backups and migrations
+- Critical paths and agenda focus to surface what’s next
+- Accessibility-friendly modals and flows (keyboard/touch/reader aware)
+- Translated UI (English, Spanish, German, French, Chinese)
+- Dark and light modes with brand color schemes
+- Sync across all your devices (Android, Linux, Windows)
+- Desktop + mobile parity with keyboard shortcuts and touch affordances
+- Smart notifications (muting, per-chat overrides, do-not-disturb)
+- Works without Google/Firebase; pure XMPP + SMTP/IMAP core
+
+## Roadmap
+
+### Completed
+
+- [x] 2024: Core XMPP messenger foundation (presence, chat, open-protocol architecture)
+- [x] 2024: First-party notifications and offline-friendly messaging baseline
+- [x] 2025: Cross-platform desktop/mobile support (Android, Linux, Windows)
+- [x] 2025: Calendar + task system foundation (natural-language scheduling and drag/drop planning)
+- [x] 2025: Unified email integration via DeltaChat Core Rust
+- [x] 2025: Group chats (MUC) and richer conversation UX (receipts/reactions/reply flows)
+- [x] 2025: File attachments and media sharing in chat/email flows
+- [x] 2025: Shared availability and collaborative calendar workflows
+
+### Upcoming
+
+- [ ] 2026: Voice and video calling
+- [ ] 2026: End-to-end encryption
+- [ ] 2026: 3rd-party email OAuth
 <br />
 <hr />
 <br />
@@ -134,6 +190,8 @@
 
 ## Why?
 
+**Email sucks and most XMPP clients neglect UX**
+
 - **Tools matter** - Would you rather write a letter while standing up outside or sitting at your
   desk? Using the right software makes the same difference. Axichat is a digital desk for your
   online communication.
@@ -147,6 +205,8 @@
 <hr />
 
 ## What?
+
+**Built on XMPP and SMTP**
 
 ### Best chat interface:
 
@@ -172,58 +232,9 @@
 - Scheduling, task management, and reminders all in one place with natural language processing (no
   AI) for frictionless use.
 
-### Feature highlights:
-
-- 🚀 1st-party push notifications and offline sync
-- 🧭 Unified inbox for chat + email side by side
-- 👥 Group chats and per-conversation settings
-- 🔁 Easy forwarding and replying
-- 😀 Emoji reactions
-- ✅ Delivery and read receipts with typing indicators
-- 🔄 Stream management with automatic reconnect to stop messages dropping
-- 🧑‍🎨 Upload your own avatar or use one of our cool defaults
-- 📌 Message drafts, starred items, and pinned messages
-- 📎 Rich attachments and inline previews
-- 🔍 Fast search across chats, mail, and calendar
-- 🗂️ Collaborative calendars with per-event permissions and owner/assignee roles
-- 🕒 Availability sharing that shows overlaps before you schedule
-- 📅 Natural-language scheduling with drag+drop calendar editing
-- ➕ One-tap add-to-calendar from simple text messages
-- 🗓️ Tasks, reminders, and calendar in one view
-- 📤📥 Calendar export/import for backups and migrations
-- ⚡ Critical paths and agenda focus to surface what’s next
-- 🦾 Accessibility-friendly modals and flows (keyboard/touch/reader aware)
-- 🌍 Translated UI (English, Spanish, German, French, Chinese)
-- 🌓 Dark and light modes with brand color schemes
-- 🔄 Sync across all your devices (Android, Linux, Windows)
-- 🖥️ Desktop + mobile parity with keyboard shortcuts and touch affordances
-- 🔔 Smart notifications (muting, per-chat overrides, do-not-disturb)
-- 🌐 Works without Google/Firebase; pure XMPP + SMTP/IMAP core
-
-## Roadmap
-
-### Completed
-
-- [x] 2024: Core XMPP messenger foundation (presence, chat, open-protocol architecture)
-- [x] 2024: First-party notifications and offline-friendly messaging baseline
-- [x] 2025: Cross-platform desktop/mobile support (Android, Linux, Windows)
-- [x] 2025: Calendar + task system foundation (natural-language scheduling and drag/drop planning)
-- [x] 2025: Unified email integration via DeltaChat Core Rust
-- [x] 2025: Group chats (MUC) and richer conversation UX (receipts/reactions/reply flows)
-- [x] 2025: File attachments and media sharing in chat/email flows
-- [x] 2025: Shared availability and collaborative calendar workflows
-
-### Upcoming
-
-- [ ] 2026: Voice and video calling
-- [ ] 2026: End-to-end encryption
-- [ ] 2026: 3rd-party email OAuth
-
-<hr />
-
 ## When?
 
-- Built in 2025
+- Development started in 2024
 
 <hr />
 
