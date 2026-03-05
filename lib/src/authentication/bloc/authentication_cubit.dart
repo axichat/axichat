@@ -86,6 +86,7 @@ enum AuthMessageKey {
   accountNotFound,
   accountDeletionDisabled,
   accountDeletionFailed,
+  deviceOnlyPasswordUnavailable,
   demoModeFailed,
 }
 
@@ -188,6 +189,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
     }
     Future<void>(() async {
+      await _restorePasswordSkippedMode();
+    });
+    Future<void>(() async {
       await _purgeLegacySignupDraft();
     });
     if (kEnableDemoChats) {
@@ -214,6 +218,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final passwordStorageKey = CredentialStore.registerKey('password');
   final passwordPreHashedStorageKey = CredentialStore.registerKey(
     'password_prehashed_v1',
+  );
+  final passwordSkippedStorageKey = CredentialStore.registerKey(
+    'password_skipped_v1',
+  );
+  final skippedPasswordRawStorageKey = CredentialStore.registerKey(
+    'skipped_password_raw_v1',
   );
   final rememberMeChoiceKey = CredentialStore.registerKey('remember_me_choice');
   final pendingSignupRollbacksKey = CredentialStore.registerKey(
@@ -250,6 +260,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   String? _blockedSignupCredentialKey;
   String? _activeSignupCredentialKey;
   _AuthTransaction? _authTransaction;
+  var _passwordWasSkipped = false;
+
+  bool get passwordWasSkipped => _passwordWasSkipped;
 
   bool get _stickyAuthActive => state is AuthenticationComplete;
   int _failedLoginAttempts = 0;
@@ -572,6 +585,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     final accountJid = await _resolveLoginClearJid(jid);
     await _credentialStore.delete(key: jidStorageKey);
     await _clearStoredPassword();
+    await _clearSkippedPasswordSecrets();
     if (accountJid != null) {
       await _clearDatabaseSecretsForJid(accountJid);
     }
@@ -593,6 +607,90 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> _clearStoredPassword() async {
     await _credentialStore.delete(key: passwordStorageKey);
     await _credentialStore.delete(key: passwordPreHashedStorageKey);
+  }
+
+  Future<void> _persistSkippedPasswordSecrets({
+    required bool passwordWasSkipped,
+    required String? rawPassword,
+  }) async {
+    if (!passwordWasSkipped) {
+      await _clearSkippedPasswordSecrets();
+      return;
+    }
+    final trimmedRaw = rawPassword?.trim();
+    if (trimmedRaw == null || trimmedRaw.isEmpty) {
+      await _clearSkippedPasswordSecrets();
+      return;
+    }
+    await _credentialStore.write(
+      key: passwordSkippedStorageKey,
+      value: true.toString(),
+    );
+    await _credentialStore.write(
+      key: skippedPasswordRawStorageKey,
+      value: trimmedRaw,
+    );
+    _passwordWasSkipped = true;
+  }
+
+  Future<void> _clearSkippedPasswordSecrets() async {
+    await _credentialStore.delete(key: passwordSkippedStorageKey);
+    await _credentialStore.delete(key: skippedPasswordRawStorageKey);
+    _passwordWasSkipped = false;
+  }
+
+  Future<bool> loadPasswordWasSkippedChoice() async {
+    final stored = await _credentialStore.read(key: passwordSkippedStorageKey);
+    final parsed = _parseBoolOrNull(stored);
+    final resolved = parsed ?? false;
+    _passwordWasSkipped = resolved;
+    return resolved;
+  }
+
+  Future<void> _restorePasswordSkippedMode() async {
+    final previous = _passwordWasSkipped;
+    final wasSkipped = await loadPasswordWasSkippedChoice();
+    if (state is AuthenticationComplete && previous != wasSkipped) {
+      emit(state.copyWithConfig(endpointConfig));
+    }
+  }
+
+  Future<String?> _readStoredSkippedPasswordRaw() async {
+    final stored = await _credentialStore.read(
+      key: skippedPasswordRawStorageKey,
+    );
+    final trimmed = stored?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  Future<String?> _resolveDeviceOnlyPassword({required String jid}) async {
+    final skippedRaw = await _readStoredSkippedPasswordRaw();
+    if (skippedRaw != null) {
+      return skippedRaw;
+    }
+    final emailService = _emailService;
+    if (emailService == null) {
+      return null;
+    }
+    String? fallback;
+    try {
+      final account = await emailService.currentAccount(jid);
+      fallback = account?.password.trim();
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to resolve device-only password from email account',
+        error,
+        stackTrace,
+      );
+      return null;
+    }
+    if (fallback == null || fallback.isEmpty) {
+      return null;
+    }
+    return fallback;
   }
 
   Future<void> _clearDatabaseSecretsForJid(String jid) async {
@@ -1060,6 +1158,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     String? username,
     String? password,
     bool rememberMe = true,
+    bool passwordWasSkipped = false,
     bool requireEmailProvisioned = false,
     provisioning.EmailProvisioningCredentials? emailCredentials,
     AvatarUploadPayload? pendingAvatar,
@@ -1137,15 +1236,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     late final String accountJid;
     late final String provisioningPasswordCandidate;
     bool passwordPreHashed = false;
+    var effectivePasswordWasSkipped = passwordWasSkipped;
+    String? skippedPasswordRaw = passwordWasSkipped ? password : null;
     if (usingStoredCredentials) {
       final loginFromStore = storedLogin;
       accountJid = loginFromStore.jid!;
       provisioningPasswordCandidate = loginFromStore.password!;
+      effectivePasswordWasSkipped = await loadPasswordWasSkippedChoice();
+      skippedPasswordRaw = await _readStoredSkippedPasswordRaw();
       if (!loginFromStore.hasPreHashedFlag) {
         if (!wasAuthenticated) {
           await persistRememberMeChoice(false);
           await _credentialStore.delete(key: jidStorageKey);
           await _clearStoredPassword();
+          await _clearSkippedPasswordSecrets();
           _emit(
             const AuthenticationFailure(
               AuthKeyMessage(AuthMessageKey.storedCredentialsOutdated),
@@ -1163,6 +1267,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     } else {
       accountJid = '$username@${config.domain}';
       provisioningPasswordCandidate = password!;
+      if (effectivePasswordWasSkipped && skippedPasswordRaw == null) {
+        skippedPasswordRaw = provisioningPasswordCandidate;
+      }
     }
 
     final storedSecrets = await _readDatabaseSecrets(accountJid);
@@ -1284,6 +1391,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               rememberMe: rememberMe,
               password: effectivePassword,
               passwordPreHashed: passwordPreHashed,
+              passwordWasSkipped: effectivePasswordWasSkipped,
+              skippedPasswordRaw: skippedPasswordRaw,
               emailPassword: emailPassword,
               emailCredentials: emailCredentials,
               enforceEmailProvisioning: enforceEmailProvisioning,
@@ -1343,6 +1452,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               rememberMe: rememberMe,
               password: effectivePassword,
               passwordPreHashed: passwordPreHashed,
+              passwordWasSkipped: effectivePasswordWasSkipped,
+              skippedPasswordRaw: skippedPasswordRaw,
               emailPassword: emailPassword,
               emailCredentials: emailCredentials,
               enforceEmailProvisioning: enforceEmailProvisioning,
@@ -1386,6 +1497,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           rememberMe: rememberMe,
           password: effectivePassword,
           passwordPreHashed: passwordPreHashed,
+          passwordWasSkipped: effectivePasswordWasSkipped,
+          skippedPasswordRaw: skippedPasswordRaw,
           databasePrefixStorageKey: databasePrefixStorageKey,
           databasePrefix: ensuredDatabasePrefix,
           databasePassphraseStorageKey: databasePassphraseStorageKey,
@@ -1465,6 +1578,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         rememberMe: rememberMe,
         password: effectivePassword,
         passwordPreHashed: passwordPreHashed,
+        passwordWasSkipped: effectivePasswordWasSkipped,
+        skippedPasswordRaw: skippedPasswordRaw,
         databasePrefixStorageKey: databasePrefixStorageKey,
         databasePrefix: ensuredDatabasePrefix,
         databasePassphraseStorageKey: databasePassphraseStorageKey,
@@ -1566,10 +1681,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String databasePrefix,
     required String databasePassphrase,
     required bool rememberMe,
+    required bool passwordWasSkipped,
     required bool enforceEmailProvisioning,
     required RegisteredCredentialKey databasePrefixStorageKey,
     required RegisteredCredentialKey databasePassphraseStorageKey,
     required bool passwordPreHashed,
+    required String? skippedPasswordRaw,
     required AvatarUploadPayload? pendingAvatar,
     String? password,
     String? emailPassword,
@@ -1615,6 +1732,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       rememberMe: rememberMe,
       password: password,
       passwordPreHashed: passwordPreHashed,
+      passwordWasSkipped: passwordWasSkipped,
+      skippedPasswordRaw: skippedPasswordRaw,
       databasePrefixStorageKey: databasePrefixStorageKey,
       databasePrefix: databasePrefix,
       databasePassphraseStorageKey: databasePassphraseStorageKey,
@@ -1854,6 +1973,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool rememberMe,
     required String? password,
     required bool passwordPreHashed,
+    required bool passwordWasSkipped,
+    required String? skippedPasswordRaw,
     required RegisteredCredentialKey databasePrefixStorageKey,
     required String databasePrefix,
     required RegisteredCredentialKey databasePassphraseStorageKey,
@@ -1865,6 +1986,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       rememberMe: rememberMe,
       password: password,
       passwordPreHashed: passwordPreHashed,
+      passwordWasSkipped: passwordWasSkipped,
+      skippedPasswordRaw: skippedPasswordRaw,
       databasePrefixStorageKey: databasePrefixStorageKey,
       databasePrefix: databasePrefix,
       databasePassphraseStorageKey: databasePassphraseStorageKey,
@@ -1892,6 +2015,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool rememberMe,
     required String? password,
     required bool passwordPreHashed,
+    required bool passwordWasSkipped,
+    required String? skippedPasswordRaw,
     required RegisteredCredentialKey databasePrefixStorageKey,
     required String databasePrefix,
     required RegisteredCredentialKey databasePassphraseStorageKey,
@@ -1922,6 +2047,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _persistPasswordCredentials(
         password: password,
         passwordPreHashed: passwordPreHashed,
+      );
+      await _persistSkippedPasswordSecrets(
+        passwordWasSkipped: passwordWasSkipped,
+        rawPassword: skippedPasswordRaw,
       );
       return;
     } on Exception catch (error, stackTrace) {
@@ -2031,6 +2160,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String captchaID,
     required String captcha,
     required bool rememberMe,
+    required bool passwordWasSkipped,
     AvatarUploadPayload? avatar,
   }) async {
     if (kEnableDemoChats) {
@@ -2105,6 +2235,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         username: username,
         password: password,
         rememberMe: rememberMe,
+        passwordWasSkipped: passwordWasSkipped,
         requireEmailProvisioned: true,
         emailCredentials: emailProvisioningCredentials,
         pendingAvatar: avatar,
@@ -2302,6 +2433,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
   Future<void> logout({LogoutSeverity severity = LogoutSeverity.auto}) async {
     if (state is! AuthenticationComplete) return;
+    if (severity == LogoutSeverity.normal && _passwordWasSkipped) {
+      _log.warning('Normal logout blocked for device-only password account.');
+      return;
+    }
     await _homeRefreshSyncService.close();
     if (severity == LogoutSeverity.normal) {
       await _xmppService.clearSessionTokens();
@@ -2327,8 +2462,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         await _credentialStore.delete(key: jidStorageKey);
         await _credentialStore.delete(key: passwordStorageKey);
         await _credentialStore.delete(key: passwordPreHashedStorageKey);
+        await _clearSkippedPasswordSecrets();
       case LogoutSeverity.burn:
         await _credentialStore.deleteAll(burn: true);
+        _passwordWasSkipped = false;
         await _xmppService.burn();
     }
 
@@ -2369,6 +2506,21 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     final accountJid = '$normalizedUsername@$effectiveHost';
+    var effectiveOldPassword = oldPassword;
+    if (passwordWasSkipped) {
+      final resolvedPassword = await _resolveDeviceOnlyPassword(
+        jid: accountJid,
+      );
+      if (resolvedPassword == null) {
+        _emit(
+          const AuthenticationPasswordChangeFailure(
+            AuthKeyMessage(AuthMessageKey.deviceOnlyPasswordUnavailable),
+          ),
+        );
+        return;
+      }
+      effectiveOldPassword = resolvedPassword;
+    }
     final shouldChangeXmppPassword = endpointConfig.xmppEnabled;
     final shouldChangeEmailPassword = endpointConfig.smtpEnabled;
     final emailAddress = shouldChangeEmailPassword
@@ -2389,7 +2541,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
         final emailError = await _changeProvisionedEmailPassword(
           email: emailAddress,
-          oldPassword: oldPassword,
+          oldPassword: effectiveOldPassword,
           newPassword: password,
         );
         if (emailError != null) {
@@ -2404,6 +2556,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           rememberMe: rememberMe,
           passwordPreHashed: passwordIsPreHashed,
         );
+        await _clearSkippedPasswordSecrets();
         _emit(
           const AuthenticationPasswordChangeSuccess(
             AuthKeyMessage(AuthMessageKey.passwordChangeSuccess),
@@ -2420,22 +2573,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           _registerBodyKeyHost: effectiveHost,
           _registerBodyKeyPassword: password,
           _registerBodyKeyPassword2: password2,
-          _registerBodyKeyPasswordOld: oldPassword,
-          _registerBodyKeyPasswordOldLegacy: oldPassword,
+          _registerBodyKeyPasswordOld: effectiveOldPassword,
+          _registerBodyKeyPasswordOldLegacy: effectiveOldPassword,
         },
       );
       if (response.statusCode == 200) {
         if (shouldChangeEmailPassword && emailAddress != null) {
           final emailError = await _changeProvisionedEmailPassword(
             email: emailAddress,
-            oldPassword: oldPassword,
+            oldPassword: effectiveOldPassword,
             newPassword: password,
           );
           if (emailError != null) {
             final rollbackSucceeded = await _attemptXmppPasswordRollback(
               username: normalizedUsername,
               host: effectiveHost,
-              oldPassword: oldPassword,
+              oldPassword: effectiveOldPassword,
               newPassword: password,
             );
             _log.warning(
@@ -2454,6 +2607,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           rememberMe: rememberMe,
           passwordPreHashed: passwordIsPreHashed,
         );
+        await _clearSkippedPasswordSecrets();
         _emit(
           const AuthenticationPasswordChangeSuccess(
             AuthKeyMessage(AuthMessageKey.passwordChangeSuccess),
@@ -2594,8 +2748,24 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       );
       return;
     }
+    final accountJid = '$normalizedUsername@$effectiveHost';
     final shouldDeleteEmailAccount = endpointConfig.smtpEnabled;
     final shouldDeleteXmppAccount = endpointConfig.xmppEnabled;
+    var effectivePassword = password;
+    if (passwordWasSkipped) {
+      final resolvedPassword = await _resolveDeviceOnlyPassword(
+        jid: accountJid,
+      );
+      if (resolvedPassword == null) {
+        _emit(
+          const AuthenticationUnregisterFailure(
+            AuthKeyMessage(AuthMessageKey.deviceOnlyPasswordUnavailable),
+          ),
+        );
+        return;
+      }
+      effectivePassword = resolvedPassword;
+    }
     if (!shouldDeleteEmailAccount && !shouldDeleteXmppAccount) {
       _emit(
         const AuthenticationUnregisterFailure(
@@ -2612,7 +2782,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
         final emailDeletionError = await _deleteProvisionedEmailAccount(
           email: email ?? '$normalizedUsername@$effectiveHost',
-          password: password,
+          password: effectivePassword,
           logContext: 'during unregister',
         );
         if (emailDeletionError != null) {
@@ -2630,7 +2800,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       final response = await _requestAccountDeletion(
         username: normalizedUsername,
         host: effectiveHost,
-        password: password,
+        password: effectivePassword,
         logContext: 'during unregister',
       );
       if (response == null) {

@@ -39,6 +39,9 @@ class _UnregisterFormState extends State<UnregisterForm> {
   void _onPressed(BuildContext context) async {
     final form = Form.of(context);
     if (!form.validate()) return;
+    final passwordWasSkipped = context
+        .read<AuthenticationCubit>()
+        .passwordWasSkipped;
     final approved = await confirm(
       context,
       title: context.l10n.authUnregisterConfirmTitle,
@@ -51,7 +54,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
     await context.read<AuthenticationCubit>().unregister(
       username: context.read<ProfileCubit>().state.username,
       host: context.read<SettingsCubit>().state.endpointConfig.domain,
-      password: _passwordTextController.value.text,
+      password: passwordWasSkipped ? '' : _passwordTextController.value.text,
     );
     if (!context.mounted) return;
     _passwordTextController.clear();
@@ -62,6 +65,9 @@ class _UnregisterFormState extends State<UnregisterForm> {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
         final loading = state is AuthenticationUnregisterInProgress;
+        final passwordWasSkipped = context.select<AuthenticationCubit, bool>(
+          (cubit) => cubit.passwordWasSkipped,
+        );
         final spacing = context.spacing;
         final unregisterErrorPadding = EdgeInsets.all(spacing.s);
         final unregisterFieldPadding = EdgeInsets.all(spacing.s);
@@ -83,14 +89,24 @@ class _UnregisterFormState extends State<UnregisterForm> {
                       ),
                     )
                   : SizedBox(height: spacing.l),
-              Padding(
-                padding: unregisterFieldPadding,
-                child: PasswordInput(
-                  placeholder: context.l10n.authPasswordPlaceholder,
-                  enabled: !loading,
-                  controller: _passwordTextController,
+              if (passwordWasSkipped)
+                Padding(
+                  padding: unregisterFieldPadding,
+                  child: Text(
+                    context.l10n.authDeviceOnlyPasswordManagedDeleteHint,
+                    textAlign: TextAlign.center,
+                    style: context.textTheme.small,
+                  ),
                 ),
-              ),
+              if (!passwordWasSkipped)
+                Padding(
+                  padding: unregisterFieldPadding,
+                  child: PasswordInput(
+                    placeholder: context.l10n.authPasswordPlaceholder,
+                    enabled: !loading,
+                    controller: _passwordTextController,
+                  ),
+                ),
               SizedBox(height: spacing.s),
               AxiButton.destructive(
                 loading: loading,

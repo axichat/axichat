@@ -1949,13 +1949,15 @@ class _ChatState extends State<Chat> {
       locate<ChatBloc>().add(const ChatRoomMembersOpened());
     }
     final navigator = Navigator.of(context);
-    final spacing = context.spacing;
     final sizing = context.sizing;
     final Duration animationDuration =
         locate<SettingsCubit>().animationDuration;
     final colors = context.colorScheme;
     final motion = context.motion;
-    final scrimColor = colors.foreground.withValues(
+    final scrimBase = context.brightness == Brightness.dark
+        ? colors.background
+        : colors.foreground;
+    final scrimColor = scrimBase.withValues(
       alpha: motion.tapFocusAlpha + motion.tapHoverAlpha,
     );
     showGeneralDialog(
@@ -1967,86 +1969,83 @@ class _ChatState extends State<Chat> {
       transitionDuration: animationDuration,
       pageBuilder: (context, animation, secondaryAnimation) {
         return SafeArea(
-          child: Padding(
-            padding: EdgeInsetsDirectional.only(start: spacing.m),
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final drawerWidth = math.min(
-                    constraints.maxWidth,
-                    sizing.dialogMaxWidth,
-                  );
-                  return SizedBox(
-                    width: drawerWidth,
-                    child: BlocProvider.value(
-                      value: locate<ChatBloc>(),
-                      child: Builder(
-                        builder: (dialogContext) => _RoomMembersDrawerContent(
-                          onInvite: (jid) {
-                            final chatState = locate<ChatBloc>().state;
-                            final chat = chatState.chat;
-                            if (chat == null) {
-                              return;
-                            }
-                            locate<ChatBloc>().add(
-                              ChatInviteRequested(
-                                jid,
-                                chat: chat,
-                                roomState: chatState.roomState,
-                              ),
-                            );
-                          },
-                          onAction: (occupantId, action, actionLabel) {
-                            final chatState = locate<ChatBloc>().state;
-                            final chat = chatState.chat;
-                            if (chat == null) {
-                              return;
-                            }
-                            locate<ChatBloc>().add(
-                              ChatModerationActionRequested(
-                                occupantId: occupantId,
-                                action: action,
-                                actionLabel: actionLabel,
-                                chat: chat,
-                                roomState: chatState.roomState,
-                              ),
-                            );
-                          },
-                          onChangeNickname: (nick) {
-                            final chatState = locate<ChatBloc>().state;
-                            final chat = chatState.chat;
-                            if (chat == null) {
-                              return;
-                            }
-                            locate<ChatBloc>().add(
-                              ChatNicknameChangeRequested(
-                                nickname: nick,
-                                chatJid: chat.jid,
-                                chatType: chat.type,
-                              ),
-                            );
-                          },
-                          onLeaveRoom: () {
-                            final chatState = locate<ChatBloc>().state;
-                            final chat = chatState.chat;
-                            if (chat == null) {
-                              return;
-                            }
-                            locate<ChatBloc>().add(
-                              ChatLeaveRoomRequested(
-                                chatJid: chat.jid,
-                                chatType: chat.type,
-                              ),
-                            );
-                          },
-                          onClose: navigator.pop,
-                        ),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final drawerWidth = math.min(
+                  constraints.maxWidth,
+                  sizing.dialogMaxWidth,
+                );
+                return SizedBox(
+                  width: drawerWidth,
+                  child: BlocProvider.value(
+                    value: locate<ChatBloc>(),
+                    child: Builder(
+                      builder: (dialogContext) => _RoomMembersDrawerContent(
+                        onInvite: (jid) {
+                          final chatState = locate<ChatBloc>().state;
+                          final chat = chatState.chat;
+                          if (chat == null) {
+                            return;
+                          }
+                          locate<ChatBloc>().add(
+                            ChatInviteRequested(
+                              jid,
+                              chat: chat,
+                              roomState: chatState.roomState,
+                            ),
+                          );
+                        },
+                        onAction: (occupantId, action, actionLabel) {
+                          final chatState = locate<ChatBloc>().state;
+                          final chat = chatState.chat;
+                          if (chat == null) {
+                            return;
+                          }
+                          locate<ChatBloc>().add(
+                            ChatModerationActionRequested(
+                              occupantId: occupantId,
+                              action: action,
+                              actionLabel: actionLabel,
+                              chat: chat,
+                              roomState: chatState.roomState,
+                            ),
+                          );
+                        },
+                        onChangeNickname: (nick) {
+                          final chatState = locate<ChatBloc>().state;
+                          final chat = chatState.chat;
+                          if (chat == null) {
+                            return;
+                          }
+                          locate<ChatBloc>().add(
+                            ChatNicknameChangeRequested(
+                              nickname: nick,
+                              chatJid: chat.jid,
+                              chatType: chat.type,
+                            ),
+                          );
+                        },
+                        onLeaveRoom: () {
+                          final chatState = locate<ChatBloc>().state;
+                          final chat = chatState.chat;
+                          if (chat == null) {
+                            return;
+                          }
+                          locate<ChatBloc>().add(
+                            ChatLeaveRoomRequested(
+                              chatJid: chat.jid,
+                              chatType: chat.type,
+                            ),
+                          );
+                        },
+                        onClose: navigator.pop,
                       ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
           ),
         );
@@ -2062,10 +2061,10 @@ class _ChatState extends State<Chat> {
         );
         return SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(0.08, 0),
+            begin: const Offset(1, 0),
             end: Offset.zero,
           ).animate(curved),
-          child: FadeScaleTransition(animation: animation, child: child),
+          child: child,
         );
       },
     );
@@ -2765,31 +2764,15 @@ class _ChatState extends State<Chat> {
 
   Future<void> _handleSendButtonLongPress() async {
     if (widget.readOnly) return;
-    final action = await showAdaptiveBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      dialogMaxWidth: context.sizing.dialogMaxWidth,
-      surfacePadding: EdgeInsets.zero,
-      builder: (sheetContext) {
-        return AxiSheetScaffold.scroll(
-          header: AxiSheetHeader(
-            title: Text(sheetContext.l10n.commonActions),
-            onClose: () => Navigator.of(sheetContext).maybePop(),
-          ),
-          children: [
-            AxiListButton(
-              leading: Icon(
-                LucideIcons.save,
-                color: sheetContext.colorScheme.primary,
-              ),
-              onPressed: () => Navigator.of(sheetContext).pop('save'),
-              child: Text(sheetContext.l10n.chatSaveAsDraft),
-            ),
-          ],
-        );
-      },
+    final approved = await confirm(
+      context,
+      title: context.l10n.commonActions,
+      message: '',
+      confirmLabel: context.l10n.chatSaveAsDraft,
+      cancelLabel: context.l10n.commonCancel,
+      destructiveConfirm: false,
     );
-    if (!mounted || action != 'save') return;
+    if (!mounted || approved != true) return;
     await _saveComposerAsDraft();
   }
 

@@ -868,6 +868,7 @@ void main() {
         captchaID: captchaId,
         captcha: captchaText,
         rememberMe: true,
+        passwordWasSkipped: false,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -928,6 +929,7 @@ void main() {
         captchaID: captchaId,
         captcha: captchaText,
         rememberMe: false,
+        passwordWasSkipped: false,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -984,6 +986,7 @@ void main() {
         captchaID: captchaId,
         captcha: captchaText,
         rememberMe: false,
+        passwordWasSkipped: false,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -1037,6 +1040,7 @@ void main() {
         captchaID: captchaId,
         captcha: captchaText,
         rememberMe: false,
+        passwordWasSkipped: false,
       ),
       expect: () => [
         const AuthenticationSignUpInProgress(),
@@ -1082,6 +1086,7 @@ void main() {
         captchaID: captchaId,
         captcha: captchaText,
         rememberMe: false,
+        passwordWasSkipped: false,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),

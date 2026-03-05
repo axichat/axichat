@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:math' as math;
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/ui/fade_scale_dialog.dart';
@@ -69,6 +71,21 @@ Future<T?> showAdaptiveBottomSheet<T>({
         final double topInset = useSafeArea
             ? viewMediaQuery.viewPadding.top
             : zeroInset;
+        final double bottomSafeInset = useSafeArea
+            ? math.max(
+                viewMediaQuery.viewPadding.bottom -
+                    mediaQuery.viewInsets.bottom,
+                zeroInset,
+              )
+            : zeroInset;
+        final EdgeInsets baseSurfacePadding = resolvedSurfacePadding.resolve(
+          Directionality.of(sheetContext),
+        );
+        final EdgeInsets resolvedSheetSurfacePadding = transparentSurface
+            ? EdgeInsets.zero
+            : baseSurfacePadding.copyWith(
+                bottom: baseSurfacePadding.bottom + bottomSafeInset,
+              );
         final Widget child = _AxiSheetChrome(
           showDragHandle: showDragHandle,
           showCloseButton: showCloseButton,
@@ -80,9 +97,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
           child: AxiModalSurface(
             backgroundColor: resolvedBackground,
             borderColor: Colors.transparent,
-            padding: transparentSurface
-                ? EdgeInsets.zero
-                : resolvedSurfacePadding,
+            padding: resolvedSheetSurfacePadding,
             borderRadius: sheetRadius,
             shadows: transparentSurface ? const <BoxShadow>[] : null,
             child: child,

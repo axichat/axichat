@@ -182,18 +182,41 @@ class RoomMembersSheet extends StatelessWidget {
   }
 
   Future<List<String>?> _promptInvite(BuildContext context) async {
-    final dialogMaxWidth = context.sizing.dialogMaxWidth;
-    return showAdaptiveBottomSheet<List<String>>(
+    return showFadeScaleDialog<List<String>>(
       context: context,
-      isScrollControlled: true,
       useRootNavigator: false,
-      surfacePadding: EdgeInsets.zero,
-      dialogMaxWidth: dialogMaxWidth,
-      showCloseButton: false,
-      builder: (context) => _InviteChipsSheet(
-        initialRecipients: const [],
-        onClose: () => Navigator.of(context).maybePop(),
-      ),
+      builder: (dialogContext) {
+        final mediaQuery = MediaQuery.of(dialogContext);
+        final spacing = dialogContext.spacing;
+        final sizing = dialogContext.sizing;
+        return Dialog(
+          insetPadding: EdgeInsets.fromLTRB(
+            spacing.l,
+            spacing.l,
+            spacing.l,
+            spacing.l + mediaQuery.viewInsets.bottom,
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          child: AxiModalSurface(
+            backgroundColor: dialogContext.colorScheme.card,
+            borderColor: dialogContext.colorScheme.border,
+            padding: EdgeInsets.zero,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: sizing.dialogMaxWidth,
+                maxHeight:
+                    mediaQuery.size.height * sizing.dialogMaxHeightFraction,
+              ),
+              child: _InviteChipsSheet(
+                initialRecipients: const [],
+                onClose: () => Navigator.of(dialogContext).maybePop(),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

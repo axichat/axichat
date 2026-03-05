@@ -463,6 +463,9 @@ class _ProfileCardSection extends StatelessWidget {
     final l10n = context.l10n;
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, profileState) {
+        final hideLogoutButton = context.select<AuthenticationCubit, bool>(
+          (cubit) => cubit.passwordWasSkipped,
+        );
         final ConnectionState connectionState = _xmppStateFor(
           connectivityState,
           demoOffline: demoOffline,
@@ -567,8 +570,10 @@ class _ProfileCardSection extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(width: _profileHeaderSpacing),
-                    const LogoutButton(),
+                    if (!hideLogoutButton) ...[
+                      const SizedBox(width: _profileHeaderSpacing),
+                      const LogoutButton(),
+                    ],
                   ],
                 ),
               ),

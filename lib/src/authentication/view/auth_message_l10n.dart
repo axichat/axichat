@@ -42,6 +42,8 @@ extension AuthMessageKeyLocalization on AuthMessageKey {
     AuthMessageKey.accountNotFound => l10n.authAccountNotFound,
     AuthMessageKey.accountDeletionDisabled => l10n.authAccountDeletionDisabled,
     AuthMessageKey.accountDeletionFailed => l10n.authAccountDeletionFailed,
+    AuthMessageKey.deviceOnlyPasswordUnavailable =>
+      l10n.authDeviceOnlyPasswordUnavailable,
     AuthMessageKey.demoModeFailed => l10n.authDemoModeFailed,
   };
 }

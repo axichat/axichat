@@ -13,6 +13,7 @@ import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
 import 'package:axichat/src/avatar/view/avatar_error_l10n.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
+import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -76,6 +77,7 @@ class _SignupFormState extends State<SignupForm>
   bool _showAllowInsecureError = false;
   bool _showBreachedError = false;
   String _lastPasswordValue = '';
+  bool _passwordWasSkipped = false;
   int _allowInsecureResetTick = 0;
   _CaptchaLoadState _captchaLoadState = _CaptchaLoadState.idle;
   String? _captchaSrcUrl;
@@ -153,6 +155,9 @@ class _SignupFormState extends State<SignupForm>
     final password = _passwordTextController.text;
     if (_lastPasswordValue != password) {
       _lastPasswordValue = password;
+      if (_passwordWasSkipped) {
+        _passwordWasSkipped = false;
+      }
       _showAllowInsecureError = false;
       _showBreachedError = false;
       if (_passwordBreached && _lastBreachedPassword != password) {
@@ -239,13 +244,15 @@ class _SignupFormState extends State<SignupForm>
         .buildSelectedAvatarPayload();
     if (!context.mounted) return;
     widget.onSubmitStart?.call();
+    final effectiveRememberMe = _passwordWasSkipped ? true : rememberMe;
     await context.read<AuthenticationCubit>().signup(
       username: _jidTextController.value.text,
       password: _passwordTextController.value.text,
       confirmPassword: _password2TextController.value.text,
       captchaID: captchaId,
       captcha: _captchaTextController.value.text,
-      rememberMe: rememberMe,
+      rememberMe: effectiveRememberMe,
+      passwordWasSkipped: _passwordWasSkipped,
       avatar: avatarPayload,
     );
   }
@@ -518,6 +525,38 @@ class _SignupFormState extends State<SignupForm>
       _passwordBreached = false;
       _lastBreachedPassword = null;
     });
+    _goToNextSignupStep();
+  }
+
+  Future<void> _handleSkipPasswordPressed(BuildContext context) async {
+    final approved = await confirm(
+      context,
+      title: context.l10n.signupSkipPasswordConfirmTitle,
+      message: context.l10n.signupSkipPasswordConfirmMessage,
+      confirmLabel: context.l10n.signupSkipPasswordConfirmAction,
+      cancelLabel: context.l10n.commonCancel,
+      destructiveConfirm: true,
+    );
+    if (!context.mounted || approved != true) {
+      return;
+    }
+    final generatedPassword = generateRandomString(length: 32);
+    _passwordTextController.text = generatedPassword;
+    _password2TextController.text = generatedPassword;
+    setState(() {
+      _passwordWasSkipped = true;
+      rememberMe = true;
+      allowInsecurePassword = false;
+      _passwordBreached = false;
+      _lastBreachedPassword = null;
+      _showAllowInsecureError = false;
+      _showBreachedError = false;
+    });
+    _rememberMeFieldKey.currentState?.didChange(true);
+    await context.read<AuthenticationCubit>().persistRememberMeChoice(true);
+    if (!context.mounted) {
+      return;
+    }
     _goToNextSignupStep();
   }
 
@@ -1042,27 +1081,28 @@ class _SignupFormState extends State<SignupForm>
                                     padding: fieldSpacing,
                                     child: TermsCheckbox(enabled: !isBusy),
                                   ),
-                                  Padding(
-                                    padding: fieldSpacing,
-                                    child: AxiCheckboxFormField(
-                                      key: _rememberMeFieldKey,
-                                      enabled: !isBusy,
-                                      initialValue: rememberMe,
-                                      inputLabel: Text(
-                                        context.l10n.authRememberMeLabel,
+                                  if (!_passwordWasSkipped)
+                                    Padding(
+                                      padding: fieldSpacing,
+                                      child: AxiCheckboxFormField(
+                                        key: _rememberMeFieldKey,
+                                        enabled: !isBusy,
+                                        initialValue: rememberMe,
+                                        inputLabel: Text(
+                                          context.l10n.authRememberMeLabel,
+                                        ),
+                                        onChanged: (value) async {
+                                          setState(() {
+                                            rememberMe = value;
+                                          });
+                                          await context
+                                              .read<AuthenticationCubit>()
+                                              .persistRememberMeChoice(
+                                                rememberMe,
+                                              );
+                                        },
                                       ),
-                                      onChanged: (value) async {
-                                        setState(() {
-                                          rememberMe = value;
-                                        });
-                                        await context
-                                            .read<AuthenticationCubit>()
-                                            .persistRememberMeChoice(
-                                              rememberMe,
-                                            );
-                                      },
                                     ),
-                                  ),
                                 ],
                               ),
                             ),
@@ -1082,6 +1122,8 @@ class _SignupFormState extends State<SignupForm>
                           final showNextButton =
                               _currentIndex < _formKeys.length - 1;
                           final showSubmitButton = !showNextButton;
+                          final showSkipPasswordButton =
+                              showNextButton && isPasswordStep;
 
                           final backButton = AxiAnimatedSize(
                             duration: animationDuration,
@@ -1119,6 +1161,19 @@ class _SignupFormState extends State<SignupForm>
                                 )
                               : const SizedBox.shrink();
 
+                          final skipPasswordButton = showSkipPasswordButton
+                              ? AxiButton.secondary(
+                                  onPressed:
+                                      isBusy ||
+                                          isCheckingPwned ||
+                                          avatarState.processing
+                                      ? null
+                                      : () =>
+                                            _handleSkipPasswordPressed(context),
+                                  child: Text(context.l10n.signupSkipPassword),
+                                )
+                              : const SizedBox.shrink();
+
                           final submitButton = showSubmitButton
                               ? AxiButton.primary(
                                   loading: isBusy,
@@ -1132,7 +1187,25 @@ class _SignupFormState extends State<SignupForm>
                                 )
                               : const SizedBox.shrink();
 
+                          if (showSkipPasswordButton) {
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Wrap(
+                                    spacing: spacing.s,
+                                    runSpacing: spacing.s,
+                                    children: [backButton, continueButton],
+                                  ),
+                                ),
+                                SizedBox(width: spacing.xl),
+                                skipPasswordButton,
+                              ],
+                            );
+                          }
+
                           return Wrap(
+                            spacing: spacing.s,
                             runSpacing: spacing.s,
                             children: [
                               backButton,

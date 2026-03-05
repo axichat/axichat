@@ -73,7 +73,6 @@ import 'widgets/task_form_section.dart';
 import 'widgets/task_checklist.dart';
 import 'widgets/task_text_field.dart';
 import 'widgets/critical_path_panel.dart';
-import 'widgets/calendar_sheet_header.dart';
 import 'widgets/calendar_task_list_tile.dart';
 import 'widgets/task_tile_surface.dart';
 import 'widgets/reminder_preferences_field.dart';
@@ -2306,43 +2305,13 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   Future<bool> _confirmCriticalPathDeletion(CalendarCriticalPath path) async {
     final BuildContext modalContext = context.calendarModalContext;
-    final result = await showAdaptiveBottomSheet<bool>(
-      context: modalContext,
-      dialogMaxWidth: 420,
-      surfacePadding: EdgeInsets.all(context.spacing.m),
-      showCloseButton: false,
-      builder: (sheetContext) {
-        return SafeArea(
-          top: false,
-          bottom: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              CalendarSheetHeader(
-                title: context.l10n.calendarCriticalPathDeleteTitle,
-                subtitle: context.l10n.calendarRemovePathConfirm(path.name),
-                onClose: () => Navigator.of(sheetContext).maybePop(false),
-              ),
-              SizedBox(height: context.spacing.m),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  AxiButton.ghost(
-                    onPressed: () => Navigator.of(sheetContext).maybePop(false),
-                    child: Text(context.l10n.commonCancel),
-                  ),
-                  SizedBox(width: context.spacing.xxs),
-                  AxiButton.destructive(
-                    onPressed: () => Navigator.of(sheetContext).pop(true),
-                    child: Text(sheetContext.l10n.commonDelete),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
+    final result = await confirm(
+      modalContext,
+      title: context.l10n.calendarCriticalPathDeleteTitle,
+      message: context.l10n.calendarRemovePathConfirm(path.name),
+      confirmLabel: context.l10n.commonDelete,
+      cancelLabel: context.l10n.commonCancel,
+      destructiveConfirm: true,
     );
     return result ?? false;
   }

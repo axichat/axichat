@@ -44,10 +44,13 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
 
   void _onPressed(BuildContext context) async {
     if (!Form.of(context).mounted || !Form.of(context).validate()) return;
+    final passwordWasSkipped = context
+        .read<AuthenticationCubit>()
+        .passwordWasSkipped;
     await context.read<AuthenticationCubit>().changePassword(
       username: context.read<ProfileCubit>().state.username,
       host: context.read<SettingsCubit>().state.endpointConfig.domain,
-      oldPassword: _passwordTextController.value.text,
+      oldPassword: passwordWasSkipped ? '' : _passwordTextController.value.text,
       password: _newPasswordTextController.value.text,
       password2: _newPassword2TextController.value.text,
     );
@@ -62,6 +65,9 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
     return BlocBuilder<AuthenticationCubit, AuthenticationState>(
       builder: (context, state) {
         final loading = state is AuthenticationPasswordChangeInProgress;
+        final passwordWasSkipped = context.select<AuthenticationCubit, bool>(
+          (cubit) => cubit.passwordWasSkipped,
+        );
         final spacing = context.spacing;
         return Form(
           child: Column(
@@ -89,14 +95,24 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
                       ),
                     )
                   : SizedBox(height: spacing.l),
-              Padding(
-                padding: EdgeInsets.all(spacing.s),
-                child: PasswordInput(
-                  placeholder: context.l10n.authPasswordCurrentPlaceholder,
-                  enabled: !loading,
-                  controller: _passwordTextController,
+              if (passwordWasSkipped)
+                Padding(
+                  padding: EdgeInsets.all(spacing.s),
+                  child: Text(
+                    context.l10n.authDeviceOnlyPasswordManagedChangeHint,
+                    textAlign: TextAlign.center,
+                    style: context.textTheme.small,
+                  ),
                 ),
-              ),
+              if (!passwordWasSkipped)
+                Padding(
+                  padding: EdgeInsets.all(spacing.s),
+                  child: PasswordInput(
+                    placeholder: context.l10n.authPasswordCurrentPlaceholder,
+                    enabled: !loading,
+                    controller: _passwordTextController,
+                  ),
+                ),
               Padding(
                 padding: EdgeInsets.all(spacing.s),
                 child: PasswordInput(

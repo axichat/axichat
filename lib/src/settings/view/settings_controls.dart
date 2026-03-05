@@ -168,13 +168,6 @@ class SettingsControls extends StatelessWidget {
                       : null,
                 ),
                 _SettingsActionButton(
-                  iconData: LucideIcons.userRoundPlus,
-                  label: context.l10n.emailContactsImportTitle,
-                  onPressed: emailEnabled
-                      ? () async => await _showEmailContactImportDialog(context)
-                      : null,
-                ),
-                _SettingsActionButton(
                   iconData: LucideIcons.image,
                   label: context.l10n.draftAttachmentsLabel,
                   onPressed: () => context.push(
@@ -214,6 +207,13 @@ class SettingsControls extends StatelessWidget {
                     const ArchivesRoute().location,
                     extra: locate,
                   ),
+                ),
+                _SettingsActionButton(
+                  iconData: LucideIcons.userRoundPlus,
+                  label: context.l10n.emailContactsImportTitle,
+                  onPressed: emailEnabled
+                      ? () async => await _showEmailContactImportDialog(context)
+                      : null,
                 ),
                 _SettingsActionButton(
                   iconData: LucideIcons.messagesSquare,
