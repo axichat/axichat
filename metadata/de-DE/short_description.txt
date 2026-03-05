@@ -1,1 +1,1 @@
-Open-Source XMPP- und E-Mail-Messenger mit Kalender, ohne FCM und Tracker.
+Freier XMPP- und E-Mail-Client mit Kalender, ohne FCM und Tracker.
