@@ -62,4 +62,4 @@ Android 权限说明：
 - 官网：https://axi.chat
 - 版本说明：https://gitlab.com/axichat/axichat/-/releases
 - 源代码与问题追踪见上方。
-- 捐助：https://axi.chat/support
+- 捐助：https://axi.chat/donate

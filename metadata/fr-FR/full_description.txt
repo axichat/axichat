@@ -62,4 +62,4 @@ Support et mises à jour:
 - Site web: https://axi.chat
 - Notes de version: https://gitlab.com/axichat/axichat/-/releases
 - Code source et tickets sont liés ci-dessus.
-- Dons: https://axi.chat/support
+- Dons: https://axi.chat/donate
