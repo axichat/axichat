@@ -13,22 +13,14 @@
 </div>
 
 <div align="center">
-  <div style="display: block; width: 100%; max-width: 800px; margin: 0 auto; border-radius: 16px; overflow: hidden;">
-    <video
-      controls
-      autoplay
-      loop
-      muted
-      playsinline
-      preload="metadata"
-      width="800"
-      style="display: block; width: 100%; height: auto;"
-    >
-      <source src="https://gitlab.com/axichat/axichat/-/raw/master/assets/readme/Axichat_demo_24fps.mp4" type="video/mp4" />
-      Your browser does not support HTML video.
-    </video>
-  </div>
+  <p><a href="https://axi.chat"><strong>Visit the website: axi.chat</strong></a></p>
 </div>
+
+<div align="center">
+  <p><a href="assets/readme/Axichat_demo_24fps.mp4"><strong>Watch the Axichat demo video (MP4)</strong></a></p>
+</div>
+
+![Axichat demo video](assets/readme/Axichat_demo_24fps.mp4)
 
 <div align="center">
   <a href="https://github.com/axichat/axichat/releases/latest/download/app-production-release.apk">
@@ -45,31 +37,61 @@
 ## Screenshots
 
 <div align="center">
-  <a href="metadata/en-US/images/mockups/01.png">
-    <img src="metadata/en-US/images/mockups/01.png" width="320" hspace="10" alt="Axichat mockup 1" />
-  </a>
-  <a href="metadata/en-US/images/mockups/02.png">
-    <img src="metadata/en-US/images/mockups/02.png" width="320" hspace="10" alt="Axichat mockup 2" />
-  </a>
+  <p><strong>Breeze through email like you're texting</strong></p>
 </div>
 
-<div align="center">
-  <a href="metadata/en-US/images/mockups/03.png">
-    <img src="metadata/en-US/images/mockups/03.png" width="320" hspace="10" alt="Axichat mockup 3" />
-  </a>
-  <a href="metadata/en-US/images/mockups/04.png">
-    <img src="metadata/en-US/images/mockups/04.png" width="320" hspace="10" alt="Axichat mockup 4" />
-  </a>
-</div>
+<table width="100%">
+  <tr>
+    <td width="50%" align="center">
+      <a href="metadata/en-US/images/mockups/02.png">
+        <img src="metadata/en-US/images/mockups/02.png" width="100%" alt="Groupchat conversation flow" />
+      </a>
+    </td>
+    <td width="50%" align="center">
+      <a href="metadata/en-US/images/mockups/01.png">
+        <img src="metadata/en-US/images/mockups/01.png" width="100%" alt="Email conversation flow" />
+      </a>
+    </td>
+  </tr>
+</table>
 
 <div align="center">
-  <a href="metadata/en-US/images/mockups/05.png">
-    <img src="metadata/en-US/images/mockups/05.png" width="320" hspace="10" alt="Axichat mockup 5" />
-  </a>
-  <a href="metadata/en-US/images/mockups/06.png">
-    <img src="metadata/en-US/images/mockups/06.png" width="320" hspace="10" alt="Axichat mockup 6" />
-  </a>
+  <p><strong>Schedule your weeks in minutes</strong></p>
 </div>
+
+<table width="100%">
+  <tr>
+    <td width="50%" align="center">
+      <a href="metadata/en-US/images/mockups/05.png">
+        <img src="metadata/en-US/images/mockups/05.png" width="100%" alt="Reminders checklist" />
+      </a>
+    </td>
+    <td width="50%" align="center">
+      <a href="metadata/en-US/images/mockups/04.png">
+        <img src="metadata/en-US/images/mockups/04.png" width="100%" alt="Drag and drop calendar grid" />
+      </a>
+    </td>
+  </tr>
+</table>
+
+<div align="center">
+  <p><strong>Reach anyone, even if they don't use Axichat</strong></p>
+</div>
+
+<table width="100%">
+  <tr>
+    <td width="50%" align="center">
+      <a href="metadata/en-US/images/mockups/03.png">
+        <img src="metadata/en-US/images/mockups/03.png" width="100%" alt="Recipient address dropdown" />
+      </a>
+    </td>
+    <td width="50%" align="center">
+      <a href="metadata/en-US/images/mockups/06.png">
+        <img src="metadata/en-US/images/mockups/06.png" width="100%" alt="Home screen conversation list" />
+      </a>
+    </td>
+  </tr>
+</table>
 <br />
 <hr />
 <br />
