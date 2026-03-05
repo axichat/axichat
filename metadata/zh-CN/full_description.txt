@@ -7,6 +7,8 @@
 
 Axichat 是一款前沿的电子邮件与 XMPP 客户端，完全开源，提供第一方推送通知（绝不使用 FCM），且不依赖任何第三方服务。
 
+你可以按照 https://github.com/axichat/selfhost 的步骤，自行托管 Axichat 的邮件 + XMPP 服务器。
+
 功能亮点：
 - 聊天与邮件同屏统一收件箱。
 - 群聊与会话级设置。

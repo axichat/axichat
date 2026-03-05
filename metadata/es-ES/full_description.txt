@@ -7,6 +7,8 @@ Licencia: AGPL-3.0-or-later
 
 Axichat es un cliente de correo y XMPP de última generación, totalmente de código abierto, con notificaciones push de primera parte (nunca FCM) y sin dependencias de terceros.
 
+Puedes autoalojar tu propio servidor de correo + XMPP para Axichat siguiendo los pasos en https://github.com/axichat/selfhost.
+
 Características destacadas:
 - Bandeja unificada para chat y correo lado a lado.
 - Chats de grupo y ajustes por conversación.
