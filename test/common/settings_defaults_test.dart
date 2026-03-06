@@ -23,5 +23,33 @@ void main() {
     test('requires email send confirmation by default', () {
       expect(state.emailSendConfirmationEnabled, isTrue);
     });
+
+    test('shows the donation prompt after 100 tracked messages by default', () {
+      expect(state.donationPromptNextDisplayMessageCount, 100);
+      expect(state.showsDonationPrompt(99), isFalse);
+      expect(state.showsDonationPrompt(100), isTrue);
+    });
+
+    test('tracks new messages across stored-count resets', () {
+      final afterInitialSync = state.syncDonationPromptMessageCount(120);
+      expect(afterInitialSync.donationPromptTrackedMessageCount, 120);
+      expect(
+        afterInitialSync.donationPromptLastObservedStoredMessageCount,
+        120,
+      );
+
+      final afterDeletion = afterInitialSync.syncDonationPromptMessageCount(20);
+      expect(afterDeletion.donationPromptTrackedMessageCount, 120);
+      expect(afterDeletion.donationPromptLastObservedStoredMessageCount, 20);
+
+      final afterMoreMessages = afterDeletion.syncDonationPromptMessageCount(
+        35,
+      );
+      expect(afterMoreMessages.donationPromptTrackedMessageCount, 135);
+      expect(
+        afterMoreMessages.donationPromptLastObservedStoredMessageCount,
+        35,
+      );
+    });
   });
 }

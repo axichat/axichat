@@ -696,6 +696,12 @@
   "profileJumpToTop": "返回頂部",
   "settingsWebsiteLabel": "網站",
   "settingsDonateLabel": "捐贈",
+  "profileDonationPromptMessage": "嗨，{username}，請支持 Axichat。它是免費而且開源的，所以我們依靠像你這樣的用戶捐款來維護應用程式並讓伺服器持續運作。哪怕只是 5 美元，也能大大幫助我們分擔每月開支。",
+  "@profileDonationPromptMessage": {
+    "placeholders": {
+      "username": {}
+    }
+  },
   "settingsMastodonLabel": "Mastodon",
   "settingsGithubLabel": "GitHub",
   "settingsGitlabLabel": "GitLab",

@@ -71,6 +71,7 @@ class ChatCutoutComposer extends StatelessWidget {
     this.maxLines = 6,
     this.header,
     this.semanticsLabel,
+    this.enabled = true,
   });
 
   final TextEditingController controller;
@@ -84,6 +85,7 @@ class ChatCutoutComposer extends StatelessWidget {
   final int maxLines;
   final Widget? header;
   final String? semanticsLabel;
+  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +101,7 @@ class ChatCutoutComposer extends StatelessWidget {
       horizontalInset,
       verticalInset,
     );
-    final shortcuts = sendEnabled && sendOnEnter
+    final shortcuts = enabled && sendEnabled && sendOnEnter
         ? const <ShortcutActivator, Intent>{
             SingleActivator(LogicalKeyboardKey.enter): _SendMessageIntent(),
           }
@@ -107,7 +109,7 @@ class ChatCutoutComposer extends StatelessWidget {
     final actionsMap = {
       _SendMessageIntent: CallbackAction<_SendMessageIntent>(
         onInvoke: (_) {
-          if (sendEnabled) onSend();
+          if (enabled && sendEnabled) onSend();
           return null;
         },
       ),
@@ -176,6 +178,8 @@ class ChatCutoutComposer extends StatelessWidget {
                   child: AxiTextField(
                     controller: controller,
                     focusNode: focusNode,
+                    enabled: enabled,
+                    readOnly: !enabled,
                     minLines: minLines,
                     maxLines: maxLines,
                     keyboardType: TextInputType.multiline,
@@ -200,7 +204,7 @@ class ChatCutoutComposer extends StatelessWidget {
                       ),
                     ),
                     onSubmitted: (_) {
-                      if (sendEnabled && sendOnEnter) onSend();
+                      if (enabled && sendEnabled && sendOnEnter) onSend();
                     },
                   ),
                 ),

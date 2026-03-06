@@ -540,7 +540,10 @@ class _UnknownSenderBanner extends StatelessWidget {
     return BlocBuilder<ChatBloc, ChatState>(
       builder: (context, state) {
         final chat = state.chat;
-        if (chat == null || chat.type != ChatType.chat || chat.spam) {
+        if (chat == null ||
+            chat.type != ChatType.chat ||
+            chat.spam ||
+            chat.isAxichatWelcomeThread) {
           return const SizedBox.shrink();
         }
         return BlocBuilder<RosterCubit, RosterState>(
@@ -3907,6 +3910,7 @@ class _ChatState extends State<Chat> {
               final String? resolvedEmailSelfJid = emailSelfJid
                   .resolveDeltaPlaceholderJid();
               final chatEntity = state.chat;
+              final isWelcomeChat = chatEntity?.isAxichatWelcomeThread == true;
               final List<BlocklistEntry> blocklistEntries =
                   _resolveBlocklistEntries(context);
               final BlocklistEntry? chatBlocklistEntry = chatEntity == null
@@ -4320,13 +4324,23 @@ class _ChatState extends State<Chat> {
                                 final canRenameContact =
                                     !readOnly &&
                                     chatEntity != null &&
-                                    chatEntity.type == ChatType.chat;
+                                    chatEntity.type == ChatType.chat &&
+                                    !chatEntity.isAxichatWelcomeThread;
                                 final statusLabel = item?.status?.trim() ?? '';
-                                final addressLabel = jid.trim();
+                                final addressLabel = isWelcomeChat
+                                    ? _emptyText
+                                    : jid.trim();
                                 const addressStatusSeparator = ' · ';
-                                final secondaryLabel = statusLabel.isNotEmpty
-                                    ? '$addressLabel$addressStatusSeparator$statusLabel'
-                                    : addressLabel;
+                                final secondaryLabel = switch ((
+                                  addressLabel.isNotEmpty,
+                                  statusLabel.isNotEmpty,
+                                )) {
+                                  (true, true) =>
+                                    '$addressLabel$addressStatusSeparator$statusLabel',
+                                  (true, false) => addressLabel,
+                                  (false, true) => statusLabel,
+                                  (false, false) => _emptyText,
+                                };
                                 final presence = item?.presence;
                                 final subscription = item?.subscription;
                                 final avatarTooltip = isGroupChat
@@ -5255,6 +5269,17 @@ class _ChatState extends State<Chat> {
                                               if (widget.readOnly) {
                                                 _ensureRecipientBarHeightCleared();
                                                 return const _ReadOnlyComposerBanner();
+                                              }
+                                              if (isWelcomeChat) {
+                                                _ensureRecipientBarHeightCleared();
+                                                return _DisabledChatComposerSection(
+                                                  hintText: composerHintText,
+                                                  textController:
+                                                      _textController,
+                                                  textFocusNode: _focusNode,
+                                                  sendOnEnter:
+                                                      composerSendOnEnter,
+                                                );
                                               }
                                               final visibilityLabel =
                                                   _recipientVisibilityLabel(
@@ -12290,6 +12315,85 @@ class _ReadOnlyComposerBanner extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DisabledChatComposerSection extends StatelessWidget {
+  const _DisabledChatComposerSection({
+    required this.hintText,
+    required this.textController,
+    required this.textFocusNode,
+    required this.sendOnEnter,
+  });
+
+  final String hintText;
+  final TextEditingController textController;
+  final FocusNode textFocusNode;
+  final bool sendOnEnter;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final width = MediaQuery.sizeOf(context).width;
+    final composerHorizontalInset = spacing.l;
+    final desktopComposerHorizontalInset = spacing.l;
+    final horizontalPadding = width >= smallScreen
+        ? desktopComposerHorizontalInset
+        : composerHorizontalInset;
+    final cutoutBalanceInset = context.sizing.iconButtonTapTarget / 2;
+    final rightPadding = math.max(0.0, horizontalPadding - cutoutBalanceInset);
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final l10n = context.l10n;
+    final actions = <ChatComposerAccessory>[
+      ChatComposerAccessory.leading(
+        child: _ChatComposerIconButton(
+          icon: LucideIcons.smile,
+          tooltip: l10n.chatEmojiPicker,
+        ),
+      ),
+      ChatComposerAccessory.leading(
+        child: _AttachmentAccessoryButton(enabled: false, onPressed: () {}),
+      ),
+      ChatComposerAccessory.trailing(
+        child: _SendMessageAccessory(enabled: false, onPressed: () {}),
+      ),
+    ];
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      bottom: !keyboardVisible,
+      child: SizedBox(
+        width: double.infinity,
+        child: ColoredBox(
+          color: colors.background,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: colors.border, width: 1)),
+            ),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                spacing.m,
+                rightPadding,
+                spacing.s,
+              ),
+              child: ChatCutoutComposer(
+                controller: textController,
+                focusNode: textFocusNode,
+                hintText: hintText,
+                onSend: () {},
+                actions: actions,
+                sendEnabled: false,
+                sendOnEnter: sendOnEnter,
+                enabled: false,
+              ),
             ),
           ),
         ),

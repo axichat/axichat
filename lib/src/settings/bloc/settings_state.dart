@@ -45,6 +45,9 @@ abstract class SettingsState with _$SettingsState {
     @Default(<String>[]) List<String> reminderSidebarOrder,
     @Default(false) bool autoLoadEmailImages,
     @Default(true) bool emailComposerWatermarkEnabled,
+    @Default(100) int donationPromptNextDisplayMessageCount,
+    @Default(0) int donationPromptTrackedMessageCount,
+    @Default(0) int donationPromptLastObservedStoredMessageCount,
     @Default(true) bool autoDownloadImages,
     @Default(false) bool autoDownloadVideos,
     @Default(false) bool autoDownloadDocuments,
@@ -63,4 +66,47 @@ extension SettingsStateAttachmentDefaults on SettingsState {
           autoDownloadArchives
       ? AttachmentAutoDownload.allowed
       : AttachmentAutoDownload.blocked;
+}
+
+extension SettingsStateDonationPrompt on SettingsState {
+  int effectiveDonationPromptTrackedMessageCount(
+    int storedConversationMessageCount,
+  ) {
+    final sanitizedStoredMessageCount = storedConversationMessageCount < 0
+        ? 0
+        : storedConversationMessageCount;
+    if (sanitizedStoredMessageCount <=
+        donationPromptLastObservedStoredMessageCount) {
+      return donationPromptTrackedMessageCount;
+    }
+    return donationPromptTrackedMessageCount +
+        sanitizedStoredMessageCount -
+        donationPromptLastObservedStoredMessageCount;
+  }
+
+  SettingsState syncDonationPromptMessageCount(
+    int storedConversationMessageCount,
+  ) {
+    final sanitizedStoredMessageCount = storedConversationMessageCount < 0
+        ? 0
+        : storedConversationMessageCount;
+    final trackedMessageCount = effectiveDonationPromptTrackedMessageCount(
+      sanitizedStoredMessageCount,
+    );
+    if (trackedMessageCount == donationPromptTrackedMessageCount &&
+        sanitizedStoredMessageCount ==
+            donationPromptLastObservedStoredMessageCount) {
+      return this;
+    }
+    return copyWith(
+      donationPromptTrackedMessageCount: trackedMessageCount,
+      donationPromptLastObservedStoredMessageCount: sanitizedStoredMessageCount,
+    );
+  }
+
+  bool showsDonationPrompt(int storedConversationMessageCount) =>
+      effectiveDonationPromptTrackedMessageCount(
+        storedConversationMessageCount,
+      ) >=
+      donationPromptNextDisplayMessageCount;
 }

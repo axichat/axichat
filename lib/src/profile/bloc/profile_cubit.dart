@@ -55,6 +55,12 @@ class ProfileCubit extends Cubit<ProfileState> {
         ),
       );
     });
+    _storedConversationMessageCountSubscription = _xmppService
+        .storedConversationMessageCountStream()
+        .listen(
+          (count) =>
+              emit(state.copyWith(storedConversationMessageCount: count)),
+        );
     unawaited(_loadAvatar());
     if (_omemoService != null) {
       loadFingerprints();
@@ -68,12 +74,15 @@ class ProfileCubit extends Cubit<ProfileState> {
   late final StreamSubscription<Presence?>? _presenceSubscription;
   late final StreamSubscription<String?>? _statusSubscription;
   late final StreamSubscription<StoredAvatar?> _selfAvatarSubscription;
+  late final StreamSubscription<int>
+  _storedConversationMessageCountSubscription;
 
   @override
   Future<void> close() async {
     await _presenceSubscription?.cancel();
     await _statusSubscription?.cancel();
     await _selfAvatarSubscription.cancel();
+    await _storedConversationMessageCountSubscription.cancel();
     return super.close();
   }
 
@@ -90,6 +99,36 @@ class ProfileCubit extends Cubit<ProfileState> {
     if (_omemoService == null) return;
     final fingerprint = await _omemoService.getCurrentFingerprint();
     emit(state.copyWith(fingerprint: fingerprint));
+  }
+
+  void syncSessionIdentity() {
+    emit(
+      state.copyWith(
+        jid: _xmppService.myJid ?? '',
+        resource: _xmppService.resource ?? '',
+        username: _xmppService.username ?? '',
+      ),
+    );
+    unawaited(_loadAvatar());
+    if (_omemoService != null) {
+      unawaited(loadFingerprints());
+    }
+  }
+
+  void clearSessionIdentity() {
+    emit(
+      state.copyWith(
+        jid: '',
+        resource: '',
+        username: '',
+        avatarPath: null,
+        avatarHash: null,
+        fingerprint: null,
+        presence: null,
+        status: null,
+        storedConversationMessageCount: 0,
+      ),
+    );
   }
 
   Future<void> regenerateDevice() async {

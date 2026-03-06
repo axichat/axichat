@@ -11,6 +11,7 @@ import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/storage/credential_store.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
@@ -47,6 +48,8 @@ void main() {
   setUpAll(() {
     registerFallbackValue(Uri());
     registerFallbackValue(FakeCredentialKey());
+    registerFallbackValue(fallbackChat);
+    registerFallbackValue(fallbackMessage);
   });
 
   late Client mockHttpClient;
@@ -60,6 +63,7 @@ void main() {
     mockConnection = MockXmppConnection();
     mockCredentialStore = MockCredentialStore();
     mockStateStore = MockXmppStateStore();
+    mockDatabase = MockXmppDatabase();
     mockNotificationService = MockNotificationService();
     mockEmailService = MockEmailService();
     mockHomeRefreshSyncService = MockHomeRefreshSyncService();
@@ -874,6 +878,168 @@ void main() {
         ),
       ).thenThrow(XmppAuthenticationException());
     });
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Emits AuthenticationCompleteFromSignup after successful signup.',
+      setUp: () {
+        when(
+          () => mockXmppService.connect(
+            jid: validJid,
+            password: validPassword,
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).thenAnswer((_) async => saltedPassword);
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: true,
+        passwordWasSkipped: false,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationLogInInProgress(fromSignup: true),
+        AuthenticationCompleteFromSignup(),
+      ],
+      verify: (_) {
+        verifyNever(() => mockDatabase.saveMessage(any()));
+      },
+    );
+
+    test(
+      'deliverSignupWelcomeMessage seeds the welcome chat message.',
+      () async {
+        const welcomeChatJid = 'axichat@welcome.axichat.invalid';
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+        );
+        when(
+          () => mockXmppService.database,
+        ).thenAnswer((_) async => mockDatabase);
+        when(
+          () => mockDatabase.getMessageByStanzaID(any()),
+        ).thenAnswer((_) async => null);
+        when(() => mockDatabase.saveMessage(any())).thenAnswer((_) async {});
+        when(() => mockDatabase.updateMessage(any())).thenAnswer((_) async {});
+        when(
+          () => mockDatabase.getChat(welcomeChatJid),
+        ).thenAnswer((_) async => Chat.fromJid(welcomeChatJid));
+        when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
+
+        await bloc.deliverSignupWelcomeMessage();
+
+        final savedMessage =
+            verify(() => mockDatabase.saveMessage(captureAny())).captured.single
+                as Message;
+        expect(savedMessage.senderJid, equals(welcomeChatJid));
+        expect(savedMessage.chatJid, equals(welcomeChatJid));
+        expect(
+          savedMessage.body,
+          equals(
+            'Welcome to Axichat!\n\n'
+            'It is still under active development and per-user storage limits '
+            'are very low, so avoid relying on it for important business at '
+            'the moment.\n\n'
+            'Many features are available by tapping on message bubbles; '
+            'Try tapping this one!\n\n'
+            'If you find any bugs, please report them at '
+            'https://github.com/axichat/axichat/issues',
+          ),
+        );
+        expect(
+          savedMessage.htmlBody,
+          equals(
+            '<p>Welcome to Axichat!</p>'
+            '<p>It is still under active development and per-user storage '
+            'limits are very low, so avoid relying on it for important '
+            'business at the moment.</p>'
+            '<p>Many features are available by tapping on message bubbles; '
+            '<strong>Try tapping this one!</strong></p>'
+            '<p>If you find any bugs, please report them at '
+            '<a href="https://github.com/axichat/axichat/issues">'
+            'https://github.com/axichat/axichat/issues'
+            '</a></p>',
+          ),
+        );
+        final updatedChat =
+            verify(() => mockDatabase.updateChat(captureAny())).captured.single
+                as Chat;
+        expect(updatedChat.title, equals('Axichat'));
+        expect(updatedChat.contactDisplayName, equals('Axichat'));
+      },
+    );
+
+    test(
+      'deliverSignupWelcomeMessage updates the existing welcome message body and html.',
+      () async {
+        const welcomeChatJid = 'axichat@welcome.axichat.invalid';
+        const welcomeStanzaId = 'signup-welcome.axichat';
+        final existingMessage = Message(
+          stanzaID: welcomeStanzaId,
+          senderJid: welcomeChatJid,
+          chatJid: welcomeChatJid,
+          body: 'Old welcome copy',
+          timestamp: DateTime.utc(2026, 3, 6),
+        );
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+        );
+        when(
+          () => mockXmppService.database,
+        ).thenAnswer((_) async => mockDatabase);
+        when(
+          () => mockDatabase.getMessageByStanzaID(welcomeStanzaId),
+        ).thenAnswer((_) async => existingMessage);
+        when(() => mockDatabase.updateMessage(any())).thenAnswer((_) async {});
+        when(
+          () => mockDatabase.getChat(welcomeChatJid),
+        ).thenAnswer((_) async => Chat.fromJid(welcomeChatJid));
+        when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
+
+        await bloc.deliverSignupWelcomeMessage();
+
+        verifyNever(() => mockDatabase.saveMessage(any()));
+        final updatedMessage =
+            verify(
+                  () => mockDatabase.updateMessage(captureAny()),
+                ).captured.single
+                as Message;
+        expect(updatedMessage.stanzaID, equals(welcomeStanzaId));
+        expect(
+          updatedMessage.htmlBody,
+          contains('<strong>Try tapping this one!</strong>'),
+        );
+        expect(
+          updatedMessage.body,
+          contains(
+            'If you find any bugs, please report them at '
+            'https://github.com/axichat/axichat/issues',
+          ),
+        );
+      },
+    );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Rolls back the account if login fails after registration.',

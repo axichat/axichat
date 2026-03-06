@@ -135,6 +135,10 @@ void main() {
     when(() => transport.notifyNetworkLost()).thenAnswer((_) async {});
     when(() => transport.connectivity()).thenAnswer((_) async => 4000);
     when(
+      () =>
+          transport.refreshChatlistSnapshot(accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async {});
+    when(
       () => transport.performBackgroundFetch(any()),
     ).thenAnswer((_) async => true);
     when(() => transport.bootstrapFromCore()).thenAnswer((_) async => true);
@@ -961,6 +965,198 @@ void main() {
 
     expect(deletedKeys.length, greaterThanOrEqualTo(2));
     expect(deletedKeys.every((key) => key.contains('bob@axi.im')), isTrue);
+  });
+
+  test(
+    'shutdown detaches the Delta listener before stopping transport',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      await service.shutdown(jid: 'bob@axi.im');
+
+      verifyInOrder([
+        () => transport.removeEventListener(any()),
+        () => transport.stop(),
+        () => transport.dispose(),
+      ]);
+    },
+  );
+
+  test('queued Delta connectivity work is dropped once stop begins', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+
+    listener(
+      DeltaCoreEvent(
+        type: DeltaEventType.connectivityChanged.code,
+        data1: 0,
+        data2: 0,
+      ),
+    );
+
+    clearInteractions(transport);
+    await service.stop();
+    await pumpMicrotasks();
+
+    verifyNever(() => transport.connectivity());
+    await service.shutdown(jid: 'bob@axi.im');
+  });
+
+  test('handleNetworkAvailable wakes a provisioned stopped service', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+
+    await service.stop();
+    clearInteractions(transport);
+    await service.handleNetworkAvailable();
+
+    verifyInOrder([
+      () => transport.addEventListener(any()),
+      () => transport.start(),
+      () => transport.notifyNetworkAvailable(),
+    ]);
+    await service.shutdown(jid: 'bob@axi.im');
+  });
+
+  test(
+    'handleNetworkLost notifies transport while provisioned but stopped',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      await service.stop();
+      clearInteractions(transport);
+      await service.handleNetworkLost();
+
+      verify(() => transport.notifyNetworkLost()).called(1);
+      verifyNever(() => transport.start());
+      await service.shutdown(jid: 'bob@axi.im');
+    },
+  );
+
+  test('shutdown blocks re-entry while dispose is in flight', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+    await service.ensureEventChannelActive();
+
+    clearInteractions(transport);
+    final disposeCompleter = Completer<void>();
+    when(() => transport.dispose()).thenAnswer((_) => disposeCompleter.future);
+
+    final shutdownFuture = service.shutdown(jid: 'bob@axi.im');
+    await untilCalled(() => transport.dispose());
+
+    await service.ensureEventChannelActive();
+    await service.handleNetworkAvailable();
+
+    verifyNever(() => transport.addEventListener(any()));
+    verifyNever(() => transport.start());
+    verifyNever(() => transport.notifyNetworkAvailable());
+
+    disposeCompleter.complete();
+    await shutdownFuture;
+  });
+
+  test('burn blocks re-entry while dispose is in flight', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+    await service.ensureEventChannelActive();
+
+    clearInteractions(transport);
+    final disposeCompleter = Completer<void>();
+    when(() => transport.dispose()).thenAnswer((_) => disposeCompleter.future);
+
+    final burnFuture = service.burn(jid: 'bob@axi.im');
+    await untilCalled(() => transport.dispose());
+
+    await service.ensureEventChannelActive();
+    await service.handleNetworkAvailable();
+
+    verifyNever(() => transport.addEventListener(any()));
+    verifyNever(() => transport.start());
+    verifyNever(() => transport.notifyNetworkAvailable());
+
+    disposeCompleter.complete();
+    await burnFuture;
   });
 
   test('burn clears in-memory session credentials', () async {

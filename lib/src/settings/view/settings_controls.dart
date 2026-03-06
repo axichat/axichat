@@ -15,6 +15,7 @@ import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/view/language_selector.dart';
 import 'package:axichat/src/notifications/view/notification_request.dart';
+import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/profile/bloc/profile_export_cubit.dart';
 import 'package:axichat/src/profile/utils/contact_exporter.dart';
 import 'package:axichat/src/profile/view/contact_export_sheet.dart';
@@ -113,6 +114,7 @@ class SettingsControls extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                _DonationRequestBanner(settingsState: state),
                 if (showImportantSection)
                   anchors?.importantKey == null
                       ? _SettingsSectionHeader(
@@ -909,6 +911,87 @@ class SettingsControls extends StatelessWidget {
         value: context.read<EmailContactImportCubit>(),
         child: const EmailContactImportDialog(),
       ),
+    );
+  }
+}
+
+class _DonationRequestBanner extends StatelessWidget {
+  const _DonationRequestBanner({required this.settingsState});
+
+  static bool forceShowDonationPromptForDebug = true;
+
+  final SettingsState settingsState;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ProfileCubit, ProfileState>(
+      builder: (context, profileState) {
+        final shouldShowDonationPrompt =
+            forceShowDonationPromptForDebug ||
+            settingsState.showsDonationPrompt(
+              profileState.storedConversationMessageCount,
+            );
+        if (!shouldShowDonationPrompt) {
+          return const SizedBox.shrink();
+        }
+        final l10n = context.l10n;
+        final spacing = context.spacing;
+        final sizing = context.sizing;
+        final colors = context.colorScheme;
+        final displayName = profileState.username.trim().isEmpty
+            ? profileState.jid
+            : profileState.username;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(spacing.m, spacing.m, spacing.m, 0),
+          child: AxiModalSurface(
+            padding: EdgeInsets.all(spacing.m),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: FaIcon(
+                    FontAwesomeIcons.solidHeart,
+                    color: colors.destructive,
+                    size: sizing.iconButtonSize,
+                  ),
+                ),
+                SizedBox(height: spacing.m),
+                Text(
+                  l10n.profileDonationPromptMessage(displayName),
+                  style: context.textTheme.muted,
+                  textAlign: TextAlign.center,
+                ),
+                SizedBox(height: spacing.m),
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: spacing.s,
+                  runSpacing: spacing.s,
+                  children: [
+                    Link(
+                      uri: Uri.parse(donateUrl),
+                      builder: (_, followLink) => AxiButton.primary(
+                        size: AxiButtonSize.lg,
+                        onPressed: followLink,
+                        child: Text(l10n.settingsDonateLabel),
+                      ),
+                    ),
+                    AxiButton.outline(
+                      size: AxiButtonSize.lg,
+                      onPressed: () =>
+                          context.read<SettingsCubit>().hideDonationPrompt(
+                            storedConversationMessageCount:
+                                profileState.storedConversationMessageCount,
+                          ),
+                      child: Text(l10n.commonHide),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

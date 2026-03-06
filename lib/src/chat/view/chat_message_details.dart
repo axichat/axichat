@@ -114,6 +114,8 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
             final String? resolvedSenderAddress = message.senderJid
                 .resolveDeltaPlaceholderJid(resolvedEmailSelfJid);
             final senderAddress = resolvedSenderAddress?.trim() ?? '';
+            final hideSenderAddress =
+                state.chat?.isAxichatWelcomeThread == true;
             final String? rawHeaders = deltaMessageId == null
                 ? null
                 : state.emailRawHeadersByDeltaId[deltaMessageId];
@@ -386,7 +388,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                         ),
                       ],
                     ),
-                    if (senderAddress.isNotEmpty)
+                    if (!hideSenderAddress && senderAddress.isNotEmpty)
                       _MessageDetailsInfo(
                         label: l10n.chatMessageDetailsSenderLabel,
                         value: senderAddress,

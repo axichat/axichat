@@ -77,6 +77,10 @@ abstract interface class XmppDatabase implements Database {
     bool includePseudoMessages = true,
   });
 
+  Stream<int> watchConversationMessageCount();
+
+  Future<int> getConversationMessageCount();
+
   Future<List<Message>> getAllMessagesForChat(
     String jid, {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
@@ -3298,6 +3302,29 @@ WHERE email_from_address IN ($placeholderClause)
   Future<int> countDrafts() async {
     final countExpression = drafts.id.count();
     final query = selectOnly(drafts)..addColumns([countExpression]);
+    final row = await query.getSingle();
+    return row.read(countExpression) ?? 0;
+  }
+
+  @override
+  Stream<int> watchConversationMessageCount() {
+    final countExpression = messages.stanzaID.count();
+    final query = selectOnly(messages)
+      ..addColumns([countExpression])
+      ..where(
+        messages.noStore.equals(false) & messages.pseudoMessageType.isNull(),
+      );
+    return query.watchSingle().map((row) => row.read(countExpression) ?? 0);
+  }
+
+  @override
+  Future<int> getConversationMessageCount() async {
+    final countExpression = messages.stanzaID.count();
+    final query = selectOnly(messages)
+      ..addColumns([countExpression])
+      ..where(
+        messages.noStore.equals(false) & messages.pseudoMessageType.isNull(),
+      );
     final row = await query.getSingle();
     return row.read(countExpression) ?? 0;
   }

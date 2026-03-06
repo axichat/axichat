@@ -360,7 +360,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   bool _shareIntentAwaitingRoute = false;
   bool _notificationIntentHandling = false;
   bool _notificationIntentAwaitingRoute = false;
+  bool _signupWelcomeAwaitingRoute = false;
   Timer? _pendingAuthNavigation;
+  Timer? _pendingSignupWelcomeDelivery;
   AuthenticationState? _lastAuthState;
   String? _pendingNotificationChatJid;
   bool _checkedInitialNotificationLaunchDetails = false;
@@ -404,9 +406,19 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    context.read<SettingsCubit>().trackDonationPromptMessageCount(
+      context.read<ProfileCubit>().state.storedConversationMessageCount,
+    );
+  }
+
+  @override
   void dispose() {
     _pendingAuthNavigation?.cancel();
     _pendingAuthNavigation = null;
+    _pendingSignupWelcomeDelivery?.cancel();
+    _pendingSignupWelcomeDelivery = null;
     _lifecycleListener.dispose();
     _router.routerDelegate.removeListener(_handleRouteChange);
     _router.dispose();
@@ -647,6 +659,18 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             final overlayStyle = _systemUiOverlayStyleFor(Theme.of(context));
             final routedContent = MultiBlocListener(
               listeners: [
+                BlocListener<ProfileCubit, ProfileState>(
+                  listenWhen: (previous, current) =>
+                      previous.storedConversationMessageCount !=
+                      current.storedConversationMessageCount,
+                  listener: (context, state) {
+                    context
+                        .read<SettingsCubit>()
+                        .trackDonationPromptMessageCount(
+                          state.storedConversationMessageCount,
+                        );
+                  },
+                ),
                 BlocListener<AuthenticationCubit, AuthenticationState>(
                   listener: (context, state) async {
                     final previousAuthState = _lastAuthState;
@@ -675,38 +699,62 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
+                      _pendingSignupWelcomeDelivery?.cancel();
+                      _pendingSignupWelcomeDelivery = null;
+                      _signupWelcomeAwaitingRoute = false;
+                      context.read<ProfileCubit>().clearSessionIdentity();
                       if (!onLoginRoute && authRequired) {
                         _router.go(const LoginRoute().location);
                       }
-                    } else if (state is AuthenticationComplete &&
-                        previousAuthState is! AuthenticationComplete &&
-                        onGuestRoute) {
-                      _pendingAuthNavigation?.cancel();
-                      _pendingAuthNavigation = null;
-                      void navigateHome() {
-                        final latestAuthState = _lastAuthState;
-                        if (latestAuthState is! AuthenticationComplete) return;
-                        final currentMatchList =
-                            _router.routerDelegate.currentConfiguration;
-                        final currentMatchedLocation =
-                            currentMatchList.matches.isEmpty
-                            ? null
-                            : currentMatchList.uri.path;
-                        if (currentMatchedLocation ==
-                            const HomeRoute().location) {
-                          return;
-                        }
-                        _router.go(const HomeRoute().location);
-                        _pendingAuthNavigation = null;
+                    } else {
+                      if (state is AuthenticationCompleteFromSignup &&
+                          previousAuthState
+                              is! AuthenticationCompleteFromSignup) {
+                        _signupWelcomeAwaitingRoute = true;
+                        _scheduleSignupWelcomeDelivery();
+                      } else if (state is! AuthenticationCompleteFromSignup) {
+                        _pendingSignupWelcomeDelivery?.cancel();
+                        _pendingSignupWelcomeDelivery = null;
+                        _signupWelcomeAwaitingRoute = false;
                       }
+                      if (state is AuthenticationComplete &&
+                          previousAuthState is! AuthenticationComplete) {
+                        context.read<ProfileCubit>().syncSessionIdentity();
+                      }
+                      if (state is AuthenticationComplete &&
+                          previousAuthState is! AuthenticationComplete &&
+                          onGuestRoute) {
+                        _pendingAuthNavigation?.cancel();
+                        _pendingAuthNavigation = null;
+                        void navigateHome() {
+                          final latestAuthState = _lastAuthState;
+                          if (latestAuthState is! AuthenticationComplete) {
+                            return;
+                          }
+                          final currentMatchList =
+                              _router.routerDelegate.currentConfiguration;
+                          final currentMatchedLocation =
+                              currentMatchList.matches.isEmpty
+                              ? null
+                              : currentMatchList.uri.path;
+                          if (currentMatchedLocation ==
+                              const HomeRoute().location) {
+                            _pendingAuthNavigation = null;
+                            _scheduleSignupWelcomeDelivery();
+                            return;
+                          }
+                          _router.go(const HomeRoute().location);
+                          _pendingAuthNavigation = null;
+                        }
 
-                      if (authCompletionDuration == Duration.zero) {
-                        navigateHome();
-                      } else {
-                        _pendingAuthNavigation = Timer(
-                          authCompletionDuration,
-                          navigateHome,
-                        );
+                        if (authCompletionDuration == Duration.zero) {
+                          navigateHome();
+                        } else {
+                          _pendingAuthNavigation = Timer(
+                            authCompletionDuration,
+                            navigateHome,
+                          );
+                        }
                       }
                     }
                     await _handleNotificationIntent();
@@ -854,10 +902,36 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       _notificationIntentAwaitingRoute = false;
       _handleNotificationIntent();
     }
+    if (_signupWelcomeAwaitingRoute && _isOnHomeRoute()) {
+      _scheduleSignupWelcomeDelivery();
+    }
     if (!_shareIntentAwaitingRoute || !_isOnHomeRoute()) {
       return;
     }
     _shareIntentAwaitingRoute = false;
+  }
+
+  void _scheduleSignupWelcomeDelivery() {
+    if (!mounted ||
+        !_signupWelcomeAwaitingRoute ||
+        !_isOnHomeRoute() ||
+        _pendingSignupWelcomeDelivery != null) {
+      return;
+    }
+    const deliveryDelay = Duration(seconds: 1);
+    _pendingSignupWelcomeDelivery = Timer(deliveryDelay, () async {
+      _pendingSignupWelcomeDelivery = null;
+      if (!mounted || !_isOnHomeRoute()) {
+        return;
+      }
+      if (context.read<AuthenticationCubit>().state
+          is! AuthenticationCompleteFromSignup) {
+        _signupWelcomeAwaitingRoute = false;
+        return;
+      }
+      _signupWelcomeAwaitingRoute = false;
+      await context.read<AuthenticationCubit>().deliverSignupWelcomeMessage();
+    });
   }
 }
 

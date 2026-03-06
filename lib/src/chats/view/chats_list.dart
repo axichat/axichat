@@ -1156,7 +1156,9 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
     final iconSize = scaled(context.sizing.menuItemIconSize);
     final spacing = scaled(context.spacing.s);
     final l10n = context.l10n;
-    final addressLabel = widget.chat.jid.trim();
+    final addressLabel = widget.chat.isAxichatWelcomeThread
+        ? ''
+        : widget.chat.jid.trim();
     final actionWrap = Wrap(
       spacing: spacing,
       runSpacing: spacing,
@@ -1170,7 +1172,8 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             widget.onClose();
           },
         ),
-        if (widget.chat.type == ChatType.chat)
+        if (widget.chat.type == ChatType.chat &&
+            !widget.chat.isAxichatWelcomeThread)
           ContextActionButton(
             icon: Icon(LucideIcons.pencilLine, size: iconSize),
             label: l10n.chatContactRenameAction,

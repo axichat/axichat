@@ -3306,6 +3306,12 @@ abstract class AppLocalizations {
   /// **'Donate'**
   String get settingsDonateLabel;
 
+  /// No description provided for @profileDonationPromptMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Hi {username}, please support Axichat. It is free and open source, so we rely on donations from users like you to maintain the app and keep servers running. Even \$5 goes a long way to help cover our monthly expenses.'**
+  String profileDonationPromptMessage(Object username);
+
   /// No description provided for @settingsMastodonLabel.
   ///
   /// In en, this message translates to:

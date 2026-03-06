@@ -350,7 +350,7 @@ class _AxiButtonState extends State<AxiButton> {
         final TextStyle baseTextStyle = switch (widget.size) {
           AxiButtonSize.sm => context.textTheme.label,
           AxiButtonSize.regular => context.textTheme.small,
-          AxiButtonSize.lg => context.textTheme.label,
+          AxiButtonSize.lg => context.textTheme.small,
         };
         final textStyle = baseTextStyle.copyWith(
           color: foreground,

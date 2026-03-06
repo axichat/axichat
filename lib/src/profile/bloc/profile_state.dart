@@ -9,6 +9,7 @@ abstract class ProfileState with _$ProfileState {
     required String jid,
     required String resource,
     required String username,
+    @Default(0) int storedConversationMessageCount,
     String? avatarPath,
     String? avatarHash,
     OmemoFingerprint? fingerprint,

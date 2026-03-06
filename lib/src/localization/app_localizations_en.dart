@@ -1828,6 +1828,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDonateLabel => 'Donate';
 
   @override
+  String profileDonationPromptMessage(Object username) {
+    return 'Hi $username, please support Axichat. It is free and open source, so we rely on donations from users like you to maintain the app and keep servers running. Even \$5 goes a long way to help cover our monthly expenses.';
+  }
+
+  @override
   String get settingsMastodonLabel => 'Mastodon';
 
   @override

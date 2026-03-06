@@ -1065,6 +1065,14 @@ mixin MessageService
     );
   }
 
+  Stream<int> storedConversationMessageCountStream() =>
+      createSingleItemStream<int, XmppDatabase>(
+        watchFunction: (db) async {
+          final initialCount = await db.getConversationMessageCount();
+          return db.watchConversationMessageCount().startWith(initialCount);
+        },
+      );
+
   Future<void> _storeMessage(
     Message message, {
     required ChatType chatType,
@@ -2453,13 +2461,9 @@ mixin MessageService
     int pageSize = mamLoginBackfillMessageLimit,
   }) async {
     if (_mamGlobalSyncInFlight) {
-      _log.fine('Global MAM catch-up skipped: already in flight.');
       return MamGlobalSyncOutcome.skippedInFlight;
     }
     if (connectionState != ConnectionState.connected) {
-      _log.fine(
-        'Global MAM catch-up failed: connection state is $connectionState.',
-      );
       return MamGlobalSyncOutcome.failed;
     }
     _mamGlobalSyncInFlight = true;
@@ -2469,29 +2473,19 @@ mixin MessageService
       await database;
       _mamGlobalMaxTimestamp = null;
       if (connectionState != ConnectionState.connected) {
-        _log.fine(
-          'Global MAM catch-up aborted before query: connection state is $connectionState.',
-        );
         return MamGlobalSyncOutcome.failed;
       }
       await _resolveMamSupportForAccount();
       if (!_mamSupported) {
-        _log.fine(
-          'Global MAM catch-up skipped: account did not advertise MAM support.',
-        );
         return MamGlobalSyncOutcome.skippedUnsupported;
       }
 
       final deniedUntil = await _loadMamGlobalDeniedUntil();
       if (deniedUntil != null && deniedUntil.isAfter(DateTime.timestamp())) {
-        _log.fine(
-          'Global MAM catch-up skipped until ${deniedUntil.toIso8601String()}.',
-        );
         return MamGlobalSyncOutcome.skippedDenied;
       }
 
       started = true;
-      _log.fine('Starting global MAM archive query loop.');
       emitXmppOperation(_mamGlobalStartEvent);
       String? after = await _loadMamGlobalLastId();
       final anchor = await _loadMamGlobalLastSync();
@@ -2530,12 +2524,8 @@ mixin MessageService
       await _storeMamGlobalDeniedUntil(null);
       _mamGlobalSyncCompletedAt = DateTime.timestamp();
       success = true;
-      _log.fine(
-        'Global MAM catch-up completed. anchor=${anchorTimestamp.toIso8601String()}',
-      );
       return MamGlobalSyncOutcome.completed;
     } on XmppAbortedException {
-      _log.fine('Global MAM catch-up aborted.');
       return MamGlobalSyncOutcome.failed;
     } on Exception catch (error, stackTrace) {
       _log.fine('Global MAM sync failed.', error, stackTrace);

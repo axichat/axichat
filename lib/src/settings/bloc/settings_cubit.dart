@@ -113,6 +113,30 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(emailComposerWatermarkEnabled: enabled));
   }
 
+  void trackDonationPromptMessageCount(int storedConversationMessageCount) {
+    final syncedState = state.syncDonationPromptMessageCount(
+      storedConversationMessageCount,
+    );
+    if (syncedState == state) {
+      return;
+    }
+    emit(syncedState);
+  }
+
+  void hideDonationPrompt({required int storedConversationMessageCount}) {
+    final syncedState = state.syncDonationPromptMessageCount(
+      storedConversationMessageCount,
+    );
+    final nextState = syncedState.copyWith(
+      donationPromptNextDisplayMessageCount:
+          syncedState.donationPromptTrackedMessageCount + 500,
+    );
+    if (nextState == state) {
+      return;
+    }
+    emit(nextState);
+  }
+
   void toggleHideCompletedScheduled(bool hide) {
     emit(state.copyWith(hideCompletedScheduled: hide));
   }
@@ -203,6 +227,12 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'unscheduledSidebarOrder': 'unscheduled_sidebar_order',
         'reminderSidebarOrder': 'reminder_sidebar_order',
         'autoLoadEmailImages': 'auto_load_email_images',
+        'donationPromptNextDisplayMessageCount':
+            'donation_prompt_next_display_message_count',
+        'donationPromptTrackedMessageCount':
+            'donation_prompt_tracked_message_count',
+        'donationPromptLastObservedStoredMessageCount':
+            'donation_prompt_last_observed_stored_message_count',
         'autoDownloadImages': 'auto_download_images',
         'autoDownloadVideos': 'auto_download_videos',
         'autoDownloadDocuments': 'auto_download_documents',

@@ -1759,6 +1759,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsDonateLabel => '捐赠';
 
   @override
+  String profileDonationPromptMessage(Object username) {
+    return '嗨，$username，请支持 Axichat。它是免费且开源的，所以我们依靠像你这样的用户捐赠来维护应用并保持服务器运行。哪怕是 5 美元，也能大大帮助我们分担每月开支。';
+  }
+
+  @override
   String get settingsMastodonLabel => 'Mastodon';
 
   @override
@@ -7555,6 +7560,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsDonateLabel => '捐贈';
+
+  @override
+  String profileDonationPromptMessage(Object username) {
+    return '嗨，$username，請支持 Axichat。它是免費而且開源的，所以我們依靠像你這樣的用戶捐款來維護應用程式並讓伺服器持續運作。哪怕只是 5 美元，也能大大幫助我們分擔每月開支。';
+  }
 
   @override
   String get settingsMastodonLabel => 'Mastodon';

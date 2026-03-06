@@ -20,6 +20,7 @@ import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
@@ -2122,6 +2123,74 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _triggerEmailReconnect();
     if (_xmppService.connectionState == ConnectionState.connected) {
       unawaited(_homeRefreshSyncService.syncOnLogin());
+    }
+  }
+
+  Future<void> deliverSignupWelcomeMessage() async {
+    const welcomeChatJid = 'axichat@welcome.axichat.invalid';
+    const welcomeStanzaId = 'signup-welcome.axichat';
+    const welcomeTitle = 'Axichat';
+    const welcomeBody =
+        'Welcome to Axichat!\n\n'
+        'It is still under active development and per-user storage limits are '
+        'very low, so avoid relying on it for important business at the '
+        'moment.\n\n'
+        'Many features are available by tapping on message bubbles; '
+        'Try tapping this one!\n\n'
+        'If you find any bugs, please report them at '
+        'https://github.com/axichat/axichat/issues';
+    const welcomeHtmlBody =
+        '<p>Welcome to Axichat!</p>'
+        '<p>It is still under active development and per-user storage limits '
+        'are very low, so avoid relying on it for important business at the '
+        'moment.</p>'
+        '<p>Many features are available by tapping on message bubbles; '
+        '<strong>Try tapping this one!</strong></p>'
+        '<p>If you find any bugs, please report them at '
+        '<a href="https://github.com/axichat/axichat/issues">'
+        'https://github.com/axichat/axichat/issues'
+        '</a></p>';
+    try {
+      final db = await _xmppService.database;
+      final existing = await db.getMessageByStanzaID(welcomeStanzaId);
+      if (existing == null) {
+        await db.saveMessage(
+          Message(
+            stanzaID: welcomeStanzaId,
+            senderJid: welcomeChatJid,
+            chatJid: welcomeChatJid,
+            body: welcomeBody,
+            htmlBody: welcomeHtmlBody,
+            timestamp: DateTime.timestamp(),
+            acked: true,
+            received: true,
+          ),
+        );
+      } else if (existing.body != welcomeBody ||
+          existing.htmlBody != welcomeHtmlBody ||
+          existing.senderJid != welcomeChatJid ||
+          existing.chatJid != welcomeChatJid) {
+        await db.updateMessage(
+          existing.copyWith(
+            senderJid: welcomeChatJid,
+            chatJid: welcomeChatJid,
+            body: welcomeBody,
+            htmlBody: welcomeHtmlBody,
+            acked: true,
+            received: true,
+          ),
+        );
+      }
+      final chat = await db.getChat(welcomeChatJid);
+      if (chat != null &&
+          (chat.title != welcomeTitle ||
+              chat.contactDisplayName != welcomeTitle)) {
+        await db.updateChat(
+          chat.copyWith(title: welcomeTitle, contactDisplayName: welcomeTitle),
+        );
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to seed signup welcome chat', error, stackTrace);
     }
   }
 

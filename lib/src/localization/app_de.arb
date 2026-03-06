@@ -701,6 +701,12 @@
   "profileJumpToTop": "Nach oben",
   "settingsWebsiteLabel": "Webseite",
   "settingsDonateLabel": "Spenden",
+  "profileDonationPromptMessage": "Hallo {username}, bitte unterstütze Axichat. Es ist kostenlos und Open Source, deshalb sind wir auf Spenden von Nutzerinnen und Nutzern wie dir angewiesen, um die App zu pflegen und die Server am Laufen zu halten. Selbst 5 $ helfen uns sehr dabei, unsere monatlichen Kosten zu decken.",
+  "@profileDonationPromptMessage": {
+    "placeholders": {
+      "username": {}
+    }
+  },
   "settingsMastodonLabel": "Mastodon",
   "settingsGithubLabel": "GitHub",
   "settingsGitlabLabel": "GitLab",

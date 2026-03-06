@@ -866,11 +866,7 @@ class XmppService extends XmppBase
             await _refreshHttpUploadSupport();
             await _refreshPubSubSupport();
             try {
-              _xmppLogger.fine('Starting initial-login global MAM catch-up.');
-              final outcome = await syncGlobalMamCatchUp();
-              _xmppLogger.fine(
-                'Initial-login global MAM catch-up finished with $outcome.',
-              );
+              await syncGlobalMamCatchUp();
             } on Exception catch (error, stackTrace) {
               _xmppLogger.fine(
                 'Initial-login MAM catch-up failed.',

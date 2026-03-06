@@ -67,6 +67,8 @@ extension _EmailSyncSourceLabels on _EmailSyncSource {
   String get logLabel => name;
 }
 
+enum _EmailRuntimePhase { stopped, running, stopping, disposing }
+
 enum EmailPasswordRefreshResult {
   confirmed,
   reconnectPending;
@@ -351,6 +353,9 @@ class EmailService {
       onUnmarkSpam: DeltaChatSpamCallback(_transport.unblockContact),
     );
     _eventListener = (event) {
+      if (!_canProcessDeltaWork) {
+        return;
+      }
       _enqueueDeltaOperation(
         () => _processDeltaEvent(event),
         operationName: _deltaQueueOperationNameProcessDeltaEvent,
@@ -446,7 +451,8 @@ class EmailService {
   EmailAccount? _activeAccount;
   EmailAccount? _sessionCredentials;
   String? _activeCredentialScope;
-  bool _running = false;
+  _EmailRuntimePhase _runtimePhase = _EmailRuntimePhase.stopped;
+  Future<void>? _stopFuture;
   final Map<String, RegisteredCredentialKey> _addressKeys = {};
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
   final Set<String> _ephemeralProvisionedScopes = {};
@@ -668,7 +674,15 @@ class EmailService {
   bool get isSmtpOnly =>
       _endpointConfig.smtpEnabled && !_endpointConfig.xmppEnabled;
 
-  bool get isRunning => _running;
+  bool get _acceptsRuntimeWork => _runtimePhase == _EmailRuntimePhase.running;
+
+  bool get _blocksRuntimeReentry =>
+      _runtimePhase == _EmailRuntimePhase.stopping ||
+      _runtimePhase == _EmailRuntimePhase.disposing;
+
+  bool get _canProcessDeltaWork => _listenerAttached && !_blocksRuntimeReentry;
+
+  bool get isRunning => _acceptsRuntimeWork;
 
   bool get hasActiveSession =>
       _databasePrefix != null && _databasePassphrase != null;
@@ -872,7 +886,7 @@ class EmailService {
     }
 
     final needsProvisioning = !alreadyProvisioned;
-    final pausedForProvisioning = needsProvisioning && _running;
+    final pausedForProvisioning = needsProvisioning && _acceptsRuntimeWork;
     if (pausedForProvisioning) {
       await stop();
     }
@@ -1116,28 +1130,66 @@ class EmailService {
   }
 
   Future<void> start() async {
-    if (_running) return;
+    if (_acceptsRuntimeWork) {
+      return;
+    }
+    if (_blocksRuntimeReentry) {
+      throw StateError('Email service is stopping.');
+    }
     await _transport.start();
-    _running = true;
+    _runtimePhase = _EmailRuntimePhase.running;
     _startImapSyncLoop();
   }
 
   Future<void> stop() async {
-    final wasRunning = _running;
-    _running = false;
-    if (wasRunning) {
-      await _transport.stop();
+    final existing = _stopFuture;
+    if (existing != null) {
+      await existing;
+      return;
     }
+    if (!_acceptsRuntimeWork && !_listenerAttached) {
+      return;
+    }
+    final future = _runStop();
+    _stopFuture = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_stopFuture, future)) {
+        _stopFuture = null;
+      }
+    }
+  }
+
+  Future<void> _runStop() async {
+    if (_runtimePhase != _EmailRuntimePhase.disposing) {
+      _runtimePhase = _EmailRuntimePhase.stopping;
+    }
+    _detachTransportListener();
+    await _stopForegroundKeepalive();
     _stopImapSyncLoop();
     _cancelContactsSyncTimer();
+    _cancelConnectivityDowngrade();
+    _clearNotificationQueue();
     _contactsSyncQueue.reset();
     _chatlistSyncQueue.reset();
     _imapSyncQueue.reset();
     _reconnectCatchUpQueue.reset();
-    _cancelConnectivityDowngrade();
+    _reconnectRestartQueue.reset();
+    _channelOverflowRecoveryQueue.reset();
+    _bootstrapOperationId += 1;
+    await _deltaOperationQueue;
+    _resetDeltaOperationQueue();
+    await _transport.stop();
+    if (_runtimePhase == _EmailRuntimePhase.stopping) {
+      _runtimePhase = _EmailRuntimePhase.stopped;
+    }
   }
 
   Future<void> ensureEventChannelActive() async {
+    if (_blocksRuntimeReentry) {
+      return;
+    }
     if (!_listenerAttached) {
       _transport.addEventListener(_eventListener);
       _listenerAttached = true;
@@ -1148,17 +1200,15 @@ class EmailService {
       _log.fine('Email transport start skipped; not provisioned.');
       return;
     }
-    if (!_running) {
+    if (!_acceptsRuntimeWork) {
       await start();
     }
   }
 
   Future<void> shutdown({String? jid, bool clearCredentials = false}) async {
+    _runtimePhase = _EmailRuntimePhase.disposing;
     await stop();
-    await _stopForegroundKeepalive();
     _resetImapCapabilities();
-    _clearNotificationQueue();
-    _resetDeltaOperationQueue();
     if (clearCredentials) {
       try {
         await _transport.deconfigureAccount();
@@ -1170,7 +1220,6 @@ class EmailService {
         await _clearCredentials(scope);
       }
     }
-    _detachTransportListener();
     await _transport.dispose();
     _databasePrefix = null;
     _databasePassphrase = null;
@@ -1178,27 +1227,23 @@ class EmailService {
     _sessionCredentials = null;
     _activeCredentialScope = null;
     _pendingPushToken = null;
-    _running = false;
+    _runtimePhase = _EmailRuntimePhase.stopped;
   }
 
   Future<void> burn({String? jid}) async {
     final scope = _scopeForOptionalJid(jid);
+    _runtimePhase = _EmailRuntimePhase.disposing;
     await stop();
     try {
       await _transport.deconfigureAccount();
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to deconfigure email account', error, stackTrace);
     }
-    _detachTransportListener();
-    await _stopForegroundKeepalive();
-    _clearNotificationQueue();
-    _resetDeltaOperationQueue();
     await _transport.dispose();
     await _transport.deleteStorageArtifacts();
     if (scope != null && _databasePrefix != null) {
       await _clearStockPurgeKey(scope: scope, databasePrefix: _databasePrefix!);
     }
-    _running = false;
     if (scope != null) {
       await _clearCredentials(scope);
     }
@@ -1208,6 +1253,7 @@ class EmailService {
     _sessionCredentials = null;
     _activeCredentialScope = null;
     _pendingPushToken = null;
+    _runtimePhase = _EmailRuntimePhase.stopped;
   }
 
   Future<Chat> ensureChatForAddress({
@@ -1983,6 +2029,9 @@ class EmailService {
   }
 
   Future<void> handleNetworkAvailable() async {
+    if (_blocksRuntimeReentry) {
+      return;
+    }
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
     }
@@ -1998,6 +2047,9 @@ class EmailService {
   }
 
   Future<void> handleNetworkLost() async {
+    if (_blocksRuntimeReentry) {
+      return;
+    }
     if (_databasePrefix == null || _databasePassphrase == null) {
       return;
     }
@@ -2511,6 +2563,9 @@ class EmailService {
     Future<void> Function() operation, {
     String? operationName,
   }) {
+    if (!_canProcessDeltaWork) {
+      return;
+    }
     final int epoch = _deltaOperationQueueEpoch;
     _deltaOperationQueue = _runDeltaOperation(
       previous: _deltaOperationQueue,
@@ -2528,7 +2583,7 @@ class EmailService {
   }) async {
     try {
       await previous;
-      if (epoch != _deltaOperationQueueEpoch) {
+      if (epoch != _deltaOperationQueueEpoch || !_canProcessDeltaWork) {
         return;
       }
       await operation();
@@ -2552,6 +2607,9 @@ class EmailService {
     required int msgId,
     required int accountId,
   }) {
+    if (!_canProcessDeltaWork) {
+      return;
+    }
     _pendingNotifications.add(
       _PendingNotification(chatId: chatId, msgId: msgId, accountId: accountId),
     );
@@ -2565,6 +2623,9 @@ class EmailService {
   }
 
   void _scheduleContactsSyncFromCore() {
+    if (!_canProcessDeltaWork) {
+      return;
+    }
     if (_contactsSyncTimer != null) {
       return;
     }
@@ -2585,6 +2646,10 @@ class EmailService {
   Future<void> _flushQueuedNotifications() async {
     _notificationFlushTimer?.cancel();
     _notificationFlushTimer = null;
+    if (!_canProcessDeltaWork) {
+      _pendingNotifications.clear();
+      return;
+    }
     if (_pendingNotifications.isEmpty) return;
     final pending = List<_PendingNotification>.from(_pendingNotifications);
     _pendingNotifications.clear();
@@ -2861,6 +2926,9 @@ class EmailService {
   Future<void> _refreshConnectivityState({
     _EmailSyncSource source = _EmailSyncSource.unknown,
   }) async {
+    if (!_acceptsRuntimeWork) {
+      return;
+    }
     try {
       final connectivity = await _transport.connectivity();
       if (connectivity == null) return;
@@ -2895,7 +2963,7 @@ class EmailService {
   }
 
   void _scheduleConnectivityDowngrade(int connectivity) {
-    if (!_running) {
+    if (!_acceptsRuntimeWork) {
       return;
     }
     _pendingConnectivityLevel = connectivity;
@@ -2914,7 +2982,7 @@ class EmailService {
   }
 
   Future<void> _confirmConnectivityDowngrade(int fallbackConnectivity) async {
-    if (!_running) {
+    if (!_acceptsRuntimeWork) {
       return;
     }
     try {
@@ -3011,6 +3079,9 @@ class EmailService {
   }
 
   Future<void> _handleBackgroundFetchDone() async {
+    if (!_acceptsRuntimeWork) {
+      return;
+    }
     if (_syncState.status == EmailSyncStatus.ready) {
       return;
     }
@@ -3084,6 +3155,9 @@ class EmailService {
   }
 
   Future<void> _bootstrapActiveAccountIfNeeded() async {
+    if (!_acceptsRuntimeWork) {
+      return;
+    }
     final scope = _activeCredentialScope;
     final prefix = _databasePrefix;
     if (scope == null || prefix == null) {
@@ -3129,6 +3203,9 @@ class EmailService {
     required int operationId,
     required RegisteredCredentialKey bootstrapKey,
   }) async {
+    if (!_acceptsRuntimeWork) {
+      return;
+    }
     if (_syncState.status == EmailSyncStatus.ready) {
       _updateSyncState(
         EmailSyncState.recovering(_l10n.emailSyncMessageHistorySyncing),
@@ -3137,11 +3214,11 @@ class EmailService {
     }
     try {
       await _transport.bootstrapFromCore();
-      if (operationId != _bootstrapOperationId) {
+      if (operationId != _bootstrapOperationId || !_acceptsRuntimeWork) {
         return;
       }
       await _credentialStore.write(key: bootstrapKey, value: true.toString());
-      if (operationId != _bootstrapOperationId) {
+      if (operationId != _bootstrapOperationId || !_acceptsRuntimeWork) {
         return;
       }
       await _refreshConnectivityState(
@@ -3225,7 +3302,7 @@ class EmailService {
   }
 
   Future<void> _foregroundKeepaliveTick() async {
-    if (!_foregroundKeepaliveEnabled) {
+    if (!_foregroundKeepaliveEnabled || !_acceptsRuntimeWork) {
       return;
     }
     try {
@@ -3406,23 +3483,23 @@ class EmailService {
   }
 
   Future<void> _runReconnectCatchUp() async {
-    if (!_running) {
+    if (!_acceptsRuntimeWork) {
       return;
     }
     await _reconnectCatchUpQueue.run(() async {
-      if (!_running) {
+      if (!_acceptsRuntimeWork) {
         return;
       }
       await _refreshImapCapabilities();
-      if (!_running) {
+      if (!_acceptsRuntimeWork) {
         return;
       }
       await _performBackgroundFetchIfIdle(timeout: _imapSyncFetchTimeout);
-      if (!_running) {
+      if (!_acceptsRuntimeWork) {
         return;
       }
       await refreshChatlistFromCore();
-      if (!_running) {
+      if (!_acceptsRuntimeWork) {
         return;
       }
       await _refreshConnectivityState(
@@ -3433,8 +3510,14 @@ class EmailService {
 
   Future<void> _scheduleReconnectRestartIfOffline() async {
     await _reconnectRestartQueue.run(() async {
+      if (!_acceptsRuntimeWork) {
+        return;
+      }
       try {
         await Future.delayed(_reconnectRestartDelay);
+        if (!_acceptsRuntimeWork) {
+          return;
+        }
         final connectivity = await _transport.connectivity();
         if (connectivity == null ||
             connectivity >= _connectivityConnectingMin) {
@@ -3449,9 +3532,11 @@ class EmailService {
       } on Exception catch (error, stackTrace) {
         _log.warning('Email transport restart failed', error, stackTrace);
       } finally {
-        await _refreshConnectivityState(
-          source: _EmailSyncSource.reconnectRestart,
-        );
+        if (_acceptsRuntimeWork) {
+          await _refreshConnectivityState(
+            source: _EmailSyncSource.reconnectRestart,
+          );
+        }
       }
     });
   }
@@ -3463,7 +3548,10 @@ class EmailService {
     if (_databasePrefix == null || _databasePassphrase == null) {
       throw StateError('Call ensureProvisioned before using EmailService.');
     }
-    if (!_running) {
+    if (_blocksRuntimeReentry) {
+      throw StateError('Email service is stopping.');
+    }
+    if (!_acceptsRuntimeWork) {
       await start();
     }
   }

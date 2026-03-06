@@ -557,6 +557,14 @@ extension ChatThreadExtension on Chat {
   bool get hasDetachedThread => contactJid != null && contactJid != jid;
 }
 
+bool isAxichatWelcomeThreadJid(String? jid) {
+  return jid?.trim() == 'axichat@welcome.axichat.invalid';
+}
+
+extension ChatSystemThreadExtension on Chat {
+  bool get isAxichatWelcomeThread => isAxichatWelcomeThreadJid(jid);
+}
+
 extension ChatTransportExtension on Chat {
   bool get supportsEmail => isEmailBacked;
 
