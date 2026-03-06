@@ -1,0 +1,1 @@
+Erste F-Droid-Version: gemeinsamer Chat/E-Mail-Posteingang, Kalender/Aufgaben, Offline-Sync, kein FCM.

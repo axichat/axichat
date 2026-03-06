@@ -1,4 +1,4 @@
-**Hinweis:** Axichat wird noch aktiv entwickelt, daher können Dinge kaputtgehen.
+<strong>Hinweis:</strong> Axichat wird noch aktiv entwickelt, daher können Dinge kaputtgehen.
 
 Website: https://axi.chat
 Quellcode: https://gitlab.com/axichat/axichat
@@ -6,6 +6,8 @@ Issue-Tracker: https://gitlab.com/axichat/axichat/-/issues
 Lizenz: AGPL-3.0-or-later
 
 Axichat ist ein hochmoderner E-Mail- und XMPP-Client, vollständig Open Source, mit First-Party-Push-Benachrichtigungen (niemals FCM) und ohne Abhängigkeiten von Drittanbietern.
+
+Hol dir jetzt deine username@axi.im-Adresse.
 
 Du kannst deinen eigenen E-Mail- und XMPP-Server für Axichat selbst hosten, indem du den Schritten unter https://github.com/axichat/selfhost folgst.
 

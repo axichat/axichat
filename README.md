@@ -9,6 +9,18 @@
 </div>
 
 <div align="center">
+  <a href="https://github.com/axichat/axichat/blob/master/LICENSE.txt">
+    <img alt="License" src="https://img.shields.io/github/license/axichat/axichat?style=for-the-badge" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases">
+    <img alt="Release" src="https://img.shields.io/github/v/release/axichat/axichat?style=for-the-badge&logo=github" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases">
+    <img alt="Release date" src="https://img.shields.io/github/release-date/axichat/axichat?style=for-the-badge" />
+  </a>
+</div>
+
+<div align="center">
   <p><strong>Warning:</strong> Axichat is under active development, so things may break.</p>
 </div>
 
@@ -29,6 +41,16 @@
     />
   </a>
   <p><em>Click the preview to play/download the MP4.</em></p>
+</div>
+
+<div align="center">
+  <a href="https://f-droid.org/packages/im.axi.axichat">
+    <img
+      src="https://f-droid.org/badge/get-it-on.png"
+      alt="Get it on F-Droid"
+      height="80"
+    />
+  </a>
 </div>
 
 <div align="center">
@@ -265,6 +287,30 @@
     - **Windows** – Extract the archive and run `Axichat.exe`.
     - **Linux** – Extract into a directory and launch `./axichat` (see `linux/axichat.desktop` for
       desktop entry guidance).
+
+<hr />
+
+## Support Axichat
+
+<div align="center">
+  <a href="https://www.buymeacoffee.com/axichat" target="_blank" rel="noreferrer">
+    <img
+      src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=&slug=axichat&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff"
+      alt="Buy me a coffee"
+      height="48"
+      style="border: 0; height: 48px;"
+    />
+  </a>
+  <a class="kofi-link" href="https://ko-fi.com/S6S01VF1Z1" target="_blank" rel="noreferrer">
+    <img
+      src="https://storage.ko-fi.com/cdn/kofi6.png?v=6"
+      alt="Buy Me a Coffee at ko-fi.com"
+      height="48"
+      style="border: 0; height: 48px;"
+      border="0"
+    />
+  </a>
+</div>
 
 <hr />
 

@@ -1,4 +1,4 @@
-**Warning:** Axichat is still under active development, so things may break.
+<strong>Warning:</strong> Axichat is still under active development, so things may break.
 
 Website: https://axi.chat
 Source code: https://gitlab.com/axichat/axichat
@@ -6,6 +6,8 @@ Issue tracker: https://gitlab.com/axichat/axichat/-/issues
 License: AGPL-3.0-or-later
 
 Axichat is a cutting-edge email and XMPP client that is fully open source with 1st party push notifications (no FCM ever) and no 3rd party dependencies.
+
+Get your username@axi.im now.
 
 You can self-host your own email + XMPP server for Axichat by following the steps at https://github.com/axichat/selfhost.
 

@@ -1,4 +1,4 @@
-**警告：** Axichat 仍在积极开发中，因此部分功能可能会出现问题。
+<strong>警告：</strong> Axichat 仍在积极开发中，因此部分功能可能会出现问题。
 
 官网：https://axi.chat
 源代码：https://gitlab.com/axichat/axichat
@@ -6,6 +6,8 @@
 许可证：AGPL-3.0-or-later
 
 Axichat 是一款前沿的电子邮件与 XMPP 客户端，完全开源，提供第一方推送通知（绝不使用 FCM），且不依赖任何第三方服务。
+
+立即获取你的 username@axi.im 地址。
 
 你可以按照 https://github.com/axichat/selfhost 的步骤，自行托管 Axichat 的邮件 + XMPP 服务器。
 

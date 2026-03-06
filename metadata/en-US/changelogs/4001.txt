@@ -1,0 +1,1 @@
+Initial F-Droid release: unified chat + email inbox, calendar/tasks, offline sync, no FCM.

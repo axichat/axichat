@@ -1,0 +1,1 @@
+Primera versión en F-Droid: bandeja unificada chat/correo, calendario/tareas, sincronización offline, sin FCM.

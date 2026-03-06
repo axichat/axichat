@@ -3,7 +3,9 @@
 # Keep fields in sync with pubspec.yaml before submission.
 
 Categories:
+  - Email
   - Messaging
+  - Calendar & Agenda
   - Internet
 
 License: AGPL-3.0-or-later
@@ -16,34 +18,13 @@ Donate: https://axi.chat/donate
 
 RepoType: git
 Repo: https://gitlab.com/axichat/axichat.git
-Summary: Open-source XMPP + email messenger with calendar and no FCM.
-
-Description: |
-  **Warning:** Axichat is still under active development, so things may break.
-  .
-  Axichat is a cutting-edge email and XMPP client that is fully open source with
-  1st party push notifications (no FCM ever) and no 3rd party dependencies.
-  .
-  Website: https://axi.chat
-  License: AGPL-3.0-or-later
-  .
-  Highlights:
-  - Unified chat + email inbox
-  - Built-in collaborative calendar and tasks
-  - Natural-language scheduling
-  - Works without Google/Firebase/FCM
-  - Offline-friendly sync and notifications
-  .
-  Android permissions are used only for messaging reliability and user-visible
-  notifications (internet, notifications, foreground service, boot restore, and
-  vibration).
 
 Builds:
-  - versionName: 0.6.0
-    versionCode: 1 # Match pubspec.yaml version: 0.6.0+1
-    commit: v0.6.0 # Replace with the exact release tag/commit submitted to F-Droid.
+  - versionName: 0.6.1
+    versionCode: 1001 # 1000 + pubspec build code (armv7)
+    commit: v0.6.1 # Replace with the exact release tag/commit submitted to F-Droid.
     subdir: .
-    output: build/app/outputs/flutter-apk/app-production-release.apk
+    output: build/app/outputs/flutter-apk/app-armeabi-v7a-production-release.apk
     prebuild:
       - export PUB_CACHE=$(pwd)/.pub-cache
       - $$flutter$$/bin/flutter config --no-analytics
@@ -54,13 +35,68 @@ Builds:
       - $$flutter$$/bin/flutter build apk \
         --flavor production \
         --release \
+        --split-per-abi \
+        --target-platform=android-arm \
+        --build-number=$$VERCODE$$ \
+        --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken \
         --dart-define=ENABLE_SHOREBIRD=false
+  - versionName: 0.6.1
+    versionCode: 2001 # 2000 + pubspec build code (arm64)
+    commit: v0.6.1 # Replace with the exact release tag/commit submitted to F-Droid.
+    subdir: .
+    output: build/app/outputs/flutter-apk/app-arm64-v8a-production-release.apk
+    prebuild:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get
+      - $$flutter$$/bin/flutter pub run build_runner build --delete-conflicting-outputs
+    build:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter build apk \
+        --flavor production \
+        --release \
+        --split-per-abi \
+        --target-platform=android-arm64 \
+        --build-number=$$VERCODE$$ \
+        --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken \
+        --dart-define=ENABLE_SHOREBIRD=false
+  - versionName: 0.6.1
+    versionCode: 4001 # 4000 + pubspec build code (x86_64)
+    commit: v0.6.1 # Replace with the exact release tag/commit submitted to F-Droid.
+    subdir: .
+    output: build/app/outputs/flutter-apk/app-x86_64-production-release.apk
+    prebuild:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get
+      - $$flutter$$/bin/flutter pub run build_runner build --delete-conflicting-outputs
+    build:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter build apk \
+        --flavor production \
+        --release \
+        --split-per-abi \
+        --target-platform=android-x64 \
+        --build-number=$$VERCODE$$ \
+        --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken \
+        --dart-define=ENABLE_SHOREBIRD=false
+
+AllowedAPKSigningKeys: 92d96304e82efa324f6aab21d731b32f05dbb3c8d42fc5514ea6755f33498d2e
+VercodeOperation:
+  - 1000 + %c
+  - 2000 + %c
+  - 4000 + %c
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags
-CurrentVersion: 0.6.0
-CurrentVersionCode: 1
+UpdateCheckData: 'pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+'
+CurrentVersion: 0.6.1
+CurrentVersionCode: 4001
 
-# When bumping versions, update versionName/versionCode/commit fields above and
-# keep --dart-define=ENABLE_SHOREBIRD=false so the F-Droid build ships without
-# OTA updates.
+# When bumping versions, update versionName/commit fields and set versionCode
+# per ABI using 1000/2000/4000 + the pubspec build code.
+# Keep CurrentVersionCode equal to the highest ABI-specific version code.
+# Keep VercodeOperation aligned with the ABI offsets above.
+# keep --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken and
+# --dart-define=ENABLE_SHOREBIRD=false so the F-Droid build ships with the
+# public provisioning token and without OTA updates.
