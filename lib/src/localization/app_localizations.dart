@@ -10249,6 +10249,12 @@ abstract class AppLocalizations {
   /// **'Password changed successfully.'**
   String get authPasswordChangeSuccess;
 
+  /// No description provided for @authPasswordChangeReconnectPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed. Email is reconnecting in the background.'**
+  String get authPasswordChangeReconnectPending;
+
   /// No description provided for @authPasswordIncorrect.
   ///
   /// In en, this message translates to:
@@ -10266,6 +10272,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Account not found.'**
   String get authAccountNotFound;
+
+  /// No description provided for @authAccountAlreadyExists.
+  ///
+  /// In en, this message translates to:
+  /// **'Account already exists.'**
+  String get authAccountAlreadyExists;
 
   /// No description provided for @authAccountDeletionDisabled.
   ///

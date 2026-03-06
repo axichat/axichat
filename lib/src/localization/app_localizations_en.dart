@@ -5952,6 +5952,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get authPasswordChangeSuccess => 'Password changed successfully.';
 
   @override
+  String get authPasswordChangeReconnectPending =>
+      'Password changed. Email is reconnecting in the background.';
+
+  @override
   String get authPasswordIncorrect => 'Incorrect password. Please try again.';
 
   @override
@@ -5960,6 +5964,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get authAccountNotFound => 'Account not found.';
+
+  @override
+  String get authAccountAlreadyExists => 'Account already exists.';
 
   @override
   String get authAccountDeletionDisabled =>

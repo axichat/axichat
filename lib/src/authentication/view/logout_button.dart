@@ -25,6 +25,7 @@ class LogoutButton extends StatelessWidget {
           context: context,
           builder: (context) {
             var severity = LogoutSeverity.normal;
+            var loading = false;
             return BlocProvider.value(
               value: context.read<AuthenticationCubit>(),
               child: StatefulBuilder(
@@ -42,6 +43,7 @@ class LogoutButton extends StatelessWidget {
                       children: [
                         AxiCheckboxFormField(
                           key: ValueKey('logout-normal-${severity.name}'),
+                          enabled: !loading,
                           initialValue: severity.isNormal,
                           inputLabel: Text(context.l10n.authLogoutNormal),
                           inputSublabel: Text(
@@ -53,6 +55,7 @@ class LogoutButton extends StatelessWidget {
                         SizedBox(height: spacing.s),
                         AxiCheckboxFormField(
                           key: ValueKey('logout-burn-${severity.name}'),
+                          enabled: !loading,
                           initialValue: severity.isBurn,
                           inputLabel: Text(context.l10n.authLogoutBurn),
                           inputSublabel: Text(
@@ -62,9 +65,26 @@ class LogoutButton extends StatelessWidget {
                         ),
                       ],
                     ),
-                    callback: () => context.read<AuthenticationCubit>().logout(
-                      severity: severity,
-                    ),
+                    loading: loading,
+                    callback: loading
+                        ? null
+                        : () async {
+                            setState(() {
+                              loading = true;
+                            });
+                            try {
+                              await context.read<AuthenticationCubit>().logout(
+                                severity: severity,
+                              );
+                            } finally {
+                              if (!context.mounted) {
+                                return;
+                              }
+                              setState(() {
+                                loading = false;
+                              });
+                            }
+                          },
                   );
                 },
               ),

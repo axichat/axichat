@@ -5691,6 +5691,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authPasswordChangeSuccess => '密码修改成功。';
 
   @override
+  String get authPasswordChangeReconnectPending => '密码已更改。电子邮件正在后台重新连接。';
+
+  @override
   String get authPasswordIncorrect => '密码错误。请重试。';
 
   @override
@@ -5698,6 +5701,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get authAccountNotFound => '未找到账号。';
+
+  @override
+  String get authAccountAlreadyExists => '账号已存在。';
 
   @override
   String get authAccountDeletionDisabled => '此账号已禁用账号删除。';
@@ -11454,10 +11460,16 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get authPasswordChangeSuccess => '密碼已成功變更。';
 
   @override
+  String get authPasswordChangeReconnectPending => '密碼已變更。電子郵件正在背景重新連線。';
+
+  @override
   String get authPasswordIncorrect => '密碼錯誤。請再試一次。';
 
   @override
   String get authAccountNotFound => '找不到帳號。';
+
+  @override
+  String get authAccountAlreadyExists => '帳號已存在。';
 
   @override
   String get authAccountDeletionDisabled => '此帳號已停用刪除功能。';

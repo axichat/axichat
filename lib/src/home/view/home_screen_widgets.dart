@@ -825,10 +825,9 @@ class _HomeShellDefaultBar extends StatefulWidget {
 }
 
 class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
-  final GlobalKey _scheduleTabKey = GlobalKey(
-    debugLabel: 'home-bottom-schedule-tab',
+  final GlobalKey _bottomNavBarKey = GlobalKey(
+    debugLabel: 'home-bottom-nav-bar',
   );
-  final GlobalKey _tasksTabKey = GlobalKey(debugLabel: 'home-bottom-tasks-tab');
   Timer? _calendarDragSwitchTimer;
   int? _hoveredCalendarTargetTab;
 
@@ -895,9 +894,9 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
   }
 
   Rect? _calendarTabRectForIndex(int index) {
-    final GlobalKey key = index == 0 ? _scheduleTabKey : _tasksTabKey;
-    final BuildContext? tabContext = key.currentContext;
-    final RenderBox? box = tabContext?.findRenderObject() as RenderBox?;
+    const int bottomNavTabCount = 4;
+    final BuildContext? navContext = _bottomNavBarKey.currentContext;
+    final RenderBox? box = navContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) {
       return null;
     }
@@ -909,7 +908,16 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
       return null;
     }
     final Offset origin = box.localToGlobal(Offset.zero);
-    return origin & size;
+    final double tabWidth = size.width / bottomNavTabCount;
+    final int bottomNavIndex = _calendarTargetToBottomNavIndex(
+      index,
+    ).clamp(0, bottomNavTabCount - 1).toInt();
+    return Rect.fromLTWH(
+      origin.dx + (tabWidth * bottomNavIndex),
+      origin.dy,
+      tabWidth,
+      size.height,
+    );
   }
 
   void _cancelCalendarDragSwitchTimer() {
@@ -1134,6 +1142,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                 size: sizing.iconButtonIconSize + spacing.xxs,
               );
               return GNav(
+                key: _bottomNavBarKey,
                 selectedIndex: safeSelectedIndex,
                 duration: context.watch<SettingsCubit>().animationDuration,
                 haptic: true,
@@ -1178,7 +1187,6 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   ),
                   GButton(
                     icon: LucideIcons.calendarClock,
-                    key: _scheduleTabKey,
                     text: l10n.calendarScheduleLabel,
                     leading: _BottomNavShake(
                       enabled: shakeSchedule,
@@ -1198,7 +1206,6 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   ),
                   GButton(
                     icon: LucideIcons.squareCheck,
-                    key: _tasksTabKey,
                     text: l10n.calendarFragmentTaskLabel,
                     leading: _BottomNavShake(
                       enabled: shakeTasks,

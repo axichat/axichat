@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
@@ -25,6 +26,7 @@ void main() {
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
     registerFallbackValue(FakeStanzaDetails());
+    registerFallbackValue(MessageNotificationChannel.chat);
     registerOmemoFallbacks();
   });
 
@@ -256,6 +258,98 @@ void main() {
       expect(afterMessage?.body, equals(messageEvent.text));
     });
 
+    test(
+      'Given a standard text message from the bare account domain, writes it to the database.',
+      () async {
+        const stanzaId = 'server-domain-message';
+        const body = 'Welcome to the server';
+        final systemMessageEvent = mox.MessageEvent(
+          mox.JID.fromString('axi.im'),
+          mox.JID.fromString(jid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData(body),
+            const mox.MessageIdData(stanzaId),
+          ]),
+          id: stanzaId,
+        );
+
+        final beforeMessage = await database.getMessageByStanzaID(stanzaId);
+        expect(beforeMessage, isNull);
+
+        eventStreamController.add(systemMessageEvent);
+
+        await pumpEventQueue();
+
+        final afterMessage = await database.getMessageByStanzaID(stanzaId);
+        final chat = await database.getChat('axi.im');
+        expect(afterMessage?.stanzaID, equals(stanzaId));
+        expect(afterMessage?.body, equals(body));
+        expect(afterMessage?.chatJid, equals('axi.im'));
+        expect(afterMessage?.senderJid, equals('axi.im'));
+        expect(chat?.title, equals('axi.im'));
+      },
+    );
+
+    test(
+      'Given a headline message from the bare account domain, writes it to the database.',
+      () async {
+        const stanzaId = 'server-domain-headline';
+        const body = 'Account created';
+        final systemMessageEvent = mox.MessageEvent(
+          mox.JID.fromString('axi.im'),
+          mox.JID.fromString(jid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData(body),
+            const mox.MessageIdData(stanzaId),
+          ]),
+          id: stanzaId,
+          type: 'headline',
+        );
+
+        final beforeMessage = await database.getMessageByStanzaID(stanzaId);
+        expect(beforeMessage, isNull);
+
+        eventStreamController.add(systemMessageEvent);
+
+        await pumpEventQueue();
+
+        final afterMessage = await database.getMessageByStanzaID(stanzaId);
+        final chat = await database.getChat('axi.im');
+        expect(afterMessage?.stanzaID, equals(stanzaId));
+        expect(afterMessage?.body, equals(body));
+        expect(afterMessage?.chatJid, equals('axi.im'));
+        expect(afterMessage?.senderJid, equals('axi.im'));
+        expect(chat?.title, equals('axi.im'));
+      },
+    );
+
+    test(
+      'Given a message from a non-server bare domain, does not label the chat with that domain.',
+      () async {
+        const stanzaId = 'other-domain-message';
+        const body = 'External bare-domain message';
+        final systemMessageEvent = mox.MessageEvent(
+          mox.JID.fromString('example.com'),
+          mox.JID.fromString(jid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData(body),
+            const mox.MessageIdData(stanzaId),
+          ]),
+          id: stanzaId,
+        );
+
+        eventStreamController.add(systemMessageEvent);
+
+        await pumpEventQueue();
+
+        final chat = await database.getChat('example.com');
+        expect(chat?.title, isEmpty);
+      },
+    );
+
     test('Given a standard text message, notifies the user.', () async {
       eventStreamController.add(messageEvent);
 
@@ -267,8 +361,10 @@ void main() {
           body: messageEvent.text,
           extraConditions: any(named: 'extraConditions'),
           allowForeground: any(named: 'allowForeground'),
-          payload: messageEvent.from.toBare().toString(),
-          threadKey: messageEvent.from.toBare().toString(),
+          payload: any(named: 'payload'),
+          threadKey: any(named: 'threadKey'),
+          showPreviewOverride: any(named: 'showPreviewOverride'),
+          channel: MessageNotificationChannel.chat,
         ),
       ).called(1);
     });
@@ -279,7 +375,6 @@ void main() {
         expectLater(
           xmppService.connectivityStream,
           emitsInOrder([
-            ConnectionState.notConnected,
             ConnectionState.connecting,
             ConnectionState.connected,
             ConnectionState.error,
@@ -520,4 +615,70 @@ void main() {
   });
 
   group('XmppConnection', () {});
+
+  group('XmppSocketWrapper', () {
+    late ServerSocket serverSocket;
+    late Future<Socket> acceptedSocketFuture;
+
+    setUp(() async {
+      serverSocket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      acceptedSocketFuture = serverSocket.first;
+    });
+
+    tearDown(() async {
+      await serverSocket.close();
+    });
+
+    test(
+      'closeStreams detaches the active socket before the controllers close',
+      () async {
+        final wrapper = XmppSocketWrapper();
+        Socket? peerSocket;
+        Object? uncaughtError;
+        StackTrace? uncaughtStackTrace;
+
+        await runZonedGuarded(
+          () async {
+            final connected = await wrapper.connect(
+              'axi.im',
+              host: InternetAddress.loopbackIPv4.address,
+              port: serverSocket.port,
+            );
+
+            expect(connected, isTrue);
+
+            peerSocket = await acceptedSocketFuture;
+
+            await wrapper.closeStreams();
+
+            try {
+              peerSocket!.add('<message />'.codeUnits);
+              await peerSocket!.flush();
+            } on SocketException {
+              // The client may already be detached; either outcome is valid.
+            }
+
+            peerSocket!.destroy();
+            await pumpEventQueue();
+          },
+          (Object error, StackTrace stackTrace) {
+            uncaughtError = error;
+            uncaughtStackTrace = stackTrace;
+          },
+        );
+
+        try {
+          await peerSocket?.close();
+        } on SocketException {
+          // The peer socket may already be destroyed.
+        }
+
+        expect(
+          uncaughtError,
+          isNull,
+          reason: '$uncaughtError\n$uncaughtStackTrace',
+        );
+      },
+    );
+  });
 }

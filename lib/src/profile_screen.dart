@@ -176,13 +176,15 @@ class _ProfileBodyState extends State<_ProfileBody> {
       builder: (context, connectivityState) {
         final l10n = context.l10n;
         final colors = context.colorScheme;
+        final spacing = context.spacing;
+        final sizing = context.sizing;
         final demoOffline = context.read<XmppService>().demoOfflineMode;
         final profileSidebarColor = colors.background;
-        final canPop = _profileRoute == _ProfileRoute.main;
+        final showingProfileSubpage = _profileRoute != _ProfileRoute.main;
         return PopScope(
-          canPop: canPop,
+          canPop: !showingProfileSubpage,
           onPopInvokedWithResult: (didPop, _) {
-            if (didPop || canPop) {
+            if (didPop || !showingProfileSubpage) {
               return;
             }
             _setRoute(_ProfileRoute.main);
@@ -190,6 +192,26 @@ class _ProfileBodyState extends State<_ProfileBody> {
           child: Scaffold(
             appBar: AppBar(
               automaticallyImplyLeading: false,
+              leadingWidth: showingProfileSubpage
+                  ? sizing.iconButtonTapTarget + spacing.m
+                  : null,
+              leading: showingProfileSubpage
+                  ? Padding(
+                      padding: EdgeInsets.only(left: spacing.m),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: sizing.iconButtonSize,
+                          height: sizing.iconButtonSize,
+                          child: AxiIconButton.ghost(
+                            iconData: LucideIcons.arrowLeft,
+                            tooltip: l10n.commonBack,
+                            onPressed: () => _setRoute(_ProfileRoute.main),
+                          ),
+                        ),
+                      ),
+                    )
+                  : null,
               title: Text(l10n.profileTitle),
               centerTitle: false,
               backgroundColor: profileSidebarColor,

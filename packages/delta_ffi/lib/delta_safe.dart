@@ -453,6 +453,7 @@ class DeltaContextHandle {
   _DeltaEventLoop? _eventLoop;
 
   bool _opened = false;
+  bool _closed = false;
   bool _ioRunning = false;
   bool? _supportsMessageIsOutgoing;
   bool? _supportsFreshMsgs;
@@ -472,6 +473,7 @@ class DeltaContextHandle {
   bool? _supportsMessageSetHtml;
 
   Future<void> open({required String passphrase}) async {
+    _ensureCanOpen();
     final result = _withCString(passphrase, (passPtr) {
       return _bindings.dc_context_open(_context, passPtr);
     });
@@ -485,7 +487,7 @@ class DeltaContextHandle {
   }
 
   bool get isConfigured {
-    _ensureState(_opened, 'check configuration state');
+    _ensureOpen('check configuration state');
     return _bindings.dc_is_configured(_context) != 0;
   }
 
@@ -495,7 +497,7 @@ class DeltaContextHandle {
     required String displayName,
     Map<String, String> additional = const {},
   }) async {
-    _ensureState(_opened, 'configure account');
+    _ensureOpen('configure account');
 
     await _setConfig('addr', address);
     await _setConfig('mail_pw', password);
@@ -512,12 +514,12 @@ class DeltaContextHandle {
     required String key,
     required String value,
   }) async {
-    _ensureState(_opened, 'set config $key');
+    _ensureOpen('set config $key');
     await _setConfig(key, value);
   }
 
   Future<String?> getConfig(String key) async {
-    _ensureState(_opened, 'get config $key');
+    _ensureOpen('get config $key');
     return _deltaOptionalConfig.read(_context, key, _bindings);
   }
 
@@ -525,7 +527,7 @@ class DeltaContextHandle {
     required String address,
     required String redirectUri,
   }) async {
-    _ensureState(_opened, 'get oauth2 url');
+    _ensureOpen('get oauth2 url');
     return _deltaOptionalOauth2Url.read(
       _context,
       address,
@@ -535,7 +537,7 @@ class DeltaContextHandle {
   }
 
   Future<void> startIo() async {
-    _ensureState(_opened, 'start IO');
+    _ensureOpen('start IO');
     final owner = _accountsOwner;
     if (owner != null) {
       await owner.startIo();
@@ -558,12 +560,12 @@ class DeltaContextHandle {
   }
 
   Future<void> maybeNetworkAvailable() async {
-    _ensureState(_opened, 'notify network availability');
+    _ensureOpen('notify network availability');
     _bindings.dc_maybe_network(_context);
   }
 
   Future<void> maybeNetworkLost() async {
-    _ensureState(_opened, 'notify network change');
+    _ensureOpen('notify network change');
     _bindings.dc_maybe_network(_context);
   }
 
@@ -603,7 +605,7 @@ class DeltaContextHandle {
   }
 
   Future<int?> lookupContactIdByAddress(String address) async {
-    _ensureState(_opened, 'lookup contact');
+    _ensureOpen('lookup contact');
     final contactId = _withCString(address, (addrPtr) {
       return _bindings.dc_lookup_contact_id_by_addr(_context, addrPtr);
     });
@@ -611,19 +613,19 @@ class DeltaContextHandle {
   }
 
   Future<void> blockContact(int contactId) async {
-    _ensureState(_opened, 'block contact');
+    _ensureOpen('block contact');
     final result = _bindings.dc_block_contact(_context, contactId);
     _ensureSuccess(result, 'block contact $contactId', _lastError);
   }
 
   Future<void> unblockContact(int contactId) async {
-    _ensureState(_opened, 'unblock contact');
+    _ensureOpen('unblock contact');
     final result = _bindings.dc_unblock_contact(_context, contactId);
     _ensureSuccess(result, 'unblock contact $contactId', _lastError);
   }
 
   Future<DeltaContact?> getContact(int contactId) async {
-    _ensureState(_opened, 'get contact');
+    _ensureOpen('get contact');
     final contactPtr = _bindings.dc_get_contact(_context, contactId);
     if (contactPtr == ffi.nullptr) {
       return null;
@@ -653,7 +655,7 @@ class DeltaContextHandle {
     String? subject,
     String? html,
   }) async {
-    _ensureState(_opened, _deltaSendTextOperation);
+    _ensureOpen(_deltaSendTextOperation);
     final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
     if (deltaMessage == ffi.nullptr) {
       throw const DeltaSafeException(_deltaMessageAllocationError);
@@ -690,7 +692,7 @@ class DeltaContextHandle {
     String? subject,
     String? html,
   }) async {
-    _ensureState(_opened, _deltaSendAttachmentOperation);
+    _ensureOpen(_deltaSendAttachmentOperation);
     final message = _bindings.dc_msg_new(_context, viewType);
     if (message == ffi.nullptr) {
       throw const DeltaSafeException(_deltaMessageAllocationError);
@@ -780,7 +782,7 @@ class DeltaContextHandle {
     String? query,
     int queryId = 0,
   }) async {
-    _ensureState(_opened, 'get chat list');
+    _ensureOpen('get chat list');
     ffi.Pointer<ffi.Char> queryPointer = ffi.nullptr;
     ffi.Pointer<dc_chatlist_t> chatlistPointer = ffi.nullptr;
     try {
@@ -828,7 +830,7 @@ class DeltaContextHandle {
     int flags = 0,
     int beforeMessageId = _deltaMessageIdInitial,
   }) async {
-    _ensureState(_opened, 'get chat messages');
+    _ensureOpen('get chat messages');
     ffi.Pointer<dc_array_t> array = ffi.nullptr;
     try {
       array = _bindings.dc_get_chat_msgs(
@@ -1021,7 +1023,7 @@ class DeltaContextHandle {
   }
 
   Future<String?> getMessageMimeHeaders(int messageId) async {
-    _ensureState(_opened, 'get message mime headers');
+    _ensureOpen('get message mime headers');
     if (messageId <= _zeroValue) return null;
     return _deltaOptionalMimeHeaders.read(_context, messageId, _bindings);
   }
@@ -1433,7 +1435,7 @@ class DeltaContextHandle {
         html: html,
       );
     }
-    _ensureState(_opened, _deltaSendQuotedOperation);
+    _ensureOpen(_deltaSendQuotedOperation);
     final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
     if (deltaMessage == ffi.nullptr) {
       throw const DeltaSafeException(_deltaMessageAllocationError);
@@ -1512,10 +1514,37 @@ class DeltaContextHandle {
     if (_accountsOwner != null || !_ownsContext) {
       return;
     }
-    await stopIo();
-    await _eventLoop?.dispose();
+    if (_closed) {
+      return;
+    }
+    _closed = true;
+    final eventLoop = _eventLoop;
     _eventLoop = null;
+    eventLoop?.requestStop();
+    await stopIo();
+    await eventLoop?.dispose();
     _bindings.dc_context_unref(_context);
+  }
+
+  void _ensureCanOpen() {
+    if (_closed || (_accountsOwner?.isDisposed ?? false)) {
+      throw const DeltaSafeException(
+        'Cannot open a context after it has been closed',
+      );
+    }
+  }
+
+  void _ensureOpen(String operation) {
+    if (!_opened) {
+      throw DeltaSafeException(
+        'Cannot $operation before opening the context',
+      );
+    }
+    if (_closed || (_accountsOwner?.isDisposed ?? false)) {
+      throw DeltaSafeException(
+        'Cannot $operation after closing the context',
+      );
+    }
   }
 
   Future<void> _setConfig(String key, String value) async {
@@ -1582,7 +1611,10 @@ class DeltaAccountsHandle {
   bool _ioRunning = false;
   bool _disposed = false;
 
+  bool get isDisposed => _disposed;
+
   Future<int> ensureAccount({String? legacyDatabasePath}) async {
+    _ensureAvailable('ensure an account');
     final existing = _existingAccountId();
     if (existing != null && existing != 0) {
       return existing;
@@ -1603,6 +1635,7 @@ class DeltaAccountsHandle {
   }
 
   Future<List<int>> accountIds() async {
+    _ensureAvailable('read account ids');
     final array = _bindings.dc_accounts_get_all(_accounts);
     if (array == ffi.nullptr) {
       return const <int>[];
@@ -1623,6 +1656,7 @@ class DeltaAccountsHandle {
   }
 
   Future<int> addAccount({bool closed = false}) async {
+    _ensureAvailable('add an account');
     final accountId = closed
         ? _bindings.dc_accounts_add_closed_account(_accounts)
         : _bindings.dc_accounts_add_account(_accounts);
@@ -1633,11 +1667,13 @@ class DeltaAccountsHandle {
   }
 
   Future<bool> removeAccount(int accountId) async {
+    _ensureAvailable('remove account $accountId');
     final result = _bindings.dc_accounts_remove_account(_accounts, accountId);
     return result != 0;
   }
 
   DeltaContextHandle contextFor(int accountId) {
+    _ensureAvailable('read account $accountId');
     final ctx = _bindings.dc_accounts_get_account(_accounts, accountId);
     if (ctx == ffi.nullptr) {
       throw DeltaSafeException('Account $accountId is unavailable');
@@ -1651,10 +1687,12 @@ class DeltaAccountsHandle {
   }
 
   Stream<DeltaCoreEvent> events() {
+    _ensureAvailable('listen for account events');
     return _ensureEventStream();
   }
 
   Stream<DeltaCoreEvent> eventsFor(int accountId) {
+    _ensureAvailable('listen for account $accountId events');
     final stream = _ensureEventStream();
     return stream.where(
       (event) => event.accountId == null || event.accountId == accountId,
@@ -1662,6 +1700,7 @@ class DeltaAccountsHandle {
   }
 
   Future<void> startIo() async {
+    _ensureAvailable('start IO');
     if (_ioRunning) return;
     _bindings.dc_accounts_start_io(_accounts);
     _ioRunning = true;
@@ -1674,14 +1713,17 @@ class DeltaAccountsHandle {
   }
 
   Future<void> maybeNetworkAvailable() async {
+    _ensureAvailable('notify network availability');
     _bindings.dc_accounts_maybe_network(_accounts);
   }
 
   Future<void> maybeNetworkLost() async {
+    _ensureAvailable('notify network change');
     _bindings.dc_accounts_maybe_network_lost(_accounts);
   }
 
   Future<bool> backgroundFetch(Duration timeout) async {
+    _ensureAvailable('run a background fetch');
     final seconds = timeout.inSeconds <= 0 ? 1 : timeout.inSeconds;
     final result = _bindings.dc_accounts_background_fetch(
       _accounts,
@@ -1691,6 +1733,7 @@ class DeltaAccountsHandle {
   }
 
   Future<void> setPushDeviceToken(String token) async {
+    _ensureAvailable('set a push device token');
     final trimmed = token.trim();
     if (trimmed.isEmpty) return;
     _withCString(trimmed, (tokenPtr) {
@@ -1703,11 +1746,13 @@ class DeltaAccountsHandle {
 
   Future<void> dispose() async {
     if (_disposed) return;
-    await stopIo();
-    await _eventLoop?.dispose();
-    _eventLoop = null;
-    _bindings.dc_accounts_unref(_accounts);
     _disposed = true;
+    final eventLoop = _eventLoop;
+    _eventLoop = null;
+    eventLoop?.requestStop();
+    await stopIo();
+    await eventLoop?.dispose();
+    _bindings.dc_accounts_unref(_accounts);
   }
 
   Stream<DeltaCoreEvent> _ensureEventStream() {
@@ -1731,6 +1776,14 @@ class DeltaAccountsHandle {
       return _bindings.dc_array_get_id(array, 0);
     } finally {
       _bindings.dc_array_unref(array);
+    }
+  }
+
+  void _ensureAvailable(String operation) {
+    if (_disposed) {
+      throw DeltaSafeException(
+        'Cannot $operation after disposing Delta accounts',
+      );
     }
   }
 }
@@ -1863,6 +1916,10 @@ class _DeltaEventLoop {
 
   Stream<DeltaCoreEvent> get stream => _controller.stream;
 
+  void requestStop() {
+    _requestStop();
+  }
+
   void _handleListen() {
     if (_started || _disposed) {
       return;
@@ -1902,6 +1959,9 @@ class _DeltaEventLoop {
     _controlSubscription = _controlPort!.listen((message) {
       if (message is SendPort) {
         _loopControlPort = message;
+        if (_stopRequested) {
+          _loopControlPort!.send(const _EventLoopCommandStop());
+        }
       } else if (message is _EventLoopStatus &&
           message.code == _EventLoopStatusCode.stopped) {
         _stoppedCompleter?.complete();
@@ -1921,12 +1981,15 @@ class _DeltaEventLoop {
   }
 
   void _requestStop() {
-    if (_stopRequested || _loopControlPort == null) {
+    if (_stopRequested) {
       return;
     }
     _stopRequested = true;
     _stoppedCompleter ??= Completer<void>();
-    _loopControlPort!.send(const _EventLoopCommandStop());
+    final controlPort = _loopControlPort;
+    if (controlPort != null) {
+      controlPort.send(const _EventLoopCommandStop());
+    }
   }
 
   Future<void> dispose() async {
@@ -2105,11 +2168,5 @@ void _ensurePositive(
     final details = errorProvider?.call();
     final suffix = details == null || details.isEmpty ? '' : ': $details';
     throw DeltaSafeException('Failed to $operation$suffix (code: $value)');
-  }
-}
-
-void _ensureState(bool predicate, String operation) {
-  if (!predicate) {
-    throw DeltaSafeException('Cannot $operation before opening the context');
   }
 }

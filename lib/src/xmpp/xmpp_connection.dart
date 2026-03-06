@@ -232,7 +232,10 @@ class XmppConnection extends mox.XmppConnection {
 
   Future<bool> addToRoster(String jid, {String? title}) async {
     if (getRosterManager() case final rm?) {
-      return await rm.addToRoster(jid, title ?? mox.JID.fromString(jid).local);
+      return await rm.addToRoster(
+        jid,
+        title ?? addressDisplayLabel(jid) ?? mox.JID.fromString(jid).local,
+      );
     }
 
     return false;

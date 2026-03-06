@@ -82,8 +82,10 @@ enum AuthMessageKey {
   passwordChangeRejected,
   passwordChangeFailed,
   passwordChangeSuccess,
+  passwordChangeReconnectPending,
   passwordIncorrect,
   accountNotFound,
+  accountAlreadyExists,
   accountDeletionDisabled,
   accountDeletionFailed,
   deviceOnlyPasswordUnavailable,
@@ -427,6 +429,119 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     return raw;
   }
+
+  bool _detailMentionsAlreadyExists(String detail) {
+    final normalized = detail.toLowerCase();
+    final mentionsConflict =
+        normalized.contains('already exists') ||
+        normalized.contains('already registered') ||
+        normalized.contains('account exists') ||
+        normalized.contains('user exists');
+    if (!mentionsConflict) {
+      return false;
+    }
+    return normalized.contains('account') ||
+        normalized.contains('user') ||
+        normalized.contains('username') ||
+        normalized.contains('jid');
+  }
+
+  bool _detailMentionsNotFound(String detail) {
+    final normalized = detail.toLowerCase();
+    final mentionsMissing =
+        normalized.contains("doesn't exist") ||
+        normalized.contains('does not exist') ||
+        normalized.contains('not found') ||
+        normalized.contains('no such account');
+    if (!mentionsMissing) {
+      return false;
+    }
+    return normalized.contains('account') ||
+        normalized.contains('user') ||
+        normalized.contains('username') ||
+        normalized.contains('jid');
+  }
+
+  String? _userVisibleProvisioningErrorDetail(String? rawDetail) {
+    final detail = rawDetail?.trim();
+    if (detail == null || detail.isEmpty) {
+      return null;
+    }
+    final normalized = detail.toLowerCase();
+    if (normalized == 'signup rejected: empty localpart.' ||
+        normalized == 'signup rejected: empty password.' ||
+        normalized == 'signup request unauthorized.' ||
+        normalized == 'signup request forbidden.' ||
+        normalized == 'signup request rejected.' ||
+        normalized == 'signup request failed: unexpected status.' ||
+        normalized == 'change password rejected: authentication failed.' ||
+        normalized == 'change password unavailable.' ||
+        normalized == 'change password failed: invalid response.' ||
+        normalized == 'delete account rejected: authentication failed.' ||
+        normalized == 'delete account forbidden.' ||
+        normalized == 'delete account unavailable.' ||
+        normalized == 'delete account failed: invalid response.' ||
+        normalized == 'email account deletion request failed.') {
+      return null;
+    }
+    return detail;
+  }
+
+  AuthMessage _signupFailureMessageForResponse(http.Response response) {
+    final detail = _registerErrorDetail(response);
+    if (response.statusCode == 409 ||
+        (detail != null && _detailMentionsAlreadyExists(detail))) {
+      return const AuthKeyMessage(AuthMessageKey.accountAlreadyExists);
+    }
+    if (detail != null) {
+      return AuthRawMessage(detail);
+    }
+    return const AuthKeyMessage(AuthMessageKey.signupFailedTryAgain);
+  }
+
+  AuthMessage _signupFailureMessageForProvisioningError(
+    provisioning.EmailProvisioningApiException error,
+  ) {
+    if (error.code == provisioning.EmailProvisioningApiErrorCode.network ||
+        error.code == provisioning.EmailProvisioningApiErrorCode.unavailable) {
+      return const AuthKeyMessage(AuthMessageKey.emailServerUnreachable);
+    }
+    if (error.code ==
+            provisioning.EmailProvisioningApiErrorCode.alreadyExists ||
+        error.statusCode == 409) {
+      return const AuthKeyMessage(AuthMessageKey.accountAlreadyExists);
+    }
+    final detail = _userVisibleProvisioningErrorDetail(error.debugMessage);
+    if (detail != null && _detailMentionsAlreadyExists(detail)) {
+      return const AuthKeyMessage(AuthMessageKey.accountAlreadyExists);
+    }
+    if (detail != null) {
+      return AuthRawMessage(detail);
+    }
+    return const AuthKeyMessage(AuthMessageKey.signupFailedTryAgain);
+  }
+
+  AuthMessage _passwordChangeFailureMessageForResponse(http.Response response) {
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      return const AuthKeyMessage(AuthMessageKey.passwordIncorrect);
+    }
+    final detail = _registerErrorDetail(response);
+    if (detail != null && _detailMentionsNotFound(detail)) {
+      return const AuthKeyMessage(AuthMessageKey.accountNotFound);
+    }
+    if (detail != null) {
+      return AuthRawMessage(detail);
+    }
+    return const AuthKeyMessage(AuthMessageKey.passwordChangeFailed);
+  }
+
+  AuthMessage _passwordChangeSuccessMessage(
+    EmailPasswordRefreshResult refreshResult,
+  ) => AuthKeyMessage(
+    refreshResult.isConfirmed
+        ? AuthMessageKey.passwordChangeSuccess
+        : AuthMessageKey.passwordChangeReconnectPending,
+  );
 
   Future<http.Response> _postRegisterForm({
     required Uri primary,
@@ -2228,7 +2343,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           )
           .timeout(_authRequestTimeout);
       if (!(response.statusCode == 200 || response.statusCode == 201)) {
-        _emit(AuthenticationSignupFailure(AuthRawMessage(response.body)));
+        _emit(
+          AuthenticationSignupFailure(
+            _signupFailureMessageForResponse(response),
+          ),
+        );
         return;
       }
       await login(
@@ -2247,13 +2366,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
-      final messageKey =
-          error.code == provisioning.EmailProvisioningApiErrorCode.network ||
-              error.code ==
-                  provisioning.EmailProvisioningApiErrorCode.unavailable
-          ? AuthMessageKey.emailServerUnreachable
-          : AuthMessageKey.signupFailedTryAgain;
-      _emit(AuthenticationSignupFailure(AuthKeyMessage(messageKey)));
+      _emit(
+        AuthenticationSignupFailure(
+          _signupFailureMessageForProvisioningError(error),
+        ),
+      );
       return;
     } on Exception catch (error, stackTrace) {
       _log.warning('Signup failed', error, stackTrace);
@@ -2550,7 +2667,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
         const bool passwordIsPreHashed = false;
         final rememberMe = await loadRememberMeChoice();
-        await _updateStoredPasswords(
+        final refreshResult = await _updateStoredPasswords(
           jid: accountJid,
           newPassword: password,
           rememberMe: rememberMe,
@@ -2558,8 +2675,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
         await _clearSkippedPasswordSecrets();
         _emit(
-          const AuthenticationPasswordChangeSuccess(
-            AuthKeyMessage(AuthMessageKey.passwordChangeSuccess),
+          AuthenticationPasswordChangeSuccess(
+            _passwordChangeSuccessMessage(refreshResult),
           ),
         );
         return;
@@ -2601,7 +2718,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         }
         const bool passwordIsPreHashed = false;
         final rememberMe = await loadRememberMeChoice();
-        await _updateStoredPasswords(
+        final refreshResult = await _updateStoredPasswords(
           jid: accountJid,
           newPassword: password,
           rememberMe: rememberMe,
@@ -2609,35 +2726,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
         await _clearSkippedPasswordSecrets();
         _emit(
-          const AuthenticationPasswordChangeSuccess(
-            AuthKeyMessage(AuthMessageKey.passwordChangeSuccess),
+          AuthenticationPasswordChangeSuccess(
+            _passwordChangeSuccessMessage(refreshResult),
           ),
         );
         return;
       }
-      if (response.statusCode == 401 || response.statusCode == 403) {
-        _emit(
-          const AuthenticationPasswordChangeFailure(
-            AuthKeyMessage(AuthMessageKey.passwordIncorrect),
-          ),
-        );
-        return;
-      }
-      if (response.statusCode == 404) {
-        _emit(
-          const AuthenticationPasswordChangeFailure(
-            AuthKeyMessage(AuthMessageKey.passwordChangeRejected),
-          ),
-        );
-        return;
-      }
-      final detail = _registerErrorDetail(response);
       _emit(
-        detail == null
-            ? const AuthenticationPasswordChangeFailure(
-                AuthKeyMessage(AuthMessageKey.passwordChangeFailed),
-              )
-            : AuthenticationPasswordChangeFailure(AuthRawMessage(detail)),
+        AuthenticationPasswordChangeFailure(
+          _passwordChangeFailureMessageForResponse(response),
+        ),
       );
       _log.warning('Password change failed (${response.statusCode}).');
     } on Exception catch (error, stackTrace) {
@@ -2675,6 +2773,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           error.code ==
               provisioning.EmailProvisioningApiErrorCode.unavailable) {
         return const AuthKeyMessage(AuthMessageKey.emailServerUnreachable);
+      }
+      final detail = _userVisibleProvisioningErrorDetail(error.debugMessage);
+      if (detail != null) {
+        return AuthRawMessage(detail);
       }
       return const AuthKeyMessage(AuthMessageKey.passwordChangeFailed);
     } on Exception catch (error, stackTrace) {
@@ -2817,10 +2919,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (response.statusCode == 404) {
+        final detail = _registerErrorDetail(response);
         _emit(
-          const AuthenticationUnregisterFailure(
-            AuthKeyMessage(AuthMessageKey.passwordIncorrect),
-          ),
+          detail == null
+              ? const AuthenticationUnregisterFailure(
+                  AuthKeyMessage(AuthMessageKey.accountDeletionFailed),
+                )
+              : AuthenticationUnregisterFailure(AuthRawMessage(detail)),
         );
         return;
       }
@@ -2872,7 +2977,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     return normalized.isEmpty ? null : normalized;
   }
 
-  Future<void> _updateStoredPasswords({
+  Future<EmailPasswordRefreshResult> _updateStoredPasswords({
     required String jid,
     required String newPassword,
     required bool rememberMe,
@@ -2895,12 +3000,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Failed to persist updated password', error, stackTrace);
     }
     final emailService = _emailService;
-    if (emailService == null) {
-      return;
+    if (emailService == null || !endpointConfig.smtpEnabled) {
+      return EmailPasswordRefreshResult.confirmed;
     }
     try {
       final displayName = addressLocalPart(jid) ?? jid;
-      await emailService.updatePassword(
+      return emailService.updatePassword(
         jid: jid,
         displayName: displayName,
         password: newPassword,
@@ -2912,6 +3017,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         error,
         stackTrace,
       );
+      return EmailPasswordRefreshResult.reconnectPending;
     }
   }
 
@@ -2975,16 +3081,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           provisioning.EmailProvisioningApiErrorCode.authenticationFailed) {
         return const AuthKeyMessage(AuthMessageKey.passwordIncorrect);
       }
-      if (error.isRecoverable) {
-        final recoverableKey =
-            error.code == provisioning.EmailProvisioningApiErrorCode.network ||
-                error.code ==
-                    provisioning.EmailProvisioningApiErrorCode.unavailable
-            ? AuthMessageKey.emailServerUnreachable
-            : AuthMessageKey.accountDeletionFailed;
-        return AuthKeyMessage(recoverableKey);
+      if (error.code == provisioning.EmailProvisioningApiErrorCode.network ||
+          error.code ==
+              provisioning.EmailProvisioningApiErrorCode.unavailable) {
+        return const AuthKeyMessage(AuthMessageKey.emailServerUnreachable);
       }
-      return null;
+      final detail = _userVisibleProvisioningErrorDetail(error.debugMessage);
+      if (detail != null) {
+        return AuthRawMessage(detail);
+      }
+      return const AuthKeyMessage(AuthMessageKey.accountDeletionFailed);
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Email account deletion failed $logContext',

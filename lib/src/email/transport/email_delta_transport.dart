@@ -161,11 +161,37 @@ class EmailDeltaTransport implements ChatTransport {
   StreamSubscription<DeltaCoreEvent>? _accountsEventSubscription;
   Future<void> _originIdHydrationQueue = Future<void>.value();
   final Set<String> _originIdHydrationPending = <String>{};
+  final Set<Future<void>> _activeCoreOperations = <Future<void>>{};
+  int _coreOperationEpoch = 0;
 
   String? _databasePrefix;
   String? _databasePassphrase;
   final Map<int, String> _accountAddresses = {};
   int? _primaryAccountId;
+
+  Future<T> _trackCoreOperation<T>(Future<T> Function() operation) {
+    final future = Future<T>.sync(operation);
+    late final Future<void> tracked;
+    tracked = future.then<void>((_) {}, onError: (_, _) {});
+    _activeCoreOperations.add(tracked);
+    tracked.whenComplete(() {
+      _activeCoreOperations.remove(tracked);
+    });
+    return future;
+  }
+
+  Future<void> _awaitActiveCoreOperations() async {
+    while (_activeCoreOperations.isNotEmpty) {
+      await Future.wait(_activeCoreOperations.toList(growable: false));
+    }
+  }
+
+  void _invalidateCoreOperationEpoch() {
+    _coreOperationEpoch += 1;
+    _originIdHydrationPending.clear();
+  }
+
+  bool _isCurrentCoreOperationEpoch(int epoch) => epoch == _coreOperationEpoch;
 
   @override
   Stream<DeltaCoreEvent> get events =>
@@ -492,6 +518,7 @@ class EmailDeltaTransport implements ChatTransport {
 
   @override
   Future<void> stop() async {
+    _invalidateCoreOperationEpoch();
     await _cancelAccountsEventSubscription();
     for (final subscription in _eventSubscriptions.values.toList(
       growable: false,
@@ -499,6 +526,9 @@ class EmailDeltaTransport implements ChatTransport {
       await subscription.cancel();
     }
     _eventSubscriptions.clear();
+    await _awaitActiveCoreOperations();
+    await _originIdHydrationQueue;
+    _originIdHydrationQueue = Future<void>.value();
     _ioRunning = false;
     if (_accounts != null) {
       await _accounts?.stopIo();
@@ -903,8 +933,12 @@ class EmailDeltaTransport implements ChatTransport {
     if (_eventSubscriptions.containsKey(session.accountId)) {
       return;
     }
-    final subscription = session.context.events().listen((event) async {
-      await _handleEvent(event: event, consumer: session.consumer);
+    final subscription = session.context.events().listen((event) {
+      unawaited(
+        _trackCoreOperation(
+          () => _handleEvent(event: event, consumer: session.consumer),
+        ),
+      );
     });
     _eventSubscriptions[session.accountId] = subscription;
   }
@@ -917,8 +951,8 @@ class EmailDeltaTransport implements ChatTransport {
     if (accounts == null) {
       return;
     }
-    _accountsEventSubscription = accounts.events().listen((event) async {
-      await _handleAccountsEvent(event);
+    _accountsEventSubscription = accounts.events().listen((event) {
+      unawaited(_trackCoreOperation(() => _handleAccountsEvent(event)));
     });
   }
 
@@ -1745,6 +1779,7 @@ class EmailDeltaTransport implements ChatTransport {
     required int msgId,
     required int accountId,
   }) {
+    final epoch = _coreOperationEpoch;
     final key = '$accountId:$msgId';
     if (_originIdHydrationPending.contains(key)) {
       return;
@@ -1756,6 +1791,7 @@ class EmailDeltaTransport implements ChatTransport {
       msgId: msgId,
       accountId: accountId,
       key: key,
+      epoch: epoch,
     );
   }
 
@@ -1765,13 +1801,18 @@ class EmailDeltaTransport implements ChatTransport {
     required int msgId,
     required int accountId,
     required String key,
+    required int epoch,
   }) async {
     await previous;
+    if (!_isCurrentCoreOperationEpoch(epoch)) {
+      return;
+    }
     try {
       await _hydrateOriginId(
         context: context,
         msgId: msgId,
         accountId: accountId,
+        epoch: epoch,
       );
     } on Exception catch (error, stackTrace) {
       _log.fine(_originIdHydrationFailedLog, error, stackTrace);
@@ -1823,6 +1864,7 @@ class EmailDeltaTransport implements ChatTransport {
     required DeltaContextHandle context,
     required int msgId,
     required int accountId,
+    required int epoch,
   }) async {
     final stanzaId = deltaMessageStanzaId(msgId);
     const maxAttempts = _originIdHydrationMaxAttempts;
@@ -1834,9 +1876,18 @@ class EmailDeltaTransport implements ChatTransport {
       attempt < maxAttempts;
       attempt += attemptStep
     ) {
+      if (!_isCurrentCoreOperationEpoch(epoch)) {
+        return;
+      }
       final originId = await _resolveMessageOriginId(context, msgId);
+      if (!_isCurrentCoreOperationEpoch(epoch)) {
+        return;
+      }
       if (originId != null) {
         final db = await _databaseBuilder();
+        if (!_isCurrentCoreOperationEpoch(epoch)) {
+          return;
+        }
         final existing =
             await db.getMessageByDeltaId(msgId, deltaAccountId: accountId) ??
             await db.getMessageByStanzaID(stanzaId);

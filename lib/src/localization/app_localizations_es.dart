@@ -6029,6 +6029,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get authPasswordChangeSuccess => 'Contraseña cambiada correctamente.';
 
   @override
+  String get authPasswordChangeReconnectPending =>
+      'Contraseña cambiada. El correo se está reconectando en segundo plano.';
+
+  @override
   String get authPasswordIncorrect =>
       'Contraseña incorrecta. Inténtalo de nuevo.';
 
@@ -6038,6 +6042,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get authAccountNotFound => 'No se encontró la cuenta.';
+
+  @override
+  String get authAccountAlreadyExists => 'La cuenta ya existe.';
 
   @override
   String get authAccountDeletionDisabled =>

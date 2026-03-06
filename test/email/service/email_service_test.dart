@@ -4,6 +4,7 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
@@ -117,17 +118,26 @@ void main() {
     when(
       () => transport.createAccount(),
     ).thenAnswer((_) async => DeltaAccountDefaults.legacyId);
+    when(() => transport.accountIds()).thenAnswer((_) async => const <int>[]);
     when(() => transport.ensureAccountSession(any())).thenAnswer((_) async {});
     when(
       () => transport.isConfigured(accountId: any(named: 'accountId')),
     ).thenAnswer((_) async => false);
+    when(() => transport.isIoRunning).thenReturn(false);
     when(() => transport.start()).thenAnswer((_) async {});
     when(() => transport.stop()).thenAnswer((_) async {});
+    when(() => transport.dispose()).thenAnswer((_) async {});
+    when(
+      () => transport.deconfigureAccount(accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async {});
+    when(() => transport.deleteStorageArtifacts()).thenAnswer((_) async {});
     when(() => transport.notifyNetworkAvailable()).thenAnswer((_) async {});
     when(() => transport.notifyNetworkLost()).thenAnswer((_) async {});
+    when(() => transport.connectivity()).thenAnswer((_) async => 4000);
     when(
       () => transport.performBackgroundFetch(any()),
     ).thenAnswer((_) async => true);
+    when(() => transport.bootstrapFromCore()).thenAnswer((_) async => true);
     when(() => transport.registerPushToken(any())).thenAnswer((_) async {});
     when(() => transport.getCoreConfig(any())).thenAnswer((_) async => null);
     when(
@@ -194,6 +204,19 @@ void main() {
     when(
       () => database.getParticipantsForShare(any()),
     ).thenAnswer((_) async => const <MessageParticipantData>[]);
+    when(
+      () => database.replaceDeltaPlaceholderSelfJids(
+        deltaAccountId: any(named: 'deltaAccountId'),
+        resolvedAddress: any(named: 'resolvedAddress'),
+        placeholderJids: any(named: 'placeholderJids'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => database.removeDeltaPlaceholderDuplicates(
+        deltaAccountId: any(named: 'deltaAccountId'),
+        placeholderJids: any(named: 'placeholderJids'),
+      ),
+    ).thenAnswer((_) async {});
     when(
       () => notificationService.sendNotification(
         title: any(named: 'title'),
@@ -787,6 +810,116 @@ void main() {
     addTearDown(service.shutdown);
   });
 
+  test(
+    'updatePassword pauses keepalive and reports reconnect pending on configure timeout',
+    () async {
+      final storedCredentials = <String, String>{};
+      when(() => credentialStore.read(key: any(named: 'key'))).thenAnswer((
+        invocation,
+      ) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        return storedCredentials[key.value];
+      });
+      when(
+        () => credentialStore.write(
+          key: any(named: 'key'),
+          value: any(named: 'value'),
+        ),
+      ).thenAnswer((invocation) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        final value = invocation.namedArguments[#value] as String;
+        storedCredentials[key.value] = value;
+        return true;
+      });
+      when(() => credentialStore.delete(key: any(named: 'key'))).thenAnswer((
+        invocation,
+      ) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        storedCredentials.remove(key.value);
+        return true;
+      });
+
+      final capturedConfigurePayloads = <Map<String, String>>[];
+      when(
+        () => transport.configureAccount(
+          address: any(named: 'address'),
+          password: any(named: 'password'),
+          displayName: any(named: 'displayName'),
+          additional: any(named: 'additional'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((invocation) async {
+        final password = invocation.namedArguments[#password] as String;
+        final additional =
+            invocation.namedArguments[#additional] as Map<String, String>;
+        capturedConfigurePayloads.add(Map<String, String>.of(additional));
+        if (password == 'new-password') {
+          throw const DeltaSafeException('Email configuration timed out');
+        }
+      });
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@axi.im',
+        passwordOverride: 'old-password',
+      );
+      await service.setForegroundKeepalive(true);
+      foregroundBridge.sent.clear();
+
+      final result = await service.updatePassword(
+        jid: 'alice@axi.im',
+        displayName: 'Alice',
+        password: 'new-password',
+      );
+
+      final currentAccount = await service.currentAccount('alice@axi.im');
+      expect(result, EmailPasswordRefreshResult.reconnectPending);
+      expect(service.activeAccount, isNotNull);
+      expect(service.activeAccount!.password, 'new-password');
+      expect(currentAccount, isNotNull);
+      expect(currentAccount!.password, 'new-password');
+      expect(service.syncState.status, EmailSyncStatus.recovering);
+      expect(capturedConfigurePayloads, hasLength(2));
+      expect(capturedConfigurePayloads.last['send_pw'], 'new-password');
+      expect(
+        foregroundBridge.sent,
+        containsAllInOrder([
+          [emailKeepalivePrefix, emailKeepaliveStopCommand],
+          predicate<List<Object>>(
+            (message) =>
+                message.length == 3 &&
+                message[0] == emailKeepalivePrefix &&
+                message[1] == emailKeepaliveStartCommand,
+          ),
+        ]),
+      );
+
+      verifyInOrder([
+        () => transport.stop(),
+        () => transport.configureAccount(
+          address: 'alice@axi.im',
+          password: 'new-password',
+          displayName: 'Alice',
+          additional: any(named: 'additional'),
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+        () => transport.start(),
+      ]);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
   test('shutdown only clears scoped credentials when requested', () async {
     final deletedKeys = <String>[];
     when(() => credentialStore.delete(key: any(named: 'key'))).thenAnswer((
@@ -813,13 +946,49 @@ void main() {
       passwordOverride: 'password',
     );
 
+    expect(service.hasActiveSession, isTrue);
+    expect(service.hasInMemoryReconnectContext, isTrue);
+    expect(service.activeAccount, isNotNull);
+
     await service.shutdown(jid: 'bob@axi.im');
+    expect(service.hasActiveSession, isFalse);
+    expect(service.hasInMemoryReconnectContext, isFalse);
+    expect(service.activeAccount, isNull);
+    expect(service.sessionCredentials, isNull);
     expect(deletedKeys, isEmpty);
 
     await service.shutdown(jid: 'bob@axi.im', clearCredentials: true);
 
     expect(deletedKeys.length, greaterThanOrEqualTo(2));
     expect(deletedKeys.every((key) => key.contains('bob@axi.im')), isTrue);
+  });
+
+  test('burn clears in-memory session credentials', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+    service.cacheSessionCredentials(
+      address: 'bob@axi.im',
+      password: 'password',
+    );
+
+    await service.burn(jid: 'bob@axi.im');
+
+    expect(service.hasActiveSession, isFalse);
+    expect(service.activeAccount, isNull);
+    expect(service.sessionCredentials, isNull);
   });
 
   test(

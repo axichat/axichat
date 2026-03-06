@@ -810,7 +810,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         }
       }
     });
-    rosterTitle ??= mox.JID.fromString(jid).local;
+    rosterTitle ??= addressDisplayLabel(jid) ?? mox.JID.fromString(jid).local;
     if (transport?.isXmpp == true && rosterTitle != null) {
       final renamed = await _connection.addToRoster(jid, title: rosterTitle);
       if (!renamed) {
@@ -841,7 +841,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
               jid: peerJid,
               title: isSelfChat
                   ? 'Saved Messages'
-                  : mox.JID.fromString(peerJid).local,
+                  : addressDisplayLabel(peerJid) ??
+                        mox.JID.fromString(peerJid).local,
               type: ChatType.chat,
               lastChangeTimestamp: lastChangeCandidate,
               transport: MessageTransport.xmpp,

@@ -167,6 +167,26 @@ String? addressLocalPart(String? raw) {
   return normalized.substring(0, atIndex).trim();
 }
 
+String? addressDisplayLabel(String? raw) {
+  final parsed = parseJid(raw);
+  if (parsed != null) {
+    final local = parsed.local.trim();
+    if (local.isNotEmpty) {
+      return local;
+    }
+    final bare = parsed.toBare().toString().trim();
+    if (bare.toLowerCase() == EndpointConfig.defaultDomain.toLowerCase()) {
+      return bare;
+    }
+    return null;
+  }
+  final normalized = normalizeAddress(raw);
+  if (normalized?.toLowerCase() == EndpointConfig.defaultDomain.toLowerCase()) {
+    return normalized;
+  }
+  return null;
+}
+
 String? addressDomainPart(String? raw) {
   final normalized = normalizeAddress(raw);
   if (normalized == null || !normalized.contains('@')) {

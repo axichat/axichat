@@ -60,10 +60,18 @@ enum _EmailSyncSource {
   bootstrapRetry,
   bootstrapComplete,
   reconnectCatchUp,
+  passwordRefreshPending,
 }
 
 extension _EmailSyncSourceLabels on _EmailSyncSource {
   String get logLabel => name;
+}
+
+enum EmailPasswordRefreshResult {
+  confirmed,
+  reconnectPending;
+
+  bool get isConfirmed => this == confirmed;
 }
 
 final class EmailConnectionConfigBuilder {
@@ -518,8 +526,18 @@ class EmailService {
   Map<String, String> _buildConnectionConfig(String address) =>
       _connectionConfigBuilder(address, _endpointConfig);
 
+  Map<String, String> _buildConfigureAccountOverrides({
+    required String address,
+    required String password,
+  }) =>
+      Map<String, String>.of(_buildConnectionConfig(address))
+        ..[_sendPasswordConfigKey] = password;
+
   bool _hasConnectionOverrides(Map<String, String> connectionOverrides) =>
       _connectionOverrideConfigKeys.any(connectionOverrides.containsKey);
+
+  bool _isConfigureTimeout(DeltaSafeException error) =>
+      error.message.toLowerCase().contains('timed out');
 
   Future<bool> _isConnectionOverrideApplied({
     required String scope,
@@ -1008,13 +1026,17 @@ class EmailService {
     return deltaAccountId;
   }
 
-  Future<void> updatePassword({
+  Future<EmailPasswordRefreshResult> updatePassword({
     required String jid,
     required String displayName,
     required String password,
     bool persistCredentials = true,
   }) async {
     await _ensureReady();
+    final hadForegroundKeepalive = _foregroundKeepaliveEnabled;
+    if (hadForegroundKeepalive) {
+      await _stopForegroundKeepalive();
+    }
     final scope = _scopeForJid(jid);
     final address = await _credentialStore.read(
       key: _addressKeyForScope(scope),
@@ -1032,21 +1054,53 @@ class EmailService {
       );
     }
     final connectionOverrides = _buildConnectionConfig(address);
-    await _transport.configureAccount(
+    final configureOverrides = _buildConfigureAccountOverrides(
       address: address,
       password: password,
-      displayName: displayName,
-      additional: connectionOverrides,
-      accountId: deltaAccountId,
     );
-    if (persistCredentials) {
+    var refreshResult = EmailPasswordRefreshResult.confirmed;
+    await stop();
+    try {
+      try {
+        await _transport.configureAccount(
+          address: address,
+          password: password,
+          displayName: displayName,
+          additional: configureOverrides,
+          accountId: deltaAccountId,
+        );
+      } on DeltaSafeException catch (error, stackTrace) {
+        if (!_isConfigureTimeout(error)) {
+          rethrow;
+        }
+        refreshResult = EmailPasswordRefreshResult.reconnectPending;
+        _updateSyncState(
+          EmailSyncState.recovering(_l10n.emailSyncMessageSyncing),
+          source: _EmailSyncSource.passwordRefreshPending,
+        );
+        _log.warning(
+          'Timed out refreshing live email credentials after password change; '
+          'email reconnect remains pending.',
+          error,
+          stackTrace,
+        );
+      }
+    } finally {
+      await start();
+      if (hadForegroundKeepalive) {
+        await setForegroundKeepalive(true);
+      }
+    }
+    if (persistCredentials && refreshResult.isConfirmed) {
       await _credentialStore.write(
         key: _provisionedKeyForScope(scope),
         value: _credentialTrueValue,
       );
     }
-    _resetImapCapabilities();
-    await _refreshImapCapabilities(force: true);
+    if (refreshResult.isConfirmed) {
+      _resetImapCapabilities();
+      await _refreshImapCapabilities(force: true);
+    }
     await _hydrateAccountAddress(
       address: address,
       deltaAccountId: deltaAccountId,
@@ -1058,6 +1112,7 @@ class EmailService {
       persistCredentials: persistCredentials,
       connectionOverrides: connectionOverrides,
     );
+    return refreshResult;
   }
 
   Future<void> start() async {
@@ -1102,18 +1157,26 @@ class EmailService {
     _resetImapCapabilities();
     _clearNotificationQueue();
     _resetDeltaOperationQueue();
-    if (!clearCredentials) {
-      return;
+    if (clearCredentials) {
+      try {
+        await _transport.deconfigureAccount();
+      } on Exception catch (error, stackTrace) {
+        _log.warning('Failed to deconfigure email account', error, stackTrace);
+      }
+      final scope = _scopeForOptionalJid(jid);
+      if (scope != null) {
+        await _clearCredentials(scope);
+      }
     }
-    try {
-      await _transport.deconfigureAccount();
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to deconfigure email account', error, stackTrace);
-    }
-    final scope = _scopeForOptionalJid(jid);
-    if (scope != null) {
-      await _clearCredentials(scope);
-    }
+    _detachTransportListener();
+    await _transport.dispose();
+    _databasePrefix = null;
+    _databasePassphrase = null;
+    _activeAccount = null;
+    _sessionCredentials = null;
+    _activeCredentialScope = null;
+    _pendingPushToken = null;
+    _running = false;
   }
 
   Future<void> burn({String? jid}) async {
@@ -1140,6 +1203,7 @@ class EmailService {
     _databasePrefix = null;
     _databasePassphrase = null;
     _activeAccount = null;
+    _sessionCredentials = null;
     _activeCredentialScope = null;
     _pendingPushToken = null;
   }
@@ -4025,12 +4089,11 @@ class EmailService {
       );
     }
     final String displayName = _displayNameForAddress(account.address);
-    final Map<String, String> connectionOverrides = _buildConnectionConfig(
-      account.address,
-    );
-    final Map<String, String> configureOverrides = Map<String, String>.of(
-      connectionOverrides,
-    )..[_sendPasswordConfigKey] = credentials.password;
+    final Map<String, String> configureOverrides =
+        _buildConfigureAccountOverrides(
+          address: account.address,
+          password: credentials.password,
+        );
     try {
       await _transport.configureAccount(
         address: account.address,

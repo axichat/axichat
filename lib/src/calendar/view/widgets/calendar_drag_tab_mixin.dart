@@ -267,25 +267,15 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                     foregroundColor: scheme.mutedForeground,
                     selectedForegroundColor: scheme.foreground,
                     textStyle: context.textTheme.small,
-                    child: DragTarget<CalendarDragPayload>(
-                      hitTestBehavior: HitTestBehavior.translucent,
-                      onWillAcceptWithDetails: _handleScheduleTabDragEvent,
-                      onMove: _handleScheduleTabDragMove,
-                      onLeave: (_) => _handleScheduleTabDragLeave(),
-                      onAcceptWithDetails: (details) {
-                        _handleScheduleTabDragLeave();
-                        onDragCancelRequested(details.data);
-                      },
-                      builder: (context, _, _) => _DragTabLabel(
-                        label: scheduleTabLabel,
-                        scheme: scheme,
-                        selected: scheduleSelected,
-                        showCue: scheduleCueActive,
-                        shake:
-                            !lowMotion &&
-                            scheduleSwitchHintActive &&
-                            !scheduleCueActive,
-                      ),
+                    child: _DragTabLabel(
+                      label: scheduleTabLabel,
+                      scheme: scheme,
+                      selected: scheduleSelected,
+                      showCue: scheduleCueActive,
+                      shake:
+                          !lowMotion &&
+                          scheduleSwitchHintActive &&
+                          !scheduleCueActive,
                     ),
                   ),
                   ShadTab<int>(
@@ -301,30 +291,61 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                     foregroundColor: scheme.mutedForeground,
                     selectedForegroundColor: scheme.foreground,
                     textStyle: context.textTheme.small,
-                    child: DragTarget<CalendarDragPayload>(
-                      hitTestBehavior: HitTestBehavior.translucent,
-                      onWillAcceptWithDetails: _handleTasksTabDragEvent,
-                      onMove: _handleTasksTabDragMove,
-                      onLeave: (_) => _handleTasksTabDragLeave(),
-                      onAcceptWithDetails: (details) {
-                        _handleTasksTabDragLeave();
-                        onDragCancelRequested(details.data);
-                      },
-                      builder: (context, _, _) => _DragTabLabel(
-                        label: tasksTabLabel,
-                        scheme: scheme,
-                        selected: tasksSelected,
-                        showCue: tasksCueActive,
-                        shake:
-                            !lowMotion &&
-                            tasksSwitchHintActive &&
-                            !tasksCueActive,
-                      ),
+                    child: _DragTabLabel(
+                      label: tasksTabLabel,
+                      scheme: scheme,
+                      selected: tasksSelected,
+                      showCue: tasksCueActive,
+                      shake:
+                          !lowMotion &&
+                          tasksSwitchHintActive &&
+                          !tasksCueActive,
                     ),
                   ),
                 ],
               );
-              return tabs;
+              if (!_isAnyDragActive) {
+                return tabs;
+              }
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  tabs,
+                  Positioned.fill(
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: DragTarget<CalendarDragPayload>(
+                            hitTestBehavior: HitTestBehavior.translucent,
+                            onWillAcceptWithDetails:
+                                _handleScheduleTabDragEvent,
+                            onMove: _handleScheduleTabDragMove,
+                            onLeave: (_) => _handleScheduleTabDragLeave(),
+                            onAcceptWithDetails: (details) {
+                              _handleScheduleTabDragLeave();
+                              onDragCancelRequested(details.data);
+                            },
+                            builder: (context, _, _) => const SizedBox.expand(),
+                          ),
+                        ),
+                        Expanded(
+                          child: DragTarget<CalendarDragPayload>(
+                            hitTestBehavior: HitTestBehavior.translucent,
+                            onWillAcceptWithDetails: _handleTasksTabDragEvent,
+                            onMove: _handleTasksTabDragMove,
+                            onLeave: (_) => _handleTasksTabDragLeave(),
+                            onAcceptWithDetails: (details) {
+                              _handleTasksTabDragLeave();
+                              onDragCancelRequested(details.data);
+                            },
+                            builder: (context, _, _) => const SizedBox.expand(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
             },
           );
         },
@@ -959,20 +980,20 @@ class _DragTabLabel extends StatelessWidget {
     if (!shake) {
       return labelContent;
     }
-    return _ShakingDragTabLabel(child: labelContent);
+    return _RotatingDragTabLabel(child: labelContent);
   }
 }
 
-class _ShakingDragTabLabel extends StatefulWidget {
-  const _ShakingDragTabLabel({required this.child});
+class _RotatingDragTabLabel extends StatefulWidget {
+  const _RotatingDragTabLabel({required this.child});
 
   final Widget child;
 
   @override
-  State<_ShakingDragTabLabel> createState() => _ShakingDragTabLabelState();
+  State<_RotatingDragTabLabel> createState() => _RotatingDragTabLabelState();
 }
 
-class _ShakingDragTabLabelState extends State<_ShakingDragTabLabel>
+class _RotatingDragTabLabelState extends State<_RotatingDragTabLabel>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
@@ -987,13 +1008,14 @@ class _ShakingDragTabLabelState extends State<_ShakingDragTabLabel>
 
   @override
   Widget build(BuildContext context) {
-    final amplitude = context.spacing.xxs;
+    final maxAngle =
+        (context.spacing.xxs / context.sizing.iconButtonSize) * 2.0;
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, child) {
-        final phase = _controller.value * math.pi * 6;
-        final dx = math.sin(phase) * amplitude;
-        return Transform.translate(offset: Offset(dx, 0), child: child);
+        final phase = _controller.value * math.pi * 2;
+        final angle = math.sin(phase) * maxAngle;
+        return Transform.rotate(angle: angle, child: child);
       },
       child: widget.child,
     );

@@ -22,6 +22,7 @@ class ChangePasswordForm extends StatefulWidget {
 }
 
 class _ChangePasswordFormState extends State<ChangePasswordForm> {
+  final _formKey = GlobalKey<FormState>();
   late TextEditingController _passwordTextController;
   late TextEditingController _newPasswordTextController;
   late TextEditingController _newPassword2TextController;
@@ -43,7 +44,8 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
   }
 
   void _onPressed(BuildContext context) async {
-    if (!Form.of(context).mounted || !Form.of(context).validate()) return;
+    final form = _formKey.currentState;
+    if (form == null || !form.validate()) return;
     final passwordWasSkipped = context
         .read<AuthenticationCubit>()
         .passwordWasSkipped;
@@ -70,6 +72,7 @@ class _ChangePasswordFormState extends State<ChangePasswordForm> {
         );
         final spacing = context.spacing;
         return Form(
+          key: _formKey,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

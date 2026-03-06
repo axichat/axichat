@@ -620,6 +620,9 @@ class _SignupFormState extends State<SignupForm>
                 .animationDuration;
             final usernameDescriptionHeight = _usernameDescriptionHeight;
             final errorText = _errorText?.trim();
+            final destructiveTextStyle = context.textTheme.small.copyWith(
+              color: context.colorScheme.destructive,
+            );
             return Align(
               alignment: Alignment.topCenter,
               child: ConstrainedBox(
@@ -663,7 +666,7 @@ class _SignupFormState extends State<SignupForm>
                                   key: const ValueKey(
                                     'signup-global-error-text',
                                   ),
-                                  style: context.textTheme.small,
+                                  style: destructiveTextStyle,
                                 ),
                               )
                             : const SizedBox(
@@ -779,7 +782,7 @@ class _SignupFormState extends State<SignupForm>
                                     if (avatarErrorText != null)
                                       Text(
                                         avatarErrorText,
-                                        style: context.textTheme.small,
+                                        style: destructiveTextStyle,
                                       ),
                                     if (_showAvatarEditor)
                                       Padding(
@@ -1467,6 +1470,9 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
+    final destructiveTextStyle = context.textTheme.small.copyWith(
+      color: context.colorScheme.destructive,
+    );
     return AnimatedSwitcher(
       duration: animationDuration,
       switchInCurve: Curves.easeIn,
@@ -1496,7 +1502,7 @@ class _SignupInsecurePasswordNotice extends StatelessWidget {
                     padding: EdgeInsets.only(left: spacing.xs, top: spacing.xs),
                     child: Text(
                       context.l10n.signupRiskError,
-                      style: context.textTheme.small,
+                      style: destructiveTextStyle,
                     ),
                   ),
                 ),
@@ -1653,7 +1659,7 @@ class _CaptchaErrorSurface extends StatelessWidget {
           child: Text(
             context.l10n.signupCaptchaFailed,
             textAlign: TextAlign.center,
-            style: textTheme.small,
+            style: textTheme.small.copyWith(color: colors.destructive),
           ),
         ),
       ),

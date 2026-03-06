@@ -22,6 +22,7 @@ class UnregisterForm extends StatefulWidget {
 }
 
 class _UnregisterFormState extends State<UnregisterForm> {
+  final _formKey = GlobalKey<FormState>();
   late TextEditingController _passwordTextController;
 
   @override
@@ -37,8 +38,8 @@ class _UnregisterFormState extends State<UnregisterForm> {
   }
 
   void _onPressed(BuildContext context) async {
-    final form = Form.of(context);
-    if (!form.validate()) return;
+    final form = _formKey.currentState;
+    if (form == null || !form.validate()) return;
     final passwordWasSkipped = context
         .read<AuthenticationCubit>()
         .passwordWasSkipped;
@@ -72,6 +73,7 @@ class _UnregisterFormState extends State<UnregisterForm> {
         final unregisterErrorPadding = EdgeInsets.all(spacing.s);
         final unregisterFieldPadding = EdgeInsets.all(spacing.s);
         return Form(
+          key: _formKey,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

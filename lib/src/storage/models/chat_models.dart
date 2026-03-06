@@ -120,7 +120,7 @@ abstract class RosterItem with _$RosterItem implements Insertable<RosterItem> {
 
   factory RosterItem.fromJid(String jid) => RosterItem(
     jid: jid.toString(),
-    title: mox.JID.fromString(jid).local,
+    title: addressDisplayLabel(jid) ?? mox.JID.fromString(jid).local,
     presence: Presence.chat,
     subscription: Subscription.both,
   );
@@ -129,7 +129,10 @@ abstract class RosterItem with _$RosterItem implements Insertable<RosterItem> {
     final subscription = Subscription.fromString(item.subscription);
     return RosterItem(
       jid: item.jid,
-      title: item.name ?? mox.JID.fromString(item.jid).local,
+      title:
+          item.name ??
+          addressDisplayLabel(item.jid) ??
+          mox.JID.fromString(item.jid).local,
       presence: subscription.isNone || subscription.isFrom
           ? Presence.unavailable
           : Presence.chat,
@@ -343,7 +346,7 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
 
   factory Chat.fromJid(String jid) => Chat(
     jid: jid,
-    title: mox.JID.fromString(jid).local,
+    title: addressDisplayLabel(jid) ?? mox.JID.fromString(jid).local,
     type: ChatType.chat,
     lastChangeTimestamp: DateTime.now(),
     transport: MessageTransport.xmpp,

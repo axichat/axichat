@@ -54,7 +54,12 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
             }
             return;
           }
-          await db.saveInvite(Invite(jid: requester, title: event.from.local));
+          await db.saveInvite(
+            Invite(
+              jid: requester,
+              title: addressDisplayLabel(requester) ?? event.from.local,
+            ),
+          );
         });
       });
   }

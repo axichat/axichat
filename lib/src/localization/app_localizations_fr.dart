@@ -6052,6 +6052,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get authPasswordChangeSuccess => 'Mot de passe modifié avec succès.';
 
   @override
+  String get authPasswordChangeReconnectPending =>
+      'Mot de passe modifié. L’e-mail se reconnecte en arrière-plan.';
+
+  @override
   String get authPasswordIncorrect =>
       'Mot de passe incorrect. Veuillez réessayer.';
 
@@ -6061,6 +6065,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get authAccountNotFound => 'Compte introuvable.';
+
+  @override
+  String get authAccountAlreadyExists => 'Le compte existe déjà.';
 
   @override
   String get authAccountDeletionDisabled =>

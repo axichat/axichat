@@ -38,8 +38,11 @@ extension AuthMessageKeyLocalization on AuthMessageKey {
     AuthMessageKey.passwordChangeRejected => l10n.authPasswordChangeRejected,
     AuthMessageKey.passwordChangeFailed => l10n.authPasswordChangeFailed,
     AuthMessageKey.passwordChangeSuccess => l10n.authPasswordChangeSuccess,
+    AuthMessageKey.passwordChangeReconnectPending =>
+      l10n.authPasswordChangeReconnectPending,
     AuthMessageKey.passwordIncorrect => l10n.authPasswordIncorrect,
     AuthMessageKey.accountNotFound => l10n.authAccountNotFound,
+    AuthMessageKey.accountAlreadyExists => l10n.authAccountAlreadyExists,
     AuthMessageKey.accountDeletionDisabled => l10n.authAccountDeletionDisabled,
     AuthMessageKey.accountDeletionFailed => l10n.authAccountDeletionFailed,
     AuthMessageKey.deviceOnlyPasswordUnavailable =>

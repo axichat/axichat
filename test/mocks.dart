@@ -162,6 +162,7 @@ RosterItem generateRandomRosterItem({
 
 void prepareMockConnection() {
   when(() => mockConnection.hasConnectionSettings).thenReturn(false);
+  when(() => mockConnection.socketWrapper).thenReturn(XmppSocketWrapper());
 
   when(
     () => mockConnection.registerFeatureNegotiators(any()),
@@ -197,6 +198,9 @@ void prepareMockConnection() {
 
 Future<void> connectSuccessfully(XmppService xmppService) async {
   when(
+    () => mockNotificationService.notificationPreviewsEnabled,
+  ).thenReturn(false);
+  when(
     () => mockNotificationService.sendMessageNotification(
       title: any(named: 'title'),
       body: any(named: 'body'),
@@ -204,6 +208,8 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
       allowForeground: any(named: 'allowForeground'),
       payload: any(named: 'payload'),
       threadKey: any(named: 'threadKey'),
+      showPreviewOverride: any(named: 'showPreviewOverride'),
+      channel: any(named: 'channel'),
     ),
   ).thenAnswer((_) async {});
 
@@ -279,6 +285,9 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
 
 Future<void> connectUnsuccessfully(XmppService xmppService) async {
   when(
+    () => mockNotificationService.notificationPreviewsEnabled,
+  ).thenReturn(false);
+  when(
     () => mockNotificationService.sendMessageNotification(
       title: any(named: 'title'),
       body: any(named: 'body'),
@@ -286,6 +295,8 @@ Future<void> connectUnsuccessfully(XmppService xmppService) async {
       allowForeground: any(named: 'allowForeground'),
       payload: any(named: 'payload'),
       threadKey: any(named: 'threadKey'),
+      showPreviewOverride: any(named: 'showPreviewOverride'),
+      channel: any(named: 'channel'),
     ),
   ).thenAnswer((_) async {});
 

@@ -25,6 +25,7 @@ enum EmailProvisioningApiErrorCode {
   network,
   authenticationFailed,
   notFound,
+  alreadyExists,
 }
 
 class EmailProvisioningApiException implements Exception {
@@ -210,6 +211,17 @@ class EmailProvisioningClient {
       throw const EmailProvisioningApiException(
         code: EmailProvisioningApiErrorCode.unauthorized,
         debugMessage: 'Signup request forbidden.',
+      );
+    }
+
+    if (response.statusCode == 409) {
+      final detail = _errorMessageFrom(response.body);
+      _log.info('Email provisioning rejected duplicate signup.');
+      throw EmailProvisioningApiException(
+        code: EmailProvisioningApiErrorCode.alreadyExists,
+        statusCode: response.statusCode,
+        debugMessage:
+            detail ?? 'Signup request rejected: account already exists.',
       );
     }
 

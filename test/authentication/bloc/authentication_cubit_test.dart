@@ -31,6 +31,14 @@ const bool clearEmailCredentialsOnLogout = true;
 Uri _registrationMatcher() =>
     any<Uri>(that: predicate((Uri uri) => uri.path.contains('/register/new/')));
 
+Uri _changePasswordMatcher() => any<Uri>(
+  that: predicate(
+    (Uri uri) =>
+        uri.path.contains('/register/change_password/') ||
+        uri.path.contains('/register/password/'),
+  ),
+);
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -89,6 +97,14 @@ void main() {
       (_) async =>
           const EmailAccount(address: validJid, password: validPassword),
     );
+    when(
+      () => mockEmailService.updatePassword(
+        jid: any(named: 'jid'),
+        displayName: any(named: 'displayName'),
+        password: any(named: 'password'),
+        persistCredentials: any(named: 'persistCredentials'),
+      ),
+    ).thenAnswer((_) async => EmailPasswordRefreshResult.confirmed);
     when(() => mockEmailService.start()).thenAnswer((_) async {});
     when(
       () => mockEmailService.handleNetworkAvailable(),
@@ -195,6 +211,13 @@ void main() {
       () => mockProvisioningClient.deleteAccount(
         email: any(named: 'email'),
         password: any(named: 'password'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockProvisioningClient.changePassword(
+        email: any(named: 'email'),
+        oldPassword: any(named: 'oldPassword'),
+        newPassword: any(named: 'newPassword'),
       ),
     ).thenAnswer((_) async {});
   });
@@ -1105,6 +1128,213 @@ void main() {
         expect(entry['password'], equals(validPassword));
       },
     );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Surfaces email signup conflicts as account already exists.',
+      setUp: () {
+        when(
+          () => mockProvisioningClient.createAccount(
+            localpart: any(named: 'localpart'),
+            password: any(named: 'password'),
+          ),
+        ).thenThrow(
+          const provisioning.EmailProvisioningApiException(
+            code: provisioning.EmailProvisioningApiErrorCode.alreadyExists,
+            statusCode: 409,
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+        passwordWasSkipped: false,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationSignupFailure(
+          AuthKeyMessage(AuthMessageKey.accountAlreadyExists),
+        ),
+      ],
+      verify: (_) {
+        verifyNever(
+          () => mockHttpClient.post(
+            _registrationMatcher(),
+            body: any(named: 'body'),
+          ),
+        );
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Surfaces ejabberd signup conflicts as account already exists.',
+      setUp: () {
+        when(
+          () => mockHttpClient.post(
+            _registrationMatcher(),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer(
+          (_) async => Response(
+            'There was an error registering the account: The account already exists',
+            409,
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(smtpEnabled: false),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+        passwordWasSkipped: false,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationSignupFailure(
+          AuthKeyMessage(AuthMessageKey.accountAlreadyExists),
+        ),
+      ],
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Surfaces email signup validation details instead of flattening them.',
+      setUp: () {
+        when(
+          () => mockProvisioningClient.createAccount(
+            localpart: any(named: 'localpart'),
+            password: any(named: 'password'),
+          ),
+        ).thenThrow(
+          const provisioning.EmailProvisioningApiException(
+            code: provisioning.EmailProvisioningApiErrorCode.invalidResponse,
+            statusCode: 422,
+            debugMessage: 'Mailbox policy rejected this username.',
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+        passwordWasSkipped: false,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationSignupFailure(
+          AuthRawMessage('Mailbox policy rejected this username.'),
+        ),
+      ],
+    );
+  });
+
+  group('changePassword', () {
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Surfaces XMPP account-not-found details from 404 responses.',
+      setUp: () {
+        when(
+          () => mockHttpClient.post(
+            _changePasswordMatcher(),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer(
+          (_) async => Response(
+            "There was an error changing the password: The account doesn't exist",
+            404,
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(smtpEnabled: false),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.changePassword(
+        username: validUsername,
+        host: EndpointConfig.defaultDomain,
+        oldPassword: validPassword,
+        password: 'newPassword',
+        password2: 'newPassword',
+      ),
+      expect: () => const [
+        AuthenticationPasswordChangeInProgress(),
+        AuthenticationPasswordChangeFailure(
+          AuthKeyMessage(AuthMessageKey.accountNotFound),
+        ),
+      ],
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Emits partial success when email reconnect remains pending.',
+      setUp: () {
+        when(
+          () => mockHttpClient.post(
+            _changePasswordMatcher(),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer((_) async => Response('', 200));
+        when(
+          () => mockEmailService.updatePassword(
+            jid: any(named: 'jid'),
+            displayName: any(named: 'displayName'),
+            password: any(named: 'password'),
+            persistCredentials: any(named: 'persistCredentials'),
+          ),
+        ).thenAnswer((_) async => EmailPasswordRefreshResult.reconnectPending);
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.changePassword(
+        username: validUsername,
+        host: EndpointConfig.defaultDomain,
+        oldPassword: validPassword,
+        password: 'newPassword',
+        password2: 'newPassword',
+      ),
+      expect: () => const [
+        AuthenticationPasswordChangeInProgress(),
+        AuthenticationPasswordChangeSuccess(
+          AuthKeyMessage(AuthMessageKey.passwordChangeReconnectPending),
+        ),
+      ],
+    );
   });
 
   group('unregister', () {
@@ -1164,6 +1394,137 @@ void main() {
         ).called(1);
         verify(() => mockXmppService.burn()).called(1);
         verify(() => mockEmailService.burn(jid: any(named: 'jid'))).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Uses the stored device-only password when unregistering a skipped-password account.',
+      setUp: () {
+        credentialStorage['password_skipped_v1'] = true.toString();
+        credentialStorage['skipped_password_raw_v1'] = validPassword;
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(smtpEnabled: false),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) async {
+        await Future<void>.delayed(Duration.zero);
+        await bloc.unregister(
+          username: validUsername,
+          host: EndpointConfig.defaultDomain,
+          password: '',
+        );
+      },
+      expect: () => const [
+        AuthenticationUnregisterInProgress(),
+        AuthenticationNone(),
+      ],
+      verify: (_) {
+        verify(
+          () => mockHttpClient.post(
+            any(
+              that: predicate(
+                (Uri uri) =>
+                    uri.path.contains('/register/delete/') ||
+                    uri.path.contains('/register/unregister/'),
+              ),
+            ),
+            body: {
+              'username': validUsername,
+              'host': EndpointConfig.defaultDomain,
+              'password': validPassword,
+            },
+          ),
+        ).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Surfaces XMPP delete details from 404 responses.',
+      setUp: () {
+        when(
+          () => mockHttpClient.post(any(), body: any(named: 'body')),
+        ).thenAnswer(
+          (_) async => Response(
+            "There was an error deleting the account: The account doesn't exist",
+            404,
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(smtpEnabled: false),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.unregister(
+        username: validUsername,
+        host: EndpointConfig.defaultDomain,
+        password: validPassword,
+      ),
+      expect: () => const [
+        AuthenticationUnregisterInProgress(),
+        AuthenticationUnregisterFailure(
+          AuthRawMessage("The account doesn't exist"),
+        ),
+      ],
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Surfaces email delete details instead of treating them as success.',
+      setUp: () {
+        when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
+          (_) async => const EmailAccount(
+            address: 'user@axi.im',
+            password: validPassword,
+          ),
+        );
+        when(
+          () => mockProvisioningClient.deleteAccount(
+            email: 'user@axi.im',
+            password: validPassword,
+          ),
+        ).thenThrow(
+          const provisioning.EmailProvisioningApiException(
+            code: provisioning.EmailProvisioningApiErrorCode.invalidResponse,
+            statusCode: 422,
+            debugMessage:
+                'Email account cannot be deleted while aliases exist.',
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        initialState: const AuthenticationComplete(),
+      ),
+      act: (bloc) => bloc.unregister(
+        username: validUsername,
+        host: EndpointConfig.defaultDomain,
+        password: validPassword,
+      ),
+      expect: () => const [
+        AuthenticationUnregisterInProgress(),
+        AuthenticationUnregisterFailure(
+          AuthRawMessage(
+            'Email account cannot be deleted while aliases exist.',
+          ),
+        ),
+      ],
+      verify: (_) {
+        verifyNever(() => mockXmppService.burn());
       },
     );
   });

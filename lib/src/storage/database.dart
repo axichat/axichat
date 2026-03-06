@@ -1403,7 +1403,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
       return identifier;
     }
     try {
-      return mox.JID.fromString(trimmed).local;
+      return addressDisplayLabel(trimmed) ?? mox.JID.fromString(trimmed).local;
     } catch (_) {
       return trimmed;
     }
