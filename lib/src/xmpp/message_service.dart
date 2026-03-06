@@ -448,6 +448,35 @@ Future<bool> _isBlockedInboundSender(
   return isJidBlocked(fromBare);
 }
 
+bool _isDefaultDomainSystemMessage(Message message) {
+  final defaultDomain = EndpointConfig.defaultDomain.toLowerCase();
+  final sender = normalizedBareAddressValue(message.senderJid);
+  if (sender != defaultDomain) {
+    return false;
+  }
+  final chat = normalizedBareAddressValue(message.chatJid);
+  return chat == defaultDomain;
+}
+
+bool _isArchivedOrOfflineMessage(mox.MessageEvent event) {
+  return event.isFromMAM ||
+      event.extensions.get<mox.DelayedDeliveryData>() != null;
+}
+
+Message _normalizeDefaultDomainSystemMessage(Message message) {
+  if (!_isDefaultDomainSystemMessage(message)) {
+    return message;
+  }
+  final trimmedBody = message.body?.trim();
+  final normalizedBody = trimmedBody == null || trimmedBody.isEmpty
+      ? null
+      : trimmedBody;
+  if (normalizedBody == message.body) {
+    return message;
+  }
+  return message.copyWith(body: normalizedBody);
+}
+
 String? _normalizePinJid(String raw) {
   final trimmed = raw.trim();
   if (trimmed.isEmpty) return null;
@@ -1110,6 +1139,8 @@ mixin MessageService
   void _resetStableKeyCache() {
     _seenStableKeys.clear();
     _stableKeyOrder.clear();
+    _seenAxiWelcomeDuplicateKeys.clear();
+    _axiWelcomeDuplicateKeyOrder.clear();
   }
 
   String? _stableKeyForEvent(mox.MessageEvent event) {
@@ -1143,14 +1174,83 @@ mixin MessageService
     }
   }
 
+  String? _axiWelcomeDuplicateKey(Message message) {
+    if (!_isDefaultDomainSystemMessage(message)) {
+      return null;
+    }
+    final body = message.body?.trim();
+    final timestamp = message.timestamp?.toUtc();
+    if (body == null || body.isEmpty || timestamp == null) {
+      return null;
+    }
+    return '${timestamp.toIso8601String()}|$body';
+  }
+
+  String? _axiWelcomeDuplicateKeyForEvent(
+    Message message,
+    mox.MessageEvent event,
+  ) {
+    if (!_isArchivedOrOfflineMessage(event)) {
+      return null;
+    }
+    return _axiWelcomeDuplicateKey(message);
+  }
+
+  bool _axiWelcomeDuplicateKeySeen(String key) {
+    return _seenAxiWelcomeDuplicateKeys.contains(key);
+  }
+
+  void _rememberAxiWelcomeDuplicateKey(String key) {
+    const duplicateKeyLimit = 32;
+    if (_seenAxiWelcomeDuplicateKeys.contains(key)) {
+      return;
+    }
+    _seenAxiWelcomeDuplicateKeys.add(key);
+    _axiWelcomeDuplicateKeyOrder.addLast(key);
+    if (_axiWelcomeDuplicateKeyOrder.length > duplicateKeyLimit) {
+      final evicted = _axiWelcomeDuplicateKeyOrder.removeFirst();
+      _seenAxiWelcomeDuplicateKeys.remove(evicted);
+    }
+  }
+
+  Future<bool> _hasStoredAxiWelcomeDuplicate(
+    Message message,
+    String key,
+  ) async {
+    const recentMessageLimit = 10;
+    return _dbOpReturning<XmppDatabase, bool>((db) async {
+      final recentMessages = await db.getChatMessages(
+        message.chatJid,
+        start: 0,
+        end: recentMessageLimit,
+      );
+      for (final existing in recentMessages) {
+        if (_axiWelcomeDuplicateKey(existing) == key) {
+          return true;
+        }
+      }
+      return false;
+    });
+  }
+
   Future<bool> _isDuplicate(
     Message message,
     mox.MessageEvent event, {
     String? stableKey,
+    String? axiWelcomeDuplicateKey,
   }) async {
     final chatJid = message.chatJid;
+    final resolvedAxiWelcomeDuplicateKey =
+        axiWelcomeDuplicateKey ??
+        _axiWelcomeDuplicateKeyForEvent(message, event);
     if (stableKey != null && _stableKeySeen(chatJid, stableKey)) {
       return true;
+    }
+    if (resolvedAxiWelcomeDuplicateKey != null) {
+      if (_axiWelcomeDuplicateKeySeen(resolvedAxiWelcomeDuplicateKey)) {
+        return true;
+      }
+      _rememberAxiWelcomeDuplicateKey(resolvedAxiWelcomeDuplicateKey);
     }
     if (message.originID != null) {
       final existing = await _dbOpReturning<XmppDatabase, Message?>(
@@ -1161,7 +1261,16 @@ mixin MessageService
     final existing = await _dbOpReturning<XmppDatabase, Message?>(
       (db) => db.getMessageByStanzaID(message.stanzaID),
     );
-    return existing != null;
+    if (existing != null) {
+      return true;
+    }
+    if (resolvedAxiWelcomeDuplicateKey == null) {
+      return false;
+    }
+    return _hasStoredAxiWelcomeDuplicate(
+      message,
+      resolvedAxiWelcomeDuplicateKey,
+    );
   }
 
   Future<void> _hydrateDuplicatePayload({
@@ -1828,6 +1937,8 @@ mixin MessageService
 
   final Map<String, Set<String>> _seenStableKeys = {};
   final Map<String, Queue<String>> _stableKeyOrder = {};
+  final Set<String> _seenAxiWelcomeDuplicateKeys = <String>{};
+  final Queue<String> _axiWelcomeDuplicateKeyOrder = Queue<String>();
   final Map<String, RegisteredStateKey> _lastSeenKeys = {};
   bool _mamSupported = false;
   bool? _mamSupportOverride;
@@ -1900,6 +2011,7 @@ mixin MessageService
         message = message.copyWith(
           timestamp: message.timestamp ?? DateTime.timestamp(),
         );
+        message = _normalizeDefaultDomainSystemMessage(message);
         final accountJid = myJid;
         if (accountJid != null &&
             !isGroupChat &&
@@ -1921,8 +2033,17 @@ mixin MessageService
             body: _attachmentLabel(labelFilename, sizeBytes),
           );
         }
+        final axiWelcomeDuplicateKey = _axiWelcomeDuplicateKeyForEvent(
+          message,
+          event,
+        );
 
-        if (await _isDuplicate(message, event, stableKey: stableKey)) {
+        if (await _isDuplicate(
+          message,
+          event,
+          stableKey: stableKey,
+          axiWelcomeDuplicateKey: axiWelcomeDuplicateKey,
+        )) {
           _log.fine(
             'Dropping duplicate message for ${message.chatJid} (${message.stanzaID})',
           );
@@ -2332,9 +2453,13 @@ mixin MessageService
     int pageSize = mamLoginBackfillMessageLimit,
   }) async {
     if (_mamGlobalSyncInFlight) {
+      _log.fine('Global MAM catch-up skipped: already in flight.');
       return MamGlobalSyncOutcome.skippedInFlight;
     }
     if (connectionState != ConnectionState.connected) {
+      _log.fine(
+        'Global MAM catch-up failed: connection state is $connectionState.',
+      );
       return MamGlobalSyncOutcome.failed;
     }
     _mamGlobalSyncInFlight = true;
@@ -2344,19 +2469,29 @@ mixin MessageService
       await database;
       _mamGlobalMaxTimestamp = null;
       if (connectionState != ConnectionState.connected) {
+        _log.fine(
+          'Global MAM catch-up aborted before query: connection state is $connectionState.',
+        );
         return MamGlobalSyncOutcome.failed;
       }
       await _resolveMamSupportForAccount();
       if (!_mamSupported) {
+        _log.fine(
+          'Global MAM catch-up skipped: account did not advertise MAM support.',
+        );
         return MamGlobalSyncOutcome.skippedUnsupported;
       }
 
       final deniedUntil = await _loadMamGlobalDeniedUntil();
       if (deniedUntil != null && deniedUntil.isAfter(DateTime.timestamp())) {
+        _log.fine(
+          'Global MAM catch-up skipped until ${deniedUntil.toIso8601String()}.',
+        );
         return MamGlobalSyncOutcome.skippedDenied;
       }
 
       started = true;
+      _log.fine('Starting global MAM archive query loop.');
       emitXmppOperation(_mamGlobalStartEvent);
       String? after = await _loadMamGlobalLastId();
       final anchor = await _loadMamGlobalLastSync();
@@ -2395,8 +2530,12 @@ mixin MessageService
       await _storeMamGlobalDeniedUntil(null);
       _mamGlobalSyncCompletedAt = DateTime.timestamp();
       success = true;
+      _log.fine(
+        'Global MAM catch-up completed. anchor=${anchorTimestamp.toIso8601String()}',
+      );
       return MamGlobalSyncOutcome.completed;
     } on XmppAbortedException {
+      _log.fine('Global MAM catch-up aborted.');
       return MamGlobalSyncOutcome.failed;
     } on Exception catch (error, stackTrace) {
       _log.fine('Global MAM sync failed.', error, stackTrace);

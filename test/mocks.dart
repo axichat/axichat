@@ -178,6 +178,16 @@ void prepareMockConnection() {
   when(
     () => mockConnection.asBroadcastStream(),
   ).thenAnswer((_) => const Stream<mox.XmppEvent>.empty());
+  when(() => mockConnection.enableCarbons()).thenAnswer((_) async => true);
+  when(() => mockConnection.requestRoster()).thenAnswer(
+    (_) =>
+        Future<moxlib.Result<mox.RosterRequestResult, mox.RosterError>?>.value(
+          null,
+        ),
+  );
+  when(
+    () => mockConnection.requestBlocklist(),
+  ).thenAnswer((_) => Future<List<String>?>.value(null));
 
   when(() => mockConnection.discoInfoQuery(any())).thenAnswer((_) async {
     final discoInfo = mox.DiscoInfo(
@@ -218,6 +228,9 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
       key: any(named: 'key'),
       value: any(named: 'value'),
     ),
+  ).thenAnswer((_) async => true);
+  when(
+    () => mockStateStore.delete(key: any(named: 'key')),
   ).thenAnswer((_) async => true);
 
   when(() => mockDatabase.getOmemoDevice(any())).thenAnswer((_) async => null);
@@ -305,6 +318,9 @@ Future<void> connectUnsuccessfully(XmppService xmppService) async {
       key: any(named: 'key'),
       value: any(named: 'value'),
     ),
+  ).thenAnswer((_) async => true);
+  when(
+    () => mockStateStore.delete(key: any(named: 'key')),
   ).thenAnswer((_) async => true);
 
   when(() => mockDatabase.getOmemoDevice(any())).thenAnswer((_) async => null);

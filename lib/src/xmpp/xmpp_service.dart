@@ -850,10 +850,6 @@ class XmppService extends XmppBase
           if (shouldHandleFailedResumption) {
             final sm = _connection.getManager<XmppStreamManagementManager>();
             await sm?.handleFailedResumption();
-            fireAndForget(
-              _syncAfterReconnect,
-              operationName: _syncAfterReconnectOperationName,
-            );
           }
           if (!resumed) {
             try {
@@ -869,6 +865,19 @@ class XmppService extends XmppBase
             }
             await _refreshHttpUploadSupport();
             await _refreshPubSubSupport();
+            try {
+              _xmppLogger.fine('Starting initial-login global MAM catch-up.');
+              final outcome = await syncGlobalMamCatchUp();
+              _xmppLogger.fine(
+                'Initial-login global MAM catch-up finished with $outcome.',
+              );
+            } on Exception catch (error, stackTrace) {
+              _xmppLogger.fine(
+                'Initial-login MAM catch-up failed.',
+                error,
+                stackTrace,
+              );
+            }
           }
         }, operationName: _postNegotiationsSetupOperationName);
         // Connection handling is automatic in moxxmpp v0.5.0.
@@ -1029,8 +1038,6 @@ class XmppService extends XmppBase
       'stream negotiations done';
   static const _postNegotiationsSetupOperationName =
       'XmppService.postNegotiationsSetup';
-  static const _syncAfterReconnectOperationName =
-      'XmppService.syncAfterReconnect';
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
   static const _nonRecoverableReconnectDisableLog =
@@ -2962,15 +2969,6 @@ class XmppService extends XmppBase
     } on Exception catch (error, stackTrace) {
       _xmppLogger.fine('Disco feature query failed.', error, stackTrace);
       return const {};
-    }
-  }
-
-  Future<void> _syncAfterReconnect() async {
-    if (connectionState != ConnectionState.connected) return;
-    try {
-      await syncGlobalMamCatchUp();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine('Reconnect MAM catch-up failed.', error, stackTrace);
     }
   }
 

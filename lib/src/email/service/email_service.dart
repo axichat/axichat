@@ -1123,9 +1123,11 @@ class EmailService {
   }
 
   Future<void> stop() async {
-    if (!_running) return;
-    await _transport.stop();
+    final wasRunning = _running;
     _running = false;
+    if (wasRunning) {
+      await _transport.stop();
+    }
     _stopImapSyncLoop();
     _cancelContactsSyncTimer();
     _contactsSyncQueue.reset();
@@ -2893,6 +2895,9 @@ class EmailService {
   }
 
   void _scheduleConnectivityDowngrade(int connectivity) {
+    if (!_running) {
+      return;
+    }
     _pendingConnectivityLevel = connectivity;
     if (_connectivityDowngradeTimer != null) {
       return;
@@ -2909,6 +2914,9 @@ class EmailService {
   }
 
   Future<void> _confirmConnectivityDowngrade(int fallbackConnectivity) async {
+    if (!_running) {
+      return;
+    }
     try {
       final connectivity = await _transport.connectivity();
       final connectivityLevel = connectivity ?? fallbackConnectivity;

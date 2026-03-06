@@ -2558,10 +2558,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (severity == LogoutSeverity.normal) {
       await _xmppService.clearSessionTokens();
     }
-    if (severity != LogoutSeverity.burn) {
-      await _xmppService.disconnect();
-    }
-
     if (endpointConfig.smtpEnabled) {
       if (severity == LogoutSeverity.burn) {
         await _emailService?.burn();
@@ -2570,6 +2566,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           clearCredentials: severity == LogoutSeverity.normal,
         );
       }
+    }
+
+    if (severity != LogoutSeverity.burn) {
+      await _xmppService.disconnect();
     }
 
     switch (severity) {

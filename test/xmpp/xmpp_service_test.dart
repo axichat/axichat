@@ -16,6 +16,32 @@ import '../mocks.dart';
 
 class MockPresenceManager extends Mock implements XmppPresenceManager {}
 
+class RecordingMamManager extends mox.MAMManager {
+  int queryCount = 0;
+  mox.JID? lastTo;
+  mox.MAMQueryOptions? lastOptions;
+  mox.ResultSetManagement? lastRsm;
+  Duration? lastTimeout;
+
+  @override
+  Future<mox.MAMQueryResult?> queryArchive({
+    mox.JID? to,
+    mox.MAMQueryOptions? options,
+    mox.ResultSetManagement? rsm,
+    Duration? timeout,
+  }) async {
+    queryCount += 1;
+    lastTo = to;
+    lastOptions = options;
+    lastRsm = rsm;
+    lastTimeout = timeout;
+    return const mox.MAMQueryResult(
+      messages: <mox.MAMMessage>[],
+      complete: true,
+    );
+  }
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -326,6 +352,46 @@ void main() {
     );
 
     test(
+      'Given archived duplicate welcome messages from the bare account domain, trims and stores only one.',
+      () async {
+        const trimmedBody = 'Welcome to Axichat';
+        final timestamp = DateTime.utc(2026, 3, 1, 12, 0, 0);
+
+        mox.MessageEvent buildWelcomeEvent(String stanzaId, String body) {
+          return mox.MessageEvent(
+            mox.JID.fromString('axi.im'),
+            mox.JID.fromString(jid),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              mox.MessageBodyData(body),
+              mox.MessageIdData(stanzaId),
+              mox.DelayedDeliveryData(mox.JID.fromString('axi.im'), timestamp),
+            ]),
+            id: stanzaId,
+            isFromMAM: true,
+          );
+        }
+
+        eventStreamController.add(
+          buildWelcomeEvent('welcome-message-1', '  $trimmedBody \n'),
+        );
+        eventStreamController.add(
+          buildWelcomeEvent('welcome-message-2', '\t$trimmedBody  '),
+        );
+
+        await pumpEventQueue(times: 20);
+
+        final messages = await database.getChatMessages(
+          'axi.im',
+          start: 0,
+          end: 10,
+        );
+        expect(messages, hasLength(1));
+        expect(messages.single.body, equals(trimmedBody));
+      },
+    );
+
+    test(
       'Given a message from a non-server bare domain, does not label the chat with that domain.',
       () async {
         const stanzaId = 'other-domain-message';
@@ -513,6 +579,35 @@ void main() {
           message.stanzaID,
         );
         expect(afterReceived?.received, isTrue);
+      },
+    );
+
+    test(
+      'When stream negotiations complete on a fresh login, runs a MAM catch-up.',
+      () async {
+        final mamManager = RecordingMamManager();
+        await xmppService.setMamSupportOverride(true);
+        when(() => mockConnection.carbonsEnabled).thenReturn(false);
+        when(
+          () => mockConnection.enableCarbons(),
+        ).thenAnswer((_) async => true);
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(
+            mox.XmppConnectionState.connected,
+            mox.XmppConnectionState.connecting,
+          ),
+        );
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+
+        await pumpEventQueue(times: 20);
+
+        expect(mamManager.queryCount, 1);
+        expect(mamManager.lastTo, isNull);
+        expect(mamManager.lastOptions?.withJid, isNull);
       },
     );
   });
