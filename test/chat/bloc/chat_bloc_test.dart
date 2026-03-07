@@ -1295,6 +1295,66 @@ void main() {
   );
 
   test(
+    'pinned message selection expands the filter window before scrolling',
+    () async {
+      final target = Message(
+        stanzaID: 'filtered-pin',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        timestamp: DateTime(2026, 1, 1, 8),
+        body: 'Pinned message outside the direct-only view',
+      );
+      when(
+        () => messageService.loadMessageByStanzaId('filtered-pin'),
+      ).thenAnswer((_) async => target);
+      when(
+        () => mockDatabase.countChatMessagesThrough(
+          any(),
+          throughTimestamp: any(named: 'throughTimestamp'),
+          throughStanzaId: any(named: 'throughStanzaId'),
+          throughDeltaMsgId: any(named: 'throughDeltaMsgId'),
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).thenAnswer((_) async => 1);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(const ChatPinnedMessageSelected('filtered-pin'));
+      await _pumpBloc();
+      expect(bloc.state.viewFilter, MessageTimelineFilter.allWithContact);
+
+      messageStreamController.add([target]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.scrollTargetMessageId, 'filtered-pin');
+      expect(bloc.state.scrollTargetRequestId, 1);
+      verify(
+        () => messageService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
     'pinned message selection backfills email history and requests scroll',
     () async {
       final emailService = MockEmailService();

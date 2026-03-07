@@ -2118,6 +2118,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         : const AuthenticationComplete();
     _emit(completedState);
     await _recordAccountAuthenticated(jid);
+    await _syncSignupWelcomeMessage(allowInsert: fromSignup);
     await _completeAuthTransaction();
     _updateEmailForegroundKeepalive();
     await _triggerEmailReconnect();
@@ -2126,7 +2127,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  Future<void> deliverSignupWelcomeMessage() async {
+  Future<void> deliverSignupWelcomeMessage() =>
+      _syncSignupWelcomeMessage(allowInsert: true);
+
+  Future<void> _syncSignupWelcomeMessage({required bool allowInsert}) async {
     const welcomeChatJid = 'axichat@welcome.axichat.invalid';
     const welcomeStanzaId = 'signup-welcome.axichat';
     const welcomeTitle = 'Axichat';
@@ -2136,13 +2140,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         'very low, so avoid relying on it for important business at the '
         'moment.\n\n'
         'Many features are available by tapping on message bubbles; '
-        'Try tapping this one!\n\n'
+        'try tapping this one!\n\n'
         'If you find any bugs, please report them at '
         'https://github.com/axichat/axichat/issues';
     try {
       final db = await _xmppService.database;
       final existing = await db.getMessageByStanzaID(welcomeStanzaId);
       if (existing == null) {
+        if (!allowInsert) {
+          return;
+        }
         await db.saveMessage(
           Message(
             stanzaID: welcomeStanzaId,
@@ -2178,7 +2185,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
       }
     } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to seed signup welcome chat', error, stackTrace);
+      _log.warning('Failed to sync signup welcome chat', error, stackTrace);
     }
   }
 

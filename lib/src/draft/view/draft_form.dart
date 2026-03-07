@@ -1217,7 +1217,6 @@ class _DraftFormState extends State<DraftForm> {
     if (!transportsReady) return;
     final settingsCubit = context.read<SettingsCubit>();
     final settingsState = settingsCubit.state;
-    final hasAttachments = _pendingAttachments.isNotEmpty;
     final split = _splitRecipients();
     final endpointConfig = settingsState.endpointConfig;
     final shareTokenSignatureEnabled = settingsState.shareTokenSignatureEnabled;

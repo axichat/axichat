@@ -84,6 +84,14 @@ void main() {
     registerFallbackValue(
       const EmailAttachment(path: '', fileName: '', sizeBytes: 0),
     );
+    registerFallbackValue(
+      Chat(
+        jid: 'fallback@axi.im',
+        title: 'Fallback',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.fromMillisecondsSinceEpoch(0),
+      ),
+    );
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(
       MessageShareData(
@@ -221,6 +229,27 @@ void main() {
         placeholderJids: any(named: 'placeholderJids'),
       ),
     ).thenAnswer((_) async {});
+    when(
+      () => database.getDeltaChatIdForAccount(
+        chatJid: any(named: 'chatJid'),
+        deltaAccountId: any(named: 'deltaAccountId'),
+      ),
+    ).thenAnswer((_) async => null);
+    when(
+      () => database.upsertEmailChatAccount(
+        chatJid: any(named: 'chatJid'),
+        deltaAccountId: any(named: 'deltaAccountId'),
+        deltaChatId: any(named: 'deltaChatId'),
+      ),
+    ).thenAnswer((_) async {});
+    when(() => database.updateChat(any())).thenAnswer((_) async {});
+    when(
+      () => database.getChatByDeltaChatId(
+        any(),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => null);
+    when(() => database.getChat(any())).thenAnswer((_) async => null);
     when(
       () => notificationService.sendNotification(
         title: any(named: 'title'),
@@ -1339,6 +1368,159 @@ void main() {
 
       expect(result, isNull);
       verifyNever(() => database.getShareIdForDeltaMessage(any()));
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test('sendMessage resolves direct chats by recipient address', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Alice',
+      databasePrefix: 'alice',
+      databasePassphrase: 'passphrase',
+      jid: 'alice@example.org',
+      passwordOverride: 'password',
+    );
+
+    when(
+      () => transport.isConfigured(accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => true);
+    when(
+      () => transport.ensureChatForAddress(
+        address: any(named: 'address'),
+        displayName: any(named: 'displayName'),
+        accountId: any(named: 'accountId'),
+      ),
+    ).thenAnswer((_) async => 91);
+
+    final chat = Chat(
+      jid: 'peer@axi.im',
+      title: 'Peer',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 88,
+      emailAddress: 'peer@example.com',
+      emailFromAddress: 'alice@example.org',
+    );
+
+    await service.sendMessage(chat: chat, body: 'First send');
+
+    verify(
+      () => transport.ensureChatForAddress(
+        address: 'peer@example.com',
+        displayName: 'Peer',
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).called(1);
+    verify(
+      () => transport.sendText(
+        chatId: 91,
+        body: 'First send',
+        subject: any(named: 'subject'),
+        shareId: any(named: 'shareId'),
+        localBodyOverride: any(named: 'localBodyOverride'),
+        htmlBody: any(named: 'htmlBody'),
+        accountId: DeltaAccountDefaults.legacyId,
+      ),
+    ).called(1);
+
+    addTearDown(service.shutdown);
+  });
+
+  test(
+    'sendMessage rehydrates stale delta chats before resolving by address',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => database.getChatByDeltaChatId(
+          88,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer(
+        (_) async => Chat(
+          jid: 'peer@example.com',
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          deltaChatId: 88,
+          emailAddress: 'peer@example.com',
+          emailFromAddress: 'alice@example.org',
+        ),
+      );
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 99);
+
+      final chat = Chat(
+        jid: 'dc-88@delta.chat',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailFromAddress: 'alice@example.org',
+      );
+
+      await service.sendMessage(chat: chat, body: 'First send');
+
+      verify(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verify(
+        () => transport.sendText(
+          chatId: 99,
+          body: 'First send',
+          subject: any(named: 'subject'),
+          shareId: any(named: 'shareId'),
+          localBodyOverride: any(named: 'localBodyOverride'),
+          htmlBody: any(named: 'htmlBody'),
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+      verify(
+        () => database.updateChat(
+          any(
+            that: predicate<Chat>(
+              (Chat updated) =>
+                  updated.jid == 'peer@example.com' &&
+                  updated.deltaChatId == 99,
+            ),
+          ),
+        ),
+      ).called(1);
 
       addTearDown(service.shutdown);
     },

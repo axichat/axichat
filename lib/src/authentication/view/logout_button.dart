@@ -77,12 +77,11 @@ class LogoutButton extends StatelessWidget {
                                 severity: severity,
                               );
                             } finally {
-                              if (!context.mounted) {
-                                return;
+                              if (context.mounted) {
+                                setState(() {
+                                  loading = false;
+                                });
                               }
-                              setState(() {
-                                loading = false;
-                              });
                             }
                           },
                   );

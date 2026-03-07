@@ -51,6 +51,8 @@ import 'package:axichat/src/chat/view/widgets/calendar_availability_viewer.dart'
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
+import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
+import 'package:axichat/src/chat/view/widgets/email_html_web_view.dart';
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
@@ -94,6 +96,7 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:flutter/rendering.dart'
     show
         BoxHitTestResult,
@@ -106,7 +109,6 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
-import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
@@ -3646,24 +3648,14 @@ class _ChatState extends State<Chat> {
             ? _scrollController.offset
             : clampOffset(maxScrollExtent * (targetIndex / (itemCount - 1)));
       } else if (targetIndex > mountedRange.max) {
-        lowerOffsetBound = math.max(
-          lowerOffsetBound,
-          _scrollController.offset,
-        );
-        targetOffset = clampOffset(
-          (lowerOffsetBound + upperOffsetBound) / 2,
-        );
+        lowerOffsetBound = math.max(lowerOffsetBound, _scrollController.offset);
+        targetOffset = clampOffset((lowerOffsetBound + upperOffsetBound) / 2);
         if ((targetOffset - _scrollController.offset).abs() < 1) {
           targetOffset = upperOffsetBound;
         }
       } else if (targetIndex < mountedRange.min) {
-        upperOffsetBound = math.min(
-          upperOffsetBound,
-          _scrollController.offset,
-        );
-        targetOffset = clampOffset(
-          (lowerOffsetBound + upperOffsetBound) / 2,
-        );
+        upperOffsetBound = math.min(upperOffsetBound, _scrollController.offset);
+        targetOffset = clampOffset((lowerOffsetBound + upperOffsetBound) / 2);
         if ((targetOffset - _scrollController.offset).abs() < 1) {
           targetOffset = lowerOffsetBound;
         }
@@ -4882,8 +4874,8 @@ class _ChatState extends State<Chat> {
                                     }
                                     final selectionSpacerVisibleHeight =
                                         spacing.l;
-                                    const compactBubbleWidthFraction = 0.7;
-                                    const regularBubbleWidthFraction = 0.7;
+                                    const compactBubbleWidthFraction = 0.8;
+                                    const regularBubbleWidthFraction = 0.8;
                                     const selectionExtrasPreferredMaxWidth =
                                         500.0;
                                     final selectionCutoutDepth = spacing.m;
@@ -5195,12 +5187,10 @@ class _ChatState extends State<Chat> {
                                       final previewId = idPrefix.isEmpty
                                           ? e.stanzaID
                                           : '$idPrefix${e.stanzaID}';
-                                      final previewDatabaseId =
-                                          idPrefix.isEmpty
-                                          ? e.id
+                                      final previewDatabaseId = idPrefix.isEmpty
+                                          ? (e.id ?? e.stanzaID)
                                           : '$idPrefix${e.id ?? e.stanzaID}';
-                                      final projectedMessage =
-                                          idPrefix.isEmpty
+                                      final projectedMessage = idPrefix.isEmpty
                                           ? e
                                           : e.copyWith(
                                               stanzaID: previewId,
@@ -5262,6 +5252,7 @@ class _ChatState extends State<Chat> {
                                         },
                                       );
                                     }
+
                                     for (
                                       var index = 0;
                                       index < filteredItems.length;
@@ -5758,8 +5749,8 @@ class _ChatState extends State<Chat> {
                                             if (deltaMessageId == null) {
                                               return null;
                                             }
-                                            return state.emailQuotedTextByDeltaId[
-                                                deltaMessageId];
+                                            return state
+                                                .emailQuotedTextByDeltaId[deltaMessageId];
                                           },
                                           onMessageLinkTap: _handleLinkTap,
                                         ),
@@ -6853,8 +6844,10 @@ class _ChatState extends State<Chat> {
                                                                             .deltaMsgId;
                                                                     final String?
                                                                     resolvedHtmlBody =
-                                                                        deltaMessageId ==
-                                                                            null
+                                                                        isWelcomeChat
+                                                                        ? null
+                                                                        : deltaMessageId ==
+                                                                              null
                                                                         ? messageModel
                                                                               .htmlBody
                                                                         : state.emailFullHtmlByDeltaId[deltaMessageId] ??
@@ -6871,13 +6864,6 @@ class _ChatState extends State<Chat> {
                                                                         HtmlContentCodec.normalizeHtml(
                                                                           resolvedHtmlBody,
                                                                         );
-                                                                    final bool
-                                                                    hasStoredHtmlBody =
-                                                                        messageModel
-                                                                            .htmlBody
-                                                                            ?.trim()
-                                                                            .isNotEmpty ==
-                                                                        true;
                                                                     final String?
                                                                     normalizedHtmlText =
                                                                         normalizedHtmlBody ==
@@ -6901,17 +6887,23 @@ class _ChatState extends State<Chat> {
                                                                           normalizedHtmlBody,
                                                                         );
                                                                     final bool
+                                                                    htmlMatchesRenderedText =
+                                                                        normalizedHtmlBody !=
+                                                                            null &&
+                                                                        normalizedHtmlText?.isNotEmpty ==
+                                                                            true &&
+                                                                        trimmedRenderedText
+                                                                            .isNotEmpty &&
+                                                                        normalizedHtmlText ==
+                                                                            trimmedRenderedText;
+                                                                    final bool
                                                                     shouldPreferPlainTextHtml =
                                                                         isPlainTextHtml ||
+                                                                        (!isEmailMessage &&
+                                                                            htmlMatchesRenderedText) ||
                                                                         (isEmailChat &&
                                                                             self &&
-                                                                            normalizedHtmlBody !=
-                                                                                null &&
-                                                                            normalizedHtmlText?.isNotEmpty ==
-                                                                                true &&
-                                                                            trimmedRenderedText.isNotEmpty &&
-                                                                            normalizedHtmlText ==
-                                                                                trimmedRenderedText);
+                                                                            htmlMatchesRenderedText);
                                                                     final String?
                                                                     taskShareText = calendarTaskIcs
                                                                         ?.toShareText(
@@ -7404,12 +7396,15 @@ class _ChatState extends State<Chat> {
                                                                           : normalizedQuotedText;
                                                                       final bool
                                                                       shouldRenderHtmlBody =
-                                                                          hasStoredHtmlBody;
+                                                                          normalizedHtmlBody
+                                                                              .isNotEmpty ==
+                                                                          true;
                                                                       final bool
                                                                       shouldShowImageGallery =
                                                                           hasRemoteHtmlImages &&
                                                                           shouldRenderHtmlBody;
-                                                                      if (emailFallbackText !=
+                                                                      if (!shouldRenderHtmlBody &&
+                                                                          emailFallbackText !=
                                                                               null &&
                                                                           emailFallbackText
                                                                               .isNotEmpty) {
@@ -7434,22 +7429,39 @@ class _ChatState extends State<Chat> {
                                                                       }
                                                                       if (shouldRenderHtmlBody) {
                                                                         bubbleTextChildren.add(
-                                                                          _MessageHtmlBody(
+                                                                          EmailHtmlWebView(
                                                                             key: ValueKey(
                                                                               bubbleContentKey,
                                                                             ),
                                                                             html:
                                                                                 normalizedHtmlBody,
-                                                                            textStyle:
-                                                                                baseTextStyle,
-                                                                            textColor:
-                                                                                textColor,
-                                                                            linkColor:
-                                                                                self
-                                                                                ? colors.primaryForeground
-                                                                                : colors.primary,
-                                                                            shouldLoadImages:
+                                                                            allowRemoteImages:
                                                                                 shouldLoadImages,
+                                                                            onBackgroundTap:
+                                                                                widget.readOnly
+                                                                                ? null
+                                                                                : () {
+                                                                                    _toggleMessageSelection(
+                                                                                      messageModel,
+                                                                                    );
+                                                                                  },
+                                                                            clampHeightToMax:
+                                                                                false,
+                                                                            disableInternalScroll:
+                                                                                true,
+                                                                            simplifyLayout:
+                                                                                true,
+                                                                            useHybridComposition:
+                                                                                false,
+                                                                            maxHeight: math.min(
+                                                                              MediaQuery.sizeOf(
+                                                                                    context,
+                                                                                  ).height *
+                                                                                  context.sizing.dialogMaxHeightFraction,
+                                                                              context.sizing.composeWindowHeight,
+                                                                            ),
+                                                                            minHeight:
+                                                                                context.sizing.listButtonHeight,
                                                                             onLinkTap:
                                                                                 _handleLinkTap,
                                                                           ),
@@ -10116,16 +10128,22 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
     final spacing = context.spacing;
     final showPanel = widget.visible && widget.maxHeight > (0.0);
     final showLoading = showPanel && !widget.pinnedMessagesLoaded;
-    final Widget panelBody = showLoading
-        ? Padding(
+    final Widget panelBody = LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth <= 0) {
+          return const SizedBox.shrink();
+        }
+        if (showLoading) {
+          return Padding(
             padding: EdgeInsets.symmetric(vertical: spacing.m),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [AxiProgressIndicator(color: colors.mutedForeground)],
             ),
-          )
-        : widget.pinnedMessages.isEmpty
-        ? Padding(
+          );
+        }
+        if (widget.pinnedMessages.isEmpty) {
+          return Padding(
             padding: EdgeInsets.symmetric(vertical: spacing.m),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -10141,39 +10159,42 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                 ),
               ],
             ),
-          )
-        : ListView.builder(
-            padding: EdgeInsets.zero,
-            shrinkWrap: true,
-            primary: false,
-            physics: const ClampingScrollPhysics(),
-            itemCount: widget.pinnedMessages.length,
-            itemBuilder: (context, index) {
-              final item = widget.pinnedMessages[index];
-              return _PinnedMessageTile(
-                item: item,
-                chat: currentChat,
-                roomState: widget.roomState,
-                canTogglePins: widget.canTogglePins,
-                canShowCalendarTasks: widget.canShowCalendarTasks,
-                canAddToPersonalCalendar: widget.canAddToPersonalCalendar,
-                canAddToChatCalendar: widget.canAddToChatCalendar,
-                locate: widget.locate,
-                isHydrating: widget.pinnedMessagesHydrating,
-                accountJid: widget.accountJid,
-                metadataFor: widget.metadataFor,
-                metadataPendingFor: widget.metadataPendingFor,
-                attachmentsBlocked: widget.attachmentsBlocked,
-                isOneTimeAttachmentAllowed: widget.isOneTimeAttachmentAllowed,
-                shouldAllowAttachment: widget.shouldAllowAttachment,
-                onApproveAttachment: widget.onApproveAttachment,
-                previewMessageForItem: widget.previewMessageForItem,
-                resolvedHtmlBodyFor: widget.resolvedHtmlBodyFor,
-                resolvedQuotedTextFor: widget.resolvedQuotedTextFor,
-                onMessageLinkTap: widget.onMessageLinkTap,
-              );
-            },
           );
+        }
+        return ListView.builder(
+          padding: EdgeInsets.zero,
+          shrinkWrap: true,
+          primary: false,
+          physics: const ClampingScrollPhysics(),
+          itemCount: widget.pinnedMessages.length,
+          itemBuilder: (context, index) {
+            final item = widget.pinnedMessages[index];
+            return _PinnedMessageTile(
+              item: item,
+              chat: currentChat,
+              roomState: widget.roomState,
+              canTogglePins: widget.canTogglePins,
+              canShowCalendarTasks: widget.canShowCalendarTasks,
+              canAddToPersonalCalendar: widget.canAddToPersonalCalendar,
+              canAddToChatCalendar: widget.canAddToChatCalendar,
+              locate: widget.locate,
+              isHydrating: widget.pinnedMessagesHydrating,
+              accountJid: widget.accountJid,
+              metadataFor: widget.metadataFor,
+              metadataPendingFor: widget.metadataPendingFor,
+              attachmentsBlocked: widget.attachmentsBlocked,
+              isOneTimeAttachmentAllowed: widget.isOneTimeAttachmentAllowed,
+              shouldAllowAttachment: widget.shouldAllowAttachment,
+              onApproveAttachment: widget.onApproveAttachment,
+              previewMessageForItem: widget.previewMessageForItem,
+              resolvedHtmlBodyFor: widget.resolvedHtmlBodyFor,
+              resolvedQuotedTextFor: widget.resolvedQuotedTextFor,
+              onMessageLinkTap: widget.onMessageLinkTap,
+            );
+          },
+        );
+      },
+    );
     final panel = ConstrainedBox(
       constraints: BoxConstraints(maxHeight: widget.maxHeight),
       child: Container(
@@ -10408,10 +10429,7 @@ class _PinnedMessageTile extends StatelessWidget {
     return safeLabel.isNotEmpty ? safeLabel : fallback;
   }
 
-  String resolveQuotedSenderLabel(
-    BuildContext context,
-    Message quotedMessage,
-  ) {
+  String resolveQuotedSenderLabel(BuildContext context, Message quotedMessage) {
     final quotedIsSelf = isSelfMessage(
       message: quotedMessage,
       accountJid: accountJid,
@@ -10446,60 +10464,143 @@ class _PinnedMessageTile extends StatelessWidget {
     );
   }
 
+  List<InlineSpan> calendarTaskShareMetadata(
+    CalendarTask task,
+    AppLocalizations l10n,
+    TextStyle detailStyle,
+  ) {
+    final metadata = <InlineSpan>[];
+    final description = task.description?.trim() ?? _emptyText;
+    if (description.isNotEmpty) {
+      metadata.add(TextSpan(text: description, style: detailStyle));
+    }
+    final location = task.location?.trim() ?? _emptyText;
+    if (location.isNotEmpty) {
+      metadata.add(
+        TextSpan(text: l10n.calendarCopyLocation(location), style: detailStyle),
+      );
+    }
+    final scheduleText = calendarTaskScheduleText(task, l10n);
+    if (scheduleText != null && scheduleText.isNotEmpty) {
+      metadata.add(TextSpan(text: scheduleText, style: detailStyle));
+    }
+    return metadata;
+  }
+
+  String? calendarTaskScheduleText(CalendarTask task, AppLocalizations l10n) {
+    final scheduled = task.scheduledTime;
+    if (scheduled == null) {
+      return null;
+    }
+    final end =
+        task.endDate ??
+        (task.duration == null ? null : scheduled.add(task.duration!));
+    final startText = TimeFormatter.formatFriendlyDateTime(l10n, scheduled);
+    if (end == null) {
+      return startText;
+    }
+    final endText = TimeFormatter.formatFriendlyDateTime(l10n, end);
+    if (endText == startText) {
+      return startText;
+    }
+    return l10n.commonRangeLabel(startText, endText);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
     final chatTokens = context.chatTheme;
     final spacing = context.spacing;
-    final message = item.message;
-    final messageText = message?.plainText.trim();
-    final hasMessageText = messageText?.isNotEmpty == true;
-    final CalendarTask? calendarTask = message?.calendarTaskIcs;
-    final bool hasCalendarTask = calendarTask != null;
+    final settings = context.watch<SettingsCubit>().state;
+    final sourceMessage = item.message;
+    final previewMessage = previewMessageForItem(item);
+    final previewProperties =
+        previewMessage?.customProperties ?? const <String, Object?>{};
+    final projectedMessage =
+        (previewProperties['model'] as Message?) ?? sourceMessage;
+    final effectiveMessage = projectedMessage ?? sourceMessage;
+    final renderedText =
+        ((previewProperties['renderedText'] as String?) ??
+                previewMessage?.text ??
+                sourceMessage?.plainText)
+            ?.trim() ??
+        _emptyText;
+    final attachmentIds =
+        (previewProperties['attachmentIds'] as List<String>?) ??
+        item.attachmentMetadataIds;
+    final shareParticipants =
+        (previewProperties['shareParticipants'] as List<chat_models.Chat>?) ??
+        const <chat_models.Chat>[];
+    final replyParticipants =
+        (previewProperties['replyParticipants'] as List<chat_models.Chat>?) ??
+        const <chat_models.Chat>[];
+    final quotedMessage = previewProperties['quoted'] as Message?;
+    final reactions =
+        (previewProperties['reactions'] as List<ReactionPreview>?) ??
+        const <ReactionPreview>[];
+    final isForwarded = (previewProperties['forwarded'] as bool?) ?? false;
+    final forwardedFromJid = previewProperties['forwardedFromJid'] as String?;
+    final hasEmailMessageFlag =
+        (previewProperties['isEmailMessage'] as bool?) == true;
+    final isEmailMessage =
+        chat.isEmailBacked ||
+        chat.defaultTransport.isEmail ||
+        hasEmailMessageFlag ||
+        effectiveMessage?.deltaChatId != null ||
+        effectiveMessage?.deltaMsgId != null;
+    final messageError =
+        (previewProperties['error'] as MessageError?) ??
+        effectiveMessage?.error ??
+        MessageError.none;
+    final trusted =
+        (previewProperties['trusted'] as bool?) ?? effectiveMessage?.trusted;
+    final CalendarFragment? calendarFragment =
+        previewProperties[_calendarFragmentPropertyKey] as CalendarFragment? ??
+        effectiveMessage?.calendarFragment;
+    final CalendarTask? calendarTask =
+        previewProperties[_calendarTaskIcsPropertyKey] as CalendarTask? ??
+        effectiveMessage?.calendarTaskIcs;
+    final bool calendarTaskReadOnly =
+        (previewProperties[_calendarTaskIcsReadOnlyPropertyKey] as bool?) ??
+        effectiveMessage?.calendarTaskIcsReadOnly ??
+        _calendarTaskIcsReadOnlyFallback;
+    final CalendarAvailabilityMessage? availabilityMessage =
+        previewProperties[_calendarAvailabilityPropertyKey]
+            as CalendarAvailabilityMessage?;
+    final CalendarCriticalPathFragment? criticalPathFragment = calendarFragment
+        ?.maybeMap(criticalPath: (value) => value, orElse: () => null);
     final String? taskShareText = calendarTask
         ?.toShareText(context.l10n)
         .trim();
+    final String? fragmentShareText = calendarFragment == null
+        ? null
+        : CalendarFragmentFormatter(
+            context.l10n,
+          ).describe(calendarFragment).trim();
     final bool hideTaskText =
         taskShareText != null &&
         taskShareText.isNotEmpty &&
-        taskShareText == messageText;
-    final CalendarFragment? calendarFragment = message?.calendarFragment;
-    final CalendarCriticalPathFragment? criticalPathFragment = calendarFragment
-        ?.maybeMap(criticalPath: (value) => value, orElse: () => null);
-    final bool hasCriticalPath = criticalPathFragment != null;
-    final String? criticalPathShareText = hasCriticalPath
-        ? CalendarFragmentFormatter(
-            context.l10n,
-          ).describe(calendarFragment!).trim()
-        : null;
-    final bool hideCriticalPathText =
-        criticalPathShareText != null &&
-        criticalPathShareText.isNotEmpty &&
-        criticalPathShareText == messageText;
-    final attachmentIds = item.attachmentMetadataIds;
-    final hasAttachments = message != null && attachmentIds.isNotEmpty;
-    final showMessageText =
-        hasMessageText && !hideTaskText && !hideCriticalPathText;
-    final showLoading = message == null && isHydrating;
-    final showMissing =
-        !showLoading &&
-        !showMessageText &&
-        !hasAttachments &&
-        !hasCalendarTask &&
-        !hasCriticalPath;
+        taskShareText == renderedText;
+    final bool hideFragmentText =
+        fragmentShareText != null &&
+        fragmentShareText.isNotEmpty &&
+        fragmentShareText == renderedText;
+    final bool hideAvailabilityText =
+        availabilityMessage != null && messageError.isNone;
+    final showLoading = sourceMessage == null && isHydrating;
     final messageForPin = resolveMessageForPin();
     final stanzaId = item.messageStanzaId.trim();
     final VoidCallback? onPressed = stanzaId.isEmpty
         ? null
         : () =>
               context.read<ChatBloc>().add(ChatPinnedMessageSelected(stanzaId));
-    final isSelf = message == null
+    final isSelf = effectiveMessage == null
         ? false
-        : isSelfMessage(message: message, accountJid: accountJid);
+        : isSelfMessage(message: effectiveMessage, accountJid: accountJid);
     final senderLabel = resolveSenderLabel(
       context: context,
-      message: message,
+      message: effectiveMessage,
       isSelf: isSelf,
     );
     final bubbleColor = isSelf ? colors.primary : colors.card;
@@ -10508,7 +10609,118 @@ class _PinnedMessageTile extends StatelessWidget {
     final detailColor = isSelf
         ? colors.primaryForeground
         : colors.mutedForeground;
+    final baseTextStyle = context.textTheme.small.copyWith(
+      color: textColor,
+      height: 1.3,
+    );
+    final linkStyle = baseTextStyle.copyWith(
+      color: isSelf ? colors.primaryForeground : colors.primary,
+      decoration: TextDecoration.underline,
+      fontWeight: FontWeight.w600,
+    );
+    final detailStyle = context.textTheme.muted.copyWith(
+      color: detailColor,
+      height: 1.0,
+      textBaseline: TextBaseline.alphabetic,
+    );
+    final extraStyle = context.textTheme.muted.copyWith(
+      color: detailColor,
+      fontStyle: FontStyle.italic,
+    );
+    final transportIconData = isEmailMessage
+        ? LucideIcons.mail
+        : LucideIcons.messageCircle;
+    TextSpan iconDetailSpan(IconData icon, Color color) => TextSpan(
+      text: String.fromCharCode(icon.codePoint),
+      style: detailStyle.copyWith(
+        color: color,
+        fontFamily: icon.fontFamily,
+        package: icon.fontPackage,
+      ),
+    );
+
+    final timestamp = (effectiveMessage?.timestamp ?? item.pinnedAt).toLocal();
+    final timeLabel =
+        '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+    final statusIcon = previewMessage?.status?.icon;
+    final detailSpans = <InlineSpan>[
+      TextSpan(text: timeLabel, style: detailStyle),
+      iconDetailSpan(transportIconData, detailColor),
+      if (isSelf && statusIcon != null) iconDetailSpan(statusIcon, detailColor),
+      if (trusted != null)
+        iconDetailSpan(
+          trusted.toShieldIcon,
+          trusted ? axiGreen : colors.destructive,
+        ),
+    ];
+    final shareMetadataDetails = hideTaskText && calendarTask != null
+        ? calendarTaskShareMetadata(calendarTask, context.l10n, detailStyle)
+        : _emptyInlineSpans;
+    final taskFooterDetails = hideTaskText
+        ? <InlineSpan>[...detailSpans, ...shareMetadataDetails]
+        : _emptyInlineSpans;
+    final fragmentFooterDetails = hideFragmentText
+        ? detailSpans
+        : _emptyInlineSpans;
+    final availabilityFooterDetails = hideAvailabilityText
+        ? detailSpans
+        : _emptyInlineSpans;
+    final showSubjectBanner =
+        (previewProperties['showSubject'] as bool?) == true &&
+        ((previewProperties['subjectLabel'] as String?)?.trim().isNotEmpty ==
+            true);
+    final subjectLabel =
+        (previewProperties['subjectLabel'] as String?)?.trim() ?? _emptyText;
+    final isInviteMessage =
+        (previewProperties['isInvite'] as bool?) ??
+        (effectiveMessage?.pseudoMessageType == PseudoMessageType.mucInvite);
+    final isInviteRevocationMessage =
+        (previewProperties['isInviteRevocation'] as bool?) ??
+        (effectiveMessage?.pseudoMessageType ==
+            PseudoMessageType.mucInviteRevocation);
+    final resolvedHtmlBody = effectiveMessage == null
+        ? null
+        : resolvedHtmlBodyFor(effectiveMessage);
+    final resolvedQuotedText = effectiveMessage == null
+        ? null
+        : resolvedQuotedTextFor(effectiveMessage)?.trim();
+    final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
+    final normalizedHtmlText = normalizedHtmlBody == null
+        ? null
+        : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
+    final bool hasStoredHtmlBody =
+        effectiveMessage?.htmlBody?.trim().isNotEmpty == true;
+    final bool isPlainTextHtml =
+        normalizedHtmlBody != null &&
+        HtmlContentCodec.isPlainTextHtml(normalizedHtmlBody);
+    final bool shouldPreferPlainTextHtml =
+        isPlainTextHtml ||
+        (isEmailMessage &&
+            isSelf &&
+            normalizedHtmlBody != null &&
+            normalizedHtmlText?.isNotEmpty == true &&
+            renderedText.isNotEmpty &&
+            normalizedHtmlText == renderedText);
+    final bool shouldRenderTextContent =
+        !hideTaskText && !hideFragmentText && !hideAvailabilityText;
+    final messageText = renderedText;
+    final metadataIdForCaption = attachmentIds.isNotEmpty
+        ? attachmentIds.first
+        : effectiveMessage?.fileMetadataID;
+    final bool hasAttachmentCaption =
+        shouldRenderTextContent &&
+        messageText.isEmpty &&
+        metadataIdForCaption != null &&
+        metadataIdForCaption.isNotEmpty;
     final contentChildren = <Widget>[];
+    final extraChildren = <Widget>[];
+    void addExtra(Widget child) {
+      if (extraChildren.isNotEmpty) {
+        extraChildren.add(SizedBox(height: spacing.s));
+      }
+      extraChildren.add(child);
+    }
+
     if (showLoading) {
       contentChildren.add(
         Align(
@@ -10516,66 +10728,239 @@ class _PinnedMessageTile extends StatelessWidget {
           child: AxiProgressIndicator(color: detailColor),
         ),
       );
-    } else if (showMessageText) {
-      contentChildren.add(
-        Text(
-          messageText ?? _emptyText,
-          style: context.textTheme.small.copyWith(
-            color: textColor,
-            height: 1.3,
-          ),
-        ),
-      );
-    } else if (showMissing) {
+    } else if (effectiveMessage == null) {
       contentChildren.add(
         Text(
           l10n.chatPinnedMissingMessage,
           style: context.textTheme.muted.copyWith(color: detailColor),
         ),
       );
-    }
-    if (hasCalendarTask) {
-      final taskReadOnly =
-          message?.calendarTaskIcsReadOnly ?? _calendarTaskIcsReadOnlyFallback;
-      if (contentChildren.isNotEmpty) {
-        contentChildren.add(SizedBox(height: spacing.s));
+    } else {
+      if (showSubjectBanner) {
+        final textScaler =
+            MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+        final subjectPainter = TextPainter(
+          text: TextSpan(text: subjectLabel, style: baseTextStyle),
+          textDirection: Directionality.of(context),
+          textScaler: textScaler,
+        )..layout();
+        contentChildren.add(Text(subjectLabel, style: baseTextStyle));
+        contentChildren.add(
+          DecoratedBox(
+            decoration: BoxDecoration(color: context.colorScheme.border),
+            child: SizedBox(
+              height: context.borderSide.width,
+              width: subjectPainter.width,
+            ),
+          ),
+        );
+        contentChildren.add(SizedBox(height: spacing.xs));
       }
-      contentChildren.add(
+      if (messageError.isNotNone) {
+        contentChildren.add(
+          Text(
+            l10n.chatErrorLabel,
+            style: baseTextStyle.copyWith(fontWeight: FontWeight.w600),
+          ),
+        );
+        if (messageText.isNotEmpty) {
+          contentChildren.add(
+            _ParsedMessageBody(
+              contentKey:
+                  '${previewProperties['id'] ?? effectiveMessage.stanzaID}_error',
+              text: messageText,
+              baseStyle: baseTextStyle,
+              linkStyle: linkStyle,
+              details: detailSpans,
+              onLinkTap: onMessageLinkTap,
+              onLinkLongPress: onMessageLinkTap,
+            ),
+          );
+        }
+      } else if (isInviteMessage || isInviteRevocationMessage) {
+        final inviteActionFallbackLabel =
+            context.l10n.chatInviteActionFallbackLabel;
+        final inviteLabel =
+            (previewProperties['inviteLabel'] as String?)?.trim() ??
+            effectiveMessage.body?.trim() ??
+            _emptyText;
+        final inviteActionLabel =
+            (previewProperties['inviteActionLabel'] as String?)?.trim() ??
+            inviteActionFallbackLabel;
+        final inviteRoomName =
+            (previewProperties['inviteRoomName'] as String?)?.trim() ??
+            _emptyText;
+        final inviteRoom =
+            (previewProperties['inviteRoom'] as String?)?.trim() ?? _emptyText;
+        contentChildren.add(
+          _ParsedMessageBody(
+            contentKey:
+                '${previewProperties['id'] ?? effectiveMessage.stanzaID}_invite',
+            text: inviteLabel,
+            baseStyle: baseTextStyle,
+            linkStyle: linkStyle,
+            details: [TextSpan(text: timeLabel, style: detailStyle)],
+            onLinkTap: onMessageLinkTap,
+            onLinkLongPress: onMessageLinkTap,
+          ),
+        );
+        addExtra(
+          _InviteAttachmentCard(
+            enabled: false,
+            label: inviteRoomName.isNotEmpty ? inviteRoomName : inviteLabel,
+            detailLabel: inviteRoom.isNotEmpty ? inviteRoom : inviteLabel,
+            actionLabel: inviteActionLabel,
+            onPressed: () {},
+          ),
+        );
+      } else if (hasAttachmentCaption) {
+        final metadata = metadataFor(metadataIdForCaption);
+        final filename = metadata?.filename.trim() ?? _emptyText;
+        final displayFilename = filename.isNotEmpty
+            ? filename
+            : l10n.chatAttachmentFallbackLabel;
+        final sizeBytes = metadata?.sizeBytes;
+        final sizeLabel = sizeBytes != null && sizeBytes > 0
+            ? formatBytes(sizeBytes, l10n)
+            : l10n.chatAttachmentUnknownSize;
+        final caption = l10n.chatAttachmentCaption(displayFilename, sizeLabel);
+        contentChildren.add(
+          DynamicInlineText(
+            key: ValueKey(previewProperties['id'] ?? effectiveMessage.stanzaID),
+            text: TextSpan(text: caption, style: baseTextStyle),
+            details: detailSpans,
+            onLinkTap: onMessageLinkTap,
+            onLinkLongPress: onMessageLinkTap,
+          ),
+        );
+      } else if (normalizedHtmlBody != null &&
+          shouldRenderTextContent &&
+          !shouldPreferPlainTextHtml) {
+        final emailFallbackText = normalizedHtmlText?.isNotEmpty == true
+            ? normalizedHtmlText
+            : resolvedQuotedText;
+        if (emailFallbackText != null && emailFallbackText.isNotEmpty) {
+          contentChildren.add(
+            _ParsedMessageBody(
+              contentKey:
+                  '${previewProperties['id'] ?? effectiveMessage.stanzaID}_email',
+              text: emailFallbackText,
+              baseStyle: baseTextStyle,
+              linkStyle: linkStyle,
+              details: const <InlineSpan>[],
+              onLinkTap: onMessageLinkTap,
+              onLinkLongPress: onMessageLinkTap,
+            ),
+          );
+        }
+        if (hasStoredHtmlBody) {
+          if (contentChildren.isNotEmpty) {
+            contentChildren.add(SizedBox(height: spacing.xs));
+          }
+          contentChildren.add(
+            _MessageHtmlBody(
+              key: ValueKey(
+                previewProperties['id'] ?? effectiveMessage.stanzaID,
+              ),
+              html: normalizedHtmlBody,
+              textStyle: baseTextStyle,
+              textColor: textColor,
+              linkColor: isSelf ? colors.primaryForeground : colors.primary,
+              shouldLoadImages: settings.autoLoadEmailImages,
+              onLinkTap: onMessageLinkTap,
+            ),
+          );
+        }
+        contentChildren.add(
+          Padding(
+            padding: EdgeInsets.only(top: spacing.xs),
+            child: ChatInlineDetails(details: detailSpans),
+          ),
+        );
+      } else if (shouldRenderTextContent && messageText.isNotEmpty) {
+        contentChildren.add(
+          _ParsedMessageBody(
+            contentKey: previewProperties['id'] ?? effectiveMessage.stanzaID,
+            text: messageText,
+            baseStyle: baseTextStyle,
+            linkStyle: linkStyle,
+            details: detailSpans,
+            onLinkTap: onMessageLinkTap,
+            onLinkLongPress: onMessageLinkTap,
+          ),
+        );
+      } else if (attachmentIds.isEmpty &&
+          calendarTask == null &&
+          calendarFragment == null &&
+          availabilityMessage == null) {
+        contentChildren.add(
+          Text(
+            l10n.chatPinnedMissingMessage,
+            style: context.textTheme.muted.copyWith(color: detailColor),
+          ),
+        );
+      }
+      if (effectiveMessage.retracted) {
+        if (contentChildren.isNotEmpty) {
+          contentChildren.add(SizedBox(height: spacing.xs));
+        }
+        contentChildren.add(Text(l10n.chatMessageRetracted, style: extraStyle));
+      } else if (effectiveMessage.edited) {
+        if (contentChildren.isNotEmpty) {
+          contentChildren.add(SizedBox(height: spacing.xs));
+        }
+        contentChildren.add(Text(l10n.chatMessageEdited, style: extraStyle));
+      }
+    }
+
+    if (availabilityMessage != null) {
+      addExtra(
+        CalendarAvailabilityMessageCard(
+          message: availabilityMessage,
+          footerDetails: availabilityFooterDetails,
+        ),
+      );
+    } else if (calendarTask != null) {
+      addExtra(
         canShowCalendarTasks
             ? ChatCalendarTaskCard(
                 task: calendarTask,
-                readOnly: taskReadOnly,
+                readOnly: calendarTaskReadOnly,
                 requireImportConfirmation: !isSelf,
                 demoQuickAdd:
                     kEnableDemoChats &&
                     chat.defaultTransport.isEmail &&
                     !isSelf,
-                footerDetails: _emptyInlineSpans,
+                footerDetails: taskFooterDetails,
                 isShareFragment: true,
               )
             : CalendarFragmentCard(
                 fragment: CalendarFragment.task(task: calendarTask),
-                footerDetails: _emptyInlineSpans,
+                footerDetails: taskFooterDetails,
               ),
       );
     }
     if (criticalPathFragment != null) {
-      if (contentChildren.isNotEmpty) {
-        contentChildren.add(SizedBox(height: spacing.s));
-      }
-      contentChildren.add(
+      addExtra(
         ChatCalendarCriticalPathCard(
           path: criticalPathFragment.path,
           tasks: criticalPathFragment.tasks,
-          footerDetails: _emptyInlineSpans,
+          footerDetails: fragmentFooterDetails,
           canAddToPersonal: canAddToPersonalCalendar,
           canAddToChat: canAddToChatCalendar,
           locate: locate,
         ),
       );
+    } else if (calendarFragment != null && calendarTask == null) {
+      addExtra(
+        CalendarFragmentCard(
+          fragment: calendarFragment,
+          footerDetails: fragmentFooterDetails,
+        ),
+      );
     }
-    if (hasAttachments) {
-      contentChildren.add(SizedBox(height: spacing.s));
+
+    if (effectiveMessage != null && attachmentIds.isNotEmpty) {
       final isEmailBacked = chat.isEmailBacked;
       final bool attachmentsBlockedForPin = attachmentsBlocked;
       final allowAttachmentByTrust = shouldAllowAttachment(
@@ -10584,13 +10969,15 @@ class _PinnedMessageTile extends StatelessWidget {
       );
       final allowAttachmentOnce = attachmentsBlockedForPin
           ? false
-          : isOneTimeAttachmentAllowed(message.stanzaID);
+          : isOneTimeAttachmentAllowed(effectiveMessage.stanzaID);
       final allowAttachment =
           !attachmentsBlockedForPin &&
           (allowAttachmentByTrust || allowAttachmentOnce);
       final emailDownloadDelegate = isEmailBacked
           ? AttachmentDownloadDelegate(() async {
-              await context.read<ChatBloc>().downloadFullEmailMessage(message);
+              await context.read<ChatBloc>().downloadFullEmailMessage(
+                effectiveMessage,
+              );
               return true;
             })
           : null;
@@ -10601,31 +10988,36 @@ class _PinnedMessageTile extends StatelessWidget {
             : AttachmentDownloadDelegate(
                 () => context.read<ChatBloc>().downloadInboundAttachment(
                   metadataId: attachmentId,
-                  stanzaId: message.stanzaID,
+                  stanzaId: effectiveMessage.stanzaID,
                 ),
               );
         final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
           () => context.read<ChatBloc>().reloadFileMetadata(attachmentId),
         );
-        if (index > 0 || contentChildren.isNotEmpty) {
-          contentChildren.add(SizedBox(height: spacing.s));
-        }
-        contentChildren.add(
+        final hasAttachmentAbove = index > 0 || contentChildren.isNotEmpty;
+        final hasAttachmentBelow = index < attachmentIds.length - 1;
+        addExtra(
           ChatAttachmentPreview(
-            stanzaId: message.stanzaID,
+            stanzaId: effectiveMessage.stanzaID,
             metadata: metadataFor(attachmentId),
             metadataPending: metadataPendingFor(attachmentId),
             allowed: allowAttachment,
             downloadDelegate: downloadDelegate,
             metadataReloadDelegate: metadataReloadDelegate,
+            surfaceShape: _attachmentSurfaceShape(
+              context: context,
+              isSelf: isSelf,
+              chainedPrevious: hasAttachmentAbove,
+              chainedNext: hasAttachmentBelow,
+            ),
             onAllowPressed: allowAttachment
                 ? null
                 : attachmentsBlockedForPin
                 ? null
                 : () => onApproveAttachment(
-                    message: message,
-                    senderJid: message.senderJid,
-                    stanzaId: message.stanzaID,
+                    message: effectiveMessage,
+                    senderJid: effectiveMessage.senderJid,
+                    stanzaId: effectiveMessage.stanzaID,
                     isSelf: isSelf,
                     isEmailChat: isEmailBacked,
                     senderEmail: chat.emailAddress,
@@ -10634,12 +11026,7 @@ class _PinnedMessageTile extends StatelessWidget {
         );
       }
     }
-    final timestamp = (message?.timestamp ?? item.pinnedAt).toLocal();
-    final timeLabel =
-        '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
-    if (contentChildren.isNotEmpty) {
-      contentChildren.add(SizedBox(height: spacing.s));
-    }
+
     final Widget? unpinAction = canTogglePins && messageForPin != null
         ? AxiIconButton.ghost(
             onPressed: () => context.read<ChatBloc>().add(
@@ -10659,21 +11046,107 @@ class _PinnedMessageTile extends StatelessWidget {
             tapTargetSize: context.sizing.menuItemHeight,
           )
         : null;
-    contentChildren.add(
-      Align(
-        alignment: Alignment.centerRight,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              timeLabel,
-              style: context.textTheme.muted.copyWith(color: detailColor),
+    final showReplyStrip = isEmailMessage && replyParticipants.isNotEmpty;
+    final showCompactReactions = !showReplyStrip && reactions.isNotEmpty;
+    final showRecipientCutout =
+        !showCompactReactions && isEmailMessage && shareParticipants.length > 1;
+    final reactionCutoutDepth = spacing.m;
+    final reactionCutoutRadius = spacing.m;
+    final reactionCutoutMinThickness = spacing.l;
+    final reactionStripOffset = Offset(0, -spacing.xxs);
+    final reactionCutoutPadding = EdgeInsets.symmetric(
+      horizontal: spacing.m,
+      vertical: spacing.xxs,
+    );
+    final reactionCornerClearance = spacing.m;
+    final recipientCutoutDepth = spacing.m;
+    final recipientCutoutRadius = spacing.m;
+    final recipientCutoutPadding = EdgeInsets.fromLTRB(
+      spacing.s,
+      spacing.xs,
+      spacing.s,
+      spacing.s,
+    );
+    final recipientCutoutMinThickness = spacing.xl;
+    Widget? reactionOverlay;
+    CutoutStyle? reactionStyle;
+    if (showReplyStrip) {
+      reactionOverlay = _ReplyStrip(participants: replyParticipants);
+      reactionStyle = CutoutStyle(
+        depth: recipientCutoutDepth,
+        cornerRadius: recipientCutoutRadius,
+        padding: recipientCutoutPadding,
+        offset: Offset.zero,
+        minThickness: recipientCutoutMinThickness,
+      );
+    } else if (showCompactReactions) {
+      reactionOverlay = _ReactionStrip(reactions: reactions);
+      reactionStyle = CutoutStyle(
+        depth: reactionCutoutDepth,
+        cornerRadius: reactionCutoutRadius,
+        padding: reactionCutoutPadding,
+        offset: reactionStripOffset,
+        minThickness: reactionCutoutMinThickness,
+      );
+    }
+    Widget? recipientOverlay;
+    CutoutStyle? recipientStyle;
+    if (showRecipientCutout) {
+      recipientOverlay = _RecipientCutoutStrip(recipients: shareParticipants);
+      recipientStyle = CutoutStyle(
+        depth: recipientCutoutDepth,
+        cornerRadius: recipientCutoutRadius,
+        padding: recipientCutoutPadding,
+        offset: Offset.zero,
+        minThickness: recipientCutoutMinThickness,
+      );
+    }
+    final replyPreview = quotedMessage == null
+        ? null
+        : _QuotedMessagePreview(
+            message: quotedMessage,
+            senderLabel: resolveQuotedSenderLabel(context, quotedMessage),
+            isSelf: isSelf,
+          );
+    final forwardedPreview = !isForwarded
+        ? null
+        : _ForwardedPreviewText(
+            senderLabel: resolveForwardedSenderLabel(
+              context: context,
+              message: effectiveMessage,
+              isSelf: isSelf,
+              forwardedFromJid: forwardedFromJid,
             ),
-            if (unpinAction != null) SizedBox(width: spacing.xs),
-            ?unpinAction,
-          ],
+            isSelf: isSelf,
+          );
+    final messagePreview = forwardedPreview == null
+        ? replyPreview
+        : (replyPreview == null
+              ? forwardedPreview
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: isSelf
+                      ? CrossAxisAlignment.end
+                      : CrossAxisAlignment.start,
+                  spacing: spacing.xxs,
+                  children: [forwardedPreview, replyPreview],
+                ));
+    final bubbleFooter = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          timeLabel,
+          style: context.textTheme.muted.copyWith(color: detailColor),
         ),
-      ),
+        if (unpinAction != null) SizedBox(width: spacing.xs),
+        ?unpinAction,
+      ],
+    );
+    if (contentChildren.isNotEmpty) {
+      contentChildren.add(SizedBox(height: spacing.s));
+    }
+    contentChildren.add(
+      Align(alignment: Alignment.centerRight, child: bubbleFooter),
     );
     final bubble = ChatBubbleSurface(
       isSelf: isSelf,
@@ -10684,11 +11157,13 @@ class _PinnedMessageTile extends StatelessWidget {
         isSelf: isSelf,
         chainedPrevious: false,
         chainedNext: false,
+        flattenBottom: extraChildren.isNotEmpty,
       ),
       shadowOpacity: 0,
       shadows: const <BoxShadow>[],
       bubbleWidthFraction: 1.0,
-      cornerClearance: _bubbleCornerClearance(context.radius),
+      cornerClearance:
+          _bubbleCornerClearance(context.radius) + reactionCornerClearance,
       body: Padding(
         padding: _bubblePadding(context),
         child: Column(
@@ -10697,6 +11172,10 @@ class _PinnedMessageTile extends StatelessWidget {
           children: contentChildren,
         ),
       ),
+      reactionOverlay: reactionOverlay,
+      reactionStyle: reactionStyle,
+      recipientOverlay: recipientOverlay,
+      recipientStyle: recipientStyle,
     );
     final bubblePreview = MouseRegion(
       cursor: onPressed == null
@@ -10708,6 +11187,33 @@ class _PinnedMessageTile extends StatelessWidget {
         child: bubble,
       ),
     );
+    final previewMaxWidth = context.sizing.dialogMaxWidth;
+    final bubbleWithPreview = _ReplyPreviewBubbleColumn(
+      preview: messagePreview,
+      senderLabel: _SenderLabelBlock(
+        primaryLabel: senderLabel,
+        secondaryLabel: null,
+        isSelf: isSelf,
+        leftInset: 0.0,
+      ),
+      bubble: bubblePreview,
+      previewMaxWidth: previewMaxWidth,
+      spacing: spacing.s,
+      alignEnd: isSelf,
+    );
+    final bubbleColumn = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: isSelf
+          ? CrossAxisAlignment.end
+          : CrossAxisAlignment.start,
+      children: [
+        bubbleWithPreview,
+        if (extraChildren.isNotEmpty) ...[
+          SizedBox(height: spacing.s),
+          ...extraChildren,
+        ],
+      ],
+    );
     return Padding(
       padding: EdgeInsets.symmetric(
         horizontal: spacing.m,
@@ -10717,21 +11223,7 @@ class _PinnedMessageTile extends StatelessWidget {
         alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: isSelf
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              _SenderLabelBlock(
-                primaryLabel: senderLabel,
-                secondaryLabel: null,
-                isSelf: isSelf,
-                leftInset: 0.0,
-              ),
-              bubblePreview,
-            ],
-          ),
+          child: bubbleColumn,
         ),
       ),
     );
@@ -12250,6 +12742,7 @@ class _ComposerNotice extends StatelessWidget {
               tooltip: context.l10n.commonClose,
               onPressed: onDismiss,
               color: foreground,
+              backgroundColor: Colors.transparent,
               iconSize: sizing.menuItemIconSize,
               buttonSize: sizing.menuItemHeight,
               tapTargetSize: sizing.menuItemHeight,
@@ -14929,7 +15422,7 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
         textTheme.p.fontSize ??
         textTheme.small.fontSize ??
         context.sizing.menuItemIconSize;
-    final htmlBody = html_widget.Html(
+    return html_widget.Html(
       data: widget.html,
       shrinkWrap: false,
       extensions: createEmailHtmlExtensions(
@@ -14941,11 +15434,12 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
         linkColor: widget.linkColor,
       ),
       onLinkTap: (url, _, _) {
-        if (url == null) return;
+        if (url == null) {
+          return;
+        }
         widget.onLinkTap(url);
       },
     );
-    return htmlBody;
   }
 }
 
@@ -15102,7 +15596,7 @@ class _GuestChatState extends State<GuestChat> {
 
   double _bubbleMaxWidth(double maxWidth) {
     final isCompact = maxWidth < smallScreen;
-    final fraction = isCompact ? 0.8 : 0.7;
+    final fraction = isCompact ? 0.8 : 0.8;
     return math.min(maxWidth * fraction, maxWidth);
   }
 

@@ -10,6 +10,7 @@ import 'package:axichat/src/common/message_error_l10n.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/url_safety.dart';
+import 'package:axichat/src/chat/view/widgets/email_html_web_view.dart';
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -18,7 +19,6 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -248,10 +248,26 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                       ),
                     ),
                     if (resolvedHtmlBody != null && resolvedHtmlBody.isNotEmpty)
-                      _EmailHtmlWebView(
-                        html: resolvedHtmlBody,
-                        allowRemoteImages: shouldLoadImages,
-                        onLinkTap: (url) => _handleLinkTap(context, url),
+                      DecoratedBox(
+                        decoration: ShapeDecoration(
+                          color: context.colorScheme.card,
+                          shape: RoundedSuperellipseBorder(
+                            borderRadius: BorderRadius.circular(
+                              context.radii.squircle,
+                            ),
+                            side: context.borderSide,
+                          ),
+                        ),
+                        child: EmailHtmlWebView(
+                          html: resolvedHtmlBody,
+                          allowRemoteImages: shouldLoadImages,
+                          simplifyLayout: true,
+                          maxHeight:
+                              MediaQuery.sizeOf(context).height *
+                              context.sizing.dialogMaxHeightFraction,
+                          minHeight: context.sizing.attachmentPreviewExtent,
+                          onLinkTap: (url) => _handleLinkTap(context, url),
+                        ),
                       )
                     else if (emailFallbackText != null &&
                         emailFallbackText.isNotEmpty)
@@ -659,144 +675,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message)));
-  }
-}
-
-class _EmailHtmlWebView extends StatefulWidget {
-  const _EmailHtmlWebView({
-    required this.html,
-    required this.allowRemoteImages,
-    required this.onLinkTap,
-  });
-
-  final String html;
-  final bool allowRemoteImages;
-  final ValueChanged<String> onLinkTap;
-
-  @override
-  State<_EmailHtmlWebView> createState() => _EmailHtmlWebViewState();
-}
-
-class _EmailHtmlWebViewState extends State<_EmailHtmlWebView> {
-  static const _emailWebViewBaseUrl = 'https://axichat.invalid/';
-
-  static final WebUri _emailWebViewUri = WebUri(_emailWebViewBaseUrl);
-
-  InAppWebViewController? _controller;
-  bool _isLoading = true;
-
-  @override
-  void didUpdateWidget(covariant _EmailHtmlWebView oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.html != widget.html ||
-        oldWidget.allowRemoteImages != widget.allowRemoteImages) {
-      _loadHtml();
-    }
-  }
-
-  Future<void> _loadHtml() async {
-    final controller = _controller;
-    if (controller == null) return;
-    final html = HtmlContentCodec.prepareEmailHtmlForWebView(
-      widget.html,
-      allowRemoteImages: widget.allowRemoteImages,
-    );
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-      });
-    }
-    await controller.loadData(
-      data: html,
-      baseUrl: _emailWebViewUri,
-      historyUrl: _emailWebViewUri,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final spacing = context.spacing;
-    final maxHeight =
-        MediaQuery.sizeOf(context).height *
-        context.sizing.dialogMaxHeightFraction;
-    final shape = RoundedSuperellipseBorder(
-      borderRadius: BorderRadius.circular(context.radii.squircle),
-      side: context.borderSide,
-    );
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: context.colorScheme.card,
-        shape: shape,
-      ),
-      child: SizedBox(
-        width: double.maxFinite,
-        height: maxHeight,
-        child: Stack(
-          children: [
-            InAppWebView(
-              initialData: InAppWebViewInitialData(
-                data: HtmlContentCodec.prepareEmailHtmlForWebView(
-                  widget.html,
-                  allowRemoteImages: widget.allowRemoteImages,
-                ),
-                baseUrl: _emailWebViewUri,
-                historyUrl: _emailWebViewUri,
-              ),
-              initialSettings: InAppWebViewSettings(
-                javaScriptEnabled: false,
-                transparentBackground: true,
-                useShouldOverrideUrlLoading: true,
-                supportZoom: false,
-              ),
-              onWebViewCreated: (controller) {
-                _controller = controller;
-              },
-              shouldOverrideUrlLoading: (controller, navigationAction) async {
-                final url =
-                    navigationAction.request.url?.toString().trim() ?? '';
-                if (url.isEmpty ||
-                    url == 'about:blank' ||
-                    url.startsWith(_emailWebViewBaseUrl)) {
-                  return NavigationActionPolicy.ALLOW;
-                }
-                widget.onLinkTap(url);
-                return NavigationActionPolicy.CANCEL;
-              },
-              onLoadStop: (controller, url) {
-                if (!mounted) return;
-                setState(() {
-                  _isLoading = false;
-                });
-              },
-              onReceivedError: (controller, request, error) {
-                if (!mounted) return;
-                setState(() {
-                  _isLoading = false;
-                });
-              },
-              onReceivedHttpError: (controller, request, errorResponse) {
-                if (!mounted) return;
-                setState(() {
-                  _isLoading = false;
-                });
-              },
-            ),
-            if (_isLoading)
-              Positioned.fill(
-                child: ColoredBox(
-                  color: context.colorScheme.card,
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(spacing.m),
-                      child: const AxiProgressIndicator(),
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

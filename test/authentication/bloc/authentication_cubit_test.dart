@@ -983,6 +983,7 @@ void main() {
           senderJid: welcomeChatJid,
           chatJid: welcomeChatJid,
           body: 'Old welcome copy',
+          htmlBody: '<p>Old welcome copy</p>',
           timestamp: DateTime.utc(2026, 3, 6),
         );
         final bloc = AuthenticationCubit(

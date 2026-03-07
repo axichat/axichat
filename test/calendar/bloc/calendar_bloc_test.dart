@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
@@ -13,8 +11,8 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:bloc_test/bloc_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:test/test.dart';
 
 class _InMemoryStorage implements Storage {
   final Map<String, dynamic> _store = {};

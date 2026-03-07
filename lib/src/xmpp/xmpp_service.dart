@@ -1660,7 +1660,6 @@ class XmppService extends XmppBase
     required XmppDatabase db,
     required DemoChatScript script,
   }) async {
-    final messages = script.messages;
     final chat = script.chat;
     await db.createChat(chat);
     for (final attachment in script.attachments) {

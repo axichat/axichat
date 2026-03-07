@@ -7,6 +7,71 @@ import 'package:xml/xml.dart' as xml;
 import 'package:axichat/src/common/url_safety.dart';
 
 class HtmlContentCodec {
+  static const String _webViewViewportContent =
+      'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no';
+  static const String _webViewBaseStyle = '''
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: auto !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+  -webkit-text-size-adjust: 100% !important;
+  font-size: 15px !important;
+  line-height: 1.45 !important;
+}
+body {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+body * {
+  box-sizing: border-box !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+table {
+  max-width: 100% !important;
+  width: auto !important;
+  table-layout: auto !important;
+  display: block !important;
+}
+tbody, thead, tfoot, tr, td, th {
+  display: block !important;
+  width: auto !important;
+  max-width: 100% !important;
+}
+div, p, span, a, li, td, th {
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  white-space: normal !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+pre, code {
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+  font-size: 0.95em !important;
+}
+*[width], *[style*="width"], *[style*="min-width"], *[style*="max-width"] {
+  max-width: 100% !important;
+}
+*[nowrap], *[style*="white-space"] {
+  white-space: normal !important;
+}
+''';
+  static const Set<String> _webViewStylePropertiesToStrip = <String>{
+    'font-size',
+    'line-height',
+    'max-width',
+    'min-width',
+    'white-space',
+    'width',
+  };
   static const Set<String> _blockTags = <String>{
     'address',
     'article',
@@ -173,6 +238,49 @@ class HtmlContentCodec {
     }
   }
 
+  static String simplifyHtmlForWebView(String html) {
+    final trimmed = html.trim();
+    if (trimmed.isEmpty) return '';
+    try {
+      final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
+      final buffer = StringBuffer();
+      final budget = _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      );
+      for (final node in fragment.nodes) {
+        _appendSimplifiedWebViewHtml(buffer, node, budget, 0);
+      }
+      final simplified = buffer.toString().trim();
+      if (simplified.isNotEmpty) {
+        return simplified;
+      }
+    } on Exception {
+      // Fall back to the standard sanitizer below.
+    }
+    return sanitizeHtml(trimmed);
+  }
+
+  static bool webViewSimplificationLosesContent(String html) {
+    final originalText = toPlainText(html).trim();
+    if (originalText.isEmpty) {
+      return false;
+    }
+    final simplifiedText = toPlainText(simplifyHtmlForWebView(html)).trim();
+    if (simplifiedText.isEmpty) {
+      return true;
+    }
+    final originalLength = originalText.length;
+    final simplifiedLength = simplifiedText.length;
+    if (simplifiedLength * 2 < originalLength) {
+      return true;
+    }
+    final originalLines = '\n'.allMatches(originalText).length + 1;
+    final simplifiedLines = '\n'.allMatches(simplifiedText).length + 1;
+    return originalLines >= 3 && simplifiedLines == 1;
+  }
+
   static String? canonicalizeHtml(String? html) {
     final trimmed = html?.trim();
     if (trimmed == null || trimmed.isEmpty) return null;
@@ -233,6 +341,37 @@ class HtmlContentCodec {
   }) {
     try {
       final document = html_parser.parse(_truncateHtmlInput(html));
+      final head =
+          document.head ??
+          (() {
+            final createdHead = dom.Element.tag('head');
+            final htmlElement = document.documentElement;
+            final body = document.body;
+            if (htmlElement != null) {
+              final bodyIndex = body == null
+                  ? -1
+                  : htmlElement.nodes.indexOf(body);
+              if (bodyIndex >= 0) {
+                htmlElement.nodes.insert(bodyIndex, createdHead);
+              } else {
+                htmlElement.append(createdHead);
+              }
+            }
+            return createdHead;
+          })();
+      for (final viewport in head.querySelectorAll('meta[name="viewport"]')) {
+        viewport.remove();
+      }
+      head.append(
+        dom.Element.tag('meta')
+          ..attributes['name'] = 'viewport'
+          ..attributes['content'] = _webViewViewportContent,
+      );
+      final styleElement = document.createElement('style')
+        ..id = 'axichat-email-webview-style'
+        ..text = _webViewBaseStyle;
+      head.append(styleElement);
+      _normalizeWebViewNodes(document.nodes);
       for (final script in document.querySelectorAll('script')) {
         script.remove();
       }
@@ -246,10 +385,103 @@ class HtmlContentCodec {
           }
         }
       }
+      _trimLeadingWebViewWhitespace(document.body);
       return document.outerHtml;
     } on Exception {
       return html;
     }
+  }
+
+  static void _normalizeWebViewNodes(List<dom.Node> nodes) {
+    for (final node in nodes) {
+      if (node is dom.Element) {
+        node.attributes.remove('nowrap');
+        final width = node.attributes['width']?.trim();
+        if (width != null && width.isNotEmpty) {
+          node.attributes.remove('width');
+        }
+        final style = node.attributes['style']?.trim();
+        if (style != null && style.isNotEmpty) {
+          final declarations = style
+              .split(';')
+              .map((part) => part.trim())
+              .where((part) => part.isNotEmpty)
+              .where((declaration) {
+                final separatorIndex = declaration.indexOf(':');
+                if (separatorIndex <= 0) {
+                  return true;
+                }
+                final property = declaration
+                    .substring(0, separatorIndex)
+                    .trim()
+                    .toLowerCase();
+                return !_webViewStylePropertiesToStrip.contains(property);
+              })
+              .toList();
+          if (declarations.isEmpty) {
+            node.attributes.remove('style');
+          } else {
+            node.attributes['style'] = declarations.join('; ');
+          }
+        }
+      }
+      if (node.nodes.isNotEmpty) {
+        _normalizeWebViewNodes(node.nodes);
+      }
+    }
+  }
+
+  static void _trimLeadingWebViewWhitespace(dom.Element? body) {
+    if (body == null) {
+      return;
+    }
+    _trimLeadingWebViewNodes(body.nodes);
+  }
+
+  static void _trimLeadingWebViewNodes(List<dom.Node> nodes) {
+    while (nodes.isNotEmpty && _isLeadingWebViewWhitespaceNode(nodes.first)) {
+      nodes.first.remove();
+    }
+    if (nodes.isEmpty) {
+      return;
+    }
+    final first = nodes.first;
+    if (first is! dom.Element) {
+      return;
+    }
+    _trimLeadingWebViewNodes(first.nodes);
+    if (_isLeadingWebViewWhitespaceNode(first)) {
+      first.remove();
+      _trimLeadingWebViewNodes(nodes);
+    }
+  }
+
+  static bool _isLeadingWebViewWhitespaceNode(dom.Node node) {
+    if (node is dom.Comment) {
+      return true;
+    }
+    if (node is dom.Text) {
+      return node.text.replaceAll('\u00A0', ' ').trim().isEmpty;
+    }
+    if (node is! dom.Element) {
+      return false;
+    }
+    final tag = (node.localName ?? '').toLowerCase();
+    if (tag == 'br') {
+      return true;
+    }
+    if (tag == 'img' || tag == 'video' || tag == 'audio' || tag == 'iframe') {
+      return false;
+    }
+    if (node.nodes.isEmpty) {
+      return true;
+    }
+    for (final child in node.nodes) {
+      if (!_isLeadingWebViewWhitespaceNode(child)) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static String? toXhtml(String html) {
@@ -465,6 +697,79 @@ class HtmlContentCodec {
         _appendSanitizedHtml(buffer, child, budget, depth + 1);
       }
     }
+  }
+
+  static void _appendSimplifiedWebViewHtml(
+    StringBuffer buffer,
+    dom.Node node,
+    _HtmlNodeBudget budget,
+    int depth,
+  ) {
+    if (!budget.allow(depth)) {
+      return;
+    }
+    if (node is dom.Text) {
+      buffer.write(_escapeHtml(node.text));
+      return;
+    }
+    if (node is! dom.Element) {
+      for (final child in node.nodes) {
+        _appendSimplifiedWebViewHtml(buffer, child, budget, depth + 1);
+      }
+      return;
+    }
+    final tag = (node.localName ?? '').toLowerCase();
+    if (tag == 'table' ||
+        tag == 'tbody' ||
+        tag == 'thead' ||
+        tag == 'tfoot' ||
+        tag == 'html' ||
+        tag == 'body') {
+      for (final child in node.nodes) {
+        _appendSimplifiedWebViewHtml(buffer, child, budget, depth + 1);
+      }
+      return;
+    }
+    if (tag == 'tr' || tag == 'td' || tag == 'th') {
+      buffer.write('<div>');
+      for (final child in node.nodes) {
+        _appendSimplifiedWebViewHtml(buffer, child, budget, depth + 1);
+      }
+      buffer.write('</div>');
+      return;
+    }
+    if (!_sanitizedAllowedTags.contains(tag)) {
+      for (final child in node.nodes) {
+        _appendSimplifiedWebViewHtml(buffer, child, budget, depth + 1);
+      }
+      return;
+    }
+    final attributes = _sanitizeAttributes(tag, node.attributes);
+    buffer
+      ..write('<')
+      ..write(tag);
+    final entries = attributes.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    for (final entry in entries) {
+      buffer
+        ..write(' ')
+        ..write(entry.key)
+        ..write('="')
+        ..write(_escapeHtml(entry.value))
+        ..write('"');
+    }
+    if (_sanitizedVoidTags.contains(tag)) {
+      buffer.write(' />');
+      return;
+    }
+    buffer.write('>');
+    for (final child in node.nodes) {
+      _appendSimplifiedWebViewHtml(buffer, child, budget, depth + 1);
+    }
+    buffer
+      ..write('</')
+      ..write(tag)
+      ..write('>');
   }
 
   static Map<String, String> _sanitizeAttributes(
