@@ -2050,6 +2050,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsColorScheme => 'Esquema de color';
 
   @override
+  String get settingsMessageTextSize => 'Tamaño del texto de los mensajes';
+
+  @override
+  String settingsMessageTextSizeOption(int size) {
+    return '${size}px';
+  }
+
+  @override
   String get settingsColorfulAvatars => 'Avatares coloridos';
 
   @override

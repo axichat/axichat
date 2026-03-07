@@ -66,6 +66,30 @@ void _mockEmailSync(MockEmailService service) {
   when(
     () => service.syncStateStream,
   ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
+  when(() => service.isKnownEmailContact(any())).thenAnswer((_) async => false);
+  when(
+    () => service.knownEmailContactStream(any()),
+  ).thenAnswer((_) => const Stream<bool>.empty());
+  when(
+    () => service.messageStreamForChat(
+      any(),
+      start: any(named: 'start'),
+      end: any(named: 'end'),
+      filter: any(named: 'filter'),
+    ),
+  ).thenAnswer((_) => const Stream<List<Message>>.empty());
+  when(
+    () => service.pinnedMessagesStream(any()),
+  ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+  when(
+    () => service.backfillChatHistory(
+      chat: any(named: 'chat'),
+      desiredWindow: any(named: 'desiredWindow'),
+      beforeMessageId: any(named: 'beforeMessageId'),
+      beforeTimestamp: any(named: 'beforeTimestamp'),
+      filter: any(named: 'filter'),
+    ),
+  ).thenAnswer((_) async {});
   when(
     () => service.sendMessage(
       chat: any(named: 'chat'),
@@ -889,6 +913,7 @@ void main() {
 
   test('email sync status updates composer error', () async {
     final emailService = MockEmailService();
+    _mockEmailSync(emailService);
     final syncController = StreamController<EmailSyncState>.broadcast();
     when(
       () => emailService.syncStateStream,
@@ -1068,6 +1093,7 @@ void main() {
 
   test('offline email send attempts send and does not save drafts', () async {
     final emailService = MockEmailService();
+    _mockEmailSync(emailService);
     when(
       () => emailService.syncState,
     ).thenReturn(const EmailSyncState.offline('offline'));
@@ -1484,6 +1510,69 @@ void main() {
       await emailMessageStreamController.close();
     },
   );
+
+  test('tracks known email contact membership for email chats', () async {
+    final emailService = MockEmailService();
+    final knownContactController = StreamController<bool>.broadcast();
+    _mockEmailSync(emailService);
+
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 4,
+      emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
+    );
+
+    when(
+      () => emailService.isKnownEmailContact('peer@example.com'),
+    ).thenAnswer((_) async => false);
+    when(
+      () => emailService.knownEmailContactStream('peer@example.com'),
+    ).thenAnswer((_) => knownContactController.stream);
+    when(
+      () => emailService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => const Stream<List<Message>>.empty());
+    when(
+      () => emailService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    when(
+      () => emailService.backfillChatHistory(
+        chat: any(named: 'chat'),
+        desiredWindow: any(named: 'desiredWindow'),
+        beforeMessageId: any(named: 'beforeMessageId'),
+        beforeTimestamp: any(named: 'beforeTimestamp'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) async {});
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(emailChat);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.emailContactKnown, false);
+
+    knownContactController.add(true);
+    await _pumpBloc();
+
+    expect(bloc.state.emailContactKnown, true);
+
+    await bloc.close();
+    await knownContactController.close();
+  });
 
   test('catch-up paginates MAM when reconnecting after gap', () async {
     final xmppService = MockXmppService();

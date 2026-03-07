@@ -2021,6 +2021,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsColorScheme => 'Color scheme';
 
   @override
+  String get settingsMessageTextSize => 'Message text size';
+
+  @override
+  String settingsMessageTextSizeOption(int size) {
+    return '${size}px';
+  }
+
+  @override
   String get settingsColorfulAvatars => 'Colorful avatars';
 
   @override

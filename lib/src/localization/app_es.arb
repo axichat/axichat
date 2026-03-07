@@ -796,6 +796,15 @@
   "settingsThemeModeLight": "Claro",
   "settingsThemeModeDark": "Oscuro",
   "settingsColorScheme": "Esquema de color",
+  "settingsMessageTextSize": "Tamaño del texto de los mensajes",
+  "settingsMessageTextSizeOption": "{size}px",
+  "@settingsMessageTextSizeOption": {
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
   "settingsColorfulAvatars": "Avatares coloridos",
   "settingsColorfulAvatarsDescription": "Genera colores de fondo diferentes para cada avatar.",
   "settingsLowMotion": "Movimiento reducido",

@@ -1589,6 +1589,451 @@ void main() {
   );
 
   test(
+    'sendMessage repairs synthetic stored email addresses after resolution',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(() => database.getChat('peer@example.com')).thenAnswer(
+        (_) async => Chat(
+          jid: 'peer@example.com',
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          deltaChatId: 88,
+          contactJid: 'peer@example.com',
+          emailAddress: 'chat-88@delta.chat',
+          emailFromAddress: 'alice@example.org',
+        ),
+      );
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 91);
+
+      final chat = Chat(
+        jid: 'dc-88@delta.chat',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        contactJid: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      await service.sendMessage(chat: chat, body: 'First send');
+
+      verify(
+        () => database.updateChat(
+          any(
+            that: predicate<Chat>(
+              (Chat updated) =>
+                  updated.jid == 'peer@example.com' &&
+                  updated.emailAddress == 'peer@example.com' &&
+                  updated.deltaChatId == 91,
+            ),
+          ),
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'getFreshMessageCount rehydrates direct chats by recipient address',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(() => database.getChat('peer@example.com')).thenAnswer(
+        (_) async => Chat(
+          jid: 'peer@example.com',
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          transport: MessageTransport.email,
+          contactJid: 'peer@example.com',
+          emailAddress: 'peer@example.com',
+          emailFromAddress: 'alice@example.org',
+        ),
+      );
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 91);
+      when(
+        () => transport.getFreshMessageCount(
+          91,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 3);
+
+      final count = await service.getFreshMessageCount(
+        Chat(
+          jid: 'peer@axi.im',
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          contactJid: 'peer@example.com',
+          emailFromAddress: 'alice@example.org',
+        ),
+      );
+
+      expect(count, 3);
+      verify(
+        () => database.upsertEmailChatAccount(
+          chatJid: 'peer@example.com',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: 91,
+        ),
+      ).called(1);
+      verifyNever(
+        () => database.upsertEmailChatAccount(
+          chatJid: 'peer@axi.im',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: any(named: 'deltaChatId'),
+        ),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'getFreshMessageCount falls back to stored mapping when direct resolution fails',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => database.getDeltaChatIdForAccount(
+          chatJid: 'peer@example.com',
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 77);
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenThrow(const DeltaSafeException('chat lookup failed'));
+      when(
+        () => transport.getFreshMessageCount(
+          77,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => 5);
+
+      final count = await service.getFreshMessageCount(
+        Chat(
+          jid: 'peer@example.com',
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          emailAddress: 'peer@example.com',
+          emailFromAddress: 'alice@example.org',
+        ),
+      );
+
+      expect(count, 5);
+      verify(
+        () => transport.getFreshMessageCount(
+          77,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'markNoticedChat clears unread count on the canonical direct chat row',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      final storedChat = Chat(
+        jid: 'peer@example.com',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        contactJid: 'peer@example.com',
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+        unreadCount: 3,
+      );
+
+      when(
+        () => database.getChat('peer@example.com'),
+      ).thenAnswer((_) async => storedChat);
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 91);
+      when(
+        () => transport.markNoticedChat(
+          91,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => true);
+
+      final noticed = await service.markNoticedChat(
+        Chat(
+          jid: 'dc-91@delta.chat',
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          contactJid: 'peer@example.com',
+          emailFromAddress: 'alice@example.org',
+        ),
+      );
+
+      expect(noticed, isTrue);
+      verify(
+        () => database.updateChat(
+          any(
+            that: predicate<Chat>(
+              (Chat updated) =>
+                  updated.jid == 'peer@example.com' && updated.unreadCount == 0,
+            ),
+          ),
+        ),
+      ).called(1);
+      verifyNever(
+        () => database.updateChat(
+          any(
+            that: predicate<Chat>(
+              (Chat updated) => updated.jid == 'dc-91@delta.chat',
+            ),
+          ),
+        ),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'searchMessages does not widen chat-scoped searches when chat resolution fails',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.searchMessages(
+          chatId: any(named: 'chatId'),
+          query: any(named: 'query'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => const <int>[]);
+
+      final results = await service.searchMessages(
+        chat: Chat(
+          jid: 'dc-88@delta.chat',
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          emailFromAddress: 'alice@example.org',
+        ),
+        query: 'needle',
+      );
+
+      expect(results, isEmpty);
+      verifyNever(
+        () => transport.searchMessages(
+          chatId: 0,
+          query: 'needle',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      );
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'backfillChatHistory uses the canonical direct chat row after rehydration',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(() => database.getChat('peer@example.com')).thenAnswer(
+        (_) async => Chat(
+          jid: 'peer@example.com',
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          contactJid: 'peer@example.com',
+          emailAddress: 'peer@example.com',
+          emailFromAddress: 'alice@example.org',
+        ),
+      );
+      when(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 91);
+      when(
+        () => database.countChatMessages(
+          'peer@example.com',
+          filter: MessageTimelineFilter.directOnly,
+          includePseudoMessages: false,
+        ),
+      ).thenAnswer((_) async => 0);
+      when(
+        () => transport.backfillChatHistory(
+          chatId: any(named: 'chatId'),
+          chatJid: any(named: 'chatJid'),
+          desiredWindow: any(named: 'desiredWindow'),
+          beforeMessageId: any(named: 'beforeMessageId'),
+          beforeTimestamp: any(named: 'beforeTimestamp'),
+          filter: any(named: 'filter'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async {});
+
+      await service.backfillChatHistory(
+        chat: Chat(
+          jid: 'dc-91@delta.chat',
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.now(),
+          transport: MessageTransport.email,
+          contactJid: 'peer@example.com',
+          emailFromAddress: 'alice@example.org',
+        ),
+        desiredWindow: 5,
+        beforeMessageId: 42,
+      );
+
+      verify(
+        () => database.countChatMessages(
+          'peer@example.com',
+          filter: MessageTimelineFilter.directOnly,
+          includePseudoMessages: false,
+        ),
+      ).called(1);
+      verifyNever(
+        () => database.countChatMessages(
+          'dc-91@delta.chat',
+          filter: any(named: 'filter'),
+          includePseudoMessages: any(named: 'includePseudoMessages'),
+        ),
+      );
+      verify(
+        () => transport.backfillChatHistory(
+          chatId: 91,
+          chatJid: 'peer@example.com',
+          desiredWindow: 5,
+          beforeMessageId: 42,
+          beforeTimestamp: null,
+          filter: MessageTimelineFilter.directOnly,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
     'shareContextForMessage returns null when share row is missing',
     () async {
       final service = EmailService(

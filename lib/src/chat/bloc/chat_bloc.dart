@@ -36,6 +36,7 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
+import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -83,6 +84,8 @@ const _mamHydrateFailedLogMessage = 'Failed to hydrate MAM for chat.';
 const _mucMembershipFailedLogMessage = 'Failed to ensure membership.';
 const _roomStateWarmFailedLogMessage = 'Failed to warm room state.';
 const _contactRenameFailedLogMessage = 'Failed to rename contact.';
+const _emailContactLookupFailedLogMessage =
+    'Failed to resolve known email contact.';
 const _sendEmailMessageFailedLogMessage = 'Failed to send email message.';
 const _sendMessageFailedLogMessage = 'Failed to send message.';
 const _messageReactionFailedLogMessage = 'Failed to react to message.';
@@ -292,6 +295,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_RoomChatsUpdated>(_onRoomChatsUpdated);
     on<_RoomSelfAvatarUpdated>(_onRoomSelfAvatarUpdated);
     on<_EmailSyncStateChanged>(_onEmailSyncStateChanged);
+    on<_EmailContactKnownChanged>(_onEmailContactKnownChanged);
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
     on<ChatMessageFocused>(_onChatMessageFocused);
     on<ChatEmailHeadersRequested>(_onChatEmailHeadersRequested);
@@ -431,6 +435,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   StreamSubscription<StoredAvatar?>? _roomSelfAvatarSubscription;
   StreamSubscription<List<String>>? _typingParticipantsSubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
+  StreamSubscription<bool>? _emailContactKnownSubscription;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
   StreamSubscription<HttpUploadSupport>? _httpUploadSupportSubscription;
   StreamSubscription<Map<String, FileMetadataData?>>? _fileMetadataSubscription;
@@ -1234,6 +1239,45 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
   }
 
+  Future<bool> _resolveKnownEmailContact(Chat chat) async {
+    if (!chat.isEmailBacked) {
+      return false;
+    }
+    final emailService = _emailService;
+    if (emailService == null) {
+      return false;
+    }
+    final address = normalizeEmailAddress(chat.remoteJid);
+    if (address.isEmpty) {
+      return false;
+    }
+    try {
+      return await emailService.isKnownEmailContact(address);
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_emailContactLookupFailedLogMessage, error, stackTrace);
+      return false;
+    }
+  }
+
+  Future<void> _subscribeToKnownEmailContact(Chat chat) async {
+    await _emailContactKnownSubscription?.cancel();
+    _emailContactKnownSubscription = null;
+    if (!chat.isEmailBacked) {
+      return;
+    }
+    final emailService = _emailService;
+    if (emailService == null) {
+      return;
+    }
+    final address = normalizeEmailAddress(chat.remoteJid);
+    if (address.isEmpty) {
+      return;
+    }
+    _emailContactKnownSubscription = emailService
+        .knownEmailContactStream(address)
+        .listen((known) => add(_EmailContactKnownChanged(known)));
+  }
+
   Future<void> _syncPinnedMessagesForChat(Chat chat) async {
     final chatJid = _resolvePinnedMessagesChatJid(chat);
     if (chatJid == null) {
@@ -1257,6 +1301,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _roomSelfAvatarSubscription?.cancel();
     await _typingParticipantsSubscription?.cancel();
     await _emailSyncSubscription?.cancel();
+    await _emailContactKnownSubscription?.cancel();
     await _connectivitySubscription?.cancel();
     await _httpUploadSupportSubscription?.cancel();
     final metadataSubscription = _fileMetadataSubscription;
@@ -1293,6 +1338,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final capabilitiesShouldReset =
         resetContext ||
         previousChat?.defaultTransport != event.chat.defaultTransport;
+    final knownEmailContactContextChanged =
+        resetContext ||
+        previousChat?.defaultTransport != event.chat.defaultTransport ||
+        previousChat?.remoteJid != event.chat.remoteJid;
     final showXmppCapabilities = event.chat.defaultTransport.isXmpp;
     final typingShouldClear =
         typingContextChanged || event.chat.defaultTransport.isEmail;
@@ -1300,6 +1349,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final nextViewFilter = resetContext && event.chat.defaultTransport.isEmail
         ? forcedViewFilter
         : state.viewFilter;
+    final nextEmailContactKnown = knownEmailContactContextChanged
+        ? await _resolveKnownEmailContact(event.chat)
+        : (event.chat.defaultTransport.isEmail
+              ? state.emailContactKnown
+              : false);
     final unreadCount = event.chat.unreadCount;
     final stagedUnreadCount = _chatsService.consumeOpenChatUnreadBoundarySeed(
       event.chat.jid,
@@ -1347,6 +1401,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         xmppCapabilities: capabilitiesShouldReset || !showXmppCapabilities
             ? null
             : state.xmppCapabilities,
+        emailContactKnown: nextEmailContactKnown,
         typingParticipants: typingShouldClear
             ? const []
             : state.typingParticipants,
@@ -1393,6 +1448,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         filter: nextViewFilter,
       );
       await _prefetchPeerAvatar(event.chat);
+    }
+    if (knownEmailContactContextChanged) {
+      await _subscribeToKnownEmailContact(event.chat);
     }
     if (event.chat.defaultTransport.isEmail && !resetContext) {
       if (_emailUnreadBoundaryUnreadCount != unreadCount) {
@@ -2949,6 +3007,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _applyEmailSyncState(event.state, emit);
   }
 
+  void _onEmailContactKnownChanged(
+    _EmailContactKnownChanged event,
+    Emitter<ChatState> emit,
+  ) {
+    if (state.emailContactKnown == event.known) {
+      return;
+    }
+    emit(state.copyWith(emailContactKnown: event.known));
+  }
+
   void _applyEmailSyncState(EmailSyncState nextState, Emitter<ChatState> emit) {
     if (!_isEmailChat) {
       if (state.emailSyncState != nextState) {
@@ -4004,6 +4072,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(
       state.copyWith(
         emailServiceAvailable: emailService != null,
+        emailContactKnown: emailService == null
+            ? false
+            : state.emailContactKnown,
         emailSelfJid: emailService?.selfSenderJid,
         emailRawHeadersUnavailable: shouldResetEmailAvailability
             ? const <int>{}
@@ -4034,6 +4105,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null) {
       return;
     }
+    emit(
+      state.copyWith(emailContactKnown: await _resolveKnownEmailContact(chat)),
+    );
+    await _subscribeToKnownEmailContact(chat);
     await _subscribeToMessages(
       limit: _currentMessageLimit,
       filter: state.viewFilter,
@@ -4218,6 +4293,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final rosterTitle = chat.contactDisplayName?.trim().isNotEmpty == true
         ? chat.contactDisplayName!.trim()
         : chat.title;
+    var nextState = state;
     try {
       if (chat.isEmailBacked) {
         final emailService = _emailService;
@@ -4226,6 +4302,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           address: remoteJid,
           displayName: rosterTitle,
         );
+        nextState = state.copyWith(emailContactKnown: true);
       } else {
         final xmppService = _xmppService;
         if (xmppService == null) return;
@@ -4247,7 +4324,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    emit(_attachToast(state, ChatToast(title: event.successTitle)));
+    emit(_attachToast(nextState, ChatToast(title: event.successTitle)));
   }
 
   Future<void> _onChatRecipientEmailChatRequested(

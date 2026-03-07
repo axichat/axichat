@@ -3654,6 +3654,18 @@ abstract class AppLocalizations {
   /// **'Color scheme'**
   String get settingsColorScheme;
 
+  /// No description provided for @settingsMessageTextSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Message text size'**
+  String get settingsMessageTextSize;
+
+  /// No description provided for @settingsMessageTextSizeOption.
+  ///
+  /// In en, this message translates to:
+  /// **'{size}px'**
+  String settingsMessageTextSizeOption(int size);
+
   /// No description provided for @settingsColorfulAvatars.
   ///
   /// In en, this message translates to:

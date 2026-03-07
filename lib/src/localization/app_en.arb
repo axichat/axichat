@@ -887,6 +887,15 @@
   "settingsThemeModeLight": "Light",
   "settingsThemeModeDark": "Dark",
   "settingsColorScheme": "Color scheme",
+  "settingsMessageTextSize": "Message text size",
+  "settingsMessageTextSizeOption": "{size}px",
+  "@settingsMessageTextSizeOption": {
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
   "settingsColorfulAvatars": "Colorful avatars",
   "settingsColorfulAvatarsDescription": "Generate different background colors for each avatar.",
   "settingsLowMotion": "Low motion",

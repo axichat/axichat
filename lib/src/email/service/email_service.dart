@@ -1285,6 +1285,25 @@ class EmailService {
     return await db.getChat(context.chat.jid) ?? context.chat;
   }
 
+  Future<bool> isKnownEmailContact(String address) async {
+    final normalized = normalizeEmailAddress(address);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final db = await _databaseBuilder();
+    return db.isEmailAddressInContacts(normalized);
+  }
+
+  Stream<bool> knownEmailContactStream(String address) async* {
+    final normalized = normalizeEmailAddress(address);
+    if (normalized.isEmpty) {
+      yield false;
+      return;
+    }
+    final db = await _databaseBuilder();
+    yield* db.watchIsEmailAddressInContacts(normalized).distinct();
+  }
+
   Future<int> sendMessage({
     required Chat chat,
     required String body,
@@ -2262,17 +2281,27 @@ class EmailService {
     await _ensureReady();
     final String scope = _requireActiveScope();
     final _ResolvedEmailAccount account = await _resolveAccountForChat(chat);
+    final Chat resolvedChat = await _storedEmailChatForAccount(
+      chat: chat,
+      deltaAccountId: account.deltaAccountId,
+    );
     await _ensureAccountConfigured(scope: scope, account: account);
     final int? chatId = await _deltaChatIdForAccount(
-      chat: chat,
+      chat: resolvedChat,
       deltaAccountId: account.deltaAccountId,
     );
     if (chatId == null) {
       return;
     }
     final db = await _databaseBuilder();
+    final Chat effectiveChat =
+        await db.getChatByDeltaChatId(
+          chatId,
+          accountId: account.deltaAccountId,
+        ) ??
+        resolvedChat;
     final localCount = await db.countChatMessages(
-      chat.jid,
+      effectiveChat.jid,
       filter: filter,
       includePseudoMessages: _includePseudoMessagesInBackfill,
     );
@@ -2282,7 +2311,7 @@ class EmailService {
     await _performBackgroundFetchIfIdle(timeout: _foregroundFetchTimeout);
     await _transport.backfillChatHistory(
       chatId: chatId,
-      chatJid: chat.jid,
+      chatJid: effectiveChat.jid,
       desiredWindow: desiredWindow,
       beforeMessageId: beforeMessageId,
       beforeTimestamp: beforeTimestamp,
@@ -3990,11 +4019,33 @@ class EmailService {
     return null;
   }
 
+  String? _storedRealEmailAddress(Chat chat) {
+    final String? bareAddress = bareAddressOrNull(chat.emailAddress);
+    if (bareAddress == null) {
+      return null;
+    }
+    final String normalized = normalizeEmailAddress(bareAddress);
+    if (_isSyntheticEmailChatAddress(normalized)) {
+      return null;
+    }
+    return normalized;
+  }
+
   Future<Chat> _storedEmailChatForAccount({
     required Chat chat,
     required int deltaAccountId,
   }) async {
     final db = await _databaseBuilder();
+    final String? recipientAddress = chat.type == ChatType.chat
+        ? _recipientAddressForChat(chat)
+        : null;
+    if (recipientAddress != null &&
+        !sameBareAddress(recipientAddress, chat.jid)) {
+      final Chat? storedByAddress = await db.getChat(recipientAddress);
+      if (storedByAddress != null) {
+        return storedByAddress;
+      }
+    }
     final int? deltaChatId = chat.deltaChatId;
     if (deltaChatId != null) {
       final Chat? storedByDelta = await db.getChatByDeltaChatId(
@@ -4161,7 +4212,8 @@ class EmailService {
     if (deltaAccountId != _transport.activeAccountId) {
       return;
     }
-    final String resolvedEmailAddress = chat.emailAddress ?? emailAddress;
+    final String resolvedEmailAddress =
+        _storedRealEmailAddress(chat) ?? emailAddress;
     if (chat.deltaChatId == deltaChatId &&
         chat.emailAddress == resolvedEmailAddress) {
       return;
@@ -4323,67 +4375,94 @@ class EmailService {
   Future<int> _ensureDeltaChatIdForAccount({
     required Chat chat,
     required _ResolvedEmailAccount account,
-  }) async {
-    final db = await _databaseBuilder();
-    final String? recipientAddress = chat.type == ChatType.chat
-        ? _recipientAddressForChat(chat)
-        : null;
-    if (recipientAddress != null) {
-      final String displayName = chat.contactDisplayName ?? chat.title;
-      final int chatId = await _guardDeltaOperation(
-        operation: 'ensure email chat',
-        body: () => _transport.ensureChatForAddress(
-          address: recipientAddress,
-          displayName: displayName,
-          accountId: account.deltaAccountId,
-        ),
-      );
-      await db.upsertEmailChatAccount(
-        chatJid: chat.jid,
-        deltaAccountId: account.deltaAccountId,
-        deltaChatId: chatId,
-      );
-      await _updateActiveChatDeltaReference(
-        chat: chat,
-        deltaAccountId: account.deltaAccountId,
-        deltaChatId: chatId,
-        emailAddress: recipientAddress,
-      );
-      return chatId;
-    }
-    final int? existing = await db.getDeltaChatIdForAccount(
-      chatJid: chat.jid,
-      deltaAccountId: account.deltaAccountId,
-    );
-    if (existing != null) {
-      return existing;
-    }
-    final int? activeDeltaChatId = chat.deltaChatId;
-    if (activeDeltaChatId != null &&
-        account.deltaAccountId == _transport.activeAccountId) {
-      await db.upsertEmailChatAccount(
-        chatJid: chat.jid,
-        deltaAccountId: account.deltaAccountId,
-        deltaChatId: activeDeltaChatId,
-      );
-      return activeDeltaChatId;
-    }
-    throw StateError('Email chat ${chat.jid} missing recipient metadata.');
-  }
+  }) async => (await _deltaChatIdForAccount(
+    chat: chat,
+    deltaAccountId: account.deltaAccountId,
+    requireRecipientMetadata: true,
+  ))!;
 
   Future<int?> _deltaChatIdForAccount({
     required Chat chat,
     required int deltaAccountId,
+    bool requireRecipientMetadata = false,
   }) async {
-    if (chat.deltaChatId != null &&
-        deltaAccountId == _transport.activeAccountId) {
-      return chat.deltaChatId;
-    }
-    final db = await _databaseBuilder();
-    return db.getDeltaChatIdForAccount(
-      chatJid: chat.jid,
+    final Chat resolvedChat = await _storedEmailChatForAccount(
+      chat: chat,
       deltaAccountId: deltaAccountId,
     );
+    final db = await _databaseBuilder();
+    final int? existing = await db.getDeltaChatIdForAccount(
+      chatJid: resolvedChat.jid,
+      deltaAccountId: deltaAccountId,
+    );
+    final int? activeDeltaChatId = resolvedChat.deltaChatId;
+    final String? recipientAddress = resolvedChat.type == ChatType.chat
+        ? _recipientAddressForChat(resolvedChat)
+        : null;
+    if (recipientAddress != null) {
+      final String displayName =
+          resolvedChat.contactDisplayName ?? resolvedChat.title;
+      try {
+        final int chatId = await _guardDeltaOperation(
+          operation: 'ensure email chat',
+          body: () => _transport.ensureChatForAddress(
+            address: recipientAddress,
+            displayName: displayName,
+            accountId: deltaAccountId,
+          ),
+        );
+        final Chat targetChat =
+            await db.getChatByDeltaChatId(chatId, accountId: deltaAccountId) ??
+            resolvedChat;
+        await db.upsertEmailChatAccount(
+          chatJid: targetChat.jid,
+          deltaAccountId: deltaAccountId,
+          deltaChatId: chatId,
+        );
+        await _updateActiveChatDeltaReference(
+          chat: targetChat,
+          deltaAccountId: deltaAccountId,
+          deltaChatId: chatId,
+          emailAddress: recipientAddress,
+        );
+        return chatId;
+      } on DeltaChatException {
+        if (requireRecipientMetadata) {
+          rethrow;
+        }
+        if (existing != null) {
+          return existing;
+        }
+        if (activeDeltaChatId != null &&
+            deltaAccountId == _transport.activeAccountId) {
+          await db.upsertEmailChatAccount(
+            chatJid: resolvedChat.jid,
+            deltaAccountId: deltaAccountId,
+            deltaChatId: activeDeltaChatId,
+          );
+          return activeDeltaChatId;
+        }
+        return null;
+      }
+    }
+    if (existing != null) {
+      return existing;
+    }
+    if (activeDeltaChatId != null &&
+        deltaAccountId == _transport.activeAccountId) {
+      await db.upsertEmailChatAccount(
+        chatJid: resolvedChat.jid,
+        deltaAccountId: deltaAccountId,
+        deltaChatId: activeDeltaChatId,
+      );
+      return activeDeltaChatId;
+    }
+    if (requireRecipientMetadata) {
+      throw StateError(
+        'Email chat ${resolvedChat.jid} missing recipient metadata.',
+      );
+    }
+    return null;
   }
 
   Future<_EmailChatContext> _ensureEmailChatContext(Chat chat) async {
@@ -4488,8 +4567,12 @@ class EmailService {
   Future<bool> markNoticedChat(Chat chat) async {
     await _ensureReady();
     final account = await _resolveAccountForChat(chat);
-    final chatId = await _deltaChatIdForAccount(
+    final Chat resolvedChat = await _storedEmailChatForAccount(
       chat: chat,
+      deltaAccountId: account.deltaAccountId,
+    );
+    final chatId = await _deltaChatIdForAccount(
+      chat: resolvedChat,
       deltaAccountId: account.deltaAccountId,
     );
     if (chatId == null) {
@@ -4503,10 +4586,12 @@ class EmailService {
       return false;
     }
     final db = await _databaseBuilder();
-    final stored = await db.getChat(chat.jid);
-    if (stored == null) {
-      return true;
-    }
+    final Chat stored =
+        await db.getChatByDeltaChatId(
+          chatId,
+          accountId: account.deltaAccountId,
+        ) ??
+        resolvedChat.copyWith(deltaChatId: chatId);
     if (stored.unreadCount != _emptyUnreadCount) {
       await db.updateChat(stored.copyWith(unreadCount: _emptyUnreadCount));
     }
@@ -4690,13 +4775,17 @@ class EmailService {
     final _ResolvedEmailAccount account = chat == null
         ? await _resolveAccountForAddress(scope: scope)
         : await _resolveAccountForChat(chat);
-    final int chatId = chat == null
-        ? 0
-        : (await _deltaChatIdForAccount(
-                chat: chat,
-                deltaAccountId: account.deltaAccountId,
-              ) ??
-              0);
+    int chatId = 0;
+    if (chat != null) {
+      final int? resolvedChatId = await _deltaChatIdForAccount(
+        chat: chat,
+        deltaAccountId: account.deltaAccountId,
+      );
+      if (resolvedChatId == null) {
+        return const <Message>[];
+      }
+      chatId = resolvedChatId;
+    }
     final deltaIds = await _transport.searchMessages(
       chatId: chatId,
       query: query,

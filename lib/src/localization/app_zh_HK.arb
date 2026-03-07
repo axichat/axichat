@@ -795,6 +795,15 @@
   "settingsThemeModeLight": "淺色",
   "settingsThemeModeDark": "深色",
   "settingsColorScheme": "配色方案",
+  "settingsMessageTextSize": "訊息文字大小",
+  "settingsMessageTextSizeOption": "{size}px",
+  "@settingsMessageTextSizeOption": {
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
   "settingsColorfulAvatars": "彩色頭像",
   "settingsColorfulAvatarsDescription": "為每個頭像產生不同的背景顏色。",
   "settingsLowMotion": "低動效",

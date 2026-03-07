@@ -18,6 +18,18 @@ enum ShadColor {
   zinc,
 }
 
+enum MessageTextSize {
+  px14(14),
+  px16(16),
+  px18(18);
+
+  const MessageTextSize(this.pixels);
+
+  final int pixels;
+
+  double get fontSize => pixels.toDouble();
+}
+
 @freezed
 abstract class SettingsState with _$SettingsState {
   const factory SettingsState({
@@ -43,6 +55,7 @@ abstract class SettingsState with _$SettingsState {
     @Default(false) bool hideCompletedReminders,
     @Default(<String>[]) List<String> unscheduledSidebarOrder,
     @Default(<String>[]) List<String> reminderSidebarOrder,
+    @Default(MessageTextSize.px16) MessageTextSize messageTextSize,
     @Default(false) bool autoLoadEmailImages,
     @Default(true) bool emailComposerWatermarkEnabled,
     @Default(100) int donationPromptNextDisplayMessageCount,

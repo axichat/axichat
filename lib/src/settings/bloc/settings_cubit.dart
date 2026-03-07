@@ -157,6 +157,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(reminderSidebarOrder: List<String>.from(order)));
   }
 
+  void updateMessageTextSize(MessageTextSize messageTextSize) {
+    emit(state.copyWith(messageTextSize: messageTextSize));
+  }
+
   void toggleAutoLoadEmailImages(bool enabled) {
     emit(state.copyWith(autoLoadEmailImages: enabled));
   }
@@ -226,6 +230,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
         'hideCompletedReminders': 'hide_completed_reminders',
         'unscheduledSidebarOrder': 'unscheduled_sidebar_order',
         'reminderSidebarOrder': 'reminder_sidebar_order',
+        'messageTextSize': 'message_text_size',
         'autoLoadEmailImages': 'auto_load_email_images',
         'donationPromptNextDisplayMessageCount':
             'donation_prompt_next_display_message_count',

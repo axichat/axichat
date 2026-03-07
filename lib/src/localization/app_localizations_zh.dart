@@ -1951,6 +1951,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsColorScheme => '配色方案';
 
   @override
+  String get settingsMessageTextSize => '消息文字大小';
+
+  @override
+  String settingsMessageTextSizeOption(int size) {
+    return '${size}px';
+  }
+
+  @override
   String get settingsColorfulAvatars => '彩色头像';
 
   @override
@@ -7768,6 +7776,14 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get settingsColorScheme => '配色方案';
+
+  @override
+  String get settingsMessageTextSize => '訊息文字大小';
+
+  @override
+  String settingsMessageTextSizeOption(int size) {
+    return '${size}px';
+  }
 
   @override
   String get settingsColorfulAvatars => '彩色頭像';

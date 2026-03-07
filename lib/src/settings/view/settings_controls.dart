@@ -313,6 +313,45 @@ class SettingsControls extends StatelessWidget {
                 ),
                 ListItemPadding(
                   child: AxiListTile(
+                    title: context.l10n.settingsMessageTextSize,
+                    actions: [
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: sizing.menuMaxWidth,
+                        ),
+                        child: AxiSelect<MessageTextSize>(
+                          initialValue: state.messageTextSize,
+                          onChanged: (messageTextSize) {
+                            if (messageTextSize == null) {
+                              return;
+                            }
+                            context.read<SettingsCubit>().updateMessageTextSize(
+                              messageTextSize,
+                            );
+                          },
+                          options: MessageTextSize.values
+                              .map(
+                                (messageTextSize) =>
+                                    ShadOption<MessageTextSize>(
+                                      value: messageTextSize,
+                                      child: _MessageTextSizeOptionLabel(
+                                        value: messageTextSize,
+                                      ),
+                                    ),
+                              )
+                              .toList(),
+                          selectedOptionBuilder:
+                              (BuildContext context, MessageTextSize value) =>
+                                  _MessageTextSizeOptionLabel(value: value),
+                        ),
+                      ),
+                    ],
+                    minTileHeight: sizing.listButtonHeight,
+                    contentPadding: compactTilePadding,
+                  ),
+                ),
+                ListItemPadding(
+                  child: AxiListTile(
                     title: context.l10n.settingsColorScheme,
                     actions: [
                       ConstrainedBox(
@@ -1092,6 +1131,23 @@ class _SettingsSectionHeader extends StatelessWidget {
   }
 }
 
+class _MessageTextSizeOptionLabel extends StatelessWidget {
+  const _MessageTextSizeOptionLabel({required this.value});
+
+  final MessageTextSize value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      value.label(context.l10n),
+      style: context.textTheme.small.copyWith(
+        fontSize: value.fontSize,
+        height: 1.0,
+      ),
+    );
+  }
+}
+
 extension ThemeModeLocalization on ThemeMode {
   String label(AppLocalizations l10n) {
     switch (this) {
@@ -1103,6 +1159,11 @@ extension ThemeModeLocalization on ThemeMode {
         return l10n.settingsThemeModeDark;
     }
   }
+}
+
+extension MessageTextSizeLocalization on MessageTextSize {
+  String label(AppLocalizations l10n) =>
+      l10n.settingsMessageTextSizeOption(pixels);
 }
 
 extension ProfileExportKindLabels on ProfileExportKind {

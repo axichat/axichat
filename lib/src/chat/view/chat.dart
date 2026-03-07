@@ -559,13 +559,10 @@ class _UnknownSenderBanner extends StatelessWidget {
                 .singleOrNull;
             final inRoster =
                 rosterEntry != null && !rosterEntry.subscription.isNone;
-            final hasContactRecord =
-                chat.contactID?.trim().isNotEmpty == true ||
-                chat.contactDisplayName?.trim().isNotEmpty == true;
             final isEmailChat = chat.isEmailBacked;
-            final showBanner =
-                (isEmailChat && !hasContactRecord) ||
-                (!isEmailChat && !inRoster);
+            final showBanner = isEmailChat
+                ? !state.emailContactKnown
+                : !inRoster;
             if (!showBanner) {
               return const SizedBox.shrink();
             }
@@ -5961,6 +5958,9 @@ class _ChatState extends State<Chat> {
                                                                             .sizing
                                                                             .progressIndicatorStrokeWidth
                                                                       : 0.0;
+                                                                  final messageTextSize =
+                                                                      settingsState
+                                                                          .messageTextSize;
                                                                   final baseTextStyle = context
                                                                       .textTheme
                                                                       .small
@@ -5968,8 +5968,7 @@ class _ChatState extends State<Chat> {
                                                                         color:
                                                                             textColor,
                                                                         fontSize:
-                                                                            (context.textTheme.small.fontSize ??
-                                                                                context.sizing.menuItemIconSize) +
+                                                                            messageTextSize.fontSize +
                                                                             selectionFontDelta,
                                                                         height:
                                                                             1.3,
@@ -6779,10 +6778,6 @@ class _ChatState extends State<Chat> {
                                                                       final subjectStyle = baseSubjectStyle.copyWith(
                                                                         color:
                                                                             textColor,
-                                                                        fontSize:
-                                                                            (baseSubjectStyle.fontSize ??
-                                                                                context.sizing.menuItemIconSize) +
-                                                                            selectionFontDelta,
                                                                         fontWeight:
                                                                             FontWeight.w600,
                                                                         height:
@@ -10497,6 +10492,7 @@ class _PinnedMessageTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final locate = context.read;
     final colors = context.colorScheme;
     final chatTokens = context.chatTheme;
     final spacing = context.spacing;
@@ -10581,8 +10577,7 @@ class _PinnedMessageTile extends StatelessWidget {
     final stanzaId = item.messageStanzaId.trim();
     final VoidCallback? onPressed = stanzaId.isEmpty
         ? null
-        : () =>
-              context.read<ChatBloc>().add(ChatPinnedMessageSelected(stanzaId));
+        : () => locate<ChatBloc>().add(ChatPinnedMessageSelected(stanzaId));
     final isSelf = effectiveMessage == null
         ? false
         : isSelfMessage(message: effectiveMessage, accountJid: accountJid);
@@ -10599,6 +10594,7 @@ class _PinnedMessageTile extends StatelessWidget {
         : colors.mutedForeground;
     final baseTextStyle = context.textTheme.small.copyWith(
       color: textColor,
+      fontSize: settings.messageTextSize.fontSize,
       height: 1.3,
     );
     final linkStyle = baseTextStyle.copyWith(
@@ -11021,8 +11017,8 @@ class _PinnedMessageTile extends StatelessWidget {
     }
 
     final Widget? unpinAction = canTogglePins && messageForPin != null
-        ? AxiIconButton.ghost(
-            onPressed: () => context.read<ChatBloc>().add(
+        ? AxiIconButton.destructive(
+            onPressed: () => locate<ChatBloc>().add(
               ChatMessagePinRequested(
                 message: messageForPin,
                 pin: false,
@@ -11032,8 +11028,8 @@ class _PinnedMessageTile extends StatelessWidget {
             ),
             iconData: LucideIcons.pinOff,
             tooltip: l10n.chatUnpinMessage,
-            color: detailColor,
-            backgroundColor: Colors.transparent,
+            backgroundColor: colors.secondary,
+            borderColor: colors.secondary,
             iconSize: context.sizing.menuItemIconSize,
             buttonSize: context.sizing.menuItemHeight,
             tapTargetSize: context.sizing.menuItemHeight,
@@ -11124,23 +11120,14 @@ class _PinnedMessageTile extends StatelessWidget {
                   spacing: spacing.xxs,
                   children: [forwardedPreview, replyPreview],
                 ));
-    final bubbleFooter = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          timeLabel,
-          style: context.textTheme.muted.copyWith(color: detailColor),
-        ),
-        if (unpinAction != null) SizedBox(width: spacing.xs),
-        ?unpinAction,
-      ],
-    );
-    if (contentChildren.isNotEmpty) {
-      contentChildren.add(SizedBox(height: spacing.s));
+    if (unpinAction != null) {
+      if (contentChildren.isNotEmpty) {
+        contentChildren.add(SizedBox(height: spacing.s));
+      }
+      contentChildren.add(
+        Align(alignment: Alignment.centerRight, child: unpinAction),
+      );
     }
-    contentChildren.add(
-      Align(alignment: Alignment.centerRight, child: bubbleFooter),
-    );
     final bubble = ChatBubbleSurface(
       isSelf: isSelf,
       backgroundColor: bubbleColor,
@@ -15853,13 +15840,21 @@ class _GuestMessageBubble extends StatelessWidget {
     final bubbleBaseRadius = context.radius;
     final bubbleCornerClearance = _bubbleCornerClearance(bubbleBaseRadius);
     final statusIcon = message.status?.icon;
+    final messageTextSize = context
+        .watch<SettingsCubit>()
+        .state
+        .messageTextSize;
     final timeLabel =
         '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}';
     final inlineText = DynamicInlineText(
       key: ValueKey(message.createdAt.microsecondsSinceEpoch),
       text: TextSpan(
         text: message.text,
-        style: context.textTheme.small.copyWith(color: textColor, height: 1.3),
+        style: context.textTheme.small.copyWith(
+          color: textColor,
+          fontSize: messageTextSize.fontSize,
+          height: 1.3,
+        ),
       ),
       details: [
         TextSpan(

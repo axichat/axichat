@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/util/email_address.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
@@ -572,6 +573,10 @@ abstract interface class XmppDatabase implements Database {
   Future<void> deleteBlocklist();
 
   Future<void> replaceContacts(Map<String, String> contactsByNativeId);
+
+  Future<bool> isEmailAddressInContacts(String address);
+
+  Stream<bool> watchIsEmailAddressInContacts(String address);
 
   Stream<List<EmailBlocklistEntry>> watchEmailBlocklist();
 
@@ -4955,6 +4960,33 @@ WHERE email_from_address IN ($placeholderClause)
         });
       }
     });
+  }
+
+  @override
+  Future<bool> isEmailAddressInContacts(String address) async {
+    final normalized = normalizeEmailAddress(address);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final matches = await (select(
+      contacts,
+    )..where((tbl) => tbl.jid.equals(normalized))).get();
+    return matches.isNotEmpty;
+  }
+
+  @override
+  Stream<bool> watchIsEmailAddressInContacts(String address) {
+    final normalized = normalizeEmailAddress(address);
+    if (normalized.isEmpty) {
+      return Stream<bool>.value(false);
+    }
+    final countExpression = contacts.nativeID.count();
+    final query = selectOnly(contacts)
+      ..addColumns([countExpression])
+      ..where(contacts.jid.equals(normalized));
+    return query.watchSingle().map(
+      (row) => (row.read(countExpression) ?? 0) > 0,
+    );
   }
 
   @override

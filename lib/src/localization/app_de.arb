@@ -800,6 +800,15 @@
   "settingsThemeModeLight": "Hell",
   "settingsThemeModeDark": "Dunkel",
   "settingsColorScheme": "Farbschema",
+  "settingsMessageTextSize": "Nachrichtentextgröße",
+  "settingsMessageTextSizeOption": "{size}px",
+  "@settingsMessageTextSizeOption": {
+    "placeholders": {
+      "size": {
+        "type": "int"
+      }
+    }
+  },
   "settingsColorfulAvatars": "Bunte Avatare",
   "settingsColorfulAvatarsDescription": "Erzeuge unterschiedliche Hintergrundfarben für jeden Avatar.",
   "settingsLowMotion": "Weniger Bewegung",
