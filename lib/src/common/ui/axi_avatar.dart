@@ -29,6 +29,7 @@ class AxiAvatar extends StatefulWidget {
     this.size = 50.0,
     this.avatarPath,
     this.avatarBytes,
+    this.colorSeed,
   });
 
   final String jid;
@@ -40,6 +41,7 @@ class AxiAvatar extends StatefulWidget {
   final double size;
   final String? avatarPath;
   final Uint8List? avatarBytes;
+  final String? colorSeed;
 
   static const double paddingFraction = 0.0;
 
@@ -63,6 +65,25 @@ class _AxiAvatarState extends State<AxiAvatar> {
       if (localPart.isNotEmpty) return localPart;
     }
     return jid;
+  }
+
+  String _colorSeedForAvatar({required String displayLabel}) {
+    final providedSeed = widget.colorSeed?.trim();
+    final preferredSeed = providedSeed?.isNotEmpty == true
+        ? providedSeed
+        : widget.jid;
+    final normalizedSeed =
+        normalizedAddressKey(preferredSeed) ??
+        normalizedAddressValue(preferredSeed) ??
+        normalizeAddress(preferredSeed);
+    if (normalizedSeed != null && normalizedSeed.isNotEmpty) {
+      return normalizedSeed;
+    }
+    if (displayLabel.isNotEmpty) {
+      return displayLabel;
+    }
+    final fallback = widget.jid.trim();
+    return fallback.isNotEmpty ? fallback : '?';
   }
 
   Future<Uint8List?> _sanitizeAvatarBytes(Uint8List? bytes) async {
@@ -247,9 +268,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
               final initial = displayLabel.isNotEmpty
                   ? displayLabel.substring(0, 1).toUpperCase()
                   : '?';
-              final colorSeed = displayLabel.isNotEmpty
-                  ? displayLabel
-                  : widget.jid;
+              final colorSeed = _colorSeedForAvatar(displayLabel: displayLabel);
               final backgroundColor = state.colorfulAvatars
                   ? stringToColor(colorSeed)
                   : context.colorScheme.secondary;

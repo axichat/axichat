@@ -52,7 +52,7 @@ class TransportAwareAvatar extends StatelessWidget {
     final String? selfAvatarPath = selfIdentity.avatarPath?.trim();
     final bool hasSelfAvatarPath = selfAvatarPath?.isNotEmpty == true;
     final isWelcomeChat = chat.isAxichatWelcomeThread;
-    final avatarIdentifier = chat.contactDisplayName?.trim().isNotEmpty == true
+    final avatarLabel = chat.contactDisplayName?.trim().isNotEmpty == true
         ? chat.contactDisplayName!.trim()
         : chat.title.trim().isNotEmpty
         ? chat.title.trim()
@@ -90,7 +90,8 @@ class TransportAwareAvatar extends StatelessWidget {
             child: isWelcomeChat
                 ? AxichatAppIconAvatar(size: resolvedSize)
                 : AxiAvatar(
-                    jid: avatarIdentifier,
+                    jid: avatarLabel,
+                    colorSeed: chat.avatarColorSeed,
                     size: resolvedSize,
                     presence: presence,
                     status: status,
