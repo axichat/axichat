@@ -18,11 +18,11 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter_html/flutter_html.dart' as html_widget;
 
 class ChatMessageDetails extends StatefulWidget {
   const ChatMessageDetails({
@@ -134,6 +134,36 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
             final bool isDebugDumpUnavailable =
                 deltaMessageId != null &&
                 state.emailDebugDumpUnavailable.contains(deltaMessageId);
+            final String? resolvedHtmlBody = deltaMessageId == null
+                ? message.htmlBody
+                : state.emailFullHtmlByDeltaId[deltaMessageId] ??
+                      message.htmlBody;
+            final String? resolvedQuotedText = deltaMessageId == null
+                ? null
+                : state.emailQuotedTextByDeltaId[deltaMessageId];
+            final String? resolvedHtmlText = resolvedHtmlBody == null
+                ? null
+                : HtmlContentCodec.toPlainText(resolvedHtmlBody).trim();
+            final shouldLoadImages =
+                settings.autoLoadEmailImages ||
+                (message.id != null &&
+                    widget.loadedEmailImageMessageIds.contains(message.id));
+            final VoidCallback? onLoadRequested = message.id == null
+                ? null
+                : () => widget.onEmailImagesApproved(message.id!);
+            final bool hasRemoteHtmlImages =
+                resolvedHtmlBody != null &&
+                HtmlContentCodec.containsRemoteImages(resolvedHtmlBody);
+            final String? quotedFallbackText =
+                (resolvedHtmlText == null || resolvedHtmlText.isEmpty) &&
+                    resolvedQuotedText?.trim().isNotEmpty == true
+                ? resolvedQuotedText!.trim()
+                : null;
+            final String? emailFallbackText =
+                resolvedHtmlText?.isNotEmpty == true
+                ? resolvedHtmlText
+                : quotedFallbackText;
+            final bool shouldShowImageGallery = hasRemoteHtmlImages;
             final xmppCapabilities = state.xmppCapabilities;
             final supportsMarkers =
                 isEmailTransport || xmppCapabilities?.supportsMarkers == true;
@@ -217,24 +247,22 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                         onPressed: handleBack,
                       ),
                     ),
-                    if (message.htmlBody != null &&
-                        message.htmlBody!.isNotEmpty)
-                      _SanitizedHtmlBody(
-                        html: message.htmlBody ?? '',
-                        textStyle: textTheme.lead,
-                        shouldLoadImages:
-                            settings.autoLoadEmailImages ||
-                            (message.id != null &&
-                                widget.loadedEmailImageMessageIds.contains(
-                                  message.id,
-                                )),
-                        onLoadRequested: message.id == null
-                            ? null
-                            : () => widget.onEmailImagesApproved(message.id!),
+                    if (resolvedHtmlBody != null && resolvedHtmlBody.isNotEmpty)
+                      _EmailHtmlWebView(
+                        html: resolvedHtmlBody,
+                        allowRemoteImages: shouldLoadImages,
                         onLinkTap: (url) => _handleLinkTap(context, url),
                       )
-                    else
+                    else if (emailFallbackText != null &&
+                        emailFallbackText.isNotEmpty)
+                      SelectableText(emailFallbackText, style: textTheme.lead)
+                    else if (emailFallbackText == null ||
+                        emailFallbackText.isEmpty)
                       SelectableText(message.body ?? '', style: textTheme.lead),
+                    if (shouldShowImageGallery &&
+                        !shouldLoadImages &&
+                        onLoadRequested != null)
+                      EmailImagePlaceholder(onTap: onLoadRequested),
                     if (shareContext?.subject?.isNotEmpty == true)
                       Column(
                         spacing: spacing.s,
@@ -634,74 +662,140 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
   }
 }
 
-class _SanitizedHtmlBody extends StatefulWidget {
-  const _SanitizedHtmlBody({
+class _EmailHtmlWebView extends StatefulWidget {
+  const _EmailHtmlWebView({
     required this.html,
-    required this.textStyle,
-    required this.shouldLoadImages,
+    required this.allowRemoteImages,
     required this.onLinkTap,
-    this.onLoadRequested,
   });
 
   final String html;
-  final TextStyle textStyle;
-  final bool shouldLoadImages;
+  final bool allowRemoteImages;
   final ValueChanged<String> onLinkTap;
-  final VoidCallback? onLoadRequested;
 
   @override
-  State<_SanitizedHtmlBody> createState() => _SanitizedHtmlBodyState();
+  State<_EmailHtmlWebView> createState() => _EmailHtmlWebViewState();
 }
 
-class _SanitizedHtmlBodyState extends State<_SanitizedHtmlBody> {
-  String? _cachedHtml;
-  String? _lastRaw;
+class _EmailHtmlWebViewState extends State<_EmailHtmlWebView> {
+  static const _emailWebViewBaseUrl = 'https://axichat.invalid/';
+
+  static final WebUri _emailWebViewUri = WebUri(_emailWebViewBaseUrl);
+
+  InAppWebViewController? _controller;
+  bool _isLoading = true;
 
   @override
-  void initState() {
-    super.initState();
-    _refreshCache();
-  }
-
-  @override
-  void didUpdateWidget(_SanitizedHtmlBody oldWidget) {
+  void didUpdateWidget(covariant _EmailHtmlWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.html != widget.html) {
-      _refreshCache();
+    if (oldWidget.html != widget.html ||
+        oldWidget.allowRemoteImages != widget.allowRemoteImages) {
+      _loadHtml();
     }
   }
 
-  void _refreshCache() {
-    _lastRaw = widget.html;
-    _cachedHtml = HtmlContentCodec.sanitizeHtml(widget.html);
+  Future<void> _loadHtml() async {
+    final controller = _controller;
+    if (controller == null) return;
+    final html = HtmlContentCodec.prepareEmailHtmlForWebView(
+      widget.html,
+      allowRemoteImages: widget.allowRemoteImages,
+    );
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
+    await controller.loadData(
+      data: html,
+      baseUrl: _emailWebViewUri,
+      historyUrl: _emailWebViewUri,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final fallbackFontSize =
-        widget.textStyle.fontSize ??
-        context.textTheme.p.fontSize ??
-        context.textTheme.small.fontSize ??
-        context.sizing.menuItemIconSize;
-    return html_widget.Html(
-      data: _cachedHtml ?? _lastRaw ?? '',
-      extensions: [
-        createEmailImageExtension(
-          shouldLoad: widget.shouldLoadImages,
-          onLoadRequested: widget.onLoadRequested,
+    final spacing = context.spacing;
+    final maxHeight =
+        MediaQuery.sizeOf(context).height *
+        context.sizing.dialogMaxHeightFraction;
+    final shape = RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.circular(context.radii.squircle),
+      side: context.borderSide,
+    );
+    return DecoratedBox(
+      decoration: ShapeDecoration(
+        color: context.colorScheme.card,
+        shape: shape,
+      ),
+      child: SizedBox(
+        width: double.maxFinite,
+        height: maxHeight,
+        child: Stack(
+          children: [
+            InAppWebView(
+              initialData: InAppWebViewInitialData(
+                data: HtmlContentCodec.prepareEmailHtmlForWebView(
+                  widget.html,
+                  allowRemoteImages: widget.allowRemoteImages,
+                ),
+                baseUrl: _emailWebViewUri,
+                historyUrl: _emailWebViewUri,
+              ),
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: false,
+                transparentBackground: true,
+                useShouldOverrideUrlLoading: true,
+                supportZoom: false,
+              ),
+              onWebViewCreated: (controller) {
+                _controller = controller;
+              },
+              shouldOverrideUrlLoading: (controller, navigationAction) async {
+                final url =
+                    navigationAction.request.url?.toString().trim() ?? '';
+                if (url.isEmpty ||
+                    url == 'about:blank' ||
+                    url.startsWith(_emailWebViewBaseUrl)) {
+                  return NavigationActionPolicy.ALLOW;
+                }
+                widget.onLinkTap(url);
+                return NavigationActionPolicy.CANCEL;
+              },
+              onLoadStop: (controller, url) {
+                if (!mounted) return;
+                setState(() {
+                  _isLoading = false;
+                });
+              },
+              onReceivedError: (controller, request, error) {
+                if (!mounted) return;
+                setState(() {
+                  _isLoading = false;
+                });
+              },
+              onReceivedHttpError: (controller, request, errorResponse) {
+                if (!mounted) return;
+                setState(() {
+                  _isLoading = false;
+                });
+              },
+            ),
+            if (_isLoading)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: context.colorScheme.card,
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(spacing.m),
+                      child: const AxiProgressIndicator(),
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
-      ],
-      onLinkTap: (url, _, _) {
-        if (url == null) return;
-        widget.onLinkTap(url);
-      },
-      style: {
-        'body': html_widget.Style(
-          margin: html_widget.Margins.zero,
-          padding: html_widget.HtmlPaddings.zero,
-          fontSize: html_widget.FontSize(fallbackFontSize),
-        ),
-      },
+      ),
     );
   }
 }

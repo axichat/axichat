@@ -1027,6 +1027,17 @@ class DeltaContextHandle {
     return _deltaOptionalMimeHeaders.read(_context, messageId, _bindings);
   }
 
+  Future<String?> getMessageFullHtml(int messageId) async {
+    _ensureState(_opened, 'get message full html');
+    if (messageId <= _zeroValue) return null;
+    return _cleanString(
+      _takeString(
+        _bindings.dc_get_msg_html(_context, messageId),
+        bindings: _bindings,
+      ),
+    );
+  }
+
   Future<List<int>> getFreshMessageIds() async {
     if (_supportsFreshMsgs == false) return const [];
     try {

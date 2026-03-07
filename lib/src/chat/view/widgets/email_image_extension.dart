@@ -12,7 +12,6 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:mime/mime.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 const Duration _emailImageDownloadTimeout = Duration(seconds: 8);
 const Duration _emailImageDecodeTimeout = Duration(seconds: 2);
@@ -24,6 +23,7 @@ const int _emailImageMaxRedirects = 3;
 const String _emailImageMimePrefix = 'image/';
 const String _emailImageMimeDetectPlaceholder = 'email-image';
 const String _emailImageHttpsScheme = 'https';
+const String _emailImageDataScheme = 'data';
 const Set<String> _emailImageAllowedSchemes = <String>{_emailImageHttpsScheme};
 const ImageDecodeLimits _emailImageDecodeLimits = ImageDecodeLimits(
   maxBytes: _emailImageMaxBytes,
@@ -33,31 +33,147 @@ const ImageDecodeLimits _emailImageDecodeLimits = ImageDecodeLimits(
   decodeTimeout: _emailImageDecodeTimeout,
 );
 
-/// Creates a flutter_html extension that blocks or allows external images.
-///
-/// When [shouldLoad] is false, displays a placeholder that can be tapped
-/// to trigger [onLoadRequested].
-TagExtension createEmailImageExtension({
-  required bool shouldLoad,
-  VoidCallback? onLoadRequested,
-}) {
+/// Creates a flutter_html extension for inline email images.
+TagExtension createEmailImageExtension({required bool shouldLoad}) {
   return TagExtension(
     tagsToExtend: {'img'},
     builder: (extensionContext) {
       final src = extensionContext.attributes['src'];
-      final uri = src == null || src.isEmpty ? null : _safeEmailImageUri(src);
-      if (shouldLoad) {
-        if (uri == null) {
-          return const EmailImagePlaceholder(isError: true);
-        }
-        return EmailImageLoader(uri: uri);
+      if (src == null || src.trim().isEmpty) {
+        return const SizedBox.shrink();
       }
-      if (uri == null) {
-        return const EmailImagePlaceholder();
-      }
-      return EmailImagePlaceholder(onTap: onLoadRequested);
+      return EmailHtmlImage(src: src, shouldLoad: shouldLoad);
     },
   );
+}
+
+List<HtmlExtension> createEmailHtmlExtensions({
+  required bool shouldLoadImages,
+}) {
+  return <HtmlExtension>[
+    createEmailImageExtension(shouldLoad: shouldLoadImages),
+  ];
+}
+
+Map<String, Style> createEmailHtmlStyles({
+  required double fallbackFontSize,
+  Color? textColor,
+  Color? linkColor,
+}) {
+  Style inlineStyle({
+    Color? color,
+    FontSize? fontSize,
+    TextDecoration? textDecoration,
+    FontWeight? fontWeight,
+    FontStyle? fontStyle,
+  }) => Style(
+    color: color,
+    fontSize: fontSize,
+    textDecoration: textDecoration,
+    fontWeight: fontWeight,
+    fontStyle: fontStyle,
+    verticalAlign: VerticalAlign.bottom,
+  );
+
+  Style blockStyle({Color? color, FontSize? fontSize}) => Style(
+    margin: Margins.zero,
+    padding: HtmlPaddings.zero,
+    color: color,
+    fontSize: fontSize,
+    display: Display.block,
+  );
+
+  final bodyStyle = blockStyle(
+    color: textColor,
+    fontSize: FontSize(fallbackFontSize),
+  );
+  final quoteStyle = blockStyle(
+    color: textColor,
+    fontSize: FontSize(fallbackFontSize),
+  ).copyWith(border: Border.fromBorderSide(BorderSide.none));
+
+  return <String, Style>{
+    'html': bodyStyle,
+    'body': bodyStyle,
+    'p': bodyStyle,
+    'div': bodyStyle,
+    'span': inlineStyle(color: textColor, fontSize: FontSize(fallbackFontSize)),
+    'blockquote': quoteStyle,
+    'ul': bodyStyle,
+    'ol': bodyStyle,
+    'li': bodyStyle,
+    'table': bodyStyle,
+    'thead': bodyStyle,
+    'tbody': bodyStyle,
+    'tfoot': bodyStyle,
+    'tr': bodyStyle,
+    'td': bodyStyle,
+    'th': bodyStyle,
+    'h1': bodyStyle,
+    'h2': bodyStyle,
+    'h3': bodyStyle,
+    'h4': bodyStyle,
+    'h5': bodyStyle,
+    'h6': bodyStyle,
+    'strong': inlineStyle(
+      color: textColor,
+      fontSize: FontSize(fallbackFontSize),
+      fontWeight: FontWeight.w700,
+    ),
+    'em': inlineStyle(
+      color: textColor,
+      fontSize: FontSize(fallbackFontSize),
+      fontStyle: FontStyle.italic,
+    ),
+    'b': inlineStyle(
+      color: textColor,
+      fontSize: FontSize(fallbackFontSize),
+      fontWeight: FontWeight.w700,
+    ),
+    'i': inlineStyle(
+      color: textColor,
+      fontSize: FontSize(fallbackFontSize),
+      fontStyle: FontStyle.italic,
+    ),
+    'u': inlineStyle(
+      color: textColor,
+      fontSize: FontSize(fallbackFontSize),
+      textDecoration: TextDecoration.underline,
+    ),
+    'img': inlineStyle(),
+    'a': inlineStyle(
+      color: linkColor,
+      fontSize: FontSize(fallbackFontSize),
+      textDecoration: TextDecoration.underline,
+    ),
+  };
+}
+
+class EmailHtmlImage extends StatelessWidget {
+  const EmailHtmlImage({
+    super.key,
+    required this.src,
+    required this.shouldLoad,
+  });
+
+  final String src;
+  final bool shouldLoad;
+
+  @override
+  Widget build(BuildContext context) {
+    final embeddedBytes = _embeddedEmailImageBytes(src);
+    if (embeddedBytes != null) {
+      return EmailEmbeddedImage(bytes: embeddedBytes);
+    }
+    final uri = _safeEmailImageUri(src);
+    if (uri == null) {
+      return const SizedBox.shrink();
+    }
+    if (!shouldLoad) {
+      return const SizedBox.shrink();
+    }
+    return EmailImageLoader(uri: uri);
+  }
 }
 
 class EmailImageLoader extends StatefulWidget {
@@ -103,6 +219,51 @@ class _EmailImageLoaderState extends State<EmailImageLoader> {
   }
 }
 
+class EmailEmbeddedImage extends StatefulWidget {
+  const EmailEmbeddedImage({super.key, required this.bytes});
+
+  final Uint8List bytes;
+
+  @override
+  State<EmailEmbeddedImage> createState() => _EmailEmbeddedImageState();
+}
+
+class _EmailEmbeddedImageState extends State<EmailEmbeddedImage> {
+  late Future<Uint8List?> _future = _validateEmbeddedEmailImageBytes(
+    widget.bytes,
+  );
+
+  @override
+  void didUpdateWidget(covariant EmailEmbeddedImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.bytes != widget.bytes) {
+      _future = _validateEmbeddedEmailImageBytes(widget.bytes);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Uint8List?>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const AxiProgressIndicator();
+        }
+        final bytes = snapshot.data;
+        if (bytes == null || bytes.isEmpty) {
+          return const EmailImagePlaceholder(isError: true);
+        }
+        return Image.memory(
+          bytes,
+          errorBuilder: (context, error, stackTrace) {
+            return const EmailImagePlaceholder(isError: true);
+          },
+        );
+      },
+    );
+  }
+}
+
 Uri? _safeEmailImageUri(String src) {
   final trimmed = src.trim();
   if (trimmed.isEmpty) return null;
@@ -113,6 +274,48 @@ Uri? _safeEmailImageUri(String src) {
   if (uri.userInfo.trim().isNotEmpty) return null;
   if (uri.host.trim().isEmpty) return null;
   return uri;
+}
+
+Uint8List? _embeddedEmailImageBytes(String src) {
+  final trimmed = src.trim();
+  if (trimmed.isEmpty) return null;
+  final uri = Uri.tryParse(trimmed);
+  if (uri == null || uri.scheme.trim().toLowerCase() != _emailImageDataScheme) {
+    return null;
+  }
+  UriData? data;
+  try {
+    data = uri.data;
+  } on FormatException {
+    return null;
+  }
+  final mimeType = data?.mimeType.trim().toLowerCase() ?? '';
+  if (!mimeType.startsWith(_emailImageMimePrefix)) {
+    return null;
+  }
+  final bytes = data?.contentAsBytes();
+  if (bytes == null || bytes.isEmpty || bytes.length > _emailImageMaxBytes) {
+    return null;
+  }
+  return Uint8List.fromList(bytes);
+}
+
+Future<Uint8List?> _validateEmbeddedEmailImageBytes(Uint8List bytes) async {
+  if (bytes.isEmpty || bytes.length > _emailImageMaxBytes) {
+    return null;
+  }
+  final detectedMime = lookupMimeType(
+    _emailImageMimeDetectPlaceholder,
+    headerBytes: bytes,
+  );
+  if (detectedMime == null || !detectedMime.startsWith(_emailImageMimePrefix)) {
+    return null;
+  }
+  final allowed = await isSafeImageBytes(bytes, _emailImageDecodeLimits);
+  if (!allowed) {
+    return null;
+  }
+  return bytes;
 }
 
 Future<Uint8List?> _downloadEmailImageBytes(Uri uri) async {
@@ -225,8 +428,6 @@ class EmailImagePlaceholder extends StatefulWidget {
 }
 
 class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
-  final AxiTapBounceController _bounceController = AxiTapBounceController();
-
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
@@ -246,46 +447,40 @@ class _EmailImagePlaceholderState extends State<EmailImagePlaceholder> {
           horizontal: spacing.s,
           vertical: spacing.xs,
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        child: Wrap(
+          spacing: spacing.s,
+          runSpacing: spacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Icon(
-              widget.isError
-                  ? Icons.broken_image_outlined
-                  : Icons.image_outlined,
-              size: sizing.menuItemIconSize,
-              color: colors.mutedForeground,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  widget.isError
+                      ? Icons.broken_image_outlined
+                      : Icons.image_outlined,
+                  size: sizing.menuItemIconSize,
+                  color: colors.mutedForeground,
+                ),
+                SizedBox(width: spacing.xs),
+                Text(
+                  label,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
+                  ),
+                ),
+              ],
             ),
-            SizedBox(width: spacing.xs),
-            Text(
-              label,
-              style: context.textTheme.small.copyWith(
-                color: colors.mutedForeground,
+            if (widget.onTap != null)
+              AxiButton.outline(
+                size: AxiButtonSize.sm,
+                onPressed: widget.onTap,
+                child: Text(context.l10n.commonShow),
               ),
-            ),
           ],
         ),
       ),
     );
-
-    return ShadFocusable(
-      canRequestFocus: widget.onTap != null,
-      builder: (context, focused, child) => child ?? const SizedBox.shrink(),
-      child: ShadGestureDetector(
-        cursor: widget.onTap == null
-            ? SystemMouseCursors.basic
-            : SystemMouseCursors.click,
-        hoverStrategies: mobileHoverStrategies,
-        onTap: widget.onTap,
-        onTapDown: _bounceController.handleTapDown,
-        onTapUp: _bounceController.handleTapUp,
-        onTapCancel: _bounceController.handleTapCancel,
-        child: AxiTapBounce(
-          controller: _bounceController,
-          enabled: widget.onTap != null,
-          child: content,
-        ),
-      ),
-    );
+    return content;
   }
 }

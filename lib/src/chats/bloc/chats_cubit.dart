@@ -44,6 +44,20 @@ enum ChatRouteIndex {
   bool get allowsChatInteraction => isMain || isSearch;
 }
 
+ChatRouteIndex resolveStoredChatRoute({
+  required ChatRouteIndex route,
+  required bool hasChat,
+  required bool hasFocusedMessage,
+}) {
+  if (route.isDetails && !hasFocusedMessage) {
+    return ChatRouteIndex.main;
+  }
+  if ((route.isSettings || route.isGallery || route.isCalendar) && !hasChat) {
+    return ChatRouteIndex.main;
+  }
+  return route;
+}
+
 class _ChatViewResults {
   const _ChatViewResults({
     required this.visibleItems,

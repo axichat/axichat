@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -40,6 +41,15 @@ void main() {
     when(
       () => xmppService.chatsStream(),
     ).thenAnswer((_) => chatsStreamController.stream);
+    when(
+      () => xmppService.recipientAddressSuggestionsStream(),
+    ).thenAnswer((_) => const Stream<List<String>>.empty());
+    when(
+      () => xmppService.demoResetStream,
+    ).thenAnswer((_) => const Stream<void>.empty());
+    when(
+      () => homeRefreshSyncService.syncUpdates,
+    ).thenAnswer((_) => const Stream<HomeRefreshSyncUpdate>.empty());
     when(() => xmppService.cachedChatList).thenReturn(const <Chat>[]);
   });
 
@@ -118,5 +128,27 @@ void main() {
     );
 
     expect(cubit.state.spamVisibleItems.first.jid, 'first@example.com');
+  });
+
+  test('stored details route falls back to main without a focused message', () {
+    expect(
+      resolveStoredChatRoute(
+        route: ChatRouteIndex.details,
+        hasChat: true,
+        hasFocusedMessage: false,
+      ),
+      ChatRouteIndex.main,
+    );
+  });
+
+  test('stored details route is preserved when the focused message exists', () {
+    expect(
+      resolveStoredChatRoute(
+        route: ChatRouteIndex.details,
+        hasChat: true,
+        hasFocusedMessage: true,
+      ),
+      ChatRouteIndex.details,
+    );
   });
 }

@@ -1650,6 +1650,7 @@ class XmppService extends XmppBase
       await _seedDemoReactions(scripts);
       await _seedDemoAvatars(scripts);
       await _seedDemoAttachmentMessages(scripts);
+      await _seedDemoPinnedMessages(scripts);
     } on Exception catch (error, stackTrace) {
       _xmppLogger.fine('Skipping demo chat seed', error, stackTrace);
     }
@@ -2033,6 +2034,42 @@ class XmppService extends XmppBase
             messageWithAttachment,
             chatType: script.chat.type,
           );
+        }
+      }
+    }, awaitDatabase: true);
+  }
+
+  Future<void> _seedDemoPinnedMessages(List<DemoChatScript> scripts) async {
+    if (!kEnableDemoChats) return;
+    final seedPinnedAtBase = demoNow().toUtc();
+    await _dbOp<XmppDatabase>((db) async {
+      for (final script in scripts) {
+        final pinnedIds = script.pinnedMessageStanzaIds;
+        if (pinnedIds.isEmpty) {
+          continue;
+        }
+        final existingEntries = await db.getPinnedMessages(script.chat.jid);
+        final existingIds = existingEntries
+            .map((entry) => entry.messageStanzaId)
+            .toSet();
+        final seededMessageIds = script.messages
+            .map((message) => message.stanzaID)
+            .toSet();
+        for (var index = 0; index < pinnedIds.length; index += 1) {
+          final stanzaId = pinnedIds[index].trim();
+          if (stanzaId.isEmpty ||
+              existingIds.contains(stanzaId) ||
+              !seededMessageIds.contains(stanzaId)) {
+            continue;
+          }
+          await db.upsertPinnedMessage(
+            PinnedMessageEntry(
+              messageStanzaId: stanzaId,
+              chatJid: script.chat.jid,
+              pinnedAt: seedPinnedAtBase.subtract(Duration(seconds: index)),
+            ),
+          );
+          existingIds.add(stanzaId);
         }
       }
     }, awaitDatabase: true);

@@ -77,6 +77,14 @@ abstract interface class XmppDatabase implements Database {
     bool includePseudoMessages = true,
   });
 
+  Future<int> countChatMessagesThrough(
+    String jid, {
+    required DateTime throughTimestamp,
+    required String throughStanzaId,
+    int? throughDeltaMsgId,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  });
+
   Stream<int> watchConversationMessageCount();
 
   Future<int> getConversationMessageCount();
@@ -1744,6 +1752,110 @@ WHERE transport IS NULL
       ],
       readsFrom: {messages, messageCopies, messageShares, messageParticipants},
     ).getSingle();
+
+    return query.read<int>('count');
+  }
+
+  @override
+  Future<int> countChatMessagesThrough(
+    String jid, {
+    required DateTime throughTimestamp,
+    required String throughStanzaId,
+    int? throughDeltaMsgId,
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  }) async {
+    final filterValue = filter.index;
+    final query = throughDeltaMsgId == null
+        ? await customSelect(
+            '''
+            SELECT COUNT(*) AS count
+            FROM messages m
+            LEFT JOIN message_copies mc
+              ON mc.dc_msg_id = m.delta_msg_id
+             AND mc.dc_account_id = m.delta_account_id
+            LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
+            LEFT JOIN message_participants mp
+              ON mp.share_id = mc.share_id AND mp.contact_jid = ?
+            WHERE m.chat_jid = ?
+              AND (
+                CASE WHEN ? = 0 THEN
+                  (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
+                ELSE
+                  (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+                END
+              )
+              AND (
+                m.timestamp > ?
+                OR (
+                  m.timestamp = ?
+                  AND (
+                    m.delta_msg_id IS NOT NULL
+                    OR (m.delta_msg_id IS NULL AND m.stanza_i_d >= ?)
+                  )
+                )
+              )
+            ''',
+            variables: [
+              Variable<String>(jid),
+              Variable<String>(jid),
+              Variable<int>(filterValue),
+              Variable<DateTime>(throughTimestamp),
+              Variable<DateTime>(throughTimestamp),
+              Variable<String>(throughStanzaId),
+            ],
+            readsFrom: {
+              messages,
+              messageCopies,
+              messageShares,
+              messageParticipants,
+            },
+          ).getSingle()
+        : await customSelect(
+            '''
+            SELECT COUNT(*) AS count
+            FROM messages m
+            LEFT JOIN message_copies mc
+              ON mc.dc_msg_id = m.delta_msg_id
+             AND mc.dc_account_id = m.delta_account_id
+            LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
+            LEFT JOIN message_participants mp
+              ON mp.share_id = mc.share_id AND mp.contact_jid = ?
+            WHERE m.chat_jid = ?
+              AND (
+                CASE WHEN ? = 0 THEN
+                  (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
+                ELSE
+                  (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+                END
+              )
+              AND (
+                m.timestamp > ?
+                OR (
+                  m.timestamp = ?
+                  AND (
+                    m.delta_msg_id > ?
+                    OR (m.delta_msg_id = ? AND m.stanza_i_d >= ?)
+                  )
+                )
+              )
+            ''',
+            variables: [
+              Variable<String>(jid),
+              Variable<String>(jid),
+              Variable<int>(filterValue),
+              Variable<DateTime>(throughTimestamp),
+              Variable<DateTime>(throughTimestamp),
+              Variable<int>(throughDeltaMsgId),
+              Variable<int>(throughDeltaMsgId),
+              Variable<String>(throughStanzaId),
+            ],
+            readsFrom: {
+              messages,
+              messageCopies,
+              messageShares,
+              messageParticipants,
+            },
+          ).getSingle();
 
     return query.read<int>('count');
   }

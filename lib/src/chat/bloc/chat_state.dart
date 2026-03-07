@@ -37,6 +37,12 @@ abstract class ChatState with _$ChatState {
     @Default(<int, String>{}) Map<int, String> emailDebugDumpByDeltaId,
     @Default(<int>{}) Set<int> emailDebugDumpLoading,
     @Default(<int>{}) Set<int> emailDebugDumpUnavailable,
+    @Default(<int, String>{}) Map<int, String> emailFullHtmlByDeltaId,
+    @Default(<int>{}) Set<int> emailFullHtmlLoading,
+    @Default(<int>{}) Set<int> emailFullHtmlUnavailable,
+    @Default(<int, String>{}) Map<int, String> emailQuotedTextByDeltaId,
+    @Default(<int>{}) Set<int> emailQuotedTextLoading,
+    @Default(<int>{}) Set<int> emailQuotedTextUnavailable,
     @Default(<String, FileMetadataData?>{})
     Map<String, FileMetadataData?> fileMetadataById,
     @Default(<PendingAttachment>[]) List<PendingAttachment> pendingAttachments,
@@ -59,6 +65,8 @@ abstract class ChatState with _$ChatState {
     String? emailSelfJid,
     String? openChatJid,
     @Default(0) int openChatRequestId,
+    String? scrollTargetMessageId,
+    @Default(0) int scrollTargetRequestId,
     ChatToast? toast,
     @Default(0) int toastId,
   }) = _ChatState;

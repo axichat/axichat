@@ -35,12 +35,14 @@ class DemoChatScript {
     required List<Message> messages,
     this.roomState,
     this.attachments = const <DemoAttachmentAsset>[],
+    this.pinnedMessageStanzaIds = const <String>[],
   }) : messages = List<Message>.of(messages);
 
   final Chat chat;
   final List<Message> messages;
   final RoomState? roomState;
   final List<DemoAttachmentAsset> attachments;
+  final List<String> pinnedMessageStanzaIds;
 }
 
 class DemoChats {
@@ -143,6 +145,9 @@ class DemoChats {
           messages: script.messages,
           roomState: script.roomState,
           attachments: List<DemoAttachmentAsset>.of(script.attachments),
+          pinnedMessageStanzaIds: List<String>.of(
+            script.pinnedMessageStanzaIds,
+          ),
         ),
       )
       .toList();
@@ -172,6 +177,7 @@ class DemoChats {
     const groupJid = _groupJid;
     const gmailJid = 'eliot@gmail.com';
     const contact1Jid = DemoChats.contact1Jid;
+    const scrollDebugJid = 'scroll-debug@$_demoDomain';
 
     Chat directChat(String jid, String title, List<Message> messages) => Chat(
       jid: jid,
@@ -221,6 +227,25 @@ class DemoChats {
           pseudoMessageType: PseudoMessageType.calendarTaskIcs,
           pseudoMessageData: CalendarTaskIcsMessage(task: task).toJson(),
         );
+
+    List<Message> scrollDebugMessages() {
+      const messageCount = 240;
+      return List<Message>.generate(messageCount, (index) {
+        final sequence = messageCount - index;
+        final isEarliest = sequence == 1;
+        final senderJid = index.isEven ? scrollDebugJid : kDemoSelfJid;
+        final body = isEarliest
+            ? 'Pinned anchor for infinite scroll debugging. This is the earliest message in the demo thread.'
+            : 'Infinite scroll debug message $sequence of $messageCount. Keep paging backward until you reach the pinned anchor.';
+        return message(
+          stanzaId: 'demo-scroll-$sequence',
+          senderJid: senderJid,
+          chatJid: scrollDebugJid,
+          body: body,
+          timestamp: now.subtract(Duration(minutes: 2 + (index * 6))),
+        );
+      });
+    }
 
     final washingtonMessages = [
       message(
@@ -609,8 +634,14 @@ class DemoChats {
         timestamp: contact1FirstTimestamp,
       ),
     ];
+    final scrollMessages = scrollDebugMessages();
 
     return [
+      DemoChatScript(
+        chat: directChat(scrollDebugJid, 'Infinite Scroll', scrollMessages),
+        messages: scrollMessages,
+        pinnedMessageStanzaIds: const ['demo-scroll-1'],
+      ),
       DemoChatScript(
         chat: directChat(washingtonJid, 'George', washingtonMessages),
         messages: washingtonMessages,

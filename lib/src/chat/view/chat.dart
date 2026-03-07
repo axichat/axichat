@@ -155,7 +155,6 @@ const Curve _chatOverlayFadeCurve = Curves.easeOutCubic;
 const Offset _chatCalendarSlideOffset = Offset(0.0, 0.04);
 const double _chatCalendarTransitionVisibleValue = 1.0;
 const double _chatCalendarTransitionHiddenValue = 0.0;
-const int _pinnedSenderMaxLines = 1;
 final _selectionSpacerTimestamp = DateTime.fromMillisecondsSinceEpoch(
   0,
   isUtc: true,
@@ -3557,6 +3556,162 @@ class _ChatState extends State<Chat> {
     );
   }
 
+  Future<bool> _waitForMessageContext(String messageId) async {
+    if (_messageKeys[messageId]?.currentContext != null) {
+      return true;
+    }
+    for (var attempt = 0; attempt < 8; attempt += 1) {
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) {
+        return false;
+      }
+      if (_messageKeys[messageId]?.currentContext != null) {
+        return true;
+      }
+    }
+    return _messageKeys[messageId]?.currentContext != null;
+  }
+
+  int? _displayedMessageIndex(String messageId) {
+    for (var index = 0; index < _cachedFilteredItems.length; index += 1) {
+      if (_cachedFilteredItems[index].stanzaID == messageId) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  ({int min, int max})? _mountedMessageIndexRange() {
+    int? minIndex;
+    int? maxIndex;
+    for (var index = 0; index < _cachedFilteredItems.length; index += 1) {
+      final messageId = _cachedFilteredItems[index].stanzaID;
+      if (_messageKeys[messageId]?.currentContext == null) {
+        continue;
+      }
+      minIndex = minIndex == null ? index : math.min(minIndex, index);
+      maxIndex = maxIndex == null ? index : math.max(maxIndex, index);
+    }
+    if (minIndex == null || maxIndex == null) {
+      return null;
+    }
+    return (min: minIndex, max: maxIndex);
+  }
+
+  Future<bool> _prepareMessageContextForScroll(String messageId) async {
+    if (await _waitForMessageContext(messageId)) {
+      return true;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !_scrollController.hasClients) {
+      return false;
+    }
+    final position = _scrollController.position;
+    if (!position.hasPixels) {
+      return false;
+    }
+    final targetIndex = _displayedMessageIndex(messageId);
+    if (targetIndex == null) {
+      return false;
+    }
+    final maxScrollExtent = math.max(0.0, position.maxScrollExtent);
+    final itemCount = _cachedFilteredItems.length;
+    var lowerOffsetBound = 0.0;
+    var upperOffsetBound = maxScrollExtent;
+    final attemptedOffsets = <double>[];
+    double clampOffset(double offset) {
+      return offset.clamp(0.0, maxScrollExtent).toDouble();
+    }
+
+    bool wasAttempted(double offset) {
+      for (final attempted in attemptedOffsets) {
+        if ((attempted - offset).abs() < 1) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    for (var attempt = 0; attempt < 14; attempt += 1) {
+      if (await _waitForMessageContext(messageId)) {
+        return true;
+      }
+      if (!mounted || !_scrollController.hasClients) {
+        return false;
+      }
+      final mountedRange = _mountedMessageIndexRange();
+      double targetOffset;
+      if (mountedRange == null) {
+        targetOffset = itemCount <= 1
+            ? _scrollController.offset
+            : clampOffset(maxScrollExtent * (targetIndex / (itemCount - 1)));
+      } else if (targetIndex > mountedRange.max) {
+        lowerOffsetBound = math.max(
+          lowerOffsetBound,
+          _scrollController.offset,
+        );
+        targetOffset = clampOffset(
+          (lowerOffsetBound + upperOffsetBound) / 2,
+        );
+        if ((targetOffset - _scrollController.offset).abs() < 1) {
+          targetOffset = upperOffsetBound;
+        }
+      } else if (targetIndex < mountedRange.min) {
+        upperOffsetBound = math.min(
+          upperOffsetBound,
+          _scrollController.offset,
+        );
+        targetOffset = clampOffset(
+          (lowerOffsetBound + upperOffsetBound) / 2,
+        );
+        if ((targetOffset - _scrollController.offset).abs() < 1) {
+          targetOffset = lowerOffsetBound;
+        }
+      } else {
+        targetOffset = _scrollController.offset;
+      }
+      if ((_scrollController.offset - targetOffset).abs() < 1 &&
+          wasAttempted(targetOffset)) {
+        break;
+      }
+      if (wasAttempted(targetOffset)) {
+        final lowerCandidate = clampOffset(lowerOffsetBound);
+        final upperCandidate = clampOffset(upperOffsetBound);
+        if (!wasAttempted(lowerCandidate) &&
+            (_scrollController.offset - lowerCandidate).abs() >= 1) {
+          targetOffset = lowerCandidate;
+        } else if (!wasAttempted(upperCandidate) &&
+            (_scrollController.offset - upperCandidate).abs() >= 1) {
+          targetOffset = upperCandidate;
+        } else {
+          break;
+        }
+      }
+      attemptedOffsets.add(targetOffset);
+      if ((_scrollController.offset - targetOffset).abs() < 1) {
+        continue;
+      }
+      _scrollController.jumpTo(targetOffset);
+    }
+    return _messageKeys[messageId]?.currentContext != null;
+  }
+
+  Future<void> _handleScrollTargetRequest(String messageId) async {
+    if (_pinnedPanelVisible) {
+      _closePinnedMessages();
+      await WidgetsBinding.instance.endOfFrame;
+    }
+    final ready = await _prepareMessageContextForScroll(messageId);
+    if (!mounted || !ready) {
+      return;
+    }
+    if (_selectedMessageId == messageId) {
+      await _scrollSelectedMessageIntoView(messageId);
+      return;
+    }
+    await _selectMessage(messageId);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -3731,10 +3886,22 @@ class _ChatState extends State<Chat> {
             BlocListener<ChatsCubit, ChatsState>(
               listenWhen: (previous, current) =>
                   previous.openChatRoute != current.openChatRoute,
-              listener: (_, chatsState) {
+              listener: (context, chatsState) {
                 if (!mounted) return;
-                final nextRoute = chatsState.openChatRoute;
-                if (_chatRoute == nextRoute) return;
+                final storedRoute = chatsState.openChatRoute;
+                if (_chatRoute == storedRoute) return;
+                final nextRoute = _resolvedStoredChatRoute(
+                  route: storedRoute,
+                  state: context.read<ChatBloc>().state,
+                );
+                if (nextRoute == _chatRoute) {
+                  if (nextRoute != storedRoute) {
+                    context.read<ChatsCubit>().setOpenChatRoute(
+                      route: nextRoute,
+                    );
+                  }
+                  return;
+                }
                 _setChatRoute(nextRoute);
               },
             ),
@@ -3798,6 +3965,19 @@ class _ChatState extends State<Chat> {
             ),
             BlocListener<ChatBloc, ChatState>(
               listenWhen: (previous, current) =>
+                  previous.scrollTargetRequestId !=
+                      current.scrollTargetRequestId &&
+                  current.scrollTargetMessageId != null,
+              listener: (_, state) {
+                final messageId = state.scrollTargetMessageId;
+                if (messageId == null || messageId.trim().isEmpty) {
+                  return;
+                }
+                unawaited(_handleScrollTargetRequest(messageId));
+              },
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
                   current.composerClearId != 0 &&
                   previous.composerClearId != current.composerClearId,
               listener: (_, _) {
@@ -3856,6 +4036,21 @@ class _ChatState extends State<Chat> {
                 if (state.messagesLoaded) {
                   _hydrateAnimatedMessages(state.items);
                 }
+              },
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  previous.focused?.stanzaID != current.focused?.stanzaID ||
+                  previous.chat?.jid != current.chat?.jid,
+              listener: (_, state) {
+                final nextRoute = _resolvedStoredChatRoute(
+                  route: _chatRoute,
+                  state: state,
+                );
+                if (nextRoute == _chatRoute) {
+                  return;
+                }
+                _setChatRoute(nextRoute);
               },
             ),
             BlocListener<ChatBloc, ChatState>(
@@ -4745,12 +4940,17 @@ class _ChatState extends State<Chat> {
                                           invite.pseudoMessageData?['token']
                                               as String,
                                     };
-                                    for (
-                                      var index = 0;
-                                      index < filteredItems.length;
-                                      index++
-                                    ) {
-                                      final e = filteredItems[index];
+                                    const pinnedPreviewMessagePrefix =
+                                        'pinned-preview:';
+                                    ChatMessage? projectDashMessage(
+                                      Message e, {
+                                      required Set<String> shownSubjectShares,
+                                      String? messageIdPrefix,
+                                    }) {
+                                      final timestamp = e.timestamp;
+                                      if (timestamp == null) {
+                                        return null;
+                                      }
                                       final senderBare = bareAddress(
                                         e.senderJid,
                                       );
@@ -4922,28 +5122,30 @@ class _ChatState extends State<Chat> {
                                           isEmailChat ||
                                           xmppCapabilities?.supportsReceipts ==
                                               true;
-                                      MessageStatus statusFor(Message e) {
-                                        if (e.error.isNotNone) {
+                                      MessageStatus statusFor(Message message) {
+                                        if (message.error.isNotNone) {
                                           return MessageStatus.failed;
                                         }
                                         if (isEmailChat) {
-                                          if (e.received || e.displayed) {
+                                          if (message.received ||
+                                              message.displayed) {
                                             return MessageStatus.received;
                                           }
-                                          if (e.acked) {
+                                          if (message.acked) {
                                             return MessageStatus.sent;
                                           }
                                           return MessageStatus.pending;
                                         }
-                                        if (e.displayed && supportsMarkers) {
+                                        if (message.displayed &&
+                                            supportsMarkers) {
                                           return MessageStatus.read;
                                         }
-                                        if (e.received &&
+                                        if (message.received &&
                                             (supportsMarkers ||
                                                 supportsReceipts)) {
                                           return MessageStatus.received;
                                         }
-                                        if (e.acked) {
+                                        if (message.acked) {
                                           return MessageStatus.sent;
                                         }
                                         return MessageStatus.pending;
@@ -4988,63 +5190,92 @@ class _ChatState extends State<Chat> {
                                             availabilityCoordinator:
                                                 availabilityCoordinator,
                                           );
-                                      dashMessages.add(
-                                        ChatMessage(
-                                          user: author,
-                                          createdAt: e.timestamp!.toLocal(),
-                                          text: shouldForceDashText
-                                              ? _dashChatPlaceholderText
-                                              : renderedText,
-                                          status: statusFor(e),
-                                          customProperties: {
-                                            'id': e.stanzaID,
-                                            'body': bodyText,
-                                            'renderedText': renderedText,
-                                            'attachmentIds': attachmentIds,
-                                            'edited': e.edited,
-                                            'retracted': e.retracted,
-                                            'error': e.error,
-                                            'encrypted':
-                                                e.encryptionProtocol.isNotNone,
-                                            'trust': e.trust,
-                                            'trusted': e.trusted,
-                                            'isSelf': isSelf,
-                                            'model': e,
-                                            _calendarFragmentPropertyKey:
-                                                e.calendarFragment,
-                                            _calendarTaskIcsPropertyKey:
-                                                e.calendarTaskIcs,
-                                            _calendarTaskIcsReadOnlyPropertyKey:
-                                                e.calendarTaskIcsReadOnly,
-                                            _calendarAvailabilityPropertyKey:
-                                                validatedAvailabilityMessage,
-                                            'quoted': quotedMessage,
-                                            'reactions': e.reactionsPreview,
-                                            'shareContext': shareContext,
-                                            'shareParticipants':
-                                                bannerParticipants,
-                                            'replyParticipants':
-                                                shareReplies[e.stanzaID],
-                                            'showSubject': showSubjectHeader,
-                                            'subjectLabel': subjectLabel,
-                                            'forwarded': isForwardedMessage,
-                                            'forwardedFromJid':
-                                                e.forwardedFromJid,
-                                            'isEmailMessage': isEmailMessage,
-                                            'inviteRoom': inviteRoom,
-                                            'inviteRoomName': inviteRoomName,
-                                            'inviteToken': inviteToken,
-                                            'inviteRevoked': inviteRevoked,
-                                            'invitee': invitee,
-                                            'isInvite': isInvite,
-                                            'isInviteRevocation':
-                                                isInviteRevocation,
-                                            'inviteLabel': inviteLabel,
-                                            'inviteActionLabel':
-                                                inviteActionLabel,
-                                          },
-                                        ),
+                                      final idPrefix =
+                                          messageIdPrefix?.trim() ?? '';
+                                      final previewId = idPrefix.isEmpty
+                                          ? e.stanzaID
+                                          : '$idPrefix${e.stanzaID}';
+                                      final previewDatabaseId =
+                                          idPrefix.isEmpty
+                                          ? e.id
+                                          : '$idPrefix${e.id ?? e.stanzaID}';
+                                      final projectedMessage =
+                                          idPrefix.isEmpty
+                                          ? e
+                                          : e.copyWith(
+                                              stanzaID: previewId,
+                                              id: previewDatabaseId,
+                                            );
+                                      return ChatMessage(
+                                        user: author,
+                                        createdAt: timestamp.toLocal(),
+                                        text: shouldForceDashText
+                                            ? _dashChatPlaceholderText
+                                            : renderedText,
+                                        status: statusFor(e),
+                                        customProperties: {
+                                          'id': previewId,
+                                          'body': bodyText,
+                                          'renderedText': renderedText,
+                                          'attachmentIds': attachmentIds,
+                                          'edited': e.edited,
+                                          'retracted': e.retracted,
+                                          'error': e.error,
+                                          'encrypted':
+                                              e.encryptionProtocol.isNotNone,
+                                          'trust': e.trust,
+                                          'trusted': e.trusted,
+                                          'isSelf': isSelf,
+                                          'model': projectedMessage,
+                                          _calendarFragmentPropertyKey:
+                                              e.calendarFragment,
+                                          _calendarTaskIcsPropertyKey:
+                                              e.calendarTaskIcs,
+                                          _calendarTaskIcsReadOnlyPropertyKey:
+                                              e.calendarTaskIcsReadOnly,
+                                          _calendarAvailabilityPropertyKey:
+                                              validatedAvailabilityMessage,
+                                          'quoted': quotedMessage,
+                                          'reactions': e.reactionsPreview,
+                                          'shareContext': shareContext,
+                                          'shareParticipants':
+                                              bannerParticipants,
+                                          'replyParticipants':
+                                              shareReplies[e.stanzaID],
+                                          'showSubject': showSubjectHeader,
+                                          'subjectLabel': subjectLabel,
+                                          'forwarded': isForwardedMessage,
+                                          'forwardedFromJid':
+                                              e.forwardedFromJid,
+                                          'isEmailMessage': isEmailMessage,
+                                          'inviteRoom': inviteRoom,
+                                          'inviteRoomName': inviteRoomName,
+                                          'inviteToken': inviteToken,
+                                          'inviteRevoked': inviteRevoked,
+                                          'invitee': invitee,
+                                          'isInvite': isInvite,
+                                          'isInviteRevocation':
+                                              isInviteRevocation,
+                                          'inviteLabel': inviteLabel,
+                                          'inviteActionLabel':
+                                              inviteActionLabel,
+                                        },
                                       );
+                                    }
+                                    for (
+                                      var index = 0;
+                                      index < filteredItems.length;
+                                      index++
+                                    ) {
+                                      final e = filteredItems[index];
+                                      final dashMessage = projectDashMessage(
+                                        e,
+                                        shownSubjectShares: shownSubjectShares,
+                                      );
+                                      if (dashMessage == null) {
+                                        continue;
+                                      }
+                                      dashMessages.add(dashMessage);
                                       if (!unreadDividerInserted &&
                                           unreadBoundaryId != null &&
                                           e.stanzaID == unreadBoundaryId) {
@@ -5499,6 +5730,38 @@ class _ChatState extends State<Chat> {
                                               _shouldAllowAttachment,
                                           onApproveAttachment:
                                               _approveAttachment,
+                                          previewMessageForItem: (item) {
+                                            final message = item.message;
+                                            if (message == null) {
+                                              return null;
+                                            }
+                                            return projectDashMessage(
+                                              message,
+                                              shownSubjectShares: <String>{},
+                                              messageIdPrefix:
+                                                  pinnedPreviewMessagePrefix,
+                                            );
+                                          },
+                                          resolvedHtmlBodyFor: (message) {
+                                            final deltaMessageId =
+                                                message.deltaMsgId;
+                                            if (deltaMessageId == null) {
+                                              return message.htmlBody;
+                                            }
+                                            return state
+                                                    .emailFullHtmlByDeltaId[deltaMessageId] ??
+                                                message.htmlBody;
+                                          },
+                                          resolvedQuotedTextFor: (message) {
+                                            final deltaMessageId =
+                                                message.deltaMsgId;
+                                            if (deltaMessageId == null) {
+                                              return null;
+                                            }
+                                            return state.emailQuotedTextByDeltaId[
+                                                deltaMessageId];
+                                          },
+                                          onMessageLinkTap: _handleLinkTap,
                                         ),
                                         Expanded(
                                           child: Stack(
@@ -6561,10 +6824,8 @@ class _ChatState extends State<Chat> {
                                                                       );
                                                                       bubbleTextChildren.add(
                                                                         Padding(
-                                                                          padding: EdgeInsets.symmetric(
-                                                                            vertical:
-                                                                                spacing.xxs,
-                                                                          ),
+                                                                          padding:
+                                                                              EdgeInsets.zero,
                                                                           child: DecoratedBox(
                                                                             decoration: BoxDecoration(
                                                                               color: context.colorScheme.border,
@@ -6586,12 +6847,37 @@ class _ChatState extends State<Chat> {
                                                                     trimmedRenderedText =
                                                                         rawRenderedText
                                                                             .trim();
+                                                                    final int?
+                                                                    deltaMessageId =
+                                                                        messageModel
+                                                                            .deltaMsgId;
+                                                                    final String?
+                                                                    resolvedHtmlBody =
+                                                                        deltaMessageId ==
+                                                                            null
+                                                                        ? messageModel
+                                                                              .htmlBody
+                                                                        : state.emailFullHtmlByDeltaId[deltaMessageId] ??
+                                                                              messageModel.htmlBody;
+                                                                    final String?
+                                                                    resolvedQuotedText =
+                                                                        deltaMessageId ==
+                                                                            null
+                                                                        ? null
+                                                                        : state
+                                                                              .emailQuotedTextByDeltaId[deltaMessageId];
                                                                     final String?
                                                                     normalizedHtmlBody =
                                                                         HtmlContentCodec.normalizeHtml(
-                                                                          messageModel
-                                                                              .htmlBody,
+                                                                          resolvedHtmlBody,
                                                                         );
+                                                                    final bool
+                                                                    hasStoredHtmlBody =
+                                                                        messageModel
+                                                                            .htmlBody
+                                                                            ?.trim()
+                                                                            .isNotEmpty ==
+                                                                        true;
                                                                     final String?
                                                                     normalizedHtmlText =
                                                                         normalizedHtmlBody ==
@@ -6600,6 +6886,13 @@ class _ChatState extends State<Chat> {
                                                                         : HtmlContentCodec.toPlainText(
                                                                             normalizedHtmlBody,
                                                                           ).trim();
+                                                                    final String?
+                                                                    normalizedQuotedText =
+                                                                        resolvedQuotedText?.trim().isNotEmpty ==
+                                                                            true
+                                                                        ? resolvedQuotedText!
+                                                                              .trim()
+                                                                        : null;
                                                                     final bool
                                                                     isPlainTextHtml =
                                                                         normalizedHtmlBody !=
@@ -6944,8 +7237,18 @@ class _ChatState extends State<Chat> {
                                                                         (normalizedHtmlText?.isNotEmpty ==
                                                                                     true
                                                                                 ? normalizedHtmlText!
+                                                                                : normalizedQuotedText?.isNotEmpty ==
+                                                                                      true
+                                                                                ? normalizedQuotedText!
                                                                                 : messageText)
                                                                             .trim();
+                                                                    final bool
+                                                                    hasRemoteHtmlImages =
+                                                                        normalizedHtmlBody !=
+                                                                            null &&
+                                                                        HtmlContentCodec.containsRemoteImages(
+                                                                          normalizedHtmlBody,
+                                                                        );
                                                                     final String
                                                                     collapsedEmailPreviewText =
                                                                         _collapsedEmailPreviewText(
@@ -7073,7 +7376,6 @@ class _ChatState extends State<Chat> {
                                                                             null &&
                                                                         shouldRenderTextContent &&
                                                                         !shouldPreferPlainTextHtml) {
-                                                                      // Render HTML content inside the normal bubble shell.
                                                                       final shouldLoadImages =
                                                                           context
                                                                               .watch<
@@ -7086,35 +7388,88 @@ class _ChatState extends State<Chat> {
                                                                               _loadedEmailImageMessageIds.contains(
                                                                                 messageModel.id,
                                                                               ));
-                                                                      bubbleTextChildren.add(
-                                                                        _MessageHtmlBody(
-                                                                          key: ValueKey(
-                                                                            bubbleContentKey,
+                                                                      final VoidCallback?
+                                                                      onLoadRequested =
+                                                                          messageModel.id ==
+                                                                              null
+                                                                          ? null
+                                                                          : () => _handleEmailImagesApproved(
+                                                                              messageModel.id!,
+                                                                            );
+                                                                      final String?
+                                                                      emailFallbackText =
+                                                                          normalizedHtmlText?.isNotEmpty ==
+                                                                              true
+                                                                          ? normalizedHtmlText
+                                                                          : normalizedQuotedText;
+                                                                      final bool
+                                                                      shouldRenderHtmlBody =
+                                                                          hasStoredHtmlBody;
+                                                                      final bool
+                                                                      shouldShowImageGallery =
+                                                                          hasRemoteHtmlImages &&
+                                                                          shouldRenderHtmlBody;
+                                                                      if (emailFallbackText !=
+                                                                              null &&
+                                                                          emailFallbackText
+                                                                              .isNotEmpty) {
+                                                                        bubbleTextChildren.add(
+                                                                          _ParsedMessageBody(
+                                                                            contentKey:
+                                                                                '${bubbleContentKey}_email',
+                                                                            text:
+                                                                                emailFallbackText,
+                                                                            baseStyle:
+                                                                                baseTextStyle,
+                                                                            linkStyle:
+                                                                                linkStyle,
+                                                                            details:
+                                                                                const [],
+                                                                            onLinkTap:
+                                                                                _handleLinkTap,
+                                                                            onLinkLongPress:
+                                                                                _handleLinkTap,
                                                                           ),
-                                                                          html:
-                                                                              normalizedHtmlBody,
-                                                                          textStyle:
-                                                                              baseTextStyle,
-                                                                          textColor:
-                                                                              textColor,
-                                                                          linkColor:
-                                                                              self
-                                                                              ? colors.primaryForeground
-                                                                              : colors.primary,
-                                                                          shouldLoadImages:
-                                                                              shouldLoadImages,
-                                                                          onLoadRequested:
-                                                                              messageModel.id ==
-                                                                                  null
-                                                                              ? null
-                                                                              : () => _handleEmailImagesApproved(
-                                                                                  messageModel.id!,
-                                                                                ),
-                                                                          onLinkTap:
-                                                                              _handleLinkTap,
-                                                                        ),
-                                                                      );
-                                                                      // Add details row below HTML content
+                                                                        );
+                                                                      }
+                                                                      if (shouldRenderHtmlBody) {
+                                                                        bubbleTextChildren.add(
+                                                                          _MessageHtmlBody(
+                                                                            key: ValueKey(
+                                                                              bubbleContentKey,
+                                                                            ),
+                                                                            html:
+                                                                                normalizedHtmlBody,
+                                                                            textStyle:
+                                                                                baseTextStyle,
+                                                                            textColor:
+                                                                                textColor,
+                                                                            linkColor:
+                                                                                self
+                                                                                ? colors.primaryForeground
+                                                                                : colors.primary,
+                                                                            shouldLoadImages:
+                                                                                shouldLoadImages,
+                                                                            onLinkTap:
+                                                                                _handleLinkTap,
+                                                                          ),
+                                                                        );
+                                                                      }
+                                                                      if (shouldShowImageGallery &&
+                                                                          !shouldLoadImages &&
+                                                                          onLoadRequested !=
+                                                                              null) {
+                                                                        bubbleTextChildren.add(
+                                                                          Padding(
+                                                                            padding: EdgeInsets.only(
+                                                                              top: context.spacing.xs,
+                                                                            ),
+                                                                            child: EmailImagePlaceholder(
+                                                                              onTap: onLoadRequested,
+                                                                            ),
+                                                                          ),
+                                                                        );
+                                                                      }
                                                                       bubbleTextChildren.add(
                                                                         Padding(
                                                                           padding: EdgeInsets.only(
@@ -7966,7 +8321,6 @@ class _ChatState extends State<Chat> {
                                                                           );
                                                                     };
                                                                   }
-
                                                                   final Widget
                                                                   actionBar = _MessageActionBar(
                                                                     onReply:
@@ -9350,12 +9704,28 @@ class _ChatState extends State<Chat> {
   }
 
   void _syncChatRoute() {
-    final nextRoute = context.read<ChatsCubit>().state.openChatRoute;
+    final storedRoute = context.read<ChatsCubit>().state.openChatRoute;
+    final nextRoute = _resolvedStoredChatRoute(
+      route: storedRoute,
+      state: context.read<ChatBloc>().state,
+    );
     if (nextRoute == _chatRoute) {
+      if (nextRoute != storedRoute) {
+        context.read<ChatsCubit>().setOpenChatRoute(route: nextRoute);
+      }
       return;
     }
     _setChatRoute(nextRoute);
   }
+
+  ChatRouteIndex _resolvedStoredChatRoute({
+    required ChatRouteIndex route,
+    required ChatState state,
+  }) => resolveStoredChatRoute(
+    route: route,
+    hasChat: state.chat != null,
+    hasFocusedMessage: state.focused != null,
+  );
 
   void _handleChatRouteHistoryRemoved() {
     if (_chatRouteHistoryEntry == null) {
@@ -9659,6 +10029,10 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
     required this.onApproveAttachment,
+    required this.previewMessageForItem,
+    required this.resolvedHtmlBodyFor,
+    required this.resolvedQuotedTextFor,
+    required this.onMessageLinkTap,
   });
 
   final chat_models.Chat? chat;
@@ -9690,6 +10064,10 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     String? senderEmail,
   })
   onApproveAttachment;
+  final ChatMessage? Function(PinnedMessageItem item) previewMessageForItem;
+  final String? Function(Message message) resolvedHtmlBodyFor;
+  final String? Function(Message message) resolvedQuotedTextFor;
+  final ValueChanged<String> onMessageLinkTap;
 
   @override
   State<_ChatPinnedMessagesPanel> createState() =>
@@ -9764,13 +10142,12 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
               ],
             ),
           )
-        : ListView.separated(
+        : ListView.builder(
             padding: EdgeInsets.zero,
             shrinkWrap: true,
             primary: false,
             physics: const ClampingScrollPhysics(),
             itemCount: widget.pinnedMessages.length,
-            separatorBuilder: (_, _) => const AxiListDivider(),
             itemBuilder: (context, index) {
               final item = widget.pinnedMessages[index];
               return _PinnedMessageTile(
@@ -9790,6 +10167,10 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
                 isOneTimeAttachmentAllowed: widget.isOneTimeAttachmentAllowed,
                 shouldAllowAttachment: widget.shouldAllowAttachment,
                 onApproveAttachment: widget.onApproveAttachment,
+                previewMessageForItem: widget.previewMessageForItem,
+                resolvedHtmlBodyFor: widget.resolvedHtmlBodyFor,
+                resolvedQuotedTextFor: widget.resolvedQuotedTextFor,
+                onMessageLinkTap: widget.onMessageLinkTap,
               );
             },
           );
@@ -9860,6 +10241,10 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
     required this.onApproveAttachment,
+    required this.previewMessageForItem,
+    required this.resolvedHtmlBodyFor,
+    required this.resolvedQuotedTextFor,
+    required this.onMessageLinkTap,
   });
 
   final PinnedMessageItem item;
@@ -9887,6 +10272,10 @@ class _PinnedMessageTile extends StatelessWidget {
     String? senderEmail,
   })
   onApproveAttachment;
+  final ChatMessage? Function(PinnedMessageItem item) previewMessageForItem;
+  final String? Function(Message message) resolvedHtmlBodyFor;
+  final String? Function(Message message) resolvedQuotedTextFor;
+  final ValueChanged<String> onMessageLinkTap;
 
   Message? resolveMessageForPin() {
     final message = item.message;
@@ -10019,10 +10408,50 @@ class _PinnedMessageTile extends StatelessWidget {
     return safeLabel.isNotEmpty ? safeLabel : fallback;
   }
 
+  String resolveQuotedSenderLabel(
+    BuildContext context,
+    Message quotedMessage,
+  ) {
+    final quotedIsSelf = isSelfMessage(
+      message: quotedMessage,
+      accountJid: accountJid,
+    );
+    if (quotedIsSelf) {
+      return context.l10n.chatSenderYou;
+    }
+    return resolveSenderLabel(
+      context: context,
+      message: quotedMessage,
+      isSelf: false,
+    );
+  }
+
+  String resolveForwardedSenderLabel({
+    required BuildContext context,
+    required Message? message,
+    required bool isSelf,
+    required String? forwardedFromJid,
+  }) {
+    final source = forwardedFromJid?.trim();
+    if (source != null && source.isNotEmpty) {
+      return source;
+    }
+    if (isSelf) {
+      return context.l10n.chatSenderYou;
+    }
+    return resolveSenderLabel(
+      context: context,
+      message: message,
+      isSelf: false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final colors = context.colorScheme;
+    final chatTokens = context.chatTheme;
+    final spacing = context.spacing;
     final message = item.message;
     final messageText = message?.plainText.trim();
     final hasMessageText = messageText?.isNotEmpty == true;
@@ -10059,40 +10488,12 @@ class _PinnedMessageTile extends StatelessWidget {
         !hasAttachments &&
         !hasCalendarTask &&
         !hasCriticalPath;
-    final messageStyle = context.textTheme.p.copyWith(color: colors.foreground);
-    final messageWidget = showLoading
-        ? Align(
-            alignment: Alignment.centerLeft,
-            child: AxiProgressIndicator(color: colors.mutedForeground),
-          )
-        : showMessageText
-        ? Text(messageText ?? _emptyText, style: messageStyle)
-        : showMissing
-        ? Text(
-            l10n.chatPinnedMissingMessage,
-            style: context.textTheme.muted.copyWith(
-              color: colors.mutedForeground,
-            ),
-          )
-        : null;
     final messageForPin = resolveMessageForPin();
-    final unpinButton = canTogglePins && messageForPin != null
-        ? AxiTooltip(
-            builder: (context) => Text(l10n.chatUnpinMessage),
-            child: AxiIconButton.ghost(
-              onPressed: () => context.read<ChatBloc>().add(
-                ChatMessagePinRequested(
-                  message: messageForPin,
-                  pin: false,
-                  chat: chat,
-                  roomState: roomState,
-                ),
-              ),
-              iconData: LucideIcons.pinOff,
-              iconSize: context.sizing.menuItemIconSize,
-            ),
-          )
-        : null;
+    final stanzaId = item.messageStanzaId.trim();
+    final VoidCallback? onPressed = stanzaId.isEmpty
+        ? null
+        : () =>
+              context.read<ChatBloc>().add(ChatPinnedMessageSelected(stanzaId));
     final isSelf = message == null
         ? false
         : isSelfMessage(message: message, accountJid: accountJid);
@@ -10101,34 +10502,44 @@ class _PinnedMessageTile extends StatelessWidget {
       message: message,
       isSelf: isSelf,
     );
-    final spacing = context.spacing;
-    final senderLabelStyle = context.textTheme.small.copyWith(
-      color: colors.mutedForeground,
-      fontWeight: FontWeight.w600,
-    );
-    final contentChildren = <Widget>[
-      Row(
-        children: [
-          Expanded(
-            child: Text(
-              senderLabel,
-              maxLines: _pinnedSenderMaxLines,
-              overflow: TextOverflow.ellipsis,
-              style: senderLabelStyle,
-            ),
+    final bubbleColor = isSelf ? colors.primary : colors.card;
+    final borderColor = isSelf ? Colors.transparent : chatTokens.recvEdge;
+    final textColor = isSelf ? colors.primaryForeground : colors.foreground;
+    final detailColor = isSelf
+        ? colors.primaryForeground
+        : colors.mutedForeground;
+    final contentChildren = <Widget>[];
+    if (showLoading) {
+      contentChildren.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: AxiProgressIndicator(color: detailColor),
+        ),
+      );
+    } else if (showMessageText) {
+      contentChildren.add(
+        Text(
+          messageText ?? _emptyText,
+          style: context.textTheme.small.copyWith(
+            color: textColor,
+            height: 1.3,
           ),
-          ?unpinButton,
-        ],
-      ),
-      if (messageWidget != null) ...[
-        SizedBox(height: spacing.s),
-        messageWidget,
-      ],
-    ];
+        ),
+      );
+    } else if (showMissing) {
+      contentChildren.add(
+        Text(
+          l10n.chatPinnedMissingMessage,
+          style: context.textTheme.muted.copyWith(color: detailColor),
+        ),
+      );
+    }
     if (hasCalendarTask) {
-      final bool taskReadOnly =
+      final taskReadOnly =
           message?.calendarTaskIcsReadOnly ?? _calendarTaskIcsReadOnlyFallback;
-      contentChildren.add(SizedBox(height: spacing.s));
+      if (contentChildren.isNotEmpty) {
+        contentChildren.add(SizedBox(height: spacing.s));
+      }
       contentChildren.add(
         canShowCalendarTasks
             ? ChatCalendarTaskCard(
@@ -10149,7 +10560,9 @@ class _PinnedMessageTile extends StatelessWidget {
       );
     }
     if (criticalPathFragment != null) {
-      contentChildren.add(SizedBox(height: spacing.s));
+      if (contentChildren.isNotEmpty) {
+        contentChildren.add(SizedBox(height: spacing.s));
+      }
       contentChildren.add(
         ChatCalendarCriticalPathCard(
           path: criticalPathFragment.path,
@@ -10194,7 +10607,7 @@ class _PinnedMessageTile extends StatelessWidget {
         final metadataReloadDelegate = AttachmentMetadataReloadDelegate(
           () => context.read<ChatBloc>().reloadFileMetadata(attachmentId),
         );
-        if (index > 0) {
+        if (index > 0 || contentChildren.isNotEmpty) {
           contentChildren.add(SizedBox(height: spacing.s));
         }
         contentChildren.add(
@@ -10221,10 +10634,105 @@ class _PinnedMessageTile extends StatelessWidget {
         );
       }
     }
-    return ListItemPadding(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: contentChildren,
+    final timestamp = (message?.timestamp ?? item.pinnedAt).toLocal();
+    final timeLabel =
+        '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}';
+    if (contentChildren.isNotEmpty) {
+      contentChildren.add(SizedBox(height: spacing.s));
+    }
+    final Widget? unpinAction = canTogglePins && messageForPin != null
+        ? AxiIconButton.ghost(
+            onPressed: () => context.read<ChatBloc>().add(
+              ChatMessagePinRequested(
+                message: messageForPin,
+                pin: false,
+                chat: chat,
+                roomState: roomState,
+              ),
+            ),
+            iconData: LucideIcons.pinOff,
+            tooltip: l10n.chatUnpinMessage,
+            color: detailColor,
+            backgroundColor: Colors.transparent,
+            iconSize: context.sizing.menuItemIconSize,
+            buttonSize: context.sizing.menuItemHeight,
+            tapTargetSize: context.sizing.menuItemHeight,
+          )
+        : null;
+    contentChildren.add(
+      Align(
+        alignment: Alignment.centerRight,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              timeLabel,
+              style: context.textTheme.muted.copyWith(color: detailColor),
+            ),
+            if (unpinAction != null) SizedBox(width: spacing.xs),
+            ?unpinAction,
+          ],
+        ),
+      ),
+    );
+    final bubble = ChatBubbleSurface(
+      isSelf: isSelf,
+      backgroundColor: bubbleColor,
+      borderColor: borderColor,
+      borderRadius: _bubbleBorderRadius(
+        baseRadius: context.radius,
+        isSelf: isSelf,
+        chainedPrevious: false,
+        chainedNext: false,
+      ),
+      shadowOpacity: 0,
+      shadows: const <BoxShadow>[],
+      bubbleWidthFraction: 1.0,
+      cornerClearance: _bubbleCornerClearance(context.radius),
+      body: Padding(
+        padding: _bubblePadding(context),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: contentChildren,
+        ),
+      ),
+    );
+    final bubblePreview = MouseRegion(
+      cursor: onPressed == null
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onPressed,
+        child: bubble,
+      ),
+    );
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.m,
+        vertical: spacing.xs,
+      ),
+      child: Align(
+        alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: isSelf
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
+            children: [
+              _SenderLabelBlock(
+                primaryLabel: senderLabel,
+                secondaryLabel: null,
+                isSelf: isSelf,
+                leftInset: 0.0,
+              ),
+              bubblePreview,
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -10337,10 +10845,44 @@ class _ChatSearchOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return _ChatSubrouteShell(
+      child: Column(
+        children: [
+          panel,
+          const Expanded(child: IgnorePointer(child: SizedBox.expand())),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatSubrouteShell extends StatelessWidget {
+  const _ChatSubrouteShell({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        panel,
-        const Expanded(child: IgnorePointer(child: SizedBox.expand())),
+        Padding(
+          padding: EdgeInsets.all(spacing.m),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AxiIconButton.ghost(
+              iconData: LucideIcons.arrowLeft,
+              tooltip: context.l10n.commonBack,
+              onPressed: () {
+                context.read<ChatsCubit>().setOpenChatRoute(
+                  route: ChatRouteIndex.main,
+                );
+              },
+            ),
+          ),
+        ),
+        Expanded(child: child),
       ],
     );
   }
@@ -10371,14 +10913,16 @@ class _ChatSettingsOverlay extends StatelessWidget {
       color: context.colorScheme.background,
       child: SafeArea(
         top: false,
-        child: _ChatSettingsButtons(
-          state: state,
-          onViewFilterChanged: onViewFilterChanged,
-          onToggleNotifications: onToggleNotifications,
-          onSpamToggle: onSpamToggle,
-          isChatBlocked: isChatBlocked,
-          blocklistEntry: blocklistEntry,
-          blockAddress: blockAddress,
+        child: _ChatSubrouteShell(
+          child: _ChatSettingsButtons(
+            state: state,
+            onViewFilterChanged: onViewFilterChanged,
+            onToggleNotifications: onToggleNotifications,
+            onSpamToggle: onSpamToggle,
+            isChatBlocked: isChatBlocked,
+            blocklistEntry: blocklistEntry,
+            blockAddress: blockAddress,
+          ),
         ),
       ),
     );
@@ -10417,9 +10961,11 @@ class _ChatGalleryOverlay extends StatelessWidget {
         color: context.colorScheme.background,
         child: SafeArea(
           top: false,
-          child: AttachmentGalleryView(
-            chatOverride: currentChat,
-            showChatLabel: false,
+          child: _ChatSubrouteShell(
+            child: AttachmentGalleryView(
+              chatOverride: currentChat,
+              showChatLabel: false,
+            ),
           ),
         ),
       ),
@@ -10447,9 +10993,11 @@ class _ChatCalendarOverlay extends StatelessWidget {
       color: context.colorScheme.background,
       child: SafeArea(
         top: false,
-        child: _ChatCalendarPanel(
-          chat: currentChat,
-          calendarAvailable: calendarAvailable,
+        child: _ChatSubrouteShell(
+          child: _ChatCalendarPanel(
+            chat: currentChat,
+            calendarAvailable: calendarAvailable,
+          ),
         ),
       ),
     );
@@ -11081,6 +11629,7 @@ class _RecipientAvatarBadge extends StatelessWidget {
           padding: EdgeInsets.all(borderWidth),
           child: AxiAvatar(
             jid: chat.avatarIdentifier,
+            colorSeed: chat.avatarColorSeed,
             size: recipientAvatarSize - (borderWidth * 2),
             avatarPath: avatarImagePath,
           ),
@@ -11694,6 +12243,16 @@ class _ComposerNotice extends StatelessWidget {
                 actionLabel,
                 style: context.textTheme.small.copyWith(color: foreground),
               ),
+            ),
+          if (onDismiss != null)
+            AxiIconButton.ghost(
+              iconData: LucideIcons.x,
+              tooltip: context.l10n.commonClose,
+              onPressed: onDismiss,
+              color: foreground,
+              iconSize: sizing.menuItemIconSize,
+              buttonSize: sizing.menuItemHeight,
+              tapTargetSize: sizing.menuItemHeight,
             ),
         ],
       ),
@@ -12617,6 +13176,33 @@ class _MessageActionBar extends StatelessWidget {
         label: l10n.chatActionForward,
         onPressed: onForward,
       ),
+      if (onResend != null)
+        ContextActionButton(
+          icon: Icon(LucideIcons.repeat, size: iconSize),
+          label: l10n.chatActionResend,
+          onPressed: onResend,
+        ),
+      if (onEdit != null)
+        ContextActionButton(
+          icon: Icon(LucideIcons.pencilLine, size: iconSize),
+          label: l10n.chatActionEdit,
+          onPressed: onEdit,
+        ),
+      if (onRevokeInvite != null)
+        ContextActionButton(
+          icon: Icon(LucideIcons.ban, size: iconSize),
+          label: l10n.chatActionRevoke,
+          onPressed: onRevokeInvite,
+        ),
+      if (onPinToggle != null)
+        ContextActionButton(
+          icon: Icon(
+            isPinned ? LucideIcons.pinOff : LucideIcons.pin,
+            size: iconSize,
+          ),
+          label: isPinned ? l10n.chatUnpinMessage : l10n.chatPinMessage,
+          onPressed: onPinToggle,
+        ),
       ContextActionButton(
         icon: Icon(LucideIcons.copy, size: iconSize),
         label: l10n.chatActionCopy,
@@ -12639,6 +13225,12 @@ class _MessageActionBar extends StatelessWidget {
         label: l10n.chatActionDetails,
         onPressed: onDetails,
       ),
+      if (onSelect != null)
+        ContextActionButton(
+          icon: Icon(LucideIcons.squareCheck, size: iconSize),
+          label: l10n.chatActionSelect,
+          onPressed: onSelect,
+        ),
     ];
     return Wrap(
       spacing: scaled(spacing.s),
@@ -14315,7 +14907,6 @@ class _MessageHtmlBody extends StatefulWidget {
     required this.linkColor,
     required this.shouldLoadImages,
     required this.onLinkTap,
-    this.onLoadRequested,
   });
 
   final String html;
@@ -14324,35 +14915,12 @@ class _MessageHtmlBody extends StatefulWidget {
   final Color linkColor;
   final bool shouldLoadImages;
   final ValueChanged<String> onLinkTap;
-  final VoidCallback? onLoadRequested;
 
   @override
   State<_MessageHtmlBody> createState() => _MessageHtmlBodyState();
 }
 
 class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
-  String? _sanitizedHtml;
-  String? _rawHtml;
-
-  @override
-  void initState() {
-    super.initState();
-    _refreshSanitizedHtml();
-  }
-
-  @override
-  void didUpdateWidget(covariant _MessageHtmlBody oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.html != widget.html) {
-      _refreshSanitizedHtml();
-    }
-  }
-
-  void _refreshSanitizedHtml() {
-    _rawHtml = widget.html;
-    _sanitizedHtml = HtmlContentCodec.sanitizeHtml(widget.html);
-  }
-
   @override
   Widget build(BuildContext context) {
     final textTheme = context.textTheme;
@@ -14362,25 +14930,16 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
         textTheme.small.fontSize ??
         context.sizing.menuItemIconSize;
     final htmlBody = html_widget.Html(
-      data: _sanitizedHtml ?? _rawHtml ?? '',
-      extensions: [
-        createEmailImageExtension(
-          shouldLoad: widget.shouldLoadImages,
-          onLoadRequested: widget.onLoadRequested,
-        ),
-      ],
-      style: {
-        'body': html_widget.Style(
-          margin: html_widget.Margins.zero,
-          padding: html_widget.HtmlPaddings.zero,
-          color: widget.textColor,
-          fontSize: html_widget.FontSize(fallbackFontSize),
-        ),
-        'a': html_widget.Style(
-          color: widget.linkColor,
-          textDecoration: TextDecoration.underline,
-        ),
-      },
+      data: widget.html,
+      shrinkWrap: false,
+      extensions: createEmailHtmlExtensions(
+        shouldLoadImages: widget.shouldLoadImages,
+      ),
+      style: createEmailHtmlStyles(
+        fallbackFontSize: fallbackFontSize,
+        textColor: widget.textColor,
+        linkColor: widget.linkColor,
+      ),
       onLinkTap: (url, _, _) {
         if (url == null) return;
         widget.onLinkTap(url);

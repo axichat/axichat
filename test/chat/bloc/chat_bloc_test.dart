@@ -79,6 +79,11 @@ void _mockEmailSync(MockEmailService service) {
       attachment: any(named: 'attachment'),
     ),
   ).thenAnswer((_) async => 1);
+  when(
+    () => service.shareContextForMessage(any()),
+  ).thenAnswer((_) async => null);
+  when(() => service.getMessageFullHtml(any())).thenAnswer((_) async => null);
+  when(() => service.getQuotedMessage(any())).thenAnswer((_) async => null);
 }
 
 void main() {
@@ -96,6 +101,7 @@ void main() {
     registerFallbackValue(MessageTimelineFilter.allWithContact);
     registerFallbackValue(OccupantAffiliation.none);
     registerFallbackValue(OccupantRole.none);
+    registerFallbackValue(fallbackMessage);
     registerFallbackValue(
       Chat(
         jid: 'fallback@axi.im',
@@ -195,6 +201,9 @@ void main() {
       ),
     ).thenAnswer((_) async => xmpp.XmppPeerCapabilities(features: const []));
     when(
+      () => messageService.loadMessageByStanzaId(any()),
+    ).thenAnswer((_) async => null);
+    when(
       () => messageService.pinnedMessagesStream(any()),
     ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
     when(
@@ -210,6 +219,18 @@ void main() {
 
     when(() => chatsService.myJid).thenReturn('self@axi.im');
     when(() => messageService.database).thenAnswer((_) async => mockDatabase);
+    when(
+      () => mockDatabase.countChatMessagesThrough(
+        any(),
+        throughTimestamp: any(named: 'throughTimestamp'),
+        throughStanzaId: any(named: 'throughStanzaId'),
+        throughDeltaMsgId: any(named: 'throughDeltaMsgId'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) async => 0);
+    when(
+      () => mockDatabase.getPinnedMessages(any()),
+    ).thenAnswer((_) async => const <PinnedMessageEntry>[]);
     when(
       () => mockDatabase.getMessageAttachments(any()),
     ).thenAnswer((_) async => const <MessageAttachmentData>[]);
@@ -1236,6 +1257,173 @@ void main() {
 
     await bloc.close();
   });
+
+  test(
+    'pinned message selection requests scroll when target is already loaded',
+    () async {
+      final message = Message(
+        stanzaID: 'loaded-pin',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        timestamp: DateTime(2026, 1, 2, 12),
+        body: 'Loaded pinned message',
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      messageStreamController.add([message]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(const ChatPinnedMessageSelected('loaded-pin'));
+      await _pumpBloc();
+
+      expect(bloc.state.scrollTargetMessageId, 'loaded-pin');
+      expect(bloc.state.scrollTargetRequestId, 1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'pinned message selection backfills email history and requests scroll',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 4,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+      );
+      final newest = Message(
+        stanzaID: 'email-newest',
+        senderJid: emailChat.jid,
+        chatJid: emailChat.jid,
+        timestamp: DateTime(2026, 1, 3, 10),
+        body: 'Newest email message',
+      );
+      final target = Message(
+        stanzaID: 'email-target',
+        senderJid: emailChat.jid,
+        chatJid: emailChat.jid,
+        deltaMsgId: 25,
+        timestamp: DateTime(2026, 1, 1, 9),
+        body: 'Older pinned email message',
+      );
+
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => emailService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+      when(
+        () => emailService.backfillChatHistory(
+          chat: any(named: 'chat'),
+          desiredWindow: any(named: 'desiredWindow'),
+          beforeMessageId: any(named: 'beforeMessageId'),
+          beforeTimestamp: any(named: 'beforeTimestamp'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) async {});
+
+      var targetLookupCount = 0;
+      when(() => messageService.loadMessageByStanzaId(any())).thenAnswer((
+        invocation,
+      ) async {
+        final messageId = invocation.positionalArguments.first as String;
+        if (messageId != target.stanzaID) {
+          return null;
+        }
+        targetLookupCount += 1;
+        return targetLookupCount >= 2 ? target : null;
+      });
+
+      var countCalls = 0;
+      when(
+        () => messageService.countLocalMessages(
+          jid: any(named: 'jid'),
+          filter: any(named: 'filter'),
+          includePseudoMessages: any(named: 'includePseudoMessages'),
+        ),
+      ).thenAnswer((_) async {
+        countCalls += 1;
+        return countCalls >= 2 ? 2 : 1;
+      });
+      when(
+        () => mockDatabase.countChatMessagesThrough(
+          emailChat.jid,
+          throughTimestamp: target.timestamp!,
+          throughStanzaId: target.stanzaID,
+          throughDeltaMsgId: target.deltaMsgId,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).thenAnswer((_) async => 75);
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      emailMessageStreamController.add([newest]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(const ChatPinnedMessageSelected('email-target'));
+      await _pumpBloc();
+
+      verify(
+        () => emailService.backfillChatHistory(
+          chat: emailChat,
+          desiredWindow: any(named: 'desiredWindow'),
+          beforeMessageId: any(named: 'beforeMessageId'),
+          beforeTimestamp: any(named: 'beforeTimestamp'),
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).called(1);
+      verify(
+        () => emailService.messageStreamForChat(
+          emailChat.jid,
+          start: any(named: 'start'),
+          end: 75,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).called(1);
+
+      emailMessageStreamController.add([newest, target]);
+      await _pumpBloc();
+
+      expect(bloc.state.scrollTargetMessageId, 'email-target');
+      expect(bloc.state.scrollTargetRequestId, 1);
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
 
   test('catch-up paginates MAM when reconnecting after gap', () async {
     final xmppService = MockXmppService();

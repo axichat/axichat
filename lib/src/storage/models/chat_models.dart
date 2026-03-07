@@ -619,6 +619,26 @@ extension ChatAvatarExtension on Chat {
     }
     return remoteJid;
   }
+
+  String get avatarColorSeed {
+    final address = emailAddress?.trim();
+    if (address?.isNotEmpty == true) {
+      return address!;
+    }
+    final fromAddress = emailFromAddress?.trim();
+    if (fromAddress?.isNotEmpty == true) {
+      return fromAddress!;
+    }
+    final contact = contactJid?.trim();
+    if (contact?.isNotEmpty == true) {
+      return contact!;
+    }
+    final remote = remoteJid.trim();
+    if (remote.isNotEmpty) {
+      return remote;
+    }
+    return avatarIdentifier;
+  }
 }
 
 extension ChatLabelExtension on Chat {

@@ -2384,12 +2384,23 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   /// Gets raw MIME headers by message ID from core.
-  Future<String?> getMessageMimeHeaders(int messageId) async {
+  Future<String?> getMessageMimeHeaders(int messageId, {int? accountId}) async {
     if (messageId <= _deltaMessageIdUnset) return null;
     await _ensureContextReady();
-    final context = _context;
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
     if (context == null) return null;
     return context.getMessageMimeHeaders(messageId);
+  }
+
+  /// Gets HTML synthesized from the stored raw MIME for a message.
+  Future<String?> getMessageFullHtml(int messageId, {int? accountId}) async {
+    if (messageId <= _deltaMessageIdUnset) return null;
+    await _ensureContextReady();
+    final session = await _ensureSession(accountId: accountId);
+    final context = session?.context;
+    if (context == null) return null;
+    return context.getMessageFullHtml(messageId);
   }
 
   /// Gets contact IDs from core.

@@ -94,7 +94,7 @@ class HtmlContentCodec {
     'mailto',
     'xmpp',
   };
-  static const Set<String> _sanitizedImageSchemes = <String>{'https'};
+  static const Set<String> _sanitizedImageSchemes = <String>{'https', 'data'};
   static const String _hrefAttribute = 'href';
   static const String _srcAttribute = 'src';
   static const String _titleAttribute = 'title';
@@ -103,7 +103,7 @@ class HtmlContentCodec {
   static const String _heightAttribute = 'height';
   static const String _colspanAttribute = 'colspan';
   static const String _rowspanAttribute = 'rowspan';
-  static const int _maxHtmlInputLength = 200000;
+  static const int _maxHtmlInputLength = 8000000;
   static const int _maxHtmlNodeCount = 5000;
   static const int _maxHtmlDepth = 40;
   static const Duration _maxHtmlParseDuration = Duration(milliseconds: 100);
@@ -201,6 +201,57 @@ class HtmlContentCodec {
     }
   }
 
+  static List<String> imageSources(String html) {
+    try {
+      final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
+      final budget = _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      );
+      final sources = <String>[];
+      final seenSources = <String>{};
+      _collectImageSources(fragment.nodes, sources, seenSources, budget, 0);
+      return sources;
+    } on Exception {
+      return const <String>[];
+    }
+  }
+
+  static bool containsRemoteImages(String html) {
+    for (final source in imageSources(html)) {
+      final uri = Uri.tryParse(source);
+      final scheme = uri?.scheme.trim().toLowerCase();
+      if (scheme == 'https') return true;
+    }
+    return false;
+  }
+
+  static String prepareEmailHtmlForWebView(
+    String html, {
+    required bool allowRemoteImages,
+  }) {
+    try {
+      final document = html_parser.parse(_truncateHtmlInput(html));
+      for (final script in document.querySelectorAll('script')) {
+        script.remove();
+      }
+      if (!allowRemoteImages) {
+        for (final image in document.querySelectorAll('img')) {
+          final source = image.attributes[_srcAttribute];
+          final uri = Uri.tryParse(source?.trim() ?? '');
+          final scheme = uri?.scheme.trim().toLowerCase();
+          if (scheme == 'https') {
+            image.remove();
+          }
+        }
+      }
+      return document.outerHtml;
+    } on Exception {
+      return html;
+    }
+  }
+
   static String? toXhtml(String html) {
     try {
       final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
@@ -253,6 +304,38 @@ class HtmlContentCodec {
       }
       if (node.nodes.isNotEmpty) {
         _appendPlainText(buffer, node.nodes, budget, depth + 1);
+      }
+    }
+  }
+
+  static void _collectImageSources(
+    List<dom.Node> nodes,
+    List<String> sources,
+    Set<String> seenSources,
+    _HtmlNodeBudget budget,
+    int depth,
+  ) {
+    for (final node in nodes) {
+      if (!budget.allow(depth)) {
+        return;
+      }
+      if (node is dom.Element) {
+        final tag = (node.localName ?? '').toLowerCase();
+        if (tag == 'img') {
+          final source = node.attributes[_srcAttribute]?.trim();
+          if (source != null && source.isNotEmpty && seenSources.add(source)) {
+            sources.add(source);
+          }
+        }
+      }
+      if (node.nodes.isNotEmpty) {
+        _collectImageSources(
+          node.nodes,
+          sources,
+          seenSources,
+          budget,
+          depth + 1,
+        );
       }
     }
   }
@@ -424,6 +507,19 @@ class HtmlContentCodec {
     if (uri == null) return null;
     final scheme = uri.scheme.toLowerCase();
     if (!allowedSchemes.contains(scheme)) return null;
+    if (scheme == 'data') {
+      UriData? data;
+      try {
+        data = uri.data;
+      } on FormatException {
+        return null;
+      }
+      final mimeType = data?.mimeType.trim().toLowerCase() ?? '';
+      if (!mimeType.startsWith('image/')) {
+        return null;
+      }
+      return trimmed;
+    }
     if (uri.userInfo.trim().isNotEmpty) return null;
     if (uri.host.trim().isEmpty &&
         !_sanitizedHostOptionalSchemes.contains(scheme)) {

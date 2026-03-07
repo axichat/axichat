@@ -2139,17 +2139,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         'Try tapping this one!\n\n'
         'If you find any bugs, please report them at '
         'https://github.com/axichat/axichat/issues';
-    const welcomeHtmlBody =
-        '<p>Welcome to Axichat!</p>'
-        '<p>It is still under active development and per-user storage limits '
-        'are very low, so avoid relying on it for important business at the '
-        'moment.</p>'
-        '<p>Many features are available by tapping on message bubbles; '
-        '<strong>Try tapping this one!</strong></p>'
-        '<p>If you find any bugs, please report them at '
-        '<a href="https://github.com/axichat/axichat/issues">'
-        'https://github.com/axichat/axichat/issues'
-        '</a></p>';
     try {
       final db = await _xmppService.database;
       final existing = await db.getMessageByStanzaID(welcomeStanzaId);
@@ -2160,14 +2149,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             senderJid: welcomeChatJid,
             chatJid: welcomeChatJid,
             body: welcomeBody,
-            htmlBody: welcomeHtmlBody,
             timestamp: DateTime.timestamp(),
             acked: true,
             received: true,
           ),
         );
       } else if (existing.body != welcomeBody ||
-          existing.htmlBody != welcomeHtmlBody ||
+          existing.htmlBody != null ||
           existing.senderJid != welcomeChatJid ||
           existing.chatJid != welcomeChatJid) {
         await db.updateMessage(
@@ -2175,7 +2163,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             senderJid: welcomeChatJid,
             chatJid: welcomeChatJid,
             body: welcomeBody,
-            htmlBody: welcomeHtmlBody,
+            htmlBody: null,
             acked: true,
             received: true,
           ),

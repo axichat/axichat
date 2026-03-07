@@ -4806,11 +4806,25 @@ class EmailService {
   }
 
   /// Gets raw RFC822 headers for a message, if available.
-  Future<String?> getMessageRawHeaders(int messageId) async {
+  Future<String?> getMessageRawHeaders(int messageId, {int? accountId}) async {
     if (messageId <= _deltaMessageIdUnset) return null;
     await _ensureReady();
-    final headers = await _transport.getMessageMimeHeaders(messageId);
+    final headers = await _transport.getMessageMimeHeaders(
+      messageId,
+      accountId: accountId,
+    );
     return sanitizeRawEmailHeaders(headers);
+  }
+
+  /// Gets HTML synthesized from the stored MIME for a message, if available.
+  Future<String?> getMessageFullHtml(Message message) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) return null;
+    await _ensureReady();
+    return _transport.getMessageFullHtml(
+      deltaId,
+      accountId: message.deltaAccountId,
+    );
   }
 
   /// Gets a debug dump for a stored email message and the current Delta view.
@@ -4826,11 +4840,19 @@ class EmailService {
       deltaId,
       accountId: message.deltaAccountId,
     );
-    final storedMimeHeaders = await _transport.getMessageMimeHeaders(deltaId);
+    final fullHtml = await _transport.getMessageFullHtml(
+      deltaId,
+      accountId: message.deltaAccountId,
+    );
+    final storedMimeHeaders = await _transport.getMessageMimeHeaders(
+      deltaId,
+      accountId: message.deltaAccountId,
+    );
     return _formatMessageDebugDump(
       storedMessage: message,
       deltaMessage: deltaMessage,
       quotedMessage: quotedMessage,
+      fullHtml: fullHtml,
       storedMimeHeaders: storedMimeHeaders,
     );
   }
@@ -4839,6 +4861,7 @@ class EmailService {
     required Message storedMessage,
     required DeltaMessage? deltaMessage,
     required DeltaQuotedMessage? quotedMessage,
+    required String? fullHtml,
     required String? storedMimeHeaders,
   }) {
     final buffer = StringBuffer();
@@ -4915,6 +4938,9 @@ class EmailService {
       writeField('id', quotedMessage.id);
       writeTextField('text', quotedMessage.text);
     }
+
+    writeSection('Delta full html');
+    writeTextField('html', fullHtml);
 
     writeSection('Delta stored mime_headers');
     writeField('present', storedMimeHeaders != null);

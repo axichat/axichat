@@ -65,6 +65,15 @@ final class ChatPinnedMessagesOpened extends ChatEvent {
   List<Object?> get props => [];
 }
 
+final class ChatPinnedMessageSelected extends ChatEvent {
+  const ChatPinnedMessageSelected(this.messageStanzaId);
+
+  final String messageStanzaId;
+
+  @override
+  List<Object?> get props => [messageStanzaId];
+}
+
 final class ChatRoomMembersOpened extends ChatEvent {
   const ChatRoomMembersOpened();
 
@@ -163,16 +172,34 @@ final class ChatMessageFocused extends ChatEvent {
 }
 
 final class ChatEmailHeadersRequested extends ChatEvent {
-  const ChatEmailHeadersRequested(this.deltaMessageId);
+  const ChatEmailHeadersRequested(this.message);
 
-  final int deltaMessageId;
+  final Message message;
 
   @override
-  List<Object?> get props => [deltaMessageId];
+  List<Object?> get props => [message];
 }
 
 final class ChatEmailDebugDumpRequested extends ChatEvent {
   const ChatEmailDebugDumpRequested(this.message);
+
+  final Message message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
+final class ChatEmailFullHtmlRequested extends ChatEvent {
+  const ChatEmailFullHtmlRequested(this.message);
+
+  final Message message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
+final class ChatEmailQuotedTextRequested extends ChatEvent {
+  const ChatEmailQuotedTextRequested(this.message);
 
   final Message message;
 

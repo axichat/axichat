@@ -78,6 +78,7 @@ dependencies:
   video_player: ^2.10.0
   connectivity_plus: ^7.0.0
   flutter_html: ^3.0.0
+  flutter_inappwebview: ^6.1.5
   flutter_local_notifications: ^20.0.0
   flutter_native_timezone:
     path: third_party/flutter_native_timezone

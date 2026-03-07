@@ -964,21 +964,7 @@ void main() {
             'https://github.com/axichat/axichat/issues',
           ),
         );
-        expect(
-          savedMessage.htmlBody,
-          equals(
-            '<p>Welcome to Axichat!</p>'
-            '<p>It is still under active development and per-user storage '
-            'limits are very low, so avoid relying on it for important '
-            'business at the moment.</p>'
-            '<p>Many features are available by tapping on message bubbles; '
-            '<strong>Try tapping this one!</strong></p>'
-            '<p>If you find any bugs, please report them at '
-            '<a href="https://github.com/axichat/axichat/issues">'
-            'https://github.com/axichat/axichat/issues'
-            '</a></p>',
-          ),
-        );
+        expect(savedMessage.htmlBody, isNull);
         final updatedChat =
             verify(() => mockDatabase.updateChat(captureAny())).captured.single
                 as Chat;
@@ -988,7 +974,7 @@ void main() {
     );
 
     test(
-      'deliverSignupWelcomeMessage updates the existing welcome message body and html.',
+      'deliverSignupWelcomeMessage updates the existing welcome message body and clears html.',
       () async {
         const welcomeChatJid = 'axichat@welcome.axichat.invalid';
         const welcomeStanzaId = 'signup-welcome.axichat';
@@ -1027,10 +1013,7 @@ void main() {
                 ).captured.single
                 as Message;
         expect(updatedMessage.stanzaID, equals(welcomeStanzaId));
-        expect(
-          updatedMessage.htmlBody,
-          contains('<strong>Try tapping this one!</strong>'),
-        );
+        expect(updatedMessage.htmlBody, isNull);
         expect(
           updatedMessage.body,
           contains(

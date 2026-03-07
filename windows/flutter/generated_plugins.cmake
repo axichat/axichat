@@ -6,6 +6,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   charset_converter
   connectivity_plus
   emoji_picker_flutter
+  flutter_inappwebview_windows
   flutter_secure_storage_windows
   permission_handler_windows
   share_plus

@@ -1111,6 +1111,40 @@ class DeltaChatBindings {
   late final _dc_get_msg = _dc_get_msgPtr.asFunction<
       ffi.Pointer<dc_msg_t> Function(ffi.Pointer<dc_context_t>, int)>();
 
+  ffi.Pointer<ffi.Char> dc_get_msg_mime_headers(
+    ffi.Pointer<dc_context_t> ctx,
+    int msg_id,
+  ) {
+    return _dc_get_msg_mime_headers(
+      ctx,
+      msg_id,
+    );
+  }
+
+  late final _dc_get_msg_mime_headersPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_context_t>,
+              ffi.Uint32)>>('dc_get_msg_mime_headers');
+  late final _dc_get_msg_mime_headers = _dc_get_msg_mime_headersPtr.asFunction<
+      ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_context_t>, int)>();
+
+  ffi.Pointer<ffi.Char> dc_get_msg_html(
+    ffi.Pointer<dc_context_t> ctx,
+    int msg_id,
+  ) {
+    return _dc_get_msg_html(
+      ctx,
+      msg_id,
+    );
+  }
+
+  late final _dc_get_msg_htmlPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Char> Function(
+              ffi.Pointer<dc_context_t>, ffi.Uint32)>>('dc_get_msg_html');
+  late final _dc_get_msg_html = _dc_get_msg_htmlPtr.asFunction<
+      ffi.Pointer<ffi.Char> Function(ffi.Pointer<dc_context_t>, int)>();
+
   void dc_msg_unref(
     ffi.Pointer<dc_msg_t> msg,
   ) {
