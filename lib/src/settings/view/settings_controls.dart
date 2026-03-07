@@ -269,6 +269,45 @@ class SettingsControls extends StatelessWidget {
                       ),
                 ListItemPadding(
                   child: AxiListTile(
+                    title: context.l10n.settingsMessageTextSize,
+                    actions: [
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: sizing.menuMaxWidth,
+                        ),
+                        child: AxiSelect<MessageTextSize>(
+                          initialValue: state.messageTextSize,
+                          onChanged: (messageTextSize) {
+                            if (messageTextSize == null) {
+                              return;
+                            }
+                            context.read<SettingsCubit>().updateMessageTextSize(
+                              messageTextSize,
+                            );
+                          },
+                          options: MessageTextSize.values
+                              .map(
+                                (messageTextSize) =>
+                                    ShadOption<MessageTextSize>(
+                                      value: messageTextSize,
+                                      child: _MessageTextSizeOptionLabel(
+                                        value: messageTextSize,
+                                      ),
+                                    ),
+                              )
+                              .toList(),
+                          selectedOptionBuilder:
+                              (BuildContext context, MessageTextSize value) =>
+                                  _MessageTextSizeOptionLabel(value: value),
+                        ),
+                      ),
+                    ],
+                    minTileHeight: sizing.listButtonHeight,
+                    contentPadding: compactTilePadding,
+                  ),
+                ),
+                ListItemPadding(
+                  child: AxiListTile(
                     title: context.l10n.settingsLanguage,
                     actions: const [LanguageSelector()],
                     minTileHeight: sizing.listButtonHeight,
@@ -304,45 +343,6 @@ class SettingsControls extends StatelessWidget {
                                 mode.label(context.l10n),
                                 style: context.textTheme.small,
                               ),
-                        ),
-                      ),
-                    ],
-                    minTileHeight: sizing.listButtonHeight,
-                    contentPadding: compactTilePadding,
-                  ),
-                ),
-                ListItemPadding(
-                  child: AxiListTile(
-                    title: context.l10n.settingsMessageTextSize,
-                    actions: [
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: sizing.menuMaxWidth,
-                        ),
-                        child: AxiSelect<MessageTextSize>(
-                          initialValue: state.messageTextSize,
-                          onChanged: (messageTextSize) {
-                            if (messageTextSize == null) {
-                              return;
-                            }
-                            context.read<SettingsCubit>().updateMessageTextSize(
-                              messageTextSize,
-                            );
-                          },
-                          options: MessageTextSize.values
-                              .map(
-                                (messageTextSize) =>
-                                    ShadOption<MessageTextSize>(
-                                      value: messageTextSize,
-                                      child: _MessageTextSizeOptionLabel(
-                                        value: messageTextSize,
-                                      ),
-                                    ),
-                              )
-                              .toList(),
-                          selectedOptionBuilder:
-                              (BuildContext context, MessageTextSize value) =>
-                                  _MessageTextSizeOptionLabel(value: value),
                         ),
                       ),
                     ],
@@ -976,7 +976,12 @@ class _DonationRequestBanner extends StatelessWidget {
             ? profileState.jid
             : profileState.username;
         return Padding(
-          padding: EdgeInsets.fromLTRB(spacing.m, spacing.m, spacing.m, 0),
+          padding: EdgeInsets.fromLTRB(
+            spacing.m,
+            spacing.m,
+            spacing.m,
+            spacing.s,
+          ),
           child: AxiModalSurface(
             padding: EdgeInsets.all(spacing.m),
             child: Column(
