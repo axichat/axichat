@@ -9721,6 +9721,36 @@ abstract class AppLocalizations {
   /// **'Headers unavailable.'**
   String get chatMessageDetailsHeadersUnavailableLabel;
 
+  /// No description provided for @chatMessageDetailsDebugDumpLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Delta debug dump'**
+  String get chatMessageDetailsDebugDumpLabel;
+
+  /// No description provided for @chatMessageDetailsDebugDumpActionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'View debug dump'**
+  String get chatMessageDetailsDebugDumpActionLabel;
+
+  /// No description provided for @chatMessageDetailsDebugDumpNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Shows Axichat-stored fields and Delta\'s parsed message payload. This is not the full raw MIME source.'**
+  String get chatMessageDetailsDebugDumpNote;
+
+  /// No description provided for @chatMessageDetailsDebugDumpLoadingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading debug dump...'**
+  String get chatMessageDetailsDebugDumpLoadingLabel;
+
+  /// No description provided for @chatMessageDetailsDebugDumpUnavailableLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Debug dump unavailable.'**
+  String get chatMessageDetailsDebugDumpUnavailableLabel;
+
   /// No description provided for @chatMessageDetailsStanzaIdLabel.
   ///
   /// In en, this message translates to:

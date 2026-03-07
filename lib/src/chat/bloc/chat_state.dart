@@ -34,6 +34,9 @@ abstract class ChatState with _$ChatState {
     @Default(<int, String>{}) Map<int, String> emailRawHeadersByDeltaId,
     @Default(<int>{}) Set<int> emailRawHeadersLoading,
     @Default(<int>{}) Set<int> emailRawHeadersUnavailable,
+    @Default(<int, String>{}) Map<int, String> emailDebugDumpByDeltaId,
+    @Default(<int>{}) Set<int> emailDebugDumpLoading,
+    @Default(<int>{}) Set<int> emailDebugDumpUnavailable,
     @Default(<String, FileMetadataData?>{})
     Map<String, FileMetadataData?> fileMetadataById,
     @Default(<PendingAttachment>[]) List<PendingAttachment> pendingAttachments,

@@ -5723,6 +5723,26 @@ class AppLocalizationsEs extends AppLocalizations {
       'Encabezados no disponibles.';
 
   @override
+  String get chatMessageDetailsDebugDumpLabel =>
+      'Volcado de depuracion de Delta';
+
+  @override
+  String get chatMessageDetailsDebugDumpActionLabel =>
+      'Ver volcado de depuracion';
+
+  @override
+  String get chatMessageDetailsDebugDumpNote =>
+      'Muestra los campos almacenados por Axichat y la carga util del mensaje analizada por Delta. Esta no es la fuente MIME sin procesar completa.';
+
+  @override
+  String get chatMessageDetailsDebugDumpLoadingLabel =>
+      'Cargando volcado de depuracion...';
+
+  @override
+  String get chatMessageDetailsDebugDumpUnavailableLabel =>
+      'Volcado de depuracion no disponible.';
+
+  @override
   String get chatMessageDetailsStanzaIdLabel => 'ID de stanza';
 
   @override

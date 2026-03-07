@@ -80,10 +80,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Avatar? _nextCarouselAvatar;
   ShadColorScheme? _carouselColors;
   bool _carouselEnabled = false;
+  int _carouselGeneration = 0;
 
   @override
   Future<void> close() async {
-    _avatarCarouselTimer?.cancel();
+    _stopAvatarCarousel();
     return super.close();
   }
 
@@ -384,6 +385,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   void _stopAvatarCarousel() {
     _avatarCarouselTimer?.cancel();
     _avatarCarouselTimer = null;
+    _carouselGeneration++;
   }
 
   Future<void> _resumeAvatarCarouselIfNeeded() async {
@@ -403,8 +405,15 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (_isCarouselBlocked() || _avatarCarouselTimer != null) {
       return;
     }
-    await _warmNextCarouselAvatar();
-    await _advanceCarousel();
+    final generation = _carouselGeneration;
+    await _warmNextCarouselAvatar(generation);
+    if (generation != _carouselGeneration) {
+      return;
+    }
+    await _advanceCarousel(generation);
+    if (generation != _carouselGeneration) {
+      return;
+    }
     if (_isCarouselBlocked() || _avatarCarouselTimer != null) {
       return;
     }
@@ -413,20 +422,29 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
 
   void _scheduleCarouselTick() {
     if (_avatarCarouselTimer != null || _isCarouselBlocked()) return;
+    final generation = _carouselGeneration;
     _avatarCarouselTimer = Timer(_avatarCarouselInterval, () async {
-      await _handleCarouselTick();
+      await _handleCarouselTick(generation);
     });
   }
 
-  Future<void> _handleCarouselTick() async {
+  Future<void> _handleCarouselTick(int generation) async {
+    if (generation != _carouselGeneration) {
+      return;
+    }
     if (_isCarouselBlocked()) {
       _stopAvatarCarousel();
       return;
     }
     try {
-      await _advanceCarousel();
+      await _advanceCarousel(generation);
     } finally {
-      _avatarCarouselTimer = null;
+      if (generation == _carouselGeneration) {
+        _avatarCarouselTimer = null;
+      }
+    }
+    if (generation != _carouselGeneration) {
+      return;
     }
     if (_isCarouselBlocked()) {
       _stopAvatarCarousel();
@@ -435,11 +453,15 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     _scheduleCarouselTick();
   }
 
-  Future<void> _advanceCarousel() async {
-    if (_isCarouselBlocked()) return;
-    if (_nextCarouselAvatar == null) {
-      await _warmNextCarouselAvatar();
+  Future<void> _advanceCarousel([int? generation]) async {
+    final activeGeneration = generation ?? _carouselGeneration;
+    if (activeGeneration != _carouselGeneration || _isCarouselBlocked()) {
+      return;
     }
+    if (_nextCarouselAvatar == null) {
+      await _warmNextCarouselAvatar(activeGeneration);
+    }
+    if (activeGeneration != _carouselGeneration) return;
     final next = _nextCarouselAvatar;
     if (next == null || _isCarouselBlocked()) return;
     emit(
@@ -450,11 +472,14 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       ),
     );
     _nextCarouselAvatar = null;
-    await _warmNextCarouselAvatar();
+    await _warmNextCarouselAvatar(activeGeneration);
   }
 
-  Future<void> _warmNextCarouselAvatar() async {
-    if (_nextCarouselAvatar != null || _isCarouselBlocked()) {
+  Future<void> _warmNextCarouselAvatar([int? generation]) async {
+    final activeGeneration = generation ?? _carouselGeneration;
+    if (activeGeneration != _carouselGeneration ||
+        _nextCarouselAvatar != null ||
+        _isCarouselBlocked()) {
       return;
     }
     final colors = _carouselColors;
@@ -463,10 +488,14 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       colors: colors,
       currentBackground: state.backgroundColor,
     );
-    _nextCarouselAvatar = await _carouselEngine.buildNext(
+    final nextAvatar = await _carouselEngine.buildNext(
       context: context,
       renderSpec: _resolveCarouselRenderSpec,
     );
+    if (activeGeneration != _carouselGeneration || _isCarouselBlocked()) {
+      return;
+    }
+    _nextCarouselAvatar = nextAvatar;
   }
 
   void updateCropRect(Rect rect) {

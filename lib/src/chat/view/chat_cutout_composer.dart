@@ -178,8 +178,10 @@ class ChatCutoutComposer extends StatelessWidget {
                   child: AxiTextField(
                     controller: controller,
                     focusNode: focusNode,
-                    enabled: enabled,
+                    enabled: true,
                     readOnly: !enabled,
+                    showCursor: enabled,
+                    enableInteractiveSelection: enabled,
                     minLines: minLines,
                     maxLines: maxLines,
                     keyboardType: TextInputType.multiline,

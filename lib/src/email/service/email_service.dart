@@ -4813,6 +4813,176 @@ class EmailService {
     return sanitizeRawEmailHeaders(headers);
   }
 
+  /// Gets a debug dump for a stored email message and the current Delta view.
+  Future<String?> getMessageDebugDump(Message message) async {
+    final deltaId = message.deltaMsgId;
+    if (deltaId == null || deltaId <= _deltaMessageIdUnset) return null;
+    await _ensureReady();
+    final deltaMessage = await _transport.getMessage(
+      deltaId,
+      accountId: message.deltaAccountId,
+    );
+    final quotedMessage = await _transport.getQuotedMessage(
+      deltaId,
+      accountId: message.deltaAccountId,
+    );
+    final storedMimeHeaders = await _transport.getMessageMimeHeaders(deltaId);
+    return _formatMessageDebugDump(
+      storedMessage: message,
+      deltaMessage: deltaMessage,
+      quotedMessage: quotedMessage,
+      storedMimeHeaders: storedMimeHeaders,
+    );
+  }
+
+  String _formatMessageDebugDump({
+    required Message storedMessage,
+    required DeltaMessage? deltaMessage,
+    required DeltaQuotedMessage? quotedMessage,
+    required String? storedMimeHeaders,
+  }) {
+    final buffer = StringBuffer();
+
+    void writeSection(String title) {
+      if (buffer.length > 0) {
+        buffer.writeln();
+      }
+      buffer.writeln('[$title]');
+    }
+
+    void writeField(String label, Object? value) {
+      buffer.writeln('$label: ${_debugDumpScalar(value)}');
+    }
+
+    void writeTextField(String label, String? value) {
+      writeField('$label.length', value?.length);
+      buffer.writeln('$label:');
+      buffer.writeln(_debugDumpText(value));
+    }
+
+    writeSection('Axichat stored message');
+    writeField('stanza_id', storedMessage.stanzaID);
+    writeField('local_id', storedMessage.id);
+    writeField('origin_id', storedMessage.originID);
+    writeField('occupant_id', storedMessage.occupantID);
+    writeField('chat_jid', storedMessage.chatJid);
+    writeField('sender_jid', storedMessage.senderJid);
+    writeField('timestamp', storedMessage.timestamp);
+    writeField('delta_account_id', storedMessage.deltaAccountId);
+    writeField('delta_chat_id', storedMessage.deltaChatId);
+    writeField('delta_message_id', storedMessage.deltaMsgId);
+    writeTextField('subject', storedMessage.subject);
+    writeTextField('body', storedMessage.body);
+    writeTextField('html_body', storedMessage.htmlBody);
+
+    writeSection('Delta getMessage');
+    if (deltaMessage == null) {
+      buffer.writeln('unavailable');
+      return buffer.toString();
+    }
+    writeField('id', deltaMessage.id);
+    writeField('chat_id', deltaMessage.chatId);
+    writeField('timestamp', deltaMessage.timestamp);
+    writeField('is_outgoing', deltaMessage.isOutgoing);
+    writeField(
+      'view_type',
+      _debugDumpLabeledInt(deltaMessage.viewType, _deltaViewTypeName),
+    );
+    writeField(
+      'state',
+      _debugDumpLabeledInt(deltaMessage.state, _deltaMessageStateName),
+    );
+    writeField(
+      'download_state',
+      _debugDumpLabeledInt(deltaMessage.downloadState, _deltaDownloadStateName),
+    );
+    writeField('needs_download', deltaMessage.needsDownload);
+    writeField('has_file', deltaMessage.hasFile);
+    writeField('file_path', deltaMessage.filePath);
+    writeField('file_name', deltaMessage.fileName);
+    writeField('file_mime', deltaMessage.fileMime);
+    writeField('file_size', deltaMessage.fileSize);
+    writeField('width', deltaMessage.width);
+    writeField('height', deltaMessage.height);
+    writeField('error', deltaMessage.error);
+    writeTextField('subject', deltaMessage.subject);
+    writeTextField('text', deltaMessage.text);
+    writeTextField('html', deltaMessage.html);
+    writeSection('Delta quoted');
+    if (quotedMessage == null) {
+      buffer.writeln('unavailable');
+    } else {
+      writeField('id', quotedMessage.id);
+      writeTextField('text', quotedMessage.text);
+    }
+
+    writeSection('Delta stored mime_headers');
+    writeField('present', storedMimeHeaders != null);
+    writeTextField('text', storedMimeHeaders);
+    return buffer.toString();
+  }
+
+  String _debugDumpScalar(Object? value) {
+    if (value == null) return '(null)';
+    if (value is DateTime) {
+      return value.toIso8601String();
+    }
+    if (value is String) {
+      return value.isEmpty ? '(empty)' : value;
+    }
+    return '$value';
+  }
+
+  String _debugDumpText(String? value) {
+    if (value == null) return '(null)';
+    if (value.isEmpty) return '(empty)';
+    return value;
+  }
+
+  String _debugDumpLabeledInt(int? value, String Function(int) labelFor) {
+    if (value == null) return '(null)';
+    return '${labelFor(value)} ($value)';
+  }
+
+  String _deltaViewTypeName(int value) => switch (value) {
+    DeltaMessageType.undefined => 'undefined',
+    DeltaMessageType.text => 'text',
+    DeltaMessageType.image => 'image',
+    DeltaMessageType.gif => 'gif',
+    DeltaMessageType.sticker => 'sticker',
+    DeltaMessageType.audio => 'audio',
+    DeltaMessageType.voice => 'voice',
+    DeltaMessageType.video => 'video',
+    DeltaMessageType.file => 'file',
+    DeltaMessageType.call => 'call',
+    DeltaMessageType.webxdc => 'webxdc',
+    DeltaMessageType.vcard => 'vcard',
+    _ => 'unknown',
+  };
+
+  String _deltaMessageStateName(int value) => switch (value) {
+    DeltaMessageState.undefined => 'undefined',
+    DeltaMessageState.inFresh => 'in_fresh',
+    DeltaMessageState.inNoticed => 'in_noticed',
+    DeltaMessageState.inSeen => 'in_seen',
+    DeltaMessageState.outPreparing => 'out_preparing',
+    DeltaMessageState.outDraft => 'out_draft',
+    DeltaMessageState.outPending => 'out_pending',
+    DeltaMessageState.outFailed => 'out_failed',
+    DeltaMessageState.outDelivered => 'out_delivered',
+    DeltaMessageState.outMdnRcvd => 'out_mdn_rcvd',
+    _ => 'unknown',
+  };
+
+  String _deltaDownloadStateName(int value) => switch (value) {
+    DeltaDownloadState.done => 'done',
+    DeltaDownloadState.available => 'available',
+    DeltaDownloadState.failure => 'failure',
+    DeltaDownloadState.undecipherable => 'undecipherable',
+    DeltaDownloadState.inProgress => 'in_progress',
+    _ => 'unknown',
+  };
+
   /// Saves a draft to core.
   Future<bool> saveDraftToCore({
     required Chat chat,

@@ -918,20 +918,15 @@ class SettingsControls extends StatelessWidget {
 class _DonationRequestBanner extends StatelessWidget {
   const _DonationRequestBanner({required this.settingsState});
 
-  static bool forceShowDonationPromptForDebug = true;
-
   final SettingsState settingsState;
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, profileState) {
-        final shouldShowDonationPrompt =
-            forceShowDonationPromptForDebug ||
-            settingsState.showsDonationPrompt(
-              profileState.storedConversationMessageCount,
-            );
-        if (!shouldShowDonationPrompt) {
+        if (!settingsState.showsDonationPrompt(
+          profileState.storedConversationMessageCount,
+        )) {
           return const SizedBox.shrink();
         }
         final l10n = context.l10n;

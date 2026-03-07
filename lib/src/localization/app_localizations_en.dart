@@ -5653,6 +5653,23 @@ class AppLocalizationsEn extends AppLocalizations {
       'Headers unavailable.';
 
   @override
+  String get chatMessageDetailsDebugDumpLabel => 'Delta debug dump';
+
+  @override
+  String get chatMessageDetailsDebugDumpActionLabel => 'View debug dump';
+
+  @override
+  String get chatMessageDetailsDebugDumpNote =>
+      'Shows Axichat-stored fields and Delta\'s parsed message payload. This is not the full raw MIME source.';
+
+  @override
+  String get chatMessageDetailsDebugDumpLoadingLabel => 'Loading debug dump...';
+
+  @override
+  String get chatMessageDetailsDebugDumpUnavailableLabel =>
+      'Debug dump unavailable.';
+
+  @override
   String get chatMessageDetailsStanzaIdLabel => 'Stanza ID';
 
   @override

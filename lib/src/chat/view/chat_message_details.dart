@@ -125,6 +125,15 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
             final bool isHeadersUnavailable =
                 deltaMessageId != null &&
                 state.emailRawHeadersUnavailable.contains(deltaMessageId);
+            final String? debugDump = deltaMessageId == null
+                ? null
+                : state.emailDebugDumpByDeltaId[deltaMessageId];
+            final bool isDebugDumpLoading =
+                deltaMessageId != null &&
+                state.emailDebugDumpLoading.contains(deltaMessageId);
+            final bool isDebugDumpUnavailable =
+                deltaMessageId != null &&
+                state.emailDebugDumpUnavailable.contains(deltaMessageId);
             final xmppCapabilities = state.xmppCapabilities;
             final supportsMarkers =
                 isEmailTransport || xmppCapabilities?.supportsMarkers == true;
@@ -413,8 +422,8 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                         ],
                       ),
                     if (isEmailMessage)
-                      _MessageHeadersSection(
-                        headers: rawHeaders,
+                      _MessageTextDumpSection(
+                        content: rawHeaders,
                         title: l10n.chatMessageDetailsHeadersLabel,
                         buttonLabel: l10n.chatMessageDetailsHeadersActionLabel,
                         note: l10n.chatMessageDetailsHeadersNote,
@@ -424,6 +433,20 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                             l10n.chatMessageDetailsHeadersUnavailableLabel,
                         isLoading: isHeadersLoading,
                         isUnavailable: isHeadersUnavailable,
+                      ),
+                    if (isEmailMessage)
+                      _MessageTextDumpSection(
+                        content: debugDump,
+                        title: l10n.chatMessageDetailsDebugDumpLabel,
+                        buttonLabel:
+                            l10n.chatMessageDetailsDebugDumpActionLabel,
+                        note: l10n.chatMessageDetailsDebugDumpNote,
+                        loadingLabel:
+                            l10n.chatMessageDetailsDebugDumpLoadingLabel,
+                        unavailableLabel:
+                            l10n.chatMessageDetailsDebugDumpUnavailableLabel,
+                        isLoading: isDebugDumpLoading,
+                        isUnavailable: isDebugDumpUnavailable,
                       ),
                     if (message.error.isNotNone)
                       Column(
@@ -683,9 +706,9 @@ class _SanitizedHtmlBodyState extends State<_SanitizedHtmlBody> {
   }
 }
 
-class _MessageHeadersSection extends StatelessWidget {
-  const _MessageHeadersSection({
-    required this.headers,
+class _MessageTextDumpSection extends StatelessWidget {
+  const _MessageTextDumpSection({
+    required this.content,
     required this.title,
     required this.buttonLabel,
     required this.note,
@@ -695,7 +718,7 @@ class _MessageHeadersSection extends StatelessWidget {
     required this.isUnavailable,
   });
 
-  final String? headers;
+  final String? content;
   final String title;
   final String buttonLabel;
   final String note;
@@ -704,7 +727,7 @@ class _MessageHeadersSection extends StatelessWidget {
   final bool isLoading;
   final bool isUnavailable;
 
-  bool get _canOpen => headers?.trim().isNotEmpty == true;
+  bool get _canOpen => content?.trim().isNotEmpty == true;
 
   String? get _statusLabel {
     if (isLoading) return loadingLabel;
@@ -723,7 +746,7 @@ class _MessageHeadersSection extends StatelessWidget {
         Text(title, style: context.textTheme.muted),
         AxiButton(
           variant: AxiButtonVariant.secondary,
-          onPressed: _canOpen ? () => _showHeadersDialog(context) : null,
+          onPressed: _canOpen ? () => _showTextDumpDialog(context) : null,
           child: Text(buttonLabel),
         ),
         if (statusLabel != null)
@@ -732,15 +755,15 @@ class _MessageHeadersSection extends StatelessWidget {
     );
   }
 
-  Future<void> _showHeadersDialog(BuildContext context) async {
-    final rawHeaders = headers;
-    if (rawHeaders == null || !_canOpen) return;
+  Future<void> _showTextDumpDialog(BuildContext context) async {
+    final text = content;
+    if (text == null || !_canOpen) return;
     final l10n = context.l10n;
     await showFadeScaleDialog<void>(
       context: context,
       builder: (dialogContext) {
-        return _RawHeadersDialog(
-          headers: rawHeaders,
+        return _TextDumpDialog(
+          content: text,
           title: title,
           note: note,
           copyLabel: l10n.chatActionCopy,
@@ -751,16 +774,16 @@ class _MessageHeadersSection extends StatelessWidget {
   }
 }
 
-class _RawHeadersDialog extends StatelessWidget {
-  const _RawHeadersDialog({
-    required this.headers,
+class _TextDumpDialog extends StatelessWidget {
+  const _TextDumpDialog({
+    required this.content,
     required this.title,
     required this.note,
     required this.copyLabel,
     required this.closeLabel,
   });
 
-  final String headers;
+  final String content;
   final String title;
   final String note;
   final String copyLabel;
@@ -781,7 +804,7 @@ class _RawHeadersDialog extends StatelessWidget {
         AxiButton(
           variant: AxiButtonVariant.secondary,
           onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: headers));
+            await Clipboard.setData(ClipboardData(text: content));
           },
           child: Text(copyLabel),
         ),
@@ -801,7 +824,7 @@ class _RawHeadersDialog extends StatelessWidget {
               if (hasNote) Text(trimmedNote, style: context.textTheme.muted),
               ShadCard(
                 padding: EdgeInsets.all(spacing.m),
-                child: SelectableText(headers, style: context.textTheme.small),
+                child: SelectableText(content, style: context.textTheme.small),
               ),
             ],
           ),

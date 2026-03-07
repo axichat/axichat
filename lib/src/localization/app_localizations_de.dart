@@ -5725,6 +5725,24 @@ class AppLocalizationsDe extends AppLocalizations {
       'Header nicht verfugbar.';
 
   @override
+  String get chatMessageDetailsDebugDumpLabel => 'Delta-Debug-Dump';
+
+  @override
+  String get chatMessageDetailsDebugDumpActionLabel => 'Debug-Dump anzeigen';
+
+  @override
+  String get chatMessageDetailsDebugDumpNote =>
+      'Zeigt in Axichat gespeicherte Felder und Deltas geparste Nachrichtenlast. Dies ist nicht die vollstandige rohe MIME-Quelle.';
+
+  @override
+  String get chatMessageDetailsDebugDumpLoadingLabel =>
+      'Debug-Dump wird geladen...';
+
+  @override
+  String get chatMessageDetailsDebugDumpUnavailableLabel =>
+      'Debug-Dump nicht verfugbar.';
+
+  @override
   String get chatMessageDetailsStanzaIdLabel => 'Stanza-ID';
 
   @override

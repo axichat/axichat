@@ -8,6 +8,8 @@ import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 
+const String _axichatAppIconAssetPath = 'assets/icons/app_icon_source.png';
+
 class SelfIdentitySnapshot {
   const SelfIdentitySnapshot({required this.selfJid, required this.avatarPath});
 
@@ -49,6 +51,7 @@ class TransportAwareAvatar extends StatelessWidget {
     final bool isSelfChat = chat.remoteJid.sameBare(selfJid);
     final String? selfAvatarPath = selfIdentity.avatarPath?.trim();
     final bool hasSelfAvatarPath = selfAvatarPath?.isNotEmpty == true;
+    final isWelcomeChat = chat.isAxichatWelcomeThread;
     final avatarIdentifier = chat.contactDisplayName?.trim().isNotEmpty == true
         ? chat.contactDisplayName!.trim()
         : chat.title.trim().isNotEmpty
@@ -61,7 +64,7 @@ class TransportAwareAvatar extends StatelessWidget {
         subscription ??
         (isAxiCompatible ? Subscription.both : Subscription.none);
     Widget? badge;
-    if (showBadge) {
+    if (showBadge && !isWelcomeChat) {
       if (supportsEmail && isAxiCompatible) {
         badge = const AxiCompatibilityBadge(compact: true);
       } else if (supportsEmail) {
@@ -84,18 +87,20 @@ class TransportAwareAvatar extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Positioned.fill(
-            child: AxiAvatar(
-              jid: avatarIdentifier,
-              size: resolvedSize,
-              presence: presence,
-              status: status,
-              subscription: effectiveSubscription,
-              avatarPath: avatarPathOverride?.trim().isNotEmpty == true
-                  ? avatarPathOverride!.trim()
-                  : isSelfChat && hasSelfAvatarPath
-                  ? selfAvatarPath
-                  : chat.avatarPath ?? chat.contactAvatarPath,
-            ),
+            child: isWelcomeChat
+                ? AxichatAppIconAvatar(size: resolvedSize)
+                : AxiAvatar(
+                    jid: avatarIdentifier,
+                    size: resolvedSize,
+                    presence: presence,
+                    status: status,
+                    subscription: effectiveSubscription,
+                    avatarPath: avatarPathOverride?.trim().isNotEmpty == true
+                        ? avatarPathOverride!.trim()
+                        : isSelfChat && hasSelfAvatarPath
+                        ? selfAvatarPath
+                        : chat.avatarPath ?? chat.contactAvatarPath,
+                  ),
           ),
           if (badge != null)
             Positioned(
@@ -104,6 +109,31 @@ class TransportAwareAvatar extends StatelessWidget {
               child: badge,
             ),
         ],
+      ),
+    );
+  }
+}
+
+class AxichatAppIconAvatar extends StatelessWidget {
+  const AxichatAppIconAvatar({super.key, required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
+    return SizedBox.square(
+      dimension: size,
+      child: ClipPath(
+        clipper: ShapeBorderClipper(shape: shape),
+        child: Image.asset(
+          _axichatAppIconAssetPath,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.high,
+          isAntiAlias: true,
+        ),
       ),
     );
   }

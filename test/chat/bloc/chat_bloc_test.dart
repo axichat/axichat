@@ -3,6 +3,7 @@ import 'dart:collection';
 
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
@@ -12,6 +13,7 @@ import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/settings/app_language.dart';
+import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
 import 'package:flutter/material.dart' show Locale;
@@ -92,6 +94,8 @@ void main() {
   setUpAll(() {
     registerFallbackValue(<FanOutTarget>[]);
     registerFallbackValue(MessageTimelineFilter.allWithContact);
+    registerFallbackValue(OccupantAffiliation.none);
+    registerFallbackValue(OccupantRole.none);
     registerFallbackValue(
       Chat(
         jid: 'fallback@axi.im',
@@ -184,12 +188,34 @@ void main() {
         includePseudoMessages: any(named: 'includePseudoMessages'),
       ),
     ).thenAnswer((_) async => 0);
+    when(
+      () => messageService.resolvePeerCapabilities(
+        jid: any(named: 'jid'),
+        forceRefresh: any(named: 'forceRefresh'),
+      ),
+    ).thenAnswer((_) async => xmpp.XmppPeerCapabilities(features: const []));
+    when(
+      () => messageService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    when(
+      () => messageService.syncPinnedMessagesForChat(any()),
+    ).thenAnswer((_) async {});
 
     when(
       () => chatsService.chatStream(any()),
     ).thenAnswer((_) => chatStreamController.stream);
+    when(
+      () => chatsService.typingParticipantsStream(any()),
+    ).thenAnswer((_) => const Stream<List<String>>.empty());
 
     when(() => chatsService.myJid).thenReturn('self@axi.im');
+    when(() => messageService.database).thenAnswer((_) async => mockDatabase);
+    when(
+      () => mockDatabase.getMessageAttachments(any()),
+    ).thenAnswer((_) async => const <MessageAttachmentData>[]);
+    when(
+      () => mockDatabase.getMessageAttachmentsForGroup(any()),
+    ).thenAnswer((_) async => const <MessageAttachmentData>[]);
 
     when(
       () => messageService.sendReadMarker(any(), any()),
@@ -876,6 +902,147 @@ void main() {
 
     await bloc.close();
     await syncController.close();
+  });
+
+  test('forwarding supports a raw XMPP address target', () async {
+    final message = Message(
+      stanzaID: 'forward-xmpp',
+      senderJid: initialChat.jid,
+      chatJid: initialChat.jid,
+      body: 'Forward me',
+      timestamp: DateTime.now(),
+    );
+    when(
+      () => messageService.sendMessage(
+        jid: 'fresh@axi.im',
+        text: 'Forward me',
+        encryptionProtocol: EncryptionProtocol.none,
+        htmlBody: null,
+        forwarded: true,
+        forwardedFromJid: initialChat.jid,
+        chatType: ChatType.chat,
+      ),
+    ).thenAnswer((_) async {});
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageForwardRequested(
+        message: message,
+        target: FanOutTarget.address(
+          address: 'fresh@axi.im',
+          shareSignatureEnabled: true,
+          transport: MessageTransport.xmpp,
+        ),
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.sendMessage(
+        jid: 'fresh@axi.im',
+        text: 'Forward me',
+        encryptionProtocol: EncryptionProtocol.none,
+        htmlBody: null,
+        forwarded: true,
+        forwardedFromJid: initialChat.jid,
+        chatType: ChatType.chat,
+      ),
+    ).called(1);
+
+    await bloc.close();
+  });
+
+  test('forwarding supports a raw email address target', () async {
+    final emailService = MockEmailService();
+    _mockEmailSync(emailService);
+    final message = Message(
+      stanzaID: 'forward-email',
+      senderJid: initialChat.jid,
+      chatJid: initialChat.jid,
+      body: 'Forward me by email',
+      timestamp: DateTime.now(),
+    );
+    final resolvedEmailChat = Chat(
+      jid: 'dc-fresh@delta.chat',
+      title: 'fresh@example.com',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+      deltaChatId: 10,
+      emailAddress: 'fresh@example.com',
+    );
+    when(
+      () => emailService.ensureChatForAddress(
+        address: any(named: 'address'),
+        displayName: any(named: 'displayName'),
+      ),
+    ).thenAnswer((_) async => resolvedEmailChat);
+    when(
+      () => emailService.sendMessage(
+        chat: any(named: 'chat'),
+        body: any(named: 'body'),
+        subject: any(named: 'subject'),
+        htmlBody: any(named: 'htmlBody'),
+        forwarded: any(named: 'forwarded'),
+        forwardedFromJid: any(named: 'forwardedFromJid'),
+      ),
+    ).thenAnswer((_) async => 1);
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageForwardRequested(
+        message: message,
+        target: FanOutTarget.address(
+          address: 'fresh@example.com',
+          shareSignatureEnabled: true,
+          transport: MessageTransport.email,
+        ),
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => emailService.ensureChatForAddress(
+        address: 'fresh@example.com',
+        displayName: 'fresh@example.com',
+      ),
+    ).called(1);
+    verify(
+      () => emailService.sendMessage(
+        chat: resolvedEmailChat,
+        body: 'Forward me by email',
+        subject: null,
+        htmlBody: null,
+        forwarded: true,
+        forwardedFromJid: initialChat.jid,
+      ),
+    ).called(1);
+
+    await bloc.close();
   });
 
   test('offline email send attempts send and does not save drafts', () async {

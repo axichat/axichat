@@ -398,6 +398,14 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   @override
   Future<bool> getShouldReconnect() async => _shouldReconnect;
 
+  bool _tryStartReconnectCycle() {
+    if (!_shouldReconnect || _reconnectionInProgress) {
+      return false;
+    }
+    _reconnectionInProgress = true;
+    return true;
+  }
+
   // Have to do Future based API to match mox implementation.
   @override
   Future<void> setShouldReconnect(bool value) async {
@@ -409,15 +417,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   }
 
   @override
-  Future<bool> canTriggerFailure() async =>
-      await canTryReconnecting() &&
-      await getShouldReconnect() &&
-      _markReconnecting();
-
-  bool _markReconnecting() {
-    _reconnectionInProgress = true;
-    return true;
-  }
+  Future<bool> canTriggerFailure() async => _tryStartReconnectCycle();
 
   @override
   Future<void> onFailure() async {
@@ -429,7 +429,7 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
   }
 
   Future<void> requestReconnect(ReconnectTrigger trigger) async {
-    if (!await getShouldReconnect()) return;
+    if (!_shouldReconnect) return;
     if (trigger.shouldResetAttemptCounter) {
       _resetAttemptCounter();
     }
@@ -443,12 +443,15 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
       return;
     }
 
-    if (!await canTryReconnecting()) return;
-    _reconnectionInProgress = true;
+    if (!_tryStartReconnectCycle()) return;
+    var reconnectDispatched = false;
     try {
       await _reconnect();
+      reconnectDispatched = true;
     } finally {
-      _reconnectionInProgress = false;
+      if (!reconnectDispatched) {
+        _reconnectionInProgress = false;
+      }
     }
   }
 
@@ -483,12 +486,21 @@ class XmppReconnectionPolicy implements mox.ReconnectionPolicy {
 
   Future<void> _fireBackoffReconnect() async {
     _cancelBackoff();
-    try {
-      if (!await getShouldReconnect()) return;
-      if (!await getIsReconnecting()) return;
-      await _reconnect();
-    } finally {
+    if (!_shouldReconnect) {
       _reconnectionInProgress = false;
+      return;
+    }
+    if (!_reconnectionInProgress) {
+      return;
+    }
+    var reconnectDispatched = false;
+    try {
+      await _reconnect();
+      reconnectDispatched = true;
+    } finally {
+      if (!reconnectDispatched) {
+        _reconnectionInProgress = false;
+      }
     }
   }
 

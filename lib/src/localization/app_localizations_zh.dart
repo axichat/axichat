@@ -5417,6 +5417,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatMessageDetailsHeadersUnavailableLabel => '头信息不可用。';
 
   @override
+  String get chatMessageDetailsDebugDumpLabel => 'Delta 调试转储';
+
+  @override
+  String get chatMessageDetailsDebugDumpActionLabel => '查看调试转储';
+
+  @override
+  String get chatMessageDetailsDebugDumpNote =>
+      '显示 Axichat 存储的字段以及 Delta 解析后的消息负载。这不是完整的原始 MIME 源。';
+
+  @override
+  String get chatMessageDetailsDebugDumpLoadingLabel => '正在加载调试转储...';
+
+  @override
+  String get chatMessageDetailsDebugDumpUnavailableLabel => '调试转储不可用。';
+
+  @override
   String get chatMessageDetailsStanzaIdLabel => '消息节 ID';
 
   @override
@@ -11189,6 +11205,22 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatMessageDetailsHeadersUnavailableLabel => '標頭不可用。';
+
+  @override
+  String get chatMessageDetailsDebugDumpLabel => 'Delta 偵錯傾印';
+
+  @override
+  String get chatMessageDetailsDebugDumpActionLabel => '查看偵錯傾印';
+
+  @override
+  String get chatMessageDetailsDebugDumpNote =>
+      '顯示 Axichat 儲存的欄位以及 Delta 解析出的訊息內容。這不是完整的原始 MIME 來源。';
+
+  @override
+  String get chatMessageDetailsDebugDumpLoadingLabel => '正在載入偵錯傾印...';
+
+  @override
+  String get chatMessageDetailsDebugDumpUnavailableLabel => '偵錯傾印不可用。';
 
   @override
   String get chatMessageDetailsStanzaIdLabel => '訊節 ID';

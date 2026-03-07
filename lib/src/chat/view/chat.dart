@@ -5270,17 +5270,6 @@ class _ChatState extends State<Chat> {
                                                 _ensureRecipientBarHeightCleared();
                                                 return const _ReadOnlyComposerBanner();
                                               }
-                                              if (isWelcomeChat) {
-                                                _ensureRecipientBarHeightCleared();
-                                                return _DisabledChatComposerSection(
-                                                  hintText: composerHintText,
-                                                  textController:
-                                                      _textController,
-                                                  textFocusNode: _focusNode,
-                                                  sendOnEnter:
-                                                      composerSendOnEnter,
-                                                );
-                                              }
                                               final visibilityLabel =
                                                   _recipientVisibilityLabel(
                                                     chat: state.chat,
@@ -5342,6 +5331,7 @@ class _ChatState extends State<Chat> {
                                                 key: const ValueKey<String>(
                                                   'inline-composer',
                                                 ),
+                                                enabled: !isWelcomeChat,
                                                 hintText: composerHintText,
                                                 recipients: recipients,
                                                 availableChats: availableChats,
@@ -6303,9 +6293,6 @@ class _ChatState extends State<Chat> {
                                                                       0;
                                                                   var extraGapCount =
                                                                       0;
-                                                                  bool
-                                                                  hasHtmlBubble =
-                                                                      false;
                                                                   final extraSpacing =
                                                                       context
                                                                           .spacing
@@ -7086,9 +7073,7 @@ class _ChatState extends State<Chat> {
                                                                             null &&
                                                                         shouldRenderTextContent &&
                                                                         !shouldPreferPlainTextHtml) {
-                                                                      // Render HTML email content
-                                                                      hasHtmlBubble =
-                                                                          true;
+                                                                      // Render HTML content inside the normal bubble shell.
                                                                       final shouldLoadImages =
                                                                           context
                                                                               .watch<
@@ -7511,8 +7496,7 @@ class _ChatState extends State<Chat> {
                                                                         );
                                                                   final bool
                                                                   showBubbleSurface =
-                                                                      hasBubbleText &&
-                                                                      !hasHtmlBubble;
+                                                                      hasBubbleText;
                                                                   final Color
                                                                   bubbleSurfaceColor =
                                                                       showBubbleSurface
@@ -8906,17 +8890,23 @@ class _ChatState extends State<Chat> {
   }
 
   bool _shouldPromptEmailForwarding({
-    required chat_models.Chat target,
+    required FanOutTarget target,
     required List<Message> messages,
   }) {
-    if (!target.supportsEmail) {
+    final targetChat = target.chat;
+    final isEmailTarget =
+        (targetChat?.supportsEmail ?? false) ||
+        ((target.transport ?? hintTransportForAddress(target.address))
+                ?.isEmail ??
+            false);
+    if (!isEmailTarget) {
       return false;
     }
     return messages.any((message) => message.deltaMsgId != null);
   }
 
   Future<EmailForwardingMode?> _resolveForwardingMode({
-    required chat_models.Chat target,
+    required FanOutTarget target,
     required List<Message> messages,
   }) async {
     if (!_shouldPromptEmailForwarding(target: target, messages: messages)) {
@@ -9494,15 +9484,13 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  Future<chat_models.Chat?> _selectForwardTarget() async {
+  Future<FanOutTarget?> _selectForwardTarget() async {
     if (!mounted) return null;
     final options =
         (context.read<ChatsCubit>().state.items ?? const <chat_models.Chat>[])
-            .where((chat) => chat.jid != context.read<ChatBloc>().jid)
             .cast<chat_models.Chat>()
             .toList(growable: false);
-    if (options.isEmpty) return null;
-    return showAdaptiveBottomSheet<chat_models.Chat>(
+    return showAdaptiveBottomSheet<FanOutTarget>(
       context: context,
       isScrollControlled: true,
       surfacePadding: EdgeInsets.zero,
@@ -11823,6 +11811,7 @@ class _InlineExpandedDraftComposerSection extends StatelessWidget {
 class _ChatComposerSection extends StatelessWidget {
   const _ChatComposerSection({
     super.key,
+    this.enabled = true,
     required this.hintText,
     required this.recipients,
     required this.availableChats,
@@ -11863,6 +11852,7 @@ class _ChatComposerSection extends StatelessWidget {
     this.onTaskDropped,
   });
 
+  final bool enabled;
   final String hintText;
   final List<ComposerRecipient> recipients;
   final List<chat_models.Chat> availableChats;
@@ -11936,11 +11926,13 @@ class _ChatComposerSection extends StatelessWidget {
     final hasSubjectText = subjectController.text.trim().isNotEmpty;
     final hasRecipients = recipients.any((recipient) => recipient.included);
     final sendEnabled =
+        enabled &&
         !hasPreparingAttachments &&
         hasRecipients &&
         (composerHasText || hasQueuedAttachments || hasSubjectText);
     final composerError = this.composerError;
     final subjectHeader = _SubjectTextField(
+      enabled: enabled,
       controller: subjectController,
       focusNode: subjectFocusNode,
       onSubmitted: onSubjectSubmitted,
@@ -12007,6 +11999,7 @@ class _ChatComposerSection extends StatelessWidget {
                       actions: buildComposerAccessories(canSend: sendEnabled),
                       sendEnabled: sendEnabled,
                       sendOnEnter: sendOnEnter,
+                      enabled: enabled,
                     ),
                   ),
                 ],
@@ -12105,8 +12098,8 @@ class _ChatComposerSection extends StatelessWidget {
         },
       ),
     );
-    children.add(composer);
-    return TapRegion(
+    children.add(Opacity(opacity: enabled ? 1.0 : 0.56, child: composer));
+    final content = TapRegion(
       groupId: tapRegionGroup,
       onTapUpOutside: (_) {
         if (!textFocusNode.hasFocus && !subjectFocusNode.hasFocus) {
@@ -12123,6 +12116,10 @@ class _ChatComposerSection extends StatelessWidget {
         ),
       ),
     );
+    if (enabled) {
+      return content;
+    }
+    return IgnorePointer(child: content);
   }
 }
 
@@ -12163,6 +12160,7 @@ class _ComposerTaskDropRegion extends StatelessWidget {
 
 class _SubjectTextField extends StatelessWidget {
   const _SubjectTextField({
+    required this.enabled,
     required this.controller,
     required this.focusNode,
     required this.onSubmitted,
@@ -12171,6 +12169,7 @@ class _SubjectTextField extends StatelessWidget {
     required this.onExpandDraftPressed,
   });
 
+  final bool enabled;
   final TextEditingController controller;
   final FocusNode focusNode;
   final VoidCallback onSubmitted;
@@ -12202,13 +12201,17 @@ class _SubjectTextField extends StatelessWidget {
         child: AxiTextField(
           controller: controller,
           focusNode: focusNode,
+          enabled: true,
+          readOnly: !enabled,
+          showCursor: enabled,
+          enableInteractiveSelection: enabled,
           selectAllOnFocus: false,
           minLines: 1,
           maxLines: 1,
           textInputAction: TextInputAction.next,
           textCapitalization: TextCapitalization.sentences,
-          onSubmitted: (_) => onSubmitted(),
-          onEditingComplete: onSubmitted,
+          onSubmitted: enabled ? (_) => onSubmitted() : null,
+          onEditingComplete: enabled ? onSubmitted : null,
           keyboardType: TextInputType.text,
           style: subjectStyle,
           strutStyle: subjectStrutStyle,
@@ -12242,7 +12245,9 @@ class _SubjectTextField extends StatelessWidget {
                     buttonSize: sizing.inputSuffixButtonSize,
                     tapTargetSize: sizing.inputSuffixButtonSize,
                     cornerRadius: context.radii.squircleSm,
-                    onPressed: expandDraftEnabled ? onExpandDraftPressed : null,
+                    onPressed: enabled && expandDraftEnabled
+                        ? onExpandDraftPressed
+                        : null,
                   )
                 : null,
             suffixIconConstraints: BoxConstraints(
@@ -12315,85 +12320,6 @@ class _ReadOnlyComposerBanner extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DisabledChatComposerSection extends StatelessWidget {
-  const _DisabledChatComposerSection({
-    required this.hintText,
-    required this.textController,
-    required this.textFocusNode,
-    required this.sendOnEnter,
-  });
-
-  final String hintText;
-  final TextEditingController textController;
-  final FocusNode textFocusNode;
-  final bool sendOnEnter;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final spacing = context.spacing;
-    final width = MediaQuery.sizeOf(context).width;
-    final composerHorizontalInset = spacing.l;
-    final desktopComposerHorizontalInset = spacing.l;
-    final horizontalPadding = width >= smallScreen
-        ? desktopComposerHorizontalInset
-        : composerHorizontalInset;
-    final cutoutBalanceInset = context.sizing.iconButtonTapTarget / 2;
-    final rightPadding = math.max(0.0, horizontalPadding - cutoutBalanceInset);
-    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final l10n = context.l10n;
-    final actions = <ChatComposerAccessory>[
-      ChatComposerAccessory.leading(
-        child: _ChatComposerIconButton(
-          icon: LucideIcons.smile,
-          tooltip: l10n.chatEmojiPicker,
-        ),
-      ),
-      ChatComposerAccessory.leading(
-        child: _AttachmentAccessoryButton(enabled: false, onPressed: () {}),
-      ),
-      ChatComposerAccessory.trailing(
-        child: _SendMessageAccessory(enabled: false, onPressed: () {}),
-      ),
-    ];
-    return SafeArea(
-      top: false,
-      left: false,
-      right: false,
-      bottom: !keyboardVisible,
-      child: SizedBox(
-        width: double.infinity,
-        child: ColoredBox(
-          color: colors.background,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: colors.border, width: 1)),
-            ),
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                horizontalPadding,
-                spacing.m,
-                rightPadding,
-                spacing.s,
-              ),
-              child: ChatCutoutComposer(
-                controller: textController,
-                focusNode: textFocusNode,
-                hintText: hintText,
-                onSend: () {},
-                actions: actions,
-                sendEnabled: false,
-                sendOnEnter: sendOnEnter,
-                enabled: false,
-              ),
             ),
           ),
         ),
@@ -14809,7 +14735,7 @@ class _GuestChatHeader extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           child: Row(
             children: [
-              _GuestChatAppIconAvatar(size: context.sizing.iconButtonSize),
+              AxichatAppIconAvatar(size: context.sizing.iconButtonSize),
               SizedBox(width: spacing),
               Expanded(
                 child: Column(
@@ -14836,31 +14762,6 @@ class _GuestChatHeader extends StatelessWidget {
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _GuestChatAppIconAvatar extends StatelessWidget {
-  const _GuestChatAppIconAvatar({required this.size});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    const String guestChatAppIconAssetPath = 'assets/icons/app_icon_source.png';
-    final shape = SquircleBorder(cornerRadius: context.radii.squircle);
-    return SizedBox.square(
-      child: ClipPath(
-        clipper: ShapeBorderClipper(shape: shape),
-        child: Image.asset(
-          guestChatAppIconAssetPath,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          filterQuality: FilterQuality.high,
-          isAntiAlias: true,
         ),
       ),
     );
@@ -15355,21 +15256,41 @@ class _ForwardRecipientSheet extends StatefulWidget {
 class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
   List<ComposerRecipient> _recipients = const [];
 
-  chat_models.Chat? get _selectedChat {
+  FanOutTarget? get _selectedTarget {
     for (final recipient in _recipients) {
-      final chat = recipient.target.chat;
-      if (recipient.included && chat != null) {
-        return chat;
+      final target = recipient.target;
+      if (recipient.included) {
+        return target;
       }
     }
     return null;
   }
 
-  bool get _canSend => _selectedChat != null;
+  bool get _canSend => _selectedTarget != null;
 
   void _handleRecipientAdded(FanOutTarget target) {
-    final chat_models.Chat? chat = target.chat;
-    if (chat == null) return;
+    final address = target.address?.trim();
+    if (target.chat == null &&
+        target.transport == null &&
+        address != null &&
+        address.isNotEmpty) {
+      _resolveAddressTransport(address).then((transport) {
+        if (!mounted || transport == null) return;
+        _applyRecipient(
+          FanOutTarget.address(
+            address: address,
+            displayName: target.displayName,
+            shareSignatureEnabled: target.shareSignatureEnabled,
+            transport: transport,
+          ),
+        );
+      });
+      return;
+    }
+    _applyRecipient(target);
+  }
+
+  void _applyRecipient(FanOutTarget target) {
     setState(() {
       _recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
     });
@@ -15398,7 +15319,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
   }
 
   void _handleSend() {
-    final chat_models.Chat? selected = _selectedChat;
+    final FanOutTarget? selected = _selectedTarget;
     if (selected == null) return;
     Navigator.of(context).pop(selected);
   }
@@ -15407,6 +15328,30 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     FocusManager.instance.primaryFocus?.unfocus();
     if (!mounted) return;
     Navigator.of(context).maybePop();
+  }
+
+  Future<MessageTransport?> _resolveAddressTransport(String address) async {
+    final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
+    final supportsEmail = endpointConfig.smtpEnabled;
+    final supportsXmpp = endpointConfig.xmppEnabled;
+    if (supportsEmail && !supportsXmpp) {
+      return MessageTransport.email;
+    }
+    if (!supportsEmail && supportsXmpp) {
+      return MessageTransport.xmpp;
+    }
+    if (!supportsEmail && !supportsXmpp) {
+      return null;
+    }
+    final hinted = hintTransportForAddress(address);
+    if (hinted != null) {
+      return hinted;
+    }
+    return showTransportChoiceDialog(
+      context,
+      address: address,
+      defaultTransport: hinted,
+    );
   }
 
   @override
@@ -15452,7 +15397,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
               selfIdentity: selfIdentity,
               latestStatuses: const {},
               collapsedByDefault: false,
-              allowAddressTargets: false,
+              allowAddressTargets: true,
               showSuggestionsWhenEmpty: true,
               horizontalPadding: 0,
               onRecipientAdded: _handleRecipientAdded,

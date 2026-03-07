@@ -171,6 +171,15 @@ final class ChatEmailHeadersRequested extends ChatEvent {
   List<Object?> get props => [deltaMessageId];
 }
 
+final class ChatEmailDebugDumpRequested extends ChatEvent {
+  const ChatEmailDebugDumpRequested(this.message);
+
+  final Message message;
+
+  @override
+  List<Object?> get props => [message];
+}
+
 final class _ChatTypingStopped extends ChatEvent {
   const _ChatTypingStopped({required this.chat});
 
@@ -484,11 +493,11 @@ final class ChatMessageForwardRequested extends ChatEvent {
   });
 
   final Message message;
-  final Chat target;
+  final FanOutTarget target;
   final EmailForwardingMode forwardingMode;
 
   @override
-  List<Object?> get props => [forwardingMode];
+  List<Object?> get props => [message, target, forwardingMode];
 }
 
 final class ChatMessageResendRequested extends ChatEvent {

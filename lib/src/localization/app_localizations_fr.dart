@@ -5745,6 +5745,25 @@ class AppLocalizationsFr extends AppLocalizations {
       'En-tetes indisponibles.';
 
   @override
+  String get chatMessageDetailsDebugDumpLabel => 'Vidage de debogage Delta';
+
+  @override
+  String get chatMessageDetailsDebugDumpActionLabel =>
+      'Voir le vidage de debogage';
+
+  @override
+  String get chatMessageDetailsDebugDumpNote =>
+      'Affiche les champs stockes par Axichat et la charge du message analysee par Delta. Ce n est pas la source MIME brute complete.';
+
+  @override
+  String get chatMessageDetailsDebugDumpLoadingLabel =>
+      'Chargement du vidage de debogage...';
+
+  @override
+  String get chatMessageDetailsDebugDumpUnavailableLabel =>
+      'Vidage de debogage indisponible.';
+
+  @override
   String get chatMessageDetailsStanzaIdLabel => 'ID de stanza';
 
   @override

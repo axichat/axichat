@@ -294,6 +294,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
     on<ChatMessageFocused>(_onChatMessageFocused);
     on<ChatEmailHeadersRequested>(_onChatEmailHeadersRequested);
+    on<ChatEmailDebugDumpRequested>(_onChatEmailDebugDumpRequested);
     on<ChatTypingStarted>(_onChatTypingStarted);
     on<_ChatTypingStopped>(_onChatTypingStopped);
     on<_TypingParticipantsUpdated>(_onTypingParticipantsUpdated);
@@ -2886,11 +2887,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           );
         emit(state.copyWith(items: updatedItems, focused: fetched));
         _maybeRequestEmailHeaders(fetched);
+        _maybeRequestEmailDebugDump(fetched);
         return;
       }
     }
     emit(state.copyWith(focused: target));
     _maybeRequestEmailHeaders(target);
+    _maybeRequestEmailDebugDump(target);
   }
 
   Future<void> _onChatEmailHeadersRequested(
@@ -2958,6 +2961,75 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
+  Future<void> _onChatEmailDebugDumpRequested(
+    ChatEmailDebugDumpRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final message = event.message;
+    final deltaMessageId = message.deltaMsgId;
+    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
+      return;
+    }
+    if (state.emailDebugDumpByDeltaId.containsKey(deltaMessageId)) {
+      return;
+    }
+    if (state.emailDebugDumpLoading.contains(deltaMessageId)) {
+      return;
+    }
+    final loading = Set<int>.from(state.emailDebugDumpLoading)
+      ..add(deltaMessageId);
+    final unavailable = Set<int>.from(state.emailDebugDumpUnavailable)
+      ..remove(deltaMessageId);
+    emit(
+      state.copyWith(
+        emailDebugDumpLoading: loading,
+        emailDebugDumpUnavailable: unavailable,
+      ),
+    );
+    final emailService = _emailService;
+    if (emailService == null) {
+      final updatedLoading = Set<int>.from(state.emailDebugDumpLoading)
+        ..remove(deltaMessageId);
+      final updatedUnavailable = Set<int>.from(state.emailDebugDumpUnavailable)
+        ..add(deltaMessageId);
+      emit(
+        state.copyWith(
+          emailDebugDumpLoading: updatedLoading,
+          emailDebugDumpUnavailable: updatedUnavailable,
+        ),
+      );
+      return;
+    }
+    String? debugDump;
+    try {
+      debugDump = await emailService.getMessageDebugDump(message);
+    } on Exception {
+      debugDump = null;
+    }
+    final updatedLoading = Set<int>.from(state.emailDebugDumpLoading)
+      ..remove(deltaMessageId);
+    if (debugDump == null || debugDump.trim().isEmpty) {
+      final updatedUnavailable = Set<int>.from(state.emailDebugDumpUnavailable)
+        ..add(deltaMessageId);
+      emit(
+        state.copyWith(
+          emailDebugDumpLoading: updatedLoading,
+          emailDebugDumpUnavailable: updatedUnavailable,
+        ),
+      );
+      return;
+    }
+    final updatedDebugDumps = Map<int, String>.from(
+      state.emailDebugDumpByDeltaId,
+    )..[deltaMessageId] = debugDump;
+    emit(
+      state.copyWith(
+        emailDebugDumpLoading: updatedLoading,
+        emailDebugDumpByDeltaId: updatedDebugDumps,
+      ),
+    );
+  }
+
   void _maybeRequestEmailHeaders(Message? message) {
     final deltaMessageId = message?.deltaMsgId;
     if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
@@ -2970,6 +3042,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     add(ChatEmailHeadersRequested(deltaMessageId));
+  }
+
+  void _maybeRequestEmailDebugDump(Message? message) {
+    final deltaMessageId = message?.deltaMsgId;
+    if (deltaMessageId == null || deltaMessageId <= _deltaMessageIdUnset) {
+      return;
+    }
+    if (state.emailDebugDumpByDeltaId.containsKey(deltaMessageId)) {
+      return;
+    }
+    if (state.emailDebugDumpLoading.contains(deltaMessageId)) {
+      return;
+    }
+    add(ChatEmailDebugDumpRequested(message!));
   }
 
   Future<void> _onChatTypingStarted(
@@ -3931,7 +4017,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final message = event.message;
     final plainText = message.plainText.trim();
     final htmlBody = message.normalizedHtmlBody;
-    final isEmailTarget = _isEmailCapableChat(target);
+    final isEmailTarget = _isEmailForwardTarget(target);
+    final targetChat = target.chat;
+    final targetJid = (targetChat?.jid ?? target.address)?.trim();
     final forwardingMode = event.forwardingMode;
     final safeForward = isEmailTarget && forwardingMode.isSafe;
     final resolvedHtmlBody = safeForward ? null : htmlBody;
@@ -3958,13 +4046,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
 
     try {
+      Chat? resolvedEmailTarget;
+      if (isEmailTarget) {
+        if (emailService == null) {
+          emitForwardFailure();
+          return;
+        }
+        resolvedEmailTarget = await _resolveEmailForwardTarget(
+          emailService: emailService,
+          target: target,
+        );
+        if (resolvedEmailTarget == null) {
+          emitForwardFailure();
+          return;
+        }
+      }
+      if (!isEmailTarget && (targetJid == null || targetJid.isEmpty)) {
+        emitForwardFailure();
+        return;
+      }
       if (isEmailTarget &&
           emailService != null &&
+          resolvedEmailTarget != null &&
           message.deltaMsgId != null &&
           forwardingMode.isOriginal) {
         final forwarded = await emailService.forwardMessages(
           messages: [message],
-          toChat: target,
+          toChat: resolvedEmailTarget,
         );
         if (forwarded) {
           emitForwardSuccess();
@@ -3976,7 +4084,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final caption = plainText.isNotEmpty ? plainText : null;
         final htmlCaption = safeForward ? null : htmlBody;
         if (isEmailTarget) {
-          if (emailService == null) {
+          if (emailService == null || resolvedEmailTarget == null) {
             emitForwardFailure();
             return;
           }
@@ -3992,7 +4100,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                 ? attachment.copyWith(caption: caption)
                 : attachment;
             await emailService.sendAttachment(
-              chat: target,
+              chat: resolvedEmailTarget,
               attachment: captionedAttachment,
               htmlCaption: index == 0 ? htmlCaption : null,
               forwarded: true,
@@ -4013,10 +4121,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               ? attachment.copyWith(caption: caption)
               : attachment;
           await _messageService.sendAttachment(
-            jid: target.jid,
+            jid: targetJid!,
             attachment: captionedAttachment,
-            encryptionProtocol: target.encryptionProtocol,
-            chatType: target.type,
+            encryptionProtocol:
+                targetChat?.encryptionProtocol ?? EncryptionProtocol.none,
+            chatType: targetChat?.type ?? ChatType.chat,
             htmlCaption: shouldApplyCaption ? resolvedHtmlBody : null,
             forwarded: true,
             forwardedFromJid: message.senderJid,
@@ -4032,12 +4141,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return;
       }
       if (isEmailTarget) {
-        if (emailService == null) {
+        if (emailService == null || resolvedEmailTarget == null) {
           emitForwardFailure();
           return;
         }
         await emailService.sendMessage(
-          chat: target,
+          chat: resolvedEmailTarget,
           body: plainText,
           htmlBody: resolvedHtmlBody,
           forwarded: true,
@@ -4045,13 +4154,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
       } else {
         await _messageService.sendMessage(
-          jid: target.jid,
+          jid: targetJid!,
           text: plainText,
           htmlBody: resolvedHtmlBody,
           forwarded: true,
           forwardedFromJid: message.senderJid,
-          encryptionProtocol: target.encryptionProtocol,
-          chatType: target.type,
+          encryptionProtocol:
+              targetChat?.encryptionProtocol ?? EncryptionProtocol.none,
+          chatType: targetChat?.type ?? ChatType.chat,
         );
       }
       emitForwardSuccess();
@@ -4059,6 +4169,34 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _log.warning(_messageForwardFailedLogMessage, error, stackTrace);
       emitForwardFailure();
     }
+  }
+
+  bool _isEmailForwardTarget(FanOutTarget target) {
+    final targetChat = target.chat;
+    if (targetChat != null) {
+      return _isEmailCapableChat(targetChat);
+    }
+    final transport =
+        target.transport ?? hintTransportForAddress(target.address);
+    return transport?.isEmail ?? false;
+  }
+
+  Future<Chat?> _resolveEmailForwardTarget({
+    required EmailService emailService,
+    required FanOutTarget target,
+  }) async {
+    final targetChat = target.chat;
+    if (targetChat != null) {
+      return emailService.ensureChatForEmailChat(targetChat);
+    }
+    final address = target.address?.trim();
+    if (address == null || address.isEmpty) {
+      return null;
+    }
+    return emailService.ensureChatForAddress(
+      address: address,
+      displayName: target.displayName,
+    );
   }
 
   Future<void> _onChatMessageResendRequested(
