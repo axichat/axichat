@@ -335,12 +335,54 @@ pre, code {
     return false;
   }
 
+  static String prepareEmailHtmlForFlutterHtml(
+    String html, {
+    required bool allowRemoteImages,
+  }) {
+    try {
+      final document = _prepareEmailHtmlDocument(
+        html,
+        allowRemoteImages: allowRemoteImages,
+        includeWebViewChrome: false,
+      );
+      final bodyHtml = document.body?.innerHtml.trim();
+      final sourceHtml = bodyHtml != null && bodyHtml.isNotEmpty
+          ? bodyHtml
+          : document.outerHtml;
+      final simplifiedHtml = simplifyHtmlForWebView(sourceHtml);
+      if (simplifiedHtml.isNotEmpty) {
+        return simplifiedHtml;
+      }
+      return sourceHtml;
+    } on Exception {
+      return html;
+    }
+  }
+
   static String prepareEmailHtmlForWebView(
     String html, {
     required bool allowRemoteImages,
   }) {
     try {
-      final document = html_parser.parse(_truncateHtmlInput(html));
+      final document = _prepareEmailHtmlDocument(
+        html,
+        allowRemoteImages: allowRemoteImages,
+        includeWebViewChrome: true,
+      );
+      return document.outerHtml;
+    } on Exception {
+      return html;
+    }
+  }
+
+  static dom.Document _prepareEmailHtmlDocument(
+    String html, {
+    required bool allowRemoteImages,
+    required bool includeWebViewChrome,
+  }) {
+    final document = html_parser.parse(_truncateHtmlInput(html));
+    _removeHiddenEmailNodes(document.nodes);
+    if (includeWebViewChrome) {
       final head =
           document.head ??
           (() {
@@ -371,25 +413,23 @@ pre, code {
         ..id = 'axichat-email-webview-style'
         ..text = _webViewBaseStyle;
       head.append(styleElement);
-      _normalizeWebViewNodes(document.nodes);
-      for (final script in document.querySelectorAll('script')) {
-        script.remove();
-      }
-      if (!allowRemoteImages) {
-        for (final image in document.querySelectorAll('img')) {
-          final source = image.attributes[_srcAttribute];
-          final uri = Uri.tryParse(source?.trim() ?? '');
-          final scheme = uri?.scheme.trim().toLowerCase();
-          if (scheme == 'https') {
-            image.remove();
-          }
+    }
+    _normalizeWebViewNodes(document.nodes);
+    for (final script in document.querySelectorAll('script')) {
+      script.remove();
+    }
+    if (!allowRemoteImages) {
+      for (final image in document.querySelectorAll('img')) {
+        final source = image.attributes[_srcAttribute];
+        final uri = Uri.tryParse(source?.trim() ?? '');
+        final scheme = uri?.scheme.trim().toLowerCase();
+        if (scheme == 'https') {
+          image.remove();
         }
       }
-      _trimLeadingWebViewWhitespace(document.body);
-      return document.outerHtml;
-    } on Exception {
-      return html;
     }
+    _trimLeadingWebViewWhitespace(document.body);
+    return document;
   }
 
   static void _normalizeWebViewNodes(List<dom.Node> nodes) {
@@ -429,6 +469,40 @@ pre, code {
         _normalizeWebViewNodes(node.nodes);
       }
     }
+  }
+
+  static void _removeHiddenEmailNodes(List<dom.Node> nodes) {
+    for (final node in nodes.toList()) {
+      if (node is dom.Element) {
+        if (_isHiddenEmailElement(node)) {
+          node.remove();
+          continue;
+        }
+      }
+      if (node.nodes.isNotEmpty) {
+        _removeHiddenEmailNodes(node.nodes);
+      }
+    }
+  }
+
+  static bool _isHiddenEmailElement(dom.Element element) {
+    if (element.attributes.containsKey('hidden')) {
+      return true;
+    }
+    final ariaHidden = element.attributes['aria-hidden']?.trim().toLowerCase();
+    if (ariaHidden == 'true') {
+      return true;
+    }
+    final style = element.attributes['style']?.trim().toLowerCase();
+    if (style == null || style.isEmpty) {
+      return false;
+    }
+    return style.contains('display:none') ||
+        style.contains('display: none') ||
+        style.contains('visibility:hidden') ||
+        style.contains('visibility: hidden') ||
+        style.contains('mso-hide:all') ||
+        style.contains('mso-hide: all');
   }
 
   static void _trimLeadingWebViewWhitespace(dom.Element? body) {

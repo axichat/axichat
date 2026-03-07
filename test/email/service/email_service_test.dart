@@ -1436,6 +1436,59 @@ void main() {
   });
 
   test(
+    'sendMessage normalizes direct recipient addresses to bare JIDs',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 91);
+
+      final chat = Chat(
+        jid: 'peer@axi.im/resource',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        contactJid: 'peer@example.com/resource',
+        emailFromAddress: 'alice@example.org',
+      );
+
+      await service.sendMessage(chat: chat, body: 'First send');
+
+      verify(
+        () => transport.ensureChatForAddress(
+          address: 'peer@example.com',
+          displayName: 'Peer',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
     'sendMessage rehydrates stale delta chats before resolving by address',
     () async {
       final service = EmailService(
@@ -1521,6 +1574,15 @@ void main() {
           ),
         ),
       ).called(1);
+      verifyNever(
+        () => database.updateChat(
+          any(
+            that: predicate<Chat>(
+              (Chat updated) => updated.jid == 'dc-88@delta.chat',
+            ),
+          ),
+        ),
+      );
 
       addTearDown(service.shutdown);
     },

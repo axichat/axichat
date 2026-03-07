@@ -52,7 +52,6 @@ import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
-import 'package:axichat/src/chat/view/widgets/email_html_web_view.dart';
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/contact_rename_dialog.dart';
@@ -7388,6 +7387,12 @@ class _ChatState extends State<Chat> {
                                                                           : () => _handleEmailImagesApproved(
                                                                               messageModel.id!,
                                                                             );
+                                                                      final String
+                                                                      preparedHtmlBody = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+                                                                        normalizedHtmlBody,
+                                                                        allowRemoteImages:
+                                                                            shouldLoadImages,
+                                                                      );
                                                                       final String?
                                                                       emailFallbackText =
                                                                           normalizedHtmlText?.isNotEmpty ==
@@ -7395,10 +7400,9 @@ class _ChatState extends State<Chat> {
                                                                           ? normalizedHtmlText
                                                                           : normalizedQuotedText;
                                                                       final bool
-                                                                      shouldRenderHtmlBody =
-                                                                          normalizedHtmlBody
-                                                                              .isNotEmpty ==
-                                                                          true;
+                                                                      shouldRenderHtmlBody = preparedHtmlBody
+                                                                          .trim()
+                                                                          .isNotEmpty;
                                                                       final bool
                                                                       shouldShowImageGallery =
                                                                           hasRemoteHtmlImages &&
@@ -7429,39 +7433,23 @@ class _ChatState extends State<Chat> {
                                                                       }
                                                                       if (shouldRenderHtmlBody) {
                                                                         bubbleTextChildren.add(
-                                                                          EmailHtmlWebView(
+                                                                          _MessageHtmlBody(
                                                                             key: ValueKey(
                                                                               bubbleContentKey,
                                                                             ),
                                                                             html:
-                                                                                normalizedHtmlBody,
-                                                                            allowRemoteImages:
+                                                                                preparedHtmlBody,
+                                                                            textStyle:
+                                                                                baseTextStyle,
+                                                                            textColor:
+                                                                                textColor,
+                                                                            linkColor:
+                                                                                linkStyle.color ??
+                                                                                (self
+                                                                                    ? colors.primaryForeground
+                                                                                    : colors.primary),
+                                                                            shouldLoadImages:
                                                                                 shouldLoadImages,
-                                                                            onBackgroundTap:
-                                                                                widget.readOnly
-                                                                                ? null
-                                                                                : () {
-                                                                                    _toggleMessageSelection(
-                                                                                      messageModel,
-                                                                                    );
-                                                                                  },
-                                                                            clampHeightToMax:
-                                                                                false,
-                                                                            disableInternalScroll:
-                                                                                true,
-                                                                            simplifyLayout:
-                                                                                true,
-                                                                            useHybridComposition:
-                                                                                false,
-                                                                            maxHeight: math.min(
-                                                                              MediaQuery.sizeOf(
-                                                                                    context,
-                                                                                  ).height *
-                                                                                  context.sizing.dialogMaxHeightFraction,
-                                                                              context.sizing.composeWindowHeight,
-                                                                            ),
-                                                                            minHeight:
-                                                                                context.sizing.listButtonHeight,
                                                                             onLinkTap:
                                                                                 _handleLinkTap,
                                                                           ),
@@ -10836,6 +10824,11 @@ class _PinnedMessageTile extends StatelessWidget {
       } else if (normalizedHtmlBody != null &&
           shouldRenderTextContent &&
           !shouldPreferPlainTextHtml) {
+        final preparedHtmlBody =
+            HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+              normalizedHtmlBody,
+              allowRemoteImages: settings.autoLoadEmailImages,
+            );
         final emailFallbackText = normalizedHtmlText?.isNotEmpty == true
             ? normalizedHtmlText
             : resolvedQuotedText;
@@ -10853,7 +10846,7 @@ class _PinnedMessageTile extends StatelessWidget {
             ),
           );
         }
-        if (hasStoredHtmlBody) {
+        if (hasStoredHtmlBody && preparedHtmlBody.trim().isNotEmpty) {
           if (contentChildren.isNotEmpty) {
             contentChildren.add(SizedBox(height: spacing.xs));
           }
@@ -10862,7 +10855,7 @@ class _PinnedMessageTile extends StatelessWidget {
               key: ValueKey(
                 previewProperties['id'] ?? effectiveMessage.stanzaID,
               ),
-              html: normalizedHtmlBody,
+              html: preparedHtmlBody,
               textStyle: baseTextStyle,
               textColor: textColor,
               linkColor: isSelf ? colors.primaryForeground : colors.primary,

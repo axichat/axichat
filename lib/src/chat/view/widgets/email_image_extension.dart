@@ -80,7 +80,6 @@ Map<String, Style> createEmailHtmlStyles({
     padding: HtmlPaddings.zero,
     color: color,
     fontSize: fontSize,
-    display: Display.block,
   );
 
   final bodyStyle = blockStyle(
@@ -91,6 +90,12 @@ Map<String, Style> createEmailHtmlStyles({
     color: textColor,
     fontSize: FontSize(fallbackFontSize),
   ).copyWith(border: Border.fromBorderSide(BorderSide.none));
+  final tableCellStyle = Style(
+    color: textColor,
+    fontSize: FontSize(fallbackFontSize),
+    margin: Margins.zero,
+    padding: HtmlPaddings.zero,
+  );
 
   return <String, Style>{
     'html': bodyStyle,
@@ -103,12 +108,12 @@ Map<String, Style> createEmailHtmlStyles({
     'ol': bodyStyle,
     'li': bodyStyle,
     'table': bodyStyle,
-    'thead': bodyStyle,
-    'tbody': bodyStyle,
-    'tfoot': bodyStyle,
-    'tr': bodyStyle,
-    'td': bodyStyle,
-    'th': bodyStyle,
+    'thead': tableCellStyle,
+    'tbody': tableCellStyle,
+    'tfoot': tableCellStyle,
+    'tr': tableCellStyle,
+    'td': tableCellStyle,
+    'th': tableCellStyle,
     'h1': bodyStyle,
     'h2': bodyStyle,
     'h3': bodyStyle,

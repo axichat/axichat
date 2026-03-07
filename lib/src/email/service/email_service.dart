@@ -1357,13 +1357,6 @@ class EmailService {
     final localBodyOverride = trimmedBody.isNotEmpty
         ? trimmedBody
         : effectiveBody;
-    _log.fine(
-      'Email send target: '
-      'chat=${context.chat.jid}, '
-      'recipient=${_recipientAddressForChat(context.chat) ?? context.chat.emailAddress ?? context.chat.contactJid ?? context.chat.jid}, '
-      'deltaChatId=$chatId, '
-      'accountId=${context.account.deltaAccountId}',
-    );
     final msgId = await _guardDeltaOperation(
       operation: 'send email message',
       body: () => _transport.sendText(
@@ -1459,13 +1452,6 @@ class EmailService {
       body: captionText,
     );
     final sanitizedCaption = captionText.trim();
-    _log.fine(
-      'Email attachment target: '
-      'chat=${context.chat.jid}, '
-      'recipient=${_recipientAddressForChat(context.chat) ?? context.chat.emailAddress ?? context.chat.contactJid ?? context.chat.jid}, '
-      'deltaChatId=$chatId, '
-      'accountId=${context.account.deltaAccountId}',
-    );
     final msgId = await _guardDeltaOperation(
       operation: 'send email attachment',
       body: () => _transport.sendAttachment(
@@ -3991,8 +3977,12 @@ class EmailService {
       chat.jid,
     ];
     for (final candidate in candidates) {
-      final String normalized = normalizeEmailAddress(candidate ?? '');
-      if (normalized.isEmpty || _isSyntheticEmailChatAddress(normalized)) {
+      final String? bareAddress = bareAddressOrNull(candidate);
+      if (bareAddress == null) {
+        continue;
+      }
+      final String normalized = normalizeEmailAddress(bareAddress);
+      if (_isSyntheticEmailChatAddress(normalized)) {
         continue;
       }
       return normalized;
@@ -4245,12 +4235,10 @@ class EmailService {
 
   Future<_ResolvedEmailAccount> _resolveAccountForChat(Chat chat) async {
     final String scope = _requireActiveScope();
-    final accountResolution = await _resolveAccountForAddress(
+    return _resolveAccountForAddress(
       scope: scope,
       fromAddress: chat.emailFromAddress,
     );
-    await _updateChatEmailFromAddress(chat, accountResolution.address);
-    return accountResolution;
   }
 
   Future<void> _ensureAccountConfigured({
