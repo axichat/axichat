@@ -160,4 +160,39 @@ void main() {
     expect(totalCount, 2);
     expect(archivedCount, 1);
   });
+
+  test('chat summary follows the newest saved message', () async {
+    final contact = Chat(
+      jid: 'summary-test@delta.chat',
+      title: 'Summary Test',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+    );
+    await db.createChat(contact);
+
+    final firstMessage = Message(
+      stanzaID: 'summary-1',
+      senderJid: contact.jid,
+      chatJid: contact.jid,
+      timestamp: DateTime.utc(2024, 1, 1, 12),
+      body: 'first message',
+      encryptionProtocol: EncryptionProtocol.none,
+    );
+    final secondMessage = Message(
+      stanzaID: 'summary-2',
+      senderJid: contact.jid,
+      chatJid: contact.jid,
+      timestamp: DateTime.utc(2024, 1, 1, 12, 1),
+      body: 'second message',
+      encryptionProtocol: EncryptionProtocol.none,
+    );
+
+    await db.saveMessage(firstMessage);
+    await db.saveMessage(secondMessage);
+
+    final updatedChat = await db.getChat(contact.jid);
+
+    expect(updatedChat?.lastMessage, 'second message');
+    expect(updatedChat?.lastChangeTimestamp, secondMessage.timestamp);
+  });
 }

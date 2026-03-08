@@ -471,6 +471,12 @@ abstract interface class XmppDatabase implements Database {
     DateTime? spamUpdatedAt,
   });
 
+  Future<void> markEmailChatsSpam({
+    required String address,
+    required bool spam,
+    DateTime? spamUpdatedAt,
+  });
+
   Future<void> markChatMarkerResponsive({
     required String jid,
     required bool? responsive,
@@ -2620,9 +2626,8 @@ WHERE transport IS NULL
   }) async {
     final resolvedLastMessage = lastMessage ?? '';
     final hasLastMessage = resolvedLastMessage.trim().isNotEmpty;
-    final int serializedTimestamp = timestamp.millisecondsSinceEpoch;
     const int emptyMessageLength = 0;
-    await customStatement(
+    await customUpdate(
       '''
 UPDATE chats
 SET last_change_timestamp = CASE
@@ -2637,16 +2642,17 @@ SET last_change_timestamp = CASE
     END
 WHERE jid = ?
 ''',
-      [
-        serializedTimestamp,
-        serializedTimestamp,
-        hasLastMessage ? 1 : 0,
-        emptyMessageLength,
-        resolvedLastMessage,
-        serializedTimestamp,
-        resolvedLastMessage,
-        jid,
+      variables: [
+        Variable<DateTime>(timestamp),
+        Variable<DateTime>(timestamp),
+        Variable<int>(hasLastMessage ? 1 : 0),
+        Variable<int>(emptyMessageLength),
+        Variable<String>(resolvedLastMessage),
+        Variable<DateTime>(timestamp),
+        Variable<String>(resolvedLastMessage),
+        Variable<String>(jid),
       ],
+      updates: {chats},
     );
   }
 
@@ -4528,6 +4534,39 @@ WHERE email_from_address IN ($placeholderClause)
         spamUpdatedAt: Value(resolvedUpdatedAt),
       ),
     );
+  }
+
+  @override
+  Future<void> markEmailChatsSpam({
+    required String address,
+    required bool spam,
+    DateTime? spamUpdatedAt,
+  }) async {
+    final normalized = _normalizeEmail(address);
+    if (normalized.isEmpty) {
+      return;
+    }
+    final resolvedUpdatedAt = spam
+        ? (spamUpdatedAt ?? DateTime.timestamp())
+        : null;
+    await (update(chats)..where(
+          (tbl) =>
+              (tbl.transport.equals(MessageTransport.email.index) |
+                  tbl.deltaChatId.isNotNull() |
+                  tbl.emailAddress.isNotNull() |
+                  tbl.emailFromAddress.isNotNull()) &
+              (tbl.jid.equals(normalized) |
+                  tbl.contactJid.equals(normalized) |
+                  tbl.contactID.equals(normalized) |
+                  tbl.emailAddress.equals(normalized) |
+                  tbl.emailFromAddress.equals(normalized)),
+        ))
+        .write(
+          ChatsCompanion(
+            spam: Value(spam),
+            spamUpdatedAt: Value(resolvedUpdatedAt),
+          ),
+        );
   }
 
   @override

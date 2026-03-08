@@ -653,13 +653,14 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   Future<bool?> moveSpamToInbox({required Chat chat}) async {
     final jid = chat.jid;
+    final spamTargetJid = chat.spamSyncTargetJid;
     if (state.spamUpdatingJids.contains(jid)) {
       return null;
     }
     emit(state.copyWith(spamUpdatingJids: {...state.spamUpdatingJids, jid}));
     bool success = false;
     try {
-      await _xmppService.setSpamStatus(jid: jid, spam: false);
+      await _xmppService.setSpamStatus(jid: spamTargetJid, spam: false);
       success = true;
     } on XmppException {
       success = false;

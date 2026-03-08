@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:drift/drift.dart' hide JsonKey;
 import 'package:freezed_annotation/freezed_annotation.dart';
@@ -592,6 +593,33 @@ extension ChatTransportExtension on Chat {
       return true;
     }
     return false;
+  }
+
+  String get spamSyncTargetJid {
+    if (!isEmailBacked) {
+      return jid.trim();
+    }
+    final candidates = <String?>[
+      emailAddress,
+      contactJid,
+      contactID,
+      emailFromAddress,
+      jid,
+    ];
+    for (final candidate in candidates) {
+      final bareAddress = bareAddressOrNull(candidate);
+      if (bareAddress == null) {
+        continue;
+      }
+      final normalized = normalizedAddressValue(bareAddress);
+      if (normalized == null ||
+          normalized.isEmpty ||
+          normalized.isDeltaPlaceholderJid) {
+        continue;
+      }
+      return normalized;
+    }
+    return jid.trim();
   }
 
   MessageTransport get defaultTransport {

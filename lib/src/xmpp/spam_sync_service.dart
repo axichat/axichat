@@ -425,6 +425,11 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
         spam: spam,
         spamUpdatedAt: spam ? updatedAt : null,
       );
+      await db.markEmailChatsSpam(
+        address: normalized,
+        spam: spam,
+        spamUpdatedAt: spam ? updatedAt : null,
+      );
     });
     emitSpamSyncUpdate(
       anti_abuse.SpamSyncUpdate(

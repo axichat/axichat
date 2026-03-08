@@ -39,6 +39,7 @@ class EmailSpamService {
     if (normalized == null) return;
     final db = await _db;
     await db.addEmailSpam(normalized);
+    await db.markEmailChatsSpam(address: normalized, spam: true);
     // Block in DeltaChat to stop downloading messages from spammers
     await _onMarkSpam?.call(normalized);
   }
@@ -48,6 +49,7 @@ class EmailSpamService {
     if (normalized == null) return;
     final db = await _db;
     await db.removeEmailSpam(normalized);
+    await db.markEmailChatsSpam(address: normalized, spam: false);
     // Unblock in DeltaChat to resume downloading messages
     await _onUnmarkSpam?.call(normalized);
   }

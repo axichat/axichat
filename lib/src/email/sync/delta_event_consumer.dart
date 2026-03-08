@@ -1013,6 +1013,11 @@ class DeltaEventConsumer {
         emailAddress.isNotEmpty &&
         await db.isEmailAddressSpam(emailAddress)) {
       warning = MessageWarning.emailSpamQuarantined;
+      await db.markEmailChatsSpam(
+        address: emailAddress,
+        spam: true,
+        spamUpdatedAt: timestamp,
+      );
       await db.markChatSpam(
         jid: resolvedChat.jid,
         spam: true,

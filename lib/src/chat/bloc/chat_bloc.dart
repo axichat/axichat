@@ -4265,8 +4265,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = event.chat;
     final xmppService = _xmppService;
     if (xmppService == null) return;
+    final spamTargetJid = chat.spamSyncTargetJid;
+    if (spamTargetJid.isEmpty) {
+      return;
+    }
     try {
-      await xmppService.setSpamStatus(jid: chat.jid, spam: event.sendToSpam);
+      await xmppService.setSpamStatus(
+        jid: spamTargetJid,
+        spam: event.sendToSpam,
+      );
     } on Exception catch (error, stackTrace) {
       _log.safeWarning('Failed to update spam status', error, stackTrace);
       emit(
