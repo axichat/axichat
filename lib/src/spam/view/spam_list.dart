@@ -135,28 +135,16 @@ class _SpamListBody extends StatelessWidget {
                 final chat = items[index];
                 final isUpdating = updatingJids.contains(chat.jid);
                 return ListItemPadding(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      ChatListTile(
-                        item: chat,
-                        selectionActive: false,
-                        isSelected: false,
-                        isOpen: false,
-                        timestampNow: timestampNow,
-                        selfIdentity: selfIdentity,
-                      ),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: AxiButton.secondary(
-                          loading: isUpdating,
-                          onPressed: isUpdating
-                              ? null
-                              : () => _moveToInbox(context, chat),
-                          child: Text(l10n.spamMoveToInbox),
-                        ),
-                      ),
-                    ],
+                  child: ChatListTile(
+                    item: chat,
+                    selectionActive: false,
+                    isSelected: false,
+                    isOpen: false,
+                    timestampNow: timestampNow,
+                    selfIdentity: selfIdentity,
+                    spamContext: true,
+                    spamUpdating: isUpdating,
+                    onMoveToInbox: () => _moveToInbox(context, chat),
                   ),
                 );
               },

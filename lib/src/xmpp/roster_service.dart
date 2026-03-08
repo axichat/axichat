@@ -114,24 +114,29 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
   }
 
   Future<void> addToRoster({required String jid, String? title}) async {
+    final normalized = bareAddress(jid) ?? jid.trim();
+    if (normalized.isEmpty) {
+      throw XmppRosterException();
+    }
+    final trimmedTitle = title?.trim();
     _rosterLog.info('Requesting to add roster entry...');
-    if (!await _connection.addToRoster(jid, title: title)) {
+    if (!await _connection.addToRoster(normalized, title: trimmedTitle)) {
       throw XmppRosterException();
     }
 
     _rosterLog.info('Requesting roster subscription...');
-    final preApproved = await _connection.preApproveSubscription(jid);
+    final preApproved = await _connection.preApproveSubscription(normalized);
     if (!preApproved) {
-      final requested = await _connection.requestSubscription(jid);
+      final requested = await _connection.requestSubscription(normalized);
       if (!requested) {
         _rosterLog.severe('Failed to request roster subscription.');
         throw XmppRosterException();
       }
     }
     if (this is AvatarService) {
-      await (this as AvatarService).scheduleAvatarRefresh([jid]);
+      await (this as AvatarService).scheduleAvatarRefresh([normalized]);
     }
-    await _ensureConversationIndexEntryForContact(jid);
+    await _ensureConversationIndexEntryForContact(normalized);
   }
 
   Future<void> _ensureConversationIndexEntryForContact(String jid) async {

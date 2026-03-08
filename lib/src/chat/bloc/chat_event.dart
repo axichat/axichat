@@ -450,16 +450,14 @@ final class ChatContactAddRequested extends ChatEvent {
     required this.chat,
     required this.successTitle,
     required this.failureTitle,
-    this.completer,
   });
 
   final Chat chat;
   final String successTitle;
   final String failureTitle;
-  final Completer<bool>? completer;
 
   @override
-  List<Object?> get props => [chat, successTitle, failureTitle, completer];
+  List<Object?> get props => [chat, successTitle, failureTitle];
 }
 
 final class ChatRecipientEmailChatRequested extends ChatEvent {

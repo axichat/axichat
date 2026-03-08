@@ -4290,7 +4290,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = event.chat;
     final remoteJid = chat.remoteJid.trim();
     if (remoteJid.isEmpty) {
-      event.completer?.complete(false);
       return;
     }
     final rosterTitle = chat.contactDisplayName?.trim().isNotEmpty == true
@@ -4301,7 +4300,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (chat.isEmailBacked) {
         final emailService = _emailService;
         if (emailService == null) {
-          event.completer?.complete(false);
           return;
         }
         await emailService.ensureChatForAddress(
@@ -4312,7 +4310,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       } else {
         final xmppService = _xmppService;
         if (xmppService == null) {
-          event.completer?.complete(false);
           return;
         }
         await xmppService.addToRoster(
@@ -4331,11 +4328,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ),
         ),
       );
-      event.completer?.complete(false);
       return;
     }
     emit(_attachToast(nextState, ChatToast(title: event.successTitle)));
-    event.completer?.complete(true);
   }
 
   Future<void> _onChatRecipientEmailChatRequested(

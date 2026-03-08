@@ -375,7 +375,10 @@ class ChatListTile extends StatefulWidget {
     required this.timestampNow,
     required this.selfIdentity,
     this.archivedContext = false,
+    this.spamContext = false,
+    this.spamUpdating = false,
     this.onArchivedTap,
+    this.onMoveToInbox,
   });
 
   final Chat item;
@@ -385,7 +388,10 @@ class ChatListTile extends StatefulWidget {
   final DateTime timestampNow;
   final SelfIdentitySnapshot selfIdentity;
   final bool archivedContext;
+  final bool spamContext;
+  final bool spamUpdating;
   final Future<void> Function(Chat chat)? onArchivedTap;
+  final Future<void> Function()? onMoveToInbox;
 
   @override
   State<ChatListTile> createState() => _ChatListTileState();
@@ -819,6 +825,9 @@ class _ChatListTileState extends State<ChatListTile> {
                       child: _ChatActionPanel(
                         chat: item,
                         archivedContext: widget.archivedContext,
+                        spamContext: widget.spamContext,
+                        spamUpdating: widget.spamUpdating,
+                        onMoveToInbox: widget.onMoveToInbox,
                         onClose: _hideActions,
                         onDelete: () => _confirmDelete(item),
                       ),
@@ -1108,6 +1117,19 @@ class _ChatListTileState extends State<ChatListTile> {
           );
         },
       ),
+      if (widget.spamContext)
+        AxiMenuAction(
+          icon: LucideIcons.inbox,
+          label: l10n.spamMoveToInbox,
+          enabled: !widget.spamUpdating,
+          onPressed: () async {
+            final moveToInbox = widget.onMoveToInbox;
+            if (moveToInbox == null) {
+              return;
+            }
+            await moveToInbox();
+          },
+        ),
       if (!widget.archivedContext)
         AxiMenuAction(
           icon: chat.hidden ? LucideIcons.eye : LucideIcons.eyeOff,
@@ -1133,12 +1155,18 @@ class _ChatActionPanel extends StatefulWidget {
   const _ChatActionPanel({
     required this.chat,
     required this.archivedContext,
+    required this.spamContext,
+    required this.spamUpdating,
+    required this.onMoveToInbox,
     required this.onClose,
     required this.onDelete,
   });
 
   final Chat chat;
   final bool archivedContext;
+  final bool spamContext;
+  final bool spamUpdating;
+  final Future<void> Function()? onMoveToInbox;
   final VoidCallback onClose;
   final VoidCallback onDelete;
 
@@ -1224,6 +1252,12 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
             widget.onClose();
           },
         ),
+        if (widget.spamContext)
+          ContextActionButton(
+            icon: Icon(LucideIcons.inbox, size: iconSize),
+            label: l10n.spamMoveToInbox,
+            onPressed: widget.spamUpdating ? null : _moveToInbox,
+          ),
         if (!widget.archivedContext)
           ContextActionButton(
             icon: Icon(
@@ -1269,6 +1303,16 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
         actionWrap,
       ],
     );
+  }
+
+  Future<void> _moveToInbox() async {
+    final moveToInbox = widget.onMoveToInbox;
+    if (moveToInbox == null) {
+      return;
+    }
+    await moveToInbox();
+    if (!mounted) return;
+    widget.onClose();
   }
 
   Future<void> _renameContact() async {
