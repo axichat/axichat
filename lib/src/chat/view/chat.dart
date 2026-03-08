@@ -123,6 +123,14 @@ extension on MessageStatus {
   };
 }
 
+({String? subject, String body}) _displaySubjectAndBody(Message message) {
+  final explicitSubject = message.subject?.trim();
+  if (explicitSubject?.isNotEmpty == true) {
+    return (subject: explicitSubject, body: message.body ?? '');
+  }
+  return ChatSubjectCodec.splitXmppBody(message.body);
+}
+
 EdgeInsets _bubblePadding(BuildContext context) => EdgeInsets.symmetric(
   horizontal: context.spacing.s,
   vertical: context.spacing.s,
@@ -133,11 +141,6 @@ const String _chatPinnedPanelKeyPrefix = 'chat-pins-';
 const String _chatPanelKeyFallback = '';
 const int _chatBaseActionCount = 3;
 const int _pinnedBadgeHiddenCount = 0;
-const int _pinnedBadgeMaxDisplayCount = 99;
-const double _pinnedBadgeIconScale = 0.6;
-const double _pinnedBadgeFallbackIconSize =
-    AxiIconButton.kDefaultSize * _pinnedBadgeIconScale;
-const double _pinnedBadgeInsetScale = 0.08;
 const String _calendarFragmentPropertyKey = 'calendarFragment';
 const String _calendarTaskIcsPropertyKey = 'calendarTaskIcs';
 const String _calendarTaskIcsReadOnlyPropertyKey = 'calendarTaskIcsReadOnly';
@@ -5069,10 +5072,7 @@ class _ChatState extends State<Chat> {
                                           showSubjectHeader = true;
                                         }
                                       } else {
-                                        final split =
-                                            ChatSubjectCodec.splitXmppBody(
-                                              e.body,
-                                            );
+                                        final split = _displaySubjectAndBody(e);
                                         subjectLabel = split.subject;
                                         bodyText = split.body;
                                       }
@@ -9933,63 +9933,27 @@ class _PinnedBadgeIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    final colors = context.colorScheme;
     final spacing = context.spacing;
-    final double iconSize =
-        context.iconTheme.size ?? _pinnedBadgeFallbackIconSize;
-    final double badgeInset = math.max(
-      spacing.xxs,
-      iconSize * _pinnedBadgeInsetScale,
-    );
+    final sizing = context.sizing;
+    final double iconSize = context.iconTheme.size ?? sizing.iconButtonIconSize;
     final Icon icon = Icon(iconData, size: iconSize, color: iconColor);
     if (count <= _pinnedBadgeHiddenCount) {
       return icon;
     }
 
-    final String label = count > _pinnedBadgeMaxDisplayCount
-        ? l10n.commonBadgeOverflowLabel
-        : count.toString();
-    final Widget badge = FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Text(
-        label,
-        style: context.textTheme.p.copyWith(
-          color: colors.destructive,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-
     return SizedBox(
       width: iconSize,
       height: iconSize,
       child: Stack(
-        clipBehavior: Clip.hardEdge,
+        clipBehavior: Clip.none,
         children: [
-          Positioned.fill(
-            child: Padding(
-              padding: EdgeInsets.only(right: spacing.xs, top: spacing.xxs),
-              child: Center(child: icon),
-            ),
-          ),
-          Positioned(
-            top: badgeInset,
-            right: badgeInset,
-            child: DecoratedBox(
-              decoration: ShapeDecoration(
-                color: colors.background,
-                shape: RoundedSuperellipseBorder(
-                  borderRadius: BorderRadius.circular(context.radii.squircle),
-                ),
-              ),
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: spacing.xs,
-                  vertical: spacing.xxs,
-                ),
-                child: badge,
-              ),
+          icon,
+          PositionedDirectional(
+            top: -spacing.xs,
+            end: -spacing.xs,
+            child: AxiCountBadge(
+              count: count,
+              diameter: sizing.menuItemIconSize,
             ),
           ),
         ],
@@ -14835,7 +14799,7 @@ class _QuotedMessagePreview extends StatelessWidget {
     final senderLabelTrimmed = senderLabel.trim();
     return Builder(
       builder: (context) {
-        final split = ChatSubjectCodec.splitXmppBody(message.body);
+        final split = _displaySubjectAndBody(message);
         final subject = split.subject?.trim();
         final body = split.body.trim();
         final previewParts = <String>[];
@@ -15253,7 +15217,7 @@ class _QuoteBanner extends StatelessWidget {
           Expanded(
             child: Builder(
               builder: (context) {
-                final split = ChatSubjectCodec.splitXmppBody(message.body);
+                final split = _displaySubjectAndBody(message);
                 final subject = split.subject?.trim();
                 final body = split.body.trim();
                 final previewParts = <String>[];
