@@ -116,6 +116,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     AuthenticationState? initialState,
     EndpointConfig? initialEndpointConfig,
     EndpointResolver endpointResolver = const EndpointResolver(),
+    Duration authRequestTimeout = const Duration(minutes: 1),
   }) : _credentialStore = credentialStore,
        _xmppService = xmppService,
        _emailService = emailService,
@@ -126,6 +127,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
              emailService: emailService,
            ),
        _endpointResolver = endpointResolver,
+       _authRequestTimeout = authRequestTimeout,
        super(initialState ?? const AuthenticationNone()) {
     _ownedHttpClient = httpClient == null ? http.Client() : null;
     _httpClient = httpClient ?? _ownedHttpClient!;
@@ -275,15 +277,11 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final _CoalescingAsyncQueue _emailProvisioningRecoveryQueue =
       _CoalescingAsyncQueue();
   DateTime? _lastEmailProvisioningRecoveryAt;
+  final Duration _authRequestTimeout;
 
   late final AppLifecycleListener _lifecycleListener;
 
   EndpointConfig get endpointConfig => state.config;
-
-  Duration get _authRequestTimeout {
-    const seconds = 12;
-    return const Duration(seconds: seconds);
-  }
 
   Future<void> updateEndpointConfig(EndpointConfig config) async {
     _handleEndpointConfigUpdated(config);
@@ -973,6 +971,36 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
+  Future<String?> _connectXmppForAuthentication({
+    required String jid,
+    required String password,
+    required String databasePrefix,
+    required String databasePassphrase,
+    required bool passwordPreHashed,
+    required bool reuseExistingSession,
+    required EndpointOverride? endpoint,
+  }) async {
+    return _xmppService
+        .connect(
+          jid: jid,
+          password: password,
+          databasePrefix: databasePrefix,
+          databasePassphrase: databasePassphrase,
+          preHashed: passwordPreHashed,
+          reuseExistingSession: reuseExistingSession,
+          endpoint: endpoint,
+        )
+        .timeout(
+          _authRequestTimeout,
+          onTimeout: () => throw XmppNetworkException(
+            TimeoutException(
+              'XMPP login timed out after '
+              '${_authRequestTimeout.inSeconds} seconds.',
+            ),
+          ),
+        );
+  }
+
   Future<void> _attemptEmailProvisioningRecovery() async {
     await _emailProvisioningRecoveryQueue.enqueue(() async {
       const cooldown = Duration(seconds: 30);
@@ -1489,12 +1517,12 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
       if (xmppEnabled) {
         try {
-          effectivePassword = await _xmppService.connect(
+          effectivePassword = await _connectXmppForAuthentication(
             jid: accountJid,
             password: provisioningPasswordCandidate,
             databasePrefix: ensuredDatabasePrefix,
             databasePassphrase: ensuredDatabasePassphrase,
-            preHashed: passwordPreHashed,
+            passwordPreHashed: passwordPreHashed,
             reuseExistingSession: reuseExistingSession,
             endpoint: xmppEndpoint,
           );

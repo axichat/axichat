@@ -315,6 +315,41 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
+      'Xmpp login timeout emits [AuthenticationFailure] instead of hanging.',
+      setUp: () {
+        when(
+          () => mockXmppService.connect(
+            jid: validJid,
+            password: validPassword,
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            preHashed: any(named: 'preHashed'),
+            reuseExistingSession: any(named: 'reuseExistingSession'),
+            endpoint: any(named: 'endpoint'),
+          ),
+        ).thenAnswer((_) => Completer<String?>().future);
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+        authRequestTimeout: const Duration(milliseconds: 1),
+      ),
+      act: (bloc) =>
+          bloc.login(username: validUsername, password: validPassword),
+      wait: const Duration(milliseconds: 20),
+      expect: () => const [
+        AuthenticationLogInInProgress(),
+        AuthenticationFailure(AuthKeyMessage(AuthMessageKey.genericError)),
+      ],
+      verify: (_) {
+        verify(() => mockXmppService.disconnect()).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
       'Given valid credentials with rememberMe false, does not persist credentials and emits [AuthenticationComplete].',
       build: () => bloc,
       act: (bloc) => bloc.login(

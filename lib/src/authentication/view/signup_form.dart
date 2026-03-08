@@ -190,17 +190,6 @@ class _SignupFormState extends State<SignupForm>
     return painter.height;
   }
 
-  bool _isLoadingForState(AuthenticationState state) {
-    final isSubmittingLastStep =
-        state is AuthenticationSignUpInProgress &&
-        state.fromSubmission &&
-        _currentIndex == _formKeys.length - 1;
-    final isPostSubmitState =
-        state is AuthenticationLogInInProgress ||
-        state is AuthenticationComplete;
-    return isSubmittingLastStep || isPostSubmitState;
-  }
-
   @override
   void didUpdateWidget(covariant SignupForm oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -1239,6 +1228,17 @@ class _SignupFormState extends State<SignupForm>
         );
       },
     );
+  }
+
+  bool _isLoadingForState(AuthenticationState state) {
+    final isSubmittingLastStep =
+        state is AuthenticationSignUpInProgress &&
+        state.fromSubmission &&
+        _currentIndex == _formKeys.length - 1;
+    final isPostSubmitState =
+        state is AuthenticationLogInInProgress ||
+        state is AuthenticationComplete;
+    return isSubmittingLastStep || isPostSubmitState;
   }
 
   @override

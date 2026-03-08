@@ -36,16 +36,12 @@ class LoginScreen extends StatefulWidget {
 
 enum _AuthFlow { login, signup }
 
-const Duration _authOperationTimeout = Duration(seconds: 45);
-
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   _AuthFlow _selectedFlow = _AuthFlow.login;
   late AuthProgressController _authProgressController;
   bool _didSeedAuthState = false;
   bool _completionHandled = false;
-  int _authTimeoutGeneration = 0;
-  _AuthFlow? _authTimeoutFlow;
   DateTime? _autoLoginRequestedAt;
 
   @override
@@ -134,7 +130,6 @@ class _LoginScreenState extends State<LoginScreen>
           context.read<SettingsCubit>().animationDuration,
         ),
       );
-      _startAuthTimeout(_AuthFlow.signup);
       return;
     }
     if (state is AuthenticationLogInInProgress) {
@@ -151,7 +146,6 @@ class _LoginScreenState extends State<LoginScreen>
             context.read<SettingsCubit>().animationDuration,
           ),
         );
-        _startAuthTimeout(_AuthFlow.signup);
       } else {
         if (_selectedFlow != _AuthFlow.login) {
           setState(() {
@@ -164,14 +158,12 @@ class _LoginScreenState extends State<LoginScreen>
             context.read<SettingsCubit>().animationDuration,
           ),
         );
-        _startAuthTimeout(_AuthFlow.login);
       }
       return;
     }
     if (state is AuthenticationFailure ||
         state is AuthenticationSignupFailure) {
       _completionHandled = false;
-      _clearAuthTimeout();
       await _authProgressController.fail(
         duration: context.read<SettingsCubit>().animationDuration,
       );
@@ -183,11 +175,9 @@ class _LoginScreenState extends State<LoginScreen>
       }
       if (_authProgressController.snapshot.phase == AuthProgressPhase.idle) {
         _completionHandled = true;
-        _clearAuthTimeout();
         return;
       }
       _completionHandled = true;
-      _clearAuthTimeout();
       final preloadHome = _preloadHomeScreenCache();
       await _authProgressController.complete(
         duration: context.read<SettingsCubit>().authCompletionDuration,
@@ -197,7 +187,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
     if (state is AuthenticationNone) {
       _completionHandled = false;
-      _clearAuthTimeout();
       _authProgressController.reset();
     }
   }
@@ -205,32 +194,7 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void dispose() {
     _authProgressController.dispose();
-    _clearAuthTimeout();
     super.dispose();
-  }
-
-  void _startAuthTimeout(_AuthFlow flow) {
-    _authTimeoutGeneration++;
-    _authTimeoutFlow = flow;
-    final generation = _authTimeoutGeneration;
-    _runAuthTimeout(flow, generation);
-  }
-
-  void _clearAuthTimeout() {
-    _authTimeoutGeneration++;
-    _authTimeoutFlow = null;
-  }
-
-  Future<void> _runAuthTimeout(_AuthFlow flow, int generation) async {
-    await Future<void>.delayed(_authOperationTimeout);
-    if (!mounted ||
-        _authTimeoutFlow != flow ||
-        generation != _authTimeoutGeneration) {
-      return;
-    }
-    await _authProgressController.fail(
-      duration: context.read<SettingsCubit>().animationDuration,
-    );
   }
 
   Future<void> _preloadSelfAvatarCache() async {
