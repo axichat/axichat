@@ -10,6 +10,7 @@ class AxiSheetHeader extends StatelessWidget {
   const AxiSheetHeader({
     required this.title,
     required this.onClose,
+    this.showCloseButton = true,
     this.subtitle,
     this.leading,
     this.padding,
@@ -17,6 +18,7 @@ class AxiSheetHeader extends StatelessWidget {
   });
 
   final Widget title;
+  final bool showCloseButton;
   final Widget? subtitle;
   final Widget? leading;
   final VoidCallback onClose;
@@ -61,13 +63,14 @@ class AxiSheetHeader extends StatelessWidget {
             SizedBox(width: context.spacing.s),
           ],
           Expanded(child: titleBlock),
-          ModalCloseButton(
-            onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
-            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-            backgroundColor: Colors.transparent,
-            borderColor: Colors.transparent,
-            color: context.colorScheme.mutedForeground,
-          ),
+          if (showCloseButton)
+            ModalCloseButton(
+              onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
+              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+              backgroundColor: Colors.transparent,
+              borderColor: Colors.transparent,
+              color: context.colorScheme.mutedForeground,
+            ),
         ],
       ),
     );

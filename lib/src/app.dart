@@ -38,7 +38,6 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
-import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
@@ -361,9 +360,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   bool _shareIntentAwaitingRoute = false;
   bool _notificationIntentHandling = false;
   bool _notificationIntentAwaitingRoute = false;
-  bool _signupWelcomeAwaitingRoute = false;
   Timer? _pendingAuthNavigation;
-  Timer? _pendingSignupWelcomeDelivery;
   AuthenticationState? _lastAuthState;
   String? _pendingNotificationChatJid;
   bool _checkedInitialNotificationLaunchDetails = false;
@@ -418,8 +415,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   void dispose() {
     _pendingAuthNavigation?.cancel();
     _pendingAuthNavigation = null;
-    _pendingSignupWelcomeDelivery?.cancel();
-    _pendingSignupWelcomeDelivery = null;
     _lifecycleListener.dispose();
     _router.routerDelegate.removeListener(_handleRouteChange);
     _router.dispose();
@@ -674,6 +669,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 ),
                 BlocListener<AuthenticationCubit, AuthenticationState>(
                   listener: (context, state) async {
+                    final locate = context.read;
+                    final profileCubit = locate<ProfileCubit>();
+                    final settingsCubit = locate<SettingsCubit>();
                     final previousAuthState = _lastAuthState;
                     _lastAuthState = state;
                     final currentLocation =
@@ -694,42 +692,19 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         currentLocation == const LoginRoute().location ||
                         matchedLocation == const LoginRoute().location;
                     final onGuestRoute = onLoginRoute || !authRequired;
-                    final authCompletionDuration = context
-                        .read<SettingsCubit>()
-                        .authCompletionDuration;
+                    final authCompletionDuration =
+                        settingsCubit.authCompletionDuration;
                     if (state is AuthenticationNone) {
                       _pendingAuthNavigation?.cancel();
                       _pendingAuthNavigation = null;
-                      _pendingSignupWelcomeDelivery?.cancel();
-                      _pendingSignupWelcomeDelivery = null;
-                      _signupWelcomeAwaitingRoute = false;
-                      context.read<ProfileCubit>().clearSessionIdentity();
+                      profileCubit.clearSessionIdentity();
                       if (!onLoginRoute && authRequired) {
                         _router.go(const LoginRoute().location);
                       }
                     } else {
-                      if (state is AuthenticationCompleteFromSignup &&
-                          previousAuthState
-                              is! AuthenticationCompleteFromSignup) {
-                        _signupWelcomeAwaitingRoute = true;
-                        _scheduleSignupWelcomeDelivery();
-                      } else if (state is! AuthenticationCompleteFromSignup) {
-                        _pendingSignupWelcomeDelivery?.cancel();
-                        _pendingSignupWelcomeDelivery = null;
-                        _signupWelcomeAwaitingRoute = false;
-                      }
                       if (state is AuthenticationComplete &&
                           previousAuthState is! AuthenticationComplete) {
-                        context.read<ProfileCubit>().syncSessionIdentity();
-                        if (state is! AuthenticationCompleteFromSignup) {
-                          await context
-                              .read<AuthenticationCubit>()
-                              .syncSignupWelcomeMessage(
-                                allowInsert: false,
-                                title: context.l10n.authSignupWelcomeTitle,
-                                body: context.l10n.authSignupWelcomeMessage,
-                              );
-                        }
+                        profileCubit.syncSessionIdentity();
                       }
                       if (state is AuthenticationComplete &&
                           previousAuthState is! AuthenticationComplete &&
@@ -750,7 +725,6 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                           if (currentMatchedLocation ==
                               const HomeRoute().location) {
                             _pendingAuthNavigation = null;
-                            _scheduleSignupWelcomeDelivery();
                             return;
                           }
                           _router.go(const HomeRoute().location);
@@ -912,40 +886,10 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       _notificationIntentAwaitingRoute = false;
       _handleNotificationIntent();
     }
-    if (_signupWelcomeAwaitingRoute && _isOnHomeRoute()) {
-      _scheduleSignupWelcomeDelivery();
-    }
     if (!_shareIntentAwaitingRoute || !_isOnHomeRoute()) {
       return;
     }
     _shareIntentAwaitingRoute = false;
-  }
-
-  void _scheduleSignupWelcomeDelivery() {
-    if (!mounted ||
-        !_signupWelcomeAwaitingRoute ||
-        !_isOnHomeRoute() ||
-        _pendingSignupWelcomeDelivery != null) {
-      return;
-    }
-    const deliveryDelay = Duration(seconds: 1);
-    _pendingSignupWelcomeDelivery = Timer(deliveryDelay, () async {
-      _pendingSignupWelcomeDelivery = null;
-      if (!mounted || !_isOnHomeRoute()) {
-        return;
-      }
-      if (context.read<AuthenticationCubit>().state
-          is! AuthenticationCompleteFromSignup) {
-        _signupWelcomeAwaitingRoute = false;
-        return;
-      }
-      _signupWelcomeAwaitingRoute = false;
-      await context.read<AuthenticationCubit>().syncSignupWelcomeMessage(
-        allowInsert: true,
-        title: context.l10n.authSignupWelcomeTitle,
-        body: context.l10n.authSignupWelcomeMessage,
-      );
-    });
   }
 }
 

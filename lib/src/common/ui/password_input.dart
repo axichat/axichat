@@ -16,13 +16,19 @@ class PasswordInput extends StatefulWidget {
     required this.controller,
     this.placeholder,
     this.enabled = false,
+    this.focusNode,
+    this.textInputAction,
+    this.onSubmitted,
     this.confirmValidator,
     this.validator,
     this.semanticsLabel,
   });
 
   final bool enabled;
+  final FocusNode? focusNode;
   final String? placeholder;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
   final String? Function(String)? confirmValidator;
   final FormFieldValidator<String>? validator;
   final TextEditingController controller;
@@ -49,19 +55,26 @@ class _PasswordInputState extends State<PasswordInput> {
       child: AxiTextFormField(
         placeholder: Text(widget.placeholder ?? defaultLabel),
         enabled: widget.enabled,
+        focusNode: widget.focusNode,
         obscureText: obscure,
         controller: widget.controller,
-        trailing: AxiIconButton.ghost(
-          backgroundColor: context.colorScheme.muted,
-          color: context.colorScheme.mutedForeground,
-          borderColor: Colors.transparent,
-          iconData: obscure ? LucideIcons.eyeOff : LucideIcons.eye,
-          iconSize: sizing.inputSuffixIconSize,
-          buttonSize: sizing.inputSuffixButtonSize,
-          tapTargetSize: sizing.inputSuffixButtonSize,
-          onPressed: () {
-            setState(() => obscure = !obscure);
-          },
+        textInputAction: widget.textInputAction,
+        onSubmitted: widget.onSubmitted,
+        trailing: ExcludeFocusTraversal(
+          child: AxiIconButton.ghost(
+            backgroundColor: context.colorScheme.muted,
+            color: context.colorScheme.mutedForeground,
+            borderColor: Colors.transparent,
+            iconData: obscure ? LucideIcons.eyeOff : LucideIcons.eye,
+            iconSize: sizing.inputSuffixIconSize,
+            buttonSize: sizing.inputSuffixButtonSize,
+            tapTargetSize: sizing.inputSuffixButtonSize,
+            onPressed: widget.enabled
+                ? () {
+                    setState(() => obscure = !obscure);
+                  }
+                : null,
+          ),
         ),
         validator: (text) {
           final localizations = context.l10n;

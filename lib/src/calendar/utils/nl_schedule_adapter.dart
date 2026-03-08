@@ -168,13 +168,13 @@ class NlAdapterResult {
 ///
 /// ### Quick start
 /// ```dart
-/// import 'package:flutter_native_timezone/flutter_native_timezone.dart';
+/// import 'package:flutter_timezone/flutter_timezone.dart';
 /// import 'package:timezone/data/latest.dart' as tzdata;
 /// import 'package:timezone/timezone.dart' as tz;
 ///
 /// Future<NlAdapterResult> parseInput(String input) async {
 ///   tzdata.initializeTimeZones();
-///   final tzName = await FlutterNativeTimezone.getLocalTimezone();
+///   final tzName = await FlutterTimezone.getLocalTimezone();
 ///   final location = tz.getLocation(tzName);
 ///   final ctx = ParseContext(
 ///     location: location,

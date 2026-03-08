@@ -534,6 +534,7 @@ class _CalendarAvailabilityShareScreenState
       );
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _isSending = true;
     });
@@ -1041,20 +1042,29 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
         BlocSelector<ChatsCubit, ChatsState, List<String>>(
           bloc: locate<ChatsCubit>(),
           selector: (state) => state.recipientAddressSuggestions,
-          builder: (context, recipientAddressSuggestions) => RecipientChipsBar(
-            recipients: recipients,
-            availableChats: availableChats,
-            rosterItems: rosterItems,
-            databaseSuggestionAddresses: recipientAddressSuggestions,
-            selfJid: chatsSelfJid,
-            selfIdentity: selfIdentity,
-            latestStatuses: const {},
-            collapsedByDefault: false,
-            allowAddressTargets: false,
-            showSuggestionsWhenEmpty: true,
-            onRecipientAdded: onRecipientAdded,
-            onRecipientRemoved: onRecipientRemoved,
-            onRecipientToggled: onRecipientToggled,
+          builder: (context, recipientAddressSuggestions) => ExcludeFocus(
+            excluding: isBusy,
+            child: ExcludeFocusTraversal(
+              excluding: isBusy,
+              child: IgnorePointer(
+                ignoring: isBusy,
+                child: RecipientChipsBar(
+                  recipients: recipients,
+                  availableChats: availableChats,
+                  rosterItems: rosterItems,
+                  databaseSuggestionAddresses: recipientAddressSuggestions,
+                  selfJid: chatsSelfJid,
+                  selfIdentity: selfIdentity,
+                  latestStatuses: const {},
+                  collapsedByDefault: false,
+                  allowAddressTargets: false,
+                  showSuggestionsWhenEmpty: true,
+                  onRecipientAdded: onRecipientAdded,
+                  onRecipientRemoved: onRecipientRemoved,
+                  onRecipientToggled: onRecipientToggled,
+                ),
+              ),
+            ),
           ),
         ),
         const SizedBox(height: _availabilitySheetSectionSpacing),
@@ -1262,7 +1272,7 @@ class _AvailabilityActionRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         AxiButton.ghost(
-          onPressed: onBack,
+          onPressed: isBusy ? null : onBack,
           child: Text(context.l10n.commonBack),
         ),
         const SizedBox(width: _availabilityRecipientChipSpacing),

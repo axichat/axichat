@@ -94,7 +94,9 @@ class _CalendarAvailabilityEditorSheetState
       children: [
         TaskSectionHeader(
           title: l10n.calendarAvailabilityWindowsLabel,
-          trailing: _AvailabilityEditorAddButton(onPressed: _handleAddWindow),
+          trailing: _AvailabilityEditorAddButton(
+            onPressed: _isSaving ? null : _handleAddWindow,
+          ),
         ),
         SizedBox(height: spacing.s),
         if (_windowDrafts.isEmpty)
@@ -113,6 +115,7 @@ class _CalendarAvailabilityEditorSheetState
                   padding: EdgeInsets.only(bottom: spacing.m),
                   child: _AvailabilityWindowCard(
                     key: ValueKey<String>(draft.id),
+                    enabled: !_isSaving,
                     draft: draft,
                     onStartChanged: (value) =>
                         _handleWindowStartChanged(draft, value),
@@ -193,6 +196,7 @@ class _CalendarAvailabilityEditorSheetState
       );
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _isSaving = true;
     });
@@ -276,12 +280,14 @@ class _CalendarAvailabilityEditorSheetState
 class _AvailabilityWindowCard extends StatelessWidget {
   const _AvailabilityWindowCard({
     super.key,
+    required this.enabled,
     required this.draft,
     required this.onStartChanged,
     required this.onEndChanged,
     required this.onRemove,
   });
 
+  final bool enabled;
   final _AvailabilityWindowDraft draft;
   final ValueChanged<DateTime?> onStartChanged;
   final ValueChanged<DateTime?> onEndChanged;
@@ -306,7 +312,9 @@ class _AvailabilityWindowCard extends StatelessWidget {
         children: [
           TaskSectionHeader(
             title: l10n.calendarAvailabilityWindowLabel,
-            trailing: _AvailabilityWindowRemoveButton(onPressed: onRemove),
+            trailing: _AvailabilityWindowRemoveButton(
+              onPressed: enabled ? onRemove : null,
+            ),
           ),
           SizedBox(height: spacing.s),
           ScheduleRangeFields(
@@ -314,12 +322,14 @@ class _AvailabilityWindowCard extends StatelessWidget {
             end: draft.end,
             onStartChanged: onStartChanged,
             onEndChanged: onEndChanged,
+            enabled: enabled,
           ),
           SizedBox(height: spacing.m),
           TaskTextField(
             controller: draft.summaryController,
             labelText: l10n.calendarAvailabilitySummaryLabel,
             hintText: l10n.calendarAvailabilitySummaryHint,
+            enabled: enabled,
           ),
           SizedBox(height: spacing.s),
           TaskTextField(
@@ -328,6 +338,7 @@ class _AvailabilityWindowCard extends StatelessWidget {
             hintText: l10n.calendarAvailabilityNotesHint,
             minLines: _availabilityEditorDescriptionMinLines,
             maxLines: _availabilityEditorDescriptionMaxLines,
+            enabled: enabled,
           ),
         ],
       ),
@@ -338,7 +349,7 @@ class _AvailabilityWindowCard extends StatelessWidget {
 class _AvailabilityWindowRemoveButton extends StatelessWidget {
   const _AvailabilityWindowRemoveButton({required this.onPressed});
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -360,7 +371,7 @@ class _AvailabilityWindowRemoveButton extends StatelessWidget {
 class _AvailabilityEditorAddButton extends StatelessWidget {
   const _AvailabilityEditorAddButton({required this.onPressed});
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

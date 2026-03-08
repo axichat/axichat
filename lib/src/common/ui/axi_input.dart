@@ -311,8 +311,11 @@ class AxiInputState extends State<AxiInput>
   void initState() {
     super.initState();
     if (widget.focusNode == null) {
-      _focusNode = FocusNode(canRequestFocus: !widget.readOnly);
+      _focusNode = FocusNode(
+        canRequestFocus: widget.enabled && !widget.readOnly,
+      );
     }
+    effectiveFocusNode.canRequestFocus = widget.enabled && !widget.readOnly;
     effectiveFocusNode.addListener(onFocusChange);
 
     if (widget.controller == null) {
@@ -338,11 +341,16 @@ class AxiInputState extends State<AxiInput>
     }
     _typingController.updateSource(_sourceController, null);
 
-    if (widget.readOnly != oldWidget.readOnly) {
-      effectiveFocusNode.canRequestFocus = !widget.readOnly;
+    if (widget.focusNode != oldWidget.focusNode ||
+        widget.enabled != oldWidget.enabled ||
+        widget.readOnly != oldWidget.readOnly) {
+      effectiveFocusNode.canRequestFocus = widget.enabled && !widget.readOnly;
+      if (!widget.enabled && effectiveFocusNode.hasFocus) {
+        effectiveFocusNode.unfocus();
+      }
       if (effectiveFocusNode.hasFocus &&
           effectiveController.selection.isCollapsed) {
-        _showSelectionHandles = !widget.readOnly;
+        _showSelectionHandles = widget.enabled && !widget.readOnly;
       }
     }
   }

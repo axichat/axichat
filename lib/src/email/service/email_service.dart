@@ -699,6 +699,30 @@ class EmailService {
   Stream<DeltaChatException> get authFailureStream =>
       _authFailureController.stream;
 
+  Future<bool> canReconnectConfiguredSession({String? jid}) async {
+    if (!hasActiveSession) {
+      return false;
+    }
+    final scope = _scopeForOptionalJid(jid);
+    if (scope == null) {
+      return false;
+    }
+    final EmailAccount? account = _activeCredentialScope == scope
+        ? _activeAccount
+        : null;
+    if (account == null) {
+      final storedAccount = await _accountForScope(scope);
+      if (storedAccount == null) {
+        return false;
+      }
+    }
+    try {
+      return await _transport.isConfigured();
+    } on Exception {
+      return false;
+    }
+  }
+
   Future<EmailAccount?> currentAccount(String jid) async {
     final scope = _scopeForJid(jid);
     final address = await _credentialStore.read(
@@ -1135,6 +1159,10 @@ class EmailService {
     }
     if (_blocksRuntimeReentry) {
       throw StateError('Email service is stopping.');
+    }
+    if (!_listenerAttached) {
+      _transport.addEventListener(_eventListener);
+      _listenerAttached = true;
     }
     await _transport.start();
     _runtimePhase = _EmailRuntimePhase.running;
@@ -3558,6 +3586,8 @@ class EmailService {
         await stop();
         await start();
         await _transport.notifyNetworkAvailable();
+        await _bootstrapActiveAccountIfNeeded();
+        await _runReconnectCatchUp();
       } on Exception catch (error, stackTrace) {
         _log.warning('Email transport restart failed', error, stackTrace);
       } finally {

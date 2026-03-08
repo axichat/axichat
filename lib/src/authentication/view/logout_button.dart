@@ -38,6 +38,7 @@ class LogoutButton extends StatelessWidget {
 
                   return AxiInputDialog(
                     title: Text(title(context.l10n)),
+                    canPop: !loading,
                     content: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -66,6 +67,7 @@ class LogoutButton extends StatelessWidget {
                       ],
                     ),
                     loading: loading,
+                    showCloseButton: !loading,
                     callback: loading
                         ? null
                         : () async {

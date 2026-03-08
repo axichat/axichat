@@ -268,6 +268,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   bool get passwordWasSkipped => _passwordWasSkipped;
 
   bool get _stickyAuthActive => state is AuthenticationComplete;
+  Completer<void>? _deferredEmailProvisioningCompleter;
   int _failedLoginAttempts = 0;
   DateTime? _loginBackoffUntil;
   final _CoalescingAsyncQueue _pendingDeletionQueue = _CoalescingAsyncQueue();
@@ -933,16 +934,28 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _triggerEmailReconnect() async {
+    await _resumeEmailReconnectIfPossible(
+      jid: _xmppService.myJid,
+      requireStoredCredentials: state is! AuthenticationLogInInProgress,
+    );
+  }
+
+  Future<void> _resumeEmailReconnectIfPossible({
+    required String? jid,
+    required bool requireStoredCredentials,
+  }) async {
     final EndpointConfig config = endpointConfig;
     if (!config.smtpEnabled) return;
     final EmailService? emailService = _emailService;
     if (emailService == null) return;
+    if (_deferredEmailProvisioningCompleter != null) {
+      return;
+    }
     final isReady = emailService.syncState.status == EmailSyncStatus.ready;
     if (isReady && emailService.hasActiveSession) {
       return;
     }
-    final jid = _xmppService.myJid;
-    if (state is! AuthenticationLogInInProgress && jid != null) {
+    if (requireStoredCredentials && jid != null) {
       final hasCredentials = await _hasEmailReconnectCredentials(jid);
       if (!hasCredentials) {
         await logout(severity: LogoutSeverity.auto);
@@ -951,6 +964,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
     try {
       await _attemptEmailProvisioningRecovery();
+      if (!await emailService.canReconnectConfiguredSession(jid: jid)) {
+        return;
+      }
       await emailService.handleNetworkAvailable();
     } on Exception catch (error, stackTrace) {
       _log.finer('Email reconnect trigger failed', error, stackTrace);
@@ -1278,6 +1294,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     bool requireEmailProvisioned = false,
     provisioning.EmailProvisioningCredentials? emailCredentials,
     AvatarUploadPayload? pendingAvatar,
+    String? signupWelcomeTitle,
+    String? signupWelcomeBody,
   }) async {
     if (kEnableDemoChats) {
       await _loginToDemoMode();
@@ -1435,6 +1453,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     );
 
     var authenticationCommitted = false;
+    Completer<void>? deferredEmailProvisioningCompleter;
     try {
       final emailService = smtpEnabled ? _emailService : null;
       if (emailPassword == null && emailService != null) {
@@ -1608,6 +1627,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
       final allowOfflineEmail = !requireEmailProvisioned;
       if (emailProvisioningMode.isDeferred) {
+        deferredEmailProvisioningCompleter = Completer<void>();
+        _deferredEmailProvisioningCompleter =
+            deferredEmailProvisioningCompleter;
         await _finalizeAuthentication(
           jid: accountJid,
           rememberMe: rememberMe,
@@ -1620,6 +1642,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           databasePassphraseStorageKey: databasePassphraseStorageKey,
           databasePassphrase: ensuredDatabasePassphrase,
           pendingAvatar: pendingAvatar,
+          signupWelcomeTitle: signupWelcomeTitle,
+          signupWelcomeBody: signupWelcomeBody,
         );
         authenticationCommitted = true;
         Future<void>(() async {
@@ -1643,6 +1667,26 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               error,
               stackTrace,
             );
+          } finally {
+            if (identical(
+              _deferredEmailProvisioningCompleter,
+              deferredEmailProvisioningCompleter,
+            )) {
+              _deferredEmailProvisioningCompleter = null;
+            }
+            if (!deferredEmailProvisioningCompleter!.isCompleted) {
+              deferredEmailProvisioningCompleter.complete();
+            }
+            if (_stickyAuthActive &&
+                _xmppService.connectionState == ConnectionState.connected &&
+                sameNormalizedAddressValue(_xmppService.myJid, accountJid)) {
+              unawaited(
+                _resumeEmailReconnectIfPossible(
+                  jid: accountJid,
+                  requireStoredCredentials: false,
+                ),
+              );
+            }
           }
         });
         return;
@@ -1701,6 +1745,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         databasePassphraseStorageKey: databasePassphraseStorageKey,
         databasePassphrase: ensuredDatabasePassphrase,
         pendingAvatar: pendingAvatar,
+        signupWelcomeTitle: signupWelcomeTitle,
+        signupWelcomeBody: signupWelcomeBody,
       );
       authenticationCommitted = true;
     } finally {
@@ -1709,6 +1755,16 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           clearCredentials: credentialDisposition.shouldWipe,
           jid: accountJid,
         );
+      }
+      if (identical(
+        _deferredEmailProvisioningCompleter,
+        deferredEmailProvisioningCompleter,
+      )) {
+        _deferredEmailProvisioningCompleter = null;
+      }
+      if (deferredEmailProvisioningCompleter != null &&
+          !deferredEmailProvisioningCompleter.isCompleted) {
+        deferredEmailProvisioningCompleter.complete();
       }
     }
   }
@@ -2096,6 +2152,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required RegisteredCredentialKey databasePassphraseStorageKey,
     required String databasePassphrase,
     required AvatarUploadPayload? pendingAvatar,
+    String? signupWelcomeTitle,
+    String? signupWelcomeBody,
   }) async {
     await _persistLoginSecrets(
       jid: jid,
@@ -2113,6 +2171,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _xmppService.cacheSelfAvatarDraft(pendingAvatar);
     }
     final bool fromSignup = _activeSignupCredentialKey != null;
+    if (fromSignup && signupWelcomeTitle != null && signupWelcomeBody != null) {
+      await syncSignupWelcomeMessage(
+        allowInsert: true,
+        title: signupWelcomeTitle,
+        body: signupWelcomeBody,
+      );
+    }
     final AuthenticationState completedState = fromSignup
         ? const AuthenticationCompleteFromSignup()
         : const AuthenticationComplete();
@@ -2120,7 +2185,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
     _updateEmailForegroundKeepalive();
-    await _triggerEmailReconnect();
+    unawaited(_triggerEmailReconnect());
     if (_xmppService.connectionState == ConnectionState.connected) {
       unawaited(_homeRefreshSyncService.syncOnLogin());
     }
@@ -2329,6 +2394,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required String captcha,
     required bool rememberMe,
     required bool passwordWasSkipped,
+    required String welcomeTitle,
+    required String welcomeBody,
     AvatarUploadPayload? avatar,
   }) async {
     if (kEnableDemoChats) {
@@ -2411,6 +2478,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         requireEmailProvisioned: true,
         emailCredentials: emailProvisioningCredentials,
         pendingAvatar: avatar,
+        signupWelcomeTitle: welcomeTitle,
+        signupWelcomeBody: welcomeBody,
       );
       signupComplete = state is AuthenticationComplete;
     } on provisioning.EmailProvisioningApiException catch (error, stackTrace) {

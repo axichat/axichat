@@ -228,6 +228,7 @@ class HomeRefreshSyncService {
   Future<void> _ensureEmailConnected() async {
     final emailService = _emailService;
     if (emailService == null) return;
+    if (!await emailService.canReconnectConfiguredSession()) return;
     try {
       await emailService.ensureEventChannelActive();
       await emailService.handleNetworkAvailable();

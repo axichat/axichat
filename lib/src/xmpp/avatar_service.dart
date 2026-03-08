@@ -120,6 +120,7 @@ mixin AvatarService on XmppBase, MucService {
   final Set<String> _configuredAvatarNodes = {};
   final Set<String> _pubSubAvatarJids = {};
   final Map<String, DateTime> _conversationAvatarRefreshAttempts = {};
+  Future<void>? _selfAvatarBootstrapReplay;
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
   static const int _maxAvatarBytes = 512 * 1024;
@@ -352,13 +353,10 @@ mixin AvatarService on XmppBase, MucService {
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         _avatarLog.fine('Stream negotiations done. resumed=${event.resumed}.');
-        if (avatarEncryptionKey != null) {
-          fireAndForget(() async {
-            await _notifyCachedSelfAvatarIfAvailable();
-            await _publishPendingSelfAvatarIfAvailable();
-            await refreshSelfAvatarIfNeeded();
-          }, operationName: 'AvatarService.refreshSelfAvatarOnNegotiations');
-        }
+        fireAndForget(
+          _bootstrapSelfAvatarIfReady,
+          operationName: 'AvatarService.refreshSelfAvatarOnNegotiations',
+        );
         if (event.resumed) return;
         fireAndForget(
           _refreshRosterAvatarsFromCache,
@@ -385,6 +383,7 @@ mixin AvatarService on XmppBase, MucService {
       owner._notifySelfAvatarUpdated(
         StoredAvatar(path: path, hash: payload.hash),
       );
+      await _bootstrapSelfAvatarIfReady();
     } on Exception catch (error, stackTrace) {
       _avatarLog.fine(
         'Failed to cache pending self avatar for immediate display.',
@@ -402,7 +401,33 @@ mixin AvatarService on XmppBase, MucService {
     _safeAvatarBytesCache.clear();
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
+    _selfAvatarBootstrapReplay = null;
     await super._reset();
+  }
+
+  Future<void> _bootstrapSelfAvatarIfReady() async {
+    if (lastStreamReady == null) return;
+    if (avatarEncryptionKey == null) return;
+    final replay = _selfAvatarBootstrapReplay;
+    if (replay != null) {
+      await replay;
+      return;
+    }
+    final nextReplay = _runSelfAvatarBootstrap();
+    _selfAvatarBootstrapReplay = nextReplay;
+    try {
+      await nextReplay;
+    } finally {
+      if (identical(_selfAvatarBootstrapReplay, nextReplay)) {
+        _selfAvatarBootstrapReplay = null;
+      }
+    }
+  }
+
+  Future<void> _runSelfAvatarBootstrap() async {
+    await _notifyCachedSelfAvatarIfAvailable();
+    await _publishPendingSelfAvatarIfAvailable();
+    await refreshSelfAvatarIfNeeded();
   }
 
   Future<void> scheduleAvatarRefresh(
@@ -1614,8 +1639,6 @@ mixin AvatarService on XmppBase, MucService {
       _avatarLog.fine('Skipping self avatar repair; cooldown active.');
       return;
     }
-    _selfAvatarRepairLastAttempt = DateTime.now();
-
     final existingPath = await _storedAvatarPath(bareJid);
     if (existingPath == null || existingPath.trim().isEmpty) return;
     final bytes = await loadAvatarBytes(existingPath);
@@ -1636,6 +1659,7 @@ mixin AvatarService on XmppBase, MucService {
       hash: hash,
       jid: bareJid,
     );
+    _selfAvatarRepairLastAttempt = DateTime.now();
     try {
       await _publishAvatarOnce(
         payload: payload,
@@ -1884,6 +1908,18 @@ mixin AvatarService on XmppBase, MucService {
     }
     _avatarDirectory = directory;
     return directory;
+  }
+
+  Future<void> _deleteAvatarCacheDirectory() async {
+    _avatarBytesCache.clear();
+    _safeAvatarBytesCache.clear();
+    final supportDir = await getApplicationSupportDirectory();
+    final directory =
+        _avatarDirectory ?? Directory(p.join(supportDir.path, 'avatars'));
+    if (await directory.exists()) {
+      await directory.delete(recursive: true);
+    }
+    _avatarDirectory = null;
   }
 
   bool _isSafeAvatarCachePath({

@@ -3,7 +3,7 @@
 
 import 'dart:async';
 
-import 'package:flutter_native_timezone/flutter_native_timezone.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -96,7 +96,7 @@ class NlScheduleParserService {
 
   Future<String> _resolveTimezone() async {
     try {
-      return await FlutterNativeTimezone.getLocalTimezone();
+      return await FlutterTimezone.getLocalTimezone();
     } catch (_) {
       return _fallbackTz;
     }

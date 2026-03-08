@@ -15,6 +15,8 @@ class AxiInputDialog extends StatelessWidget {
     this.callback,
     this.callbackText,
     this.loading = false,
+    this.canPop = true,
+    this.showCloseButton = true,
     this.actions = const [],
     this.maxWidth,
   });
@@ -24,6 +26,8 @@ class AxiInputDialog extends StatelessWidget {
   final void Function()? callback;
   final String? callbackText;
   final bool loading;
+  final bool canPop;
+  final bool showCloseButton;
   final List<Widget> actions;
   final double? maxWidth;
 
@@ -52,7 +56,7 @@ class AxiInputDialog extends StatelessWidget {
     );
     final actionButtons = <Widget>[
       AxiButton.outline(
-        onPressed: () => context.pop(),
+        onPressed: canPop ? () => context.pop() : null,
         child: Text(context.l10n.commonCancel),
       ),
       ...actions,
@@ -74,6 +78,7 @@ class AxiInputDialog extends StatelessWidget {
             AxiSheetHeader(
               title: title,
               onClose: () => context.pop(),
+              showCloseButton: showCloseButton,
               padding: headerPadding,
             ),
             Padding(padding: bodyPadding, child: content),
@@ -90,12 +95,15 @@ class AxiInputDialog extends StatelessWidget {
         ),
       ),
     );
-    return Dialog(
-      insetPadding: dialogInsets,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      shadowColor: Colors.transparent,
-      child: dialogChild,
+    return PopScope(
+      canPop: canPop,
+      child: Dialog(
+        insetPadding: dialogInsets,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        shadowColor: Colors.transparent,
+        child: dialogChild,
+      ),
     );
   }
 }

@@ -15,7 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
     hide NotificationVisibility;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_native_timezone/flutter_native_timezone.dart';
+import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -461,7 +461,7 @@ class NotificationService {
 
     String? timeZoneName;
     try {
-      timeZoneName = await FlutterNativeTimezone.getLocalTimezone();
+      timeZoneName = await FlutterTimezone.getLocalTimezone();
     } catch (_) {
       timeZoneName = null;
     }

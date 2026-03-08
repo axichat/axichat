@@ -735,13 +735,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.6"
-  flutter_native_timezone:
-    dependency: "direct main"
-    description:
-      path: "third_party/flutter_native_timezone"
-      relative: true
-    source: path
-    version: "2.0.0"
   flutter_parsed_text:
     dependency: transitive
     description:
@@ -827,6 +820,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_timezone:
+    dependency: "direct main"
+    description:
+      name: flutter_timezone
+      sha256: ea53c61c9152f271a5e30624a624184804947b6a733ff2b64186bb2579446892
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.0.1"
   flutter_web_plugins:
     dependency: transitive
     description: flutter

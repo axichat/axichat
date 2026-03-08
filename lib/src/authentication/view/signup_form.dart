@@ -49,6 +49,8 @@ class _SignupFormState extends State<SignupForm>
     with AutomaticKeepAliveClientMixin {
   static const Size _captchaFrameSize = Size(180, 70);
 
+  final _passwordFocusNode = FocusNode();
+  final _password2FocusNode = FocusNode();
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   late TextEditingController _password2TextController;
@@ -117,6 +119,8 @@ class _SignupFormState extends State<SignupForm>
 
   @override
   void dispose() {
+    _passwordFocusNode.dispose();
+    _password2FocusNode.dispose();
     _jidTextController
       ..removeListener(_handleFieldProgressChanged)
       ..dispose();
@@ -253,6 +257,8 @@ class _SignupFormState extends State<SignupForm>
       captcha: _captchaTextController.value.text,
       rememberMe: effectiveRememberMe,
       passwordWasSkipped: _passwordWasSkipped,
+      welcomeTitle: context.l10n.authSignupWelcomeTitle,
+      welcomeBody: context.l10n.authSignupWelcomeMessage,
       avatar: avatarPayload,
     );
   }
@@ -905,6 +911,10 @@ class _SignupFormState extends State<SignupForm>
                                       enabled:
                                           !isBusy && !_pwnedCheckInProgress,
                                       controller: _passwordTextController,
+                                      focusNode: _passwordFocusNode,
+                                      textInputAction: TextInputAction.next,
+                                      onSubmitted: (_) =>
+                                          _password2FocusNode.requestFocus(),
                                     ),
                                   ),
                                   Padding(
@@ -913,6 +923,8 @@ class _SignupFormState extends State<SignupForm>
                                       enabled:
                                           !isBusy && !_pwnedCheckInProgress,
                                       controller: _password2TextController,
+                                      focusNode: _password2FocusNode,
+                                      textInputAction: TextInputAction.done,
                                       confirmValidator: (text) =>
                                           text != _passwordTextController.text
                                           ? context.l10n.authPasswordsMismatch

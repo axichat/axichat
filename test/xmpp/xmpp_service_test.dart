@@ -1,20 +1,37 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:path/path.dart' as p;
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 import '../mocks.dart';
 
 class MockPresenceManager extends Mock implements XmppPresenceManager {}
+
+class MockUserAvatarManager extends Mock implements mox.UserAvatarManager {}
+
+class _FakePathProviderPlatform extends PathProviderPlatform {
+  _FakePathProviderPlatform(this.supportPath);
+
+  final String supportPath;
+
+  @override
+  Future<String?> getApplicationSupportPath() async => supportPath;
+}
 
 class RecordingMamManager extends mox.MAMManager {
   int queryCount = 0;
@@ -40,6 +57,87 @@ class RecordingMamManager extends mox.MAMManager {
       complete: true,
     );
   }
+}
+
+class RecordingAvatarPubSubManager extends SafePubSubManager {
+  int publishCount = 0;
+  final Map<String, mox.XMLNode> _publishedItems = <String, mox.XMLNode>{};
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> configureNode(
+    mox.JID jid,
+    String node,
+    AxiPubSubNodeConfig config,
+  ) async => const moxlib.Result(true);
+
+  @override
+  Future<String?> createNode(mox.JID jid, {String? nodeId}) async =>
+      nodeId ?? 'created-node';
+
+  @override
+  Future<String?> createNodeWithConfig(
+    mox.JID jid,
+    mox.NodeConfig config, {
+    String? nodeId,
+  }) async => nodeId ?? 'created-node';
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> publish(
+    mox.JID jid,
+    String node,
+    mox.XMLNode payload, {
+    String? id,
+    mox.PubSubPublishOptions? options,
+    bool autoCreate = false,
+    mox.NodeConfig? createNodeConfig,
+  }) async {
+    publishCount += 1;
+    final itemId = id ?? 'item-$publishCount';
+    _publishedItems[_publishedKey(node, itemId)] = payload;
+    return const moxlib.Result(true);
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, mox.PubSubItem>> getItem(
+    mox.JID jid,
+    String node,
+    String id, {
+    String? subId,
+  }) async {
+    final payload = _publishedItems[_publishedKey(node, id)];
+    if (payload == null) {
+      return moxlib.Result(mox.ItemNotFoundError());
+    }
+    return moxlib.Result(mox.PubSubItem(id: id, node: node, payload: payload));
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>> getItems(
+    mox.JID jid,
+    String node, {
+    int? maxItems,
+    String? subId,
+  }) async {
+    final items = _publishedItems.entries
+        .where((entry) => entry.key.startsWith('$node|'))
+        .map(
+          (entry) => mox.PubSubItem(
+            id: entry.key.split('|').last,
+            node: node,
+            payload: entry.value,
+          ),
+        )
+        .toList(growable: false);
+    if (items.isEmpty) {
+      return moxlib.Result(mox.ItemNotFoundError());
+    }
+    if (maxItems == null || items.length <= maxItems) {
+      return moxlib.Result(items);
+    }
+    return moxlib.Result(items.take(maxItems).toList(growable: false));
+  }
+
+  String _publishedKey(String node, String id) => '$node|$id';
 }
 
 void main() {
@@ -113,7 +211,6 @@ void main() {
     });
 
     tearDown(() async {
-      await database.deleteAll();
       await xmppService.close();
       await pumpEventQueue();
     });
@@ -266,6 +363,93 @@ void main() {
         ),
       ).called(1);
     });
+
+    test(
+      'Caches a signup self avatar draft after stream ready and publishes it immediately.',
+      () async {
+        final originalPathProvider = PathProviderPlatform.instance;
+        final tempDir = await Directory.systemTemp.createTemp(
+          'axichat-avatar-',
+        );
+        final supportDir = Directory(p.join(tempDir.path, 'support'));
+        await supportDir.create(recursive: true);
+        PathProviderPlatform.instance = _FakePathProviderPlatform(
+          supportDir.path,
+        );
+        final stateStoreValues = <String, Object?>{};
+        final pubsubManager = RecordingAvatarPubSubManager();
+        final userAvatarManager = MockUserAvatarManager();
+        try {
+          when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
+            invocation,
+          ) {
+            final key = invocation.namedArguments[#key] as RegisteredStateKey;
+            return stateStoreValues[key.value];
+          });
+          when(
+            () => mockStateStore.write(
+              key: any(named: 'key'),
+              value: any(named: 'value'),
+            ),
+          ).thenAnswer((invocation) async {
+            final key = invocation.namedArguments[#key] as RegisteredStateKey;
+            stateStoreValues[key.value] = invocation.namedArguments[#value];
+            return true;
+          });
+          when(() => mockStateStore.delete(key: any(named: 'key'))).thenAnswer((
+            invocation,
+          ) async {
+            final key = invocation.namedArguments[#key] as RegisteredStateKey;
+            stateStoreValues.remove(key.value);
+            return true;
+          });
+
+          when(
+            () => mockConnection.getManager<SafePubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.PubSubManager>(),
+          ).thenReturn(pubsubManager);
+          when(
+            () => mockConnection.getManager<mox.UserAvatarManager>(),
+          ).thenReturn(userAvatarManager);
+          when(
+            () => mockConnection.getManager<mox.VCardManager>(),
+          ).thenReturn(null);
+          when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+
+          eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+          await pumpEventQueue();
+
+          expect(pubsubManager.publishCount, equals(0));
+
+          await xmppService.cacheSelfAvatarDraft(
+            AvatarUploadPayload(
+              bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+              mimeType: 'image/png',
+              width: 1,
+              height: 1,
+              hash: 'signup-avatar-hash',
+            ),
+          );
+
+          await pumpEventQueue();
+
+          expect(pubsubManager.publishCount, equals(2));
+          expect(
+            stateStoreValues[xmppService.selfAvatarPendingPublishKey.value],
+            isNull,
+          );
+          expect(
+            (await xmppService.getOwnAvatar())?.hash,
+            'signup-avatar-hash',
+          );
+        } finally {
+          PathProviderPlatform.instance = originalPathProvider;
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
 
     test('Given a standard text message, writes it to the database.', () async {
       final beforeMessage = await database.getMessageByStanzaID(
@@ -707,6 +891,65 @@ void main() {
         );
       },
     );
+  });
+
+  group('burn', () {
+    setUp(() async {
+      xmppService = XmppService(
+        buildConnection: () => mockConnection,
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+      await connectSuccessfully(xmppService);
+    });
+
+    tearDown(() async {
+      await xmppService.close();
+      await pumpEventQueue();
+    });
+
+    tearDown(() {
+      resetMocktailState();
+    });
+
+    test('Burn removes the avatar cache directory.', () async {
+      final originalPathProvider = PathProviderPlatform.instance;
+      final tempDir = await Directory.systemTemp.createTemp('axichat-burn-');
+      final supportDir = Directory(p.join(tempDir.path, 'support'));
+      await supportDir.create(recursive: true);
+      PathProviderPlatform.instance = _FakePathProviderPlatform(
+        supportDir.path,
+      );
+      final avatarDirectory = Directory(p.join(supportDir.path, 'avatars'));
+
+      try {
+        when(
+          () => mockStateStore.deleteAll(burn: true),
+        ).thenAnswer((_) async => true);
+
+        await xmppService.cacheSelfAvatarDraft(
+          AvatarUploadPayload(
+            bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
+            mimeType: 'image/png',
+            width: 1,
+            height: 1,
+            hash: 'burn-avatar-hash',
+          ),
+        );
+
+        expect(await avatarDirectory.exists(), isTrue);
+
+        await xmppService.burn();
+
+        expect(await avatarDirectory.exists(), isFalse);
+      } finally {
+        PathProviderPlatform.instance = originalPathProvider;
+        if (await tempDir.exists()) {
+          await tempDir.delete(recursive: true);
+        }
+      }
+    });
   });
 
   group('XmppConnection', () {});

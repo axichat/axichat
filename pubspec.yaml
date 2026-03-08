@@ -80,8 +80,7 @@ dependencies:
   flutter_html: ^3.0.0
   flutter_inappwebview: ^6.1.5
   flutter_local_notifications: ^20.0.0
-  flutter_native_timezone:
-    path: third_party/flutter_native_timezone
+  flutter_timezone: ^3.0.1
   timezone: ^0.10.0
   dnsolve: ^2.0.0
   app_settings: ^7.0.0

@@ -26,6 +26,7 @@ class LoginForm extends StatefulWidget {
 
 class _LoginFormState extends State<LoginForm> {
   final _formKey = GlobalKey<FormState>();
+  final _passwordFocusNode = FocusNode();
   late TextEditingController _jidTextController;
   late TextEditingController _passwordTextController;
   final _rememberMeFieldKey = GlobalKey<FormFieldState<bool>>();
@@ -53,6 +54,7 @@ class _LoginFormState extends State<LoginForm> {
 
   @override
   void dispose() {
+    _passwordFocusNode.dispose();
     _jidTextController.dispose();
     _passwordTextController.dispose();
     super.dispose();
@@ -142,6 +144,7 @@ class _LoginFormState extends State<LoginForm> {
                       child: AxiTextFormField(
                         key: loginUsernameKey,
                         autocorrect: false,
+                        textInputAction: TextInputAction.next,
                         inputFormatters: [
                           FilteringTextInputFormatter.allow(
                             usernameCharactersPattern,
@@ -151,6 +154,7 @@ class _LoginFormState extends State<LoginForm> {
                         placeholder: Text(context.l10n.authUsername),
                         enabled: !isBusy,
                         controller: _jidTextController,
+                        onSubmitted: (_) => _passwordFocusNode.requestFocus(),
                         trailing: EndpointSuffix(server: state.server),
                         validator: (text) {
                           final value = text;
@@ -169,6 +173,8 @@ class _LoginFormState extends State<LoginForm> {
                       key: loginPasswordKey,
                       enabled: !isBusy,
                       controller: _passwordTextController,
+                      focusNode: _passwordFocusNode,
+                      textInputAction: TextInputAction.done,
                     ),
                   ),
                   SizedBox(height: spacing.m),

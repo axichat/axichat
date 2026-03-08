@@ -27,6 +27,8 @@ const validPassword = 'validPassword';
 const saltedPassword = 'saltedPassword';
 const invalidUsername = 'invalidUsername';
 const invalidPassword = 'invalidPassword';
+const signupWelcomeTitle = 'Axichat';
+const signupWelcomeBody = 'Welcome to Axichat!';
 const bool clearEmailCredentialsOnLogout = true;
 
 Uri _registrationMatcher() =>
@@ -90,6 +92,11 @@ void main() {
     ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
     when(() => mockEmailService.hasActiveSession).thenReturn(false);
     when(() => mockEmailService.hasInMemoryReconnectContext).thenReturn(true);
+    when(
+      () => mockEmailService.canReconnectConfiguredSession(
+        jid: any(named: 'jid'),
+      ),
+    ).thenAnswer((_) async => true);
     when(() => mockXmppService.hasInMemoryReconnectContext).thenReturn(true);
     when(
       () => mockXmppService.streamReadyStream,
@@ -507,6 +514,114 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
+      'Fresh deferred login lets deferred email provisioning own startup.',
+      setUp: () {
+        when(() => mockXmppService.myJid).thenReturn(validJid);
+        when(
+          () => mockXmppService.connectionState,
+        ).thenReturn(ConnectionState.connected);
+        when(() => mockEmailService.hasActiveSession).thenReturn(false);
+        when(
+          () => mockEmailService.hasInMemoryReconnectContext,
+        ).thenReturn(false);
+        when(
+          () => mockEmailService.canReconnectConfiguredSession(
+            jid: any(named: 'jid'),
+          ),
+        ).thenAnswer((_) async => false);
+        when(
+          () => mockEmailService.ensureProvisioned(
+            displayName: any(named: 'displayName'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            jid: any(named: 'jid'),
+            passwordOverride: any(named: 'passwordOverride'),
+            addressOverride: any(named: 'addressOverride'),
+            persistCredentials: any(named: 'persistCredentials'),
+          ),
+        ).thenThrow(
+          const EmailProvisioningException(
+            EmailProvisioningFailure.networkUnavailable,
+            isRecoverable: true,
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        homeRefreshSyncService: mockHomeRefreshSyncService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) =>
+          bloc.login(username: validUsername, password: validPassword),
+      wait: const Duration(milliseconds: 10),
+      expect: () => [
+        const AuthenticationLogInInProgress(),
+        const AuthenticationComplete(),
+      ],
+      verify: (_) {
+        verify(
+          () => mockEmailService.ensureProvisioned(
+            displayName: any(named: 'displayName'),
+            databasePrefix: any(named: 'databasePrefix'),
+            databasePassphrase: any(named: 'databasePassphrase'),
+            jid: any(named: 'jid'),
+            passwordOverride: any(named: 'passwordOverride'),
+            addressOverride: any(named: 'addressOverride'),
+            persistCredentials: any(named: 'persistCredentials'),
+          ),
+        ).called(2);
+        verifyNever(() => mockEmailService.handleNetworkAvailable());
+        verify(() => mockHomeRefreshSyncService.syncOnLogin()).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Fresh deferred login resumes email reconnect after provisioning completes.',
+      setUp: () {
+        when(() => mockXmppService.myJid).thenReturn(validJid);
+        when(
+          () => mockXmppService.connectionState,
+        ).thenReturn(ConnectionState.connected);
+        when(
+          () => mockEmailService.syncState,
+        ).thenReturn(const EmailSyncState.recovering('Syncing'));
+        when(() => mockEmailService.hasActiveSession).thenReturn(true);
+        when(
+          () => mockEmailService.hasInMemoryReconnectContext,
+        ).thenReturn(false);
+        when(
+          () => mockEmailService.canReconnectConfiguredSession(
+            jid: any(named: 'jid'),
+          ),
+        ).thenAnswer((_) async => true);
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        homeRefreshSyncService: mockHomeRefreshSyncService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) =>
+          bloc.login(username: validUsername, password: validPassword),
+      wait: const Duration(milliseconds: 10),
+      expect: () => [
+        const AuthenticationLogInInProgress(),
+        const AuthenticationComplete(),
+      ],
+      verify: (_) {
+        verify(() => mockEmailService.handleNetworkAvailable()).called(2);
+        verify(() => mockHomeRefreshSyncService.syncOnLogin()).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
       'Stored login without database secrets blocks login and emits [AuthenticationFailure].',
       setUp: () {
         credentialStorage['jid'] = validJid;
@@ -909,6 +1024,8 @@ void main() {
         captcha: captchaText,
         rememberMe: true,
         passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -1080,6 +1197,8 @@ void main() {
         captcha: captchaText,
         rememberMe: true,
         passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -1141,6 +1260,8 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
         passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -1198,6 +1319,8 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
         passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -1252,6 +1375,8 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
         passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
       ),
       expect: () => [
         const AuthenticationSignUpInProgress(),
@@ -1298,6 +1423,8 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
         passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -1347,6 +1474,8 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
         passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -1394,6 +1523,8 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
         passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),
@@ -1434,6 +1565,8 @@ void main() {
         captcha: captchaText,
         rememberMe: false,
         passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
       ),
       expect: () => const [
         AuthenticationSignUpInProgress(),

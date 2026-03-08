@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/storage/database.dart';

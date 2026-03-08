@@ -1088,6 +1088,43 @@ void main() {
   });
 
   test(
+    'reconnect restart reattaches listener and reruns recovery after offline restart',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Bob',
+        databasePrefix: 'bob',
+        databasePassphrase: 'secret',
+        jid: 'bob@axi.im',
+        passwordOverride: 'password',
+      );
+
+      await service.handleNetworkAvailable();
+      clearInteractions(transport);
+      when(() => transport.connectivity()).thenAnswer((_) async => 1000);
+
+      await service.handleNetworkAvailable();
+      await Future<void>.delayed(const Duration(milliseconds: 2200));
+      await pumpMicrotasks();
+
+      verify(() => transport.removeEventListener(any())).called(1);
+      verify(() => transport.stop()).called(1);
+      verify(() => transport.addEventListener(any())).called(1);
+      verify(() => transport.start()).called(1);
+      verify(() => transport.notifyNetworkAvailable()).called(2);
+
+      await service.shutdown(jid: 'bob@axi.im');
+    },
+  );
+
+  test(
     'handleNetworkLost notifies transport while provisioned but stopped',
     () async {
       final service = EmailService(

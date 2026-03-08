@@ -340,6 +340,8 @@ abstract interface class XmppBase {
 
   Stream<StoredAvatar?> get selfAvatarStream;
 
+  XmppStreamReady? get lastStreamReady;
+
   void _notifySelfAvatarUpdated(StoredAvatar? avatar);
 
   Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream;
@@ -558,6 +560,7 @@ class XmppService extends XmppBase
   Stream<XmppStreamReady> get streamReadyStream =>
       _streamReadyController.stream;
 
+  @override
   XmppStreamReady? get lastStreamReady => _lastStreamReady;
 
   bool get hasGlobalMamSyncForCurrentSession {
@@ -1410,7 +1413,10 @@ class XmppService extends XmppBase
     );
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
-    await refreshSelfAvatarIfNeeded();
+    await _bootstrapSelfAvatarIfReady();
+    if (lastStreamReady == null) {
+      await refreshSelfAvatarIfNeeded();
+    }
     fireAndForget(
       _verifyMamSupportOnLogin,
       operationName: 'XmppService.verifyMamSupportOnLogin',
@@ -2147,6 +2153,8 @@ class XmppService extends XmppBase
   }
 
   Future<void> burn() async {
+    await _deleteAvatarCacheDirectory();
+
     await _dbOp<XmppStateStore>((ss) async {
       _xmppLogger.info('Wiping state store...');
       await ss.deleteAll(burn: true);

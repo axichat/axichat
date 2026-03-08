@@ -151,6 +151,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                       SizedBox(height: spacing.m),
                       AxiTextField(
                         controller: _messageController,
+                        enabled: !isBusy,
                         decoration: InputDecoration(
                           labelText: context.l10n.emailDemoMessageLabel,
                         ),

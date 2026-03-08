@@ -147,6 +147,7 @@ class _CalendarAvailabilityRequestSheetState
           onEndChanged: _handleEndChanged,
           minDate: widget.share.overlay.rangeStart.value,
           maxDate: widget.share.overlay.rangeEnd.value,
+          enabled: !_isSending,
         ),
         const SizedBox(height: _availabilityRequestSheetSpacing),
         _AvailabilitySheetSectionLabel(
@@ -156,6 +157,7 @@ class _CalendarAvailabilityRequestSheetState
           label: context.l10n.calendarAvailabilityRequestTitleLabel,
           placeholder: context.l10n.calendarAvailabilityRequestTitlePlaceholder,
           controller: _titleController,
+          enabled: !_isSending,
         ),
         const SizedBox(height: _availabilityRequestSheetGap),
         _AvailabilityTextField(
@@ -163,6 +165,7 @@ class _CalendarAvailabilityRequestSheetState
           placeholder:
               context.l10n.calendarAvailabilityRequestDescriptionPlaceholder,
           controller: _descriptionController,
+          enabled: !_isSending,
           minLines: _availabilityRequestDescriptionMinLines,
           maxLines: _availabilityRequestDescriptionMaxLines,
           minHeight: _availabilityRequestDescriptionMinHeight,
@@ -221,6 +224,7 @@ class _CalendarAvailabilityRequestSheetState
     final description = _descriptionController.text.trim();
     final ownerJid = widget.share.overlay.owner.trim();
     final resolvedOwnerJid = ownerJid.isEmpty ? null : ownerJid;
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _isSending = true;
     });
@@ -366,6 +370,7 @@ class _AvailabilityTextField extends StatelessWidget {
     required this.label,
     required this.placeholder,
     required this.controller,
+    required this.enabled,
     this.minLines = _availabilityTextFieldDefaultMinLines,
     this.maxLines = _availabilityTextFieldDefaultMaxLines,
     this.minHeight,
@@ -374,6 +379,7 @@ class _AvailabilityTextField extends StatelessWidget {
   final String label;
   final String placeholder;
   final TextEditingController controller;
+  final bool enabled;
   final int minLines;
   final int maxLines;
   final double? minHeight;
@@ -385,6 +391,7 @@ class _AvailabilityTextField extends StatelessWidget {
       placeholder: Text(placeholder),
       minLines: minLines,
       maxLines: maxLines,
+      enabled: enabled,
     );
     final Widget content = minHeight == null
         ? field
