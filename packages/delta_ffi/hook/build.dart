@@ -325,7 +325,8 @@ String? _androidNdkToolchainBinDirectory() {
   final ndkRoot = Platform.environment['ANDROID_NDK_ROOT'] ??
       Platform.environment['ANDROID_NDK_HOME'] ??
       Platform.environment['NDK_HOME'];
-  final prebuiltRoot = _joinPaths(ndkRoot, 'toolchains', 'llvm', 'prebuilt');
+  final prebuiltRoot =
+      _joinPaths(_joinPaths(ndkRoot, 'toolchains', 'llvm'), 'prebuilt');
   if (prebuiltRoot == null) {
     return null;
   }
