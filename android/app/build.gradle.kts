@@ -159,18 +159,17 @@ fun Project.stripDevOnlyPluginRegistrationsFromGeneratedRegistrant() {
     }
 
     val originalContents = registrantFile.readText()
-    val registrationBlockPattern = Regex(
-        """(?ms)^    try \{\R      flutterEngine\.getPlugins\(\)\.add\(new .+\);\R    \} catch \(Exception e\) \{\R      Log\.e\(TAG, "Error registering plugin ([^,]+), .+", e\);\R    \}\R"""
-    )
     val removedPluginNames = mutableSetOf<String>()
 
-    val sanitizedContents = originalContents.replace(registrationBlockPattern) { match ->
-        val pluginName = match.groupValues[1]
-        if (pluginName in devDependencyPluginNames) {
+    var sanitizedContents = originalContents
+    for (pluginName in devDependencyPluginNames) {
+        val registrationBlockPattern = Regex(
+            """(?ms)^    try \{\R      flutterEngine\.getPlugins\(\)\.add\(new .*?\);\R    \} catch \(Exception e\) \{\R      Log\.e\(TAG, "Error registering plugin ${Regex.escape(pluginName)}, .*?", e\);\R    \}\R?"""
+        )
+        val updatedContents = sanitizedContents.replace(registrationBlockPattern, "")
+        if (updatedContents != sanitizedContents) {
             removedPluginNames += pluginName
-            ""
-        } else {
-            match.value
+            sanitizedContents = updatedContents
         }
     }
 
