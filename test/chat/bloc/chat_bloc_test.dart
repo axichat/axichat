@@ -1574,6 +1574,105 @@ void main() {
     await knownContactController.close();
   });
 
+  test('dismisses unknown sender immediately after xmpp add contact', () async {
+    final xmppService = MockXmppService();
+    when(
+      () => xmppService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => const Stream<List<Message>>.empty());
+    when(
+      () => xmppService.countLocalMessages(
+        jid: any(named: 'jid'),
+        filter: any(named: 'filter'),
+        includePseudoMessages: any(named: 'includePseudoMessages'),
+      ),
+    ).thenAnswer((_) async => 0);
+    when(
+      () => xmppService.resolvePeerCapabilities(
+        jid: any(named: 'jid'),
+        forceRefresh: any(named: 'forceRefresh'),
+      ),
+    ).thenAnswer((_) async => xmpp.XmppPeerCapabilities(features: const []));
+    when(
+      () => xmppService.prefetchAvatarForJid(any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.loadMessageByStanzaId(any()),
+    ).thenAnswer((_) async => null);
+    when(
+      () => xmppService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+    when(
+      () => xmppService.syncPinnedMessagesForChat(any()),
+    ).thenAnswer((_) async {});
+    when(() => xmppService.database).thenAnswer((_) async => mockDatabase);
+    when(
+      () => xmppService.addToRoster(
+        jid: any(named: 'jid'),
+        title: any(named: 'title'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => xmppService.connectionState,
+    ).thenReturn(xmpp.ConnectionState.connected);
+    when(
+      () => xmppService.connectivityStream,
+    ).thenAnswer((_) => const Stream<xmpp.ConnectionState>.empty());
+    when(
+      () => xmppService.httpUploadSupportStream,
+    ).thenAnswer((_) => const Stream<xmpp.HttpUploadSupport>.empty());
+    when(
+      () => xmppService.httpUploadSupport,
+    ).thenReturn(const xmpp.HttpUploadSupport(supported: false));
+    when(() => xmppService.lastStreamReady).thenReturn(null);
+    when(() => xmppService.hasGlobalMamSyncForCurrentSession).thenReturn(false);
+    when(() => xmppService.resolveMamSupport()).thenAnswer((_) async => false);
+
+    final xmppChat = initialChat.copyWith(
+      transport: MessageTransport.xmpp,
+      jid: 'friend@example.net',
+    );
+
+    final bloc = ChatBloc(
+      jid: xmppChat.jid,
+      messageService: xmppService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(xmppChat);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    final completer = Completer<bool>();
+
+    bloc.add(
+      ChatContactAddRequested(
+        chat: xmppChat,
+        successTitle: 'Added',
+        failureTitle: 'Failed',
+        completer: completer,
+      ),
+    );
+    await _pumpBloc();
+
+    expect(await completer.future, true);
+    verify(
+      () => xmppService.addToRoster(
+        jid: 'friend@example.net',
+        title: any(named: 'title'),
+      ),
+    ).called(1);
+
+    await bloc.close();
+  });
+
   test('catch-up paginates MAM when reconnecting after gap', () async {
     final xmppService = MockXmppService();
     final connectivityController =

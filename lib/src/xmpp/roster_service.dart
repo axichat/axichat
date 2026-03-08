@@ -251,12 +251,17 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     List<mox.XmppRosterItem> added,
   ) async {
     final updatedJids = <String>{};
+    final createdChatJids = <String>{};
     await owner._dbOp<XmppDatabase>((db) async {
       for (final jid in removed) {
         await db.removeRosterItem(jid);
       }
 
       for (final item in added) {
+        final existingChat = await db.getChat(item.jid);
+        if (existingChat == null) {
+          createdChatJids.add(item.jid);
+        }
         await db.saveRosterItem(RosterItem.fromMox(item));
         updatedJids.add(item.jid);
       }
@@ -268,6 +273,12 @@ class XmppRosterStateManager extends mox.BaseRosterStateManager {
     }, awaitDatabase: true);
     if (owner is AvatarService && updatedJids.isNotEmpty) {
       await (owner as AvatarService).scheduleAvatarRefresh(updatedJids);
+    }
+    if (owner is RosterService && createdChatJids.isNotEmpty) {
+      final rosterOwner = owner as RosterService;
+      for (final jid in createdChatJids) {
+        await rosterOwner._ensureConversationIndexEntryForContact(jid);
+      }
     }
 
     if (version != null) {

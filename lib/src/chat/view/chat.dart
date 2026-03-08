@@ -523,12 +523,14 @@ class _UnknownSenderBanner extends StatelessWidget {
   const _UnknownSenderBanner({
     required this.readOnly,
     required this.isSelfChat,
+    required this.dismissedLocally,
     required this.onAddContact,
     required this.onReportSpam,
   });
 
   final bool readOnly;
   final bool isSelfChat;
+  final bool dismissedLocally;
   final Future<void> Function()? onAddContact;
   final Future<void> Function()? onReportSpam;
 
@@ -562,7 +564,7 @@ class _UnknownSenderBanner extends StatelessWidget {
             final isEmailChat = chat.isEmailBacked;
             final showBanner = isEmailChat
                 ? !state.emailContactKnown
-                : !inRoster;
+                : !inRoster && !dismissedLocally;
             if (!showBanner) {
               return const SizedBox.shrink();
             }
@@ -902,6 +904,7 @@ class _ChatState extends State<Chat> {
       CalendarFragmentPolicy();
   CalendarTask? _pendingCalendarTaskIcs;
   String? _pendingCalendarSeedText;
+  String? _optimisticallyDismissedUnknownSenderJid;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
 
@@ -2116,17 +2119,37 @@ class _ChatState extends State<Chat> {
   Future<void> _handleAddContact() async {
     final chat = context.read<ChatBloc>().state.chat;
     if (chat == null) return;
-    if (chat.remoteJid.trim().isEmpty) {
+    final remoteJid = chat.remoteJid.trim();
+    if (remoteJid.isEmpty) {
       return;
     }
     final l10n = context.l10n;
+    if (chat.isEmailBacked) {
+      context.read<ChatBloc>().add(
+        ChatContactAddRequested(
+          chat: chat,
+          successTitle: l10n.rosterAddTitle,
+          failureTitle: l10n.rosterAddTitle,
+        ),
+      );
+      return;
+    }
+    final completer = Completer<bool>();
     context.read<ChatBloc>().add(
       ChatContactAddRequested(
         chat: chat,
         successTitle: l10n.rosterAddTitle,
         failureTitle: l10n.rosterAddTitle,
+        completer: completer,
       ),
     );
+    final added = await completer.future;
+    if (!mounted || !added) {
+      return;
+    }
+    setState(() {
+      _optimisticallyDismissedUnknownSenderJid = remoteJid;
+    });
   }
 
   void _handleSubjectChanged() {
@@ -4758,6 +4781,9 @@ class _ChatState extends State<Chat> {
                             _UnknownSenderBanner(
                               readOnly: readOnly,
                               isSelfChat: isSelfChat,
+                              dismissedLocally:
+                                  _optimisticallyDismissedUnknownSenderJid ==
+                                  (state.chat?.remoteJid ?? ''),
                               onAddContact: _handleAddContact,
                               onReportSpam: () =>
                                   _handleSpamToggle(sendToSpam: true),

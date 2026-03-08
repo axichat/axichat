@@ -39,8 +39,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const List<mox.MessageProcessingHint> _mucChatStateProcessingHints = [
     mox.MessageProcessingHint.noStore,
   ];
-  static const String _publishOpenChatOperationName =
-      'ChatsService.publishConversationIndexForOpenChat';
   static const List<ConvItem> _emptyConversationIndexSnapshot = <ConvItem>[];
   static const List<Chat> _emptyChatList = <Chat>[];
   final Map<String, Set<String>> _typingParticipants = {};
@@ -611,9 +609,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       await sendChatState(jid: closed.jid, state: mox.ChatState.inactive);
     }
     await sendChatState(jid: jid, state: mox.ChatState.active);
-    fireAndForget(() async {
-      await _publishConversationIndexForOpenChat(jid);
-    }, operationName: _publishOpenChatOperationName);
   }
 
   Future<void> closeChat() async {
@@ -969,13 +964,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         mutedUntil: mutedUntil,
       ),
     );
-  }
-
-  Future<void> _publishConversationIndexForOpenChat(String jid) async {
-    final normalized = _normalizeBareChatJid(jid);
-    if (normalized == null || normalized.isEmpty) return;
-    if (_isMucChatJid(normalized)) return;
-    await _syncConversationIndexMeta(jid: normalized);
   }
 
   String? _normalizeBareChatJid(String jid) {

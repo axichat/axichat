@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
+import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -215,6 +216,7 @@ void main() {
   group('openChat', () {
     test('Opens the given chat.', () async {
       await connectSuccessfully(xmppService);
+      clearInteractions(mockConnection);
 
       when(
         () => mockConnection.sendChatState(
@@ -234,6 +236,7 @@ void main() {
         () =>
             mockConnection.sendChatState(jid: jid, state: mox.ChatState.active),
       ).called(1);
+      verifyNever(() => mockConnection.getManager<ConversationIndexManager>());
     });
 
     test('If a different chat is already open, closes it.', () async {
