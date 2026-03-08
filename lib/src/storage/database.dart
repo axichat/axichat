@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
+import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -2575,9 +2576,13 @@ WHERE transport IS NULL
           : 'Invite revoked';
     }
 
-    final String? trimmedSubject = subject?.trim();
-    if (trimmedBody?.isNotEmpty == true) {
-      final lines = trimmedBody!.split('\n');
+    final split = ChatSubjectCodec.splitDisplayBody(
+      body: trimmedBody,
+      subject: subject,
+    );
+    final String? trimmedSubject = split.subject?.trim();
+    if (split.body.trim().isNotEmpty) {
+      final lines = split.body.trim().split('\n');
       final filtered = lines
           .where(
             (line) =>
@@ -2597,7 +2602,11 @@ WHERE transport IS NULL
           return extractedName;
         }
       }
-      if (cleaned.isNotEmpty) return cleaned;
+      if (cleaned.isNotEmpty) {
+        return trimmedSubject?.isNotEmpty == true
+            ? '$trimmedSubject — $cleaned'
+            : cleaned;
+      }
     }
     if (trimmedSubject?.isNotEmpty == true) {
       return trimmedSubject;

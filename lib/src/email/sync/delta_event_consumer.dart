@@ -6,6 +6,7 @@ import 'dart:ui';
 
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
+import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
@@ -1393,15 +1394,10 @@ class DeltaEventConsumer {
   }
 
   String? _previewTextForStoredMessage(Message message) {
-    final String? trimmedBody = message.body?.trim();
-    if (trimmedBody?.isNotEmpty == true) {
-      return trimmedBody;
-    }
-    final String? trimmedSubject = message.subject?.trim();
-    if (trimmedSubject?.isNotEmpty == true) {
-      return trimmedSubject;
-    }
-    return null;
+    return ChatSubjectCodec.previewText(
+      body: message.body,
+      subject: message.subject,
+    );
   }
 
   Future<bool> _isInternalMessagePreview({
@@ -1425,13 +1421,13 @@ class DeltaEventConsumer {
     if (message == null) {
       return null;
     }
-    final String? trimmedBody = message.text?.trim();
-    if (trimmedBody?.isNotEmpty == true) {
-      return trimmedBody;
-    }
     final sanitizedSubject = sanitizeEmailSubjectValue(message.subject);
-    if (sanitizedSubject != null) {
-      return sanitizedSubject;
+    final previewText = ChatSubjectCodec.previewText(
+      body: message.text,
+      subject: sanitizedSubject,
+    );
+    if (previewText != null) {
+      return previewText;
     }
     if (message.hasFile) {
       final metadataId = deltaFileMetadataId(message.id);
@@ -1653,8 +1649,14 @@ class DeltaEventConsumer {
         : (normalizedHtml == null
               ? rawText
               : HtmlContentCodec.toPlainText(normalizedHtml));
+    final normalizedBody = sanitizedSubject?.isNotEmpty == true
+        ? ChatSubjectCodec.stripRepeatedSubject(
+            body: resolvedBody,
+            subject: sanitizedSubject!,
+          )
+        : resolvedBody;
     var next = message.copyWith(
-      body: resolvedBody?.trim().isEmpty == true ? null : resolvedBody,
+      body: normalizedBody?.trim().isEmpty == true ? null : normalizedBody,
       htmlBody: normalizedHtml,
       subject: sanitizedSubject,
     );

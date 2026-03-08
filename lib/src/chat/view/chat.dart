@@ -124,11 +124,10 @@ extension on MessageStatus {
 }
 
 ({String? subject, String body}) _displaySubjectAndBody(Message message) {
-  final explicitSubject = message.subject?.trim();
-  if (explicitSubject?.isNotEmpty == true) {
-    return (subject: explicitSubject, body: message.body ?? '');
-  }
-  return ChatSubjectCodec.splitXmppBody(message.body);
+  return ChatSubjectCodec.splitDisplayBody(
+    body: message.body,
+    subject: message.subject,
+  );
 }
 
 EdgeInsets _bubblePadding(BuildContext context) => EdgeInsets.symmetric(
