@@ -653,7 +653,7 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   Future<bool?> moveSpamToInbox({required Chat chat}) async {
     final jid = chat.jid;
-    final spamTargetJid = chat.spamSyncTargetJid;
+    final spamTargetJid = chat.antiAbuseTargetAddress;
     if (state.spamUpdatingJids.contains(jid)) {
       return null;
     }

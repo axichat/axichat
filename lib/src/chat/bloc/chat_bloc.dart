@@ -4265,7 +4265,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = event.chat;
     final xmppService = _xmppService;
     if (xmppService == null) return;
-    final spamTargetJid = chat.spamSyncTargetJid;
+    final spamTargetJid = chat.antiAbuseTargetAddress;
     if (spamTargetJid.isEmpty) {
       return;
     }

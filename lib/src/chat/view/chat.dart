@@ -2464,16 +2464,10 @@ class _ChatState extends State<Chat> {
     if (entries.isEmpty) {
       return null;
     }
-    final transport = chat.defaultTransport;
-    if (transport.isEmail) {
-      final String? address = chat.emailAddress?.trim();
-      final String candidate = address?.isNotEmpty == true
-          ? address!
-          : chat.remoteJid.trim();
-      if (candidate.isEmpty) {
-        return null;
-      }
-      final String? normalizedCandidate = normalizedAddressValue(candidate);
+    if (chat.isEmailBacked) {
+      final String? normalizedCandidate = normalizedAddressValue(
+        chat.antiAbuseTargetAddress,
+      );
       if (normalizedCandidate == null || normalizedCandidate.isEmpty) {
         return null;
       }
@@ -2504,11 +2498,8 @@ class _ChatState extends State<Chat> {
   }
 
   String? _resolveChatBlockAddress({required chat_models.Chat chat}) {
-    if (chat.defaultTransport.isEmail) {
-      final String? address = chat.emailAddress?.trim();
-      final String candidate = address?.isNotEmpty == true
-          ? address!
-          : chat.remoteJid.trim();
+    if (chat.isEmailBacked) {
+      final candidate = chat.antiAbuseTargetAddress.trim();
       if (candidate.isEmpty) {
         return null;
       }
@@ -14149,6 +14140,9 @@ class _ChatSettingsButtons extends StatelessWidget {
         resolvedBlockAddress != null && resolvedBlockAddress.isNotEmpty;
     final bool hasBlockEntry = blocklistEntry != null;
     final bool showXmppCapabilities = chat.defaultTransport.isXmpp;
+    final blockTransport = chat.isEmailBacked
+        ? MessageTransport.email
+        : chat.defaultTransport;
     final itemPadding = EdgeInsets.all(context.spacing.m);
     final bool blockActionInFlight = switch (blocklistState) {
       BlocklistLoading state =>
@@ -14241,7 +14235,7 @@ class _ChatSettingsButtons extends StatelessWidget {
                     }
                     context.read<BlocklistCubit>().block(
                       address: address,
-                      transport: chat.defaultTransport,
+                      transport: blockTransport,
                     );
                     return;
                   }

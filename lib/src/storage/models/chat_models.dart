@@ -595,7 +595,7 @@ extension ChatTransportExtension on Chat {
     return false;
   }
 
-  String get spamSyncTargetJid {
+  String get antiAbuseTargetAddress {
     if (!isEmailBacked) {
       return jid.trim();
     }
@@ -621,6 +621,8 @@ extension ChatTransportExtension on Chat {
     }
     return jid.trim();
   }
+
+  String get spamSyncTargetJid => antiAbuseTargetAddress;
 
   MessageTransport get defaultTransport {
     return transport;
