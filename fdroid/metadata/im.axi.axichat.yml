@@ -21,74 +21,86 @@ Repo: https://gitlab.com/axichat/axichat.git
 
 Builds:
   - versionName: 0.6.1
-    versionCode: 1001 # 1000 + pubspec build code (armv7)
-    commit: v0.6.1 # Replace with the exact release tag/commit submitted to F-Droid.
+    versionCode: 1001  # 1000 + pubspec build code (armv7)
+    commit: v0.6.1  # Replace with the exact release tag/commit submitted to F-Droid.
     subdir: .
     output: build/app/outputs/flutter-apk/app-armeabi-v7a-production-release.apk
+    ndk: 28.2.13676358
     srclibs:
       - flutter@3.41.4
     prebuild:
       - export PUB_CACHE=$(pwd)/.pub-cache
-      - echo "flutter.sdk=$$flutter$$" > android/local.properties
+      - export ANDROID_HOME=$$SDK$$
+      - export ANDROID_SDK_ROOT=$$SDK$$
+      - export ANDROID_NDK_HOME=$$NDK$$
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - printf "sdk.dir=%s\nflutter.sdk=%s\n" "$$SDK$$" "$$flutter$$" > android/local.properties
       - $$flutter$$/bin/flutter config --no-analytics
-      - $$flutter$$/bin/flutter pub get
+    scandelete:
+      - .pub-cache
     build:
       - export PUB_CACHE=$(pwd)/.pub-cache
+      - export ANDROID_HOME=$$SDK$$
+      - export ANDROID_SDK_ROOT=$$SDK$$
+      - export ANDROID_NDK_HOME=$$NDK$$
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - $$flutter$$/bin/flutter pub get
       - $$flutter$$/bin/dart run build_runner build --delete-conflicting-outputs
-      - $$flutter$$/bin/flutter build apk \
-        --flavor production \
-        --release \
-        --split-per-abi \
-        --target-platform=android-arm \
-        --build-number=$$VERCODE$$ \
-        --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken \
-        --dart-define=ENABLE_SHOREBIRD=false
+      - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi --target-platform=android-arm --build-number=$$VERCODE$$ --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken --dart-define=ENABLE_SHOREBIRD=false
   - versionName: 0.6.1
-    versionCode: 2001 # 2000 + pubspec build code (arm64)
-    commit: v0.6.1 # Replace with the exact release tag/commit submitted to F-Droid.
+    versionCode: 2001  # 2000 + pubspec build code (arm64)
+    commit: v0.6.1  # Replace with the exact release tag/commit submitted to F-Droid.
     subdir: .
     output: build/app/outputs/flutter-apk/app-arm64-v8a-production-release.apk
+    ndk: 28.2.13676358
     srclibs:
       - flutter@3.41.4
     prebuild:
       - export PUB_CACHE=$(pwd)/.pub-cache
-      - echo "flutter.sdk=$$flutter$$" > android/local.properties
+      - export ANDROID_HOME=$$SDK$$
+      - export ANDROID_SDK_ROOT=$$SDK$$
+      - export ANDROID_NDK_HOME=$$NDK$$
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - printf "sdk.dir=%s\nflutter.sdk=%s\n" "$$SDK$$" "$$flutter$$" > android/local.properties
       - $$flutter$$/bin/flutter config --no-analytics
-      - $$flutter$$/bin/flutter pub get
+    scandelete:
+      - .pub-cache
     build:
       - export PUB_CACHE=$(pwd)/.pub-cache
+      - export ANDROID_HOME=$$SDK$$
+      - export ANDROID_SDK_ROOT=$$SDK$$
+      - export ANDROID_NDK_HOME=$$NDK$$
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - $$flutter$$/bin/flutter pub get
       - $$flutter$$/bin/dart run build_runner build --delete-conflicting-outputs
-      - $$flutter$$/bin/flutter build apk \
-        --flavor production \
-        --release \
-        --split-per-abi \
-        --target-platform=android-arm64 \
-        --build-number=$$VERCODE$$ \
-        --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken \
-        --dart-define=ENABLE_SHOREBIRD=false
+      - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi --target-platform=android-arm64 --build-number=$$VERCODE$$ --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken --dart-define=ENABLE_SHOREBIRD=false
   - versionName: 0.6.1
-    versionCode: 4001 # 4000 + pubspec build code (x86_64)
-    commit: v0.6.1 # Replace with the exact release tag/commit submitted to F-Droid.
+    versionCode: 4001  # 4000 + pubspec build code (x86_64)
+    commit: v0.6.1  # Replace with the exact release tag/commit submitted to F-Droid.
     subdir: .
     output: build/app/outputs/flutter-apk/app-x86_64-production-release.apk
+    ndk: 28.2.13676358
     srclibs:
       - flutter@3.41.4
     prebuild:
       - export PUB_CACHE=$(pwd)/.pub-cache
-      - echo "flutter.sdk=$$flutter$$" > android/local.properties
+      - export ANDROID_HOME=$$SDK$$
+      - export ANDROID_SDK_ROOT=$$SDK$$
+      - export ANDROID_NDK_HOME=$$NDK$$
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - printf "sdk.dir=%s\nflutter.sdk=%s\n" "$$SDK$$" "$$flutter$$" > android/local.properties
       - $$flutter$$/bin/flutter config --no-analytics
-      - $$flutter$$/bin/flutter pub get
+    scandelete:
+      - .pub-cache
     build:
       - export PUB_CACHE=$(pwd)/.pub-cache
+      - export ANDROID_HOME=$$SDK$$
+      - export ANDROID_SDK_ROOT=$$SDK$$
+      - export ANDROID_NDK_HOME=$$NDK$$
+      - export ANDROID_NDK_ROOT=$$NDK$$
+      - $$flutter$$/bin/flutter pub get
       - $$flutter$$/bin/dart run build_runner build --delete-conflicting-outputs
-      - $$flutter$$/bin/flutter build apk \
-        --flavor production \
-        --release \
-        --split-per-abi \
-        --target-platform=android-x64 \
-        --build-number=$$VERCODE$$ \
-        --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken \
-        --dart-define=ENABLE_SHOREBIRD=false
+      - $$flutter$$/bin/flutter build apk --flavor production --release --split-per-abi --target-platform=android-x64 --build-number=$$VERCODE$$ --dart-define=EMAIL_PUBLIC_TOKEN=axichatpublictoken --dart-define=ENABLE_SHOREBIRD=false
 
 AllowedAPKSigningKeys: 92d96304e82efa324f6aab21d731b32f05dbb3c8d42fc5514ea6755f33498d2e
 VercodeOperation:

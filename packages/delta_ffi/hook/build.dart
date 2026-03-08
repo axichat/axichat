@@ -124,24 +124,27 @@ Map<String, String> _cargoEnvForTarget({
   // Example: aarch64-apple-darwin -> aarch64_apple_darwin
   final tripleKeyCc = triple.replaceAll('-', '_');
   final cCompiler = codeConfig.cCompiler;
-  if (cCompiler != null) {
-    var compilerPath = cCompiler.compiler.toFilePath();
-    final archiverPath = cCompiler.archiver.toFilePath();
-    var linkerPath = cCompiler.linker.toFilePath();
-    String? cxxPath;
-    final toolchainDir = File(compilerPath).parent.path;
+  String? compilerPath = cCompiler?.compiler.toFilePath();
+  String? archiverPath = cCompiler?.archiver.toFilePath();
+  String? linkerPath = cCompiler?.linker.toFilePath();
+  String? cxxPath;
+  var toolchainDir =
+      compilerPath == null ? null : File(compilerPath).parent.path;
 
-    if (codeConfig.targetOS == OS.android) {
-      final androidConfig = codeConfig.android;
-      final ndkApi = androidConfig.targetNdkApi;
-      // TODO: check this conditional depending on the OS you're building ON, not FOR.
-      if (triple == _rustTargetTriple(OS.android, Architecture.arm)) {
-        triple = 'armv7a-linux-androideabi';
-      }
-      final targetPrefix = '$triple$ndkApi';
+  if (codeConfig.targetOS == OS.android) {
+    final androidConfig = codeConfig.android;
+    final ndkApi = androidConfig.targetNdkApi;
+    final targetToolchainTriple =
+        triple == _rustTargetTriple(OS.android, Architecture.arm)
+            ? 'armv7a-linux-androideabi'
+            : triple;
+    final targetPrefix = '$targetToolchainTriple$ndkApi';
+    toolchainDir ??= _androidNdkToolchainBinDirectory();
+    if (toolchainDir != null) {
       final targetClang = _toolchainBinary(toolchainDir, '$targetPrefix-clang');
       final targetClangxx =
           _toolchainBinary(toolchainDir, '$targetPrefix-clang++');
+      final targetArchiver = _toolchainBinary(toolchainDir, 'llvm-ar');
       if (targetClang != null) {
         compilerPath = targetClang;
       }
@@ -149,11 +152,16 @@ Map<String, String> _cargoEnvForTarget({
         linkerPath = targetClangxx;
         cxxPath = targetClangxx;
       }
-      final targetArg = '--target=$targetPrefix';
-      env['CFLAGS_$tripleKeyCc'] = targetArg;
-      env['CXXFLAGS_$tripleKeyCc'] = targetArg;
+      if (targetArchiver != null && archiverPath == null) {
+        archiverPath = targetArchiver;
+      }
     }
+    final targetArg = '--target=$targetPrefix';
+    env['CFLAGS_$tripleKeyCc'] = targetArg;
+    env['CXXFLAGS_$tripleKeyCc'] = targetArg;
+  }
 
+  if (compilerPath != null && archiverPath != null && linkerPath != null) {
     env['CARGO_TARGET_${tripleKeyCargo}_LINKER'] = linkerPath;
     env['CARGO_TARGET_${tripleKeyCargo}_AR'] = archiverPath;
     env['CC_$tripleKeyCc'] = compilerPath;
@@ -311,6 +319,34 @@ String? _toolchainBinary(String directory, String binaryName) {
     return null;
   }
   return file.path;
+}
+
+String? _androidNdkToolchainBinDirectory() {
+  final ndkRoot = Platform.environment['ANDROID_NDK_ROOT'] ??
+      Platform.environment['ANDROID_NDK_HOME'] ??
+      Platform.environment['NDK_HOME'];
+  final prebuiltRoot = _joinPaths(ndkRoot, 'toolchains', 'llvm', 'prebuilt');
+  if (prebuiltRoot == null) {
+    return null;
+  }
+
+  final prebuiltDirectory = Directory(prebuiltRoot);
+  if (!prebuiltDirectory.existsSync()) {
+    return null;
+  }
+
+  for (final hostDirectory
+      in prebuiltDirectory.listSync().whereType<Directory>()) {
+    final binDirectory = _joinPaths(hostDirectory.path, 'bin');
+    if (binDirectory == null) {
+      continue;
+    }
+    if (Directory(binDirectory).existsSync()) {
+      return binDirectory;
+    }
+  }
+
+  return null;
 }
 
 bool _isReleaseBuild(hooks.BuildInput input) {
