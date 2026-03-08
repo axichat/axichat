@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="/metadata/en-US/images/axichat_banner.png" width="800" alt="Axichat banner" />
+  <img src="/metadata/en-US/images/featureGraphic.png" width="800" alt="Axichat banner" />
 </div>
 
 <hr />
