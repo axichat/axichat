@@ -60,6 +60,9 @@ moxxy-master/
 /deltachat-android-main.zip
 /moxxy-master.zip
 
-RENDER.md
-BLOC_GUIDE.md
+# Root docs: keep standard public docs tracked, treat the rest as local-only.
+/*.md
+!/README.md
+!/CONTRIBUTING.md
+/lib/**/*.md
 /conversations/

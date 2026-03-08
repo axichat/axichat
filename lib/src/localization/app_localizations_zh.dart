@@ -1183,6 +1183,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get authLoginPending => '正在登录';
 
   @override
+  String get authSignupWelcomeTitle => 'Axichat';
+
+  @override
+  String get authSignupWelcomeMessage =>
+      '欢迎使用 Axichat！\n\n它仍在积极开发中，而且每位用户的存储限制目前非常低，所以暂时不要将它用于重要事务。\n\n点按消息气泡可以使用很多功能；试着点一下这一条！\n\n如果你发现 bug，请到 https://github.com/axichat/axichat/issues 提交，这样我就能修复它们！';
+
+  @override
   String get signupTitle => '注册';
 
   @override
@@ -7024,6 +7031,13 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get authLoginPending => '正在登入';
+
+  @override
+  String get authSignupWelcomeTitle => 'Axichat';
+
+  @override
+  String get authSignupWelcomeMessage =>
+      '歡迎使用 Axichat！\n\n它仍在積極開發中，而且每位使用者目前的儲存限制都很低，所以暫時不要把它用於重要事項。\n\n點按訊息氣泡即可使用很多功能；試試點一下這則！\n\n如果你發現 bug，請到 https://github.com/axichat/axichat/issues 回報，這樣我就能修復它們！';
 
   @override
   String get signupTitle => '註冊';

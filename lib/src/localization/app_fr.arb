@@ -425,6 +425,8 @@
   "authPasswordPending": "Vérification de la sécurité du mot de passe",
   "authSignupPending": "En attente de l’inscription",
   "authLoginPending": "En attente de connexion",
+  "authSignupWelcomeTitle": "Axichat",
+  "authSignupWelcomeMessage": "Bienvenue sur Axichat !\n\nLe développement est toujours très actif et les limites de stockage par utilisateur sont très faibles, donc évite pour l’instant de t’en servir pour des usages importants.\n\nDe nombreuses fonctions sont disponibles en touchant les bulles de message ; touche celle-ci !\n\nSi tu trouves des bugs, signale-les sur https://github.com/axichat/axichat/issues pour que je puisse les corriger.",
   "signupTitle": "S’inscrire",
   "signupStepUsername": "Choisir un nom d’utilisateur",
   "signupStepPassword": "Créer un mot de passe",

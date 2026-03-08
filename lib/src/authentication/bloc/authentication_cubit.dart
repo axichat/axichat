@@ -2118,7 +2118,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         : const AuthenticationComplete();
     _emit(completedState);
     await _recordAccountAuthenticated(jid);
-    await _syncSignupWelcomeMessage(allowInsert: fromSignup);
     await _completeAuthTransaction();
     _updateEmailForegroundKeepalive();
     await _triggerEmailReconnect();
@@ -2127,22 +2126,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  Future<void> deliverSignupWelcomeMessage() =>
-      _syncSignupWelcomeMessage(allowInsert: true);
-
-  Future<void> _syncSignupWelcomeMessage({required bool allowInsert}) async {
+  Future<void> syncSignupWelcomeMessage({
+    required bool allowInsert,
+    required String title,
+    required String body,
+  }) async {
     const welcomeChatJid = 'axichat@welcome.axichat.invalid';
     const welcomeStanzaId = 'signup-welcome.axichat';
-    const welcomeTitle = 'Axichat';
-    const welcomeBody =
-        'Welcome to Axichat!\n\n'
-        'It is still under active development and per-user storage limits are '
-        'very low, so avoid relying on it for important business at the '
-        'moment.\n\n'
-        'Many features are available by tapping on message bubbles; '
-        'try tapping this one!\n\n'
-        'If you find any bugs, please report them at '
-        'https://github.com/axichat/axichat/issues';
     try {
       final db = await _xmppService.database;
       final existing = await db.getMessageByStanzaID(welcomeStanzaId);
@@ -2155,13 +2145,13 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
             stanzaID: welcomeStanzaId,
             senderJid: welcomeChatJid,
             chatJid: welcomeChatJid,
-            body: welcomeBody,
+            body: body,
             timestamp: DateTime.timestamp(),
             acked: true,
             received: true,
           ),
         );
-      } else if (existing.body != welcomeBody ||
+      } else if (existing.body != body ||
           existing.htmlBody != null ||
           existing.senderJid != welcomeChatJid ||
           existing.chatJid != welcomeChatJid) {
@@ -2169,7 +2159,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           existing.copyWith(
             senderJid: welcomeChatJid,
             chatJid: welcomeChatJid,
-            body: welcomeBody,
+            body: body,
             htmlBody: null,
             acked: true,
             received: true,
@@ -2178,10 +2168,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
       final chat = await db.getChat(welcomeChatJid);
       if (chat != null &&
-          (chat.title != welcomeTitle ||
-              chat.contactDisplayName != welcomeTitle)) {
+          (chat.title != title || chat.contactDisplayName != title)) {
         await db.updateChat(
-          chat.copyWith(title: welcomeTitle, contactDisplayName: welcomeTitle),
+          chat.copyWith(title: title, contactDisplayName: title),
         );
       }
     } on Exception catch (error, stackTrace) {

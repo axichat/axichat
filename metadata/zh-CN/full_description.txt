@@ -1,8 +1,9 @@
-<strong>警告：</strong> Axichat 仍在积极开发中，因此部分功能可能会出现问题。
+<strong>说明：</strong> Axichat 仍在积极开发中，因此部分功能可能会出现问题。它不是靠 vibe coding 做出来的。
+
+如果你发现任何 bug，请到 https://github.com/axichat/axichat/issues 提交反馈，这样我就能修复它们！GitLab 也可以用来反馈 bug。
 
 官网：https://axi.chat
 源代码：https://gitlab.com/axichat/axichat
-问题追踪：https://gitlab.com/axichat/axichat/-/issues
 许可证：AGPL-3.0-or-later
 
 Axichat 是一款前沿的电子邮件与 XMPP 客户端，完全开源，提供第一方推送通知（绝不使用 FCM），且不依赖任何第三方服务。
@@ -63,5 +64,4 @@ Android 权限说明：
 支持与更新：
 - 官网：https://axi.chat
 - 版本说明：https://gitlab.com/axichat/axichat/-/releases
-- 源代码与问题追踪见上方。
 - 捐助：https://axi.chat/donate

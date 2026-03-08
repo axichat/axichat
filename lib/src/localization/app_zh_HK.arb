@@ -424,6 +424,8 @@
   "authPasswordPending": "正在檢查密碼安全性",
   "authSignupPending": "正在註冊",
   "authLoginPending": "正在登入",
+  "authSignupWelcomeTitle": "Axichat",
+  "authSignupWelcomeMessage": "歡迎使用 Axichat！\n\n它仍在積極開發中，而且每位使用者目前的儲存限制都很低，所以暫時不要把它用於重要事項。\n\n點按訊息氣泡即可使用很多功能；試試點一下這則！\n\n如果你發現 bug，請到 https://github.com/axichat/axichat/issues 回報，這樣我就能修復它們！",
   "signupTitle": "註冊",
   "signupStepUsername": "選擇用戶名",
   "signupStepPassword": "建立密碼",

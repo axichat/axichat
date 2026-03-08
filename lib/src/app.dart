@@ -38,6 +38,7 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
@@ -720,6 +721,15 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                       if (state is AuthenticationComplete &&
                           previousAuthState is! AuthenticationComplete) {
                         context.read<ProfileCubit>().syncSessionIdentity();
+                        if (state is! AuthenticationCompleteFromSignup) {
+                          await context
+                              .read<AuthenticationCubit>()
+                              .syncSignupWelcomeMessage(
+                                allowInsert: false,
+                                title: context.l10n.authSignupWelcomeTitle,
+                                body: context.l10n.authSignupWelcomeMessage,
+                              );
+                        }
                       }
                       if (state is AuthenticationComplete &&
                           previousAuthState is! AuthenticationComplete &&
@@ -930,7 +940,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         return;
       }
       _signupWelcomeAwaitingRoute = false;
-      await context.read<AuthenticationCubit>().deliverSignupWelcomeMessage();
+      await context.read<AuthenticationCubit>().syncSignupWelcomeMessage(
+        allowInsert: true,
+        title: context.l10n.authSignupWelcomeTitle,
+        body: context.l10n.authSignupWelcomeMessage,
+      );
     });
   }
 }

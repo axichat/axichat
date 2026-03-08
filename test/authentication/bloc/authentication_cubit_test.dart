@@ -920,64 +920,73 @@ void main() {
       },
     );
 
+    test('syncSignupWelcomeMessage seeds the welcome chat message.', () async {
+      const welcomeChatJid = 'axichat@welcome.axichat.invalid';
+      const welcomeTitle = 'Axichat';
+      const welcomeBody =
+          'Welcome to Axichat!\n\n'
+          'It is still under active development and per-user storage limits '
+          'are very low, so avoid relying on it for important business at '
+          'the moment.\n\n'
+          'Many features are available by tapping on message bubbles; '
+          'try tapping this one!\n\n'
+          'If you find any bugs, please report them at '
+          'https://github.com/axichat/axichat/issues so I can fix them!';
+      final bloc = AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      );
+      when(
+        () => mockXmppService.database,
+      ).thenAnswer((_) async => mockDatabase);
+      when(
+        () => mockDatabase.getMessageByStanzaID(any()),
+      ).thenAnswer((_) async => null);
+      when(() => mockDatabase.saveMessage(any())).thenAnswer((_) async {});
+      when(() => mockDatabase.updateMessage(any())).thenAnswer((_) async {});
+      when(
+        () => mockDatabase.getChat(welcomeChatJid),
+      ).thenAnswer((_) async => Chat.fromJid(welcomeChatJid));
+      when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
+
+      await bloc.syncSignupWelcomeMessage(
+        allowInsert: true,
+        title: welcomeTitle,
+        body: welcomeBody,
+      );
+
+      final savedMessage =
+          verify(() => mockDatabase.saveMessage(captureAny())).captured.single
+              as Message;
+      expect(savedMessage.senderJid, equals(welcomeChatJid));
+      expect(savedMessage.chatJid, equals(welcomeChatJid));
+      expect(savedMessage.body, equals(welcomeBody));
+      expect(savedMessage.htmlBody, isNull);
+      final updatedChat =
+          verify(() => mockDatabase.updateChat(captureAny())).captured.single
+              as Chat;
+      expect(updatedChat.title, equals(welcomeTitle));
+      expect(updatedChat.contactDisplayName, equals(welcomeTitle));
+    });
+
     test(
-      'deliverSignupWelcomeMessage seeds the welcome chat message.',
+      'syncSignupWelcomeMessage updates the existing welcome message body and clears html.',
       () async {
         const welcomeChatJid = 'axichat@welcome.axichat.invalid';
-        final bloc = AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          initialEndpointConfig: const EndpointConfig(),
-          xmppService: mockXmppService,
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-        );
-        when(
-          () => mockXmppService.database,
-        ).thenAnswer((_) async => mockDatabase);
-        when(
-          () => mockDatabase.getMessageByStanzaID(any()),
-        ).thenAnswer((_) async => null);
-        when(() => mockDatabase.saveMessage(any())).thenAnswer((_) async {});
-        when(() => mockDatabase.updateMessage(any())).thenAnswer((_) async {});
-        when(
-          () => mockDatabase.getChat(welcomeChatJid),
-        ).thenAnswer((_) async => Chat.fromJid(welcomeChatJid));
-        when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
-
-        await bloc.deliverSignupWelcomeMessage();
-
-        final savedMessage =
-            verify(() => mockDatabase.saveMessage(captureAny())).captured.single
-                as Message;
-        expect(savedMessage.senderJid, equals(welcomeChatJid));
-        expect(savedMessage.chatJid, equals(welcomeChatJid));
-        expect(
-          savedMessage.body,
-          equals(
+        const welcomeStanzaId = 'signup-welcome.axichat';
+        const welcomeTitle = 'Axichat';
+        const welcomeBody =
             'Welcome to Axichat!\n\n'
             'It is still under active development and per-user storage limits '
             'are very low, so avoid relying on it for important business at '
             'the moment.\n\n'
             'Many features are available by tapping on message bubbles; '
-            'Try tapping this one!\n\n'
+            'try tapping this one!\n\n'
             'If you find any bugs, please report them at '
-            'https://github.com/axichat/axichat/issues',
-          ),
-        );
-        expect(savedMessage.htmlBody, isNull);
-        final updatedChat =
-            verify(() => mockDatabase.updateChat(captureAny())).captured.single
-                as Chat;
-        expect(updatedChat.title, equals('Axichat'));
-        expect(updatedChat.contactDisplayName, equals('Axichat'));
-      },
-    );
-
-    test(
-      'deliverSignupWelcomeMessage updates the existing welcome message body and clears html.',
-      () async {
-        const welcomeChatJid = 'axichat@welcome.axichat.invalid';
-        const welcomeStanzaId = 'signup-welcome.axichat';
+            'https://github.com/axichat/axichat/issues so I can fix them!';
         final existingMessage = Message(
           stanzaID: welcomeStanzaId,
           senderJid: welcomeChatJid,
@@ -1005,7 +1014,11 @@ void main() {
         ).thenAnswer((_) async => Chat.fromJid(welcomeChatJid));
         when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
 
-        await bloc.deliverSignupWelcomeMessage();
+        await bloc.syncSignupWelcomeMessage(
+          allowInsert: true,
+          title: welcomeTitle,
+          body: welcomeBody,
+        );
 
         verifyNever(() => mockDatabase.saveMessage(any()));
         final updatedMessage =
@@ -1015,13 +1028,38 @@ void main() {
                 as Message;
         expect(updatedMessage.stanzaID, equals(welcomeStanzaId));
         expect(updatedMessage.htmlBody, isNull);
-        expect(
-          updatedMessage.body,
-          contains(
-            'If you find any bugs, please report them at '
-            'https://github.com/axichat/axichat/issues',
-          ),
+        expect(updatedMessage.body, equals(welcomeBody));
+      },
+    );
+
+    test(
+      'syncSignupWelcomeMessage skips insert when allowInsert is false and the message is missing.',
+      () async {
+        const welcomeTitle = 'Axichat';
+        const welcomeBody = 'Localized welcome body';
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
         );
+        when(
+          () => mockXmppService.database,
+        ).thenAnswer((_) async => mockDatabase);
+        when(
+          () => mockDatabase.getMessageByStanzaID(any()),
+        ).thenAnswer((_) async => null);
+
+        await bloc.syncSignupWelcomeMessage(
+          allowInsert: false,
+          title: welcomeTitle,
+          body: welcomeBody,
+        );
+
+        verifyNever(() => mockDatabase.saveMessage(any()));
+        verifyNever(() => mockDatabase.updateMessage(any()));
+        verifyNever(() => mockDatabase.getChat(any()));
       },
     );
 

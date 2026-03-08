@@ -1,8 +1,9 @@
-<strong>Warning:</strong> Axichat is still under active development, so things may break.
+<strong>Note:</strong> Axichat is still under active development, so things may break. It was not vibe-coded.
+
+If you find any bugs please report them at https://github.com/axichat/axichat/issues so I can fix them! GitLab also works for bug reports.
 
 Website: https://axi.chat
 Source code: https://gitlab.com/axichat/axichat
-Issue tracker: https://gitlab.com/axichat/axichat/-/issues
 License: AGPL-3.0-or-later
 
 Axichat is a cutting-edge email and XMPP client that is fully open source with 1st party push notifications (no FCM ever) and no 3rd party dependencies.
@@ -63,5 +64,4 @@ Android permissions explained:
 Support and updates:
 - Website: https://axi.chat
 - Release notes: https://gitlab.com/axichat/axichat/-/releases
-- Source and issues are linked above.
 - Donations: https://axi.chat/donate

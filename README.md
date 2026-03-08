@@ -21,7 +21,7 @@
 </div>
 
 <div align="center">
-  <p><strong>Warning:</strong> Axichat is under active development, so things may break.</p>
+  <p><strong>Note:</strong> Axichat is under active development, so things may break. It was not vibe-coded.</p>
 </div>
 
 <div align="center">

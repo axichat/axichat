@@ -1252,6 +1252,13 @@ class AppLocalizationsFr extends AppLocalizations {
   String get authLoginPending => 'En attente de connexion';
 
   @override
+  String get authSignupWelcomeTitle => 'Axichat';
+
+  @override
+  String get authSignupWelcomeMessage =>
+      'Bienvenue sur Axichat !\n\nLe développement est toujours très actif et les limites de stockage par utilisateur sont très faibles, donc évite pour l’instant de t’en servir pour des usages importants.\n\nDe nombreuses fonctions sont disponibles en touchant les bulles de message ; touche celle-ci !\n\nSi tu trouves des bugs, signale-les sur https://github.com/axichat/axichat/issues pour que je puisse les corriger.';
+
+  @override
   String get signupTitle => 'S’inscrire';
 
   @override
