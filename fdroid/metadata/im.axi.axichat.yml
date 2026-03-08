@@ -25,8 +25,11 @@ Builds:
     commit: v0.6.1 # Replace with the exact release tag/commit submitted to F-Droid.
     subdir: .
     output: build/app/outputs/flutter-apk/app-armeabi-v7a-production-release.apk
+    srclibs:
+      - flutter@3.41.4
     prebuild:
       - export PUB_CACHE=$(pwd)/.pub-cache
+      - echo "flutter.sdk=$$flutter$$" > android/local.properties
       - $$flutter$$/bin/flutter config --no-analytics
       - $$flutter$$/bin/flutter pub get
     build:
@@ -45,8 +48,11 @@ Builds:
     commit: v0.6.1 # Replace with the exact release tag/commit submitted to F-Droid.
     subdir: .
     output: build/app/outputs/flutter-apk/app-arm64-v8a-production-release.apk
+    srclibs:
+      - flutter@3.41.4
     prebuild:
       - export PUB_CACHE=$(pwd)/.pub-cache
+      - echo "flutter.sdk=$$flutter$$" > android/local.properties
       - $$flutter$$/bin/flutter config --no-analytics
       - $$flutter$$/bin/flutter pub get
     build:
@@ -65,8 +71,11 @@ Builds:
     commit: v0.6.1 # Replace with the exact release tag/commit submitted to F-Droid.
     subdir: .
     output: build/app/outputs/flutter-apk/app-x86_64-production-release.apk
+    srclibs:
+      - flutter@3.41.4
     prebuild:
       - export PUB_CACHE=$(pwd)/.pub-cache
+      - echo "flutter.sdk=$$flutter$$" > android/local.properties
       - $$flutter$$/bin/flutter config --no-analytics
       - $$flutter$$/bin/flutter pub get
     build:
