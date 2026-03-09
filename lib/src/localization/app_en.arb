@@ -1034,6 +1034,34 @@
     }
   },
   "shorebirdUpdateAvailable": "Update available: log out and restart the app",
+  "updatePromptTitle": "Update available",
+  "updatePromptStoreMessage": "A newer version of Axichat is available. Update now to install the latest version.",
+  "updatePromptStoreMessageVersion": "Version {version} of Axichat is available. Update now to install the latest version.",
+  "@updatePromptStoreMessageVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updatePromptPatchReadyTitle": "Patch ready",
+  "updatePromptPatchReadyMessage": "The latest Axichat patch is ready. Restart the app to apply it.",
+  "updateStatusStoreAvailable": "Update available",
+  "updateStatusStoreAvailableVersion": "Update available: v{version}",
+  "@updateStatusStoreAvailableVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "updateStatusPatchReady": "Patch ready: restart app to apply it",
+  "updateActionUpdate": "Update",
+  "updateActionLater": "Later",
+  "updateActionOk": "OK",
+  "updateActionFailed": "Could not start the update.",
+  "updateActionOpenFailed": "Could not open the update page.",
+  "updateActionDeclined": "Update was declined.",
   "calendarEditTaskTitle": "Edit task",
   "calendarDateTimeLabel": "Date & time",
   "calendarSelectDate": "Select date",

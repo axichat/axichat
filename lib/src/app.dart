@@ -15,7 +15,6 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/capability.dart';
 import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/policy.dart';
-import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
@@ -38,6 +37,9 @@ import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/update/bloc/update_cubit.dart';
+import 'package:axichat/src/update/update_service.dart';
+import 'package:axichat/src/update/view/update_prompt.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:axichat/src/xmpp_activity/bloc/xmpp_activity_cubit.dart';
@@ -48,6 +50,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -150,6 +153,10 @@ class _AxichatState extends State<Axichat> {
             policy: context.read<Policy>(),
           ),
         ),
+        RepositoryProvider<http.Client>(
+          create: (context) => http.Client(),
+          dispose: (client) => client.close(),
+        ),
       ],
       child: BlocProvider(
         create: (context) => SettingsCubit(
@@ -185,6 +192,13 @@ class _AxichatState extends State<Axichat> {
               ],
               child: MultiBlocProvider(
                 providers: [
+                  BlocProvider(
+                    create: (context) => UpdateCubit(
+                      updateService: UpdateService(
+                        httpClient: context.read<http.Client>(),
+                      ),
+                    )..initialize(),
+                  ),
                   BlocProvider(
                     create: (context) => AuthenticationCubit(
                       credentialStore: context.read<CredentialStore>(),
@@ -667,6 +681,14 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                         );
                   },
                 ),
+                BlocListener<ConnectivityCubit, ConnectivityState>(
+                  listenWhen: (previous, current) =>
+                      previous is! ConnectivityConnected &&
+                      current is ConnectivityConnected,
+                  listener: (context, _) {
+                    context.read<UpdateCubit>().refresh();
+                  },
+                ),
                 BlocListener<AuthenticationCubit, AuthenticationState>(
                   listener: (context, state) async {
                     final locate = context.read;
@@ -753,6 +775,9 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               ],
               child: child ?? const SizedBox.shrink(),
             );
+            final authComplete = context.select<AuthenticationCubit, bool>(
+              (cubit) => cubit.state is AuthenticationComplete,
+            );
             Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
               value: overlayStyle,
               child: routedContent,
@@ -774,7 +799,12 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
                 ),
               ),
             );
-            content = ShorebirdUpdateGate(child: content);
+            content = UpdatePromptOverlay(
+              canPresentPrompt: _canPresentUpdatePrompt(
+                authComplete: authComplete,
+              ),
+              child: content,
+            );
             return content;
           },
         );
@@ -785,6 +815,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   }
 
   void _handleLifecycleResume() {
+    context.read<UpdateCubit>().refresh();
     _handleNotificationIntent();
     _handleShareIntent();
   }
@@ -878,6 +909,20 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
       return true;
     }
     return false;
+  }
+
+  bool _canPresentUpdatePrompt({required bool authComplete}) {
+    if (!authComplete) {
+      return false;
+    }
+    final currentLocation = _router.routeInformationProvider.value.uri.path;
+    final matchedLocation = _router.state.matchedLocation;
+    final currentRoute = resolveRouteLocation(currentLocation);
+    final matchedRoute = matchedLocation.isEmpty
+        ? null
+        : resolveRouteLocation(matchedLocation);
+    final effectiveRoute = currentRoute ?? matchedRoute;
+    return effectiveRoute?.authenticationRequired ?? true;
   }
 
   void _handleRouteChange() {

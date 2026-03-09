@@ -83,6 +83,7 @@ dependencies:
   flutter_timezone: ^3.0.1
   timezone: ^0.10.0
   dnsolve: ^2.0.0
+  in_app_update: ^4.2.5
   app_settings: ^7.0.0
   intl: ^0.20.2 # Required by flutter_localizations; override keeps dash_chat_2 compatible.
   chrono_dart: ^2.0.2
@@ -106,6 +107,7 @@ dependencies:
   pdfrx: ^2.2.24
   charset_converter: ^2.3.0
   google_nav_bar: ^5.0.7
+  upgrader: ^12.5.0
 
 dependency_overrides:
   pinenacl: ^0.6.0

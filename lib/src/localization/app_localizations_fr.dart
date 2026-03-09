@@ -2449,6 +2449,54 @@ class AppLocalizationsFr extends AppLocalizations {
       'Mise à jour disponible : déconnectez-vous et redémarrez l’app';
 
   @override
+  String get updatePromptTitle => 'Update available';
+
+  @override
+  String get updatePromptStoreMessage =>
+      'A newer version of Axichat is available. Update now to install the latest version.';
+
+  @override
+  String updatePromptStoreMessageVersion(String version) {
+    return 'Version $version of Axichat is available. Update now to install the latest version.';
+  }
+
+  @override
+  String get updatePromptPatchReadyTitle => 'Patch ready';
+
+  @override
+  String get updatePromptPatchReadyMessage =>
+      'The latest Axichat patch is ready. Restart the app to apply it.';
+
+  @override
+  String get updateStatusStoreAvailable => 'Update available';
+
+  @override
+  String updateStatusStoreAvailableVersion(String version) {
+    return 'Update available: v$version';
+  }
+
+  @override
+  String get updateStatusPatchReady => 'Patch ready: restart app to apply it';
+
+  @override
+  String get updateActionUpdate => 'Update';
+
+  @override
+  String get updateActionLater => 'Later';
+
+  @override
+  String get updateActionOk => 'OK';
+
+  @override
+  String get updateActionFailed => 'Could not start the update.';
+
+  @override
+  String get updateActionOpenFailed => 'Could not open the update page.';
+
+  @override
+  String get updateActionDeclined => 'Update was declined.';
+
+  @override
   String get calendarEditTaskTitle => 'Modifier la tâche';
 
   @override

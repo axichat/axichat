@@ -4332,6 +4332,90 @@ abstract class AppLocalizations {
   /// **'Update available: log out and restart the app'**
   String get shorebirdUpdateAvailable;
 
+  /// No description provided for @updatePromptTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get updatePromptTitle;
+
+  /// No description provided for @updatePromptStoreMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'A newer version of Axichat is available. Update now to install the latest version.'**
+  String get updatePromptStoreMessage;
+
+  /// No description provided for @updatePromptStoreMessageVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} of Axichat is available. Update now to install the latest version.'**
+  String updatePromptStoreMessageVersion(String version);
+
+  /// No description provided for @updatePromptPatchReadyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Patch ready'**
+  String get updatePromptPatchReadyTitle;
+
+  /// No description provided for @updatePromptPatchReadyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The latest Axichat patch is ready. Restart the app to apply it.'**
+  String get updatePromptPatchReadyMessage;
+
+  /// No description provided for @updateStatusStoreAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get updateStatusStoreAvailable;
+
+  /// No description provided for @updateStatusStoreAvailableVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available: v{version}'**
+  String updateStatusStoreAvailableVersion(String version);
+
+  /// No description provided for @updateStatusPatchReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Patch ready: restart app to apply it'**
+  String get updateStatusPatchReady;
+
+  /// No description provided for @updateActionUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get updateActionUpdate;
+
+  /// No description provided for @updateActionLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get updateActionLater;
+
+  /// No description provided for @updateActionOk.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get updateActionOk;
+
+  /// No description provided for @updateActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start the update.'**
+  String get updateActionFailed;
+
+  /// No description provided for @updateActionOpenFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the update page.'**
+  String get updateActionOpenFailed;
+
+  /// No description provided for @updateActionDeclined.
+  ///
+  /// In en, this message translates to:
+  /// **'Update was declined.'**
+  String get updateActionDeclined;
+
   /// No description provided for @calendarEditTaskTitle.
   ///
   /// In en, this message translates to:

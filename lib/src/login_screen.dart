@@ -13,7 +13,6 @@ import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/chat/view/chat.dart';
-import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -414,7 +413,6 @@ class _LoginScreenState extends State<LoginScreen>
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const ShorebirdChecker(),
                                   AxiAnimatedSize(
                                     duration: context
                                         .watch<SettingsCubit>()

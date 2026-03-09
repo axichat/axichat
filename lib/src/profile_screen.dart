@@ -9,7 +9,6 @@ import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
 import 'package:axichat/src/authentication/view/unregister_form.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/connectivity/view/connectivity_indicator.dart';
@@ -26,6 +25,7 @@ import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/settings/view/settings_controls.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/update/view/update_prompt.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
@@ -655,7 +655,7 @@ class _ProfileStatusHeader extends StatelessWidget {
   const _ProfileStatusHeader();
 
   @override
-  Widget build(BuildContext context) => const ShorebirdChecker();
+  Widget build(BuildContext context) => const UpdateStatusBanner();
 }
 
 class _EditableAvatarButton extends StatefulWidget {
