@@ -7,6 +7,7 @@ import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:axichat/src/notifications/view/notification_dialog.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -69,22 +70,32 @@ class _NotificationRequestBody extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        if (state.hasPermissions == true) {
-          return ShadSwitch(
-            enabled: false,
-            value: true,
-            label: Text(l10n.notificationsRestartTitle),
-            sublabel: Text(l10n.notificationsRestartSubtitle),
-          );
-        }
-
         return ShadSwitch(
           label: Text(l10n.notificationsMessageToggle),
-          sublabel: Text(l10n.notificationsRequiresRestart),
-          value: state.hasPermissions ?? false,
+          sublabel: Text(
+            state.hasPermissions == true
+                ? l10n.notificationsRestartSubtitle
+                : l10n.notificationsRequiresRestart,
+          ),
+          value: state.foregroundServiceActive,
           onChanged: state.isBusy
               ? null
               : (enabled) async {
+                  if (!enabled) {
+                    return;
+                  }
+                  if (state.hasPermissions == true) {
+                    final foregroundEnabled =
+                        await locate<NotificationRequestCubit>()
+                            .enableForegroundService();
+                    if (!context.mounted || !foregroundEnabled) {
+                      return;
+                    }
+                    context.read<SettingsCubit>().toggleBackgroundMessaging(
+                      true,
+                    );
+                    return;
+                  }
                   final confirmed = await showNotificationDialog(
                     context,
                     locate,
@@ -101,8 +112,13 @@ class _NotificationRequestBody extends StatelessWidget {
                   if (!context.mounted) {
                     return;
                   }
-                  await locate<NotificationRequestCubit>()
-                      .enableForegroundService();
+                  final foregroundEnabled =
+                      await locate<NotificationRequestCubit>()
+                          .enableForegroundService();
+                  if (!context.mounted || !foregroundEnabled) {
+                    return;
+                  }
+                  context.read<SettingsCubit>().toggleBackgroundMessaging(true);
                 },
         );
       },

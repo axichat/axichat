@@ -8,6 +8,7 @@ final class UpdateState extends Equatable {
     this.installedBuild,
     this.currentOffer,
     this.dismissedOfferId,
+    this.dismissedAt,
     this.isChecking = false,
     this.isPerformingAction = false,
     this.actionFailure,
@@ -19,6 +20,7 @@ final class UpdateState extends Equatable {
   final int? installedBuild;
   final UpdateOffer? currentOffer;
   final String? dismissedOfferId;
+  final DateTime? dismissedAt;
   final bool isChecking;
   final bool isPerformingAction;
   final UpdateActionFailure? actionFailure;
@@ -43,6 +45,7 @@ final class UpdateState extends Equatable {
     int? installedBuild,
     UpdateOffer? currentOffer,
     String? dismissedOfferId,
+    DateTime? dismissedAt,
     bool? isChecking,
     bool? isPerformingAction,
     UpdateActionFailure? actionFailure,
@@ -64,6 +67,7 @@ final class UpdateState extends Equatable {
     dismissedOfferId: clearDismissedOfferId
         ? null
         : dismissedOfferId ?? this.dismissedOfferId,
+    dismissedAt: clearDismissedOfferId ? null : dismissedAt ?? this.dismissedAt,
     isChecking: isChecking ?? this.isChecking,
     isPerformingAction: isPerformingAction ?? this.isPerformingAction,
     actionFailure: clearActionFailure
@@ -84,6 +88,7 @@ final class UpdateState extends Equatable {
     currentOffer?.availableBuild,
     currentOffer?.storeUrl,
     dismissedOfferId,
+    dismissedAt,
     isChecking,
     isPerformingAction,
     actionFailure,

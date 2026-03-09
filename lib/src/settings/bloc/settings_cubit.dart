@@ -54,6 +54,10 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     updateEndpointConfig(const EndpointConfig());
   }
 
+  void toggleBackgroundMessaging(bool enabled) {
+    emit(state.copyWith(backgroundMessagingEnabled: enabled));
+  }
+
   void toggleChatNotificationsMuted(bool muted) {
     emit(state.copyWith(chatNotificationsMuted: muted));
   }
@@ -212,6 +216,7 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
       const keyMap = <String, String>{
         'themeMode': 'theme_mode',
         'shadColor': 'shad_color',
+        'backgroundMessagingEnabled': 'background_messaging_enabled',
         'chatNotificationsMuted': 'chat_notifications_muted',
         'emailNotificationsMuted': 'email_notifications_muted',
         'notificationPreviewsEnabled': 'notification_previews_enabled',

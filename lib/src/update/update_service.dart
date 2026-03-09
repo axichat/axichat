@@ -109,7 +109,7 @@ abstract interface class UpdateStoreBackend {
 }
 
 abstract interface class ShorebirdPatchBackend {
-  Future<ShorebirdUpdateStatus> check();
+  Future<ShorebirdUpdateStatus> check({required bool applyUpdate});
 }
 
 abstract interface class DisposableUpdateBackend {
@@ -162,10 +162,12 @@ final class UpdateService {
       shorebirdEnabled: kEnableShorebird,
     );
     final packageInfo = await _loadPackageInfo();
-    final shorebirdStatus = await _shorebirdBackend.check();
     final storeOffer = packageInfo == null
         ? null
         : await _checkStoreOffer(channel: channel, packageInfo: packageInfo);
+    final shorebirdStatus = await _shorebirdBackend.check(
+      applyUpdate: storeOffer == null,
+    );
     return UpdateCheckResult(
       channel: channel,
       shorebirdStatus: shorebirdStatus,
@@ -204,6 +206,13 @@ final class UpdateService {
       final loaded = await _packageInfoLoader();
       _packageInfo = loaded;
       return loaded;
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'Package info plugin is unavailable for update checks.',
+        error,
+        stackTrace,
+      );
+      return null;
     } on PlatformException catch (error, stackTrace) {
       _log.warning(
         'Failed to read package info for update checks.',
@@ -317,11 +326,19 @@ final class UpdateService {
     if (storeUrl == null) {
       return UpdateActionFailure.openStoreFailed;
     }
-    final launched = await _launchUrl(
-      storeUrl,
-      mode: LaunchMode.externalApplication,
-    );
-    return launched ? null : UpdateActionFailure.openStoreFailed;
+    try {
+      final launched = await _launchUrl(
+        storeUrl,
+        mode: LaunchMode.externalApplication,
+      );
+      return launched ? null : UpdateActionFailure.openStoreFailed;
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning('Store launcher plugin is unavailable.', error, stackTrace);
+      return UpdateActionFailure.openStoreFailed;
+    } on PlatformException catch (error, stackTrace) {
+      _log.warning('Opening the store URL failed.', error, stackTrace);
+      return UpdateActionFailure.openStoreFailed;
+    }
   }
 }
 
@@ -410,16 +427,18 @@ final class _AppStoreUpdateBackend
   final Upgrader _upgrader;
   bool _initialized = false;
 
+  static const Duration _requestTimeout = Duration(seconds: 8);
+
   @override
   Future<UpdateOffer?> check({
     required UpdateChannel channel,
     required PackageInfo packageInfo,
   }) async {
     if (!_initialized) {
-      await _upgrader.initialize();
+      await _upgrader.initialize().timeout(_requestTimeout);
       _initialized = true;
     } else {
-      await _upgrader.updateVersionInfo();
+      await _upgrader.updateVersionInfo().timeout(_requestTimeout);
     }
     if (!_upgrader.isUpdateAvailable()) {
       return null;
@@ -523,5 +542,6 @@ final class _ShorebirdPatchBackend implements ShorebirdPatchBackend {
   final ShorebirdUpdater _shorebird;
 
   @override
-  Future<ShorebirdUpdateStatus> check() => checkShorebirdStatus(_shorebird);
+  Future<ShorebirdUpdateStatus> check({required bool applyUpdate}) =>
+      checkShorebirdStatus(shorebird: _shorebird, applyUpdate: applyUpdate);
 }

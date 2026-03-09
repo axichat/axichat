@@ -37,6 +37,7 @@ abstract class SettingsState with _$SettingsState {
     @Default(ThemeMode.light) ThemeMode themeMode,
     @Default(ShadColor.neutral) ShadColor shadColor,
     @Default(EndpointConfig()) EndpointConfig endpointConfig,
+    @Default(false) bool backgroundMessagingEnabled,
     @Default(false) bool chatNotificationsMuted,
     @Default(false) bool emailNotificationsMuted,
     @Default(false) bool notificationPreviewsEnabled,

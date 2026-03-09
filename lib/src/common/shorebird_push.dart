@@ -16,9 +16,10 @@ extension ShorebirdUpdateStatusX on ShorebirdUpdateStatus {
   bool get requiresRestart => this == ShorebirdUpdateStatus.restartRequired;
 }
 
-Future<ShorebirdUpdateStatus> checkShorebirdStatus([
+Future<ShorebirdUpdateStatus> checkShorebirdStatus({
   ShorebirdUpdater? shorebird,
-]) async {
+  bool applyUpdate = true,
+}) async {
   if (!kEnableShorebird) {
     return ShorebirdUpdateStatus.unavailable;
   }
@@ -33,6 +34,9 @@ Future<ShorebirdUpdateStatus> checkShorebirdStatus([
       return ShorebirdUpdateStatus.restartRequired;
     }
     if (status == UpdateStatus.outdated) {
+      if (!applyUpdate) {
+        return ShorebirdUpdateStatus.upToDate;
+      }
       await updater.update();
       return ShorebirdUpdateStatus.restartRequired;
     }
