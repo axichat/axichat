@@ -157,6 +157,7 @@ abstract interface class XmppDatabase implements Database {
   Future<void> saveMessage(
     Message message, {
     ChatType chatType = ChatType.chat,
+    String? selfJid,
   });
 
   Future<void> updateMessage(Message message);
@@ -1725,7 +1726,6 @@ WHERE transport IS NULL
       limit: limit,
       beforeTimestamp: beforeTimestamp,
       beforeStanzaId: beforeStanzaId,
-      beforeDeltaMsgId: beforeDeltaMsgId,
     ).get();
   }
 
@@ -1777,97 +1777,45 @@ WHERE transport IS NULL
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   }) async {
     final filterValue = filter.index;
-    final query = throughDeltaMsgId == null
-        ? await customSelect(
-            '''
-            SELECT COUNT(*) AS count
-            FROM messages m
-            LEFT JOIN message_copies mc
-              ON mc.dc_msg_id = m.delta_msg_id
-             AND mc.dc_account_id = m.delta_account_id
-            LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
-            LEFT JOIN message_participants mp
-              ON mp.share_id = mc.share_id AND mp.contact_jid = ?
-            WHERE m.chat_jid = ?
-              AND (
-                CASE WHEN ? = 0 THEN
-                  (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
-                ELSE
-                  (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
-                END
-              )
-              AND (
-                m.timestamp > ?
-                OR (
-                  m.timestamp = ?
-                  AND (
-                    m.delta_msg_id IS NOT NULL
-                    OR (m.delta_msg_id IS NULL AND m.stanza_i_d >= ?)
-                  )
-                )
-              )
-            ''',
-            variables: [
-              Variable<String>(jid),
-              Variable<String>(jid),
-              Variable<int>(filterValue),
-              Variable<DateTime>(throughTimestamp),
-              Variable<DateTime>(throughTimestamp),
-              Variable<String>(throughStanzaId),
-            ],
-            readsFrom: {
-              messages,
-              messageCopies,
-              messageShares,
-              messageParticipants,
-            },
-          ).getSingle()
-        : await customSelect(
-            '''
-            SELECT COUNT(*) AS count
-            FROM messages m
-            LEFT JOIN message_copies mc
-              ON mc.dc_msg_id = m.delta_msg_id
-             AND mc.dc_account_id = m.delta_account_id
-            LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
-            LEFT JOIN message_participants mp
-              ON mp.share_id = mc.share_id AND mp.contact_jid = ?
-            WHERE m.chat_jid = ?
-              AND (
-                CASE WHEN ? = 0 THEN
-                  (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
-                ELSE
-                  (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
-                END
-              )
-              AND (
-                m.timestamp > ?
-                OR (
-                  m.timestamp = ?
-                  AND (
-                    m.delta_msg_id > ?
-                    OR (m.delta_msg_id = ? AND m.stanza_i_d >= ?)
-                  )
-                )
-              )
-            ''',
-            variables: [
-              Variable<String>(jid),
-              Variable<String>(jid),
-              Variable<int>(filterValue),
-              Variable<DateTime>(throughTimestamp),
-              Variable<DateTime>(throughTimestamp),
-              Variable<int>(throughDeltaMsgId),
-              Variable<int>(throughDeltaMsgId),
-              Variable<String>(throughStanzaId),
-            ],
-            readsFrom: {
-              messages,
-              messageCopies,
-              messageShares,
-              messageParticipants,
-            },
-          ).getSingle();
+    final query = await customSelect(
+      '''
+      SELECT COUNT(*) AS count
+      FROM messages m
+      LEFT JOIN message_copies mc
+        ON mc.dc_msg_id = m.delta_msg_id
+       AND mc.dc_account_id = m.delta_account_id
+      LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
+      LEFT JOIN message_participants mp
+        ON mp.share_id = mc.share_id AND mp.contact_jid = ?
+      WHERE m.chat_jid = ?
+        AND (
+          CASE WHEN ? = 0 THEN
+            (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
+          ELSE
+            (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
+          END
+        )
+        AND (
+          m.timestamp > ?
+          OR (
+            m.timestamp = ?
+            AND m.rowid >= COALESCE(
+              (SELECT rowid FROM messages WHERE stanza_i_d = ?),
+              9223372036854775807
+            )
+          )
+        )
+      ''',
+      variables: [
+        Variable<String>(jid),
+        Variable<String>(jid),
+        Variable<int>(filterValue),
+        Variable<DateTime>(throughTimestamp),
+        Variable<DateTime>(throughTimestamp),
+        Variable<String>(throughStanzaId),
+      ],
+      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
+    ).getSingle();
 
     return query.read<int>('count');
   }
@@ -1897,7 +1845,7 @@ WHERE transport IS NULL
             (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
           END
         )
-      ORDER BY m.timestamp DESC, m.delta_msg_id DESC, m.stanza_i_d DESC
+      ORDER BY m.timestamp DESC, m.rowid DESC
       LIMIT ?
       OFFSET ?
       ''',
@@ -1925,57 +1873,8 @@ WHERE transport IS NULL
     required int limit,
     required DateTime beforeTimestamp,
     required String beforeStanzaId,
-    int? beforeDeltaMsgId,
   }) {
     final filterValue = filter.index;
-    if (beforeDeltaMsgId == null) {
-      final query = customSelect(
-        '''
-        SELECT m.*
-        FROM messages m
-        LEFT JOIN message_copies mc
-          ON mc.dc_msg_id = m.delta_msg_id
-         AND mc.dc_account_id = m.delta_account_id
-        LEFT JOIN message_shares ms ON ms.share_id = mc.share_id
-        LEFT JOIN message_participants mp
-          ON mp.share_id = mc.share_id AND mp.contact_jid = ?
-        WHERE m.chat_jid = ?
-          AND (
-            CASE WHEN ? = 0 THEN
-              (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
-            ELSE
-              (mc.share_id IS NULL OR mp.contact_jid IS NOT NULL)
-            END
-          )
-          AND (
-            m.timestamp < ?
-            OR (
-              m.timestamp = ?
-              AND m.delta_msg_id IS NULL
-              AND m.stanza_i_d < ?
-            )
-          )
-        ORDER BY m.timestamp DESC, m.delta_msg_id DESC, m.stanza_i_d DESC
-        LIMIT ?
-        ''',
-        variables: [
-          Variable<String>(jid),
-          Variable<String>(jid),
-          Variable<int>(filterValue),
-          Variable<DateTime>(beforeTimestamp),
-          Variable<DateTime>(beforeTimestamp),
-          Variable<String>(beforeStanzaId),
-          Variable<int>(limit),
-        ],
-        readsFrom: {
-          messages,
-          messageCopies,
-          messageShares,
-          messageParticipants,
-        },
-      );
-      return query.map((row) => messages.map(row.data));
-    }
     final query = customSelect(
       '''
       SELECT m.*
@@ -1998,14 +1897,13 @@ WHERE transport IS NULL
           m.timestamp < ?
           OR (
             m.timestamp = ?
-            AND (
-              m.delta_msg_id < ?
-              OR m.delta_msg_id IS NULL
-              OR (m.delta_msg_id = ? AND m.stanza_i_d < ?)
+            AND m.rowid < COALESCE(
+              (SELECT rowid FROM messages WHERE stanza_i_d = ?),
+              -1
             )
           )
         )
-      ORDER BY m.timestamp DESC, m.delta_msg_id DESC, m.stanza_i_d DESC
+      ORDER BY m.timestamp DESC, m.rowid DESC
       LIMIT ?
       ''',
       variables: [
@@ -2014,8 +1912,6 @@ WHERE transport IS NULL
         Variable<int>(filterValue),
         Variable<DateTime>(beforeTimestamp),
         Variable<DateTime>(beforeTimestamp),
-        Variable<int>(beforeDeltaMsgId),
-        Variable<int>(beforeDeltaMsgId),
         Variable<String>(beforeStanzaId),
         Variable<int>(limit),
       ],
@@ -2408,6 +2304,7 @@ WHERE transport IS NULL
   Future<void> saveMessage(
     Message message, {
     ChatType chatType = ChatType.chat,
+    String? selfJid,
   }) async {
     _log.fine('Persisting message');
     final resolvedMessageId = message.id ?? uuid.v4();
@@ -2421,10 +2318,15 @@ WHERE transport IS NULL
       fileMetadataId: trimmedMetadataId,
     );
     final bool shouldUpdateChatSummary = !isInternalSync;
+    final bool isSelfMessage = sameNormalizedAddressValue(
+      message.senderJid,
+      selfJid,
+    );
     final bool shouldIncrementUnread =
         shouldUpdateChatSummary &&
         (hasBody || hasAttachment) &&
-        message.pseudoMessageType == null;
+        message.pseudoMessageType == null &&
+        !isSelfMessage;
     final int unreadIncrement = shouldIncrementUnread ? 1 : 0;
     final DateTime? existingLastChangeTimestamp = shouldUpdateChatSummary
         ? null

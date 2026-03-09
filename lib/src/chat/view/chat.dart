@@ -5198,7 +5198,9 @@ class _ChatState extends State<Chat> {
                                         user: author,
                                         createdAt: timestamp.toLocal(),
                                         text: shouldForceDashText
-                                            ? _dashChatPlaceholderText
+                                            ? (hasRenderableSubjectHeader
+                                                  ? subjectText
+                                                  : _dashChatPlaceholderText)
                                             : renderedText,
                                         status: statusFor(e),
                                         customProperties: {
@@ -13179,6 +13181,7 @@ class _SubjectTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
+    final spacing = context.spacing;
     final sizing = context.sizing;
     final subjectStyle = context.textTheme.small.copyWith(
       fontWeight: FontWeight.w600,
@@ -13195,55 +13198,56 @@ class _SubjectTextField extends StatelessWidget {
       child: Semantics(
         label: l10n.chatSubjectSemantics,
         textField: true,
-        child: AxiTextField(
-          controller: controller,
-          focusNode: focusNode,
-          enabled: true,
-          readOnly: !enabled,
-          showCursor: enabled,
-          enableInteractiveSelection: enabled,
-          selectAllOnFocus: false,
-          minLines: 1,
-          maxLines: 1,
-          textInputAction: TextInputAction.next,
-          textCapitalization: TextCapitalization.sentences,
-          onSubmitted: enabled ? (_) => onSubmitted() : null,
-          onEditingComplete: enabled ? onSubmitted : null,
-          keyboardType: TextInputType.text,
-          style: subjectStyle,
-          strutStyle: subjectStrutStyle,
-          cursorHeight: subjectStyle.fontSize,
-          textAlignVertical: TextAlignVertical.center,
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            disabledBorder: InputBorder.none,
-            isCollapsed: true,
-            contentPadding: EdgeInsets.zero,
-            prefixText: '${l10n.chatSubjectHint}: ',
-            prefixStyle: subjectStyle,
-            suffixIcon: showExpandDraftAction
-                ? AxiIconButton.secondary(
-                    iconData: LucideIcons.maximize2,
-                    tooltip: l10n.draftExpand,
-                    semanticLabel: l10n.draftExpand,
-                    iconSize: sizing.inputSuffixIconSize,
-                    buttonSize: sizing.inputSuffixButtonSize,
-                    tapTargetSize: sizing.inputSuffixButtonSize,
-                    cornerRadius: context.radii.squircleSm,
-                    onPressed: enabled && expandDraftEnabled
-                        ? onExpandDraftPressed
-                        : null,
-                  )
-                : null,
-            suffixIconConstraints: BoxConstraints(
-              minWidth: sizing.inputSuffixButtonSize,
-              maxWidth: sizing.inputSuffixButtonSize,
-              minHeight: sizing.inputSuffixButtonSize,
-              maxHeight: sizing.inputSuffixButtonSize,
+        child: Row(
+          children: [
+            Text('${l10n.chatSubjectHint}:', style: subjectStyle),
+            SizedBox(width: spacing.xs),
+            Expanded(
+              child: AxiTextField(
+                controller: controller,
+                focusNode: focusNode,
+                enabled: true,
+                readOnly: !enabled,
+                showCursor: enabled,
+                enableInteractiveSelection: enabled,
+                selectAllOnFocus: false,
+                minLines: 1,
+                maxLines: 1,
+                textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.sentences,
+                onSubmitted: enabled ? (_) => onSubmitted() : null,
+                onEditingComplete: enabled ? onSubmitted : null,
+                keyboardType: TextInputType.text,
+                style: subjectStyle,
+                strutStyle: subjectStrutStyle,
+                cursorHeight: subjectStyle.fontSize,
+                textAlignVertical: TextAlignVertical.center,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  isCollapsed: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
             ),
-          ),
+            if (showExpandDraftAction) ...[
+              SizedBox(width: spacing.xs),
+              AxiIconButton.secondary(
+                iconData: LucideIcons.maximize2,
+                tooltip: l10n.draftExpand,
+                semanticLabel: l10n.draftExpand,
+                iconSize: sizing.inputSuffixIconSize,
+                buttonSize: sizing.inputSuffixButtonSize,
+                tapTargetSize: sizing.inputSuffixButtonSize,
+                cornerRadius: context.radii.squircleSm,
+                onPressed: enabled && expandDraftEnabled
+                    ? onExpandDraftPressed
+                    : null,
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -14793,19 +14797,13 @@ class _QuotedMessagePreview extends StatelessWidget {
     final senderLabelTrimmed = senderLabel.trim();
     return Builder(
       builder: (context) {
-        final split = _displaySubjectAndBody(message);
-        final subject = split.subject?.trim();
-        final body = split.body.trim();
-        final previewParts = <String>[];
-        if (subject?.isNotEmpty == true) {
-          previewParts.add(subject!);
-        }
-        if (body.isNotEmpty) {
-          previewParts.add(body);
-        }
-        final previewText = previewParts.isNotEmpty
-            ? previewParts.join(' — ')
-            : context.l10n.chatQuotedNoContent;
+        final previewText =
+            ChatSubjectCodec.previewText(
+              body: message.body,
+              htmlBody: message.htmlBody,
+              subject: message.subject,
+            ) ??
+            context.l10n.chatQuotedNoContent;
         final quotedPreview = '"$previewText"';
         return _ReplyingToPreviewText(
           senderLabel: senderLabelTrimmed,
@@ -14880,15 +14878,11 @@ class _ReplyingToPreviewText extends StatelessWidget {
         final headerFits = headerPainter.computeLineMetrics().length <= 1;
         if (!headerFits) {
           return Column(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: crossAxisAlignment,
             spacing: spacing.xxs,
             children: [
-              Text.rich(
-                headerWithNameSpan,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: textAlign,
-              ),
+              Text.rich(headerWithNameSpan, textAlign: textAlign),
               Align(
                 alignment: isSelf
                     ? Alignment.centerRight
@@ -14897,7 +14891,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
                   width: quoteLineWidth,
                   child: Text(
                     quotedPreview,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: textAlign,
                     style: baseStyle,
@@ -14934,6 +14928,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
           );
         }
         return Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: crossAxisAlignment,
           spacing: spacing.xxs,
           children: [
@@ -14949,7 +14944,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
                 width: quoteLineWidth,
                 child: Text(
                   quotedPreview,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: textAlign,
                   style: baseStyle,
@@ -15148,16 +15143,8 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       );
     }
     if (previewChild != null) {
-      final constrainedPreviewMaxWidth = constraints.constrainWidth(
-        previewMaxWidth,
-      );
       previewChild.layout(
-        BoxConstraints(
-          minWidth: 0,
-          maxWidth: constrainedPreviewMaxWidth,
-          minHeight: 0,
-          maxHeight: constraints.maxHeight,
-        ),
+        BoxConstraints.tightFor(width: bubbleWidth),
         parentUsesSize: true,
       );
       previewWidth = previewChild.size.width;
@@ -15217,19 +15204,13 @@ class _QuoteBanner extends StatelessWidget {
           Expanded(
             child: Builder(
               builder: (context) {
-                final split = _displaySubjectAndBody(message);
-                final subject = split.subject?.trim();
-                final body = split.body.trim();
-                final previewParts = <String>[];
-                if (subject?.isNotEmpty == true) {
-                  previewParts.add(subject!);
-                }
-                if (body.isNotEmpty) {
-                  previewParts.add(body);
-                }
-                final previewText = previewParts.isNotEmpty
-                    ? previewParts.join(' — ')
-                    : context.l10n.chatQuotedNoContent;
+                final previewText =
+                    ChatSubjectCodec.previewText(
+                      body: message.body,
+                      htmlBody: message.htmlBody,
+                      subject: message.subject,
+                    ) ??
+                    context.l10n.chatQuotedNoContent;
                 final quotedPreview = '"$previewText"';
                 return _ReplyingToPreviewText(
                   senderLabel: isSelf

@@ -149,6 +149,12 @@ pre, code {
     'p',
     'span',
   };
+  static const String _directionAttribute = 'dir';
+  static const Set<String> _plainTextDirectionValues = <String>{
+    'auto',
+    'ltr',
+    'rtl',
+  };
   static const Set<String> _sanitizedLinkSchemes = <String>{
     'http',
     'https',
@@ -666,7 +672,7 @@ pre, code {
         if (!_plainTextHtmlTags.contains(tag)) {
           return false;
         }
-        if (node.attributes.isNotEmpty) {
+        if (!_isAllowedPlainTextElementAttributes(node)) {
           return false;
         }
         if (!_isPlainTextNodes(node.nodes, budget, depth + 1)) {
@@ -676,6 +682,23 @@ pre, code {
       }
       if (node.nodes.isNotEmpty &&
           !_isPlainTextNodes(node.nodes, budget, depth + 1)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  static bool _isAllowedPlainTextElementAttributes(dom.Element node) {
+    if (node.attributes.isEmpty) {
+      return true;
+    }
+    for (final entry in node.attributes.entries) {
+      final attributeName = entry.key.toString().trim().toLowerCase();
+      if (attributeName != _directionAttribute) {
+        return false;
+      }
+      final directionValue = entry.value.toString().trim().toLowerCase();
+      if (!_plainTextDirectionValues.contains(directionValue)) {
         return false;
       }
     }

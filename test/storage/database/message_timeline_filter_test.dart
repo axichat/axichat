@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:drift/native.dart';
@@ -120,6 +121,53 @@ void main() {
     expect(allWithContact.map((msg) => msg.stanzaID), contains('direct-1'));
   });
 
+  test(
+    'saveMessage does not increment unread for direct self messages',
+    () async {
+      const selfJid = 'me@example.com';
+      const peerJid = 'peer@example.com';
+      final chat = Chat(
+        jid: peerJid,
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        emailAddress: peerJid,
+      );
+      await db.createChat(chat);
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'outbound-1',
+          senderJid: selfJid,
+          chatJid: peerJid,
+          timestamp: DateTime.utc(2024, 1, 1, 10),
+          body: 'Outbound hello',
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+        selfJid: selfJid,
+      );
+
+      final afterOutbound = await db.getChat(peerJid);
+      expect(afterOutbound?.unreadCount, 0);
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'inbound-1',
+          senderJid: peerJid,
+          chatJid: peerJid,
+          timestamp: DateTime.utc(2024, 1, 1, 11),
+          body: 'Inbound hello',
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+        selfJid: selfJid,
+      );
+
+      final afterInbound = await db.getChat(peerJid);
+      expect(afterInbound?.unreadCount, 1);
+    },
+  );
+
   test('countChatMessages can exclude pseudo messages', () async {
     final contact = Chat(
       jid: 'dc-1@delta.chat',
@@ -195,4 +243,130 @@ void main() {
     expect(updatedChat?.lastMessage, 'second message');
     expect(updatedChat?.lastChangeTimestamp, secondMessage.timestamp);
   });
+
+  test('same-timestamp email messages follow local insertion order', () async {
+    final contact = Chat(
+      jid: 'ordering-test@delta.chat',
+      title: 'Ordering Test',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      deltaChatId: 1,
+      emailAddress: 'ordering@example.com',
+    );
+    await db.createChat(contact);
+
+    final sharedTimestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
+    final oldestMessage = Message(
+      stanzaID: 'dc-msg-12',
+      senderJid: contact.jid,
+      chatJid: contact.jid,
+      timestamp: sharedTimestamp,
+      body: 'oldest',
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaChatId: contact.deltaChatId,
+      deltaMsgId: 12,
+    );
+    final middleMessage = Message(
+      stanzaID: 'dc-msg-300',
+      senderJid: 'self@example.com',
+      chatJid: contact.jid,
+      timestamp: sharedTimestamp,
+      body: 'middle',
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaChatId: contact.deltaChatId,
+      deltaMsgId: 300,
+    );
+    final newestMessage = Message(
+      stanzaID: 'dc-msg-40',
+      senderJid: contact.jid,
+      chatJid: contact.jid,
+      timestamp: sharedTimestamp,
+      body: 'newest',
+      encryptionProtocol: EncryptionProtocol.none,
+      deltaChatId: contact.deltaChatId,
+      deltaMsgId: 40,
+    );
+
+    await db.saveMessage(oldestMessage);
+    await db.saveMessage(middleMessage);
+    await db.saveMessage(newestMessage);
+
+    final messages = await db.getChatMessages(contact.jid, start: 0, end: 10);
+
+    expect(messages.map((message) => message.stanzaID), [
+      newestMessage.stanzaID,
+      middleMessage.stanzaID,
+      oldestMessage.stanzaID,
+    ]);
+  });
+
+  test(
+    'same-timestamp email paging and counts ignore delta message ids',
+    () async {
+      final contact = Chat(
+        jid: 'paging-test@delta.chat',
+        title: 'Paging Test',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        deltaChatId: 1,
+        emailAddress: 'paging@example.com',
+      );
+      await db.createChat(contact);
+
+      final sharedTimestamp = DateTime.utc(2024, 1, 2, 3, 4, 5);
+      final oldestMessage = Message(
+        stanzaID: 'dc-msg-12',
+        senderJid: contact.jid,
+        chatJid: contact.jid,
+        timestamp: sharedTimestamp,
+        body: 'oldest',
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: contact.deltaChatId,
+        deltaMsgId: 12,
+      );
+      final middleMessage = Message(
+        stanzaID: 'dc-msg-300',
+        senderJid: 'self@example.com',
+        chatJid: contact.jid,
+        timestamp: sharedTimestamp,
+        body: 'middle',
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: contact.deltaChatId,
+        deltaMsgId: 300,
+      );
+      final newestMessage = Message(
+        stanzaID: 'dc-msg-40',
+        senderJid: contact.jid,
+        chatJid: contact.jid,
+        timestamp: sharedTimestamp,
+        body: 'newest',
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: contact.deltaChatId,
+        deltaMsgId: 40,
+      );
+
+      await db.saveMessage(oldestMessage);
+      await db.saveMessage(middleMessage);
+      await db.saveMessage(newestMessage);
+
+      final olderMessages = await db.getChatMessagesBefore(
+        contact.jid,
+        beforeTimestamp: sharedTimestamp,
+        beforeStanzaId: middleMessage.stanzaID,
+        beforeDeltaMsgId: middleMessage.deltaMsgId,
+        limit: 10,
+      );
+      final messagesThroughMiddle = await db.countChatMessagesThrough(
+        contact.jid,
+        throughTimestamp: sharedTimestamp,
+        throughStanzaId: middleMessage.stanzaID,
+        throughDeltaMsgId: middleMessage.deltaMsgId,
+      );
+
+      expect(olderMessages.map((message) => message.stanzaID), [
+        oldestMessage.stanzaID,
+      ]);
+      expect(messagesThroughMiddle, 2);
+    },
+  );
 }

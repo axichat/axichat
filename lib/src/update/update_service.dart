@@ -89,6 +89,7 @@ final class UpdateCheckResult {
   const UpdateCheckResult({
     required this.channel,
     required this.shorebirdStatus,
+    this.shorebirdNextPatchNumber,
     this.installedVersion,
     this.installedBuild,
     this.currentOffer,
@@ -96,6 +97,7 @@ final class UpdateCheckResult {
 
   final UpdateChannel channel;
   final ShorebirdUpdateStatus shorebirdStatus;
+  final int? shorebirdNextPatchNumber;
   final String? installedVersion;
   final int? installedBuild;
   final UpdateOffer? currentOffer;
@@ -109,7 +111,7 @@ abstract interface class UpdateStoreBackend {
 }
 
 abstract interface class ShorebirdPatchBackend {
-  Future<ShorebirdUpdateStatus> check({required bool applyUpdate});
+  Future<ShorebirdCheckResult> check({required bool applyUpdate});
 }
 
 abstract interface class DisposableUpdateBackend {
@@ -165,17 +167,23 @@ final class UpdateService {
     final storeOffer = packageInfo == null
         ? null
         : await _checkStoreOffer(channel: channel, packageInfo: packageInfo);
-    final shorebirdStatus = await _shorebirdBackend.check(
+    final shorebirdResult = await _shorebirdBackend.check(
       applyUpdate: storeOffer == null,
     );
     return UpdateCheckResult(
       channel: channel,
-      shorebirdStatus: shorebirdStatus,
+      shorebirdStatus: shorebirdResult.status,
+      shorebirdNextPatchNumber: shorebirdResult.nextPatchNumber,
       installedVersion: packageInfo?.version,
       installedBuild: _parseBuildNumber(packageInfo?.buildNumber),
       currentOffer:
           storeOffer ??
-          _buildShorebirdOffer(channel, packageInfo, shorebirdStatus),
+          _buildShorebirdOffer(
+            channel,
+            packageInfo,
+            shorebirdResult.status,
+            shorebirdResult.nextPatchNumber,
+          ),
     );
   }
 
@@ -238,6 +246,19 @@ final class UpdateService {
     }
     try {
       return await backend.check(channel: channel, packageInfo: packageInfo);
+    } on PlatformException catch (error, stackTrace) {
+      if (_isExpectedPlayStoreCheckFailure(channel: channel, error: error)) {
+        _log.info(
+          'Skipping Play in-app update check: ${error.message ?? error.code}.',
+        );
+        return null;
+      }
+      _log.warning(
+        'Failed to check for a store update on $channel.',
+        error,
+        stackTrace,
+      );
+      return null;
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to check for a store update on $channel.',
@@ -248,19 +269,38 @@ final class UpdateService {
     }
   }
 
+  bool _isExpectedPlayStoreCheckFailure({
+    required UpdateChannel channel,
+    required PlatformException error,
+  }) {
+    if (channel != UpdateChannel.playStore || error.code != 'TASK_FAILURE') {
+      return false;
+    }
+    final message = error.message;
+    if (message == null || message.isEmpty) {
+      return false;
+    }
+    final match = RegExp(r'Install Error\((-?\d+)\)').firstMatch(message);
+    final installErrorCode = match == null
+        ? null
+        : int.tryParse(match.group(1)!);
+    return installErrorCode == -5 || installErrorCode == -6;
+  }
+
   UpdateOffer? _buildShorebirdOffer(
     UpdateChannel channel,
     PackageInfo? packageInfo,
     ShorebirdUpdateStatus status,
+    int? nextPatchNumber,
   ) {
     if (!status.requiresRestart) {
       return null;
     }
     final version = packageInfo?.version;
     final build = _parseBuildNumber(packageInfo?.buildNumber);
-    final id = version == null
-        ? 'shorebird:restart'
-        : 'shorebird:$version:${build ?? 0}';
+    final versionToken = version ?? 'unknown';
+    final patchToken = nextPatchNumber?.toString() ?? 'unknown';
+    final id = 'shorebird:$versionToken:${build ?? 0}:$patchToken';
     return UpdateOffer(
       id: id,
       kind: UpdateOfferKind.shorebirdRestart,
@@ -542,6 +582,6 @@ final class _ShorebirdPatchBackend implements ShorebirdPatchBackend {
   final ShorebirdUpdater _shorebird;
 
   @override
-  Future<ShorebirdUpdateStatus> check({required bool applyUpdate}) =>
+  Future<ShorebirdCheckResult> check({required bool applyUpdate}) =>
       checkShorebirdStatus(shorebird: _shorebird, applyUpdate: applyUpdate);
 }

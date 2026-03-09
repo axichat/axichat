@@ -169,7 +169,7 @@ extension DeltaMessageStateChecks on DeltaMessage {
       }
       return _deltaOutgoingPendingStatus;
     }
-    if (isIncomingSeen) {
+    if (isIncomingNoticed || isIncomingSeen) {
       return _deltaIncomingSeenStatus;
     }
     return _deltaIncomingUnseenStatus;
@@ -518,7 +518,7 @@ class DeltaEventConsumer {
       final chat = await _ensureChat(chatId);
       final isArchived = archivedChatIds.contains(chatId);
       var updated = chat;
-      var hydratedLastMessage = false;
+      var hydratedMessages = false;
       DateTime? lastTimestamp;
       String? lastPreview;
       if (entry.msgId > 0 && !_isDeltaMessageMarkerId(entry.msgId)) {
@@ -528,7 +528,7 @@ class DeltaEventConsumer {
         );
         if (existing != null) {
           lastTimestamp = existing.timestamp;
-          lastPreview = existing.body;
+          lastPreview = await _previewTextForStoredMessage(db: db, message: existing);
         } else {
           final last = await _context.getMessage(entry.msgId);
           lastTimestamp = last?.timestamp;
@@ -543,7 +543,7 @@ class DeltaEventConsumer {
                 chat: updated,
                 skipSystemChatCheck: true,
               );
-              hydratedLastMessage = true;
+              hydratedMessages = true;
             }
           }
         }
@@ -551,7 +551,7 @@ class DeltaEventConsumer {
       if (updated.archived != isArchived) {
         updated = updated.copyWith(archived: isArchived);
       }
-      if (!hydratedLastMessage && lastTimestamp != null) {
+      if (!hydratedMessages && lastTimestamp != null) {
         final bool hasPreview = lastPreview?.isNotEmpty == true;
         final bool hasStoredPreview =
             updated.lastMessage?.trim().isNotEmpty == true;
@@ -570,7 +570,12 @@ class DeltaEventConsumer {
       if (freshCount.supported && freshCount.count != updated.unreadCount) {
         updated = updated.copyWith(unreadCount: freshCount.count);
       }
-      if (hydratedLastMessage) {
+      if (freshCount.supported && freshCount.count > 0) {
+        await _syncChatMessages(chatId);
+        await _refreshStoredChatSummary(chatJid: updated.jid, db: db);
+        hydratedMessages = true;
+      }
+      if (hydratedMessages) {
         final refreshed = await db.getChat(updated.jid);
         if (refreshed == null) {
           if (updated != chat) {
@@ -737,6 +742,14 @@ class DeltaEventConsumer {
       return;
     }
     await _syncChatMessages(chatId);
+    final db = await _db();
+    final chat = await db.getChatByDeltaChatId(
+      chatId,
+      accountId: _deltaAccountId,
+    );
+    if (chat != null) {
+      await _refreshStoredChatSummary(chatJid: chat.jid, db: db);
+    }
     await _refreshChat(chatId);
     await _updateUnreadCount(chatId);
     await _refreshArchivedState(chatId);
@@ -1052,6 +1065,7 @@ class DeltaEventConsumer {
       msg: msg,
     );
     await _storeMessage(db: db, message: message, chatJid: resolvedChat.jid);
+    await _refreshStoredChatSummary(chatJid: resolvedChat.jid, db: db);
     await _scheduleOriginIdHydration(msgId: msg.id, accountId: deltaAccountId);
     final bool isSpamQuarantined =
         warning == MessageWarning.emailSpamQuarantined;
@@ -1083,8 +1097,11 @@ class DeltaEventConsumer {
     required int chatId,
     required int deltaAccountId,
   }) async {
+    const maxTimestampDelta = Duration(minutes: 2);
+    final maxTimestampDeltaMicros = maxTimestampDelta.inMicroseconds;
     final PendingOutgoingEmailSignature incomingSignature =
         PendingOutgoingEmailSignature.fromOutgoing(
+          subject: msg.subject,
           text: msg.text,
           html: msg.html,
           fileName: msg.fileName,
@@ -1136,6 +1153,9 @@ class DeltaEventConsumer {
         return candidate;
       }
       final int delta = (candidateTimestamp - incomingTimestampMicros).abs();
+      if (delta > maxTimestampDeltaMicros) {
+        continue;
+      }
       if (closestDelta == null || delta < closestDelta) {
         closestDelta = delta;
         closestMatch = candidate;
@@ -1179,6 +1199,10 @@ class DeltaEventConsumer {
     var next = existing;
     if (originId != null && originId != existing.originID) {
       next = next.copyWith(originID: originId);
+    }
+    final DateTime? timestamp = msg.timestamp;
+    if (timestamp != null && next.timestamp != timestamp) {
+      next = next.copyWith(timestamp: timestamp);
     }
     if (msg.hasKnownState) {
       final deliveryStatus = msg.deliveryStatus;
@@ -1227,6 +1251,7 @@ class DeltaEventConsumer {
         _log.log(Level.FINE, 'Message update diff: $updateSummary');
       }
       await db.updateMessage(next);
+      await _refreshStoredChatSummary(chatJid: next.chatJid, db: db);
     }
   }
 
@@ -1373,31 +1398,54 @@ class DeltaEventConsumer {
     if (stored == null) {
       return;
     }
-    if (await _isInternalMessagePreview(db: db, message: stored)) {
+    await _refreshStoredChatSummary(chatJid: chat.jid, db: db);
+  }
+
+  Future<void> _refreshStoredChatSummary({
+    required String chatJid,
+    XmppDatabase? db,
+  }) async {
+    final resolvedDb = db ?? await _db();
+    final chat = await resolvedDb.getChat(chatJid);
+    if (chat == null) {
       return;
     }
-    final preview = _previewTextForStoredMessage(stored);
-    if (preview == null) {
-      return;
-    }
-    final DateTime now = DateTime.timestamp();
-    final DateTime nextTimestamp = now.isAfter(chat.lastChangeTimestamp)
-        ? now
-        : chat.lastChangeTimestamp;
+    final lastMessage = await resolvedDb.getLastMessageForChat(
+      chatJid,
+      filter: MessageTimelineFilter.allWithContact,
+    );
+    final preview = lastMessage == null
+        ? null
+        : await _previewTextForStoredMessage(
+            db: resolvedDb,
+            message: lastMessage,
+          );
     final updated = chat.copyWith(
       lastMessage: preview,
-      lastChangeTimestamp: nextTimestamp,
+      lastChangeTimestamp: lastMessage?.timestamp ?? chat.lastChangeTimestamp,
     );
     if (updated != chat) {
-      await db.updateChat(updated);
+      await resolvedDb.updateChat(updated);
     }
   }
 
-  String? _previewTextForStoredMessage(Message message) {
-    return ChatSubjectCodec.previewText(
+  Future<String?> _previewTextForStoredMessage({
+    required XmppDatabase db,
+    required Message message,
+  }) async {
+    final preview = ChatSubjectCodec.previewText(
       body: message.body,
       subject: message.subject,
     );
+    if (preview != null) {
+      return preview;
+    }
+    final metadataId = message.fileMetadataID?.trim();
+    if (metadataId == null || metadataId.isEmpty) {
+      return null;
+    }
+    final metadata = await db.getFileMetadata(metadataId);
+    return _attachmentLabel(metadata);
   }
 
   Future<bool> _isInternalMessagePreview({
@@ -1678,7 +1726,7 @@ class DeltaEventConsumer {
     required Message message,
     required String chatJid,
   }) async {
-    await db.saveMessage(message);
+    await db.saveMessage(message, selfJid: _selfJid);
   }
 
   Future<Message> _attachFileMetadata({

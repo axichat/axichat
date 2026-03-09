@@ -3452,7 +3452,7 @@ class EmailService {
       return;
     }
     if (_transport.isIoRunning) {
-      _stopImapSyncLoop();
+      _scheduleNextImapSync(token);
       return;
     }
     await _enqueueImapSync(token);
@@ -3690,7 +3690,7 @@ class EmailService {
             }
           : null,
     );
-    await db.saveMessage(message);
+    await db.saveMessage(message, selfJid: kDemoSelfJid);
     unawaited(
       Future<void>.delayed(
         const Duration(milliseconds: 500),
@@ -3762,7 +3762,7 @@ class EmailService {
           : null,
     );
     await db.saveFileMetadata(metadata);
-    await db.saveMessage(message);
+    await db.saveMessage(message, selfJid: kDemoSelfJid);
     unawaited(
       Future<void>.delayed(
         const Duration(milliseconds: 500),

@@ -3,7 +3,6 @@
 
 import 'dart:async';
 
-import 'package:axichat/main.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/change_password_form.dart';
@@ -335,11 +334,9 @@ class _ProfileMainView extends StatelessWidget {
       locate: locate,
       onNavigate: onNavigate,
     );
-    final showImportantSection =
-        context.select<SettingsCubit, bool>(
-          (cubit) => cubit.canForegroundService,
-        ) &&
-        !foregroundServiceActive.value;
+    final showImportantSection = context.select<SettingsCubit, bool>(
+      (cubit) => cubit.canForegroundService,
+    );
     if (!isWideLayout) {
       final spacing = context.spacing;
       final profileSectionPadding = EdgeInsets.symmetric(

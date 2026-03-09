@@ -1574,6 +1574,65 @@ void main() {
     await knownContactController.close();
   });
 
+  test('self email messages do not create an unread boundary', () async {
+    final emailService = MockEmailService();
+    final emailMessageStreamController =
+        StreamController<List<Message>>.broadcast();
+    _mockEmailSync(emailService);
+
+    final emailChat = initialChat.copyWith(
+      deltaChatId: 4,
+      emailAddress: 'peer@example.com',
+      transport: MessageTransport.email,
+      unreadCount: 1,
+    );
+    final selfMessage = Message(
+      stanzaID: 'email-self-1',
+      senderJid: 'me@example.com',
+      chatJid: emailChat.jid,
+      deltaMsgId: 41,
+      timestamp: DateTime(2026, 1, 3, 10),
+      body: 'Outbound email message',
+    );
+
+    when(() => emailService.selfSenderJid).thenReturn('me@example.com');
+    when(
+      () => emailService.getOldestFreshMessageId(any()),
+    ).thenAnswer((_) async => null);
+    when(
+      () => emailService.messageStreamForChat(
+        any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+        filter: any(named: 'filter'),
+      ),
+    ).thenAnswer((_) => emailMessageStreamController.stream);
+    when(
+      () => emailService.pinnedMessagesStream(any()),
+    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+
+    final bloc = ChatBloc(
+      jid: emailChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: emailService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(emailChat);
+    await _pumpBloc();
+    emailMessageStreamController.add([selfMessage]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    expect(bloc.state.unreadBoundaryStanzaId, isNull);
+
+    await bloc.close();
+    await emailMessageStreamController.close();
+  });
+
   test('catch-up paginates MAM when reconnecting after gap', () async {
     final xmppService = MockXmppService();
     final connectivityController =

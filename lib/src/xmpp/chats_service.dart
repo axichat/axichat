@@ -33,6 +33,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const int _openChatPreloadMessageDisabledLimit = 0;
   static const _recipientAddressSuggestionLimit = 50000;
   static const Duration _mutedForeverDuration = Duration(days: 3650);
+  static const String _signupWelcomeChatJid =
+      'axichat@welcome.axichat.invalid';
   static const String _conversationIndexLoginSyncOperationName =
       'ChatsService.syncConversationIndexOnLogin';
   static const String _mucChatStatePlaceholderBody = '';
@@ -822,6 +824,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         final peerJid = item.peerBare.toBare().toString();
         if (peerJid.isEmpty) continue;
         if (_isMucChatJid(peerJid)) continue;
+        if (_isConversationIndexLocalOnlyChatJid(peerJid)) continue;
 
         final archived = item.archived;
         final pinned = item.pinned;
@@ -913,6 +916,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         if (normalized == null || normalized.isEmpty) continue;
         if (normalized == selfJid) continue;
         if (_isMucChatJid(normalized)) continue;
+        if (_isConversationIndexLocalOnlyChatJid(normalized)) continue;
         if (knownPeers.contains(normalized)) continue;
         if (chat.archived) continue;
         await db.updateChat(chat.copyWith(archived: true));
@@ -924,6 +928,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     final peer = peerBare.toBare().toString();
     if (peer.isEmpty) return;
     if (_isMucChatJid(peer)) return;
+    if (_isConversationIndexLocalOnlyChatJid(peer)) return;
     await _dbOp<XmppDatabase>((db) async {
       final existing = await db.getChat(peer);
       if (existing == null || existing.type != ChatType.chat) return;
@@ -936,6 +941,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     if (connectionState != ConnectionState.connected) return;
     if (jid.isEmpty) return;
     if (_isMucChatJid(jid)) return;
+    if (_isConversationIndexLocalOnlyChatJid(jid)) return;
 
     final manager = _connection.getManager<ConversationIndexManager>();
     if (manager == null) return;
@@ -975,6 +981,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       return null;
     }
   }
+
+  bool _isConversationIndexLocalOnlyChatJid(String jid) =>
+      sameNormalizedAddressValue(jid, _signupWelcomeChatJid);
 }
 
 class MUCManager extends mox.MUCManager {

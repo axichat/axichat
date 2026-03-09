@@ -5,10 +5,13 @@ import 'package:axichat/src/update/update_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/testing.dart';
+import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('resolveUpdateChannel', () {
     test('returns none on web', () {
       final channel = resolveUpdateChannel(
@@ -55,6 +58,7 @@ void main() {
     test('prefers the store offer over a Shorebird restart', () async {
       final shorebirdBackend = _RecordingShorebirdBackend(
         status: ShorebirdUpdateStatus.restartRequired,
+        nextPatchNumber: 17,
       );
       final service = UpdateService(
         httpClient: MockClient((_) async => throw UnimplementedError()),
@@ -87,6 +91,7 @@ void main() {
       () async {
         final shorebirdBackend = _RecordingShorebirdBackend(
           status: ShorebirdUpdateStatus.restartRequired,
+          nextPatchNumber: 17,
         );
         final service = UpdateService(
           httpClient: MockClient((_) async => throw UnimplementedError()),
@@ -101,6 +106,7 @@ void main() {
 
         expect(result.channel, UpdateChannel.appStore);
         expect(result.currentOffer?.kind, UpdateOfferKind.shorebirdRestart);
+        expect(result.currentOffer?.id, 'shorebird:1.2.3:45:17');
         expect(result.currentOffer?.availableVersion, '1.2.3');
         expect(result.currentOffer?.availableBuild, 45);
         expect(shorebirdBackend.applyUpdateCalls, [true]);
@@ -110,6 +116,7 @@ void main() {
     test('falls back to Shorebird when the store check times out', () async {
       final shorebirdBackend = _RecordingShorebirdBackend(
         status: ShorebirdUpdateStatus.restartRequired,
+        nextPatchNumber: 17,
       );
       final service = UpdateService(
         httpClient: MockClient((_) async => throw UnimplementedError()),
@@ -127,6 +134,43 @@ void main() {
       expect(result.currentOffer?.kind, UpdateOfferKind.shorebirdRestart);
       expect(shorebirdBackend.applyUpdateCalls, [true]);
     });
+
+    test(
+      'suppresses warning logs for expected Play task failures from device state',
+      () async {
+        final shorebirdBackend = _RecordingShorebirdBackend(
+          status: ShorebirdUpdateStatus.upToDate,
+        );
+        final logger = Logger('UpdateService.play.expected_failure');
+        final records = <LogRecord>[];
+        final subscription = logger.onRecord.listen(records.add);
+        addTearDown(subscription.cancel);
+        final service = UpdateService(
+          httpClient: MockClient((_) async => throw UnimplementedError()),
+          logger: logger,
+          packageInfoLoader: () async => _packageInfo(),
+          targetPlatformResolver: () => TargetPlatform.android,
+          playStoreBackend: _ThrowingStoreBackend(
+            error: PlatformException(
+              code: 'TASK_FAILURE',
+              message:
+                  '-6: Install Error(-6): The download/install is not allowed.',
+            ),
+          ),
+          shorebirdBackend: shorebirdBackend,
+        );
+        addTearDown(service.dispose);
+
+        final result = await service.checkForUpdates();
+
+        expect(result.currentOffer, isNull);
+        expect(shorebirdBackend.applyUpdateCalls, [true]);
+        expect(
+          records.where((record) => record.level >= Level.WARNING),
+          isEmpty,
+        );
+      },
+    );
 
     test('returns an open-store failure when launching throws', () async {
       final service = UpdateService(
@@ -206,15 +250,19 @@ final class _FakeStoreBackend implements UpdateStoreBackend {
 }
 
 final class _RecordingShorebirdBackend implements ShorebirdPatchBackend {
-  _RecordingShorebirdBackend({required this.status});
+  _RecordingShorebirdBackend({required this.status, this.nextPatchNumber});
 
   final ShorebirdUpdateStatus status;
+  final int? nextPatchNumber;
   final List<bool> applyUpdateCalls = [];
 
   @override
-  Future<ShorebirdUpdateStatus> check({required bool applyUpdate}) async {
+  Future<ShorebirdCheckResult> check({required bool applyUpdate}) async {
     applyUpdateCalls.add(applyUpdate);
-    return status;
+    return ShorebirdCheckResult(
+      status: status,
+      nextPatchNumber: nextPatchNumber,
+    );
   }
 }
 

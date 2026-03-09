@@ -1293,12 +1293,14 @@ class EmailDeltaTransport implements ChatTransport {
       await _markOutgoingMessageFailed(stanzaId: pendingStanzaId);
       rethrow;
     }
+    final deltaMessage = await context.getMessage(msgId);
     await _markOutgoingMessageSent(
       stanzaId: pendingStanzaId,
       msgId: msgId,
       accountId: resolvedAccountId,
       chatId: chatId,
       shareId: shareId,
+      timestamp: deltaMessage?.timestamp,
     );
     await _scheduleOriginIdHydration(
       context: context,
@@ -1372,6 +1374,7 @@ class EmailDeltaTransport implements ChatTransport {
       rethrow;
     }
     final FileMetadataData metadata = _metadataForAttachment(attachment, msgId);
+    final deltaMessage = await context.getMessage(msgId);
     await _markOutgoingMessageSent(
       stanzaId: pendingStanzaId,
       msgId: msgId,
@@ -1379,6 +1382,7 @@ class EmailDeltaTransport implements ChatTransport {
       chatId: chatId,
       shareId: shareId,
       metadata: metadata,
+      timestamp: deltaMessage?.timestamp,
     );
     await _scheduleOriginIdHydration(
       context: context,
@@ -1511,7 +1515,13 @@ class EmailDeltaTransport implements ChatTransport {
       deltaAccountId: deltaAccountId,
       fileMetadataID: metadata?.id,
     );
-    await db.saveMessage(message);
+    await db.saveMessage(
+      message,
+      selfJid: _resolveOutgoingSenderJid(
+        chat: resolvedChat,
+        accountId: deltaAccountId,
+      ),
+    );
     if (shareId != null && resolvedMsgId != null) {
       await db.insertMessageCopy(
         shareId: shareId,
@@ -1529,6 +1539,7 @@ class EmailDeltaTransport implements ChatTransport {
     required int chatId,
     String? shareId,
     FileMetadataData? metadata,
+    DateTime? timestamp,
   }) async {
     final XmppDatabase db = await _databaseBuilder();
     final Message? existing = await db.getMessageByStanzaID(stanzaId);
@@ -1552,6 +1563,7 @@ class EmailDeltaTransport implements ChatTransport {
     if (existing.deltaMsgId != msgId ||
         existing.deltaChatId != chatId ||
         existing.deltaAccountId != accountId ||
+        (timestamp != null && existing.timestamp != timestamp) ||
         (metadata != null && existing.fileMetadataID != metadata.id)) {
       next = existing.copyWith(
         deltaMsgId: msgId,
@@ -1559,6 +1571,9 @@ class EmailDeltaTransport implements ChatTransport {
         deltaAccountId: accountId,
         fileMetadataID: metadata?.id ?? existing.fileMetadataID,
       );
+      if (timestamp != null && next.timestamp != timestamp) {
+        next = next.copyWith(timestamp: timestamp);
+      }
     }
     if (next != existing) {
       await db.updateMessage(next);
@@ -2320,11 +2335,13 @@ class EmailDeltaTransport implements ChatTransport {
       await _markOutgoingMessageFailed(stanzaId: pendingStanzaId);
       rethrow;
     }
+    final deltaMessage = await context.getMessage(msgId);
     await _markOutgoingMessageSent(
       stanzaId: pendingStanzaId,
       msgId: msgId,
       accountId: resolvedAccountId,
       chatId: chatId,
+      timestamp: deltaMessage?.timestamp,
     );
     await _scheduleOriginIdHydration(
       context: context,

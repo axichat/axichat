@@ -2150,7 +2150,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _countsTowardUnread(Message message) {
     final hasBody = message.body?.trim().isNotEmpty == true;
     final hasAttachment = message.fileMetadataID?.trim().isNotEmpty == true;
-    return (hasBody || hasAttachment) && message.pseudoMessageType == null;
+    if (!(hasBody || hasAttachment) || message.pseudoMessageType != null) {
+      return false;
+    }
+    final chat = state.chat;
+    if (chat == null) {
+      return true;
+    }
+    final selfJid = chat.defaultTransport.isEmail
+        ? state.emailSelfJid
+        : _chatsService.myJid;
+    if (sameNormalizedAddressValue(message.senderJid, selfJid)) {
+      return false;
+    }
+    if (chat.type == ChatType.groupChat) {
+      final myOccupantId = state.roomState?.myOccupantId?.trim();
+      final messageOccupantId = message.occupantID?.trim();
+      if (myOccupantId != null &&
+          myOccupantId.isNotEmpty &&
+          messageOccupantId != null &&
+          messageOccupantId.isNotEmpty &&
+          messageOccupantId == myOccupantId) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<int?> _resolveEmailUnreadBoundaryDeltaId(Chat? chat) async {

@@ -16,32 +16,53 @@ extension ShorebirdUpdateStatusX on ShorebirdUpdateStatus {
   bool get requiresRestart => this == ShorebirdUpdateStatus.restartRequired;
 }
 
-Future<ShorebirdUpdateStatus> checkShorebirdStatus({
+final class ShorebirdCheckResult {
+  const ShorebirdCheckResult({required this.status, this.nextPatchNumber});
+
+  final ShorebirdUpdateStatus status;
+  final int? nextPatchNumber;
+}
+
+Future<ShorebirdCheckResult> checkShorebirdStatus({
   ShorebirdUpdater? shorebird,
   bool applyUpdate = true,
 }) async {
   if (!kEnableShorebird) {
-    return ShorebirdUpdateStatus.unavailable;
+    return const ShorebirdCheckResult(
+      status: ShorebirdUpdateStatus.unavailable,
+    );
   }
   final updater = shorebird ?? ShorebirdUpdater();
   if (!updater.isAvailable) {
-    return ShorebirdUpdateStatus.unavailable;
+    return const ShorebirdCheckResult(
+      status: ShorebirdUpdateStatus.unavailable,
+    );
   }
 
   try {
     final status = await updater.checkForUpdate();
     if (status == UpdateStatus.restartRequired) {
-      return ShorebirdUpdateStatus.restartRequired;
+      final nextPatch = await updater.readNextPatch();
+      return ShorebirdCheckResult(
+        status: ShorebirdUpdateStatus.restartRequired,
+        nextPatchNumber: nextPatch?.number,
+      );
     }
     if (status == UpdateStatus.outdated) {
       if (!applyUpdate) {
-        return ShorebirdUpdateStatus.upToDate;
+        return const ShorebirdCheckResult(
+          status: ShorebirdUpdateStatus.upToDate,
+        );
       }
       await updater.update();
-      return ShorebirdUpdateStatus.restartRequired;
+      final nextPatch = await updater.readNextPatch();
+      return ShorebirdCheckResult(
+        status: ShorebirdUpdateStatus.restartRequired,
+        nextPatchNumber: nextPatch?.number,
+      );
     }
-    return ShorebirdUpdateStatus.upToDate;
+    return const ShorebirdCheckResult(status: ShorebirdUpdateStatus.upToDate);
   } on Exception {
-    return ShorebirdUpdateStatus.failed;
+    return const ShorebirdCheckResult(status: ShorebirdUpdateStatus.failed);
   }
 }

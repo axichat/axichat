@@ -12,17 +12,20 @@ const String _pendingOutgoingEmpty = '';
 
 class PendingOutgoingEmailSignature {
   const PendingOutgoingEmailSignature({
+    required this.subjectSignature,
     required this.textSignature,
     required this.htmlSignature,
     required this.fileSignature,
   });
 
   factory PendingOutgoingEmailSignature.fromOutgoing({
+    String? subject,
     String? text,
     String? html,
     String? fileName,
     String? filePath,
   }) {
+    final String? normalizedSubject = _normalizeSubject(subject);
     final String? normalizedText = _normalizeText(text);
     final String? normalizedHtml = _normalizeHtml(html);
     final String? normalizedFile = _normalizeFileSignature(
@@ -30,6 +33,7 @@ class PendingOutgoingEmailSignature {
       filePath: filePath,
     );
     return PendingOutgoingEmailSignature(
+      subjectSignature: normalizedSubject,
       textSignature: normalizedText,
       htmlSignature: normalizedHtml,
       fileSignature: normalizedFile,
@@ -41,6 +45,7 @@ class PendingOutgoingEmailSignature {
     FileMetadataData? metadata,
   }) {
     return PendingOutgoingEmailSignature.fromOutgoing(
+      subject: message.subject,
       text: message.body,
       html: message.htmlBody,
       fileName: metadata?.filename,
@@ -48,14 +53,21 @@ class PendingOutgoingEmailSignature {
     );
   }
 
+  final String? subjectSignature;
   final String? textSignature;
   final String? htmlSignature;
   final String? fileSignature;
 
   bool get isEmpty =>
-      textSignature == null && htmlSignature == null && fileSignature == null;
+      subjectSignature == null &&
+      textSignature == null &&
+      htmlSignature == null &&
+      fileSignature == null;
 
   bool matches(PendingOutgoingEmailSignature match) {
+    if (!_signaturesMatch(subjectSignature, match.subjectSignature)) {
+      return false;
+    }
     if (fileSignature != null || match.fileSignature != null) {
       return fileSignature != null &&
           match.fileSignature != null &&
@@ -71,9 +83,26 @@ class PendingOutgoingEmailSignature {
         htmlSignature == match.htmlSignature) {
       return true;
     }
+    if (subjectSignature != null &&
+        match.subjectSignature != null &&
+        subjectSignature == match.subjectSignature) {
+      return true;
+    }
     return false;
   }
 }
+
+bool _signaturesMatch(String? first, String? second) {
+  if (first == null && second == null) {
+    return true;
+  }
+  if (first == null || second == null) {
+    return false;
+  }
+  return first == second;
+}
+
+String? _normalizeSubject(String? value) => _normalizeText(value);
 
 String? _normalizeText(String? value) {
   final normalized = value

@@ -52,6 +52,7 @@ void main() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(fallbackChat);
     registerFallbackValue(fallbackMessage);
+    registerFallbackValue(ChatType.chat);
   });
 
   late Client mockHttpClient;
@@ -657,6 +658,48 @@ void main() {
     );
 
     blocTest<AuthenticationCubit, AuthenticationState>(
+      'Stored ready email session still triggers reconnect catch-up on login.',
+      setUp: () {
+        when(() => mockXmppService.myJid).thenReturn(validJid);
+        when(
+          () => mockXmppService.connectionState,
+        ).thenReturn(ConnectionState.connected);
+        when(
+          () => mockEmailService.syncState,
+        ).thenReturn(const EmailSyncState.ready());
+        when(() => mockEmailService.hasActiveSession).thenReturn(true);
+        when(
+          () => mockEmailService.hasInMemoryReconnectContext,
+        ).thenReturn(true);
+        when(
+          () => mockEmailService.canReconnectConfiguredSession(
+            jid: any(named: 'jid'),
+          ),
+        ).thenAnswer((_) async => true);
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        homeRefreshSyncService: mockHomeRefreshSyncService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) =>
+          bloc.login(username: validUsername, password: validPassword),
+      wait: const Duration(milliseconds: 10),
+      expect: () => [
+        const AuthenticationLogInInProgress(),
+        const AuthenticationComplete(),
+      ],
+      verify: (_) {
+        verify(() => mockEmailService.handleNetworkAvailable()).called(2);
+        verify(() => mockHomeRefreshSyncService.syncOnLogin()).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
       'Stored login without database secrets blocks login and emits [AuthenticationFailure].',
       setUp: () {
         credentialStorage['jid'] = validJid;
@@ -1097,7 +1140,9 @@ void main() {
       when(
         () => mockDatabase.getMessageByStanzaID(any()),
       ).thenAnswer((_) async => null);
-      when(() => mockDatabase.saveMessage(any())).thenAnswer((_) async {});
+      when(
+        () => mockDatabase.saveMessage(any(), chatType: any(named: 'chatType')),
+      ).thenAnswer((_) async {});
       when(() => mockDatabase.updateMessage(any())).thenAnswer((_) async {});
       when(
         () => mockDatabase.getChat(welcomeChatJid),
@@ -1111,7 +1156,12 @@ void main() {
       );
 
       final savedMessage =
-          verify(() => mockDatabase.saveMessage(captureAny())).captured.single
+          verify(
+                () => mockDatabase.saveMessage(
+                  captureAny(),
+                  chatType: ChatType.note,
+                ),
+              ).captured.first
               as Message;
       expect(savedMessage.senderJid, equals(welcomeChatJid));
       expect(savedMessage.chatJid, equals(welcomeChatJid));
@@ -1120,6 +1170,7 @@ void main() {
       final updatedChat =
           verify(() => mockDatabase.updateChat(captureAny())).captured.single
               as Chat;
+      expect(updatedChat.type, equals(ChatType.note));
       expect(updatedChat.title, equals(welcomeTitle));
       expect(updatedChat.contactDisplayName, equals(welcomeTitle));
     });

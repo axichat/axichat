@@ -2985,7 +2985,7 @@ mixin MucService on XmppBase, BaseStreamService {
       pseudoMessageData: payload,
     );
     await _dbOp<XmppDatabase>(
-      (db) => db.saveMessage(message, chatType: ChatType.chat),
+      (db) => db.saveMessage(message, chatType: ChatType.chat, selfJid: myBare),
     );
     final inviteExtensions = <mox.StanzaHandlerExtension>[
       DirectMucInviteData(
@@ -3054,7 +3054,7 @@ mixin MucService on XmppBase, BaseStreamService {
       pseudoMessageData: payload,
     );
     await _dbOp<XmppDatabase>(
-      (db) => db.saveMessage(message, chatType: ChatType.chat),
+      (db) => db.saveMessage(message, chatType: ChatType.chat, selfJid: myBare),
     );
     final revokeExtensions = <mox.StanzaHandlerExtension>[
       AxiMucInvitePayload(

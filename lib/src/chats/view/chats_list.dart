@@ -921,7 +921,9 @@ class _ChatListTileState extends State<ChatListTile> {
     }
     final split = ChatSubjectCodec.splitXmppBody(trimmed);
     final subject = _collapsePreviewText(split.subject);
-    final body = _collapsePreviewText(split.body);
+    final body = _collapsePreviewText(
+      ChatSubjectCodec.previewBodyText(split.body),
+    );
     if (subject.isEmpty) {
       return body.isEmpty ? null : body;
     }
@@ -935,7 +937,10 @@ class _ChatListTileState extends State<ChatListTile> {
     if (value == null) {
       return '';
     }
-    return value.replaceAll(RegExp(r'\s+'), ' ').trim();
+    return value
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceFirst(RegExp(r'\s+[—–]$'), '')
+        .trim();
   }
 
   void _toggleActions() {

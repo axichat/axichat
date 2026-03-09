@@ -61,27 +61,39 @@ class _NotificationRequestBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final backgroundMessagingEnabled = context.select<SettingsCubit, bool>(
+      (cubit) => cubit.state.backgroundMessagingEnabled,
+    );
     return BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
       builder: (context, state) {
         final locate = context.read;
         if (state.hasPermissions == null ||
-            state.foregroundServiceActive ||
             !displayMode.shouldShowFor(capability)) {
           return const SizedBox.shrink();
         }
+        final bool requiresRestart =
+            backgroundMessagingEnabled != state.foregroundServiceActive;
+        final String? sublabel = switch ((
+          backgroundMessagingEnabled,
+          requiresRestart,
+          state.hasPermissions,
+        )) {
+          (_, true, _) => l10n.notificationsRequiresRestart,
+          (true, false, false) => l10n.notificationsRequiresRestart,
+          _ => null,
+        };
 
         return ShadSwitch(
           label: Text(l10n.notificationsMessageToggle),
-          sublabel: Text(
-            state.hasPermissions == true
-                ? l10n.notificationsRestartSubtitle
-                : l10n.notificationsRequiresRestart,
-          ),
-          value: state.foregroundServiceActive,
+          sublabel: sublabel == null ? null : Text(sublabel),
+          value: backgroundMessagingEnabled,
           onChanged: state.isBusy
               ? null
               : (enabled) async {
                   if (!enabled) {
+                    context.read<SettingsCubit>().toggleBackgroundMessaging(
+                      false,
+                    );
                     return;
                   }
                   if (state.hasPermissions == true) {

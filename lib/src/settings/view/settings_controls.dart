@@ -3,7 +3,6 @@
 
 import 'dart:io';
 
-import 'package:axichat/main.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -104,658 +103,635 @@ class SettingsControls extends StatelessWidget {
         final double dividerIndent = fullWidthDividers
             ? 0.0
             : sectionHeaderPadding.horizontal;
-        return ValueListenableBuilder<bool>(
-          valueListenable: foregroundServiceActive,
-          builder: (context, foregroundActive, child) {
-            final showImportantSection =
-                canForegroundService && !foregroundActive;
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _DonationRequestBanner(settingsState: state),
-                if (showImportantSection)
-                  anchors?.importantKey == null
-                      ? _SettingsSectionHeader(
-                          label: context.l10n.settingsSectionImportant,
-                          showDivider: showDivider,
-                          dividerIndent: dividerIndent,
-                          padding: sectionHeaderPadding,
-                        )
-                      : KeyedSubtree(
-                          key: anchors?.importantKey,
-                          child: _SettingsSectionHeader(
-                            label: context.l10n.settingsSectionImportant,
-                            showDivider: showDivider,
-                            dividerIndent: dividerIndent,
-                            padding: sectionHeaderPadding,
-                          ),
-                        ),
-                if (showImportantSection)
-                  Padding(
-                    padding: switchPadding,
-                    child: const NotificationRequest(),
-                  ),
-                anchors?.accountKey == null
-                    ? _SettingsSectionHeader(
-                        label: context.l10n.settingsSectionAccount,
+        final showImportantSection = canForegroundService;
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _DonationRequestBanner(settingsState: state),
+            if (showImportantSection)
+              anchors?.importantKey == null
+                  ? _SettingsSectionHeader(
+                      label: context.l10n.settingsSectionImportant,
+                      showDivider: showDivider,
+                      dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
+                    )
+                  : KeyedSubtree(
+                      key: anchors?.importantKey,
+                      child: _SettingsSectionHeader(
+                        label: context.l10n.settingsSectionImportant,
                         showDivider: showDivider,
                         dividerIndent: dividerIndent,
                         padding: sectionHeaderPadding,
-                      )
-                    : KeyedSubtree(
-                        key: anchors?.accountKey,
-                        child: _SettingsSectionHeader(
-                          label: context.l10n.settingsSectionAccount,
-                          showDivider: showDivider,
-                          dividerIndent: dividerIndent,
-                          padding: sectionHeaderPadding,
-                        ),
                       ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.user,
-                  label: context.l10n.profileEditAvatar,
-                  onPressed: () => context.push(
-                    const AvatarEditorRoute().location,
-                    extra: locate,
+                    ),
+            if (showImportantSection)
+              Padding(
+                padding: switchPadding,
+                child: const NotificationRequest(),
+              ),
+            anchors?.accountKey == null
+                ? _SettingsSectionHeader(
+                    label: context.l10n.settingsSectionAccount,
+                    showDivider: showDivider,
+                    dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
+                  )
+                : KeyedSubtree(
+                    key: anchors?.accountKey,
+                    child: _SettingsSectionHeader(
+                      label: context.l10n.settingsSectionAccount,
+                      showDivider: showDivider,
+                      dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
+                    ),
                   ),
-                ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.mail,
-                  label: context.l10n.emailForwardingGuideTitle,
-                  onPressed: emailEnabled
-                      ? () async =>
-                            await showEmailForwardingGuideDialog(context)
-                      : null,
-                ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.image,
-                  label: context.l10n.draftAttachmentsLabel,
-                  onPressed: () => context.push(
-                    const AttachmentGalleryRoute().location,
-                    extra: locate,
+            _SettingsActionButton(
+              iconData: LucideIcons.user,
+              label: context.l10n.profileEditAvatar,
+              onPressed: () => context.push(
+                const AvatarEditorRoute().location,
+                extra: locate,
+              ),
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.mail,
+              label: context.l10n.emailForwardingGuideTitle,
+              onPressed: emailEnabled
+                  ? () async => await showEmailForwardingGuideDialog(context)
+                  : null,
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.image,
+              label: context.l10n.draftAttachmentsLabel,
+              onPressed: () => context.push(
+                const AttachmentGalleryRoute().location,
+                extra: locate,
+              ),
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.keyRound,
+              label: context.l10n.profileChangePassword,
+              onPressed: onChangePassword,
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.trash2,
+              label: context.l10n.profileDeleteAccount,
+              destructive: true,
+              onPressed: onDeleteAccount,
+            ),
+            anchors?.dataKey == null
+                ? _SettingsSectionHeader(
+                    label: context.l10n.settingsSectionData,
+                    dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
+                  )
+                : KeyedSubtree(
+                    key: anchors?.dataKey,
+                    child: _SettingsSectionHeader(
+                      label: context.l10n.settingsSectionData,
+                      dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
+                    ),
                   ),
-                ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.keyRound,
-                  label: context.l10n.profileChangePassword,
-                  onPressed: onChangePassword,
-                ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.trash2,
-                  label: context.l10n.profileDeleteAccount,
-                  destructive: true,
-                  onPressed: onDeleteAccount,
-                ),
-                anchors?.dataKey == null
-                    ? _SettingsSectionHeader(
-                        label: context.l10n.settingsSectionData,
-                        dividerIndent: dividerIndent,
-                        padding: sectionHeaderPadding,
-                      )
-                    : KeyedSubtree(
-                        key: anchors?.dataKey,
-                        child: _SettingsSectionHeader(
-                          label: context.l10n.settingsSectionData,
-                          dividerIndent: dividerIndent,
-                          padding: sectionHeaderPadding,
-                        ),
-                      ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.archive,
-                  label: context.l10n.profileArchives,
-                  onPressed: () => context.push(
-                    const ArchivesRoute().location,
-                    extra: locate,
+            _SettingsActionButton(
+              iconData: LucideIcons.archive,
+              label: context.l10n.profileArchives,
+              onPressed: () =>
+                  context.push(const ArchivesRoute().location, extra: locate),
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.userRoundPlus,
+              label: context.l10n.emailContactsImportTitle,
+              onPressed: emailEnabled
+                  ? () async => await _showEmailContactImportDialog(context)
+                  : null,
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.messagesSquare,
+              label: context.l10n.profileExportActionLabel(
+                ProfileExportKind.xmppMessages.label(context.l10n),
+              ),
+              onPressed: exportBusy
+                  ? null
+                  : () async => await _handleXmppMessageExport(context),
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.users,
+              label: context.l10n.profileExportActionLabel(
+                ProfileExportKind.xmppContacts.label(context.l10n),
+              ),
+              onPressed: exportBusy
+                  ? null
+                  : () async => await _handleXmppContactsExport(context),
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.mail,
+              label: context.l10n.profileExportActionLabel(
+                ProfileExportKind.emailMessages.label(context.l10n),
+              ),
+              onPressed: exportBusy || !emailEnabled
+                  ? null
+                  : () async => await _handleEmailMessageExport(context),
+            ),
+            _SettingsActionButton(
+              iconData: LucideIcons.userRound,
+              label: context.l10n.profileExportActionLabel(
+                ProfileExportKind.emailContacts.label(context.l10n),
+              ),
+              onPressed: exportBusy || !emailEnabled
+                  ? null
+                  : () async => await _handleEmailContactsExport(context),
+            ),
+            anchors?.appearanceKey == null
+                ? _SettingsSectionHeader(
+                    label: context.l10n.settingsSectionAppearance,
+                    dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
+                  )
+                : KeyedSubtree(
+                    key: anchors?.appearanceKey,
+                    child: _SettingsSectionHeader(
+                      label: context.l10n.settingsSectionAppearance,
+                      dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
+                    ),
                   ),
-                ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.userRoundPlus,
-                  label: context.l10n.emailContactsImportTitle,
-                  onPressed: emailEnabled
-                      ? () async => await _showEmailContactImportDialog(context)
-                      : null,
-                ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.messagesSquare,
-                  label: context.l10n.profileExportActionLabel(
-                    ProfileExportKind.xmppMessages.label(context.l10n),
+            ListItemPadding(
+              child: AxiListTile(
+                title: context.l10n.settingsMessageTextSize,
+                actions: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+                    child: AxiSelect<MessageTextSize>(
+                      initialValue: state.messageTextSize,
+                      onChanged: (messageTextSize) {
+                        if (messageTextSize == null) {
+                          return;
+                        }
+                        context.read<SettingsCubit>().updateMessageTextSize(
+                          messageTextSize,
+                        );
+                      },
+                      options: MessageTextSize.values
+                          .map(
+                            (messageTextSize) => ShadOption<MessageTextSize>(
+                              value: messageTextSize,
+                              child: _MessageTextSizeOptionLabel(
+                                value: messageTextSize,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      selectedOptionBuilder:
+                          (BuildContext context, MessageTextSize value) =>
+                              _MessageTextSizeOptionLabel(value: value),
+                    ),
                   ),
-                  onPressed: exportBusy
-                      ? null
-                      : () async => await _handleXmppMessageExport(context),
-                ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.users,
-                  label: context.l10n.profileExportActionLabel(
-                    ProfileExportKind.xmppContacts.label(context.l10n),
-                  ),
-                  onPressed: exportBusy
-                      ? null
-                      : () async => await _handleXmppContactsExport(context),
-                ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.mail,
-                  label: context.l10n.profileExportActionLabel(
-                    ProfileExportKind.emailMessages.label(context.l10n),
-                  ),
-                  onPressed: exportBusy || !emailEnabled
-                      ? null
-                      : () async => await _handleEmailMessageExport(context),
-                ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.userRound,
-                  label: context.l10n.profileExportActionLabel(
-                    ProfileExportKind.emailContacts.label(context.l10n),
-                  ),
-                  onPressed: exportBusy || !emailEnabled
-                      ? null
-                      : () async => await _handleEmailContactsExport(context),
-                ),
-                anchors?.appearanceKey == null
-                    ? _SettingsSectionHeader(
-                        label: context.l10n.settingsSectionAppearance,
-                        dividerIndent: dividerIndent,
-                        padding: sectionHeaderPadding,
-                      )
-                    : KeyedSubtree(
-                        key: anchors?.appearanceKey,
-                        child: _SettingsSectionHeader(
-                          label: context.l10n.settingsSectionAppearance,
-                          dividerIndent: dividerIndent,
-                          padding: sectionHeaderPadding,
-                        ),
-                      ),
-                ListItemPadding(
-                  child: AxiListTile(
-                    title: context.l10n.settingsMessageTextSize,
-                    actions: [
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: sizing.menuMaxWidth,
-                        ),
-                        child: AxiSelect<MessageTextSize>(
-                          initialValue: state.messageTextSize,
-                          onChanged: (messageTextSize) {
-                            if (messageTextSize == null) {
-                              return;
-                            }
-                            context.read<SettingsCubit>().updateMessageTextSize(
-                              messageTextSize,
-                            );
-                          },
-                          options: MessageTextSize.values
-                              .map(
-                                (messageTextSize) =>
-                                    ShadOption<MessageTextSize>(
-                                      value: messageTextSize,
-                                      child: _MessageTextSizeOptionLabel(
-                                        value: messageTextSize,
-                                      ),
-                                    ),
-                              )
-                              .toList(),
-                          selectedOptionBuilder:
-                              (BuildContext context, MessageTextSize value) =>
-                                  _MessageTextSizeOptionLabel(value: value),
-                        ),
-                      ),
-                    ],
-                    minTileHeight: sizing.listButtonHeight,
-                    contentPadding: compactTilePadding,
-                  ),
-                ),
-                ListItemPadding(
-                  child: AxiListTile(
-                    title: context.l10n.settingsLanguage,
-                    actions: const [LanguageSelector()],
-                    minTileHeight: sizing.listButtonHeight,
-                    contentPadding: compactTilePadding,
-                  ),
-                ),
-                ListItemPadding(
-                  child: AxiListTile(
-                    title: context.l10n.settingsThemeMode,
-                    actions: [
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: sizing.menuMaxWidth,
-                        ),
-                        child: AxiSelect<ThemeMode>(
-                          initialValue: state.themeMode,
-                          onChanged: (themeMode) => context
-                              .read<SettingsCubit>()
-                              .updateThemeMode(themeMode),
-                          options: ThemeMode.values
-                              .map(
-                                (themeMode) => ShadOption<ThemeMode>(
-                                  value: themeMode,
-                                  child: Text(
-                                    themeMode.label(context.l10n),
-                                    style: context.textTheme.small,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          selectedOptionBuilder: (BuildContext context, mode) =>
-                              Text(
-                                mode.label(context.l10n),
+                ],
+                minTileHeight: sizing.listButtonHeight,
+                contentPadding: compactTilePadding,
+              ),
+            ),
+            ListItemPadding(
+              child: AxiListTile(
+                title: context.l10n.settingsLanguage,
+                actions: const [LanguageSelector()],
+                minTileHeight: sizing.listButtonHeight,
+                contentPadding: compactTilePadding,
+              ),
+            ),
+            ListItemPadding(
+              child: AxiListTile(
+                title: context.l10n.settingsThemeMode,
+                actions: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+                    child: AxiSelect<ThemeMode>(
+                      initialValue: state.themeMode,
+                      onChanged: (themeMode) => context
+                          .read<SettingsCubit>()
+                          .updateThemeMode(themeMode),
+                      options: ThemeMode.values
+                          .map(
+                            (themeMode) => ShadOption<ThemeMode>(
+                              value: themeMode,
+                              child: Text(
+                                themeMode.label(context.l10n),
                                 style: context.textTheme.small,
                               ),
-                        ),
-                      ),
-                    ],
-                    minTileHeight: sizing.listButtonHeight,
-                    contentPadding: compactTilePadding,
+                            ),
+                          )
+                          .toList(),
+                      selectedOptionBuilder: (BuildContext context, mode) =>
+                          Text(
+                            mode.label(context.l10n),
+                            style: context.textTheme.small,
+                          ),
+                    ),
                   ),
-                ),
-                ListItemPadding(
-                  child: AxiListTile(
-                    title: context.l10n.settingsColorScheme,
-                    actions: [
-                      ConstrainedBox(
-                        constraints: BoxConstraints(
-                          maxWidth: sizing.menuMaxWidth,
-                        ),
-                        child: AxiSelect<ShadColor>(
-                          initialValue: state.shadColor,
-                          onChanged: (colorScheme) => context
-                              .read<SettingsCubit>()
-                              .updateColorScheme(colorScheme),
-                          options: ShadColor.values
-                              .map(
-                                (colorScheme) => ShadOption<ShadColor>(
-                                  value: colorScheme,
-                                  child: Text(
-                                    colorScheme.name,
-                                    style: context.textTheme.small,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          selectedOptionBuilder:
-                              (BuildContext context, ShadColor value) => Text(
-                                value.name,
+                ],
+                minTileHeight: sizing.listButtonHeight,
+                contentPadding: compactTilePadding,
+              ),
+            ),
+            ListItemPadding(
+              child: AxiListTile(
+                title: context.l10n.settingsColorScheme,
+                actions: [
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: sizing.menuMaxWidth),
+                    child: AxiSelect<ShadColor>(
+                      initialValue: state.shadColor,
+                      onChanged: (colorScheme) => context
+                          .read<SettingsCubit>()
+                          .updateColorScheme(colorScheme),
+                      options: ShadColor.values
+                          .map(
+                            (colorScheme) => ShadOption<ShadColor>(
+                              value: colorScheme,
+                              child: Text(
+                                colorScheme.name,
                                 style: context.textTheme.small,
                               ),
-                        ),
-                      ),
-                    ],
-                    minTileHeight: sizing.listButtonHeight,
-                    contentPadding: compactTilePadding,
-                  ),
-                ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsColorfulAvatars),
-                    sublabel: Text(
-                      context.l10n.settingsColorfulAvatarsDescription,
+                            ),
+                          )
+                          .toList(),
+                      selectedOptionBuilder:
+                          (BuildContext context, ShadColor value) =>
+                              Text(value.name, style: context.textTheme.small),
                     ),
-                    value: state.colorfulAvatars,
-                    onChanged: (colorfulAvatars) => context
-                        .read<SettingsCubit>()
-                        .toggleColorfulAvatars(colorfulAvatars),
                   ),
-                ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsLowMotion),
-                    sublabel: Text(context.l10n.settingsLowMotionDescription),
-                    value: state.lowMotion,
-                    onChanged: (lowMotion) => context
-                        .read<SettingsCubit>()
-                        .toggleLowMotion(lowMotion),
-                  ),
-                ),
-                anchors?.securityKey == null
-                    ? _SettingsSectionHeader(
-                        label: context.l10n.settingsSectionSecurity,
-                        dividerIndent: dividerIndent,
-                        padding: sectionHeaderPadding,
-                      )
-                    : KeyedSubtree(
-                        key: anchors?.securityKey,
-                        child: _SettingsSectionHeader(
-                          label: context.l10n.settingsSectionSecurity,
-                          dividerIndent: dividerIndent,
-                          padding: sectionHeaderPadding,
-                        ),
-                      ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsNotificationPreviews),
-                    sublabel: Text(
-                      context.l10n.settingsNotificationPreviewsDescription,
+                ],
+                minTileHeight: sizing.listButtonHeight,
+                contentPadding: compactTilePadding,
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsColorfulAvatars),
+                sublabel: Text(context.l10n.settingsColorfulAvatarsDescription),
+                value: state.colorfulAvatars,
+                onChanged: (colorfulAvatars) => context
+                    .read<SettingsCubit>()
+                    .toggleColorfulAvatars(colorfulAvatars),
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsLowMotion),
+                sublabel: Text(context.l10n.settingsLowMotionDescription),
+                value: state.lowMotion,
+                onChanged: (lowMotion) =>
+                    context.read<SettingsCubit>().toggleLowMotion(lowMotion),
+              ),
+            ),
+            anchors?.securityKey == null
+                ? _SettingsSectionHeader(
+                    label: context.l10n.settingsSectionSecurity,
+                    dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
+                  )
+                : KeyedSubtree(
+                    key: anchors?.securityKey,
+                    child: _SettingsSectionHeader(
+                      label: context.l10n.settingsSectionSecurity,
+                      dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
-                    value: state.notificationPreviewsEnabled,
-                    onChanged: (enabled) => context
-                        .read<SettingsCubit>()
-                        .toggleNotificationPreviews(enabled),
                   ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsNotificationPreviews),
+                sublabel: Text(
+                  context.l10n.settingsNotificationPreviewsDescription,
                 ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsAutoLoadEmailImages),
-                    sublabel: Text(
-                      context.l10n.settingsAutoLoadEmailImagesDescription,
+                value: state.notificationPreviewsEnabled,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleNotificationPreviews(enabled),
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsAutoLoadEmailImages),
+                sublabel: Text(
+                  context.l10n.settingsAutoLoadEmailImagesDescription,
+                ),
+                value: state.autoLoadEmailImages,
+                onChanged: emailEnabled
+                    ? (enabled) => context
+                          .read<SettingsCubit>()
+                          .toggleAutoLoadEmailImages(enabled)
+                    : null,
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsAutoDownloadImages),
+                sublabel: Text(
+                  context.l10n.settingsAutoDownloadImagesDescription,
+                ),
+                value: state.autoDownloadImages,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: enabled,
+                      videosEnabled: state.autoDownloadVideos,
+                      documentsEnabled: state.autoDownloadDocuments,
+                      archivesEnabled: state.autoDownloadArchives,
                     ),
-                    value: state.autoLoadEmailImages,
-                    onChanged: emailEnabled
-                        ? (enabled) => context
-                              .read<SettingsCubit>()
-                              .toggleAutoLoadEmailImages(enabled)
-                        : null,
-                  ),
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsAutoDownloadVideos),
+                sublabel: Text(
+                  context.l10n.settingsAutoDownloadVideosDescription,
                 ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsAutoDownloadImages),
-                    sublabel: Text(
-                      context.l10n.settingsAutoDownloadImagesDescription,
+                value: state.autoDownloadVideos,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: state.autoDownloadImages,
+                      videosEnabled: enabled,
+                      documentsEnabled: state.autoDownloadDocuments,
+                      archivesEnabled: state.autoDownloadArchives,
                     ),
-                    value: state.autoDownloadImages,
-                    onChanged: (enabled) => context
-                        .read<SettingsCubit>()
-                        .setAttachmentAutoDownloadSettings(
-                          imagesEnabled: enabled,
-                          videosEnabled: state.autoDownloadVideos,
-                          documentsEnabled: state.autoDownloadDocuments,
-                          archivesEnabled: state.autoDownloadArchives,
-                        ),
-                  ),
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsAutoDownloadDocuments),
+                sublabel: Text(
+                  context.l10n.settingsAutoDownloadDocumentsDescription,
                 ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsAutoDownloadVideos),
-                    sublabel: Text(
-                      context.l10n.settingsAutoDownloadVideosDescription,
+                value: state.autoDownloadDocuments,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: state.autoDownloadImages,
+                      videosEnabled: state.autoDownloadVideos,
+                      documentsEnabled: enabled,
+                      archivesEnabled: state.autoDownloadArchives,
                     ),
-                    value: state.autoDownloadVideos,
-                    onChanged: (enabled) => context
-                        .read<SettingsCubit>()
-                        .setAttachmentAutoDownloadSettings(
-                          imagesEnabled: state.autoDownloadImages,
-                          videosEnabled: enabled,
-                          documentsEnabled: state.autoDownloadDocuments,
-                          archivesEnabled: state.autoDownloadArchives,
-                        ),
-                  ),
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsAutoDownloadArchives),
+                sublabel: Text(
+                  context.l10n.settingsAutoDownloadArchivesDescription,
                 ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsAutoDownloadDocuments),
-                    sublabel: Text(
-                      context.l10n.settingsAutoDownloadDocumentsDescription,
+                value: state.autoDownloadArchives,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .setAttachmentAutoDownloadSettings(
+                      imagesEnabled: state.autoDownloadImages,
+                      videosEnabled: state.autoDownloadVideos,
+                      documentsEnabled: state.autoDownloadDocuments,
+                      archivesEnabled: enabled,
                     ),
-                    value: state.autoDownloadDocuments,
-                    onChanged: (enabled) => context
-                        .read<SettingsCubit>()
-                        .setAttachmentAutoDownloadSettings(
-                          imagesEnabled: state.autoDownloadImages,
-                          videosEnabled: state.autoDownloadVideos,
-                          documentsEnabled: enabled,
-                          archivesEnabled: state.autoDownloadArchives,
-                        ),
-                  ),
-                ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsAutoDownloadArchives),
-                    sublabel: Text(
-                      context.l10n.settingsAutoDownloadArchivesDescription,
+              ),
+            ),
+            anchors?.chatPreferencesKey == null
+                ? _SettingsSectionHeader(
+                    label: context.l10n.settingsSectionChats,
+                    dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
+                  )
+                : KeyedSubtree(
+                    key: anchors?.chatPreferencesKey,
+                    child: _SettingsSectionHeader(
+                      label: context.l10n.settingsSectionChats,
+                      dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
-                    value: state.autoDownloadArchives,
-                    onChanged: (enabled) => context
-                        .read<SettingsCubit>()
-                        .setAttachmentAutoDownloadSettings(
-                          imagesEnabled: state.autoDownloadImages,
-                          videosEnabled: state.autoDownloadVideos,
-                          documentsEnabled: state.autoDownloadDocuments,
-                          archivesEnabled: enabled,
-                        ),
                   ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsMuteNotifications),
+                sublabel: Text(
+                  context.l10n.settingsMuteNotificationsDescription,
                 ),
-                anchors?.chatPreferencesKey == null
-                    ? _SettingsSectionHeader(
-                        label: context.l10n.settingsSectionChats,
-                        dividerIndent: dividerIndent,
-                        padding: sectionHeaderPadding,
-                      )
-                    : KeyedSubtree(
-                        key: anchors?.chatPreferencesKey,
-                        child: _SettingsSectionHeader(
-                          label: context.l10n.settingsSectionChats,
-                          dividerIndent: dividerIndent,
-                          padding: sectionHeaderPadding,
-                        ),
-                      ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsMuteNotifications),
-                    sublabel: Text(
-                      context.l10n.settingsMuteNotificationsDescription,
+                value: state.chatNotificationsMuted,
+                onChanged: (muted) => context
+                    .read<SettingsCubit>()
+                    .toggleChatNotificationsMuted(muted),
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsChatReadReceipts),
+                value: state.chatReadReceipts,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleChatReadReceipts(enabled),
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsTypingIndicators),
+                sublabel: Text(
+                  context.l10n.settingsTypingIndicatorsDescription,
+                ),
+                value: state.indicateTyping,
+                onChanged: (indicateTyping) => context
+                    .read<SettingsCubit>()
+                    .toggleIndicateTyping(indicateTyping),
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsChatSendOnEnter),
+                sublabel: Text(context.l10n.settingsChatSendOnEnterDescription),
+                value: state.chatSendOnEnter,
+                onChanged: (enabled) => context
+                    .read<SettingsCubit>()
+                    .toggleChatSendOnEnter(enabled),
+              ),
+            ),
+            anchors?.emailPreferencesKey == null
+                ? _SettingsSectionHeader(
+                    label: context.l10n.settingsSectionEmail,
+                    dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
+                  )
+                : KeyedSubtree(
+                    key: anchors?.emailPreferencesKey,
+                    child: _SettingsSectionHeader(
+                      label: context.l10n.settingsSectionEmail,
+                      dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
-                    value: state.chatNotificationsMuted,
-                    onChanged: (muted) => context
-                        .read<SettingsCubit>()
-                        .toggleChatNotificationsMuted(muted),
                   ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsMuteNotifications),
+                sublabel: Text(
+                  context.l10n.settingsMuteNotificationsDescription,
                 ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsChatReadReceipts),
-                    value: state.chatReadReceipts,
-                    onChanged: (enabled) => context
-                        .read<SettingsCubit>()
-                        .toggleChatReadReceipts(enabled),
-                  ),
+                value: state.emailNotificationsMuted,
+                onChanged: emailEnabled
+                    ? (muted) => context
+                          .read<SettingsCubit>()
+                          .toggleEmailNotificationsMuted(muted)
+                    : null,
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsEmailReadReceipts),
+                value: state.emailReadReceipts,
+                onChanged: emailEnabled
+                    ? (enabled) => context
+                          .read<SettingsCubit>()
+                          .toggleEmailReadReceipts(enabled)
+                    : null,
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsShareTokenFooter),
+                sublabel: Text(
+                  context.l10n.settingsShareTokenFooterDescription,
                 ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsTypingIndicators),
-                    sublabel: Text(
-                      context.l10n.settingsTypingIndicatorsDescription,
+                value: state.shareTokenSignatureEnabled,
+                onChanged: emailEnabled
+                    ? (enabled) => context
+                          .read<SettingsCubit>()
+                          .toggleShareTokenSignature(enabled)
+                    : null,
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsEmailComposerWatermark),
+                sublabel: Text(
+                  context.l10n.settingsEmailComposerWatermarkDescription,
+                ),
+                value: state.emailComposerWatermarkEnabled,
+                onChanged: emailEnabled
+                    ? (enabled) => context
+                          .read<SettingsCubit>()
+                          .toggleEmailComposerWatermark(enabled)
+                    : null,
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsEmailSendOnEnter),
+                sublabel: Text(
+                  context.l10n.settingsEmailSendOnEnterDescription,
+                ),
+                value: state.emailSendOnEnter,
+                onChanged: emailEnabled
+                    ? (enabled) => context
+                          .read<SettingsCubit>()
+                          .toggleEmailSendOnEnter(enabled)
+                    : null,
+              ),
+            ),
+            Padding(
+              padding: switchPadding,
+              child: ShadSwitch(
+                label: Text(context.l10n.settingsEmailSendConfirmation),
+                sublabel: Text(
+                  context.l10n.settingsEmailSendConfirmationDescription,
+                ),
+                value: state.emailSendConfirmationEnabled,
+                onChanged: emailEnabled
+                    ? (enabled) => context
+                          .read<SettingsCubit>()
+                          .toggleEmailSendConfirmation(enabled)
+                    : null,
+              ),
+            ),
+            anchors?.aboutKey == null
+                ? _SettingsSectionHeader(
+                    label: context.l10n.settingsSectionAbout,
+                    dividerIndent: dividerIndent,
+                    padding: sectionHeaderPadding,
+                  )
+                : KeyedSubtree(
+                    key: anchors?.aboutKey,
+                    child: _SettingsSectionHeader(
+                      label: context.l10n.settingsSectionAbout,
+                      dividerIndent: dividerIndent,
+                      padding: sectionHeaderPadding,
                     ),
-                    value: state.indicateTyping,
-                    onChanged: (indicateTyping) => context
-                        .read<SettingsCubit>()
-                        .toggleIndicateTyping(indicateTyping),
                   ),
-                ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsChatSendOnEnter),
-                    sublabel: Text(
-                      context.l10n.settingsChatSendOnEnterDescription,
-                    ),
-                    value: state.chatSendOnEnter,
-                    onChanged: (enabled) => context
-                        .read<SettingsCubit>()
-                        .toggleChatSendOnEnter(enabled),
-                  ),
-                ),
-                anchors?.emailPreferencesKey == null
-                    ? _SettingsSectionHeader(
-                        label: context.l10n.settingsSectionEmail,
-                        dividerIndent: dividerIndent,
-                        padding: sectionHeaderPadding,
-                      )
-                    : KeyedSubtree(
-                        key: anchors?.emailPreferencesKey,
-                        child: _SettingsSectionHeader(
-                          label: context.l10n.settingsSectionEmail,
-                          dividerIndent: dividerIndent,
-                          padding: sectionHeaderPadding,
-                        ),
-                      ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsMuteNotifications),
-                    sublabel: Text(
-                      context.l10n.settingsMuteNotificationsDescription,
-                    ),
-                    value: state.emailNotificationsMuted,
-                    onChanged: emailEnabled
-                        ? (muted) => context
-                              .read<SettingsCubit>()
-                              .toggleEmailNotificationsMuted(muted)
-                        : null,
-                  ),
-                ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsEmailReadReceipts),
-                    value: state.emailReadReceipts,
-                    onChanged: emailEnabled
-                        ? (enabled) => context
-                              .read<SettingsCubit>()
-                              .toggleEmailReadReceipts(enabled)
-                        : null,
-                  ),
-                ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsShareTokenFooter),
-                    sublabel: Text(
-                      context.l10n.settingsShareTokenFooterDescription,
-                    ),
-                    value: state.shareTokenSignatureEnabled,
-                    onChanged: emailEnabled
-                        ? (enabled) => context
-                              .read<SettingsCubit>()
-                              .toggleShareTokenSignature(enabled)
-                        : null,
-                  ),
-                ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsEmailComposerWatermark),
-                    sublabel: Text(
-                      context.l10n.settingsEmailComposerWatermarkDescription,
-                    ),
-                    value: state.emailComposerWatermarkEnabled,
-                    onChanged: emailEnabled
-                        ? (enabled) => context
-                              .read<SettingsCubit>()
-                              .toggleEmailComposerWatermark(enabled)
-                        : null,
-                  ),
-                ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsEmailSendOnEnter),
-                    sublabel: Text(
-                      context.l10n.settingsEmailSendOnEnterDescription,
-                    ),
-                    value: state.emailSendOnEnter,
-                    onChanged: emailEnabled
-                        ? (enabled) => context
-                              .read<SettingsCubit>()
-                              .toggleEmailSendOnEnter(enabled)
-                        : null,
-                  ),
-                ),
-                Padding(
-                  padding: switchPadding,
-                  child: ShadSwitch(
-                    label: Text(context.l10n.settingsEmailSendConfirmation),
-                    sublabel: Text(
-                      context.l10n.settingsEmailSendConfirmationDescription,
-                    ),
-                    value: state.emailSendConfirmationEnabled,
-                    onChanged: emailEnabled
-                        ? (enabled) => context
-                              .read<SettingsCubit>()
-                              .toggleEmailSendConfirmation(enabled)
-                        : null,
-                  ),
-                ),
-                anchors?.aboutKey == null
-                    ? _SettingsSectionHeader(
-                        label: context.l10n.settingsSectionAbout,
-                        dividerIndent: dividerIndent,
-                        padding: sectionHeaderPadding,
-                      )
-                    : KeyedSubtree(
-                        key: anchors?.aboutKey,
-                        child: _SettingsSectionHeader(
-                          label: context.l10n.settingsSectionAbout,
-                          dividerIndent: dividerIndent,
-                          padding: sectionHeaderPadding,
-                        ),
-                      ),
-                _SettingsActionButton(
-                  iconData: LucideIcons.info,
-                  label: context.l10n.settingsAboutAxichat,
-                  onPressed: () => showAboutDialog(
-                    context: context,
-                    applicationName: appDisplayName,
-                    applicationVersion: applicationVersion,
-                    applicationLegalese: context.l10n.settingsAboutLegalese,
-                  ),
-                ),
-                _SettingsLinkButton(
-                  label: context.l10n.settingsWebsiteLabel,
-                  link: websiteUrl,
-                  iconData: LucideIcons.link,
-                ),
-                _SettingsLinkButton(
-                  label: context.l10n.settingsTermsLabel,
-                  link: termsUrl,
-                  iconData: LucideIcons.link,
-                ),
-                _SettingsLinkButton(
-                  label: context.l10n.settingsPrivacyLabel,
-                  link: privacyUrl,
-                  iconData: LucideIcons.link,
-                ),
-                _SettingsLinkButton(
-                  label: context.l10n.settingsLicenseAgpl,
-                  link: licenseUrl,
-                  iconData: LucideIcons.link,
-                ),
-                _SettingsLinkButton(
-                  label: context.l10n.settingsGitlabLabel,
-                  link: gitlabUrl,
-                  iconData: FontAwesomeIcons.gitlab,
-                ),
-                _SettingsLinkButton(
-                  label: context.l10n.settingsGithubLabel,
-                  link: githubUrl,
-                  iconData: FontAwesomeIcons.github,
-                ),
-                _SettingsLinkButton(
-                  label: context.l10n.settingsMastodonLabel,
-                  link: mastodonUrl,
-                  iconData: FontAwesomeIcons.mastodon,
-                ),
-                _SettingsLinkButton(
-                  label: context.l10n.settingsDonateLabel,
-                  link: donateUrl,
-                  iconData: FontAwesomeIcons.heart,
-                ),
-                SizedBox(height: spacing.xxl),
-              ],
-            );
-          },
+            _SettingsActionButton(
+              iconData: LucideIcons.info,
+              label: context.l10n.settingsAboutAxichat,
+              onPressed: () => showAboutDialog(
+                context: context,
+                applicationName: appDisplayName,
+                applicationVersion: applicationVersion,
+                applicationLegalese: context.l10n.settingsAboutLegalese,
+              ),
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsWebsiteLabel,
+              link: websiteUrl,
+              iconData: LucideIcons.link,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsTermsLabel,
+              link: termsUrl,
+              iconData: LucideIcons.link,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsPrivacyLabel,
+              link: privacyUrl,
+              iconData: LucideIcons.link,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsLicenseAgpl,
+              link: licenseUrl,
+              iconData: LucideIcons.link,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsGitlabLabel,
+              link: gitlabUrl,
+              iconData: FontAwesomeIcons.gitlab,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsGithubLabel,
+              link: githubUrl,
+              iconData: FontAwesomeIcons.github,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsMastodonLabel,
+              link: mastodonUrl,
+              iconData: FontAwesomeIcons.mastodon,
+            ),
+            _SettingsLinkButton(
+              label: context.l10n.settingsDonateLabel,
+              link: donateUrl,
+              iconData: FontAwesomeIcons.heart,
+            ),
+            SizedBox(height: spacing.xxl),
+          ],
         );
       },
     );

@@ -1081,7 +1081,7 @@ mixin MessageService
       _internalEnvelopeChats.add(message.chatJid);
     }
     await _dbOp<XmppDatabase>((db) async {
-      await db.saveMessage(message, chatType: chatType);
+      await db.saveMessage(message, chatType: chatType, selfJid: myJid);
     });
   }
 
