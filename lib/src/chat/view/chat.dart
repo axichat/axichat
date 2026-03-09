@@ -4899,7 +4899,8 @@ class _ChatState extends State<Chat> {
                                       constraints.maxHeight -
                                           _bottomSectionHeight,
                                     );
-                                    final pinnedStanzaIds = state.pinnedMessages
+                                    final pinnedMessageIds = state
+                                        .pinnedMessages
                                         .map((item) => item.messageStanzaId)
                                         .toSet();
                                     final attachmentsByMessageId =
@@ -4928,6 +4929,18 @@ class _ChatState extends State<Chat> {
                                       final key = messageKey(message);
                                       return attachmentsByMessageId[key] ??
                                           emptyAttachments;
+                                    }
+
+                                    bool isPinnedMessage(Message message) {
+                                      final stanzaId = message.stanzaID.trim();
+                                      if (stanzaId.isNotEmpty &&
+                                          pinnedMessageIds.contains(stanzaId)) {
+                                        return true;
+                                      }
+                                      final originId = message.originID?.trim();
+                                      return originId != null &&
+                                          originId.isNotEmpty &&
+                                          pinnedMessageIds.contains(originId);
                                     }
 
                                     final filteredItems = _cachedFilteredItems;
@@ -8365,9 +8378,8 @@ class _ChatState extends State<Chat> {
                                                                   final includeSelectAction =
                                                                       !_multiSelectActive;
                                                                   final isPinned =
-                                                                      pinnedStanzaIds.contains(
-                                                                        messageModel
-                                                                            .stanzaID,
+                                                                      isPinnedMessage(
+                                                                        messageModel,
                                                                       );
                                                                   void
                                                                   onReply() {

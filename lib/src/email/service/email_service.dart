@@ -249,6 +249,8 @@ class EmailService {
   static const String _connectionOverrideClearedValue = '';
   static const String _showEmailsConfigKey = 'show_emails';
   static const String _showEmailsAllValue = '2';
+  static const String _fetchExistingMessagesConfigKey = 'fetch_existing_msgs';
+  static const String _fetchExistingMessagesRecentValue = '1';
   static const String _mdnsEnabledConfigKey = 'mdns_enabled';
   static const String _mdnsEnabledValue = '1';
   static const String _mailServerConfigKey = 'mail_server';
@@ -532,12 +534,15 @@ class EmailService {
   Map<String, String> _buildConnectionConfig(String address) =>
       _connectionConfigBuilder(address, _endpointConfig);
 
+  Map<String, String> _buildProvisioningOverrides(String address) =>
+      Map<String, String>.of(_buildConnectionConfig(address))
+        ..[_fetchExistingMessagesConfigKey] = _fetchExistingMessagesRecentValue;
+
   Map<String, String> _buildConfigureAccountOverrides({
     required String address,
     required String password,
   }) =>
-      Map<String, String>.of(_buildConnectionConfig(address))
-        ..[_sendPasswordConfigKey] = password;
+      _buildProvisioningOverrides(address)..[_sendPasswordConfigKey] = password;
 
   bool _hasConnectionOverrides(Map<String, String> connectionOverrides) =>
       _connectionOverrideConfigKeys.any(connectionOverrides.containsKey);
@@ -924,11 +929,12 @@ class EmailService {
     if (needsProvisioning) {
       _log.info('Configuring email account credentials');
       try {
+        final configureOverrides = _buildProvisioningOverrides(address);
         await _transport.configureAccount(
           address: address,
           password: password!,
           displayName: displayName,
-          additional: connectionOverrides,
+          additional: configureOverrides,
           accountId: deltaAccountId,
         );
         _resetImapCapabilities();

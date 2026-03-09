@@ -121,6 +121,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Message?> getMessageByOriginID(String originID);
 
+  Future<Message?> getMessageByReferenceId(String messageId);
+
   Future<Message?> getMessageByDeltaId(
     int deltaMsgId, {
     int? deltaAccountId,
@@ -134,6 +136,8 @@ abstract interface class XmppDatabase implements Database {
   });
 
   Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
+
+  Future<List<Message>> getMessagesByReferenceIds(Iterable<String> messageIds);
 
   Stream<List<Reaction>> watchReactionsForChat(String jid);
 
@@ -224,6 +228,12 @@ abstract interface class XmppDatabase implements Database {
     required String messageStanzaId,
     required DateTime pinnedAt,
     required bool active,
+  });
+
+  Future<void> normalizePinnedMessageAliases({
+    required String chatJid,
+    required String canonicalMessageStanzaId,
+    required Iterable<String> aliases,
   });
 
   Future<void> deletePinnedMessage({
@@ -2131,6 +2141,16 @@ WHERE transport IS NULL
       messagesAccessor.selectOneByOriginID(originID);
 
   @override
+  Future<Message?> getMessageByReferenceId(String messageId) async {
+    final normalized = messageId.trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    return await getMessageByStanzaID(normalized) ??
+        await getMessageByOriginID(normalized);
+  }
+
+  @override
   Future<Message?> getMessageByDeltaId(
     int deltaMsgId, {
     int? deltaAccountId,
@@ -2185,6 +2205,25 @@ WHERE transport IS NULL
     return (select(
       messages,
     )..where((tbl) => tbl.stanzaID.isIn(normalized))).get();
+  }
+
+  @override
+  Future<List<Message>> getMessagesByReferenceIds(
+    Iterable<String> messageIds,
+  ) async {
+    final normalized = messageIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (normalized.isEmpty) {
+      return const <Message>[];
+    }
+    return (select(messages)..where(
+          (tbl) =>
+              tbl.stanzaID.isIn(normalized) | tbl.originID.isIn(normalized),
+        ))
+        .get();
   }
 
   @override
@@ -4060,6 +4099,77 @@ WHERE email_from_address IN ($placeholderClause)
           chatJid: chatJid,
           pinnedAt: normalizedPinnedAt,
           active: active,
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> normalizePinnedMessageAliases({
+    required String chatJid,
+    required String canonicalMessageStanzaId,
+    required Iterable<String> aliases,
+  }) async {
+    final canonical = canonicalMessageStanzaId.trim();
+    if (canonical.isEmpty) {
+      return;
+    }
+    final normalizedAliases = <String>{
+      canonical,
+      for (final alias in aliases)
+        if (alias.trim().isNotEmpty) alias.trim(),
+    }.toList(growable: false);
+    if (normalizedAliases.length < 2) {
+      return;
+    }
+    await transaction(() async {
+      final existing =
+          await (select(pinnedMessages)
+                ..where((tbl) => tbl.chatJid.equals(chatJid))
+                ..where((tbl) => tbl.messageStanzaId.isIn(normalizedAliases)))
+              .get();
+      if (existing.isEmpty) {
+        return;
+      }
+
+      PinnedMessageEntry latest = existing.first;
+      for (final entry in existing.skip(1)) {
+        final latestPinnedAt = latest.pinnedAt.toUtc();
+        final entryPinnedAt = entry.pinnedAt.toUtc();
+        if (entryPinnedAt.isAfter(latestPinnedAt)) {
+          latest = entry;
+          continue;
+        }
+        if (!entryPinnedAt.isAtSameMomentAs(latestPinnedAt)) {
+          continue;
+        }
+        if (!entry.active && latest.active) {
+          latest = entry;
+          continue;
+        }
+        if (entry.messageStanzaId == canonical &&
+            latest.messageStanzaId != canonical) {
+          latest = entry;
+        }
+      }
+
+      final requiresRewrite =
+          latest.messageStanzaId != canonical ||
+          existing.any((entry) => entry.messageStanzaId != canonical);
+      if (!requiresRewrite) {
+        return;
+      }
+
+      await (delete(pinnedMessages)
+            ..where((tbl) => tbl.chatJid.equals(chatJid))
+            ..where((tbl) => tbl.messageStanzaId.isIn(normalizedAliases)))
+          .go();
+      await into(pinnedMessages).insertOnConflictUpdate(
+        PinnedMessageEntry(
+          messageStanzaId: canonical,
+          chatJid: chatJid,
+          pinnedAt: latest.pinnedAt.toUtc(),
+          active: latest.active,
         ),
       );
     });

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/event_manager.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
@@ -22,6 +23,7 @@ void main() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
+    registerFallbackValue(MessageNotificationChannel.chat);
     registerOmemoFallbacks();
   });
 

@@ -1834,20 +1834,25 @@ mixin MessageService
     required Message message,
   }) async {
     final normalizedChat = _normalizePinChatJid(chatJid);
-    final stanzaId = message.stanzaID.trim();
-    if (normalizedChat == null || stanzaId.isEmpty) {
+    final messageId = _pinMessageReferenceId(message);
+    if (normalizedChat == null || messageId == null) {
       return;
     }
+    await _normalizePinAliasState(
+      chatJid: normalizedChat,
+      canonicalMessageStanzaId: messageId,
+      aliases: _pinMessageAliases(message),
+    );
     final pinnedAt = DateTime.timestamp().toUtc();
     await _dbOp<XmppDatabase>(
       (db) => db.applyPinnedMessageMutation(
         chatJid: normalizedChat,
-        messageStanzaId: stanzaId,
+        messageStanzaId: messageId,
         pinnedAt: pinnedAt,
         active: true,
       ),
     );
-    await _queuePinPublish(normalizedChat, stanzaId);
+    await _queuePinPublish(normalizedChat, messageId);
     await _flushPendingPinSyncForChat(normalizedChat);
   }
 
@@ -1856,20 +1861,25 @@ mixin MessageService
     required Message message,
   }) async {
     final normalizedChat = _normalizePinChatJid(chatJid);
-    final stanzaId = message.stanzaID.trim();
-    if (normalizedChat == null || stanzaId.isEmpty) {
+    final messageId = _pinMessageReferenceId(message);
+    if (normalizedChat == null || messageId == null) {
       return;
     }
+    await _normalizePinAliasState(
+      chatJid: normalizedChat,
+      canonicalMessageStanzaId: messageId,
+      aliases: _pinMessageAliases(message),
+    );
     final unpinnedAt = DateTime.timestamp().toUtc();
     await _dbOp<XmppDatabase>(
       (db) => db.applyPinnedMessageMutation(
         chatJid: normalizedChat,
-        messageStanzaId: stanzaId,
+        messageStanzaId: messageId,
         pinnedAt: unpinnedAt,
         active: false,
       ),
     );
-    await _queuePinRetraction(normalizedChat, stanzaId);
+    await _queuePinRetraction(normalizedChat, messageId);
     await _flushPendingPinSyncForChat(normalizedChat);
   }
 
@@ -1895,6 +1905,7 @@ mixin MessageService
         return;
       }
       await _ensurePendingPinSyncLoaded();
+      await _normalizeActivePinnedMessageAliasesForChat(normalizedChat);
       if (!_usesPubSubPinSync(context)) {
         try {
           await _ensureSharedPinArchiveBootstrapped(
@@ -1905,16 +1916,6 @@ mixin MessageService
           _log.fine(_pinArchiveBootstrapAbortedLog);
         } on Exception catch (error, stackTrace) {
           _log.fine(_pinArchiveBootstrapFailedLog, error, stackTrace);
-        }
-        final legacySnapshot = await _fetchLegacyPinSnapshotForChat(
-          chatJid: normalizedChat,
-          context: context,
-        );
-        if (legacySnapshot != null) {
-          await _applyLegacyPinSnapshot(
-            chatJid: normalizedChat,
-            items: legacySnapshot,
-          );
         }
         await _flushPendingSharedPinMutationsForChat(
           chatJid: normalizedChat,
@@ -2305,10 +2306,7 @@ mixin MessageService
           _mucJoinMamDeferredRooms.add(roomJid);
           return;
         }
-        fireAndForget(
-          () => _syncMucArchiveAfterJoin(roomJid),
-          operationName: 'MessageService.syncMucArchiveAfterJoin',
-        );
+        _scheduleMucHistorySyncAfterJoin(roomJid);
       })
       ..registerHandler<OutboundGroupchatStanzaEvent>((event) async {
         _trackOutboundGroupchatStanza(
@@ -2458,13 +2456,17 @@ mixin MessageService
         final deferred = List<String>.from(_mucJoinMamDeferredRooms);
         _mucJoinMamDeferredRooms.clear();
         for (final roomJid in deferred) {
-          fireAndForget(
-            () => _syncMucArchiveAfterJoin(roomJid),
-            operationName: 'MessageService.syncMucArchiveAfterJoin',
-          );
+          _scheduleMucHistorySyncAfterJoin(roomJid);
         }
       }
     }
+  }
+
+  void _scheduleMucHistorySyncAfterJoin(String roomJid) {
+    fireAndForget(() async {
+      await _awaitMucJoinCompleterIfActive(roomJid);
+      await _syncMucArchiveAfterJoin(roomJid);
+    }, operationName: 'MessageService.syncMucArchiveAfterJoin');
   }
 
   Future<void> _syncMucArchiveAfterJoin(String roomJid) async {
@@ -4276,6 +4278,12 @@ mixin MessageService
     );
   }
 
+  Future<Message?> loadMessageByReferenceId(String messageId) async {
+    return await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByReferenceId(messageId),
+    );
+  }
+
   Future<void> resendMessage(String stanzaID, {ChatType? chatType}) async {
     final message = await _dbOpReturning<XmppDatabase, Message?>(
       (db) => db.getMessageByStanzaID(stanzaID),
@@ -5660,10 +5668,17 @@ mixin MessageService
     final outboundMutation = fromSelf
         ? _takeOutboundPinMutation(event.id)
         : null;
+    final messageId = await _normalizePinReferenceForChat(
+      chatJid: normalizedChat,
+      messageId: mutation.messageId,
+    );
+    if (messageId == null) {
+      return true;
+    }
     await _dbOp<XmppDatabase>(
       (db) => db.applyPinnedMessageMutation(
         chatJid: normalizedChat,
-        messageStanzaId: mutation.messageId,
+        messageStanzaId: messageId,
         pinnedAt: mutation.timestamp,
         active: mutation.pinned,
       ),
@@ -5671,7 +5686,7 @@ mixin MessageService
     final current = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
       (db) => db.getPinnedMessage(
         chatJid: normalizedChat,
-        messageStanzaId: mutation.messageId,
+        messageStanzaId: messageId,
       ),
     );
     if (fromSelf) {
@@ -5682,19 +5697,19 @@ mixin MessageService
       if (matchesCurrentState) {
         _dropOutboundPinMutationByAction(
           chatJid: normalizedChat,
-          messageStanzaId: mutation.messageId,
+          messageStanzaId: messageId,
           pinned: mutation.pinned,
         );
         await _clearPendingPinMutation(
           chatJid: normalizedChat,
-          messageStanzaId: mutation.messageId,
+          messageStanzaId: messageId,
           pinned: mutation.pinned,
         );
         if (outboundMutation != null) {
           fireAndForget(
             () => _mirrorSharedPinMutationToLegacyPubSub(
               chatJid: normalizedChat,
-              messageStanzaId: mutation.messageId,
+              messageStanzaId: messageId,
             ),
             operationName:
                 'MessageService.mirrorSharedPinMutationToLegacyPubSub',
@@ -7680,16 +7695,20 @@ mixin MessageService
     if (parsed == null) {
       return;
     }
-    if (_pendingPinRetractionsByChat[chatJid]?.contains(
-          parsed.messageStanzaId,
-        ) ==
-        true) {
+    final messageId = await _normalizePinReferenceForChat(
+      chatJid: chatJid,
+      messageId: parsed.messageStanzaId,
+    );
+    if (messageId == null) {
+      return;
+    }
+    if (_pendingPinRetractionsByChat[chatJid]?.contains(messageId) == true) {
       return;
     }
     final publisher = event.item.publisher;
     final canApply = await _isPinPublisherAuthorized(
       chatJid: chatJid,
-      messageStanzaId: parsed.messageStanzaId,
+      messageStanzaId: messageId,
       publisher: publisher,
     );
     if (!canApply) {
@@ -7701,7 +7720,13 @@ mixin MessageService
       }
       return;
     }
-    await _applyPinSyncUpdate(parsed);
+    await _applyPinSyncUpdate(
+      _PinnedMessageSyncPayload(
+        messageStanzaId: messageId,
+        chatJid: parsed.chatJid,
+        pinnedAt: parsed.pinnedAt,
+      ),
+    );
   }
 
   Future<void> _handlePinRetraction(mox.PubSubItemsRetractedEvent event) async {
@@ -7718,13 +7743,20 @@ mixin MessageService
     for (final itemId in event.itemIds) {
       final normalized = itemId.trim();
       if (normalized.isEmpty) continue;
+      final messageId = await _normalizePinReferenceForChat(
+        chatJid: chatJid,
+        messageId: normalized,
+      );
+      if (messageId == null) {
+        continue;
+      }
       await _applyPinSyncRetraction(
         chatJid: chatJid,
-        messageStanzaId: normalized,
+        messageStanzaId: messageId,
       );
       pendingChanged =
-          _pendingPinPublishesByChat[chatJid]?.remove(normalized) == true ||
-          _pendingPinRetractionsByChat[chatJid]?.remove(normalized) == true ||
+          _pendingPinPublishesByChat[chatJid]?.remove(messageId) == true ||
+          _pendingPinRetractionsByChat[chatJid]?.remove(messageId) == true ||
           pendingChanged;
     }
     if (pendingChanged) {
@@ -7997,40 +8029,6 @@ mixin MessageService
     return parsed;
   }
 
-  Future<List<_PinnedMessageSyncPayload>?> _fetchLegacyPinSnapshotForChat({
-    required String chatJid,
-    required _PinNodeContext context,
-  }) async {
-    final nodeId = _pinNodeForChat(chatJid);
-    if (nodeId == null) {
-      return null;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.pubSubSupported,
-      featureLabel: 'pinned messages',
-    );
-    if (!decision.isAllowed) {
-      return null;
-    }
-    _cachePinAuthorizedPublishers(chatJid, context);
-    for (final host in _pinPubSubHosts()) {
-      await _subscribeToPins(host: host, nodeId: nodeId);
-      final snapshot = await _fetchPinSnapshot(
-        host: host,
-        nodeId: nodeId,
-        chatJid: chatJid,
-      );
-      if (snapshot == null) {
-        continue;
-      }
-      _pinPubSubHost = host;
-      _legacyPinMirrorReadyChats.add(chatJid);
-      return snapshot;
-    }
-    return null;
-  }
-
   Future<void> _applyPinSnapshot({
     required String chatJid,
     required List<_PinnedMessageSyncPayload> items,
@@ -8065,21 +8063,6 @@ mixin MessageService
         chatJid: chatJid,
         messageStanzaId: messageId,
       );
-    }
-  }
-
-  Future<void> _applyLegacyPinSnapshot({
-    required String chatJid,
-    required List<_PinnedMessageSyncPayload> items,
-  }) async {
-    await _ensurePendingPinSyncLoaded();
-    final pendingRetractions =
-        _pendingPinRetractionsByChat[chatJid] ?? const <String>{};
-    for (final item in items) {
-      if (pendingRetractions.contains(item.messageStanzaId)) {
-        continue;
-      }
-      await _applyPinSyncUpdate(item);
     }
   }
 
@@ -8283,27 +8266,45 @@ mixin MessageService
     for (final messageId in pendingRetractions) {
       final trimmed = messageId.trim();
       if (trimmed.isEmpty) continue;
+      final canonicalMessageId = await _normalizePinReferenceForChat(
+        chatJid: normalizedChat,
+        messageId: trimmed,
+      );
+      if (canonicalMessageId == null) {
+        continue;
+      }
       final success = await _retractPinFromServer(
         pubsub: pubsub,
         host: host,
         nodeId: nodeId,
-        messageStanzaId: trimmed,
+        messageStanzaId: canonicalMessageId,
       );
       if (!success) {
         continue;
       }
       pendingChanged =
-          _pendingPinRetractionsByChat[normalizedChat]?.remove(trimmed) ==
+          _pendingPinRetractionsByChat[normalizedChat]?.remove(
+                canonicalMessageId,
+              ) ==
               true ||
           pendingChanged;
     }
     for (final messageId in pendingPublishes) {
       final trimmed = messageId.trim();
       if (trimmed.isEmpty) continue;
-      final entry = pinnedById[trimmed];
+      final canonicalMessageId = await _normalizePinReferenceForChat(
+        chatJid: normalizedChat,
+        messageId: trimmed,
+      );
+      if (canonicalMessageId == null) {
+        continue;
+      }
+      final entry = pinnedById[canonicalMessageId];
       if (entry == null) {
         pendingChanged =
-            _pendingPinPublishesByChat[normalizedChat]?.remove(trimmed) ==
+            _pendingPinPublishesByChat[normalizedChat]?.remove(
+                  canonicalMessageId,
+                ) ==
                 true ||
             pendingChanged;
         continue;
@@ -8319,7 +8320,10 @@ mixin MessageService
         continue;
       }
       pendingChanged =
-          _pendingPinPublishesByChat[normalizedChat]?.remove(trimmed) == true ||
+          _pendingPinPublishesByChat[normalizedChat]?.remove(
+                canonicalMessageId,
+              ) ==
+              true ||
           pendingChanged;
     }
     if (pendingChanged) {
@@ -8353,26 +8357,37 @@ mixin MessageService
       if (trimmed.isEmpty) {
         continue;
       }
+      final canonicalMessageId = await _normalizePinReferenceForChat(
+        chatJid: chatJid,
+        messageId: trimmed,
+      );
+      if (canonicalMessageId == null) {
+        continue;
+      }
       if (_hasOutboundPinMutationInFlight(
         chatJid: chatJid,
-        messageStanzaId: trimmed,
+        messageStanzaId: canonicalMessageId,
         pinned: false,
       )) {
         continue;
       }
       final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
-        (db) => db.getPinnedMessage(chatJid: chatJid, messageStanzaId: trimmed),
+        (db) => db.getPinnedMessage(
+          chatJid: chatJid,
+          messageStanzaId: canonicalMessageId,
+        ),
       );
       if (record == null || record.active) {
         pendingChanged =
-            _pendingPinRetractionsByChat[chatJid]?.remove(trimmed) == true ||
+            _pendingPinRetractionsByChat[chatJid]?.remove(canonicalMessageId) ==
+                true ||
             pendingChanged;
         continue;
       }
       final success = await _sendPinMutationToChat(
         chatJid: chatJid,
         chat: chat,
-        messageStanzaId: trimmed,
+        messageStanzaId: canonicalMessageId,
         pinnedAt: record.pinnedAt,
         pinned: false,
       );
@@ -8385,26 +8400,37 @@ mixin MessageService
       if (trimmed.isEmpty) {
         continue;
       }
+      final canonicalMessageId = await _normalizePinReferenceForChat(
+        chatJid: chatJid,
+        messageId: trimmed,
+      );
+      if (canonicalMessageId == null) {
+        continue;
+      }
       if (_hasOutboundPinMutationInFlight(
         chatJid: chatJid,
-        messageStanzaId: trimmed,
+        messageStanzaId: canonicalMessageId,
         pinned: true,
       )) {
         continue;
       }
       final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
-        (db) => db.getPinnedMessage(chatJid: chatJid, messageStanzaId: trimmed),
+        (db) => db.getPinnedMessage(
+          chatJid: chatJid,
+          messageStanzaId: canonicalMessageId,
+        ),
       );
       if (record == null || !record.active) {
         pendingChanged =
-            _pendingPinPublishesByChat[chatJid]?.remove(trimmed) == true ||
+            _pendingPinPublishesByChat[chatJid]?.remove(canonicalMessageId) ==
+                true ||
             pendingChanged;
         continue;
       }
       final success = await _sendPinMutationToChat(
         chatJid: chatJid,
         chat: chat,
-        messageStanzaId: trimmed,
+        messageStanzaId: canonicalMessageId,
         pinnedAt: record.pinnedAt,
         pinned: true,
       );
@@ -8606,6 +8632,200 @@ mixin MessageService
       notify: _pinNotifyEnabled,
     );
     return !result.isType<mox.PubSubError>();
+  }
+
+  Set<String> _pinMessageAliases(Message message) {
+    final aliases = <String>{};
+    final stanzaId = message.stanzaID.trim();
+    if (stanzaId.isNotEmpty) {
+      aliases.add(stanzaId);
+    }
+    final originId = message.originID?.trim();
+    if (originId != null && originId.isNotEmpty) {
+      aliases.add(originId);
+    }
+    return aliases;
+  }
+
+  Future<void> _normalizeActivePinnedMessageAliasesForChat(
+    String chatJid,
+  ) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (normalizedChat == null) {
+      return;
+    }
+    final pinnedEntries =
+        await _dbOpReturning<XmppDatabase, List<PinnedMessageEntry>>(
+          (db) => db.getPinnedMessages(normalizedChat),
+        );
+    for (final entry in pinnedEntries) {
+      await _normalizePinReferenceForChat(
+        chatJid: normalizedChat,
+        messageId: entry.messageStanzaId,
+      );
+    }
+  }
+
+  Future<String?> _normalizePinReferenceForChat({
+    required String chatJid,
+    required String messageId,
+  }) async {
+    final trimmed = messageId.trim();
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    if (trimmed.isEmpty || normalizedChat == null) {
+      return null;
+    }
+    final identity = await _pinReferenceIdentityForMessageId(trimmed);
+    final canonicalId = identity.canonicalId.trim();
+    if (canonicalId.isEmpty) {
+      return null;
+    }
+    await _normalizePinAliasState(
+      chatJid: normalizedChat,
+      canonicalMessageStanzaId: canonicalId,
+      aliases: identity.aliases,
+    );
+    return canonicalId;
+  }
+
+  Future<({String canonicalId, Set<String> aliases})>
+  _pinReferenceIdentityForMessageId(String messageId) async {
+    final trimmed = messageId.trim();
+    if (trimmed.isEmpty) {
+      return (canonicalId: '', aliases: const <String>{});
+    }
+    final message = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByReferenceId(trimmed),
+    );
+    if (message == null) {
+      return (canonicalId: trimmed, aliases: <String>{trimmed});
+    }
+    final aliases = _pinMessageAliases(message)..add(trimmed);
+    final canonicalId = _pinMessageReferenceId(message) ?? trimmed;
+    return (canonicalId: canonicalId, aliases: aliases);
+  }
+
+  Future<void> _normalizePinAliasState({
+    required String chatJid,
+    required String canonicalMessageStanzaId,
+    required Set<String> aliases,
+  }) async {
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    final canonicalId = canonicalMessageStanzaId.trim();
+    if (normalizedChat == null || canonicalId.isEmpty) {
+      return;
+    }
+    final normalizedAliases = <String>{
+      canonicalId,
+      for (final alias in aliases)
+        if (alias.trim().isNotEmpty) alias.trim(),
+    };
+    await _dbOp<XmppDatabase>(
+      (db) => db.normalizePinnedMessageAliases(
+        chatJid: normalizedChat,
+        canonicalMessageStanzaId: canonicalId,
+        aliases: normalizedAliases,
+      ),
+    );
+    await _rewritePendingPinAliases(
+      chatJid: normalizedChat,
+      canonicalMessageStanzaId: canonicalId,
+      aliases: normalizedAliases,
+    );
+  }
+
+  Future<void> _rewritePendingPinAliases({
+    required String chatJid,
+    required String canonicalMessageStanzaId,
+    required Set<String> aliases,
+  }) async {
+    await _ensurePendingPinSyncLoaded();
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    final canonicalId = canonicalMessageStanzaId.trim();
+    if (normalizedChat == null || canonicalId.isEmpty) {
+      return;
+    }
+    final aliasIds = aliases
+        .map((alias) => alias.trim())
+        .where((alias) => alias.isNotEmpty && alias != canonicalId)
+        .toSet();
+    if (aliasIds.isEmpty) {
+      return;
+    }
+
+    final publishes = _pendingPinPublishesByChat.putIfAbsent(
+      normalizedChat,
+      () => <String>{},
+    );
+    final retractions = _pendingPinRetractionsByChat.putIfAbsent(
+      normalizedChat,
+      () => <String>{},
+    );
+
+    var changed = false;
+    var movedPublish = false;
+    var movedRetraction = false;
+    for (final aliasId in aliasIds) {
+      if (publishes.remove(aliasId)) {
+        movedPublish = true;
+        changed = true;
+      }
+      if (retractions.remove(aliasId)) {
+        movedRetraction = true;
+        changed = true;
+      }
+    }
+    if (movedPublish) {
+      publishes.add(canonicalId);
+    }
+    if (movedRetraction) {
+      retractions.add(canonicalId);
+    }
+    if (publishes.contains(canonicalId) && retractions.contains(canonicalId)) {
+      final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
+        (db) => db.getPinnedMessage(
+          chatJid: normalizedChat,
+          messageStanzaId: canonicalId,
+        ),
+      );
+      if (record?.active == true) {
+        changed = retractions.remove(canonicalId) || changed;
+      } else {
+        changed = publishes.remove(canonicalId) || changed;
+      }
+    }
+    if (changed) {
+      await _persistPendingPinSync();
+    }
+
+    final updatedOutboundMutations = <String, _OutboundPinMutation>{};
+    for (final entry in _outboundPinMutationsByStanzaId.entries) {
+      final mutation = entry.value;
+      if (mutation.chatJid != normalizedChat ||
+          !aliasIds.contains(mutation.messageStanzaId)) {
+        continue;
+      }
+      updatedOutboundMutations[entry.key] = _OutboundPinMutation(
+        chatJid: mutation.chatJid,
+        messageStanzaId: canonicalId,
+        pinned: mutation.pinned,
+      );
+    }
+    if (updatedOutboundMutations.isNotEmpty) {
+      _outboundPinMutationsByStanzaId.addAll(updatedOutboundMutations);
+    }
+  }
+
+  String? _pinMessageReferenceId(Message message) {
+    final stanzaId = message.stanzaID.trim();
+    if (stanzaId.isNotEmpty) {
+      return stanzaId;
+    }
+    final originId = message.originID?.trim();
+    if (originId == null || originId.isEmpty) {
+      return null;
+    }
+    return originId;
   }
 
   String _normalizeBase64(String input) {

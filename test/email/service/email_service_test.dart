@@ -470,6 +470,9 @@ void main() {
     expect(
       capturedAdditional,
       equals({
+        'fetch_existing_msgs': '1',
+        'show_emails': '2',
+        'mdns_enabled': '1',
         'mail_server': 'axi.im',
         'mail_port': '993',
         'mail_security': 'ssl',
@@ -933,6 +936,8 @@ void main() {
       expect(currentAccount!.password, 'new-password');
       expect(service.syncState.status, EmailSyncStatus.recovering);
       expect(capturedConfigurePayloads, hasLength(2));
+      expect(capturedConfigurePayloads.first['fetch_existing_msgs'], '1');
+      expect(capturedConfigurePayloads.last['fetch_existing_msgs'], '1');
       expect(capturedConfigurePayloads.last['send_pw'], 'new-password');
       expect(
         foregroundBridge.sent,

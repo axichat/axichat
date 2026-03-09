@@ -747,11 +747,43 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   bool _containsMessageId(Iterable<Message> messages, String messageId) {
     for (final message in messages) {
-      if (message.stanzaID == messageId) {
+      if (_messageMatchesId(message, messageId)) {
         return true;
       }
     }
     return false;
+  }
+
+  Message? _messageForId(Iterable<Message> messages, String messageId) {
+    for (final message in messages) {
+      if (_messageMatchesId(message, messageId)) {
+        return message;
+      }
+    }
+    return null;
+  }
+
+  bool _messageMatchesId(Message message, String messageId) {
+    final normalized = messageId.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    if (message.stanzaID.trim() == normalized) {
+      return true;
+    }
+    final originId = message.originID?.trim();
+    return originId != null && originId == normalized;
+  }
+
+  void _indexMessageByReference(Map<String, Message> target, Message message) {
+    final stanzaId = message.stanzaID.trim();
+    if (stanzaId.isNotEmpty) {
+      target[stanzaId] = message;
+    }
+    final originId = message.originID?.trim();
+    if (originId != null && originId.isNotEmpty) {
+      target[originId] = message;
+    }
   }
 
   void _emitScrollTargetRequest(Emitter<ChatState> emit, String messageId) {
@@ -767,7 +799,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Chat chat,
     required String messageId,
   }) async {
-    var target = await _messageService.loadMessageByStanzaId(messageId);
+    var target = await _messageService.loadMessageByReferenceId(messageId);
     if (target != null) {
       await _refreshPinnedMessagesFromDatabase(chat);
       return target;
@@ -781,7 +813,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _loadEarlierFromEmail(
           desiredWindow: previousCount + messageBatchSize,
         );
-        target = await _messageService.loadMessageByStanzaId(messageId);
+        target = await _messageService.loadMessageByReferenceId(messageId);
         if (target != null) {
           await _refreshPinnedMessagesFromDatabase(chat);
           return target;
@@ -797,7 +829,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (_mamBeforeId == null && state.items.isEmpty) {
       await _hydrateLatestFromMam(chat);
-      target = await _messageService.loadMessageByStanzaId(messageId);
+      target = await _messageService.loadMessageByReferenceId(messageId);
       if (target != null) {
         await _refreshPinnedMessagesFromDatabase(chat);
         return target;
@@ -808,7 +840,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _loadEarlierFromMam(
         desiredWindow: previousCount + messageBatchSize,
       );
-      target = await _messageService.loadMessageByStanzaId(messageId);
+      target = await _messageService.loadMessageByReferenceId(messageId);
       if (target != null) {
         await _refreshPinnedMessagesFromDatabase(chat);
         return target;
@@ -2215,33 +2247,37 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (event.items.isNotEmpty) {
       final orderedIds = <String>{};
       for (final entry in event.items) {
-        final stanzaId = entry.messageStanzaId.trim();
-        if (stanzaId.isEmpty) {
+        final messageId = entry.messageStanzaId.trim();
+        if (messageId.isEmpty) {
           continue;
         }
-        orderedIds.add(stanzaId);
+        orderedIds.add(messageId);
       }
       if (orderedIds.isNotEmpty) {
         final db = await _messageService.database;
-        final messages = await db.getMessagesByStanzaIds(orderedIds);
-        final messageByStanza = <String, Message>{
-          for (final message in messages) message.stanzaID: message,
-        };
+        final messages = await db.getMessagesByReferenceIds(orderedIds);
+        final messageByReference = <String, Message>{};
+        for (final message in state.items) {
+          _indexMessageByReference(messageByReference, message);
+        }
+        for (final message in messages) {
+          _indexMessageByReference(messageByReference, message);
+        }
         final attachmentMaps = await _loadAttachmentMaps(messages);
         pinnedItems = <PinnedMessageItem>[];
         for (final entry in event.items) {
-          final stanzaId = entry.messageStanzaId.trim();
-          if (stanzaId.isEmpty) {
+          final messageId = entry.messageStanzaId.trim();
+          if (messageId.isEmpty) {
             continue;
           }
-          final message = messageByStanza[stanzaId];
+          final message = messageByReference[messageId];
           final attachmentIds = message == null
               ? _emptyPinnedAttachmentIds
               : attachmentMaps.attachmentsByMessageId[_messageKey(message)] ??
                     _emptyPinnedAttachmentIds;
           pinnedItems.add(
             PinnedMessageItem(
-              messageStanzaId: stanzaId,
+              messageStanzaId: messageId,
               chatJid: entry.chatJid,
               pinnedAt: entry.pinnedAt,
               message: message,
@@ -2439,16 +2475,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null) {
       return;
     }
-    if (_containsMessageId(state.items, messageId)) {
+    final currentMessage = _messageForId(state.items, messageId);
+    if (currentMessage != null) {
       _pendingScrollTargetMessageId = null;
-      _emitScrollTargetRequest(emit, messageId);
+      _emitScrollTargetRequest(emit, currentMessage.stanzaID);
       return;
     }
     if (!_forceAllWithContactViewFilter &&
         state.viewFilter == MessageTimelineFilter.directOnly) {
       emit(state.copyWith(viewFilter: MessageTimelineFilter.allWithContact));
     }
-    _pendingScrollTargetMessageId = messageId;
     final target = await _ensurePinnedMessageAvailableLocally(
       chat: chat,
       messageId: messageId,
@@ -2457,10 +2493,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _pendingScrollTargetMessageId = null;
       return;
     }
+    _pendingScrollTargetMessageId = target.stanzaID;
     await _subscribeThroughMessage(chat: chat, target: target);
-    if (_containsMessageId(state.items, messageId)) {
+    if (_containsMessageId(state.items, target.stanzaID)) {
       _pendingScrollTargetMessageId = null;
-      _emitScrollTargetRequest(emit, messageId);
+      _emitScrollTargetRequest(emit, target.stanzaID);
     }
   }
 
@@ -2531,7 +2568,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return missingStanzaIds;
     }
     final db = await _messageService.database;
-    final resolvedMessages = await db.getMessagesByStanzaIds(missingStanzaIds);
+    final resolvedMessages = await db.getMessagesByReferenceIds(
+      missingStanzaIds,
+    );
     if (resolvedMessages.isEmpty) {
       return missingStanzaIds;
     }
@@ -2540,6 +2579,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final stanzaId = message.stanzaID.trim();
       if (stanzaId.isNotEmpty) {
         resolvedIds.add(stanzaId);
+      }
+      final originId = message.originID?.trim();
+      if (originId != null && originId.isNotEmpty) {
+        resolvedIds.add(originId);
       }
     }
     missingStanzaIds.removeAll(resolvedIds);
