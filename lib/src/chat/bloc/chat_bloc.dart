@@ -1372,12 +1372,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerHydrationId: resetContext ? 0 : state.composerHydrationId,
         composerClearId: resetContext ? 0 : state.composerClearId,
         emailSubject: resetContext ? null : state.emailSubject,
-        emailSubjectHydrationText: resetContext
-            ? null
-            : state.emailSubjectHydrationText,
-        emailSubjectHydrationId: resetContext
-            ? 0
-            : state.emailSubjectHydrationId,
         emailSubjectAutofillEligible: resetContext
             ? true
             : state.emailSubjectAutofillEligible,
@@ -3400,9 +3394,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } on Exception {
       quotedText = null;
     }
+    final sanitizedQuotedText = ChatSubjectCodec.previewBodyText(
+      quotedText,
+    ).trim();
     final updatedLoading = Set<int>.from(state.emailQuotedTextLoading)
       ..remove(deltaMessageId);
-    if (quotedText == null || quotedText.isEmpty) {
+    if (sanitizedQuotedText.isEmpty) {
       final updatedUnavailable = Set<int>.from(state.emailQuotedTextUnavailable)
         ..add(deltaMessageId);
       emit(
@@ -3415,7 +3412,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final updatedQuotedText = Map<int, String>.from(
       state.emailQuotedTextByDeltaId,
-    )..[deltaMessageId] = quotedText;
+    )..[deltaMessageId] = sanitizedQuotedText;
     emit(
       state.copyWith(
         emailQuotedTextLoading: updatedLoading,
@@ -6202,8 +6199,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(
       state.copyWith(
         emailSubject: '',
-        emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
-        emailSubjectHydrationText: '',
         emailSubjectAutofillEligible: true,
         emailSubjectAutofilled: false,
       ),
@@ -6474,7 +6469,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null || service == null) return;
     ShareContext? shareContext = state.shareContexts[message.stanzaID];
     final nextHydrationId = ++_composerHydrationSeed;
-    final nextSubject = shareContext?.subject;
+    final nextSubject = (shareContext?.subject ?? message.subject)?.trim();
     emit(
       state.copyWith(
         pendingAttachments: const <PendingAttachment>[],
@@ -6483,29 +6478,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         composerError: message.error.isNotNone
             ? _chatMessageKeyForMessageError(message.error)
             : state.composerError,
-        emailSubject: nextSubject != null && nextSubject != state.emailSubject
-            ? nextSubject
-            : state.emailSubject,
-        emailSubjectHydrationId:
-            nextSubject != null && nextSubject != state.emailSubject
-            ? state.emailSubjectHydrationId + 1
-            : state.emailSubjectHydrationId,
-        emailSubjectHydrationText:
-            nextSubject != null && nextSubject != state.emailSubject
-            ? nextSubject
-            : state.emailSubject,
+        emailSubject: nextSubject?.isNotEmpty == true ? nextSubject : '',
         emailSubjectAutofillEligible: false,
         emailSubjectAutofilled: false,
       ),
     );
     shareContext ??= await service.shareContextForMessage(message);
-    final updatedSubject = shareContext?.subject;
-    if (updatedSubject != null && updatedSubject != state.emailSubject) {
+    final updatedSubject = (shareContext?.subject ?? message.subject)?.trim();
+    if (updatedSubject != (state.emailSubject ?? '')) {
       emit(
         state.copyWith(
-          emailSubject: updatedSubject,
-          emailSubjectHydrationId: state.emailSubjectHydrationId + 1,
-          emailSubjectHydrationText: updatedSubject,
+          emailSubject: updatedSubject?.isNotEmpty == true
+              ? updatedSubject
+              : '',
           emailSubjectAutofillEligible: false,
           emailSubjectAutofilled: false,
         ),

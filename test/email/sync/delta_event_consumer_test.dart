@@ -11,6 +11,7 @@ void main() {
   setUpAll(() {
     registerFallbackValue(fallbackChat);
     registerFallbackValue(fallbackMessage);
+    registerFallbackValue(MessageTimelineFilter.directOnly);
     registerFallbackValue(
       const FileMetadataData(id: 'fallback-file', filename: 'fallback.txt'),
     );
@@ -53,6 +54,7 @@ void main() {
     when(
       () => database.getMessageByOriginID(any()),
     ).thenAnswer((_) async => null);
+    when(() => database.getChat(any())).thenAnswer((_) async => null);
     when(
       () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
     ).thenAnswer((_) async {});
@@ -64,11 +66,13 @@ void main() {
       () => database.isEmailAddressSpam(any()),
     ).thenAnswer((_) async => false);
     when(
-      () => database.getLastMessageForChat(
+      () => database.getChatMessages(
         any(),
+        start: any(named: 'start'),
+        end: any(named: 'end'),
         filter: any(named: 'filter'),
       ),
-    ).thenAnswer((_) async => null);
+    ).thenAnswer((_) async => const <Message>[]);
     when(() => context.getChat(any())).thenAnswer(
       (invocation) async => DeltaChat(
         id: invocation.positionalArguments.first as int,
@@ -372,6 +376,27 @@ void main() {
       when(
         () => database.getMessageByStanzaID('dc-msg-$msgId'),
       ).thenAnswer((_) async => null);
+      when(
+        () => database.getChatMessages(
+          chat.jid,
+          start: 0,
+          end: 1,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).thenAnswer(
+        (_) async => [
+          Message(
+            stanzaID: 'dc-msg-$msgId',
+            senderJid: chat.jid,
+            chatJid: chat.jid,
+            body: 'Fresh offline email',
+            timestamp: deltaMessage.timestamp,
+            deltaAccountId: DeltaAccountDefaults.legacyId,
+            deltaChatId: chatId,
+            deltaMsgId: msgId,
+          ),
+        ],
+      );
       when(() => database.updateChat(any())).thenAnswer((_) async {});
       when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
 
@@ -387,6 +412,15 @@ void main() {
               as Message;
       expect(persisted.deltaMsgId, msgId);
       expect(persisted.body, 'Fresh offline email');
+      expect(
+        verify(() => database.updateChat(captureAny())).captured.any(
+          (value) =>
+              value is Chat &&
+              value.jid == chat.jid &&
+              value.lastMessage == 'Fresh offline email',
+        ),
+        isTrue,
+      );
     },
   );
 

@@ -149,9 +149,8 @@ class _NexusScaffold extends StatelessWidget {
               .where((chat) => chatsState.selectedJids.contains(chat.jid))
               .toList();
     final badgeCounts = <HomeTab, int>{
-      HomeTab.invites: context.watch<RosterCubit>().inviteCount,
       HomeTab.chats: chatItems
-          .where((chat) => !chat.archived && !chat.spam)
+          .where((chat) => !chat.archived && !chat.spam && !chat.hidden)
           .fold<int>(
             0,
             (sum, chat) => sum + (chat.unreadCount > 0 ? chat.unreadCount : 0),
@@ -1043,15 +1042,13 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
     final chatsState = context.watch<ChatsCubit>().state;
     final chatItems = chatsState.items ?? const <m.Chat>[];
     final unreadChatsCount = chatItems
-        .where((chat) => !chat.archived && !chat.spam)
+        .where((chat) => !chat.archived && !chat.spam && !chat.hidden)
         .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount));
-    final invitesCount = context.watch<RosterCubit>().inviteCount;
     final draftsCount = context.watch<DraftCubit>().state.items?.length ?? 0;
     final spamCount = chatItems
         .where((chat) => chat.spam && !chat.archived)
         .length;
-    final chatsBadgeCount =
-        unreadChatsCount + invitesCount + draftsCount + spamCount;
+    final chatsBadgeCount = unreadChatsCount + draftsCount + spamCount;
     int scheduledAlertsCount = 0;
     int unscheduledAlertsCount = 0;
     if (widget.calendarAvailable) {

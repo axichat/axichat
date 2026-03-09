@@ -765,6 +765,49 @@ CalendarAvailabilityShareCoordinator? _readAvailabilityShareCoordinator(
     ? context.read<CalendarAvailabilityShareCoordinator>()
     : null;
 
+String _fitQuotedPreviewText({
+  required BuildContext context,
+  required String quoteText,
+  required TextStyle style,
+  required double maxWidth,
+}) {
+  final quotedPreview = '"$quoteText"';
+  if (!maxWidth.isFinite || maxWidth <= 0) {
+    return quotedPreview;
+  }
+  final painter = TextPainter(
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
+    maxLines: 2,
+  );
+
+  bool fits(String candidate) {
+    painter.text = TextSpan(text: candidate, style: style);
+    painter.layout(maxWidth: maxWidth);
+    return !painter.didExceedMaxLines;
+  }
+
+  if (fits(quotedPreview)) {
+    return quotedPreview;
+  }
+
+  final graphemes = quoteText.characters.toList(growable: false);
+  var low = 0;
+  var high = graphemes.length;
+  var best = '"…"';
+  while (low <= high) {
+    final mid = (low + high) ~/ 2;
+    final candidate = '"${graphemes.take(mid).join()}…"';
+    if (fits(candidate)) {
+      best = candidate;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return best;
+}
+
 class Chat extends StatefulWidget {
   const Chat({super.key, this.readOnly = false});
 
@@ -1168,7 +1211,7 @@ class _ChatState extends State<Chat> {
   }
 
   void _updateMessageBubbleWidth(String messageId, Size size) {
-    if (!mounted || _selectedMessageId != messageId) {
+    if (!mounted) {
       return;
     }
     final width = size.width;
@@ -1922,6 +1965,67 @@ class _ChatState extends State<Chat> {
       }
     }
     return source;
+  }
+
+  String _quotedSenderLabel({
+    required Message quotedMessage,
+    required bool isGroupChat,
+    required RoomState? roomState,
+    required String? chatDisplayName,
+    required AppLocalizations l10n,
+  }) {
+    if (isGroupChat) {
+      final occupant = _resolveOccupantForSender(
+        senderJid: quotedMessage.senderJid,
+        roomState: roomState,
+      );
+      final nick =
+          occupant?.nick.trim() ?? _nickFromSender(quotedMessage.senderJid);
+      final normalizedNick = nick?.trim() ?? _emptyText;
+      if (normalizedNick.isNotEmpty) {
+        return normalizedNick;
+      }
+    } else {
+      final displayName = chatDisplayName?.trim() ?? _emptyText;
+      if (displayName.isNotEmpty) {
+        return displayName;
+      }
+    }
+    final senderFallback = quotedMessage.senderJid.trim();
+    if (senderFallback.isNotEmpty) {
+      return senderFallback;
+    }
+    return l10n.commonUnknownLabel;
+  }
+
+  String? _resolvedDirectChatDisplayName({
+    required chat_models.Chat? chat,
+    required ChatsState? chatsState,
+  }) {
+    final currentDisplayName = chat?.displayName.trim();
+    if (currentDisplayName != null && currentDisplayName.isNotEmpty) {
+      return currentDisplayName;
+    }
+    final targetJid = chat?.jid ?? chatsState?.openJid;
+    final normalizedTargetJid = normalizedAddressValue(targetJid);
+    if (normalizedTargetJid == null || normalizedTargetJid.isEmpty) {
+      return null;
+    }
+    for (final item in chatsState?.items ?? const <chat_models.Chat>[]) {
+      final normalizedItemJid = normalizedAddressValue(item.jid);
+      final normalizedRemoteJid = normalizedAddressValue(item.remoteJid);
+      final matchesCurrentChat =
+          normalizedItemJid == normalizedTargetJid ||
+          normalizedRemoteJid == normalizedTargetJid;
+      if (!matchesCurrentChat) {
+        continue;
+      }
+      final displayName = item.displayName.trim();
+      if (displayName.isNotEmpty) {
+        return displayName;
+      }
+    }
+    return null;
   }
 
   void _toggleSettingsPanel() {
@@ -3995,24 +4099,6 @@ class _ChatState extends State<Chat> {
             ),
             BlocListener<ChatBloc, ChatState>(
               listenWhen: (previous, current) =>
-                  previous.emailSubjectHydrationId !=
-                  current.emailSubjectHydrationId,
-              listener: (context, state) {
-                final subject = state.emailSubjectHydrationText ?? '';
-                if (_subjectFocusNode.hasFocus &&
-                    _subjectController.text != subject) {
-                  return;
-                }
-                _subjectChangeSuppressed = true;
-                _subjectController
-                  ..text = subject
-                  ..selection = TextSelection.collapsed(offset: subject.length);
-                _lastSubjectValue = subject;
-                _subjectChangeSuppressed = false;
-              },
-            ),
-            BlocListener<ChatBloc, ChatState>(
-              listenWhen: (previous, current) =>
                   previous.chat?.jid != current.chat?.jid,
               listener: (_, state) {
                 _animatedMessageIds.clear();
@@ -4077,6 +4163,15 @@ class _ChatState extends State<Chat> {
             },
             listener: (context, state) {
               final text = state.composerHydrationText ?? '';
+              final subject = state.chat?.supportsEmail == true
+                  ? (state.emailSubject ?? '')
+                  : _emptyText;
+              _subjectChangeSuppressed = true;
+              _subjectController
+                ..text = subject
+                ..selection = TextSelection.collapsed(offset: subject.length);
+              _lastSubjectValue = subject;
+              _subjectChangeSuppressed = false;
               _textController
                 ..text = text
                 ..selection = TextSelection.collapsed(offset: text.length);
@@ -4093,11 +4188,17 @@ class _ChatState extends State<Chat> {
               ProfileState? profileState() =>
                   context.watch<ProfileCubit>().state;
               ChatsState? chatsState() => context.watch<ChatsCubit>().state;
+              final chatsCubitState = chatsState();
               final readOnly = widget.readOnly;
               final emailSelfJid = state.emailSelfJid;
               final String? resolvedEmailSelfJid = emailSelfJid
                   .resolveDeltaPlaceholderJid();
               final chatEntity = state.chat;
+              final resolvedDirectChatDisplayName =
+                  _resolvedDirectChatDisplayName(
+                    chat: chatEntity,
+                    chatsState: chatsCubitState,
+                  );
               final isWelcomeChat = chatEntity?.isAxichatWelcomeThread == true;
               final List<BlocklistEntry> blocklistEntries =
                   _resolveBlocklistEntries(context);
@@ -5081,6 +5182,22 @@ class _ChatState extends State<Chat> {
                                         subjectLabel = split.subject;
                                         bodyText = split.body;
                                       }
+                                      if (isEmailMessage) {
+                                        final trimmedSubject = subjectLabel
+                                            ?.trim();
+                                        if (trimmedSubject?.isNotEmpty ==
+                                            true) {
+                                          bodyText =
+                                              ChatSubjectCodec.stripRepeatedSubject(
+                                                body: bodyText,
+                                                subject: trimmedSubject!,
+                                              );
+                                        }
+                                        bodyText =
+                                            ChatSubjectCodec.previewBodyText(
+                                              bodyText,
+                                            );
+                                      }
                                       if (!showSubjectHeader &&
                                           shareContext == null &&
                                           subjectLabel?.isNotEmpty == true) {
@@ -5383,6 +5500,23 @@ class _ChatState extends State<Chat> {
                                             quoting.stanzaID,
                                           ),
                                           message: quoting,
+                                          senderLabel:
+                                              _isQuotedMessageFromSelf(
+                                                quotedMessage: quoting,
+                                                isGroupChat: isGroupChat,
+                                                myOccupantId: myOccupantId,
+                                                selfNick: selfNick,
+                                                currentUserId: currentUserId,
+                                              )
+                                              ? context.l10n.chatSenderYou
+                                                : _quotedSenderLabel(
+                                                    quotedMessage: quoting,
+                                                    isGroupChat: isGroupChat,
+                                                    roomState: state.roomState,
+                                                    chatDisplayName:
+                                                        resolvedDirectChatDisplayName,
+                                                    l10n: context.l10n,
+                                                  ),
                                           isSelf: _isQuotedMessageFromSelf(
                                             quotedMessage: quoting,
                                             isGroupChat: isGroupChat,
@@ -5990,34 +6124,6 @@ class _ChatState extends State<Chat> {
                                                                         FontWeight
                                                                             .w600,
                                                                   );
-                                                                  final messageText =
-                                                                      (message.customProperties?['renderedText']
-                                                                          as String?) ??
-                                                                      message
-                                                                          .text;
-                                                                  final timeColor =
-                                                                      detailColor;
-                                                                  final detailStyle = context
-                                                                      .textTheme
-                                                                      .small
-                                                                      .copyWith(
-                                                                        color:
-                                                                            timeColor,
-                                                                        fontSize:
-                                                                            11.0,
-                                                                        height:
-                                                                            1.0,
-                                                                        textBaseline:
-                                                                            TextBaseline.alphabetic,
-                                                                      );
-                                                                  final surfaceDetailColor =
-                                                                      colors
-                                                                          .foreground;
-                                                                  final surfaceDetailStyle =
-                                                                      detailStyle.copyWith(
-                                                                        color:
-                                                                            surfaceDetailColor,
-                                                                      );
                                                                   final messageId =
                                                                       message.customProperties?['id']
                                                                           as String?;
@@ -6042,6 +6148,39 @@ class _ChatState extends State<Chat> {
                                                                             .mail
                                                                       : LucideIcons
                                                                             .messageCircle;
+                                                                  final messageText =
+                                                                      isEmailMessage
+                                                                      ? ChatSubjectCodec.previewBodyText(
+                                                                          (message.customProperties?['renderedText']
+                                                                                  as String?) ??
+                                                                              message.text,
+                                                                        )
+                                                                      : ((message.customProperties?['renderedText']
+                                                                                as String?) ??
+                                                                            message.text);
+                                                                  final timeColor =
+                                                                      detailColor;
+                                                                  final detailStyle = context
+                                                                      .textTheme
+                                                                      .small
+                                                                      .copyWith(
+                                                                        color:
+                                                                            timeColor,
+                                                                        fontSize:
+                                                                            11.0,
+                                                                        height:
+                                                                            1.0,
+                                                                        textBaseline:
+                                                                            TextBaseline.alphabetic,
+                                                                      );
+                                                                  final surfaceDetailColor =
+                                                                      colors
+                                                                          .foreground;
+                                                                  final surfaceDetailStyle =
+                                                                      detailStyle.copyWith(
+                                                                        color:
+                                                                            surfaceDetailColor,
+                                                                      );
                                                                   TextSpan
                                                                   iconDetailSpan(
                                                                     IconData
@@ -6833,8 +6972,15 @@ class _ChatState extends State<Chat> {
                                                                         message
                                                                             .text;
                                                                     final String
+                                                                    messageText =
+                                                                        isEmailMessage
+                                                                        ? ChatSubjectCodec.previewBodyText(
+                                                                            rawRenderedText,
+                                                                          )
+                                                                        : rawRenderedText;
+                                                                    final String
                                                                     trimmedRenderedText =
-                                                                        rawRenderedText
+                                                                        messageText
                                                                             .trim();
                                                                     final int?
                                                                     deltaMessageId =
@@ -6851,13 +6997,6 @@ class _ChatState extends State<Chat> {
                                                                         : state.emailFullHtmlByDeltaId[deltaMessageId] ??
                                                                               messageModel.htmlBody;
                                                                     final String?
-                                                                    resolvedQuotedText =
-                                                                        deltaMessageId ==
-                                                                            null
-                                                                        ? null
-                                                                        : state
-                                                                              .emailQuotedTextByDeltaId[deltaMessageId];
-                                                                    final String?
                                                                     normalizedHtmlBody =
                                                                         HtmlContentCodec.normalizeHtml(
                                                                           resolvedHtmlBody,
@@ -6870,38 +7009,37 @@ class _ChatState extends State<Chat> {
                                                                         : HtmlContentCodec.toPlainText(
                                                                             normalizedHtmlBody,
                                                                           ).trim();
-                                                                    final String?
-                                                                    normalizedQuotedText =
-                                                                        resolvedQuotedText?.trim().isNotEmpty ==
-                                                                            true
-                                                                        ? resolvedQuotedText!
-                                                                              .trim()
-                                                                        : null;
                                                                     final bool
-                                                                    isPlainTextHtml =
+                                                                    hasRichHtmlBody =
                                                                         normalizedHtmlBody !=
                                                                             null &&
-                                                                        HtmlContentCodec.isPlainTextHtml(
+                                                                        !HtmlContentCodec.isPlainTextHtml(
                                                                           normalizedHtmlBody,
                                                                         );
                                                                     final bool
-                                                                    htmlMatchesRenderedText =
+                                                                    hasHtmlFallbackText =
                                                                         normalizedHtmlBody !=
                                                                             null &&
                                                                         normalizedHtmlText?.isNotEmpty ==
-                                                                            true &&
-                                                                        trimmedRenderedText
-                                                                            .isNotEmpty &&
-                                                                        normalizedHtmlText ==
-                                                                            trimmedRenderedText;
+                                                                            true;
                                                                     final bool
-                                                                    shouldPreferPlainTextHtml =
-                                                                        isPlainTextHtml ||
-                                                                        (!isEmailMessage &&
-                                                                            htmlMatchesRenderedText) ||
-                                                                        (isEmailChat &&
-                                                                            self &&
-                                                                            htmlMatchesRenderedText);
+                                                                    shouldRenderEmailHtmlBody =
+                                                                        isEmailMessage &&
+                                                                        normalizedHtmlBody !=
+                                                                            null &&
+                                                                        hasRichHtmlBody;
+                                                                    final String
+                                                                    displayMessageText =
+                                                                        isEmailMessage &&
+                                                                            trimmedRenderedText.isEmpty &&
+                                                                            hasHtmlFallbackText &&
+                                                                            !hasRichHtmlBody
+                                                                        ? normalizedHtmlText!
+                                                                        : messageText;
+                                                                    final String
+                                                                    trimmedDisplayMessageText =
+                                                                        displayMessageText
+                                                                            .trim();
                                                                     final String?
                                                                     taskShareText = calendarTaskIcs
                                                                         ?.toShareText(
@@ -7216,7 +7354,7 @@ class _ChatState extends State<Chat> {
                                                                     final bool
                                                                     hasAttachmentCaption =
                                                                         shouldRenderTextContent &&
-                                                                        trimmedRenderedText
+                                                                        trimmedDisplayMessageText
                                                                             .isEmpty &&
                                                                         metadataIdForCaption !=
                                                                             null &&
@@ -7224,13 +7362,12 @@ class _ChatState extends State<Chat> {
                                                                             .isNotEmpty;
                                                                     final String
                                                                     fullEmailPreviewText =
-                                                                        (normalizedHtmlText?.isNotEmpty ==
-                                                                                    true
-                                                                                ? normalizedHtmlText!
-                                                                                : normalizedQuotedText?.isNotEmpty ==
+                                                                        (trimmedDisplayMessageText.isNotEmpty
+                                                                                ? displayMessageText
+                                                                                : normalizedHtmlText?.isNotEmpty ==
                                                                                       true
-                                                                                ? normalizedQuotedText!
-                                                                                : messageText)
+                                                                                ? normalizedHtmlText!
+                                                                                : _emptyText)
                                                                             .trim();
                                                                     final bool
                                                                     hasRemoteHtmlImages =
@@ -7362,10 +7499,8 @@ class _ChatState extends State<Chat> {
                                                                           ),
                                                                         ),
                                                                       );
-                                                                    } else if (normalizedHtmlBody !=
-                                                                            null &&
-                                                                        shouldRenderTextContent &&
-                                                                        !shouldPreferPlainTextHtml) {
+                                                                    } else if (shouldRenderTextContent &&
+                                                                        shouldRenderEmailHtmlBody) {
                                                                       final shouldLoadImages =
                                                                           context
                                                                               .watch<
@@ -7397,7 +7532,7 @@ class _ChatState extends State<Chat> {
                                                                           normalizedHtmlText?.isNotEmpty ==
                                                                               true
                                                                           ? normalizedHtmlText
-                                                                          : normalizedQuotedText;
+                                                                          : null;
                                                                       final bool
                                                                       shouldRenderHtmlBody = preparedHtmlBody
                                                                           .trim()
@@ -7509,7 +7644,7 @@ class _ChatState extends State<Chat> {
                                                                           contentKey:
                                                                               bubbleContentKey,
                                                                           text:
-                                                                              messageText,
+                                                                              displayMessageText,
                                                                           baseStyle:
                                                                               baseTextStyle,
                                                                           linkStyle:
@@ -8556,38 +8691,24 @@ class _ChatState extends State<Chat> {
                                                                             currentUserId:
                                                                                 currentUserId,
                                                                           );
-                                                                          final quotedSenderLabel =
-                                                                              quotedIsSelf
-                                                                              ? l10n.chatSenderYou
-                                                                              : () {
-                                                                                  if (!isGroupChat) {
-                                                                                    return quotedModel.senderJid;
-                                                                                  }
-                                                                                  final occupantId =
-                                                                                      quotedModel.occupantID?.trim() ??
-                                                                                      '';
-                                                                                  final occupant = occupantId.isNotEmpty
-                                                                                      ? state.roomState?.occupants[occupantId]
-                                                                                      : state.roomState?.occupants[quotedModel.senderJid];
-                                                                                  final nick =
-                                                                                      occupant?.nick.trim() ??
-                                                                                      _nickFromSender(
-                                                                                        quotedModel.senderJid,
-                                                                                      );
-                                                                                  final normalizedNick =
-                                                                                      nick?.trim() ??
-                                                                                      '';
-                                                                                  return normalizedNick.isNotEmpty
-                                                                                      ? normalizedNick
-                                                                                      : quotedModel.senderJid;
-                                                                                }();
                                                                           return _QuotedMessagePreview(
                                                                             message:
                                                                                 quotedModel,
                                                                             senderLabel:
-                                                                                quotedSenderLabel,
+                                                                                quotedIsSelf
+                                                                                ? l10n.chatSenderYou
+                                                                                : _quotedSenderLabel(
+                                                                                    quotedMessage: quotedModel,
+                                                                                    isGroupChat: isGroupChat,
+                                                                                    roomState: state.roomState,
+                                                                                    chatDisplayName: resolvedDirectChatDisplayName,
+                                                                                    l10n: l10n,
+                                                                                  ),
                                                                             isSelf:
                                                                                 self,
+                                                                            quoteMaxWidth:
+                                                                                clampedMeasuredBubbleWidth ??
+                                                                                bubbleMaxWidthForLayout,
                                                                           );
                                                                         }();
                                                                   final Widget?
@@ -8696,8 +8817,10 @@ class _ChatState extends State<Chat> {
                                                                   final messageKey =
                                                                       _messageKeys[messageModel
                                                                           .stanzaID];
-                                                                  final previewMaxWidth =
+                                                                  final bubblePreviewWidth =
                                                                       bubbleMaxWidthForLayout;
+                                                                  final replyPreviewMaxWidth =
+                                                                      messageRowMaxWidth;
                                                                   final selectableBubble = MouseRegion(
                                                                     cursor:
                                                                         widget
@@ -8784,7 +8907,7 @@ class _ChatState extends State<Chat> {
                                                                     constraints:
                                                                         BoxConstraints(
                                                                           maxWidth:
-                                                                              previewMaxWidth,
+                                                                              bubblePreviewWidth,
                                                                         ),
                                                                     child:
                                                                         measuredBubbleStack,
@@ -8798,7 +8921,7 @@ class _ChatState extends State<Chat> {
                                                                     bubble:
                                                                         bubbleWithSlack,
                                                                     previewMaxWidth:
-                                                                        previewMaxWidth,
+                                                                        replyPreviewMaxWidth,
                                                                     spacing: context
                                                                         .spacing
                                                                         .s,
@@ -10472,12 +10595,23 @@ class _PinnedMessageTile extends StatelessWidget {
     final projectedMessage =
         (previewProperties['model'] as Message?) ?? sourceMessage;
     final effectiveMessage = projectedMessage ?? sourceMessage;
-    final renderedText =
+    final hasEmailMessageFlag =
+        (previewProperties['isEmailMessage'] as bool?) == true;
+    final isEmailMessage =
+        chat.isEmailBacked ||
+        chat.defaultTransport.isEmail ||
+        hasEmailMessageFlag ||
+        effectiveMessage?.deltaChatId != null ||
+        effectiveMessage?.deltaMsgId != null;
+    final rawRenderedText =
         ((previewProperties['renderedText'] as String?) ??
                 previewMessage?.text ??
                 sourceMessage?.plainText)
             ?.trim() ??
         _emptyText;
+    final renderedText = isEmailMessage
+        ? ChatSubjectCodec.previewBodyText(rawRenderedText).trim()
+        : rawRenderedText;
     final attachmentIds =
         (previewProperties['attachmentIds'] as List<String>?) ??
         item.attachmentMetadataIds;
@@ -10493,14 +10627,6 @@ class _PinnedMessageTile extends StatelessWidget {
         const <ReactionPreview>[];
     final isForwarded = (previewProperties['forwarded'] as bool?) ?? false;
     final forwardedFromJid = previewProperties['forwardedFromJid'] as String?;
-    final hasEmailMessageFlag =
-        (previewProperties['isEmailMessage'] as bool?) == true;
-    final isEmailMessage =
-        chat.isEmailBacked ||
-        chat.defaultTransport.isEmail ||
-        hasEmailMessageFlag ||
-        effectiveMessage?.deltaChatId != null ||
-        effectiveMessage?.deltaMsgId != null;
     final messageError =
         (previewProperties['error'] as MessageError?) ??
         effectiveMessage?.error ??
@@ -10633,29 +10759,25 @@ class _PinnedMessageTile extends StatelessWidget {
     final resolvedHtmlBody = effectiveMessage == null
         ? null
         : resolvedHtmlBodyFor(effectiveMessage);
-    final resolvedQuotedText = effectiveMessage == null
-        ? null
-        : resolvedQuotedTextFor(effectiveMessage)?.trim();
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
     final normalizedHtmlText = normalizedHtmlBody == null
         ? null
         : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
-    final bool hasStoredHtmlBody =
-        effectiveMessage?.htmlBody?.trim().isNotEmpty == true;
-    final bool isPlainTextHtml =
+    final bool hasRichHtmlBody =
         normalizedHtmlBody != null &&
-        HtmlContentCodec.isPlainTextHtml(normalizedHtmlBody);
-    final bool shouldPreferPlainTextHtml =
-        isPlainTextHtml ||
-        (isEmailMessage &&
-            isSelf &&
-            normalizedHtmlBody != null &&
-            normalizedHtmlText?.isNotEmpty == true &&
-            renderedText.isNotEmpty &&
-            normalizedHtmlText == renderedText);
+        !HtmlContentCodec.isPlainTextHtml(normalizedHtmlBody);
+    final bool hasHtmlFallbackText = normalizedHtmlText?.isNotEmpty == true;
+    final bool shouldRenderEmailHtmlBody =
+        isEmailMessage && normalizedHtmlBody != null && hasRichHtmlBody;
     final bool shouldRenderTextContent =
         !hideTaskText && !hideFragmentText && !hideAvailabilityText;
-    final messageText = renderedText;
+    final messageText =
+        isEmailMessage &&
+            renderedText.isEmpty &&
+            hasHtmlFallbackText &&
+            !hasRichHtmlBody
+        ? normalizedHtmlText!
+        : renderedText;
     final metadataIdForCaption = attachmentIds.isNotEmpty
         ? attachmentIds.first
         : effectiveMessage?.fileMetadataID;
@@ -10785,35 +10907,13 @@ class _PinnedMessageTile extends StatelessWidget {
             onLinkLongPress: onMessageLinkTap,
           ),
         );
-      } else if (normalizedHtmlBody != null &&
-          shouldRenderTextContent &&
-          !shouldPreferPlainTextHtml) {
+      } else if (shouldRenderTextContent && shouldRenderEmailHtmlBody) {
         final preparedHtmlBody =
             HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
               normalizedHtmlBody,
               allowRemoteImages: settings.autoLoadEmailImages,
             );
-        final emailFallbackText = normalizedHtmlText?.isNotEmpty == true
-            ? normalizedHtmlText
-            : resolvedQuotedText;
-        if (emailFallbackText != null && emailFallbackText.isNotEmpty) {
-          contentChildren.add(
-            _ParsedMessageBody(
-              contentKey:
-                  '${previewProperties['id'] ?? effectiveMessage.stanzaID}_email',
-              text: emailFallbackText,
-              baseStyle: baseTextStyle,
-              linkStyle: linkStyle,
-              details: const <InlineSpan>[],
-              onLinkTap: onMessageLinkTap,
-              onLinkLongPress: onMessageLinkTap,
-            ),
-          );
-        }
-        if (hasStoredHtmlBody && preparedHtmlBody.trim().isNotEmpty) {
-          if (contentChildren.isNotEmpty) {
-            contentChildren.add(SizedBox(height: spacing.xs));
-          }
+        if (preparedHtmlBody.trim().isNotEmpty) {
           contentChildren.add(
             _MessageHtmlBody(
               key: ValueKey(
@@ -14786,11 +14886,13 @@ class _QuotedMessagePreview extends StatelessWidget {
     required this.message,
     required this.senderLabel,
     required this.isSelf,
+    this.quoteMaxWidth,
   });
 
   final Message message;
   final String senderLabel;
   final bool isSelf;
+  final double? quoteMaxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -14800,15 +14902,14 @@ class _QuotedMessagePreview extends StatelessWidget {
         final previewText =
             ChatSubjectCodec.previewText(
               body: message.body,
-              htmlBody: message.htmlBody,
               subject: message.subject,
             ) ??
             context.l10n.chatQuotedNoContent;
-        final quotedPreview = '"$previewText"';
         return _ReplyingToPreviewText(
           senderLabel: senderLabelTrimmed,
-          quotedPreview: quotedPreview,
+          quoteText: previewText,
           isSelf: isSelf,
+          quoteMaxWidth: quoteMaxWidth,
         );
       },
     );
@@ -14818,15 +14919,15 @@ class _QuotedMessagePreview extends StatelessWidget {
 class _ReplyingToPreviewText extends StatelessWidget {
   const _ReplyingToPreviewText({
     required this.senderLabel,
-    required this.quotedPreview,
+    required this.quoteText,
     required this.isSelf,
-    this.constrainQuoteToHeaderWidth = true,
+    this.quoteMaxWidth,
   });
 
   final String senderLabel;
-  final String quotedPreview;
+  final String quoteText;
   final bool isSelf;
-  final bool constrainQuoteToHeaderWidth;
+  final double? quoteMaxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -14851,7 +14952,8 @@ class _ReplyingToPreviewText extends StatelessWidget {
         senderSpan,
       ],
     );
-    final quoteSpan = TextSpan(text: quotedPreview, style: baseStyle);
+    final quotedPreview = '"$quoteText"';
+    final quotedSpan = TextSpan(text: quotedPreview, style: baseStyle);
     final textAlign = isSelf ? TextAlign.end : TextAlign.start;
     final crossAxisAlignment = isSelf
         ? CrossAxisAlignment.end
@@ -14864,54 +14966,23 @@ class _ReplyingToPreviewText extends StatelessWidget {
             constraints.maxWidth.isFinite && constraints.maxWidth > 0
             ? constraints.maxWidth
             : double.infinity;
-        final headerPainter = TextPainter(
-          text: headerWithNameSpan,
-          textDirection: Directionality.of(context),
-          textScaler: textScaler,
-        )..layout(maxWidth: maxPreviewWidth);
-        final headerLineWidth = headerPainter.size.width <= 0
-            ? maxPreviewWidth
-            : math.min(maxPreviewWidth, headerPainter.size.width);
-        final quoteLineWidth = constrainQuoteToHeaderWidth
-            ? headerLineWidth
+        final maxQuoteWidth =
+            quoteMaxWidth != null &&
+                quoteMaxWidth!.isFinite &&
+                quoteMaxWidth! > 0
+            ? math.min(maxPreviewWidth, quoteMaxWidth!)
             : maxPreviewWidth;
-        final headerFits = headerPainter.computeLineMetrics().length <= 1;
-        if (!headerFits) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: crossAxisAlignment,
-            spacing: spacing.xxs,
-            children: [
-              Text.rich(headerWithNameSpan, textAlign: textAlign),
-              Align(
-                alignment: isSelf
-                    ? Alignment.centerRight
-                    : Alignment.centerLeft,
-                child: SizedBox(
-                  width: quoteLineWidth,
-                  child: Text(
-                    quotedPreview,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: textAlign,
-                    style: baseStyle,
-                  ),
-                ),
-              ),
-            ],
-          );
-        }
         final inlinePainter = TextPainter(
           text: TextSpan(
             children: [
               headerWithNameSpan,
               const TextSpan(text: ' '),
-              quoteSpan,
+              quotedSpan,
             ],
           ),
           textDirection: Directionality.of(context),
           textScaler: textScaler,
-        )..layout(maxWidth: maxPreviewWidth);
+        )..layout(maxWidth: maxQuoteWidth);
         final canInline = inlinePainter.computeLineMetrics().length <= 1;
         if (canInline) {
           return Text.rich(
@@ -14919,7 +14990,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
               children: [
                 headerWithNameSpan,
                 const TextSpan(text: ' '),
-                quoteSpan,
+                quotedSpan,
               ],
             ),
             maxLines: 1,
@@ -14927,25 +14998,33 @@ class _ReplyingToPreviewText extends StatelessWidget {
             textAlign: textAlign,
           );
         }
+        final headerText = Text.rich(
+          headerWithNameSpan,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
+          textAlign: textAlign,
+        );
+        final stackedQuotedPreview = _fitQuotedPreviewText(
+          context: context,
+          quoteText: quoteText,
+          style: baseStyle,
+          maxWidth: maxQuoteWidth,
+        );
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: crossAxisAlignment,
           spacing: spacing.xxs,
           children: [
-            Text.rich(
-              headerWithNameSpan,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: textAlign,
-            ),
+            headerText,
             Align(
               alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
-              child: SizedBox(
-                width: quoteLineWidth,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: maxQuoteWidth),
                 child: Text(
-                  quotedPreview,
+                  stackedQuotedPreview,
                   maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  overflow: TextOverflow.clip,
                   textAlign: textAlign,
                   style: baseStyle,
                 ),
@@ -15133,18 +15212,13 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       senderLabelHeight = senderLabelChild.size.height;
       senderLabelWidth = senderLabelChild.size.width;
     }
-    var layoutWidth = math.max(bubbleWidth, senderLabelWidth);
-    if (senderLabelChild != null) {
-      final senderLabelParentData =
-          senderLabelChild.parentData as _ReplyPreviewBubbleParentData;
-      senderLabelParentData.offset = Offset(
-        alignEnd ? layoutWidth - senderLabelWidth : 0,
-        0,
-      );
-    }
+    var layoutWidth = bubbleWidth;
     if (previewChild != null) {
+      final effectivePreviewMaxWidth = constraints.hasBoundedWidth
+          ? math.min(previewMaxWidth, constraints.maxWidth)
+          : previewMaxWidth;
       previewChild.layout(
-        BoxConstraints.tightFor(width: bubbleWidth),
+        BoxConstraints(maxWidth: effectivePreviewMaxWidth),
         parentUsesSize: true,
       );
       previewWidth = previewChild.size.width;
@@ -15157,10 +15231,19 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
         senderLabelHeight,
       );
     }
+    final bubbleOffsetX = alignEnd ? layoutWidth - bubbleWidth : 0.0;
+    if (senderLabelChild != null) {
+      final senderLabelParentData =
+          senderLabelChild.parentData as _ReplyPreviewBubbleParentData;
+      senderLabelParentData.offset = Offset(
+        alignEnd ? bubbleOffsetX + bubbleWidth - senderLabelWidth : 0,
+        0,
+      );
+    }
     final bubbleParentData =
         bubbleChild.parentData as _ReplyPreviewBubbleParentData;
     bubbleParentData.offset = Offset(
-      alignEnd ? layoutWidth - bubbleWidth : 0,
+      bubbleOffsetX,
       previewHeight + senderLabelHeight,
     );
     size = constraints.constrain(
@@ -15181,11 +15264,13 @@ class _QuoteBanner extends StatelessWidget {
   const _QuoteBanner({
     super.key,
     required this.message,
+    required this.senderLabel,
     required this.isSelf,
     required this.onClear,
   });
 
   final Message message;
+  final String senderLabel;
   final bool isSelf;
   final VoidCallback onClear;
 
@@ -15207,18 +15292,13 @@ class _QuoteBanner extends StatelessWidget {
                 final previewText =
                     ChatSubjectCodec.previewText(
                       body: message.body,
-                      htmlBody: message.htmlBody,
                       subject: message.subject,
                     ) ??
                     context.l10n.chatQuotedNoContent;
-                final quotedPreview = '"$previewText"';
                 return _ReplyingToPreviewText(
-                  senderLabel: isSelf
-                      ? context.l10n.chatSenderYou
-                      : message.senderJid,
-                  quotedPreview: quotedPreview,
+                  senderLabel: senderLabel,
+                  quoteText: previewText,
                   isSelf: isSelf,
-                  constrainQuoteToHeaderWidth: false,
                 );
               },
             ),

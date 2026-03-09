@@ -1,9 +1,11 @@
 import 'dart:io';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
+import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -47,6 +49,7 @@ void main() {
   setUpAll(() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
+    registerFallbackValue(MessageNotificationChannel.chat);
     registerFallbackValue(mox.ChatState.active);
     registerFallbackValue(FakeUserAgent());
     registerOmemoFallbacks();
@@ -210,6 +213,28 @@ void main() {
       verify(
         () => mockConnection.sendChatState(jid: jid, state: state),
       ).called(1);
+    },
+  );
+
+  test(
+    'Conversation index reconciliation preserves the local welcome chat.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      const welcomeChatJid = 'axichat@welcome.axichat.invalid';
+      await database.createChat(
+        Chat.fromJid(
+          welcomeChatJid,
+        ).copyWith(archived: false, type: ChatType.chat),
+      );
+
+      await xmppService.applyConversationIndexSnapshot(
+        const PubSubFetchResult<ConvItem>(items: [], isSuccess: true),
+      );
+
+      final chat = await database.getChat(welcomeChatJid);
+      expect(chat, isNotNull);
+      expect(chat?.archived, isFalse);
     },
   );
 

@@ -4,8 +4,6 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
-import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
@@ -528,7 +526,10 @@ class DeltaEventConsumer {
         );
         if (existing != null) {
           lastTimestamp = existing.timestamp;
-          lastPreview = await _previewTextForStoredMessage(db: db, message: existing);
+          lastPreview = await _previewTextForStoredMessage(
+            db: db,
+            message: existing,
+          );
         } else {
           final last = await _context.getMessage(entry.msgId);
           lastTimestamp = last?.timestamp;
@@ -1410,10 +1411,13 @@ class DeltaEventConsumer {
     if (chat == null) {
       return;
     }
-    final lastMessage = await resolvedDb.getLastMessageForChat(
+    final messages = await resolvedDb.getChatMessages(
       chatJid,
+      start: 0,
+      end: 1,
       filter: MessageTimelineFilter.allWithContact,
     );
+    final lastMessage = messages.isEmpty ? null : messages.first;
     final preview = lastMessage == null
         ? null
         : await _previewTextForStoredMessage(
@@ -1445,24 +1449,10 @@ class DeltaEventConsumer {
       return null;
     }
     final metadata = await db.getFileMetadata(metadataId);
+    if (metadata == null) {
+      return 'Attachment';
+    }
     return _attachmentLabel(metadata);
-  }
-
-  Future<bool> _isInternalMessagePreview({
-    required XmppDatabase db,
-    required Message message,
-  }) async {
-    final String? trimmedBody = message.body?.trim();
-    if (trimmedBody?.isNotEmpty == true &&
-        CalendarSyncMessage.looksLikeEnvelope(trimmedBody!)) {
-      return true;
-    }
-    final String? metadataId = message.fileMetadataID?.trim();
-    if (metadataId == null || metadataId.isEmpty) {
-      return false;
-    }
-    final metadata = await db.getFileMetadata(metadataId);
-    return metadata?.isCalendarSnapshot == true;
   }
 
   String? _previewTextForDeltaMessage(DeltaMessage? message) {
@@ -1693,9 +1683,9 @@ class DeltaEventConsumer {
     final normalizedHtml = HtmlContentCodec.normalizeHtml(rawHtml);
     final sanitizedSubject = sanitizeEmailSubjectValue(msg.subject);
     final resolvedBody = rawText?.trim().isNotEmpty == true
-        ? rawText
+        ? rawText!
         : (normalizedHtml == null
-              ? rawText
+              ? ''
               : HtmlContentCodec.toPlainText(normalizedHtml));
     final normalizedBody = sanitizedSubject?.isNotEmpty == true
         ? ChatSubjectCodec.stripRepeatedSubject(
@@ -1704,7 +1694,7 @@ class DeltaEventConsumer {
           )
         : resolvedBody;
     var next = message.copyWith(
-      body: normalizedBody?.trim().isEmpty == true ? null : normalizedBody,
+      body: normalizedBody.trim().isEmpty ? null : normalizedBody,
       htmlBody: normalizedHtml,
       subject: sanitizedSubject,
     );

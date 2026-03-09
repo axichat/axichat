@@ -33,8 +33,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const int _openChatPreloadMessageDisabledLimit = 0;
   static const _recipientAddressSuggestionLimit = 50000;
   static const Duration _mutedForeverDuration = Duration(days: 3650);
-  static const String _signupWelcomeChatJid =
-      'axichat@welcome.axichat.invalid';
+  static const String _signupWelcomeChatJid = 'axichat@welcome.axichat.invalid';
   static const String _conversationIndexLoginSyncOperationName =
       'ChatsService.syncConversationIndexOnLogin';
   static const String _mucChatStatePlaceholderBody = '';

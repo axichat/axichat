@@ -51,8 +51,6 @@ abstract class ChatState with _$ChatState {
     String? composerHydrationText,
     @Default(0) int composerClearId,
     String? emailSubject,
-    @Default(0) int emailSubjectHydrationId,
-    String? emailSubjectHydrationText,
     @Default(true) bool emailSubjectAutofillEligible,
     @Default(false) bool emailSubjectAutofilled,
     @Default(EmailSyncState.ready()) EmailSyncState emailSyncState,

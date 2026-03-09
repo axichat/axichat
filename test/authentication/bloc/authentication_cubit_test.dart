@@ -1156,12 +1156,7 @@ void main() {
       );
 
       final savedMessage =
-          verify(
-                () => mockDatabase.saveMessage(
-                  captureAny(),
-                  chatType: ChatType.note,
-                ),
-              ).captured.first
+          verify(() => mockDatabase.saveMessage(captureAny())).captured.single
               as Message;
       expect(savedMessage.senderJid, equals(welcomeChatJid));
       expect(savedMessage.chatJid, equals(welcomeChatJid));
@@ -1170,7 +1165,6 @@ void main() {
       final updatedChat =
           verify(() => mockDatabase.updateChat(captureAny())).captured.single
               as Chat;
-      expect(updatedChat.type, equals(ChatType.note));
       expect(updatedChat.title, equals(welcomeTitle));
       expect(updatedChat.contactDisplayName, equals(welcomeTitle));
     });

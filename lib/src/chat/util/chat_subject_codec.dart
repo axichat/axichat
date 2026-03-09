@@ -5,7 +5,6 @@ import 'package:axichat/src/common/html_content.dart';
 
 class ChatSubjectCodec {
   static const String _marker = '\u2060';
-  static final RegExp _htmlTagPattern = RegExp(r'<\/?[a-zA-Z][^>]*>');
 
   static String composeXmppBody({
     required String body,
@@ -52,21 +51,19 @@ class ChatSubjectCodec {
 
   static String? previewText({
     required String? body,
-    String? htmlBody,
     required String? subject,
   }) {
-    final resolvedBody = _previewSourceBody(body: body, htmlBody: htmlBody);
     final explicitSubject = subject?.trim();
     if (explicitSubject?.isNotEmpty == true) {
       final trimmedBody = previewBodyText(
-        stripRepeatedSubject(body: resolvedBody, subject: explicitSubject!),
+        stripRepeatedSubject(body: body, subject: explicitSubject!),
       ).trim();
       if (trimmedBody.isNotEmpty) {
         return '$explicitSubject — $trimmedBody';
       }
       return explicitSubject;
     }
-    final split = splitXmppBody(resolvedBody);
+    final split = splitXmppBody(body);
     final trimmedSubject = split.subject?.trim();
     final trimmedBody = previewBodyText(split.body).trim();
     if (trimmedSubject?.isNotEmpty == true && trimmedBody.isNotEmpty) {
@@ -104,25 +101,10 @@ class ChatSubjectCodec {
     if (rawBody == null || rawBody.isEmpty) {
       return '';
     }
-    if (!_htmlTagPattern.hasMatch(rawBody)) {
-      return rawBody;
+    if (RegExp(r'<\/?[A-Za-z][^>]*>').hasMatch(rawBody)) {
+      return HtmlContentCodec.toPlainText(rawBody).trim();
     }
-    final plainText = HtmlContentCodec.toPlainText(rawBody).trim();
-    return plainText.isEmpty ? rawBody : plainText;
-  }
-
-  static String _previewSourceBody({
-    required String? body,
-    required String? htmlBody,
-  }) {
-    final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
-    if (normalizedHtml != null) {
-      final plainText = HtmlContentCodec.toPlainText(normalizedHtml).trim();
-      if (plainText.isNotEmpty) {
-        return plainText;
-      }
-    }
-    return body ?? '';
+    return rawBody;
   }
 
   static bool _startsWithIgnoreCase(String value, String prefix) =>

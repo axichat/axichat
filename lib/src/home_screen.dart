@@ -282,9 +282,8 @@ class _HomeShellState extends State<HomeShell> {
     final isChatCalendarRoute = chatsState.openChatRoute.isCalendar;
     final chatItems = chatsState.items ?? const <m.Chat>[];
     final badgeCounts = <HomeTab, int>{
-      HomeTab.invites: context.watch<RosterCubit>().inviteCount,
       HomeTab.chats: chatItems
-          .where((chat) => !chat.archived && !chat.spam)
+          .where((chat) => !chat.archived && !chat.spam && !chat.hidden)
           .fold<int>(0, (sum, chat) => sum + math.max(0, chat.unreadCount)),
       HomeTab.drafts: context.watch<DraftCubit>().state.items?.length ?? 0,
       HomeTab.spam: chatItems
