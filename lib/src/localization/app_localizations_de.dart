@@ -6285,6 +6285,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get xmppOperationMamFetchFailure => 'Abruf des Archivs fehlgeschlagen';
 
   @override
+  String get xmppOperationMucCreateStart => 'Raum wird erstellt...';
+
+  @override
+  String get xmppOperationMucCreateSuccess => 'Raum erstellt';
+
+  @override
+  String get xmppOperationMucCreateFailure => 'Raumerstellung fehlgeschlagen';
+
+  @override
   String get xmppOperationMucJoinStart => 'Raum wird beigetreten...';
 
   @override
@@ -6292,6 +6301,28 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get xmppOperationMucJoinFailure => 'Beitritt zum Raum fehlgeschlagen';
+
+  @override
+  String get xmppOperationMucAvatarUpdateStart =>
+      'Raumavatar wird aktualisiert...';
+
+  @override
+  String get xmppOperationMucAvatarUpdateSuccess => 'Raumavatar aktualisiert';
+
+  @override
+  String get xmppOperationMucAvatarUpdateFailure =>
+      'Aktualisierung des Raumavatars fehlgeschlagen';
+
+  @override
+  String get xmppOperationSelfAvatarPublishStart =>
+      'Avatar wird veröffentlicht...';
+
+  @override
+  String get xmppOperationSelfAvatarPublishSuccess => 'Avatar veröffentlicht';
+
+  @override
+  String get xmppOperationSelfAvatarPublishFailure =>
+      'Veröffentlichung des Avatars fehlgeschlagen';
 
   @override
   String get chatSettingsCapabilitiesTitle => 'Funktionen';

@@ -96,7 +96,6 @@ const _emailResendFailedLogMessage = 'Failed to resend email message.';
 const _attachmentSendFailedLogMessage = 'Failed to send attachment.';
 const _xmppAttachmentSendFailedLogMessage = 'Failed to send XMPP attachment.';
 const _xmppDraftSaveFailedLogMessage = 'Failed to save XMPP draft.';
-const _mucOccupantSeparator = '/';
 const int _pinnedMessagesFetchPageLimit = 4;
 const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
@@ -1091,7 +1090,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null || chat.type != ChatType.groupChat) return;
     await _ensureMucMembership(chat);
-    _seedLocalRoomOccupant(chat, state.roomState);
     final roomState =
         state.roomState ??
         _mucService.roomStateFor(chat.jid) ??
@@ -1102,51 +1100,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _refreshRoomAffiliationsIfNeeded(chat: chat, roomState: roomState);
   }
 
-  String? _resolveLocalRoomNickname(Chat chat, String selfJid) {
-    final nickname = chat.myNickname?.trim();
-    if (nickname?.isNotEmpty == true) return nickname;
-    try {
-      final local = mox.JID.fromString(selfJid).local.trim();
-      if (local.isNotEmpty) return local;
-    } on Exception {
-      return null;
-    }
-    return null;
-  }
-
-  void _seedLocalRoomOccupant(Chat chat, RoomState? roomState) {
-    if (_mucService.hasLeftRoom(chat.jid)) return;
-    final roomJid = _bareJid(chat.jid);
-    if (roomJid == null || roomJid.isEmpty) return;
-    final selfJid = _bareJid(_chatsService.myJid);
-    if (selfJid == null || selfJid.isEmpty) return;
-    if (roomState?.myOccupantId?.isNotEmpty == true) return;
-    final normalizedSelfJid = selfJid.toLowerCase();
-    final alreadySeeded =
-        roomState?.occupants.values.any(
-          (occupant) =>
-              _bareJid(occupant.realJid)?.toLowerCase() == normalizedSelfJid,
-        ) ??
-        false;
-    if (alreadySeeded) return;
-    final nick = _resolveLocalRoomNickname(chat, selfJid);
-    if (nick == null || nick.isEmpty) return;
-    final occupantId = '$roomJid$_mucOccupantSeparator$nick';
-    _mucService.updateOccupantFromPresence(
-      roomJid: roomJid,
-      occupantId: occupantId,
-      nick: nick,
-      realJid: selfJid,
-      isPresent: true,
-    );
-  }
-
   Future<void> _refreshRoomAffiliationsIfNeeded({
     required Chat chat,
     required RoomState roomState,
   }) async {
     if (!roomState.hasSelfPresence) return;
-    if (roomState.occupants.isEmpty) return;
     if (!roomState.myAffiliation.isNone) return;
     if (state.xmppConnectionState != ConnectionState.connected) return;
     final roomJid = _bareJid(chat.jid);
@@ -1580,7 +1538,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
     final chat = state.chat;
     if (chat == null || chat.type != ChatType.groupChat) return;
-    _seedLocalRoomOccupant(chat, event.roomState);
     await _refreshRoomAffiliationsIfNeeded(
       chat: chat,
       roomState: event.roomState,

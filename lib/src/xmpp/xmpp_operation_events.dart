@@ -15,7 +15,10 @@ enum XmppOperationKind {
   mamGlobalSync,
   mamMucSync,
   mamFetch,
+  mucCreate,
   mucJoin,
+  mucAvatarUpdate,
+  selfAvatarPublish,
 }
 
 enum XmppOperationStage { start, end }

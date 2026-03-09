@@ -71,10 +71,17 @@ class HomeRefreshSyncService {
     final emailSub = _emailSyncSubscription;
     _emailSyncSubscription = null;
     await emailSub?.cancel();
+    _lastSyncAt = null;
+    _lastXmppState = null;
+    _lastEmailStatus = null;
   }
 
   Future<void> syncOnLogin() async {
-    unawaited(refreshUnreadOnly());
+    if (_lastSyncAt == null) {
+      await refresh();
+      return;
+    }
+    await refreshUnreadOnly();
   }
 
   Future<DateTime> refreshUnreadOnly() async {
@@ -200,8 +207,7 @@ class HomeRefreshSyncService {
   Future<void> _refreshEmailUnread() async {
     final emailService = _emailService;
     if (emailService == null) return;
-    if (emailService.syncState.status != EmailSyncStatus.ready ||
-        !emailService.hasActiveSession) {
+    if (!emailService.hasActiveSession) {
       return;
     }
     try {
@@ -254,8 +260,7 @@ class HomeRefreshSyncService {
   Future<void> _refreshEmailHistory() async {
     final emailService = _emailService;
     if (emailService == null) return;
-    if (emailService.syncState.status != EmailSyncStatus.ready ||
-        !emailService.hasActiveSession) {
+    if (!emailService.hasActiveSession) {
       return;
     }
     try {
@@ -272,8 +277,7 @@ class HomeRefreshSyncService {
   Future<void> _syncEmailContacts() async {
     final emailService = _emailService;
     if (emailService == null) return;
-    if (emailService.syncState.status != EmailSyncStatus.ready ||
-        !emailService.hasActiveSession) {
+    if (!emailService.hasActiveSession) {
       return;
     }
     try {

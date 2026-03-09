@@ -10,6 +10,10 @@ void main() {
   late MockXmppService mockXmppService;
   late MockEmailService mockEmailService;
 
+  setUpAll(() {
+    registerFallbackValue(const Duration(seconds: 1));
+  });
+
   setUp(() {
     mockXmppService = MockXmppService();
     mockEmailService = MockEmailService();
@@ -29,6 +33,17 @@ void main() {
     ).thenAnswer((_) async {});
     when(
       () => mockEmailService.handleNetworkAvailable(),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.performBackgroundFetch(
+        timeout: any(named: 'timeout'),
+      ),
+    ).thenAnswer((_) async => true);
+    when(
+      () => mockEmailService.refreshChatlistFromCore(),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.syncContactsFromCore(),
     ).thenAnswer((_) async {});
   });
 
@@ -72,4 +87,55 @@ void main() {
     verify(() => mockEmailService.ensureEventChannelActive()).called(1);
     verify(() => mockEmailService.handleNetworkAvailable()).called(1);
   });
+
+  test(
+    'syncOnLogin runs a full restore once and unread-only afterward',
+    () async {
+      when(() => mockEmailService.hasActiveSession).thenReturn(true);
+      when(
+        () => mockEmailService.canReconnectConfiguredSession(),
+      ).thenAnswer((_) async => false);
+
+      final service = HomeRefreshSyncService(
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+      );
+
+      await service.syncOnLogin();
+      await service.syncOnLogin();
+
+      verify(() => mockEmailService.syncContactsFromCore()).called(1);
+      verify(
+        () => mockEmailService.performBackgroundFetch(
+          timeout: any(named: 'timeout'),
+        ),
+      ).called(2);
+      verify(() => mockEmailService.refreshChatlistFromCore()).called(2);
+    },
+  );
+
+  test(
+    'refresh fetches email history even while email sync is offline',
+    () async {
+      when(() => mockEmailService.hasActiveSession).thenReturn(true);
+      when(
+        () => mockEmailService.canReconnectConfiguredSession(),
+      ).thenAnswer((_) async => false);
+
+      final service = HomeRefreshSyncService(
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+      );
+
+      await service.refresh();
+
+      verify(() => mockEmailService.syncContactsFromCore()).called(1);
+      verify(
+        () => mockEmailService.performBackgroundFetch(
+          timeout: any(named: 'timeout'),
+        ),
+      ).called(1);
+      verify(() => mockEmailService.refreshChatlistFromCore()).called(1);
+    },
+  );
 }

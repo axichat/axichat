@@ -707,8 +707,25 @@ String _resolveOperationLabel(
     XmppOperationLabelKey.mamFetchStart => l10n.xmppOperationMamFetchStart,
     XmppOperationLabelKey.mamFetchSuccess => l10n.xmppOperationMamFetchSuccess,
     XmppOperationLabelKey.mamFetchFailure => l10n.xmppOperationMamFetchFailure,
+    XmppOperationLabelKey.mucCreateStart => l10n.xmppOperationMucCreateStart,
+    XmppOperationLabelKey.mucCreateSuccess =>
+      l10n.xmppOperationMucCreateSuccess,
+    XmppOperationLabelKey.mucCreateFailure =>
+      l10n.xmppOperationMucCreateFailure,
     XmppOperationLabelKey.mucJoinStart => l10n.xmppOperationMucJoinStart,
     XmppOperationLabelKey.mucJoinSuccess => l10n.xmppOperationMucJoinSuccess,
     XmppOperationLabelKey.mucJoinFailure => l10n.xmppOperationMucJoinFailure,
+    XmppOperationLabelKey.mucAvatarUpdateStart =>
+      l10n.xmppOperationMucAvatarUpdateStart,
+    XmppOperationLabelKey.mucAvatarUpdateSuccess =>
+      l10n.xmppOperationMucAvatarUpdateSuccess,
+    XmppOperationLabelKey.mucAvatarUpdateFailure =>
+      l10n.xmppOperationMucAvatarUpdateFailure,
+    XmppOperationLabelKey.selfAvatarPublishStart =>
+      l10n.xmppOperationSelfAvatarPublishStart,
+    XmppOperationLabelKey.selfAvatarPublishSuccess =>
+      l10n.xmppOperationSelfAvatarPublishSuccess,
+    XmppOperationLabelKey.selfAvatarPublishFailure =>
+      l10n.xmppOperationSelfAvatarPublishFailure,
   };
 }

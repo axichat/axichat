@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/src/chats/utils/chat_history_exporter.dart';
+import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -691,8 +692,11 @@ class ChatsCubit extends Cubit<ChatsState> {
         nickname: nickname,
         avatar: avatar,
       );
-      await openChat(jid: roomJid);
       emit(state.copyWith(creationStatus: RequestStatus.success));
+      fireAndForget(
+        () => openChat(jid: roomJid),
+        operationName: 'ChatsCubit.openCreatedRoom',
+      );
     } on Exception {
       emit(state.copyWith(creationStatus: RequestStatus.failure));
     }

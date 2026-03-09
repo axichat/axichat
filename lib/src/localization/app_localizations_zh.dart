@@ -5909,6 +5909,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get xmppOperationMamFetchFailure => '归档获取失败';
 
   @override
+  String get xmppOperationMucCreateStart => '正在创建群组...';
+
+  @override
+  String get xmppOperationMucCreateSuccess => '群组已创建';
+
+  @override
+  String get xmppOperationMucCreateFailure => '群组创建失败';
+
+  @override
   String get xmppOperationMucJoinStart => '正在加入群组...';
 
   @override
@@ -5916,6 +5925,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get xmppOperationMucJoinFailure => '加入群组失败';
+
+  @override
+  String get xmppOperationMucAvatarUpdateStart => '正在更新群组头像...';
+
+  @override
+  String get xmppOperationMucAvatarUpdateSuccess => '群组头像已更新';
+
+  @override
+  String get xmppOperationMucAvatarUpdateFailure => '群组头像更新失败';
+
+  @override
+  String get xmppOperationSelfAvatarPublishStart => '正在发布头像...';
+
+  @override
+  String get xmppOperationSelfAvatarPublishSuccess => '头像已发布';
+
+  @override
+  String get xmppOperationSelfAvatarPublishFailure => '头像发布失败';
 
   @override
   String get chatSettingsCapabilitiesTitle => '功能';
@@ -11711,6 +11738,15 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get xmppOperationMamFetchFailure => '封存擷取失敗';
 
   @override
+  String get xmppOperationMucCreateStart => '正在建立聊天室...';
+
+  @override
+  String get xmppOperationMucCreateSuccess => '聊天室已建立';
+
+  @override
+  String get xmppOperationMucCreateFailure => '建立聊天室失敗';
+
+  @override
   String get xmppOperationMucJoinStart => '正在加入聊天室...';
 
   @override
@@ -11718,6 +11754,24 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get xmppOperationMucJoinFailure => '加入聊天室失敗';
+
+  @override
+  String get xmppOperationMucAvatarUpdateStart => '正在更新聊天室頭像...';
+
+  @override
+  String get xmppOperationMucAvatarUpdateSuccess => '聊天室頭像已更新';
+
+  @override
+  String get xmppOperationMucAvatarUpdateFailure => '更新聊天室頭像失敗';
+
+  @override
+  String get xmppOperationSelfAvatarPublishStart => '正在發佈頭像...';
+
+  @override
+  String get xmppOperationSelfAvatarPublishSuccess => '頭像已發佈';
+
+  @override
+  String get xmppOperationSelfAvatarPublishFailure => '發佈頭像失敗';
 
   @override
   String get chatSettingsCapabilitiesTitle => '功能';

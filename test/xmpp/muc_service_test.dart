@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+
 import 'dart:async';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -37,14 +41,21 @@ const String _subjectEmpty = '   ';
 const String _mucDiscoFeature = 'http://jabber.org/protocol/muc';
 const String _mucOwnerXmlns = 'http://jabber.org/protocol/muc#owner';
 const String _mucAdminXmlns = 'http://jabber.org/protocol/muc#admin';
+const String _mucRoomInfoFormType = 'http://jabber.org/protocol/muc#roominfo';
+const String _mucRoomConfigFormType =
+    'http://jabber.org/protocol/muc#roomconfig';
+const String _discoInfoXmlns = 'http://jabber.org/protocol/disco#info';
 const String _dataFormXmlns = 'jabber:x:data';
 const String _dataFormTag = 'x';
 const String _queryTag = 'query';
+const String _fieldTag = 'field';
 const String _itemTag = 'item';
 const String _jidAttr = 'jid';
 const String _nickAttr = 'nick';
 const String _roleAttr = 'role';
 const String _affiliationAttr = 'affiliation';
+const String _varAttr = 'var';
+const String _errorTag = 'error';
 const String _reasonTag = 'reason';
 const String _subjectTag = 'subject';
 const String _bodyTag = 'body';
@@ -52,6 +63,8 @@ const String _messageTag = 'message';
 const String _xmlnsAttr = 'xmlns';
 const String _typeAttr = 'type';
 const String _toAttr = 'to';
+const String _iqTypeGet = 'get';
+const String _iqTypeSet = 'set';
 const String _iqTypeResult = 'result';
 const String _iqTypeError = 'error';
 const String _messageTypeGroupchat = 'groupchat';
@@ -83,6 +96,30 @@ class FakeMucError extends Fake implements mox.MUCError {}
 
 class FakeJid extends Fake implements mox.JID {}
 
+const List<int> _pngLikeBytes = <int>[
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+];
+
+mox.XMLNode _formTypeField(String formType) => mox.XMLNode(
+  tag: _fieldTag,
+  attributes: {_varAttr: 'FORM_TYPE', 'type': 'hidden'},
+  children: [mox.XMLNode(tag: 'value', text: formType)],
+);
+
+mox.XMLNode _singleValueField(String name, String value) => mox.XMLNode(
+  tag: _fieldTag,
+  attributes: {_varAttr: name},
+  children: [mox.XMLNode(tag: 'value', text: value)],
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -99,6 +136,7 @@ void main() {
     registerFallbackValue(FakeJid());
     registerFallbackValue(_fallbackChatType);
     registerFallbackValue(_emptyXmlNodeList);
+    registerFallbackValue(MessageNotificationChannel.chat);
     registerOmemoFallbacks();
     resetForegroundNotifier(value: false);
   });
@@ -121,6 +159,25 @@ void main() {
     joinBootstrapManager = MucJoinBootstrapManager();
 
     prepareMockConnection();
+    when(() => mockConnection.discoInfoQuery(any())).thenAnswer((
+      invocation,
+    ) async {
+      final target = invocation.positionalArguments.first;
+      final jid = target is mox.JID
+          ? target.toBare().toString()
+          : target.toString();
+      final features = jid == _serviceJid || jid == 'muc.axi.im'
+          ? <String>[_mucDiscoFeature]
+          : <String>[mox.mamXmlns];
+      final discoInfo = mox.DiscoInfo(
+        features,
+        const [],
+        const [],
+        null,
+        mox.JID.fromString(_accountBareJid),
+      );
+      return moxlib.Result<mox.StanzaError, mox.DiscoInfo>(discoInfo);
+    });
 
     when(
       () => mockConnection.asBroadcastStream(),
@@ -134,6 +191,19 @@ void main() {
     ).thenReturn(joinBootstrapManager);
     when(() => mockConnection.sendStanza(any())).thenAnswer((_) async => null);
     when(() => mockDatabase.getChat(any())).thenAnswer((_) async => null);
+    when(
+      () => mockDatabase.watchBlocklist(
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+      ),
+    ).thenAnswer((_) => const Stream<List<BlocklistData>>.empty());
+    when(
+      () => mockDatabase.getBlocklist(
+        start: any(named: 'start'),
+        end: any(named: 'end'),
+      ),
+    ).thenAnswer((_) async => <BlocklistData>[]);
+    when(() => mucManager.getRoomState(any())).thenAnswer((_) async => null);
 
     xmppService = XmppService(
       buildConnection: () => mockConnection,
@@ -148,6 +218,20 @@ void main() {
     );
     await pumpEventQueue();
   });
+
+  Future<List<XmppOperationEvent>> captureXmppOperations(
+    Future<void> Function() action,
+  ) async {
+    final events = <XmppOperationEvent>[];
+    final subscription = xmppService.xmppOperationStream.listen(events.add);
+    try {
+      await action();
+      await pumpEventQueue();
+      return List<XmppOperationEvent>.from(events);
+    } finally {
+      await subscription.cancel();
+    }
+  }
 
   tearDown(() async {
     await eventStreamController.close();
@@ -460,6 +544,492 @@ void main() {
             maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
         );
+      },
+    );
+
+    test(
+      'JOIN-020 [HP] own data arriving before self presence is applied once self presence lands',
+      () async {
+        eventStreamController.add(
+          mox.OwnDataChangedEvent(
+            mox.JID.fromString(_roomJid),
+            'me',
+            mox.Affiliation.owner,
+            mox.Role.moderator,
+          ),
+        );
+
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: _roomJidWithSelfNick,
+            nick: 'me',
+            affiliation: OccupantAffiliation.none.xmlValue,
+            role: OccupantRole.participant.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: false,
+            statusCodes: {MucStatusCode.selfPresence.code},
+          ),
+        );
+
+        await pumpEventQueue();
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room?.hasSelfPresence, isTrue);
+        expect(room?.myOccupantId, equals(_roomJidWithSelfNick));
+        expect(room?.myAffiliation, equals(OccupantAffiliation.owner));
+        expect(room?.myRole, equals(OccupantRole.moderator));
+        expect(
+          room?.occupants[_roomJidWithSelfNick]?.realJid,
+          equals(_accountBareJid),
+        );
+      },
+    );
+
+    test(
+      'JOIN-021 [HP] joinRoom requests affiliations as soon as self presence arrives',
+      () async {
+        final requestedAffiliations = <String>[];
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: _roomJid,
+              occupantJid: _roomJidWithSelfNick,
+              nick: 'me',
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {MucStatusCode.selfPresence.code},
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+        when(() => mockConnection.sendStanza(any())).thenAnswer((
+          invocation,
+        ) async {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          final adminQuery = stanza.firstTag(_queryTag, xmlns: _mucAdminXmlns);
+          if (adminQuery != null) {
+            final affiliation = adminQuery
+                .firstTag(_itemTag)
+                ?.attributes[_affiliationAttr]
+                ?.toString();
+            if (affiliation != null) {
+              requestedAffiliations.add(affiliation);
+            }
+            return mox.Stanza.iq(
+              type: _iqTypeResult,
+              children: [
+                mox.XMLNode.xmlns(tag: _queryTag, xmlns: _mucAdminXmlns),
+              ],
+            );
+          }
+          final ownerQuery = stanza.firstTag(_queryTag, xmlns: _mucOwnerXmlns);
+          if (ownerQuery != null) {
+            final affiliation = ownerQuery
+                .firstTag(_itemTag)
+                ?.attributes[_affiliationAttr]
+                ?.toString();
+            if (affiliation != null) {
+              requestedAffiliations.add(affiliation);
+            }
+            return mox.Stanza.iq(
+              type: _iqTypeResult,
+              children: [
+                mox.XMLNode.xmlns(tag: _queryTag, xmlns: _mucOwnerXmlns),
+              ],
+            );
+          }
+          return null;
+        });
+
+        await xmppService.joinRoom(roomJid: _roomJid, nickname: 'me');
+
+        expect(
+          requestedAffiliations,
+          containsAll(<String>[
+            OccupantAffiliation.member.xmlValue,
+            OccupantAffiliation.owner.xmlValue,
+            OccupantAffiliation.admin.xmlValue,
+          ]),
+        );
+      },
+    );
+
+    test(
+      'JOIN-022 [HP] joinRoom completes before post-join metadata refresh replies',
+      () async {
+        final pendingMetadataReplies = Completer<mox.XMLNode?>();
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: _roomJid,
+              occupantJid: _roomJidWithSelfNick,
+              nick: 'me',
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {
+                MucStatusCode.selfPresence.code,
+                MucStatusCode.roomCreated.code,
+              },
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          final isAffiliationQuery =
+              stanza.firstTag(_queryTag, xmlns: _mucAdminXmlns) != null ||
+              stanza.firstTag(_queryTag, xmlns: _mucOwnerXmlns) != null;
+          if (!isAffiliationQuery) {
+            return Future<mox.XMLNode?>.value(null);
+          }
+          return pendingMetadataReplies.future;
+        });
+
+        await xmppService
+            .joinRoom(roomJid: _roomJid, nickname: 'me')
+            .timeout(const Duration(seconds: 1));
+
+        expect(xmppService.roomStateFor(_roomJid)?.hasSelfPresence, isTrue);
+
+        pendingMetadataReplies.complete(null);
+        await pumpEventQueue();
+      },
+    );
+
+    test(
+      'JOIN-023 [HP] resumed streams invalidate stale joined room state before any next send',
+      () async {
+        final managerRoomState = mox.RoomState(
+          roomJid: mox.JID.fromString(_roomJidBare),
+          nick: 'me',
+          joined: true,
+        );
+        when(
+          () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
+        ).thenAnswer((_) async => managerRoomState);
+
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: _roomJidWithSelfNick,
+            nick: 'me',
+            affiliation: OccupantAffiliation.owner.xmlValue,
+            role: OccupantRole.moderator.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: false,
+            statusCodes: {MucStatusCode.selfPresence.code},
+          ),
+        );
+        await pumpEventQueue();
+
+        expect(xmppService.roomStateFor(_roomJid)?.hasSelfPresence, isTrue);
+        expect(
+          xmppService
+              .roomStateFor(_roomJid)
+              ?.occupants[_roomJidWithSelfNick]
+              ?.isPresent,
+          isTrue,
+        );
+        expect(managerRoomState.joined, isTrue);
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
+        await pumpEventQueue();
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room?.hasSelfPresence, isFalse);
+        expect(room?.occupants[_roomJidWithSelfNick]?.isPresent, isFalse);
+        expect(managerRoomState.joined, isFalse);
+      },
+    );
+
+    test('JOIN-024 [HP] joinRoom emits room join operation events', () async {
+      when(
+        () => mucManager.joinRoom(
+          any(),
+          any(),
+          maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+        ),
+      ).thenAnswer((_) async {
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: _roomJidWithSelfNick,
+            nick: 'me',
+            affiliation: OccupantAffiliation.owner.xmlValue,
+            role: OccupantRole.moderator.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: false,
+            statusCodes: {MucStatusCode.selfPresence.code},
+          ),
+        );
+        return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+      });
+
+      final events = await captureXmppOperations(
+        () => xmppService.joinRoom(roomJid: _roomJid, nickname: 'me'),
+      );
+      final joinEvents = events
+          .where((event) => event.kind == XmppOperationKind.mucJoin)
+          .toList(growable: false);
+
+      expect(joinEvents, hasLength(2));
+      expect(joinEvents.first.stage, XmppOperationStage.start);
+      expect(joinEvents.last.stage, XmppOperationStage.end);
+      expect(joinEvents.last.isSuccess, isTrue);
+    });
+
+    test(
+      'CREATE-001 [HP] createRoom emits create events without nested join events',
+      () async {
+        await xmppService.setMucServiceHost(_serviceJid);
+        when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: 'planning-room@$_serviceJid',
+              occupantJid: 'planning-room@$_serviceJid/me',
+              nick: 'me',
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {
+                MucStatusCode.selfPresence.code,
+                MucStatusCode.roomCreated.code,
+              },
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+
+        final events = await captureXmppOperations(
+          () => xmppService.createRoom(name: _roomName, nickname: 'me'),
+        );
+        final createEvents = events
+            .where((event) => event.kind == XmppOperationKind.mucCreate)
+            .toList(growable: false);
+        final joinEvents = events
+            .where((event) => event.kind == XmppOperationKind.mucJoin)
+            .toList(growable: false);
+
+        expect(createEvents, hasLength(2));
+        expect(createEvents.first.stage, XmppOperationStage.start);
+        expect(createEvents.last.stage, XmppOperationStage.end);
+        expect(createEvents.last.isSuccess, isTrue);
+        expect(joinEvents, isEmpty);
+      },
+    );
+
+    test(
+      'JOIN-025 [HP] joining a room triggers room history sync operation events',
+      () async {
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: _roomJid,
+              occupantJid: _roomJidWithSelfNick,
+              nick: 'me',
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {MucStatusCode.selfPresence.code},
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          if (stanza.firstTag(_queryTag, xmlns: _mucAdminXmlns) != null) {
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(tag: _queryTag, xmlns: _mucAdminXmlns),
+                ],
+              ),
+            );
+          }
+          if (stanza.firstTag(_queryTag, xmlns: _mucOwnerXmlns) != null) {
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(tag: _queryTag, xmlns: _mucOwnerXmlns),
+                ],
+              ),
+            );
+          }
+          if (stanza.firstTag(_queryTag, xmlns: mox.mamXmlns) != null) {
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeError,
+                children: [mox.XMLNode(tag: _errorTag)],
+              ),
+            );
+          }
+          return Future<mox.XMLNode?>.value(null);
+        });
+
+        final events = await captureXmppOperations(
+          () => xmppService.joinRoom(roomJid: _roomJid, nickname: 'me'),
+        );
+        await pumpEventQueue();
+
+        final roomHistoryEvents = events
+            .where((event) => event.kind == XmppOperationKind.mamMucSync)
+            .toList(growable: false);
+
+        expect(roomHistoryEvents, hasLength(2));
+        expect(roomHistoryEvents.first.stage, XmppOperationStage.start);
+        expect(roomHistoryEvents.last.stage, XmppOperationStage.end);
+        expect(roomHistoryEvents.last.isSuccess, isFalse);
+      },
+    );
+
+    test(
+      'ROOM-AVATAR-001 [HP] updateRoomAvatar emits room avatar operation events',
+      () async {
+        const expectedHash = 'expected-room-avatar-hash';
+        final payload = AvatarUploadPayload(
+          bytes: Uint8List.fromList(_pngLikeBytes),
+          mimeType: 'image/png',
+          width: 1,
+          height: 1,
+          hash: expectedHash,
+        );
+        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          final type = stanza.attributes[_typeAttr]?.toString();
+          if (stanza.firstTag(_queryTag, xmlns: _mucOwnerXmlns)
+              case final query? when type == _iqTypeGet) {
+            final item = query.firstTag(_itemTag);
+            if (item != null) {
+              return Future<mox.XMLNode?>.value(
+                mox.Stanza.iq(
+                  type: _iqTypeResult,
+                  children: [
+                    mox.XMLNode.xmlns(tag: _queryTag, xmlns: _mucOwnerXmlns),
+                  ],
+                ),
+              );
+            }
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(
+                    tag: _queryTag,
+                    xmlns: _mucOwnerXmlns,
+                    children: [
+                      mox.XMLNode.xmlns(
+                        tag: _dataFormTag,
+                        xmlns: _dataFormXmlns,
+                        attributes: {'type': 'form'},
+                        children: [
+                          _formTypeField(_mucRoomConfigFormType),
+                          _singleValueField('muc#roomconfig_avatar', ''),
+                          _singleValueField('muc#roomconfig_avatar_hash', ''),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+          if (stanza.firstTag(_queryTag, xmlns: _mucOwnerXmlns) != null &&
+              type == _iqTypeSet) {
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(type: _iqTypeResult),
+            );
+          }
+          if (stanza.firstTag(_queryTag, xmlns: _discoInfoXmlns) != null) {
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(
+                    tag: _queryTag,
+                    xmlns: _discoInfoXmlns,
+                    children: [
+                      mox.XMLNode.xmlns(
+                        tag: _dataFormTag,
+                        xmlns: _dataFormXmlns,
+                        attributes: {'type': 'result'},
+                        children: [
+                          _formTypeField(_mucRoomInfoFormType),
+                          _singleValueField(
+                            'muc#roominfo_avatar_hash',
+                            expectedHash,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+          return Future<mox.XMLNode?>.value(null);
+        });
+
+        final events = await captureXmppOperations(
+          () =>
+              xmppService.updateRoomAvatar(roomJid: _roomJid, avatar: payload),
+        );
+        final avatarEvents = events
+            .where((event) => event.kind == XmppOperationKind.mucAvatarUpdate)
+            .toList(growable: false);
+
+        expect(avatarEvents, hasLength(2));
+        expect(avatarEvents.first.stage, XmppOperationStage.start);
+        expect(avatarEvents.last.stage, XmppOperationStage.end);
+        expect(avatarEvents.last.isSuccess, isTrue);
       },
     );
   });

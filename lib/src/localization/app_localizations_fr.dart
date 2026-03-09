@@ -6305,6 +6305,15 @@ class AppLocalizationsFr extends AppLocalizations {
       'Échec de la récupération de l’archive';
 
   @override
+  String get xmppOperationMucCreateStart => 'Création du salon...';
+
+  @override
+  String get xmppOperationMucCreateSuccess => 'Salon créé';
+
+  @override
+  String get xmppOperationMucCreateFailure => 'Échec de la création du salon';
+
+  @override
   String get xmppOperationMucJoinStart => 'Connexion au salon...';
 
   @override
@@ -6312,6 +6321,29 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get xmppOperationMucJoinFailure => 'Échec de la connexion au salon';
+
+  @override
+  String get xmppOperationMucAvatarUpdateStart =>
+      'Mise à jour de l’avatar du salon...';
+
+  @override
+  String get xmppOperationMucAvatarUpdateSuccess =>
+      'Avatar du salon mis à jour';
+
+  @override
+  String get xmppOperationMucAvatarUpdateFailure =>
+      'Échec de la mise à jour de l’avatar du salon';
+
+  @override
+  String get xmppOperationSelfAvatarPublishStart =>
+      'Publication de l’avatar...';
+
+  @override
+  String get xmppOperationSelfAvatarPublishSuccess => 'Avatar publié';
+
+  @override
+  String get xmppOperationSelfAvatarPublishFailure =>
+      'Échec de la publication de l’avatar';
 
   @override
   String get chatSettingsCapabilitiesTitle => 'Capacités';

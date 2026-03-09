@@ -1,8 +1,10 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/event_manager.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -137,4 +139,46 @@ void main() {
     expect(updated?.avatarHash, isNull);
     expect(updated?.avatarPath, isNull);
   });
+
+  test(
+    'Self avatar publish emits avatar publish operation failure when PubSub is unavailable',
+    () async {
+      final events = <XmppOperationEvent>[];
+      final subscription = xmppService.xmppOperationStream.listen(events.add);
+      addTearDown(subscription.cancel);
+
+      final payload = AvatarUploadPayload(
+        bytes: Uint8List.fromList(const <int>[
+          0x89,
+          0x50,
+          0x4E,
+          0x47,
+          0x0D,
+          0x0A,
+          0x1A,
+          0x0A,
+          0x00,
+        ]),
+        mimeType: 'image/png',
+        width: 1,
+        height: 1,
+        hash: 'self-avatar-hash',
+      );
+
+      await expectLater(
+        xmppService.publishAvatar(payload),
+        throwsA(isA<XmppAvatarException>()),
+      );
+      await pumpEventQueue();
+
+      final publishEvents = events
+          .where((event) => event.kind == XmppOperationKind.selfAvatarPublish)
+          .toList(growable: false);
+
+      expect(publishEvents, hasLength(2));
+      expect(publishEvents.first.stage, XmppOperationStage.start);
+      expect(publishEvents.last.stage, XmppOperationStage.end);
+      expect(publishEvents.last.isSuccess, isFalse);
+    },
+  );
 }

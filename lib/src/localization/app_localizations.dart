@@ -10657,6 +10657,24 @@ abstract class AppLocalizations {
   /// **'Archive fetch failed'**
   String get xmppOperationMamFetchFailure;
 
+  /// No description provided for @xmppOperationMucCreateStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Creating room...'**
+  String get xmppOperationMucCreateStart;
+
+  /// No description provided for @xmppOperationMucCreateSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Room created'**
+  String get xmppOperationMucCreateSuccess;
+
+  /// No description provided for @xmppOperationMucCreateFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Room creation failed'**
+  String get xmppOperationMucCreateFailure;
+
   /// No description provided for @xmppOperationMucJoinStart.
   ///
   /// In en, this message translates to:
@@ -10674,6 +10692,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Room join failed'**
   String get xmppOperationMucJoinFailure;
+
+  /// No description provided for @xmppOperationMucAvatarUpdateStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Updating room avatar...'**
+  String get xmppOperationMucAvatarUpdateStart;
+
+  /// No description provided for @xmppOperationMucAvatarUpdateSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Room avatar updated'**
+  String get xmppOperationMucAvatarUpdateSuccess;
+
+  /// No description provided for @xmppOperationMucAvatarUpdateFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Room avatar update failed'**
+  String get xmppOperationMucAvatarUpdateFailure;
+
+  /// No description provided for @xmppOperationSelfAvatarPublishStart.
+  ///
+  /// In en, this message translates to:
+  /// **'Publishing avatar...'**
+  String get xmppOperationSelfAvatarPublishStart;
+
+  /// No description provided for @xmppOperationSelfAvatarPublishSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar published'**
+  String get xmppOperationSelfAvatarPublishSuccess;
+
+  /// No description provided for @xmppOperationSelfAvatarPublishFailure.
+  ///
+  /// In en, this message translates to:
+  /// **'Avatar publish failed'**
+  String get xmppOperationSelfAvatarPublishFailure;
 
   /// No description provided for @chatSettingsCapabilitiesTitle.
   ///

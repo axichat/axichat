@@ -6276,6 +6276,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get xmppOperationMamFetchFailure => 'Error al obtener el archivo';
 
   @override
+  String get xmppOperationMucCreateStart => 'Creando sala...';
+
+  @override
+  String get xmppOperationMucCreateSuccess => 'Sala creada';
+
+  @override
+  String get xmppOperationMucCreateFailure => 'Error al crear la sala';
+
+  @override
   String get xmppOperationMucJoinStart => 'Uniéndose a la sala...';
 
   @override
@@ -6283,6 +6292,28 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get xmppOperationMucJoinFailure => 'Error al unirse a la sala';
+
+  @override
+  String get xmppOperationMucAvatarUpdateStart =>
+      'Actualizando avatar de la sala...';
+
+  @override
+  String get xmppOperationMucAvatarUpdateSuccess =>
+      'Avatar de la sala actualizado';
+
+  @override
+  String get xmppOperationMucAvatarUpdateFailure =>
+      'Error al actualizar el avatar de la sala';
+
+  @override
+  String get xmppOperationSelfAvatarPublishStart => 'Publicando avatar...';
+
+  @override
+  String get xmppOperationSelfAvatarPublishSuccess => 'Avatar publicado';
+
+  @override
+  String get xmppOperationSelfAvatarPublishFailure =>
+      'Error al publicar el avatar';
 
   @override
   String get chatSettingsCapabilitiesTitle => 'Capacidades';

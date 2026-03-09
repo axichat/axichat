@@ -8,6 +8,19 @@ String _base64EncodeAvatarPublishPayload(Uint8List bytes) =>
 
 const String _avatarRosterRefreshOperationName =
     'AvatarService.refreshRosterAvatarsOnNegotiations';
+final XmppOperationEvent _selfAvatarPublishStartEvent = XmppOperationEvent(
+  kind: XmppOperationKind.selfAvatarPublish,
+  stage: XmppOperationStage.start,
+);
+final XmppOperationEvent _selfAvatarPublishSuccessEvent = XmppOperationEvent(
+  kind: XmppOperationKind.selfAvatarPublish,
+  stage: XmppOperationStage.end,
+);
+final XmppOperationEvent _selfAvatarPublishFailureEvent = XmppOperationEvent(
+  kind: XmppOperationKind.selfAvatarPublish,
+  stage: XmppOperationStage.end,
+  isSuccess: false,
+);
 
 class AvatarUploadPayload {
   const AvatarUploadPayload({
@@ -1219,7 +1232,12 @@ mixin AvatarService on XmppBase, MucService {
     if (targetJid == null) {
       throw XmppAvatarException();
     }
+    final shouldEmitOperation = _isSelfAvatarTarget(targetJid);
+    if (shouldEmitOperation) {
+      emitXmppOperation(_selfAvatarPublishStartEvent);
+    }
     _avatarLog.fine('Publishing avatar. public=$public.');
+    var success = false;
     try {
       final result = await _publishAvatarOnce(
         payload: payload,
@@ -1231,6 +1249,7 @@ mixin AvatarService on XmppBase, MucService {
         await _clearPendingSelfAvatarPublish();
       }
       _avatarLog.fine('Avatar publish completed.');
+      success = true;
       return result;
     } on XmppAvatarException catch (error, stackTrace) {
       final cause = error.wrapped;
@@ -1240,11 +1259,18 @@ mixin AvatarService on XmppBase, MucService {
         }
         const retryPublic = false;
         try {
-          return await _publishAvatarOnce(
+          final result = await _publishAvatarOnce(
             payload: payload,
             targetJid: targetJid,
             public: retryPublic,
           );
+          _markPubSubAvatarPreferred(targetJid);
+          if (_isSelfAvatarTarget(targetJid)) {
+            await _clearPendingSelfAvatarPublish();
+          }
+          _avatarLog.fine('Avatar publish completed.');
+          success = true;
+          return result;
         } on XmppAvatarException catch (retryError, retryStackTrace) {
           final retryCause = retryError.wrapped;
           final isAvatarError = retryCause is mox.AvatarError;
@@ -1272,6 +1298,14 @@ mixin AvatarService on XmppBase, MucService {
     } catch (error, stackTrace) {
       _avatarLog.severe('Failed to publish avatar', error, stackTrace);
       throw XmppAvatarException(error);
+    } finally {
+      if (shouldEmitOperation) {
+        emitXmppOperation(
+          success
+              ? _selfAvatarPublishSuccessEvent
+              : _selfAvatarPublishFailureEvent,
+        );
+      }
     }
   }
 

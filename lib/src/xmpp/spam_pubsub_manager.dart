@@ -192,15 +192,6 @@ final class SpamPubSubManager extends mox.XmppManagerBase {
 
   @override
   Future<void> onXmppEvent(mox.XmppEvent event) async {
-    if (event is mox.StreamNegotiationsDoneEvent) {
-      if (event.resumed) return super.onXmppEvent(event);
-      _subscriptionReady = false;
-      fireAndForget(
-        _bootstrap,
-        operationName: _spamPubSubBootstrapOperationName,
-      );
-      return super.onXmppEvent(event);
-    }
     if (event is mox.PubSubNotificationEvent) {
       fireAndForget(() => _handleNotification(event));
       return;
