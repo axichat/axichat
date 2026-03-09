@@ -68,5 +68,6 @@ abstract class ChatState with _$ChatState {
     @Default(0) int scrollTargetRequestId,
     ChatToast? toast,
     @Default(0) int toastId,
+    @Default(RequestStatus.none) RequestStatus roomAvatarUpdateStatus,
   }) = _ChatState;
 }

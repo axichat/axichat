@@ -4036,31 +4036,33 @@ WHERE email_from_address IN ($placeholderClause)
     required DateTime pinnedAt,
     required bool active,
   }) async {
-    final normalizedPinnedAt = pinnedAt.toUtc();
-    final existing = await getPinnedMessage(
-      chatJid: chatJid,
-      messageStanzaId: messageStanzaId,
-    );
-    if (existing != null) {
-      final existingPinnedAt = existing.pinnedAt.toUtc();
-      if (existingPinnedAt.isAfter(normalizedPinnedAt)) {
-        return;
-      }
-      final sameTimestamp = existingPinnedAt.isAtSameMomentAs(
-        normalizedPinnedAt,
-      );
-      if (sameTimestamp && (!existing.active || existing.active == active)) {
-        return;
-      }
-    }
-    await into(pinnedMessages).insertOnConflictUpdate(
-      PinnedMessageEntry(
-        messageStanzaId: messageStanzaId,
+    await transaction(() async {
+      final normalizedPinnedAt = pinnedAt.toUtc();
+      final existing = await getPinnedMessage(
         chatJid: chatJid,
-        pinnedAt: normalizedPinnedAt,
-        active: active,
-      ),
-    );
+        messageStanzaId: messageStanzaId,
+      );
+      if (existing != null) {
+        final existingPinnedAt = existing.pinnedAt.toUtc();
+        if (existingPinnedAt.isAfter(normalizedPinnedAt)) {
+          return;
+        }
+        final sameTimestamp = existingPinnedAt.isAtSameMomentAs(
+          normalizedPinnedAt,
+        );
+        if (sameTimestamp && (!existing.active || existing.active == active)) {
+          return;
+        }
+      }
+      await into(pinnedMessages).insertOnConflictUpdate(
+        PinnedMessageEntry(
+          messageStanzaId: messageStanzaId,
+          chatJid: chatJid,
+          pinnedAt: normalizedPinnedAt,
+          active: active,
+        ),
+      );
+    });
   }
 
   @override

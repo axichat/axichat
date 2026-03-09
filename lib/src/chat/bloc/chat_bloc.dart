@@ -23,6 +23,7 @@ import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
@@ -1153,6 +1154,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_roomAffiliationRefreshAttempts.contains(roomJid)) return;
     _roomAffiliationRefreshAttempts.add(roomJid);
     try {
+      await _mucService.fetchRoomMembers(roomJid: roomJid);
       await _mucService.fetchRoomOwners(roomJid: roomJid);
       await _mucService.fetchRoomAdmins(roomJid: roomJid);
     } on Exception catch (error, stackTrace) {
@@ -2858,6 +2860,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     if (event.avatar.bytes.isEmpty) return;
+    emit(state.copyWith(roomAvatarUpdateStatus: RequestStatus.loading));
     try {
       final updated = await _mucService.updateRoomAvatar(
         roomJid: chat.jid,
@@ -2866,6 +2869,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (!updated) {
         emit(
           state.copyWith(
+            roomAvatarUpdateStatus: RequestStatus.none,
             toast: const ChatToast(
               message: ChatMessageKey.chatRoomAvatarUpdateFailed,
               variant: ChatToastVariant.destructive,
@@ -2877,6 +2881,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       emit(
         state.copyWith(
+          roomAvatarUpdateStatus: RequestStatus.none,
           toast: const ChatToast(message: ChatMessageKey.chatRoomAvatarUpdated),
           toastId: state.toastId + 1,
         ),
@@ -2885,6 +2890,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _log.safeWarning(_roomAvatarUpdateFailedLogMessage, error, stackTrace);
       emit(
         state.copyWith(
+          roomAvatarUpdateStatus: RequestStatus.none,
           toast: const ChatToast(
             message: ChatMessageKey.chatRoomAvatarUpdateFailed,
             variant: ChatToastVariant.destructive,
