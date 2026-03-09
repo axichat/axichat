@@ -3482,8 +3482,10 @@ class _ChatState extends State<Chat> {
     final filteredItems = displayItems
         .where((message) {
           final hasHtml = message.normalizedHtmlBody?.isNotEmpty == true;
+          final hasSubject = message.subject?.trim().isNotEmpty == true;
           final attachments = attachmentsForMessage(message);
           return message.body != null ||
+              hasSubject ||
               hasHtml ||
               message.error.isNotNone ||
               attachments.isNotEmpty;
@@ -13190,65 +13192,56 @@ class _SubjectTextField extends StatelessWidget {
       child: Semantics(
         label: l10n.chatSubjectSemantics,
         textField: true,
-        child: AxiTextField(
-          controller: controller,
-          focusNode: focusNode,
-          enabled: true,
-          readOnly: !enabled,
-          showCursor: enabled,
-          enableInteractiveSelection: enabled,
-          selectAllOnFocus: false,
-          minLines: 1,
-          maxLines: 1,
-          textInputAction: TextInputAction.next,
-          textCapitalization: TextCapitalization.sentences,
-          onSubmitted: enabled ? (_) => onSubmitted() : null,
-          onEditingComplete: enabled ? onSubmitted : null,
-          keyboardType: TextInputType.text,
-          style: subjectStyle,
-          strutStyle: subjectStrutStyle,
-          cursorHeight: subjectStyle.fontSize,
-          textAlignVertical: TextAlignVertical.center,
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            enabledBorder: InputBorder.none,
-            focusedBorder: InputBorder.none,
-            disabledBorder: InputBorder.none,
-            isCollapsed: true,
-            contentPadding: EdgeInsets.zero,
-            prefixIcon: Padding(
-              padding: EdgeInsetsDirectional.only(end: spacing.xs),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                widthFactor: 1,
-                child: Text('${l10n.chatSubjectHint}: ', style: subjectStyle),
+        child: Row(
+          children: [
+            Text('${l10n.chatSubjectHint}:', style: subjectStyle),
+            SizedBox(width: spacing.xs),
+            Expanded(
+              child: AxiTextField(
+                controller: controller,
+                focusNode: focusNode,
+                enabled: true,
+                readOnly: !enabled,
+                showCursor: enabled,
+                enableInteractiveSelection: enabled,
+                selectAllOnFocus: false,
+                minLines: 1,
+                maxLines: 1,
+                textInputAction: TextInputAction.next,
+                textCapitalization: TextCapitalization.sentences,
+                onSubmitted: enabled ? (_) => onSubmitted() : null,
+                onEditingComplete: enabled ? onSubmitted : null,
+                keyboardType: TextInputType.text,
+                style: subjectStyle,
+                strutStyle: subjectStrutStyle,
+                cursorHeight: subjectStyle.fontSize,
+                textAlignVertical: TextAlignVertical.center,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  isCollapsed: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
               ),
             ),
-            prefixIconConstraints: const BoxConstraints(
-              minWidth: 0,
-              minHeight: 0,
-            ),
-            suffixIcon: showExpandDraftAction
-                ? AxiIconButton.secondary(
-                    iconData: LucideIcons.maximize2,
-                    tooltip: l10n.draftExpand,
-                    semanticLabel: l10n.draftExpand,
-                    iconSize: sizing.inputSuffixIconSize,
-                    buttonSize: sizing.inputSuffixButtonSize,
-                    tapTargetSize: sizing.inputSuffixButtonSize,
-                    cornerRadius: context.radii.squircleSm,
-                    onPressed: enabled && expandDraftEnabled
-                        ? onExpandDraftPressed
-                        : null,
-                  )
-                : null,
-            suffixIconConstraints: BoxConstraints(
-              minWidth: sizing.inputSuffixButtonSize,
-              maxWidth: sizing.inputSuffixButtonSize,
-              minHeight: sizing.inputSuffixButtonSize,
-              maxHeight: sizing.inputSuffixButtonSize,
-            ),
-          ),
+            if (showExpandDraftAction) ...[
+              SizedBox(width: spacing.xs),
+              AxiIconButton.secondary(
+                iconData: LucideIcons.maximize2,
+                tooltip: l10n.draftExpand,
+                semanticLabel: l10n.draftExpand,
+                iconSize: sizing.inputSuffixIconSize,
+                buttonSize: sizing.inputSuffixButtonSize,
+                tapTargetSize: sizing.inputSuffixButtonSize,
+                cornerRadius: context.radii.squircleSm,
+                onPressed: enabled && expandDraftEnabled
+                    ? onExpandDraftPressed
+                    : null,
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -14827,16 +14820,19 @@ class _ReplyingToPreviewText extends StatelessWidget {
     required this.senderLabel,
     required this.quotedPreview,
     required this.isSelf,
+    this.constrainQuoteToHeaderWidth = true,
   });
 
   final String senderLabel;
   final String quotedPreview;
   final bool isSelf;
+  final bool constrainQuoteToHeaderWidth;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final baseStyle = context.textTheme.small;
+    final spacing = context.spacing;
     final mutedStyle = baseStyle.copyWith(color: colors.mutedForeground);
     final prefixStyle = context.textTheme.sectionLabelM;
     final replyPrefix = context.l10n.chatReplyingTo;
@@ -14876,11 +14872,14 @@ class _ReplyingToPreviewText extends StatelessWidget {
         final headerLineWidth = headerPainter.size.width <= 0
             ? maxPreviewWidth
             : math.min(maxPreviewWidth, headerPainter.size.width);
+        final quoteLineWidth = constrainQuoteToHeaderWidth
+            ? headerLineWidth
+            : maxPreviewWidth;
         final headerFits = headerPainter.computeLineMetrics().length <= 1;
         if (!headerFits) {
           return Column(
             crossAxisAlignment: crossAxisAlignment,
-            spacing: 2,
+            spacing: spacing.xxs,
             children: [
               Text.rich(
                 headerWithNameSpan,
@@ -14893,7 +14892,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
                     ? Alignment.centerRight
                     : Alignment.centerLeft,
                 child: SizedBox(
-                  width: headerLineWidth,
+                  width: quoteLineWidth,
                   child: Text(
                     quotedPreview,
                     maxLines: 1,
@@ -14934,7 +14933,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
         }
         return Column(
           crossAxisAlignment: crossAxisAlignment,
-          spacing: 2,
+          spacing: spacing.xxs,
           children: [
             Text.rich(
               headerWithNameSpan,
@@ -14945,7 +14944,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
             Align(
               alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
               child: SizedBox(
-                width: headerLineWidth,
+                width: quoteLineWidth,
                 child: Text(
                   quotedPreview,
                   maxLines: 1,
@@ -15236,6 +15235,7 @@ class _QuoteBanner extends StatelessWidget {
                       : message.senderJid,
                   quotedPreview: quotedPreview,
                   isSelf: isSelf,
+                  constrainQuoteToHeaderWidth: false,
                 );
               },
             ),

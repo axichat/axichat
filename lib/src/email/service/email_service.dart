@@ -1905,6 +1905,24 @@ class EmailService {
     return sanitizeEmailHeaderValue(subject);
   }
 
+  String? _normalizeReplySubject({
+    required String? subject,
+    required String? quotedSubject,
+  }) {
+    final normalizedSubject = _normalizeSubject(subject);
+    if (normalizedSubject != null) {
+      return normalizedSubject;
+    }
+    final normalizedQuotedSubject = _normalizeSubject(quotedSubject);
+    if (normalizedQuotedSubject == null) {
+      return null;
+    }
+    if (normalizedQuotedSubject.toLowerCase().startsWith('re:')) {
+      return normalizedQuotedSubject;
+    }
+    return 'Re: $normalizedQuotedSubject';
+  }
+
   String? _normalizeDraftHtml({required String text, String? htmlBody}) {
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     if (normalizedHtml != null) {
@@ -4992,7 +5010,10 @@ class EmailService {
       );
     }
     await _ensureReady();
-    final normalizedSubject = _normalizeSubject(subject);
+    final normalizedSubject = _normalizeReplySubject(
+      subject: subject,
+      quotedSubject: quotedMessage.subject,
+    );
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     final trimmedBody = body.trim();
     final effectiveBody = trimmedBody.isNotEmpty
@@ -5006,6 +5027,7 @@ class EmailService {
         chatId: chatId,
         body: effectiveBody,
         quotedMessageId: quotedMsgId,
+        quotedStanzaId: quotedMessage.stanzaID,
         subject: normalizedSubject,
         htmlBody: normalizedHtml,
         accountId: context.account.deltaAccountId,
