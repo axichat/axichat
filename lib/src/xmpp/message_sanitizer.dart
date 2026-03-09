@@ -22,6 +22,13 @@ const _calendarAvailabilityTag = 'calendar-availability';
 const _calendarAvailabilityPayloadTag = 'payload';
 const _calendarAvailabilityVersionAttr = 'version';
 const _calendarAvailabilityVersionValue = '1';
+const _pinMutationXmlns = 'urn:axichat:pins:1';
+const _pinMutationTag = 'pin';
+const _pinMutationVersionAttr = 'version';
+const _pinMutationVersionValue = '1';
+const _pinMutationMessageIdAttr = 'message-id';
+const _pinMutationPinnedAttr = 'pinned';
+const _pinMutationTimestampAttr = 'timestamp';
 const _mucUserXmlns = 'http://jabber.org/protocol/muc#user';
 const _mucJoinXmlns = 'http://jabber.org/protocol/muc';
 const _occupantIdXmlns = 'urn:xmpp:occupant-id:0';
@@ -46,6 +53,8 @@ const int _inviteRoomJidMaxLength = 1024;
 const int _calendarFragmentPayloadMaxLength = 200000;
 const int _calendarTaskIcsPayloadMaxLength = 200000;
 const int _calendarAvailabilityPayloadMaxLength = 200000;
+const int _pinMutationMessageIdMaxLength = 1024;
+const int _pinMutationTimestampMaxLength = 64;
 const String _xmlNamespaceAttr = 'xmlns';
 const String _messageTypeError = 'error';
 const String _errorTypeAttr = 'type';
@@ -414,6 +423,67 @@ final class CalendarAvailabilityMessagePayload
   }
 }
 
+final class PinMessageMutationData implements mox.StanzaHandlerExtension {
+  const PinMessageMutationData({
+    required this.messageId,
+    required this.pinned,
+    required this.timestamp,
+  });
+
+  final String messageId;
+  final bool pinned;
+  final DateTime timestamp;
+
+  mox.XMLNode toXml() {
+    return mox.XMLNode.xmlns(
+      tag: _pinMutationTag,
+      xmlns: _pinMutationXmlns,
+      attributes: {
+        _pinMutationVersionAttr: _pinMutationVersionValue,
+        _pinMutationMessageIdAttr: messageId,
+        _pinMutationPinnedAttr: pinned.toString(),
+        _pinMutationTimestampAttr: timestamp.toUtc().toIso8601String(),
+      },
+    );
+  }
+
+  static PinMessageMutationData? fromStanza(mox.Stanza stanza) {
+    final node = stanza.firstTag(_pinMutationTag, xmlns: _pinMutationXmlns);
+    if (node == null) return null;
+    final messageId = node.attributes[_pinMutationMessageIdAttr]
+        ?.toString()
+        .trim();
+    if (messageId == null ||
+        messageId.isEmpty ||
+        messageId.length > _pinMutationMessageIdMaxLength) {
+      return null;
+    }
+    final pinned = _parseInviteBool(
+      node.attributes[_pinMutationPinnedAttr]?.toString(),
+    );
+    if (pinned == null) {
+      return null;
+    }
+    final rawTimestamp = node.attributes[_pinMutationTimestampAttr]
+        ?.toString()
+        .trim();
+    if (rawTimestamp == null ||
+        rawTimestamp.isEmpty ||
+        rawTimestamp.length > _pinMutationTimestampMaxLength) {
+      return null;
+    }
+    final timestamp = DateTime.tryParse(rawTimestamp);
+    if (timestamp == null) {
+      return null;
+    }
+    return PinMessageMutationData(
+      messageId: messageId,
+      pinned: pinned,
+      timestamp: timestamp.toUtc(),
+    );
+  }
+}
+
 bool? _parseInviteBool(String? raw) {
   final normalized = raw?.trim().toLowerCase();
   return switch (normalized) {
@@ -528,6 +598,10 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
     if (availability != null) {
       nodes.add(availability.toXml());
     }
+    final pinMutation = extensions.get<PinMessageMutationData>();
+    if (pinMutation != null) {
+      nodes.add(pinMutation.toXml());
+    }
     return nodes;
   }
 
@@ -593,6 +667,10 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
     final availability = CalendarAvailabilityMessagePayload.fromStanza(stanza);
     if (availability != null) {
       state.extensions.set(availability);
+    }
+    final pinMutation = PinMessageMutationData.fromStanza(stanza);
+    if (pinMutation != null) {
+      state.extensions.set(pinMutation);
     }
 
     final subjectNode = stanza.firstTag(_subjectTag);

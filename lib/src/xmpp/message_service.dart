@@ -26,6 +26,7 @@ const String _calendarSyncAckFailedLog =
     'Failed to acknowledge calendar sync message.';
 const String _calendarSyncReadOnlyRejectedLog =
     'Rejected calendar sync message targeting read-only task.';
+const String _pinMutationAckFailedLog = 'Failed to acknowledge pin mutation.';
 const String _attachmentUploadStartLog =
     'Uploading attachment to HTTP upload slot.';
 const String _attachmentUploadCompleteLog = 'Upload complete for attachment.';
@@ -1768,12 +1769,11 @@ mixin MessageService
     }
     final pinnedAt = DateTime.timestamp().toUtc();
     await _dbOp<XmppDatabase>(
-      (db) => db.upsertPinnedMessage(
-        PinnedMessageEntry(
-          messageStanzaId: stanzaId,
-          chatJid: normalizedChat,
-          pinnedAt: pinnedAt,
-        ),
+      (db) => db.applyPinnedMessageMutation(
+        chatJid: normalizedChat,
+        messageStanzaId: stanzaId,
+        pinnedAt: pinnedAt,
+        active: true,
       ),
     );
     await _queuePinPublish(normalizedChat, stanzaId);
@@ -1789,10 +1789,13 @@ mixin MessageService
     if (normalizedChat == null || stanzaId.isEmpty) {
       return;
     }
+    final unpinnedAt = DateTime.timestamp().toUtc();
     await _dbOp<XmppDatabase>(
-      (db) => db.deletePinnedMessage(
+      (db) => db.applyPinnedMessageMutation(
         chatJid: normalizedChat,
         messageStanzaId: stanzaId,
+        pinnedAt: unpinnedAt,
+        active: false,
       ),
     );
     await _queuePinRetraction(normalizedChat, stanzaId);
@@ -1814,7 +1817,6 @@ mixin MessageService
       return;
     }
     final context = await _resolvePinNodeContext(normalizedChat);
-    _cachePinAuthorizedPublishers(normalizedChat, context);
     _pinSyncInFlight.add(normalizedChat);
     try {
       await database;
@@ -1822,6 +1824,14 @@ mixin MessageService
         return;
       }
       await _ensurePendingPinSyncLoaded();
+      if (!_usesPubSubPinSync(context)) {
+        await _flushPendingSharedPinMutationsForChat(
+          chatJid: normalizedChat,
+          chat: context.chat,
+        );
+        return;
+      }
+      _cachePinAuthorizedPublishers(normalizedChat, context);
       final support = await refreshPubSubSupport();
       final decision = decidePubSubSupport(
         supported: support.pubSubSupported,
@@ -2071,6 +2081,7 @@ mixin MessageService
 
         if (await _handleCorrection(event, message.senderJid)) return;
         if (await _handleRetraction(event, message.senderJid)) return;
+        if (await _handlePinMessageMutation(event)) return;
 
         if (await _handleMessageStatusSync(event)) return;
         if (await _handleCalendarSync(event, metadata: metadata)) return;
@@ -5448,6 +5459,48 @@ mixin MessageService
     });
   }
 
+  Future<bool> _handlePinMessageMutation(mox.MessageEvent event) async {
+    final mutation = event.get<PinMessageMutationData>();
+    if (mutation == null) {
+      return false;
+    }
+    if (!_isGroupChatMutationAuthorized(event)) {
+      _log.warning(_mucMutationRejectedLog);
+      return true;
+    }
+    final normalizedChat = _normalizePinChatJid(
+      _pinMutationChatJid(event, myJid),
+    );
+    if (normalizedChat == null) {
+      return true;
+    }
+    final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+      (db) => db.getChat(normalizedChat),
+    );
+    if (chat?.isEmailBacked == true) {
+      return true;
+    }
+    await _dbOp<XmppDatabase>(
+      (db) => db.applyPinnedMessageMutation(
+        chatJid: normalizedChat,
+        messageStanzaId: mutation.messageId,
+        pinnedAt: mutation.timestamp,
+        active: mutation.pinned,
+      ),
+    );
+    await _clearPendingPinMutation(
+      chatJid: normalizedChat,
+      messageStanzaId: mutation.messageId,
+      pinned: mutation.pinned,
+    );
+    try {
+      await _acknowledgeMessage(event);
+    } catch (error, stackTrace) {
+      _log.fine(_pinMutationAckFailedLog, error, stackTrace);
+    }
+    return true;
+  }
+
   Future<bool> _handleReactions(mox.MessageEvent event) async {
     final reactions = event.extensions.get<mox.MessageReactionsData>();
     if (reactions == null) return false;
@@ -6163,6 +6216,21 @@ mixin MessageService
 
   String _calendarSyncChatJid(mox.MessageEvent event, String? accountJid) {
     final isGroupChat = event.type == 'groupchat';
+    final to = event.to.toBare().toString();
+    final from = event.from.toBare().toString();
+    if (isGroupChat) {
+      return from;
+    }
+    if (accountJid != null && accountJid.isNotEmpty) {
+      if (from.toLowerCase() == accountJid.toLowerCase()) {
+        return to;
+      }
+    }
+    return from;
+  }
+
+  String _pinMutationChatJid(mox.MessageEvent event, String? accountJid) {
+    final isGroupChat = event.type == _messageTypeGroupchat;
     final to = event.to.toBare().toString();
     final from = event.from.toBare().toString();
     if (isGroupChat) {
@@ -7282,6 +7350,10 @@ mixin MessageService
     final nodeId = event.item.node;
     final chatJid = _chatJidFromPinNode(nodeId);
     if (chatJid == null) return;
+    final context = await _resolvePinNodeContext(chatJid);
+    if (!_usesPubSubPinSync(context)) {
+      return;
+    }
     if (!_shouldProcessPinSyncEvent(chatJid)) return;
     await _ensurePendingPinSyncLoaded();
     final itemId = event.item.id.trim();
@@ -7332,6 +7404,10 @@ mixin MessageService
   Future<void> _handlePinRetraction(mox.PubSubItemsRetractedEvent event) async {
     final chatJid = _chatJidFromPinNode(event.node);
     if (chatJid == null) return;
+    final context = await _resolvePinNodeContext(chatJid);
+    if (!_usesPubSubPinSync(context)) {
+      return;
+    }
     if (event.itemIds.isEmpty) return;
     if (!_shouldProcessPinSyncEvent(chatJid)) return;
     await _ensurePendingPinSyncLoaded();
@@ -7360,6 +7436,7 @@ mixin MessageService
           messageStanzaId: payload.messageStanzaId,
           chatJid: payload.chatJid,
           pinnedAt: payload.pinnedAt,
+          active: true,
         ),
       ),
     );
@@ -7791,6 +7868,13 @@ mixin MessageService
       return;
     }
     final context = await _resolvePinNodeContext(normalizedChat);
+    if (!_usesPubSubPinSync(context)) {
+      await _flushPendingSharedPinMutationsForChat(
+        chatJid: normalizedChat,
+        chat: context.chat,
+      );
+      return;
+    }
     final support = await refreshPubSubSupport();
     final decision = decidePubSubSupport(
       supported: support.pubSubSupported,
@@ -7874,6 +7958,170 @@ mixin MessageService
           pendingChanged;
     }
     if (pendingChanged) {
+      await _persistPendingPinSync();
+    }
+  }
+
+  bool _usesPubSubPinSync(_PinNodeContext context) =>
+      context.chat?.isEmailBacked == true;
+
+  ChatType _pinMutationChatType(String chatJid, Chat? chat) {
+    if (chat?.type == ChatType.groupChat || _isMucChatJid(chatJid)) {
+      return ChatType.groupChat;
+    }
+    return ChatType.chat;
+  }
+
+  Future<void> _flushPendingSharedPinMutationsForChat({
+    required String chatJid,
+    required Chat? chat,
+  }) async {
+    final pendingRetractions =
+        _pendingPinRetractionsByChat[chatJid]?.toList(growable: false) ??
+        const <String>[];
+    final pendingPublishes =
+        _pendingPinPublishesByChat[chatJid]?.toList(growable: false) ??
+        const <String>[];
+    var pendingChanged = false;
+    for (final messageId in pendingRetractions) {
+      final trimmed = messageId.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
+        (db) => db.getPinnedMessage(chatJid: chatJid, messageStanzaId: trimmed),
+      );
+      if (record == null || record.active) {
+        pendingChanged =
+            _pendingPinRetractionsByChat[chatJid]?.remove(trimmed) == true ||
+            pendingChanged;
+        continue;
+      }
+      final success = await _sendPinMutationToChat(
+        chatJid: chatJid,
+        chat: chat,
+        messageStanzaId: trimmed,
+        pinnedAt: record.pinnedAt,
+        pinned: false,
+      );
+      if (!success) {
+        continue;
+      }
+      pendingChanged =
+          _pendingPinRetractionsByChat[chatJid]?.remove(trimmed) == true ||
+          pendingChanged;
+    }
+    for (final messageId in pendingPublishes) {
+      final trimmed = messageId.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final record = await _dbOpReturning<XmppDatabase, PinnedMessageEntry?>(
+        (db) => db.getPinnedMessage(chatJid: chatJid, messageStanzaId: trimmed),
+      );
+      if (record == null || !record.active) {
+        pendingChanged =
+            _pendingPinPublishesByChat[chatJid]?.remove(trimmed) == true ||
+            pendingChanged;
+        continue;
+      }
+      final success = await _sendPinMutationToChat(
+        chatJid: chatJid,
+        chat: chat,
+        messageStanzaId: trimmed,
+        pinnedAt: record.pinnedAt,
+        pinned: true,
+      );
+      if (!success) {
+        continue;
+      }
+      pendingChanged =
+          _pendingPinPublishesByChat[chatJid]?.remove(trimmed) == true ||
+          pendingChanged;
+    }
+    if (pendingChanged) {
+      await _persistPendingPinSync();
+    }
+  }
+
+  Future<bool> _sendPinMutationToChat({
+    required String chatJid,
+    required Chat? chat,
+    required String messageStanzaId,
+    required DateTime pinnedAt,
+    required bool pinned,
+  }) async {
+    final accountJid = myJid;
+    if (accountJid == null) {
+      return false;
+    }
+    final chatType = _pinMutationChatType(chatJid, chat);
+    final isGroupChat = chatType == ChatType.groupChat;
+    if (isGroupChat) {
+      try {
+        await _ensureMucJoinForSend(roomJid: chatJid);
+      } on Exception {
+        return false;
+      }
+    }
+    final stanzaId = _connection.generateId();
+    final senderJid = isGroupChat
+        ? (roomStateFor(chatJid)?.myOccupantId ?? accountJid)
+        : accountJid;
+    final targetJid = mox.JID.fromString(chatJid);
+    final extensions = <mox.StanzaHandlerExtension>[
+      mox.MessageIdData(stanzaId),
+      const mox.MessageProcessingHintData([mox.MessageProcessingHint.store]),
+      PinMessageMutationData(
+        messageId: messageStanzaId,
+        pinned: pinned,
+        timestamp: pinnedAt.toUtc(),
+      ),
+    ];
+    final wantsOmemo =
+        !isGroupChat && chat?.encryptionProtocol == EncryptionProtocol.omemo;
+    if (wantsOmemo) {
+      final decision = await _omemoDecision(jid: chatJid);
+      if (!decision.isAllowed) {
+        _logCapabilityDecision(
+          featureLabel: 'OMEMO',
+          jid: chatJid,
+          decision: decision,
+        );
+        return false;
+      }
+      extensions.add(mox.StableIdData(stanzaId, null));
+    }
+    try {
+      return await _connection.sendMessage(
+        mox.MessageEvent(
+          mox.JID.fromString(senderJid),
+          isGroupChat ? targetJid.toBare() : targetJid,
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList(extensions),
+          id: stanzaId,
+          type: isGroupChat ? _messageTypeGroupchat : 'chat',
+        ),
+      );
+    } on Exception {
+      return false;
+    }
+  }
+
+  Future<void> _clearPendingPinMutation({
+    required String chatJid,
+    required String messageStanzaId,
+    required bool pinned,
+  }) async {
+    await _ensurePendingPinSyncLoaded();
+    final trimmed = messageStanzaId.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final changed = pinned
+        ? _pendingPinPublishesByChat[chatJid]?.remove(trimmed) == true
+        : _pendingPinRetractionsByChat[chatJid]?.remove(trimmed) == true;
+    if (changed) {
       await _persistPendingPinSync();
     }
   }

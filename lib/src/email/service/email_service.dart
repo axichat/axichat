@@ -2534,6 +2534,7 @@ class EmailService {
         messageStanzaId: stanzaId,
         chatJid: chatJid,
         pinnedAt: pinnedAt,
+        active: true,
       ),
     );
   }

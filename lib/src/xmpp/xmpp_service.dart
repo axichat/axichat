@@ -2072,6 +2072,7 @@ class XmppService extends XmppBase
               messageStanzaId: stanzaId,
               chatJid: script.chat.jid,
               pinnedAt: seedPinnedAtBase.subtract(Duration(seconds: index)),
+              active: true,
             ),
           );
           existingIds.add(stanzaId);

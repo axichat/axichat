@@ -66,6 +66,7 @@ import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/common/ui/axi_input.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -766,18 +767,19 @@ CalendarAvailabilityShareCoordinator? _readAvailabilityShareCoordinator(
     : null;
 
 String _fitQuotedPreviewText({
-  required BuildContext context,
   required String quoteText,
   required TextStyle style,
   required double maxWidth,
+  required TextDirection textDirection,
+  required TextScaler textScaler,
 }) {
   final quotedPreview = '"$quoteText"';
   if (!maxWidth.isFinite || maxWidth <= 0) {
     return quotedPreview;
   }
   final painter = TextPainter(
-    textDirection: Directionality.of(context),
-    textScaler: MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
+    textDirection: textDirection,
+    textScaler: textScaler,
     maxLines: 2,
   );
 
@@ -5509,14 +5511,14 @@ class _ChatState extends State<Chat> {
                                                 currentUserId: currentUserId,
                                               )
                                               ? context.l10n.chatSenderYou
-                                                : _quotedSenderLabel(
-                                                    quotedMessage: quoting,
-                                                    isGroupChat: isGroupChat,
-                                                    roomState: state.roomState,
-                                                    chatDisplayName:
-                                                        resolvedDirectChatDisplayName,
-                                                    l10n: context.l10n,
-                                                  ),
+                                              : _quotedSenderLabel(
+                                                  quotedMessage: quoting,
+                                                  isGroupChat: isGroupChat,
+                                                  roomState: state.roomState,
+                                                  chatDisplayName:
+                                                      resolvedDirectChatDisplayName,
+                                                  l10n: context.l10n,
+                                                ),
                                           isSelf: _isQuotedMessageFromSelf(
                                             quotedMessage: quoting,
                                             isGroupChat: isGroupChat,
@@ -8706,9 +8708,6 @@ class _ChatState extends State<Chat> {
                                                                                   ),
                                                                             isSelf:
                                                                                 self,
-                                                                            quoteMaxWidth:
-                                                                                clampedMeasuredBubbleWidth ??
-                                                                                bubbleMaxWidthForLayout,
                                                                           );
                                                                         }();
                                                                   final Widget?
@@ -8735,24 +8734,6 @@ class _ChatState extends State<Chat> {
                                                                               self,
                                                                         )
                                                                       : null;
-                                                                  final Widget?
-                                                                  messagePreview =
-                                                                      forwardedPreview ==
-                                                                          null
-                                                                      ? replyPreview
-                                                                      : (replyPreview ==
-                                                                                null
-                                                                            ? forwardedPreview
-                                                                            : Column(
-                                                                                crossAxisAlignment: self
-                                                                                    ? CrossAxisAlignment.end
-                                                                                    : CrossAxisAlignment.start,
-                                                                                spacing: context.spacing.xxs,
-                                                                                children: [
-                                                                                  forwardedPreview,
-                                                                                  replyPreview,
-                                                                                ],
-                                                                              ));
                                                                   final attachmentsAligned =
                                                                       attachments;
                                                                   final extraShadows =
@@ -8861,18 +8842,20 @@ class _ChatState extends State<Chat> {
                                                                       selectableBubble,
                                                                     ],
                                                                   );
-                                                                  final measuredBubbleStack = _SizeReportingWidget(
-                                                                    onSizeChange:
-                                                                        (
-                                                                          size,
-                                                                        ) => _updateMessageBubbleWidth(
-                                                                          messageModel
-                                                                              .stanzaID,
-                                                                          size,
-                                                                        ),
-                                                                    child:
-                                                                        bubbleStack,
-                                                                  );
+                                                                  final measuredBubbleStack =
+                                                                      isSingleSelection
+                                                                      ? _SizeReportingWidget(
+                                                                          onSizeChange:
+                                                                              (
+                                                                                size,
+                                                                              ) => _updateMessageBubbleWidth(
+                                                                                messageModel.stanzaID,
+                                                                                size,
+                                                                              ),
+                                                                          child:
+                                                                              bubbleStack,
+                                                                        )
+                                                                      : bubbleStack;
                                                                   final shouldShowSenderLabel =
                                                                       isRenderableBubble &&
                                                                       !_chatMessagesShouldChain(
@@ -8914,8 +8897,10 @@ class _ChatState extends State<Chat> {
                                                                   );
                                                                   final Widget
                                                                   bubbleStackWithReply = _ReplyPreviewBubbleColumn(
-                                                                    preview:
-                                                                        messagePreview,
+                                                                    forwardedPreview:
+                                                                        forwardedPreview,
+                                                                    quotedPreview:
+                                                                        replyPreview,
                                                                     senderLabel:
                                                                         senderLabel,
                                                                     bubble:
@@ -8925,6 +8910,10 @@ class _ChatState extends State<Chat> {
                                                                     spacing: context
                                                                         .spacing
                                                                         .s,
+                                                                    previewSpacing:
+                                                                        context
+                                                                            .spacing
+                                                                            .xxs,
                                                                     alignEnd:
                                                                         self,
                                                                   );
@@ -11176,18 +11165,6 @@ class _PinnedMessageTile extends StatelessWidget {
             ),
             isSelf: isSelf,
           );
-    final messagePreview = forwardedPreview == null
-        ? replyPreview
-        : (replyPreview == null
-              ? forwardedPreview
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: isSelf
-                      ? CrossAxisAlignment.end
-                      : CrossAxisAlignment.start,
-                  spacing: spacing.xxs,
-                  children: [forwardedPreview, replyPreview],
-                ));
     if (unpinAction != null) {
       if (contentChildren.isNotEmpty) {
         contentChildren.add(SizedBox(height: spacing.s));
@@ -11237,7 +11214,8 @@ class _PinnedMessageTile extends StatelessWidget {
     );
     final previewMaxWidth = context.sizing.dialogMaxWidth;
     final bubbleWithPreview = _ReplyPreviewBubbleColumn(
-      preview: messagePreview,
+      forwardedPreview: forwardedPreview,
+      quotedPreview: replyPreview,
       senderLabel: _SenderLabelBlock(
         primaryLabel: senderLabel,
         secondaryLabel: null,
@@ -11247,6 +11225,7 @@ class _PinnedMessageTile extends StatelessWidget {
       bubble: bubblePreview,
       previewMaxWidth: previewMaxWidth,
       spacing: spacing.s,
+      previewSpacing: spacing.xxs,
       alignEnd: isSelf,
     );
     final bubbleColumn = Column(
@@ -13284,7 +13263,6 @@ class _SubjectTextField extends StatelessWidget {
     final spacing = context.spacing;
     final sizing = context.sizing;
     final subjectStyle = context.textTheme.small.copyWith(
-      fontWeight: FontWeight.w600,
       color: colors.foreground,
     );
     final subjectStrutStyle = StrutStyle.fromTextStyle(
@@ -13293,6 +13271,16 @@ class _SubjectTextField extends StatelessWidget {
       height: subjectStyle.height,
       leading: 0,
     );
+    const inputDecoration = ShadDecoration(
+      color: Colors.transparent,
+      border: ShadBorder.none,
+      secondaryBorder: ShadBorder.none,
+      secondaryFocusedBorder: ShadBorder.none,
+      focusedBorder: ShadBorder.none,
+      errorBorder: ShadBorder.none,
+      secondaryErrorBorder: ShadBorder.none,
+      disableSecondaryBorder: true,
+    );
     return SizedBox(
       height: sizing.menuItemHeight,
       child: Semantics(
@@ -13300,19 +13288,21 @@ class _SubjectTextField extends StatelessWidget {
         textField: true,
         child: Row(
           children: [
-            Text('${l10n.chatSubjectHint}:', style: subjectStyle),
+            Text(
+              '${l10n.chatSubjectHint}:',
+              style: context.textTheme.small.copyWith(
+                color: colors.mutedForeground,
+              ),
+            ),
             SizedBox(width: spacing.xs),
             Expanded(
-              child: AxiTextField(
+              child: AxiInput(
                 controller: controller,
                 focusNode: focusNode,
-                enabled: true,
+                enabled: enabled,
                 readOnly: !enabled,
                 showCursor: enabled,
                 enableInteractiveSelection: enabled,
-                selectAllOnFocus: false,
-                minLines: 1,
-                maxLines: 1,
                 textInputAction: TextInputAction.next,
                 textCapitalization: TextCapitalization.sentences,
                 onSubmitted: enabled ? (_) => onSubmitted() : null,
@@ -13321,15 +13311,10 @@ class _SubjectTextField extends StatelessWidget {
                 style: subjectStyle,
                 strutStyle: subjectStrutStyle,
                 cursorHeight: subjectStyle.fontSize,
-                textAlignVertical: TextAlignVertical.center,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  isCollapsed: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
+                decoration: inputDecoration,
+                padding: EdgeInsets.zero,
+                inputPadding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minHeight: 0),
               ),
             ),
             if (showExpandDraftAction) ...[
@@ -14886,13 +14871,11 @@ class _QuotedMessagePreview extends StatelessWidget {
     required this.message,
     required this.senderLabel,
     required this.isSelf,
-    this.quoteMaxWidth,
   });
 
   final Message message;
   final String senderLabel;
   final bool isSelf;
-  final double? quoteMaxWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -14909,7 +14892,6 @@ class _QuotedMessagePreview extends StatelessWidget {
           senderLabel: senderLabelTrimmed,
           quoteText: previewText,
           isSelf: isSelf,
-          quoteMaxWidth: quoteMaxWidth,
         );
       },
     );
@@ -14921,119 +14903,318 @@ class _ReplyingToPreviewText extends StatelessWidget {
     required this.senderLabel,
     required this.quoteText,
     required this.isSelf,
+  });
+
+  final String senderLabel;
+  final String quoteText;
+  final bool isSelf;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final baseStyle = context.textTheme.small;
+    final mutedStyle = baseStyle.copyWith(color: colors.mutedForeground);
+    final prefixStyle = context.textTheme.sectionLabelM;
+    final senderStyle = mutedStyle.copyWith(fontWeight: FontWeight.w600);
+    return _ReplyingToPreviewTextRenderWidget(
+      senderLabel: senderLabel,
+      quoteText: quoteText,
+      isSelf: isSelf,
+      quoteMaxWidth: null,
+      replyPrefix: context.l10n.chatReplyingTo.toUpperCase(),
+      baseStyle: baseStyle,
+      prefixStyle: prefixStyle,
+      senderStyle: senderStyle,
+      spacing: context.spacing.xxs,
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
+    );
+  }
+}
+
+class _ReplyingToPreviewTextRenderWidget extends LeafRenderObjectWidget {
+  const _ReplyingToPreviewTextRenderWidget({
+    required this.senderLabel,
+    required this.quoteText,
+    required this.isSelf,
+    required this.replyPrefix,
+    required this.baseStyle,
+    required this.prefixStyle,
+    required this.senderStyle,
+    required this.spacing,
+    required this.textDirection,
+    required this.textScaler,
     this.quoteMaxWidth,
   });
 
   final String senderLabel;
   final String quoteText;
   final bool isSelf;
+  final String replyPrefix;
+  final TextStyle baseStyle;
+  final TextStyle prefixStyle;
+  final TextStyle senderStyle;
+  final double spacing;
+  final TextDirection textDirection;
+  final TextScaler textScaler;
   final double? quoteMaxWidth;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final baseStyle = context.textTheme.small;
-    final spacing = context.spacing;
-    final mutedStyle = baseStyle.copyWith(color: colors.mutedForeground);
-    final prefixStyle = context.textTheme.sectionLabelM;
-    final replyPrefix = context.l10n.chatReplyingTo;
-    final senderSpan = TextSpan(
-      text: senderLabel,
-      style: mutedStyle.copyWith(fontWeight: FontWeight.w600),
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderReplyingToPreviewText(
+        senderLabel: senderLabel,
+        quoteText: quoteText,
+        isSelf: isSelf,
+        replyPrefix: replyPrefix,
+        baseStyle: baseStyle,
+        prefixStyle: prefixStyle,
+        senderStyle: senderStyle,
+        spacing: spacing,
+        textDirection: textDirection,
+        textScaler: textScaler,
+        quoteMaxWidth: quoteMaxWidth,
+      );
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderReplyingToPreviewText renderObject,
+  ) {
+    renderObject
+      ..senderLabel = senderLabel
+      ..quoteText = quoteText
+      ..isSelf = isSelf
+      ..replyPrefix = replyPrefix
+      ..baseStyle = baseStyle
+      ..prefixStyle = prefixStyle
+      ..senderStyle = senderStyle
+      ..spacing = spacing
+      ..textDirection = textDirection
+      ..textScaler = textScaler
+      ..quoteMaxWidth = quoteMaxWidth;
+  }
+}
+
+class _RenderReplyingToPreviewText extends RenderBox {
+  _RenderReplyingToPreviewText({
+    required String senderLabel,
+    required String quoteText,
+    required bool isSelf,
+    required String replyPrefix,
+    required TextStyle baseStyle,
+    required TextStyle prefixStyle,
+    required TextStyle senderStyle,
+    required double spacing,
+    required TextDirection textDirection,
+    required TextScaler textScaler,
+    required double? quoteMaxWidth,
+  }) : _senderLabel = senderLabel,
+       _quoteText = quoteText,
+       _isSelf = isSelf,
+       _replyPrefix = replyPrefix,
+       _baseStyle = baseStyle,
+       _prefixStyle = prefixStyle,
+       _senderStyle = senderStyle,
+       _spacing = spacing,
+       _textDirection = textDirection,
+       _textScaler = textScaler,
+       _quoteMaxWidth = quoteMaxWidth;
+
+  String _senderLabel;
+  String _quoteText;
+  bool _isSelf;
+  String _replyPrefix;
+  TextStyle _baseStyle;
+  TextStyle _prefixStyle;
+  TextStyle _senderStyle;
+  double _spacing;
+  TextDirection _textDirection;
+  TextScaler _textScaler;
+  double? _quoteMaxWidth;
+
+  final TextPainter _inlinePainter = TextPainter();
+  final TextPainter _headerPainter = TextPainter(maxLines: 1);
+  final TextPainter _quotePainter = TextPainter(maxLines: 2);
+  bool _canInline = true;
+
+  String get senderLabel => _senderLabel;
+
+  set senderLabel(String value) {
+    if (_senderLabel == value) return;
+    _senderLabel = value;
+    markNeedsLayout();
+  }
+
+  String get quoteText => _quoteText;
+
+  set quoteText(String value) {
+    if (_quoteText == value) return;
+    _quoteText = value;
+    markNeedsLayout();
+  }
+
+  bool get isSelf => _isSelf;
+
+  set isSelf(bool value) {
+    if (_isSelf == value) return;
+    _isSelf = value;
+    markNeedsLayout();
+  }
+
+  String get replyPrefix => _replyPrefix;
+
+  set replyPrefix(String value) {
+    if (_replyPrefix == value) return;
+    _replyPrefix = value;
+    markNeedsLayout();
+  }
+
+  TextStyle get baseStyle => _baseStyle;
+
+  set baseStyle(TextStyle value) {
+    if (_baseStyle == value) return;
+    _baseStyle = value;
+    markNeedsLayout();
+  }
+
+  TextStyle get prefixStyle => _prefixStyle;
+
+  set prefixStyle(TextStyle value) {
+    if (_prefixStyle == value) return;
+    _prefixStyle = value;
+    markNeedsLayout();
+  }
+
+  TextStyle get senderStyle => _senderStyle;
+
+  set senderStyle(TextStyle value) {
+    if (_senderStyle == value) return;
+    _senderStyle = value;
+    markNeedsLayout();
+  }
+
+  double get spacing => _spacing;
+
+  set spacing(double value) {
+    if (_spacing == value) return;
+    _spacing = value;
+    markNeedsLayout();
+  }
+
+  TextDirection get textDirection => _textDirection;
+
+  set textDirection(TextDirection value) {
+    if (_textDirection == value) return;
+    _textDirection = value;
+    markNeedsLayout();
+  }
+
+  TextScaler get textScaler => _textScaler;
+
+  set textScaler(TextScaler value) {
+    if (_textScaler == value) return;
+    _textScaler = value;
+    markNeedsLayout();
+  }
+
+  double? get quoteMaxWidth => _quoteMaxWidth;
+
+  set quoteMaxWidth(double? value) {
+    if (_quoteMaxWidth == value) return;
+    _quoteMaxWidth = value;
+    markNeedsLayout();
+  }
+
+  TextAlign get _textAlign => isSelf ? TextAlign.end : TextAlign.start;
+
+  TextSpan get _headerSpan => TextSpan(
+    children: [
+      TextSpan(text: replyPrefix, style: prefixStyle),
+      const TextSpan(text: ' '),
+      TextSpan(text: senderLabel, style: senderStyle),
+    ],
+  );
+
+  TextSpan get _inlineSpan => TextSpan(
+    children: [
+      _headerSpan,
+      const TextSpan(text: ' '),
+      TextSpan(text: '"$quoteText"', style: baseStyle),
+    ],
+  );
+
+  @override
+  void performLayout() {
+    final maxPreviewWidth =
+        constraints.maxWidth.isFinite && constraints.maxWidth > 0
+        ? constraints.maxWidth
+        : double.infinity;
+    final maxQuoteWidth =
+        quoteMaxWidth != null && quoteMaxWidth!.isFinite && quoteMaxWidth! > 0
+        ? math.min(maxPreviewWidth, quoteMaxWidth!)
+        : maxPreviewWidth;
+    _inlinePainter
+      ..text = _inlineSpan
+      ..textAlign = _textAlign
+      ..textDirection = textDirection
+      ..textScaler = textScaler
+      ..maxLines = null
+      ..ellipsis = null
+      ..layout(maxWidth: maxQuoteWidth);
+    _canInline = _inlinePainter.computeLineMetrics().length <= 1;
+    if (_canInline) {
+      size = constraints.constrain(
+        Size(_inlinePainter.width, _inlinePainter.height),
+      );
+      return;
+    }
+    _headerPainter
+      ..text = _headerSpan
+      ..textAlign = _textAlign
+      ..textDirection = textDirection
+      ..textScaler = textScaler
+      ..ellipsis = null
+      ..layout(maxWidth: maxPreviewWidth);
+    final fittedQuoteText = _fitQuotedPreviewText(
+      quoteText: quoteText,
+      style: baseStyle,
+      maxWidth: maxQuoteWidth,
+      textDirection: textDirection,
+      textScaler: textScaler,
     );
-    final headerPrefixSpan = TextSpan(
-      text: replyPrefix.toUpperCase(),
-      style: prefixStyle,
+    _quotePainter
+      ..text = TextSpan(text: fittedQuoteText, style: baseStyle)
+      ..textAlign = _textAlign
+      ..textDirection = textDirection
+      ..textScaler = textScaler
+      ..ellipsis = null
+      ..layout(maxWidth: maxQuoteWidth);
+    final stackedWidth = math.max(_headerPainter.width, _quotePainter.width);
+    final stackedHeight =
+        _headerPainter.height + spacing + _quotePainter.height;
+    size = constraints.constrain(Size(stackedWidth, stackedHeight));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    if (_canInline) {
+      final inlineOffset = Offset(
+        isSelf ? size.width - _inlinePainter.width : 0,
+        0,
+      );
+      _inlinePainter.paint(context.canvas, offset + inlineOffset);
+      return;
+    }
+    final headerOffset = Offset(
+      isSelf ? size.width - _headerPainter.width : 0,
+      0,
     );
-    final headerWithNameSpan = TextSpan(
-      children: [
-        headerPrefixSpan,
-        const TextSpan(text: ' '),
-        senderSpan,
-      ],
+    _headerPainter.paint(context.canvas, offset + headerOffset);
+    final quoteOffset = Offset(
+      isSelf ? size.width - _quotePainter.width : 0,
+      _headerPainter.height + spacing,
     );
-    final quotedPreview = '"$quoteText"';
-    final quotedSpan = TextSpan(text: quotedPreview, style: baseStyle);
-    final textAlign = isSelf ? TextAlign.end : TextAlign.start;
-    final crossAxisAlignment = isSelf
-        ? CrossAxisAlignment.end
-        : CrossAxisAlignment.start;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final textScaler =
-            MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
-        final maxPreviewWidth =
-            constraints.maxWidth.isFinite && constraints.maxWidth > 0
-            ? constraints.maxWidth
-            : double.infinity;
-        final maxQuoteWidth =
-            quoteMaxWidth != null &&
-                quoteMaxWidth!.isFinite &&
-                quoteMaxWidth! > 0
-            ? math.min(maxPreviewWidth, quoteMaxWidth!)
-            : maxPreviewWidth;
-        final inlinePainter = TextPainter(
-          text: TextSpan(
-            children: [
-              headerWithNameSpan,
-              const TextSpan(text: ' '),
-              quotedSpan,
-            ],
-          ),
-          textDirection: Directionality.of(context),
-          textScaler: textScaler,
-        )..layout(maxWidth: maxQuoteWidth);
-        final canInline = inlinePainter.computeLineMetrics().length <= 1;
-        if (canInline) {
-          return Text.rich(
-            TextSpan(
-              children: [
-                headerWithNameSpan,
-                const TextSpan(text: ' '),
-                quotedSpan,
-              ],
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: textAlign,
-          );
-        }
-        final headerText = Text.rich(
-          headerWithNameSpan,
-          maxLines: 1,
-          softWrap: false,
-          overflow: TextOverflow.ellipsis,
-          textAlign: textAlign,
-        );
-        final stackedQuotedPreview = _fitQuotedPreviewText(
-          context: context,
-          quoteText: quoteText,
-          style: baseStyle,
-          maxWidth: maxQuoteWidth,
-        );
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: crossAxisAlignment,
-          spacing: spacing.xxs,
-          children: [
-            headerText,
-            Align(
-              alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxQuoteWidth),
-                child: Text(
-                  stackedQuotedPreview,
-                  maxLines: 2,
-                  overflow: TextOverflow.clip,
-                  textAlign: textAlign,
-                  style: baseStyle,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+    _quotePainter.paint(context.canvas, offset + quoteOffset);
   }
 }
 
@@ -15073,19 +15254,23 @@ class _ForwardedPreviewText extends StatelessWidget {
 
 class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
   const _ReplyPreviewBubbleColumn({
-    required this.preview,
+    required this.forwardedPreview,
+    required this.quotedPreview,
     required this.senderLabel,
     required this.bubble,
     required this.previewMaxWidth,
     required this.spacing,
+    required this.previewSpacing,
     required this.alignEnd,
   });
 
-  final Widget? preview;
+  final Widget? forwardedPreview;
+  final Widget? quotedPreview;
   final Widget? senderLabel;
   final Widget bubble;
   final double previewMaxWidth;
   final double spacing;
+  final double previewSpacing;
   final bool alignEnd;
 
   @override
@@ -15093,7 +15278,9 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
       _RenderReplyPreviewBubbleColumn(
         previewMaxWidth: previewMaxWidth,
         spacing: spacing,
-        hasPreview: preview != null,
+        previewSpacing: previewSpacing,
+        hasForwardedPreview: forwardedPreview != null,
+        hasQuotedPreview: quotedPreview != null,
         hasSenderLabel: senderLabel != null,
         alignEnd: alignEnd,
       );
@@ -15106,13 +15293,20 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
     renderObject
       ..previewMaxWidth = previewMaxWidth
       ..spacing = spacing
-      ..hasPreview = preview != null
+      ..previewSpacing = previewSpacing
+      ..hasForwardedPreview = forwardedPreview != null
+      ..hasQuotedPreview = quotedPreview != null
       ..hasSenderLabel = senderLabel != null
       ..alignEnd = alignEnd;
   }
 
   @override
-  List<Widget> get children => <Widget>[?senderLabel, ?preview, bubble];
+  List<Widget> get children => <Widget>[
+    ?senderLabel,
+    ?forwardedPreview,
+    ?quotedPreview,
+    bubble,
+  ];
 }
 
 class _ReplyPreviewBubbleParentData extends ContainerBoxParentData<RenderBox> {}
@@ -15127,18 +15321,24 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
   _RenderReplyPreviewBubbleColumn({
     required double previewMaxWidth,
     required double spacing,
-    required bool hasPreview,
+    required double previewSpacing,
+    required bool hasForwardedPreview,
+    required bool hasQuotedPreview,
     required bool hasSenderLabel,
     required bool alignEnd,
   }) : _previewMaxWidth = previewMaxWidth,
        _spacing = spacing,
-       _hasPreview = hasPreview,
+       _previewSpacing = previewSpacing,
+       _hasForwardedPreview = hasForwardedPreview,
+       _hasQuotedPreview = hasQuotedPreview,
        _hasSenderLabel = hasSenderLabel,
        _alignEnd = alignEnd;
 
   double _previewMaxWidth;
   double _spacing;
-  bool _hasPreview;
+  double _previewSpacing;
+  bool _hasForwardedPreview;
+  bool _hasQuotedPreview;
   bool _hasSenderLabel;
   bool _alignEnd;
 
@@ -15158,11 +15358,27 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
     markNeedsLayout();
   }
 
-  bool get hasPreview => _hasPreview;
+  double get previewSpacing => _previewSpacing;
 
-  set hasPreview(bool value) {
-    if (_hasPreview == value) return;
-    _hasPreview = value;
+  set previewSpacing(double value) {
+    if (_previewSpacing == value) return;
+    _previewSpacing = value;
+    markNeedsLayout();
+  }
+
+  bool get hasForwardedPreview => _hasForwardedPreview;
+
+  set hasForwardedPreview(bool value) {
+    if (_hasForwardedPreview == value) return;
+    _hasForwardedPreview = value;
+    markNeedsLayout();
+  }
+
+  bool get hasQuotedPreview => _hasQuotedPreview;
+
+  set hasQuotedPreview(bool value) {
+    if (_hasQuotedPreview == value) return;
+    _hasQuotedPreview = value;
     markNeedsLayout();
   }
 
@@ -15192,8 +15408,13 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
   @override
   void performLayout() {
     final RenderBox? senderLabelChild = hasSenderLabel ? firstChild : null;
-    final RenderBox? previewChild = hasPreview
+    final RenderBox? forwardedPreviewChild = hasForwardedPreview
         ? (hasSenderLabel ? childAfter(senderLabelChild!) : firstChild)
+        : null;
+    final RenderBox? quotedPreviewChild = hasQuotedPreview
+        ? (hasForwardedPreview
+              ? childAfter(forwardedPreviewChild!)
+              : (hasSenderLabel ? childAfter(senderLabelChild!) : firstChild))
         : null;
     final RenderBox? bubbleChild = lastChild;
     if (bubbleChild == null) {
@@ -15203,8 +15424,10 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
     bubbleChild.layout(constraints.loosen(), parentUsesSize: true);
     final bubbleSize = bubbleChild.size;
     final double bubbleWidth = bubbleSize.width;
-    var previewHeight = 0.0;
-    var previewWidth = 0.0;
+    var forwardedPreviewHeight = 0.0;
+    var forwardedPreviewWidth = 0.0;
+    var quotedPreviewHeight = 0.0;
+    var quotedPreviewWidth = 0.0;
     var senderLabelHeight = 0.0;
     var senderLabelWidth = 0.0;
     if (senderLabelChild != null) {
@@ -15213,23 +15436,30 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       senderLabelWidth = senderLabelChild.size.width;
     }
     var layoutWidth = bubbleWidth;
-    if (previewChild != null) {
-      final effectivePreviewMaxWidth = constraints.hasBoundedWidth
-          ? math.min(previewMaxWidth, constraints.maxWidth)
-          : previewMaxWidth;
-      previewChild.layout(
+    final effectivePreviewMaxWidth = constraints.hasBoundedWidth
+        ? math.min(previewMaxWidth, constraints.maxWidth)
+        : previewMaxWidth;
+    if (forwardedPreviewChild != null) {
+      forwardedPreviewChild.layout(
         BoxConstraints(maxWidth: effectivePreviewMaxWidth),
         parentUsesSize: true,
       );
-      previewWidth = previewChild.size.width;
-      previewHeight = previewChild.size.height + spacing;
-      layoutWidth = math.max(layoutWidth, previewWidth);
-      final previewParentData =
-          previewChild.parentData as _ReplyPreviewBubbleParentData;
-      previewParentData.offset = Offset(
-        alignEnd ? layoutWidth - previewWidth : 0,
-        senderLabelHeight,
+      forwardedPreviewWidth = forwardedPreviewChild.size.width;
+      forwardedPreviewHeight = forwardedPreviewChild.size.height;
+      layoutWidth = math.max(layoutWidth, forwardedPreviewWidth);
+    }
+    if (quotedPreviewChild
+        case final _RenderReplyingToPreviewText quotedRender) {
+      quotedRender.quoteMaxWidth = bubbleWidth;
+    }
+    if (quotedPreviewChild != null) {
+      quotedPreviewChild.layout(
+        BoxConstraints(maxWidth: effectivePreviewMaxWidth),
+        parentUsesSize: true,
       );
+      quotedPreviewWidth = quotedPreviewChild.size.width;
+      quotedPreviewHeight = quotedPreviewChild.size.height;
+      layoutWidth = math.max(layoutWidth, quotedPreviewWidth);
     }
     final bubbleOffsetX = alignEnd ? layoutWidth - bubbleWidth : 0.0;
     if (senderLabelChild != null) {
@@ -15240,14 +15470,33 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
         0,
       );
     }
+    var currentY = senderLabelHeight;
+    if (forwardedPreviewChild != null) {
+      final forwardedPreviewParentData =
+          forwardedPreviewChild.parentData as _ReplyPreviewBubbleParentData;
+      forwardedPreviewParentData.offset = Offset(
+        alignEnd ? layoutWidth - forwardedPreviewWidth : 0,
+        currentY,
+      );
+      currentY += forwardedPreviewHeight;
+      if (quotedPreviewChild != null) {
+        currentY += previewSpacing;
+      }
+    }
+    if (quotedPreviewChild != null) {
+      final quotedPreviewParentData =
+          quotedPreviewChild.parentData as _ReplyPreviewBubbleParentData;
+      quotedPreviewParentData.offset = Offset(
+        alignEnd ? layoutWidth - quotedPreviewWidth : 0,
+        currentY,
+      );
+      currentY += quotedPreviewHeight + spacing;
+    }
     final bubbleParentData =
         bubbleChild.parentData as _ReplyPreviewBubbleParentData;
-    bubbleParentData.offset = Offset(
-      bubbleOffsetX,
-      previewHeight + senderLabelHeight,
-    );
+    bubbleParentData.offset = Offset(bubbleOffsetX, currentY);
     size = constraints.constrain(
-      Size(layoutWidth, bubbleSize.height + previewHeight + senderLabelHeight),
+      Size(layoutWidth, bubbleSize.height + currentY),
     );
   }
 

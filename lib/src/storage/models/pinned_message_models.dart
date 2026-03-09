@@ -11,6 +11,8 @@ class PinnedMessages extends Table {
 
   DateTimeColumn get pinnedAt => dateTime()();
 
+  BoolColumn get active => boolean().withDefault(const Constant(true))();
+
   @override
   Set<Column<Object>>? get primaryKey => {messageStanzaId, chatJid};
 

@@ -212,7 +212,19 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<PinnedMessageEntry>> getPinnedMessages(String chatJid);
 
+  Future<PinnedMessageEntry?> getPinnedMessage({
+    required String chatJid,
+    required String messageStanzaId,
+  });
+
   Future<void> upsertPinnedMessage(PinnedMessageEntry entry);
+
+  Future<void> applyPinnedMessageMutation({
+    required String chatJid,
+    required String messageStanzaId,
+    required DateTime pinnedAt,
+    required bool active,
+  });
 
   Future<void> deletePinnedMessage({
     required String chatJid,
@@ -1435,7 +1447,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 30;
+  int get schemaVersion => 31;
 
   @override
   MigrationStrategy get migration {
@@ -1673,6 +1685,9 @@ WHERE transport IS NULL
         }
         if (from < 28) {
           await m.createTable(pinnedMessages);
+        }
+        if (from < 31) {
+          await m.addColumn(pinnedMessages, pinnedMessages.active);
         }
       },
       beforeOpen: (_) async {
@@ -3964,7 +3979,7 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Stream<List<PinnedMessageEntry>> watchPinnedMessages(String chatJid) {
     final query = select(pinnedMessages)
-      ..where((tbl) => tbl.chatJid.equals(chatJid))
+      ..where((tbl) => tbl.chatJid.equals(chatJid) & tbl.active.equals(true))
       ..orderBy([
         (tbl) =>
             OrderingTerm(expression: tbl.pinnedAt, mode: OrderingMode.desc),
@@ -3979,7 +3994,7 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Future<List<PinnedMessageEntry>> getPinnedMessages(String chatJid) {
     final query = select(pinnedMessages)
-      ..where((tbl) => tbl.chatJid.equals(chatJid))
+      ..where((tbl) => tbl.chatJid.equals(chatJid) & tbl.active.equals(true))
       ..orderBy([
         (tbl) =>
             OrderingTerm(expression: tbl.pinnedAt, mode: OrderingMode.desc),
@@ -3992,8 +4007,60 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   @override
+  Future<PinnedMessageEntry?> getPinnedMessage({
+    required String chatJid,
+    required String messageStanzaId,
+  }) {
+    final query = select(pinnedMessages)
+      ..where((tbl) => tbl.chatJid.equals(chatJid))
+      ..where((tbl) => tbl.messageStanzaId.equals(messageStanzaId));
+    return query.getSingleOrNull();
+  }
+
+  @override
   Future<void> upsertPinnedMessage(PinnedMessageEntry entry) async {
-    await into(pinnedMessages).insertOnConflictUpdate(entry);
+    await into(pinnedMessages).insertOnConflictUpdate(
+      PinnedMessageEntry(
+        messageStanzaId: entry.messageStanzaId,
+        chatJid: entry.chatJid,
+        pinnedAt: entry.pinnedAt.toUtc(),
+        active: true,
+      ),
+    );
+  }
+
+  @override
+  Future<void> applyPinnedMessageMutation({
+    required String chatJid,
+    required String messageStanzaId,
+    required DateTime pinnedAt,
+    required bool active,
+  }) async {
+    final normalizedPinnedAt = pinnedAt.toUtc();
+    final existing = await getPinnedMessage(
+      chatJid: chatJid,
+      messageStanzaId: messageStanzaId,
+    );
+    if (existing != null) {
+      final existingPinnedAt = existing.pinnedAt.toUtc();
+      if (existingPinnedAt.isAfter(normalizedPinnedAt)) {
+        return;
+      }
+      final sameTimestamp = existingPinnedAt.isAtSameMomentAs(
+        normalizedPinnedAt,
+      );
+      if (sameTimestamp && (!existing.active || existing.active == active)) {
+        return;
+      }
+    }
+    await into(pinnedMessages).insertOnConflictUpdate(
+      PinnedMessageEntry(
+        messageStanzaId: messageStanzaId,
+        chatJid: chatJid,
+        pinnedAt: normalizedPinnedAt,
+        active: active,
+      ),
+    );
   }
 
   @override
