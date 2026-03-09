@@ -3999,6 +3999,10 @@ class _ChatState extends State<Chat> {
                   current.emailSubjectHydrationId,
               listener: (context, state) {
                 final subject = state.emailSubjectHydrationText ?? '';
+                if (_subjectFocusNode.hasFocus &&
+                    _subjectController.text != subject) {
+                  return;
+                }
                 _subjectChangeSuppressed = true;
                 _subjectController
                   ..text = subject
@@ -13175,7 +13179,6 @@ class _SubjectTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final l10n = context.l10n;
-    final spacing = context.spacing;
     final sizing = context.sizing;
     final subjectStyle = context.textTheme.small.copyWith(
       fontWeight: FontWeight.w600,
@@ -13192,56 +13195,55 @@ class _SubjectTextField extends StatelessWidget {
       child: Semantics(
         label: l10n.chatSubjectSemantics,
         textField: true,
-        child: Row(
-          children: [
-            Text('${l10n.chatSubjectHint}:', style: subjectStyle),
-            SizedBox(width: spacing.xs),
-            Expanded(
-              child: AxiTextField(
-                controller: controller,
-                focusNode: focusNode,
-                enabled: true,
-                readOnly: !enabled,
-                showCursor: enabled,
-                enableInteractiveSelection: enabled,
-                selectAllOnFocus: false,
-                minLines: 1,
-                maxLines: 1,
-                textInputAction: TextInputAction.next,
-                textCapitalization: TextCapitalization.sentences,
-                onSubmitted: enabled ? (_) => onSubmitted() : null,
-                onEditingComplete: enabled ? onSubmitted : null,
-                keyboardType: TextInputType.text,
-                style: subjectStyle,
-                strutStyle: subjectStrutStyle,
-                cursorHeight: subjectStyle.fontSize,
-                textAlignVertical: TextAlignVertical.center,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  disabledBorder: InputBorder.none,
-                  isCollapsed: true,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
+        child: AxiTextField(
+          controller: controller,
+          focusNode: focusNode,
+          enabled: true,
+          readOnly: !enabled,
+          showCursor: enabled,
+          enableInteractiveSelection: enabled,
+          selectAllOnFocus: false,
+          minLines: 1,
+          maxLines: 1,
+          textInputAction: TextInputAction.next,
+          textCapitalization: TextCapitalization.sentences,
+          onSubmitted: enabled ? (_) => onSubmitted() : null,
+          onEditingComplete: enabled ? onSubmitted : null,
+          keyboardType: TextInputType.text,
+          style: subjectStyle,
+          strutStyle: subjectStrutStyle,
+          cursorHeight: subjectStyle.fontSize,
+          textAlignVertical: TextAlignVertical.center,
+          decoration: InputDecoration(
+            border: InputBorder.none,
+            enabledBorder: InputBorder.none,
+            focusedBorder: InputBorder.none,
+            disabledBorder: InputBorder.none,
+            isCollapsed: true,
+            contentPadding: EdgeInsets.zero,
+            prefixText: '${l10n.chatSubjectHint}: ',
+            prefixStyle: subjectStyle,
+            suffixIcon: showExpandDraftAction
+                ? AxiIconButton.secondary(
+                    iconData: LucideIcons.maximize2,
+                    tooltip: l10n.draftExpand,
+                    semanticLabel: l10n.draftExpand,
+                    iconSize: sizing.inputSuffixIconSize,
+                    buttonSize: sizing.inputSuffixButtonSize,
+                    tapTargetSize: sizing.inputSuffixButtonSize,
+                    cornerRadius: context.radii.squircleSm,
+                    onPressed: enabled && expandDraftEnabled
+                        ? onExpandDraftPressed
+                        : null,
+                  )
+                : null,
+            suffixIconConstraints: BoxConstraints(
+              minWidth: sizing.inputSuffixButtonSize,
+              maxWidth: sizing.inputSuffixButtonSize,
+              minHeight: sizing.inputSuffixButtonSize,
+              maxHeight: sizing.inputSuffixButtonSize,
             ),
-            if (showExpandDraftAction) ...[
-              SizedBox(width: spacing.xs),
-              AxiIconButton.secondary(
-                iconData: LucideIcons.maximize2,
-                tooltip: l10n.draftExpand,
-                semanticLabel: l10n.draftExpand,
-                iconSize: sizing.inputSuffixIconSize,
-                buttonSize: sizing.inputSuffixButtonSize,
-                tapTargetSize: sizing.inputSuffixButtonSize,
-                cornerRadius: context.radii.squircleSm,
-                onPressed: enabled && expandDraftEnabled
-                    ? onExpandDraftPressed
-                    : null,
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );
