@@ -16,6 +16,7 @@ import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/startup/first_frame_gate.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:flutter/foundation.dart';
@@ -87,11 +88,20 @@ Future<void> main() async {
   registerCalendarHiveAdapters();
   await storageManager.ensureGuestStorage();
 
+  final SettingsCubit startupSettingsCubit = SettingsCubit(
+    capability: capability,
+  );
+  final bool backgroundMessagingEnabled =
+      startupSettingsCubit.state.backgroundMessagingEnabled;
+  await startupSettingsCubit.close();
+
   await notificationInitFuture;
 
   final bool hasNotificationPermissions = await notificationPermissionsFuture;
   withForeground =
-      capability.canForegroundService && hasNotificationPermissions;
+      capability.canForegroundService &&
+      backgroundMessagingEnabled &&
+      hasNotificationPermissions;
   foregroundServiceActive.value = withForeground;
   if (withForeground) {
     initForegroundService();

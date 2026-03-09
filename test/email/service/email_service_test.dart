@@ -567,11 +567,18 @@ void main() {
 
   test('foreground keepalive performs periodic fetches', () async {
     var fetchCalls = 0;
+    var refreshCalls = 0;
     when(() => transport.performBackgroundFetch(any())).thenAnswer((
       invocation,
     ) async {
       fetchCalls++;
       return true;
+    });
+    when(
+      () =>
+          transport.refreshChatlistSnapshot(accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async {
+      refreshCalls++;
     });
 
     final service = EmailService(
@@ -593,6 +600,7 @@ void main() {
     await service.setForegroundKeepalive(true);
     await pumpMicrotasks();
     expect(fetchCalls, 1);
+    expect(refreshCalls, 1);
     expect(
       foregroundBridge.isClientAcquired(foregroundClientEmailKeepalive),
       isTrue,
@@ -603,6 +611,7 @@ void main() {
     );
     await pumpMicrotasks();
     expect(fetchCalls, 2);
+    expect(refreshCalls, 2);
 
     await service.setForegroundKeepalive(false);
     await service.shutdown();
@@ -616,6 +625,7 @@ void main() {
     );
     await pumpMicrotasks();
     expect(fetchCalls, 2);
+    expect(refreshCalls, 2);
   });
 
   test('sendAttachment delegates to transport after provisioning', () async {

@@ -3385,6 +3385,16 @@ class EmailService {
       await _refreshConnectivityState(
         source: _EmailSyncSource.connectivityConfirm,
       );
+      await _bootstrapActiveAccountIfNeeded();
+      final fetched = await _performBackgroundFetchIfIdle(
+        timeout: _foregroundFetchTimeout,
+      );
+      if (fetched) {
+        await refreshChatlistFromCore();
+        await _refreshConnectivityState(
+          source: _EmailSyncSource.backgroundFetchDone,
+        );
+      }
     } on Exception catch (error, stackTrace) {
       _log.finer('Foreground keepalive tick failed', error, stackTrace);
     }

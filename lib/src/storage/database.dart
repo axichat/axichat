@@ -2581,8 +2581,9 @@ WHERE transport IS NULL
       subject: subject,
     );
     final String? trimmedSubject = split.subject?.trim();
-    if (split.body.trim().isNotEmpty) {
-      final lines = split.body.trim().split('\n');
+    final previewBody = ChatSubjectCodec.previewBodyText(split.body).trim();
+    if (previewBody.isNotEmpty) {
+      final lines = previewBody.split('\n');
       final filtered = lines
           .where(
             (line) =>

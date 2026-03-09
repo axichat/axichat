@@ -147,11 +147,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       onResume: _handleLifecycleResume,
       onShow: _handleLifecycleResume,
       onRestart: _handleLifecycleResume,
-      onDetach: logout,
-      onExitRequested: () async {
-        await logout();
-        return AppExitResponse.exit;
-      },
+      onDetach: _handleLifecycleDetach,
+      onExitRequested: _handleExitRequested,
       onStateChange: (lifeCycleState) async {
         await _xmppService.setClientState(
           lifeCycleState == AppLifecycleState.resumed ||
@@ -878,6 +875,37 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     await _resumeStickySession();
+  }
+
+  Future<void> _handleLifecycleDetach() async {
+    if (_shouldPreserveBackgroundSession()) {
+      return;
+    }
+    await logout();
+  }
+
+  Future<AppExitResponse> _handleExitRequested() async {
+    if (_shouldPreserveBackgroundSession()) {
+      return AppExitResponse.exit;
+    }
+    await logout();
+    return AppExitResponse.exit;
+  }
+
+  bool _shouldPreserveBackgroundSession() {
+    if (!_stickyAuthActive) {
+      return false;
+    }
+    if (!withForeground || !foregroundServiceActive.value) {
+      return false;
+    }
+    if (endpointConfig.xmppEnabled && _xmppService.hasConnectionSettings) {
+      return true;
+    }
+    if (endpointConfig.smtpEnabled) {
+      return _emailService?.hasInMemoryReconnectContext ?? false;
+    }
+    return false;
   }
 
   Future<void> _resumeStickySession() async {

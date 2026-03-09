@@ -5,6 +5,10 @@ void main() {
   const SettingsState state = SettingsState();
 
   group('SettingsState defaults', () {
+    test('keeps background messaging disabled by default', () {
+      expect(state.backgroundMessagingEnabled, isFalse);
+    });
+
     test('blocks remote email images by default', () {
       const expectAutoLoadEmailImages = false;
       expect(state.autoLoadEmailImages, expectAutoLoadEmailImages);
