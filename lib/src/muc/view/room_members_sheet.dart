@@ -31,6 +31,7 @@ class RoomMembersSheet extends StatelessWidget {
     required this.roomState,
     required this.memberSections,
     required this.canInvite,
+    required this.avatarUpdateInFlight,
     required this.onInvite,
     required this.onAction,
     this.roomAvatarPath,
@@ -45,6 +46,7 @@ class RoomMembersSheet extends StatelessWidget {
   final RoomState roomState;
   final List<RoomMemberSection> memberSections;
   final bool canInvite;
+  final bool avatarUpdateInFlight;
   final ValueChanged<String> onInvite;
   final void Function(
     String occupantId,
@@ -101,7 +103,8 @@ class RoomMembersSheet extends StatelessWidget {
               roomJid: roomState.roomJid,
               avatarPath: avatarPath,
               canEdit: canEditAvatar,
-              onEdit: canEditAvatar
+              loading: avatarUpdateInFlight,
+              onEdit: canEditAvatar && !avatarUpdateInFlight
                   ? () => _handleAvatarEdit(context, avatarPath)
                   : null,
             ),
@@ -282,28 +285,67 @@ class _RoomAvatarSection extends StatelessWidget {
     required this.roomJid,
     required this.avatarPath,
     required this.canEdit,
+    required this.loading,
     this.onEdit,
   });
 
   final String roomJid;
   final String? avatarPath;
   final bool canEdit;
+  final bool loading;
   final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final motion = context.motion;
+    final radii = context.radii;
     final sizing = context.sizing;
     final spacing = context.spacing;
     final avatarSize = sizing.iconButtonTapTarget;
     final avatarSpacing = spacing.s;
     final l10n = context.l10n;
-    final avatar = AxiAvatar(
-      jid: roomJid,
-      size: avatarSize,
-      avatarPath: avatarPath,
+    final sizeSpan = sizing.iconButtonSize - sizing.iconButtonIconSize;
+    final clampedProgress = sizeSpan <= 0
+        ? 1.0
+        : ((avatarSize - sizing.iconButtonIconSize) / sizeSpan)
+              .clamp(0.0, 1.0)
+              .toDouble();
+    final squircleCornerRadius =
+        radii.squircleSm +
+        ((radii.squircle - radii.squircleSm) * clampedProgress);
+    final avatarShape = SquircleBorder(cornerRadius: squircleCornerRadius);
+    final overlayAlpha = motion.tapFocusAlpha + motion.tapHoverAlpha;
+    final avatar = SizedBox.square(
+      dimension: avatarSize,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          AxiAvatar(jid: roomJid, size: avatarSize, avatarPath: avatarPath),
+          if (loading)
+            IgnorePointer(
+              child: ClipPath(
+                clipper: ShapeBorderClipper(shape: avatarShape),
+                child: ColoredBox(
+                  color: colors.foreground.withValues(alpha: overlayAlpha),
+                  child: Center(
+                    child: AxiProgressIndicator(
+                      color: colors.background,
+                      semanticsLabel: l10n.mucEditAvatar,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
     final editButton = canEdit
-        ? AxiButton.outline(onPressed: onEdit, child: Text(l10n.mucEditAvatar))
+        ? AxiButton.outline(
+            onPressed: onEdit,
+            loading: loading,
+            child: Text(l10n.mucEditAvatar),
+          )
         : null;
     return Row(
       children: [

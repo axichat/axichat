@@ -31,6 +31,7 @@ class ChatsAddButton extends StatelessWidget {
       tooltip: l10n.chatsCreateGroupChatTooltip,
       iconData: LucideIcons.userPlus,
       label: l10n.chatsRoomLabel,
+      barrierDismissible: false,
       dialogBuilder: (context) {
         final colors = context.colorScheme;
         return BlocProvider(
@@ -159,6 +160,8 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                 sizing.dialogMaxHeightFraction;
             return AxiInputDialog(
               title: Text(l10n.chatsCreateChatRoomTitle),
+              canPop: !loading,
+              showCloseButton: !loading,
               maxWidth: sizing.dialogMaxWidth,
               content: ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: dialogMaxHeight),
@@ -291,7 +294,9 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                     child: AxiIconButton(
                                       iconData: LucideIcons.x,
                                       tooltip: l10n.commonClose,
-                                      onPressed: _closeAvatarEditor,
+                                      onPressed: loading
+                                          ? null
+                                          : _closeAvatarEditor,
                                     ),
                                   ),
                                 ],

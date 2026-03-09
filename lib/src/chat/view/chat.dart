@@ -165,6 +165,7 @@ final _selectionSpacerTimestamp = DateTime.fromMillisecondsSinceEpoch(
 );
 const _reactionQuickChoices = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '👏'];
 const _selectionSpacerMessageId = '__selection_spacer__';
+const _composerOverlaySpacerMessageId = '__composer_overlay_spacer__';
 const _emptyStateMessageId = '__empty_state__';
 const _unreadDividerMessageId = '__unread_divider__';
 const _chatScrollStoragePrefix = 'chat-scroll-offset-';
@@ -873,6 +874,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
         return RoomMembersSheet(
           roomState: roomState,
           memberSections: state.roomMemberSections,
+          avatarUpdateInFlight: state.roomAvatarUpdateStatus.isLoading,
           canInvite:
               roomState.myAffiliation.isOwner ||
               roomState.myAffiliation.isAdmin ||
@@ -892,6 +894,8 @@ class _RoomMembersDrawerContent extends StatelessWidget {
 }
 
 class _ChatState extends State<Chat> {
+  static bool get _debugShowAllComposerBanners => false;
+
   late final ShadPopoverController _emojiPopoverController;
   late final FocusNode _focusNode;
   late final TextEditingController _textController;
@@ -5421,19 +5425,6 @@ class _ChatState extends State<Chat> {
                                         ),
                                       );
                                     }
-                                    if (_multiSelectActive) {
-                                      dashMessages.add(
-                                        ChatMessage(
-                                          user: spacerUser,
-                                          createdAt: _selectionSpacerTimestamp,
-                                          text: ' ',
-                                          customProperties: const {
-                                            'id': _selectionSpacerMessageId,
-                                            'selectionSpacer': true,
-                                          },
-                                        ),
-                                      );
-                                    }
                                     late final MessageListOptions
                                     dashMessageListOptions;
                                     dashMessageListOptions = MessageListOptions(
@@ -5487,57 +5478,70 @@ class _ChatState extends State<Chat> {
                                     final composerHintText = isEmailComposer
                                         ? context.l10n.chatComposerEmailHint
                                         : context.l10n.chatComposerMessageHint;
-                                    Widget quoteSection;
                                     final quoting = state.quoting;
-                                    if (quoting == null) {
-                                      quoteSection = const SizedBox.shrink();
-                                    } else {
-                                      quoteSection = Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        child: _QuoteBanner(
-                                          key: ValueKey<String?>(
-                                            quoting.stanzaID,
-                                          ),
-                                          message: quoting,
-                                          senderLabel:
-                                              _isQuotedMessageFromSelf(
-                                                quotedMessage: quoting,
-                                                isGroupChat: isGroupChat,
-                                                myOccupantId: myOccupantId,
-                                                selfNick: selfNick,
-                                                currentUserId: currentUserId,
-                                              )
-                                              ? context.l10n.chatSenderYou
-                                              : _quotedSenderLabel(
-                                                  quotedMessage: quoting,
-                                                  isGroupChat: isGroupChat,
-                                                  roomState: state.roomState,
-                                                  chatDisplayName:
-                                                      resolvedDirectChatDisplayName,
-                                                  l10n: context.l10n,
-                                                ),
-                                          isSelf: _isQuotedMessageFromSelf(
-                                            quotedMessage: quoting,
+                                    final quotedMessage =
+                                        quoting ??
+                                        (_debugShowAllComposerBanners &&
+                                                filteredItems.isNotEmpty
+                                            ? filteredItems.first
+                                            : null);
+                                    final quotedIsSelf = quotedMessage == null
+                                        ? false
+                                        : _isQuotedMessageFromSelf(
+                                            quotedMessage: quotedMessage,
                                             isGroupChat: isGroupChat,
                                             myOccupantId: myOccupantId,
                                             selfNick: selfNick,
                                             currentUserId: currentUserId,
+                                          );
+                                    final quotedSenderLabel =
+                                        quotedMessage == null
+                                        ? null
+                                        : quotedIsSelf
+                                        ? context.l10n.chatSenderYou
+                                        : _quotedSenderLabel(
+                                            quotedMessage: quotedMessage,
+                                            isGroupChat: isGroupChat,
+                                            roomState: state.roomState,
+                                            chatDisplayName:
+                                                resolvedDirectChatDisplayName,
+                                            l10n: context.l10n,
+                                          );
+                                    final composerErrorMessage = state
+                                        .composerError
+                                        ?.label(context.l10n);
+                                    final composerNotices = _ComposerNotices(
+                                      horizontalPadding: context.spacing.l,
+                                      composerError: composerErrorMessage,
+                                      onComposerErrorCleared: () =>
+                                          context.read<ChatBloc>().add(
+                                            const ChatComposerErrorCleared(),
                                           ),
-                                          onClear: () => context
-                                              .read<ChatBloc>()
-                                              .add(const ChatQuoteCleared()),
-                                        ),
-                                      );
-                                    }
-                                    quoteSection = AnimatedSize(
-                                      duration: _bubbleFocusDuration,
-                                      curve: _bubbleFocusCurve,
-                                      alignment: Alignment.topCenter,
-                                      child: quoteSection,
+                                      showAttachmentWarning:
+                                          showAttachmentWarning,
+                                      retryReport: retryReport,
+                                      retryShareId: retryShareId,
+                                      onFanOutRetry: onFanOutRetry,
                                     );
+                                    final showComposerNotices =
+                                        composerErrorMessage?.isNotEmpty ==
+                                            true ||
+                                        showAttachmentWarning ||
+                                        (retryReport != null &&
+                                            retryShareId != null &&
+                                            retryReport.statuses.any(
+                                              (status) =>
+                                                  status.state ==
+                                                  FanOutRecipientState.failed,
+                                            ));
+                                    final overlayNotices = showComposerNotices
+                                        ? composerNotices
+                                        : (_debugShowAllComposerBanners
+                                              ? const _DebugComposerNotices()
+                                              : null);
+                                    var hasComposerOverlay =
+                                        quotedMessage != null ||
+                                        overlayNotices != null;
                                     final demoTypingAvatars =
                                         _demoTypingParticipants(state);
                                     final typingAvatars =
@@ -5561,259 +5565,275 @@ class _ChatState extends State<Chat> {
                                     final typingVisible =
                                         state.typing == true ||
                                         typingAvatars.isNotEmpty;
-                                    final bottomSection = _SizeReportingWidget(
-                                      onSizeChange: _updateBottomSectionHeight,
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          quoteSection,
-                                          if (_multiSelectActive &&
-                                              selectedMessages.isNotEmpty)
-                                            () {
-                                              final targets = List<Message>.of(
-                                                selectedMessages,
-                                                growable: false,
-                                              );
-                                              final canReact =
-                                                  !isEmailChat &&
-                                                  (state
-                                                          .xmppCapabilities
-                                                          ?.features
-                                                          .contains(
-                                                            mox.messageReactionsXmlns,
-                                                          ) ??
-                                                      false);
-                                              return _MessageSelectionToolbar(
-                                                count: targets.length,
-                                                onClear: _clearMultiSelection,
-                                                onCopy: () =>
-                                                    _copySelectedMessages(
-                                                      List<Message>.of(targets),
-                                                    ),
-                                                onShare: () =>
-                                                    _shareSelectedMessages(
-                                                      List<Message>.of(targets),
-                                                    ),
-                                                shareStatus:
-                                                    _shareRequestStatus,
-                                                onForward: () =>
-                                                    _forwardSelectedMessages(
-                                                      List<Message>.of(targets),
-                                                    ),
-                                                onAddToCalendar: () =>
-                                                    _addSelectedToCalendar(
-                                                      List<Message>.of(targets),
-                                                    ),
-                                                showReactions: canReact,
-                                                onReactionSelected: canReact
-                                                    ? (emoji) =>
-                                                          _toggleQuickReactionForMessages(
-                                                            targets,
-                                                            emoji,
-                                                          )
-                                                    : null,
-                                                onReactionPicker: canReact
-                                                    ? () =>
-                                                          _handleMultiReactionSelection(
-                                                            List<Message>.of(
-                                                              targets,
-                                                            ),
-                                                          )
-                                                    : null,
-                                              );
-                                            }()
-                                          else
-                                            () {
-                                              if (widget.readOnly) {
-                                                _ensureRecipientBarHeightCleared();
-                                                return const _ReadOnlyComposerBanner();
-                                              }
-                                              final visibilityLabel =
-                                                  _recipientVisibilityLabel(
-                                                    chat: state.chat,
-                                                    recipients: recipients,
-                                                  );
-                                              final expandedComposerSeed =
-                                                  _expandedComposerSeed;
-                                              final animationDuration = context
-                                                  .watch<SettingsCubit>()
-                                                  .animationDuration;
-                                              final Widget composerChild;
-                                              if (expandedComposerSeed !=
-                                                  null) {
-                                                final locate = context.read;
-                                                composerChild = _InlineExpandedDraftComposerSection(
-                                                  key: const ValueKey<String>(
-                                                    'expanded-composer',
+                                    Widget? composerOverlayBanner;
+                                    final Widget bottomContent;
+                                    if (_multiSelectActive &&
+                                        selectedMessages.isNotEmpty) {
+                                      final targets = List<Message>.of(
+                                        selectedMessages,
+                                        growable: false,
+                                      );
+                                      final canReact =
+                                          !isEmailChat &&
+                                          (state.xmppCapabilities?.features
+                                                  .contains(
+                                                    mox.messageReactionsXmlns,
+                                                  ) ??
+                                              false);
+                                      composerOverlayBanner = _MessageSelectionToolbar(
+                                        count: targets.length,
+                                        onClear: _clearMultiSelection,
+                                        onCopy: () => _copySelectedMessages(
+                                          List<Message>.of(targets),
+                                        ),
+                                        onShare: () => _shareSelectedMessages(
+                                          List<Message>.of(targets),
+                                        ),
+                                        shareStatus: _shareRequestStatus,
+                                        onForward: () =>
+                                            _forwardSelectedMessages(
+                                              List<Message>.of(targets),
+                                            ),
+                                        onAddToCalendar: () =>
+                                            _addSelectedToCalendar(
+                                              List<Message>.of(targets),
+                                            ),
+                                        showReactions: canReact,
+                                        onReactionSelected: canReact
+                                            ? (emoji) =>
+                                                  _toggleQuickReactionForMessages(
+                                                    targets,
+                                                    emoji,
+                                                  )
+                                            : null,
+                                        onReactionPicker: canReact
+                                            ? () =>
+                                                  _handleMultiReactionSelection(
+                                                    List<Message>.of(targets),
+                                                  )
+                                            : null,
+                                      );
+                                      hasComposerOverlay = true;
+                                      bottomContent = const SizedBox.shrink();
+                                    } else if (widget.readOnly) {
+                                      _ensureRecipientBarHeightCleared();
+                                      composerOverlayBanner =
+                                          const _ReadOnlyComposerBanner();
+                                      hasComposerOverlay = true;
+                                      bottomContent = const SizedBox.shrink();
+                                    } else {
+                                      final visibilityLabel =
+                                          _recipientVisibilityLabel(
+                                            chat: state.chat,
+                                            recipients: recipients,
+                                          );
+                                      final expandedComposerSeed =
+                                          _expandedComposerSeed;
+                                      final animationDuration = context
+                                          .watch<SettingsCubit>()
+                                          .animationDuration;
+                                      final Widget composerChild;
+                                      if (expandedComposerSeed != null) {
+                                        final locate = context.read;
+                                        composerChild =
+                                            _InlineExpandedDraftComposerSection(
+                                              key: const ValueKey<String>(
+                                                'expanded-composer',
+                                              ),
+                                              seed: expandedComposerSeed,
+                                              locate: locate,
+                                              onUnexpand: () =>
+                                                  _collapseExpandedDraftComposer(
+                                                    clearInlineComposer: false,
                                                   ),
-                                                  seed: expandedComposerSeed,
-                                                  locate: locate,
-                                                  onUnexpand: () =>
-                                                      _collapseExpandedDraftComposer(
-                                                        clearInlineComposer:
-                                                            false,
-                                                      ),
-                                                  onClosed: () =>
-                                                      _collapseExpandedDraftComposer(
-                                                        clearInlineComposer:
-                                                            true,
-                                                      ),
-                                                  onDiscarded: () =>
-                                                      _collapseExpandedDraftComposer(
-                                                        clearInlineComposer:
-                                                            true,
-                                                      ),
-                                                  onDraftSaved: (draftId) {
-                                                    if (!mounted) return;
-                                                    setState(() {
-                                                      _expandedComposerDraftId =
-                                                          draftId;
-                                                      final current =
-                                                          _expandedComposerSeed;
-                                                      if (current == null) {
-                                                        return;
-                                                      }
-                                                      _expandedComposerSeed =
-                                                          current.copyWith(
-                                                            id: draftId,
-                                                          );
-                                                    });
-                                                  },
-                                                );
-                                                return _ComposerModeTransition(
-                                                  duration: animationDuration,
-                                                  child: composerChild,
-                                                );
-                                              }
-                                              composerChild = _ChatComposerSection(
-                                                key: const ValueKey<String>(
-                                                  'inline-composer',
-                                                ),
-                                                enabled: !isWelcomeChat,
-                                                hintText: composerHintText,
-                                                recipients: recipients,
-                                                availableChats: availableChats,
-                                                latestStatuses: latestStatuses,
-                                                visibilityLabel:
-                                                    visibilityLabel,
-                                                pendingAttachments:
-                                                    pendingAttachments,
-                                                composerHasText:
-                                                    _composerHasContent,
-                                                composerMinLines: 1,
-                                                composerMaxLines: 6,
-                                                selfJid: selfXmppJid,
-                                                selfIdentity: selfIdentity,
-                                                composerError: state
-                                                    .composerError
-                                                    ?.label(context.l10n),
-                                                onComposerErrorCleared: () =>
-                                                    context.read<ChatBloc>().add(
-                                                      const ChatComposerErrorCleared(),
-                                                    ),
-                                                showAttachmentWarning:
-                                                    showAttachmentWarning,
-                                                retryReport: retryReport,
-                                                retryShareId: retryShareId,
-                                                onFanOutRetry: onFanOutRetry,
-                                                subjectController:
-                                                    _subjectController,
-                                                subjectFocusNode:
-                                                    _subjectFocusNode,
-                                                textController: _textController,
-                                                textFocusNode: _focusNode,
-                                                tapRegionGroup:
-                                                    _composerTapRegionGroup,
-                                                onSubjectSubmitted: () =>
-                                                    _focusNode.requestFocus(),
-                                                showExpandDraftAction:
-                                                    isEmailComposer,
-                                                expandDraftEnabled:
-                                                    !_expandingComposerDraft,
-                                                onExpandDraftPressed: () =>
-                                                    _expandEmailComposerToDraft(
-                                                      state,
-                                                    ),
-                                                onRecipientAdded:
-                                                    _handleRecipientAdded,
-                                                onRecipientRemoved:
-                                                    _handleRecipientRemoved,
-                                                onRecipientToggled:
-                                                    _handleRecipientToggled,
-                                                onAttachmentRetry: (id) {
-                                                  final chat = chatEntity;
-                                                  if (chat == null) {
+                                              onClosed: () =>
+                                                  _collapseExpandedDraftComposer(
+                                                    clearInlineComposer: true,
+                                                  ),
+                                              onDiscarded: () =>
+                                                  _collapseExpandedDraftComposer(
+                                                    clearInlineComposer: true,
+                                                  ),
+                                              onDraftSaved: (draftId) {
+                                                if (!mounted) return;
+                                                setState(() {
+                                                  _expandedComposerDraftId =
+                                                      draftId;
+                                                  final current =
+                                                      _expandedComposerSeed;
+                                                  if (current == null) {
                                                     return;
                                                   }
-                                                  context.read<ChatBloc>().add(
-                                                    ChatAttachmentRetryRequested(
-                                                      attachmentId: id,
-                                                      recipients: _recipients,
-                                                      chat: chat,
-                                                      quotedDraft:
-                                                          state.quoting,
-                                                      subject:
-                                                          _subjectController
-                                                              .text,
-                                                      settings:
-                                                          settingsSnapshot,
-                                                      supportsHttpFileUpload: state
-                                                          .supportsHttpFileUpload,
-                                                    ),
-                                                  );
-                                                },
-                                                onAttachmentRemove: (id) =>
-                                                    context.read<ChatBloc>().add(
-                                                      ChatPendingAttachmentRemoved(
-                                                        id,
-                                                      ),
-                                                    ),
-                                                onPendingAttachmentPressed:
-                                                    _handlePendingAttachmentPressed,
-                                                onPendingAttachmentLongPressed:
-                                                    _handlePendingAttachmentLongPressed,
-                                                pendingAttachmentMenuBuilder:
-                                                    (
-                                                      pending,
-                                                    ) => _pendingAttachmentMenuItems(
-                                                      pending,
-                                                      chat: chatEntity,
-                                                      quotedDraft:
-                                                          state.quoting,
-                                                      supportsHttpFileUpload: state
-                                                          .supportsHttpFileUpload,
-                                                      settingsSnapshot:
-                                                          settingsSnapshot,
-                                                    ),
-                                                buildComposerAccessories:
-                                                    ({
-                                                      required bool canSend,
-                                                    }) => _composerAccessories(
-                                                      canSend: canSend,
-                                                      attachmentsEnabled:
-                                                          attachmentsEnabled,
-                                                      chatState: state,
-                                                      settingsSnapshot:
-                                                          settingsSnapshot,
-                                                    ),
-                                                onTaskDropped: _handleTaskDrop,
-                                                sendOnEnter:
-                                                    composerSendOnEnter,
-                                                onSend: () =>
-                                                    _handleSendMessage(
-                                                      chatState: state,
-                                                      settingsSnapshot:
-                                                          settingsSnapshot,
-                                                    ),
-                                              );
-                                              return _ComposerModeTransition(
-                                                duration: animationDuration,
-                                                child: composerChild,
-                                              );
-                                            }(),
-                                        ],
-                                      ),
+                                                  _expandedComposerSeed =
+                                                      current.copyWith(
+                                                        id: draftId,
+                                                      );
+                                                });
+                                              },
+                                            );
+                                        bottomContent = _ComposerModeTransition(
+                                          duration: animationDuration,
+                                          child: composerChild,
+                                        );
+                                      } else {
+                                        composerChild = _ChatComposerSection(
+                                          key: const ValueKey<String>(
+                                            'inline-composer',
+                                          ),
+                                          enabled: !isWelcomeChat,
+                                          hintText: composerHintText,
+                                          recipients: recipients,
+                                          availableChats: availableChats,
+                                          latestStatuses: latestStatuses,
+                                          visibilityLabel: visibilityLabel,
+                                          pendingAttachments:
+                                              pendingAttachments,
+                                          composerHasText: _composerHasContent,
+                                          composerMinLines: 1,
+                                          composerMaxLines: 6,
+                                          selfJid: selfXmppJid,
+                                          selfIdentity: selfIdentity,
+                                          composerError: null,
+                                          onComposerErrorCleared: null,
+                                          showAttachmentWarning: false,
+                                          retryReport: null,
+                                          retryShareId: null,
+                                          onFanOutRetry: null,
+                                          subjectController: _subjectController,
+                                          subjectFocusNode: _subjectFocusNode,
+                                          textController: _textController,
+                                          textFocusNode: _focusNode,
+                                          tapRegionGroup:
+                                              _composerTapRegionGroup,
+                                          onSubjectSubmitted: () =>
+                                              _focusNode.requestFocus(),
+                                          showExpandDraftAction:
+                                              isEmailComposer,
+                                          expandDraftEnabled:
+                                              !_expandingComposerDraft,
+                                          onExpandDraftPressed: () =>
+                                              _expandEmailComposerToDraft(
+                                                state,
+                                              ),
+                                          onRecipientAdded:
+                                              _handleRecipientAdded,
+                                          onRecipientRemoved:
+                                              _handleRecipientRemoved,
+                                          onRecipientToggled:
+                                              _handleRecipientToggled,
+                                          onAttachmentRetry: (id) {
+                                            final chat = chatEntity;
+                                            if (chat == null) {
+                                              return;
+                                            }
+                                            context.read<ChatBloc>().add(
+                                              ChatAttachmentRetryRequested(
+                                                attachmentId: id,
+                                                recipients: _recipients,
+                                                chat: chat,
+                                                quotedDraft: state.quoting,
+                                                subject:
+                                                    _subjectController.text,
+                                                settings: settingsSnapshot,
+                                                supportsHttpFileUpload: state
+                                                    .supportsHttpFileUpload,
+                                              ),
+                                            );
+                                          },
+                                          onAttachmentRemove: (id) =>
+                                              context.read<ChatBloc>().add(
+                                                ChatPendingAttachmentRemoved(
+                                                  id,
+                                                ),
+                                              ),
+                                          onPendingAttachmentPressed:
+                                              _handlePendingAttachmentPressed,
+                                          onPendingAttachmentLongPressed:
+                                              _handlePendingAttachmentLongPressed,
+                                          pendingAttachmentMenuBuilder:
+                                              (
+                                                pending,
+                                              ) => _pendingAttachmentMenuItems(
+                                                pending,
+                                                chat: chatEntity,
+                                                quotedDraft: state.quoting,
+                                                supportsHttpFileUpload: state
+                                                    .supportsHttpFileUpload,
+                                                settingsSnapshot:
+                                                    settingsSnapshot,
+                                              ),
+                                          buildComposerAccessories:
+                                              ({required bool canSend}) =>
+                                                  _composerAccessories(
+                                                    canSend: canSend,
+                                                    attachmentsEnabled:
+                                                        attachmentsEnabled,
+                                                    chatState: state,
+                                                    settingsSnapshot:
+                                                        settingsSnapshot,
+                                                  ),
+                                          onTaskDropped: _handleTaskDrop,
+                                          sendOnEnter: composerSendOnEnter,
+                                          onSend: () => _handleSendMessage(
+                                            chatState: state,
+                                            settingsSnapshot: settingsSnapshot,
+                                          ),
+                                        );
+                                        bottomContent = _ComposerModeTransition(
+                                          duration: animationDuration,
+                                          child: composerChild,
+                                        );
+                                      }
+                                    }
+                                    composerOverlayBanner ??=
+                                        _debugShowAllComposerBanners
+                                        ? const _DebugComposerOverlayBanner()
+                                        : null;
+                                    hasComposerOverlay =
+                                        quotedMessage != null ||
+                                        overlayNotices != null ||
+                                        composerOverlayBanner != null;
+                                    final bottomSection = _SizeReportingWidget(
+                                      onSizeChange: _updateBottomSectionHeight,
+                                      child: bottomContent,
                                     );
+                                    if (hasComposerOverlay) {
+                                      dashMessages.insert(
+                                        0,
+                                        ChatMessage(
+                                          user: spacerUser,
+                                          createdAt: _selectionSpacerTimestamp,
+                                          text: ' ',
+                                          customProperties: const {
+                                            'id':
+                                                _composerOverlaySpacerMessageId,
+                                            'composerOverlaySpacer': true,
+                                          },
+                                        ),
+                                      );
+                                    }
+                                    final composerOverlay = !hasComposerOverlay
+                                        ? null
+                                        : Positioned(
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            child: _ComposerBottomOverlay(
+                                              quotedMessage: quotedMessage,
+                                              quotedSenderLabel:
+                                                  quotedSenderLabel,
+                                              quotedIsSelf: quotedIsSelf,
+                                              onClearQuote: quoting == null
+                                                  ? () {}
+                                                  : () => context
+                                                        .read<ChatBloc>()
+                                                        .add(
+                                                          const ChatQuoteCleared(),
+                                                        ),
+                                              notices: overlayNotices,
+                                              banner: composerOverlayBanner,
+                                            ),
+                                          );
                                     return Column(
                                       children: [
                                         _ChatPinnedMessagesPanel(
@@ -5966,6 +5986,30 @@ class _ChatState extends State<Chat> {
                                                                     return _SelectionHeadroomSpacer(
                                                                       height:
                                                                           spacerHeight,
+                                                                    );
+                                                                  }
+                                                                  final isComposerOverlaySpacer =
+                                                                      message
+                                                                          .customProperties?['composerOverlaySpacer'] ==
+                                                                      true;
+                                                                  if (isComposerOverlaySpacer) {
+                                                                    return _ComposerOverlayHeadroomSpacer(
+                                                                      child: _ComposerBottomOverlay(
+                                                                        quotedMessage:
+                                                                            quoting,
+                                                                        quotedSenderLabel:
+                                                                            quotedSenderLabel,
+                                                                        quotedIsSelf:
+                                                                            quotedIsSelf,
+                                                                        onClearQuote:
+                                                                            () {},
+                                                                        notices:
+                                                                            showComposerNotices
+                                                                            ? composerNotices
+                                                                            : null,
+                                                                        banner:
+                                                                            composerOverlayBanner,
+                                                                      ),
                                                                     );
                                                                   }
                                                                   final isUnreadDivider =
@@ -9097,6 +9141,7 @@ class _ChatState extends State<Chat> {
                                                             ),
                                                           ),
                                                         ),
+                                                      ?composerOverlay,
                                                     ],
                                                   ),
                                                 ),
@@ -12780,6 +12825,162 @@ class _ComposerNotice extends StatelessWidget {
   }
 }
 
+class _ComposerNotices extends StatelessWidget {
+  const _ComposerNotices({
+    required this.horizontalPadding,
+    required this.composerError,
+    required this.onComposerErrorCleared,
+    required this.showAttachmentWarning,
+    required this.retryReport,
+    required this.retryShareId,
+    required this.onFanOutRetry,
+  });
+
+  final double horizontalPadding;
+  final String? composerError;
+  final VoidCallback? onComposerErrorCleared;
+  final bool showAttachmentWarning;
+  final FanOutSendReport? retryReport;
+  final String? retryShareId;
+  final VoidCallback? onFanOutRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final notices = <Widget>[];
+    final composerError = this.composerError;
+    if (composerError != null && composerError.isNotEmpty) {
+      notices.add(
+        _ComposerNotice(
+          type: _ComposerNoticeType.error,
+          message: composerError,
+          onDismiss: onComposerErrorCleared,
+        ),
+      );
+    }
+    if (showAttachmentWarning) {
+      notices.add(
+        _ComposerNotice(
+          type: _ComposerNoticeType.warning,
+          message: l10n.chatComposerAttachmentWarning,
+        ),
+      );
+    }
+    final report = retryReport;
+    final shareId = retryShareId;
+    if (report != null && shareId != null) {
+      final failedCount = report.statuses
+          .where((status) => status.state == FanOutRecipientState.failed)
+          .length;
+      if (failedCount > 0) {
+        final label = l10n.chatFanOutRecipientLabel(failedCount);
+        final subjectLabel = report.subject?.trim();
+        final failureMessage = subjectLabel?.isNotEmpty == true
+            ? l10n.chatFanOutFailureWithSubject(
+                subjectLabel!,
+                failedCount,
+                label,
+              )
+            : l10n.chatFanOutFailure(failedCount, label);
+        notices.add(
+          _ComposerNotice(
+            type: _ComposerNoticeType.info,
+            message: failureMessage,
+            actionLabel: onFanOutRetry == null ? null : l10n.chatFanOutRetry,
+            onAction: onFanOutRetry,
+          ),
+        );
+      }
+    }
+    if (notices.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final noticePadding = EdgeInsets.symmetric(
+      horizontal: horizontalPadding + spacing.xs,
+    );
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < notices.length; i++) ...[
+          Padding(padding: noticePadding, child: notices[i]),
+          if (i != notices.length - 1) SizedBox(height: spacing.s),
+        ],
+        SizedBox(height: spacing.m),
+      ],
+    );
+  }
+}
+
+class _DebugComposerNotices extends StatelessWidget {
+  const _DebugComposerNotices();
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: spacing.l + spacing.xs),
+          child: _ComposerNotice(
+            type: _ComposerNoticeType.error,
+            message: 'Debug failed-send banner',
+            onDismiss: () {},
+          ),
+        ),
+        SizedBox(height: spacing.s),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: spacing.l + spacing.xs),
+          child: _ComposerNotice(
+            type: _ComposerNoticeType.warning,
+            message: 'Debug attachment warning banner',
+          ),
+        ),
+        SizedBox(height: spacing.s),
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: spacing.l + spacing.xs),
+          child: _ComposerNotice(
+            type: _ComposerNoticeType.info,
+            message: 'Debug retry/sync banner',
+            actionLabel: 'Retry',
+            onAction: () {},
+          ),
+        ),
+        SizedBox(height: spacing.m),
+      ],
+    );
+  }
+}
+
+class _DebugComposerOverlayBanner extends StatelessWidget {
+  const _DebugComposerOverlayBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _ReadOnlyComposerBanner(),
+        SizedBox(height: spacing.s),
+        _MessageSelectionToolbar(
+          count: 2,
+          onClear: () {},
+          onCopy: () {},
+          onShare: () {},
+          shareStatus: RequestStatus.none,
+          onForward: () {},
+          onAddToCalendar: () {},
+        ),
+      ],
+    );
+  }
+}
+
 class _ComposerModeTransition extends StatelessWidget {
   const _ComposerModeTransition({required this.duration, required this.child});
 
@@ -12976,7 +13177,6 @@ class _ChatComposerSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final l10n = context.l10n;
     final spacing = context.spacing;
     final myJid = selfJid;
     final suggestionAddresses = <String>{
@@ -13009,7 +13209,6 @@ class _ChatComposerSection extends StatelessWidget {
         !hasPreparingAttachments &&
         hasRecipients &&
         (composerHasText || hasQueuedAttachments || hasSubjectText);
-    final composerError = this.composerError;
     final subjectHeader = _SubjectTextField(
       enabled: enabled,
       controller: subjectController,
@@ -13089,64 +13288,7 @@ class _ChatComposerSection extends StatelessWidget {
       ),
     );
     final locate = context.read;
-    final notices = <Widget>[];
-    if (composerError != null && composerError.isNotEmpty) {
-      notices.add(
-        _ComposerNotice(
-          type: _ComposerNoticeType.error,
-          message: composerError,
-          onDismiss: onComposerErrorCleared,
-        ),
-      );
-    }
-    if (showAttachmentWarning) {
-      notices.add(
-        _ComposerNotice(
-          type: _ComposerNoticeType.warning,
-          message: l10n.chatComposerAttachmentWarning,
-        ),
-      );
-    }
-    final report = retryReport;
-    final shareId = retryShareId;
-    if (report != null && shareId != null) {
-      final failedCount = report.statuses
-          .where((status) => status.state == FanOutRecipientState.failed)
-          .length;
-      if (failedCount > 0) {
-        final label = l10n.chatFanOutRecipientLabel(failedCount);
-        final subjectLabel = report.subject?.trim();
-        final hasSubjectLabel = subjectLabel?.isNotEmpty == true;
-        final failureMessage = hasSubjectLabel
-            ? l10n.chatFanOutFailureWithSubject(
-                subjectLabel!,
-                failedCount,
-                label,
-              )
-            : l10n.chatFanOutFailure(failedCount, label);
-        notices.add(
-          _ComposerNotice(
-            type: _ComposerNoticeType.info,
-            message: failureMessage,
-            actionLabel: onFanOutRetry == null ? null : l10n.chatFanOutRetry,
-            onAction: onFanOutRetry,
-          ),
-        );
-      }
-    }
     final children = <Widget>[];
-    if (notices.isNotEmpty) {
-      final noticePadding = EdgeInsets.symmetric(
-        horizontal: horizontalPadding + spacing.xs,
-      );
-      for (var i = 0; i < notices.length; i++) {
-        children.add(Padding(padding: noticePadding, child: notices[i]));
-        if (i != notices.length - 1) {
-          children.add(SizedBox(height: spacing.s));
-        }
-      }
-      children.add(SizedBox(height: spacing.m));
-    }
     children.add(
       BlocSelector<ChatsCubit, ChatsState, List<String>>(
         bloc: locate<ChatsCubit>(),
@@ -13604,6 +13746,20 @@ class _SelectionHeadroomSpacer extends StatelessWidget {
         clipBehavior: Clip.none,
         child: SizedBox(height: clampedHeight),
       ),
+    );
+  }
+}
+
+class _ComposerOverlayHeadroomSpacer extends StatelessWidget {
+  const _ComposerOverlayHeadroomSpacer({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      ignoring: true,
+      child: ExcludeSemantics(child: Opacity(opacity: 0, child: child)),
     );
   }
 }
@@ -15149,9 +15305,15 @@ class _RenderReplyingToPreviewText extends RenderBox {
         constraints.maxWidth.isFinite && constraints.maxWidth > 0
         ? constraints.maxWidth
         : double.infinity;
+    final parentQuoteMaxWidth = parentData is _ReplyPreviewBubbleParentData
+        ? (parentData as _ReplyPreviewBubbleParentData).quoteMaxWidth
+        : null;
+    final effectiveQuoteMaxWidth = quoteMaxWidth ?? parentQuoteMaxWidth;
     final maxQuoteWidth =
-        quoteMaxWidth != null && quoteMaxWidth!.isFinite && quoteMaxWidth! > 0
-        ? math.min(maxPreviewWidth, quoteMaxWidth!)
+        effectiveQuoteMaxWidth != null &&
+            effectiveQuoteMaxWidth.isFinite &&
+            effectiveQuoteMaxWidth > 0
+        ? math.min(maxPreviewWidth, effectiveQuoteMaxWidth)
         : maxPreviewWidth;
     _inlinePainter
       ..text = _inlineSpan
@@ -15309,7 +15471,9 @@ class _ReplyPreviewBubbleColumn extends MultiChildRenderObjectWidget {
   ];
 }
 
-class _ReplyPreviewBubbleParentData extends ContainerBoxParentData<RenderBox> {}
+class _ReplyPreviewBubbleParentData extends ContainerBoxParentData<RenderBox> {
+  double? quoteMaxWidth;
+}
 
 class _RenderReplyPreviewBubbleColumn extends RenderBox
     with
@@ -15448,11 +15612,10 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
       forwardedPreviewHeight = forwardedPreviewChild.size.height;
       layoutWidth = math.max(layoutWidth, forwardedPreviewWidth);
     }
-    if (quotedPreviewChild
-        case final _RenderReplyingToPreviewText quotedRender) {
-      quotedRender.quoteMaxWidth = bubbleWidth;
-    }
     if (quotedPreviewChild != null) {
+      final quotedPreviewParentData =
+          quotedPreviewChild.parentData as _ReplyPreviewBubbleParentData;
+      quotedPreviewParentData.quoteMaxWidth = bubbleWidth;
       quotedPreviewChild.layout(
         BoxConstraints(maxWidth: effectivePreviewMaxWidth),
         parentUsesSize: true,
@@ -15562,6 +15725,57 @@ class _QuoteBanner extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ComposerBottomOverlay extends StatelessWidget {
+  const _ComposerBottomOverlay({
+    required this.quotedMessage,
+    required this.quotedSenderLabel,
+    required this.quotedIsSelf,
+    required this.onClearQuote,
+    this.notices,
+    this.banner,
+  });
+
+  final Message? quotedMessage;
+  final String? quotedSenderLabel;
+  final bool quotedIsSelf;
+  final VoidCallback onClearQuote;
+  final Widget? notices;
+  final Widget? banner;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget quoteSection;
+    final quotedMessage = this.quotedMessage;
+    if (quotedMessage == null || quotedSenderLabel == null) {
+      quoteSection = const SizedBox.shrink();
+    } else {
+      quoteSection = Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: _QuoteBanner(
+          key: ValueKey<String?>(quotedMessage.stanzaID),
+          message: quotedMessage,
+          senderLabel: quotedSenderLabel!,
+          isSelf: quotedIsSelf,
+          onClear: onClearQuote,
+        ),
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AnimatedSize(
+          duration: _bubbleFocusDuration,
+          curve: _bubbleFocusCurve,
+          alignment: Alignment.topCenter,
+          child: quoteSection,
+        ),
+        ...[notices, banner].whereType<Widget>(),
+      ],
     );
   }
 }

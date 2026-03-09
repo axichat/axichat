@@ -12,12 +12,14 @@ class AxiDialogFab extends StatelessWidget {
     required this.iconData,
     required this.label,
     required this.dialogBuilder,
+    this.barrierDismissible = true,
   });
 
   final String tooltip;
   final IconData iconData;
   final String label;
   final WidgetBuilder dialogBuilder;
+  final bool barrierDismissible;
 
   @override
   Widget build(BuildContext context) {
@@ -25,8 +27,11 @@ class AxiDialogFab extends StatelessWidget {
       tooltip: tooltip,
       iconData: iconData,
       text: label,
-      onPressed: () =>
-          showFadeScaleDialog(context: context, builder: dialogBuilder),
+      onPressed: () => showFadeScaleDialog(
+        context: context,
+        builder: dialogBuilder,
+        barrierDismissible: barrierDismissible,
+      ),
     );
   }
 }
