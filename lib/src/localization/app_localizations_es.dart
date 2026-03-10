@@ -906,6 +906,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatReplyingTo => 'RESP.:';
 
   @override
+  String get chatReplyingToComposer => 'Respondiendo a...';
+
+  @override
   String get chatForwardPrefix => 'RV:';
 
   @override
@@ -2668,6 +2671,9 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get commonShow => 'Mostrar';
+
+  @override
+  String get chatMessageViewHtmlAction => 'Ver HTML';
 
   @override
   String get commonHide => 'Ocultar';

@@ -369,6 +369,7 @@ void main() {
         body: any(named: 'body'),
         attachment: any(named: 'attachment'),
         shareId: any(named: 'shareId'),
+        quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
       ),
     ).thenAnswer((_) async => report);
@@ -412,6 +413,7 @@ void main() {
                 body: 'Team status update',
                 attachment: any(named: 'attachment'),
                 shareId: any(named: 'shareId'),
+                quotedStanzaId: any(named: 'quotedStanzaId'),
                 useSubjectToken: any(named: 'useSubjectToken'),
               ),
             ).captured.single
@@ -464,6 +466,7 @@ void main() {
         body: any(named: 'body'),
         attachment: any(named: 'attachment'),
         shareId: any(named: 'shareId'),
+        quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
       ),
     ).thenAnswer((_) async => report);
@@ -510,6 +513,7 @@ void main() {
                 body: 'Hello world',
                 attachment: any(named: 'attachment'),
                 shareId: any(named: 'shareId'),
+                quotedStanzaId: any(named: 'quotedStanzaId'),
                 useSubjectToken: any(named: 'useSubjectToken'),
               ),
             ).captured.single
@@ -561,6 +565,7 @@ void main() {
         body: any(named: 'body'),
         attachment: any(named: 'attachment'),
         shareId: any(named: 'shareId'),
+        quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
       ),
     );
@@ -590,6 +595,7 @@ void main() {
         body: any(named: 'body'),
         attachment: any(named: 'attachment'),
         shareId: any(named: 'shareId'),
+        quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
       ),
     ).thenThrow(
@@ -692,6 +698,7 @@ void main() {
         body: any(named: 'body'),
         attachment: any(named: 'attachment'),
         shareId: any(named: 'shareId'),
+        quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
       ),
     ).thenAnswer((invocation) async {
@@ -1152,6 +1159,7 @@ void main() {
           htmlCaption: any(named: 'htmlCaption'),
           shareId: any(named: 'shareId'),
           subject: any(named: 'subject'),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
           useSubjectToken: any(named: 'useSubjectToken'),
           tokenAsSignature: any(named: 'tokenAsSignature'),
         ),
@@ -1217,10 +1225,15 @@ void main() {
           htmlCaption: null,
           shareId: any(named: 'shareId'),
           subject: syntheticReply.subject,
+          quotedStanzaId: quotedMessage.stanzaID,
           useSubjectToken: true,
           tokenAsSignature: true,
         ),
       ).called(1);
+      expect(
+        bloc.state.fanOutDrafts[report.shareId]?.quotedStanzaId,
+        quotedMessage.stanzaID,
+      );
 
       await bloc.close();
     },

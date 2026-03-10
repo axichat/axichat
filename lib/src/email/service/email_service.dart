@@ -1420,6 +1420,7 @@ class EmailService {
         htmlBody: htmlBody,
         forwarded: forwarded,
         forwardedFromJid: forwardedFromJid,
+        quotedStanzaId: quotedStanzaId,
       );
     }
     final context = await _ensureEmailChatContext(chat);
@@ -1532,6 +1533,7 @@ class EmailService {
         htmlCaption: htmlCaption,
         forwarded: forwarded,
         forwardedFromJid: forwardedFromJid,
+        quotedStanzaId: quotedStanzaId,
       );
     }
     final context = await _ensureEmailChatContext(chat);
@@ -1622,6 +1624,7 @@ class EmailService {
     bool tokenAsSignature = true,
     String? shareId,
     String? subject,
+    String? quotedStanzaId,
   }) async {
     if (kEnableDemoChats) {
       return _fanOutSendDemo(
@@ -1632,6 +1635,7 @@ class EmailService {
         htmlCaption: htmlCaption,
         shareId: shareId,
         subject: subject,
+        quotedStanzaId: quotedStanzaId,
       );
     }
     await _ensureReady();
@@ -1767,6 +1771,7 @@ class EmailService {
               shareId: effectiveShareId,
               captionOverride: captionText,
               htmlCaption: htmlCaptionWithToken,
+              quotingStanzaId: quotedStanzaId,
               accountId: context.account.deltaAccountId,
             ),
           );
@@ -1780,6 +1785,7 @@ class EmailService {
               shareId: effectiveShareId,
               localBodyOverride: bodyText,
               htmlBody: htmlBodyWithToken,
+              quotingStanzaId: quotedStanzaId,
               accountId: context.account.deltaAccountId,
             ),
           );
@@ -1864,6 +1870,7 @@ class EmailService {
     String? htmlCaption,
     String? shareId,
     String? subject,
+    String? quotedStanzaId,
   }) async {
     if (targets.isEmpty) {
       throw const FanOutValidationException(
@@ -1884,6 +1891,7 @@ class EmailService {
             attachment: captionedAttachment,
             subject: subject,
             htmlCaption: htmlCaption,
+            quotedStanzaId: quotedStanzaId,
           );
           _scheduleDemoCopiedReply(chat);
         } else {
@@ -1898,6 +1906,7 @@ class EmailService {
             body: effectiveBody,
             subject: subject,
             htmlBody: htmlBody,
+            quotedStanzaId: quotedStanzaId,
           );
         }
         statuses.add(
@@ -3792,6 +3801,7 @@ class EmailService {
     String? htmlBody,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? quotedStanzaId,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -3818,6 +3828,7 @@ class EmailService {
       body: effectiveBody,
       htmlBody: normalizedHtml,
       subject: normalizedSubject,
+      quoting: quotedStanzaId,
       timestamp: timestamp,
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
@@ -3849,6 +3860,7 @@ class EmailService {
     String? htmlCaption,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? quotedStanzaId,
   }) async {
     final normalizedSubject = _normalizeSubject(subject);
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlCaption);
@@ -3888,6 +3900,7 @@ class EmailService {
       body: captionBody,
       htmlBody: normalizedHtml,
       subject: normalizedSubject,
+      quoting: quotedStanzaId,
       timestamp: timestamp,
       encryptionProtocol: EncryptionProtocol.none,
       acked: false,
@@ -5147,6 +5160,7 @@ class EmailService {
         body: body,
         subject: subject,
         htmlBody: htmlBody,
+        quotedStanzaId: quotedMessage.stanzaID,
       );
     }
     final quotedMsgId = quotedMessage.deltaMsgId;

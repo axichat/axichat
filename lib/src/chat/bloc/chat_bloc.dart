@@ -138,15 +138,23 @@ class FanOutDraft extends Equatable {
     this.attachment,
     required this.shareId,
     this.subject,
+    this.quotedStanzaId,
   });
 
   final String? body;
   final EmailAttachment? attachment;
   final String shareId;
   final String? subject;
+  final String? quotedStanzaId;
 
   @override
-  List<Object?> get props => [body, attachment, shareId, subject];
+  List<Object?> get props => [
+    body,
+    attachment,
+    shareId,
+    subject,
+    quotedStanzaId,
+  ];
 }
 
 enum ChatToastVariant { info, warning, destructive }
@@ -3081,7 +3089,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     var composerError = state.composerError;
-    if (nextState.status == EmailSyncStatus.ready) {
+    if (!nextState.requiresAttention) {
       if (composerError != null && composerError == _emailSyncComposerMessage) {
         composerError = null;
       }
@@ -3828,6 +3836,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               text: effectiveEmailBody,
               htmlBody: effectiveEmailHtmlBody,
               subject: effectiveEmailSubject,
+              quotedStanzaId: syntheticEmailReply?.quotedStanzaId,
               chat: chat,
               settings: settings,
               emit: emit,
@@ -5168,6 +5177,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attachment: draft.attachment,
       shareId: draft.shareId,
       subject: draft.subject,
+      quotedStanzaId: draft.quotedStanzaId,
       chat: event.chat,
       settings: event.settings,
       emit: emit,
@@ -5243,6 +5253,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         attachment: effectiveAttachment,
         htmlCaption: effectiveHtmlCaption,
         subject: effectiveSubject,
+        quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
         chat: chat,
         settings: settings,
         emit: emit,
@@ -5381,6 +5392,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         attachment: resolvedAttachment,
         htmlCaption: effectiveHtmlCaption,
         subject: effectiveSubject,
+        quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
         chat: chat,
         settings: settings,
         emit: emit,
@@ -5568,6 +5580,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           attachment: resolvedAttachment,
           htmlCaption: effectiveHtmlCaption,
           subject: effectiveSubject,
+          quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
           chat: chat,
           settings: settings,
           emit: emit,
@@ -6641,6 +6654,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     String? htmlCaption,
     String? shareId,
     String? subject,
+    String? quotedStanzaId,
     required Chat chat,
     required ChatSettingsSnapshot settings,
     required Emitter<ChatState> emit,
@@ -6663,6 +6677,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         htmlCaption: htmlCaption,
         shareId: effectiveShareId,
         subject: subject,
+        quotedStanzaId: quotedStanzaId,
         useSubjectToken: useSignatureToken,
         tokenAsSignature: useSignatureToken,
       );
@@ -6677,6 +6692,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           attachment: attachment,
           shareId: report.shareId,
           subject: subject,
+          quotedStanzaId: quotedStanzaId,
         );
       emit(
         state.copyWith(

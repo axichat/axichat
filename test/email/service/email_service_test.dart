@@ -719,6 +719,7 @@ void main() {
         shareId: any(named: 'shareId'),
         captionOverride: any(named: 'captionOverride'),
         htmlCaption: any(named: 'htmlCaption'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: any(named: 'accountId'),
       ),
     ).thenAnswer((_) async => 77);
@@ -737,6 +738,7 @@ void main() {
         shareId: any(named: 'shareId'),
         captionOverride: any(named: 'captionOverride'),
         htmlCaption: any(named: 'htmlCaption'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: any(named: 'accountId'),
       ),
     ).called(1);
@@ -804,6 +806,23 @@ void main() {
         () => database.getParticipantsForShare(any()),
       ).thenAnswer((_) async => const <MessageParticipantData>[]);
       when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((invocation) async {
+        final address = invocation.namedArguments[#address] as String;
+        return switch (address) {
+          'bob@example.com' => chatA.deltaChatId!,
+          'carol@example.com' => chatB.deltaChatId!,
+          _ => throw StateError('Unexpected address: $address'),
+        };
+      });
+      when(
         () => transport.sendText(
           chatId: any(named: 'chatId'),
           body: any(named: 'body'),
@@ -811,6 +830,7 @@ void main() {
           shareId: any(named: 'shareId'),
           localBodyOverride: any(named: 'localBodyOverride'),
           htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
           accountId: any(named: 'accountId'),
         ),
       ).thenAnswer(
@@ -823,6 +843,7 @@ void main() {
           FanOutTarget.chat(chat: chatB, shareSignatureEnabled: true),
         ],
         body: 'Hello everyone',
+        quotedStanzaId: 'quoted-stanza',
       );
 
       expect(report.statuses, hasLength(2));
@@ -849,6 +870,7 @@ void main() {
           shareId: report.shareId,
           localBodyOverride: any(named: 'localBodyOverride'),
           htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: 'quoted-stanza',
           accountId: any(named: 'accountId'),
         ),
       ).called(1);
@@ -860,6 +882,7 @@ void main() {
           shareId: report.shareId,
           localBodyOverride: any(named: 'localBodyOverride'),
           htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: 'quoted-stanza',
           accountId: any(named: 'accountId'),
         ),
       ).called(1);
@@ -1472,6 +1495,7 @@ void main() {
           shareId: any(named: 'shareId'),
           localBodyOverride: any(named: 'localBodyOverride'),
           htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
           accountId: any(named: 'accountId'),
         ),
       ).thenAnswer((_) async => 202);
@@ -1588,6 +1612,7 @@ void main() {
         shareId: any(named: 'shareId'),
         localBodyOverride: any(named: 'localBodyOverride'),
         htmlBody: any(named: 'htmlBody'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: DeltaAccountDefaults.legacyId,
       ),
     ).called(1);
@@ -1895,6 +1920,7 @@ void main() {
           shareId: any(named: 'shareId'),
           localBodyOverride: any(named: 'localBodyOverride'),
           htmlBody: any(named: 'htmlBody'),
+          quotingStanzaId: any(named: 'quotingStanzaId'),
           accountId: DeltaAccountDefaults.legacyId,
         ),
       ).called(1);

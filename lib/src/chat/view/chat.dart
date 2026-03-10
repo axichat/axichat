@@ -31,6 +31,7 @@ import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'package:axichat/src/calendar/view/quick_add_modal.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/chat/bloc/chat_search_cubit.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
@@ -5610,16 +5611,26 @@ class _ChatState extends State<Chat> {
                                                 resolvedDirectChatDisplayName,
                                             l10n: context.l10n,
                                           );
-                                    final composerErrorMessage = state
-                                        .composerError
-                                        ?.label(context.l10n);
+                                    final composerErrorKey =
+                                        state.composerError;
+                                    final composerErrorMessage =
+                                        composerErrorKey?.label(context.l10n);
+                                    final onComposerErrorCleared =
+                                        state
+                                                .emailSyncState
+                                                .requiresAttention &&
+                                            composerErrorKey ==
+                                                ChatMessageKey
+                                                    .messageErrorServiceUnavailable
+                                        ? null
+                                        : () => context.read<ChatBloc>().add(
+                                            const ChatComposerErrorCleared(),
+                                          );
                                     final composerNotices = _ComposerNotices(
                                       horizontalPadding: context.spacing.l,
                                       composerError: composerErrorMessage,
-                                      onComposerErrorCleared: () =>
-                                          context.read<ChatBloc>().add(
-                                            const ChatComposerErrorCleared(),
-                                          ),
+                                      onComposerErrorCleared:
+                                          onComposerErrorCleared,
                                       showAttachmentWarning:
                                           showAttachmentWarning,
                                       retryReport: retryReport,
@@ -6006,6 +6017,8 @@ class _ChatState extends State<Chat> {
                                                   pinnedPreviewMessagePrefix,
                                             );
                                           },
+                                          onShowMessageDetails:
+                                              _showMessageDetailsById,
                                           resolvedHtmlBodyFor: (message) {
                                             final deltaMessageId =
                                                 message.deltaMsgId;
@@ -7078,16 +7091,18 @@ class _ChatState extends State<Chat> {
                                                                     final subjectLabel =
                                                                         (message.customProperties?['subjectLabel']
                                                                             as String?);
+                                                                    final String
+                                                                    subjectText =
+                                                                        subjectLabel
+                                                                            ?.trim() ??
+                                                                        _emptyText;
                                                                     final showSubjectBanner =
                                                                         (message.customProperties?['showSubject']
                                                                                 as bool?) ==
                                                                             true &&
-                                                                        subjectLabel !=
-                                                                            null;
+                                                                        subjectText
+                                                                            .isNotEmpty;
                                                                     if (showSubjectBanner) {
-                                                                      final String
-                                                                      subjectText =
-                                                                          subjectLabel;
                                                                       final textTheme =
                                                                           context
                                                                               .textTheme;
@@ -7185,38 +7200,9 @@ class _ChatState extends State<Chat> {
                                                                         : HtmlContentCodec.toPlainText(
                                                                             normalizedHtmlBody,
                                                                           ).trim();
-                                                                    final bool
-                                                                    hasRichHtmlBody =
-                                                                        normalizedHtmlBody !=
-                                                                            null &&
-                                                                        !HtmlContentCodec.isPlainTextHtml(
-                                                                          normalizedHtmlBody,
-                                                                        );
-                                                                    final bool
-                                                                    hasHtmlFallbackText =
-                                                                        normalizedHtmlBody !=
-                                                                            null &&
-                                                                        normalizedHtmlText?.isNotEmpty ==
-                                                                            true;
-                                                                    final bool
-                                                                    shouldRenderEmailHtmlBody =
-                                                                        isEmailMessage &&
-                                                                        HtmlContentCodec.shouldRenderRichEmailHtml(
-                                                                          normalizedHtmlBody:
-                                                                              normalizedHtmlBody,
-                                                                          normalizedHtmlText:
-                                                                              normalizedHtmlText,
-                                                                          renderedText:
-                                                                              messageText,
-                                                                        );
                                                                     final String
                                                                     displayMessageText =
-                                                                        isEmailMessage &&
-                                                                            trimmedRenderedText.isEmpty &&
-                                                                            hasHtmlFallbackText &&
-                                                                            !hasRichHtmlBody
-                                                                        ? normalizedHtmlText!
-                                                                        : messageText;
+                                                                        messageText;
                                                                     final String
                                                                     trimmedDisplayMessageText =
                                                                         displayMessageText
@@ -7543,12 +7529,7 @@ class _ChatState extends State<Chat> {
                                                                             .isNotEmpty;
                                                                     final String
                                                                     fullEmailPreviewText =
-                                                                        (trimmedDisplayMessageText.isNotEmpty
-                                                                                ? displayMessageText
-                                                                                : normalizedHtmlText?.isNotEmpty ==
-                                                                                      true
-                                                                                ? normalizedHtmlText!
-                                                                                : _emptyText)
+                                                                        displayMessageText
                                                                             .trim();
                                                                     final bool
                                                                     hasRemoteHtmlImages =
@@ -7572,6 +7553,28 @@ class _ChatState extends State<Chat> {
                                                                             .isNotEmpty &&
                                                                         collapsedEmailPreviewText !=
                                                                             fullEmailPreviewText;
+                                                                    final bool
+                                                                    hasVisibleEmailText =
+                                                                        trimmedDisplayMessageText
+                                                                            .isNotEmpty ||
+                                                                        subjectText
+                                                                            .isNotEmpty;
+                                                                    final bool
+                                                                    shouldShowEmailHtmlAction =
+                                                                        isEmailMessage &&
+                                                                        shouldRenderTextContent &&
+                                                                        !hasAttachmentCaption &&
+                                                                        normalizedHtmlBody !=
+                                                                            null &&
+                                                                        hasVisibleEmailText;
+                                                                    final bool
+                                                                    shouldRenderInlineEmailHtmlBody =
+                                                                        isEmailMessage &&
+                                                                        shouldRenderTextContent &&
+                                                                        !hasAttachmentCaption &&
+                                                                        normalizedHtmlBody !=
+                                                                            null &&
+                                                                        !hasVisibleEmailText;
                                                                     if (hasAttachmentCaption) {
                                                                       final metadataId =
                                                                           metadataIdForCaption;
@@ -7680,8 +7683,7 @@ class _ChatState extends State<Chat> {
                                                                           ),
                                                                         ),
                                                                       );
-                                                                    } else if (shouldRenderTextContent &&
-                                                                        shouldRenderEmailHtmlBody) {
+                                                                    } else if (shouldRenderInlineEmailHtmlBody) {
                                                                       final shouldLoadImages =
                                                                           context
                                                                               .watch<
@@ -7704,7 +7706,7 @@ class _ChatState extends State<Chat> {
                                                                             );
                                                                       final String
                                                                       preparedHtmlBody = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-                                                                        normalizedHtmlBody!,
+                                                                        normalizedHtmlBody,
                                                                         allowRemoteImages:
                                                                             shouldLoadImages,
                                                                       );
@@ -7843,6 +7845,23 @@ class _ChatState extends State<Chat> {
                                                                               _handleLinkTap,
                                                                           onLinkLongPress:
                                                                               _handleLinkTap,
+                                                                        ),
+                                                                      );
+                                                                    }
+                                                                    if (shouldShowEmailHtmlAction) {
+                                                                      bubbleTextChildren.add(
+                                                                        Padding(
+                                                                          padding: EdgeInsets.only(
+                                                                            top:
+                                                                                context.spacing.xs,
+                                                                          ),
+                                                                          child: _EmailHtmlActionButton(
+                                                                            isSelf:
+                                                                                self,
+                                                                            onPressed: () => _showMessageDetailsById(
+                                                                              messageModel.stanzaID,
+                                                                            ),
+                                                                          ),
                                                                         ),
                                                                       );
                                                                     }
@@ -9919,7 +9938,13 @@ class _ChatState extends State<Chat> {
 
   void _showMessageDetails(ChatMessage message) {
     final detailId = message.customProperties?['id'];
-    if (detailId == null) return;
+    if (detailId is! String) return;
+    _showMessageDetailsById(detailId);
+  }
+
+  void _showMessageDetailsById(String messageId) {
+    final detailId = messageId.trim();
+    if (detailId.isEmpty) return;
     context.read<ChatBloc>().add(ChatMessageFocused(detailId));
     _setChatRoute(ChatRouteIndex.details);
   }
@@ -10214,6 +10239,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
     required this.onApproveAttachment,
+    required this.onShowMessageDetails,
     required this.previewMessageForItem,
     required this.resolvedHtmlBodyFor,
     required this.resolvedQuotedTextFor,
@@ -10249,6 +10275,7 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     String? senderEmail,
   })
   onApproveAttachment;
+  final ValueChanged<String> onShowMessageDetails;
   final ChatMessage? Function(PinnedMessageItem item) previewMessageForItem;
   final String? Function(Message message) resolvedHtmlBodyFor;
   final String? Function(Message message) resolvedQuotedTextFor;
@@ -10359,6 +10386,7 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
               isOneTimeAttachmentAllowed: widget.isOneTimeAttachmentAllowed,
               shouldAllowAttachment: widget.shouldAllowAttachment,
               onApproveAttachment: widget.onApproveAttachment,
+              onShowMessageDetails: widget.onShowMessageDetails,
               previewMessageForItem: widget.previewMessageForItem,
               resolvedHtmlBodyFor: widget.resolvedHtmlBodyFor,
               resolvedQuotedTextFor: widget.resolvedQuotedTextFor,
@@ -10435,6 +10463,7 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.isOneTimeAttachmentAllowed,
     required this.shouldAllowAttachment,
     required this.onApproveAttachment,
+    required this.onShowMessageDetails,
     required this.previewMessageForItem,
     required this.resolvedHtmlBodyFor,
     required this.resolvedQuotedTextFor,
@@ -10466,6 +10495,7 @@ class _PinnedMessageTile extends StatelessWidget {
     String? senderEmail,
   })
   onApproveAttachment;
+  final ValueChanged<String> onShowMessageDetails;
   final ChatMessage? Function(PinnedMessageItem item) previewMessageForItem;
   final String? Function(Message message) resolvedHtmlBodyFor;
   final String? Function(Message message) resolvedQuotedTextFor;
@@ -10866,29 +10896,9 @@ class _PinnedMessageTile extends StatelessWidget {
         ? null
         : resolvedHtmlBodyFor(effectiveMessage);
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(resolvedHtmlBody);
-    final normalizedHtmlText = normalizedHtmlBody == null
-        ? null
-        : HtmlContentCodec.toPlainText(normalizedHtmlBody).trim();
-    final bool hasRichHtmlBody =
-        normalizedHtmlBody != null &&
-        !HtmlContentCodec.isPlainTextHtml(normalizedHtmlBody);
-    final bool hasHtmlFallbackText = normalizedHtmlText?.isNotEmpty == true;
-    final bool shouldRenderEmailHtmlBody =
-        isEmailMessage &&
-        HtmlContentCodec.shouldRenderRichEmailHtml(
-          normalizedHtmlBody: normalizedHtmlBody,
-          normalizedHtmlText: normalizedHtmlText,
-          renderedText: renderedText,
-        );
     final bool shouldRenderTextContent =
         !hideTaskText && !hideFragmentText && !hideAvailabilityText;
-    final messageText =
-        isEmailMessage &&
-            renderedText.isEmpty &&
-            hasHtmlFallbackText &&
-            !hasRichHtmlBody
-        ? normalizedHtmlText!
-        : renderedText;
+    final messageText = renderedText;
     final metadataIdForCaption = attachmentIds.isNotEmpty
         ? attachmentIds.first
         : effectiveMessage?.fileMetadataID;
@@ -10897,6 +10907,20 @@ class _PinnedMessageTile extends StatelessWidget {
         messageText.isEmpty &&
         metadataIdForCaption != null &&
         metadataIdForCaption.isNotEmpty;
+    final bool hasVisibleEmailText =
+        messageText.isNotEmpty || subjectLabel.isNotEmpty;
+    final bool shouldShowEmailHtmlAction =
+        isEmailMessage &&
+        shouldRenderTextContent &&
+        !hasAttachmentCaption &&
+        normalizedHtmlBody != null &&
+        hasVisibleEmailText;
+    final bool shouldRenderInlineEmailHtmlBody =
+        isEmailMessage &&
+        shouldRenderTextContent &&
+        !hasAttachmentCaption &&
+        normalizedHtmlBody != null &&
+        !hasVisibleEmailText;
     final contentChildren = <Widget>[];
     final extraChildren = <Widget>[];
     void addExtra(Widget child) {
@@ -11025,10 +11049,10 @@ class _PinnedMessageTile extends StatelessWidget {
             onLinkLongPress: onMessageLinkTap,
           ),
         );
-      } else if (shouldRenderTextContent && shouldRenderEmailHtmlBody) {
+      } else if (shouldRenderInlineEmailHtmlBody) {
         final preparedHtmlBody =
             HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-              normalizedHtmlBody!,
+              normalizedHtmlBody,
               allowRemoteImages: settings.autoLoadEmailImages,
             );
         if (preparedHtmlBody.trim().isNotEmpty) {
@@ -11072,6 +11096,23 @@ class _PinnedMessageTile extends StatelessWidget {
           Text(
             l10n.chatPinnedMissingMessage,
             style: context.textTheme.muted.copyWith(color: detailColor),
+          ),
+        );
+      }
+      if (shouldShowEmailHtmlAction) {
+        if (messageText.isEmpty) {
+          if (contentChildren.isNotEmpty) {
+            contentChildren.add(SizedBox(height: spacing.xs));
+          }
+          contentChildren.add(ChatInlineDetails(details: detailSpans));
+        }
+        if (contentChildren.isNotEmpty) {
+          contentChildren.add(SizedBox(height: spacing.xs));
+        }
+        contentChildren.add(
+          _EmailHtmlActionButton(
+            isSelf: isSelf,
+            onPressed: () => onShowMessageDetails(effectiveMessage.stanzaID),
           ),
         );
       }
@@ -13617,57 +13658,42 @@ class _RoomBootstrapComposerBanner extends StatelessWidget {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final composerHorizontalInset = spacing.m;
-    return SafeArea(
-      top: false,
-      left: false,
-      right: false,
-      child: ColoredBox(
-        color: colors.background,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: colors.border, width: 1)),
+    final sizing = context.sizing;
+    final maxTextWidth =
+        sizing.dialogMaxWidth - sizing.iconButtonIconSize - spacing.s;
+    return _ComposerInlineBannerSurface(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AxiProgressIndicator(
+            color: colors.foreground,
+            semanticsLabel: l10n.xmppOperationMucJoinStart,
           ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              composerHorizontalInset,
-              spacing.m,
-              composerHorizontalInset,
-              spacing.m,
-            ),
-            child: Row(
+          SizedBox(width: spacing.s),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxTextWidth),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                AxiProgressIndicator(
-                  color: colors.foreground,
-                  semanticsLabel: l10n.xmppOperationMucJoinStart,
+                Text(
+                  l10n.xmppOperationMucJoinStart,
+                  style: context.textTheme.small.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-                SizedBox(width: spacing.m),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        l10n.xmppOperationMucJoinStart,
-                        style: context.textTheme.small.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      SizedBox(height: spacing.xs),
-                      Text(
-                        l10n.chatMembersLoadingEllipsis,
-                        style: context.textTheme.small.copyWith(
-                          color: colors.mutedForeground,
-                        ),
-                      ),
-                    ],
+                SizedBox(height: spacing.xxs),
+                Text(
+                  l10n.chatMembersLoadingEllipsis,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.mutedForeground,
                   ),
                 ),
               ],
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -13684,59 +13710,88 @@ class _RoomJoinFailureComposerBanner extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final composerHorizontalInset = spacing.m;
     final normalizedDetail = detail?.trim();
+    final maxTextWidth =
+        sizing.dialogMaxWidth - sizing.iconButtonIconSize - spacing.s;
+    return _ComposerInlineBannerSurface(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            LucideIcons.triangleAlert,
+            size: sizing.iconButtonIconSize,
+            color: colors.destructive,
+          ),
+          SizedBox(width: spacing.s),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: maxTextWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  l10n.chatInviteJoinFailed,
+                  style: context.textTheme.small.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: colors.destructive,
+                  ),
+                ),
+                if (normalizedDetail?.isNotEmpty == true) ...[
+                  SizedBox(height: spacing.xxs),
+                  Text(
+                    normalizedDetail!,
+                    style: context.textTheme.small.copyWith(
+                      color: colors.mutedForeground,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComposerInlineBannerSurface extends StatelessWidget {
+  const _ComposerInlineBannerSurface({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final radii = context.radii;
     return SafeArea(
       top: false,
       left: false,
       right: false,
+      bottom: false,
       child: ColoredBox(
         color: colors.background,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: colors.border, width: 1)),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(
+            spacing.m,
+            spacing.s,
+            spacing.m,
+            spacing.s,
           ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              composerHorizontalInset,
-              spacing.m,
-              composerHorizontalInset,
-              spacing.m,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  LucideIcons.triangleAlert,
-                  size: sizing.iconButtonIconSize,
-                  color: colors.destructive,
-                ),
-                SizedBox(width: spacing.m),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        l10n.chatInviteJoinFailed,
-                        style: context.textTheme.small.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: colors.destructive,
-                        ),
-                      ),
-                      if (normalizedDetail?.isNotEmpty == true) ...[
-                        SizedBox(height: spacing.xs),
-                        Text(
-                          normalizedDetail!,
-                          style: context.textTheme.small.copyWith(
-                            color: colors.mutedForeground,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
+          child: Align(
+            alignment: Alignment.center,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: context.sizing.dialogMaxWidth,
+              ),
+              child: AxiModalSurface(
+                padding: EdgeInsets.all(spacing.s),
+                borderRadius: BorderRadius.circular(radii.container),
+                backgroundColor: colors.card,
+                borderColor: colors.border,
+                child: child,
+              ),
             ),
           ),
         ),
@@ -15254,11 +15309,13 @@ class _ReplyingToPreviewText extends StatelessWidget {
     required this.senderLabel,
     required this.quoteText,
     required this.isSelf,
+    this.replyPrefix,
   });
 
   final String senderLabel;
   final String quoteText;
   final bool isSelf;
+  final String? replyPrefix;
 
   @override
   Widget build(BuildContext context) {
@@ -15272,7 +15329,7 @@ class _ReplyingToPreviewText extends StatelessWidget {
       quoteText: quoteText,
       isSelf: isSelf,
       quoteMaxWidth: null,
-      replyPrefix: context.l10n.chatReplyingTo.toUpperCase(),
+      replyPrefix: replyPrefix ?? context.l10n.chatReplyingTo.toUpperCase(),
       baseStyle: baseStyle,
       prefixStyle: prefixStyle,
       senderStyle: senderStyle,
@@ -15837,9 +15894,7 @@ class _RenderReplyPreviewBubbleColumn extends RenderBox
         currentY,
       );
       currentY += forwardedPreviewHeight;
-      if (quotedPreviewChild != null) {
-        currentY += previewSpacing;
-      }
+      currentY += quotedPreviewChild != null ? previewSpacing : spacing;
     }
     if (quotedPreviewChild != null) {
       final quotedPreviewParentData =
@@ -15884,13 +15939,15 @@ class _QuoteBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: colors.border),
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    return AxiModalSurface(
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+      padding: EdgeInsets.symmetric(
+        horizontal: spacing.s,
+        vertical: spacing.xs,
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         children: [
           Expanded(
@@ -15903,10 +15960,12 @@ class _QuoteBanner extends StatelessWidget {
                   senderLabel: senderLabel,
                   quoteText: previewText,
                   isSelf: isSelf,
+                  replyPrefix: l10n.chatReplyingToComposer,
                 );
               },
             ),
           ),
+          SizedBox(width: spacing.s),
           AxiIconButton(
             iconData: LucideIcons.x,
             tooltip: context.l10n.chatCancelReply,
@@ -15940,13 +15999,17 @@ class _ComposerBottomOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     Widget quoteSection;
     final quotedMessage = this.quotedMessage;
     if (quotedMessage == null || quotedSenderLabel == null) {
       quoteSection = const SizedBox.shrink();
     } else {
       quoteSection = Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: spacing.m,
+          vertical: spacing.s,
+        ),
         child: _QuoteBanner(
           key: ValueKey<String?>(quotedMessage.stanzaID),
           message: quotedMessage,
@@ -15993,6 +16056,30 @@ class _ParsedMessageBody extends StatefulWidget {
 
   @override
   State<_ParsedMessageBody> createState() => _ParsedMessageBodyState();
+}
+
+class _EmailHtmlActionButton extends StatelessWidget {
+  const _EmailHtmlActionButton({required this.isSelf, required this.onPressed});
+
+  final bool isSelf;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final button = isSelf
+        ? AxiButton.secondary(
+            size: AxiButtonSize.sm,
+            onPressed: onPressed,
+            child: Text(l10n.chatMessageViewHtmlAction),
+          )
+        : AxiButton.link(
+            size: AxiButtonSize.sm,
+            onPressed: onPressed,
+            child: Text(l10n.chatMessageViewHtmlAction),
+          );
+    return Align(alignment: AlignmentDirectional.centerStart, child: button);
+  }
 }
 
 class _ParsedMessageBodyState extends State<_ParsedMessageBody> {

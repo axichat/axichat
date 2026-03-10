@@ -856,6 +856,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatReplyingTo => '回复：';
 
   @override
+  String get chatReplyingToComposer => '回复给...';
+
+  @override
   String get chatForwardPrefix => '转发：';
 
   @override
@@ -2543,6 +2546,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get commonShow => '显示';
+
+  @override
+  String get chatMessageViewHtmlAction => '查看 HTML';
 
   @override
   String get commonHide => '隐藏';
@@ -6788,6 +6794,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatReplyingTo => '回覆：';
 
   @override
+  String get chatReplyingToComposer => '回覆給...';
+
+  @override
   String get chatForwardPrefix => '轉發：';
 
   @override
@@ -8390,6 +8399,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get commonShow => '顯示';
+
+  @override
+  String get chatMessageViewHtmlAction => '查看 HTML';
 
   @override
   String get commonHide => '隱藏';

@@ -1681,6 +1681,12 @@ abstract class AppLocalizations {
   /// **'RE:'**
   String get chatReplyingTo;
 
+  /// No description provided for @chatReplyingToComposer.
+  ///
+  /// In en, this message translates to:
+  /// **'Replying to...'**
+  String get chatReplyingToComposer;
+
   /// No description provided for @chatForwardPrefix.
   ///
   /// In en, this message translates to:
@@ -4763,6 +4769,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Show'**
   String get commonShow;
+
+  /// No description provided for @chatMessageViewHtmlAction.
+  ///
+  /// In en, this message translates to:
+  /// **'View HTML'**
+  String get chatMessageViewHtmlAction;
 
   /// No description provided for @commonHide.
   ///

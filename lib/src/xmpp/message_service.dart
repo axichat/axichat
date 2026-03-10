@@ -2171,11 +2171,15 @@ mixin MessageService
         );
         message = _normalizeDefaultDomainSystemMessage(message);
         final accountJid = myJid;
-        if (accountJid != null &&
-            !isGroupChat &&
-            message.senderJid.toLowerCase() == accountJid.toLowerCase() &&
-            (event.isCarbon || event.isFromMAM)) {
-          message = message.copyWith(acked: true);
+        if (accountJid != null && (event.isCarbon || event.isFromMAM)) {
+          final bool isSelfDirectMessage =
+              !isGroupChat &&
+              sameNormalizedAddressValue(message.senderJid, accountJid);
+          final bool isSelfGroupMessage =
+              isGroupChat && _isSelfArchivedGroupChatMessageEvent(event);
+          if (isSelfDirectMessage || isSelfGroupMessage) {
+            message = message.copyWith(acked: true);
+          }
         }
         if (shouldPersistAttachment) {
           message = message.copyWith(fileMetadataID: metadata.id);
@@ -6139,6 +6143,30 @@ mixin MessageService
       return occupantId == myOccupantId;
     }
     return event.from.toString() == myOccupantId;
+  }
+
+  bool _isSelfArchivedGroupChatMessageEvent(mox.MessageEvent event) {
+    if (event.type != _messageTypeGroupchat) {
+      return false;
+    }
+    if (_isSelfPinMutation(event)) {
+      return true;
+    }
+    final accountJid = myJid;
+    if (accountJid == null) {
+      return false;
+    }
+    final roomJid = event.from.toBare().toString();
+    final roomState = roomStateFor(roomJid);
+    if (roomState == null) {
+      return false;
+    }
+    final occupant = _mucOccupantForSender(event, roomState: roomState);
+    final realJid = occupant?.realJid?.trim();
+    if (realJid != null && realJid.isNotEmpty) {
+      return sameNormalizedAddressValue(realJid, accountJid);
+    }
+    return false;
   }
 
   bool _isReadOnlyTaskSyncBlocked({
