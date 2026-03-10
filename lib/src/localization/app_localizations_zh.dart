@@ -1373,10 +1373,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationsRestartSubtitle => '必要权限已授予';
 
   @override
-  String get notificationsMessageToggle => '消息通知';
+  String get notificationsMessageToggle => '后台通知';
 
   @override
-  String get notificationsRequiresRestart => '需要重启';
+  String get notificationsRequiresRestart => '强烈建议';
 
   @override
   String get notificationsDialogTitle => '启用消息通知';
@@ -7290,10 +7290,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get notificationsRestartSubtitle => '必要權限已授予';
 
   @override
-  String get notificationsMessageToggle => '訊息通知';
+  String get notificationsMessageToggle => '背景通知';
 
   @override
-  String get notificationsRequiresRestart => '需要重新啟動';
+  String get notificationsRequiresRestart => '強烈建議';
 
   @override
   String get notificationsDialogTitle => '啟用訊息通知';

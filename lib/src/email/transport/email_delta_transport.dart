@@ -1305,6 +1305,7 @@ class EmailDeltaTransport implements ChatTransport {
     String? shareId,
     String? localBodyOverride,
     String? htmlBody,
+    String? quotingStanzaId,
     int? accountId,
   }) async {
     final session = await _ensureSession(accountId: accountId);
@@ -1328,6 +1329,7 @@ class EmailDeltaTransport implements ChatTransport {
       chat: chat,
       body: body,
       subject: sanitizedSubject,
+      quotingStanzaId: quotingStanzaId,
       shareId: shareId,
       localBodyOverride: localBodyOverride,
       htmlBody: htmlBody,
@@ -1371,6 +1373,7 @@ class EmailDeltaTransport implements ChatTransport {
     String? shareId,
     String? captionOverride,
     String? htmlCaption,
+    String? quotingStanzaId,
     int? accountId,
   }) async {
     final session = await _ensureSession(accountId: accountId);
@@ -1403,6 +1406,7 @@ class EmailDeltaTransport implements ChatTransport {
       chat: chat,
       body: attachment.caption,
       subject: sanitizedSubject,
+      quotingStanzaId: quotingStanzaId,
       metadata: pendingMetadata,
       shareId: shareId,
       localBodyOverride: captionOverride,

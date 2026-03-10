@@ -1451,10 +1451,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Permisos necesarios ya concedidos';
 
   @override
-  String get notificationsMessageToggle => 'Notificaciones de mensajes';
+  String get notificationsMessageToggle => 'Notificaciones en segundo plano';
 
   @override
-  String get notificationsRequiresRestart => 'Requiere reinicio';
+  String get notificationsRequiresRestart => 'Muy recomendable';
 
   @override
   String get notificationsDialogTitle => 'Activar notificaciones de mensajes';

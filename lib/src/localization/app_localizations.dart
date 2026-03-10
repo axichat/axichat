@@ -2625,13 +2625,13 @@ abstract class AppLocalizations {
   /// No description provided for @notificationsMessageToggle.
   ///
   /// In en, this message translates to:
-  /// **'Message notifications'**
+  /// **'Background notifications'**
   String get notificationsMessageToggle;
 
   /// No description provided for @notificationsRequiresRestart.
   ///
   /// In en, this message translates to:
-  /// **'Requires restart'**
+  /// **'Strongly recommended'**
   String get notificationsRequiresRestart;
 
   /// No description provided for @notificationsDialogTitle.

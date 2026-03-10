@@ -18,6 +18,37 @@ enum MucStatusCode {
   final String code;
 }
 
+enum MucJoinErrorCondition {
+  registrationRequired('registration-required'),
+  forbidden('forbidden'),
+  notAuthorized('not-authorized'),
+  itemNotFound('item-not-found'),
+  serviceUnavailable('service-unavailable'),
+  other('');
+
+  const MucJoinErrorCondition(this.xmlValue);
+
+  final String xmlValue;
+
+  bool get blocksAutoRejoin => switch (this) {
+    MucJoinErrorCondition.registrationRequired ||
+    MucJoinErrorCondition.forbidden ||
+    MucJoinErrorCondition.notAuthorized ||
+    MucJoinErrorCondition.itemNotFound => true,
+    _ => false,
+  };
+
+  static MucJoinErrorCondition? fromString(String? value) => switch (value) {
+    'registration-required' => registrationRequired,
+    'forbidden' => forbidden,
+    'not-authorized' => notAuthorized,
+    'item-not-found' => itemNotFound,
+    'service-unavailable' => serviceUnavailable,
+    null || '' => null,
+    _ => other,
+  };
+}
+
 enum OccupantAffiliation {
   owner,
   admin,
@@ -131,6 +162,9 @@ class RoomState {
     this.myOccupantId,
     Set<String>? selfPresenceStatusCodes,
     this.selfPresenceReason,
+    this.joinErrorCondition,
+    this.joinErrorText,
+    this.postJoinRefreshPending = false,
   }) : occupants = Map.unmodifiable(
          Map<String, Occupant>.of(occupants ?? <String, Occupant>{}),
        ),
@@ -143,6 +177,9 @@ class RoomState {
   final String? myOccupantId;
   final Set<String> selfPresenceStatusCodes;
   final String? selfPresenceReason;
+  final MucJoinErrorCondition? joinErrorCondition;
+  final String? joinErrorText;
+  final bool postJoinRefreshPending;
   late final _RoomOccupantGroups _occupantGroups = _buildOccupantGroups();
 
   OccupantAffiliation get myAffiliation =>
@@ -224,6 +261,9 @@ class RoomState {
     String? myOccupantId,
     Set<String>? selfPresenceStatusCodes,
     String? selfPresenceReason,
+    MucJoinErrorCondition? joinErrorCondition,
+    String? joinErrorText,
+    bool? postJoinRefreshPending,
   }) => RoomState(
     roomJid: roomJid,
     occupants: occupants ?? this.occupants,
@@ -231,6 +271,10 @@ class RoomState {
     selfPresenceStatusCodes:
         selfPresenceStatusCodes ?? this.selfPresenceStatusCodes,
     selfPresenceReason: selfPresenceReason ?? this.selfPresenceReason,
+    joinErrorCondition: joinErrorCondition ?? this.joinErrorCondition,
+    joinErrorText: joinErrorText ?? this.joinErrorText,
+    postJoinRefreshPending:
+        postJoinRefreshPending ?? this.postJoinRefreshPending,
   );
 }
 
@@ -242,6 +286,10 @@ extension RoomStatePresence on RoomState {
   bool get hasSelfPresence =>
       selfPresenceStatusCodes.contains(MucStatusCode.selfPresence.code);
 
+  bool get hasJoinError => joinErrorCondition != null || joinErrorText != null;
+
+  bool get blocksAutoRejoin => joinErrorCondition?.blocksAutoRejoin == true;
+
   bool get hasPresentSelfOccupant {
     final occupantId = myOccupantId;
     if (occupantId == null || occupantId.isEmpty) {
@@ -252,7 +300,9 @@ extension RoomStatePresence on RoomState {
 
   bool get isReadyForMessaging => hasSelfPresence && hasPresentSelfOccupant;
 
-  bool get isBootstrapPending => !isReadyForMessaging || roomCreated;
+  bool get isBootstrapPending =>
+      !hasJoinError &&
+      (!isReadyForMessaging || roomCreated || postJoinRefreshPending);
 }
 
 enum MucModerationAction {

@@ -1,5 +1,6 @@
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -125,6 +126,7 @@ void main() {
     registerFallbackValue(FakeCredentialKey());
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
+    registerFallbackValue(MessageNotificationChannel.chat);
     registerOmemoFallbacks();
     registerFallbackValue(
       XmppConnectionSettings(
@@ -384,6 +386,11 @@ void _registerNotificationStubs(MockNotificationService notificationService) {
     () => notificationService.sendMessageNotification(
       title: any(named: 'title'),
       body: any(named: 'body'),
+      senderName: any(named: 'senderName'),
+      senderKey: any(named: 'senderKey'),
+      conversationTitle: any(named: 'conversationTitle'),
+      sentAt: any(named: 'sentAt'),
+      isGroupConversation: any(named: 'isGroupConversation'),
       extraConditions: any(named: 'extraConditions'),
       allowForeground: any(named: 'allowForeground'),
       payload: any(named: 'payload'),

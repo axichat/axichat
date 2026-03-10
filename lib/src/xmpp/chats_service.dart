@@ -828,7 +828,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         final archived = item.archived;
         final pinned = item.pinned;
         final muted = item.mutedUntil?.toLocal().isAfter(now) ?? false;
-        final lastChangeCandidate = item.lastTimestamp.toLocal();
+        final lastChangeCandidate = item.lastTimestamp.toUtc();
 
         final existing = await db.getChat(peerJid);
         if (existing == null) {
@@ -874,14 +874,13 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
           continue;
         }
 
-        await db.updateChat(
-          existing.copyWith(
-            lastChangeTimestamp: effectiveLastChange,
-            muted: muted,
-            favorited: pinned,
-            archived: archived,
-            contactJid: peerJid,
-          ),
+        await db.updateConversationIndexChatMeta(
+          jid: peerJid,
+          lastChangeTimestamp: effectiveLastChange,
+          muted: muted,
+          favorited: pinned,
+          archived: archived,
+          contactJid: peerJid,
         );
         if (shouldUpdateTimestamp) {
           await db.repairChatSummaryPreservingTimestamp(peerJid);
@@ -921,7 +920,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         if (_isConversationIndexLocalOnlyChatJid(normalized)) continue;
         if (knownPeers.contains(normalized)) continue;
         if (chat.archived) continue;
-        await db.updateChat(chat.copyWith(archived: true));
+        await db.updateConversationIndexArchived(jid: chat.jid, archived: true);
       }
     }, awaitDatabase: true);
   }
@@ -935,7 +934,10 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       final existing = await db.getChat(peer);
       if (existing == null || existing.type != ChatType.chat) return;
       if (existing.archived) return;
-      await db.updateChat(existing.copyWith(archived: true));
+      await db.updateConversationIndexArchived(
+        jid: existing.jid,
+        archived: true,
+      );
     }, awaitDatabase: true);
   }
 

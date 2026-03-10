@@ -610,6 +610,34 @@ void main() {
     );
 
     test(
+      'Given an archived inbound direct message, increments the chat unread count.',
+      () async {
+        const peerJid = 'peer@example.com';
+        const stanzaId = 'mam-inbound-unread';
+        final timestamp = DateTime.utc(2026, 3, 1, 12, 0, 0);
+        final event = mox.MessageEvent(
+          mox.JID.fromString(peerJid),
+          mox.JID.fromString(jid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageBodyData('Missed while offline'),
+            const mox.MessageIdData(stanzaId),
+            mox.DelayedDeliveryData(mox.JID.fromString(peerJid), timestamp),
+          ]),
+          id: stanzaId,
+          isFromMAM: true,
+        );
+
+        eventStreamController.add(event);
+
+        await pumpEventQueue(times: 20);
+
+        final chat = await database.getChat(peerJid);
+        expect(chat?.unreadCount, equals(1));
+      },
+    );
+
+    test(
       'Given a message from a non-server bare domain, does not label the chat with that domain.',
       () async {
         const stanzaId = 'other-domain-message';
@@ -643,6 +671,11 @@ void main() {
         () => mockNotificationService.sendMessageNotification(
           title: any(named: 'title'),
           body: messageEvent.text,
+          senderName: any(named: 'senderName'),
+          senderKey: any(named: 'senderKey'),
+          conversationTitle: any(named: 'conversationTitle'),
+          sentAt: any(named: 'sentAt'),
+          isGroupConversation: any(named: 'isGroupConversation'),
           extraConditions: any(named: 'extraConditions'),
           allowForeground: any(named: 'allowForeground'),
           payload: any(named: 'payload'),

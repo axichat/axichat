@@ -304,7 +304,7 @@ void main() {
 
       final repaired = await database.getChat(peerJid);
       expect(repaired?.lastMessage, 'Newest stored body');
-      expect(repaired?.lastChangeTimestamp, snapshotTimestamp.toLocal());
+      expect(repaired?.lastChangeTimestamp, snapshotTimestamp);
     },
   );
 

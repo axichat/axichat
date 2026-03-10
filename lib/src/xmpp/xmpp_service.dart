@@ -1277,13 +1277,60 @@ class XmppService extends XmppBase
       'Foreground socket migration failed.';
   static const String _connectivityNotificationFailedLog =
       'Failed to update connectivity notification.';
+
+  String _socketWrapperLabel([XmppConnection? connection]) {
+    final socketWrapper = (connection ?? _connection).socketWrapper;
+    if (socketWrapper is ForegroundSocketWrapper) {
+      return 'foreground';
+    }
+    return socketWrapper.runtimeType.toString();
+  }
+
+  String _foregroundMigrationStateSummary({
+    AppLifecycleState? lifecycleState,
+    XmppConnection? connection,
+  }) {
+    final lifecycle =
+        lifecycleState ?? SchedulerBinding.instance.lifecycleState;
+    return 'socket=${_socketWrapperLabel(connection)} '
+        'serviceActive=${foregroundServiceActive.value} '
+        'connectionState=$connectionState '
+        'lifecycle=$lifecycle '
+        'sessionReconnectEnabled=$_sessionReconnectEnabled '
+        'connectInFlight=$_connectInFlight '
+        'reconnectBlocked=$_reconnectBlocked '
+        'hasSettings=${_connection.hasConnectionSettings} '
+        'messageSubscription=${_messageSubscription != null}';
+  }
+
+  void _logForegroundMigrationSkip(
+    String reason, {
+    AppLifecycleState? lifecycleState,
+  }) {
+    _xmppLogger.fine(
+      'Skipping foreground socket migration: $reason. '
+      '${_foregroundMigrationStateSummary(lifecycleState: lifecycleState)}',
+    );
+  }
+
   void _scheduleForegroundSocketMigration() {
     if (!withForeground) {
+      _xmppLogger.fine(
+        'Not scheduling foreground socket migration because withForeground is false.',
+      );
       return;
     }
     if (!foregroundServiceActive.value) {
+      _xmppLogger.fine(
+        'Not scheduling foreground socket migration because foreground service is inactive.',
+      );
       return;
     }
+    _xmppLogger.info(
+      'Scheduling foreground socket migration in '
+      '${_foregroundSocketMigrationDelay.inSeconds}s. '
+      '${_foregroundMigrationStateSummary()}',
+    );
     _foregroundSocketMigrationTimer?.cancel();
     _foregroundSocketMigrationTimer = Timer(
       _foregroundSocketMigrationDelay,
@@ -1295,6 +1342,10 @@ class XmppService extends XmppBase
 
   Future<void> _runForegroundSocketMigration() async {
     _foregroundSocketMigrationTimer = null;
+    _xmppLogger.info(
+      'Running scheduled foreground socket migration. '
+      '${_foregroundMigrationStateSummary()}',
+    );
     try {
       await ensureForegroundSocketIfActive();
     } catch (error, stackTrace) {
@@ -1440,9 +1491,18 @@ class XmppService extends XmppBase
       if (threadKey.isEmpty) {
         return;
       }
+      final isGroupConversation = chat?.type == ChatType.groupChat;
       await _notificationService.sendMessageNotification(
-        title: chat?.title ?? message.senderJid,
+        title: chat?.displayName ?? message.senderJid,
         body: message.body,
+        senderName: _notificationSenderName(chat: chat, message: message),
+        senderKey: message.senderJid,
+        conversationTitle: _notificationConversationTitle(
+          chat: chat,
+          message: message,
+        ),
+        sentAt: message.timestamp,
+        isGroupConversation: isGroupConversation,
         extraConditions: [message.senderJid != myJid],
         payload: threadKey,
         threadKey: threadKey,
@@ -1467,6 +1527,48 @@ class XmppService extends XmppBase
     );
 
     return _connection.saltedPassword;
+  }
+
+  String _notificationConversationTitle({
+    required Chat? chat,
+    required Message message,
+  }) {
+    final displayName = chat?.displayName.trim();
+    if (displayName?.isNotEmpty == true) {
+      return displayName!;
+    }
+    return _notificationAddressLabel(message.chatJid);
+  }
+
+  String _notificationSenderName({
+    required Chat? chat,
+    required Message message,
+  }) {
+    if (chat?.type == ChatType.groupChat) {
+      final nick = _nickFromSender(message.senderJid)?.trim();
+      if (nick?.isNotEmpty == true) {
+        return nick!;
+      }
+    }
+    if (chat?.type == ChatType.chat) {
+      final displayName = chat?.displayName.trim();
+      if (displayName?.isNotEmpty == true) {
+        return displayName!;
+      }
+    }
+    return _notificationAddressLabel(message.senderJid);
+  }
+
+  String _notificationAddressLabel(String address) {
+    final label = addressDisplayLabel(address)?.trim();
+    if (label?.isNotEmpty == true) {
+      return label!;
+    }
+    final safeAddress = address.displaySafeJid?.trim();
+    if (safeAddress?.isNotEmpty == true) {
+      return safeAddress!;
+    }
+    return address.trim();
   }
 
   bool _isAuthenticationError(mox.XmppError error) {
@@ -2364,36 +2466,49 @@ class XmppService extends XmppBase
 
   Future<void> ensureForegroundSocketIfActive() async {
     if (!withForeground) {
+      _logForegroundMigrationSkip('withForeground disabled');
       return;
     }
     if (!foregroundServiceActive.value) {
+      _logForegroundMigrationSkip('foreground service inactive');
       return;
     }
     final lifecycleState = SchedulerBinding.instance.lifecycleState;
     if (lifecycleState != null && lifecycleState != AppLifecycleState.resumed) {
+      _logForegroundMigrationSkip(
+        'app lifecycle is not resumed',
+        lifecycleState: lifecycleState,
+      );
       return;
     }
     if (connectionState == ConnectionState.connecting) {
+      _logForegroundMigrationSkip('connection already connecting');
       return;
     }
     if (_reconnectBlocked) {
+      _logForegroundMigrationSkip('reconnect blocked');
       return;
     }
     if (!_sessionReconnectEnabled) {
+      _logForegroundMigrationSkip('session reconnect disabled');
       return;
     }
     if (_connectInFlight) {
+      _logForegroundMigrationSkip('connect already in flight');
       return;
     }
     if (await _connection.isReconnecting()) {
+      _logForegroundMigrationSkip('connection already reconnecting');
       return;
     }
     final bool usingForegroundSocket =
         _connection.socketWrapper is ForegroundSocketWrapper;
     if (usingForegroundSocket) {
+      _logForegroundMigrationSkip('already using foreground socket');
       return;
     }
     if (!_connection.hasConnectionSettings) {
+      _logForegroundMigrationSkip('missing connection settings');
       return;
     }
 
@@ -2401,6 +2516,11 @@ class XmppService extends XmppBase
     final now = DateTime.now();
     if (lastAttempt != null &&
         now.difference(lastAttempt) < _foregroundSocketMigrationCooldown) {
+      _xmppLogger.fine(
+        'Skipping foreground socket migration: cooldown active for '
+        '${_foregroundSocketMigrationCooldown - now.difference(lastAttempt)}. '
+        '${_foregroundMigrationStateSummary(lifecycleState: lifecycleState)}',
+      );
       return;
     }
     _lastForegroundSocketMigrationAttempt = now;
@@ -2411,6 +2531,10 @@ class XmppService extends XmppBase
 
     var warmupAcquired = false;
     try {
+      _xmppLogger.info(
+        'Acquiring foreground warmup lease before XMPP migration. '
+        '${_foregroundMigrationStateSummary(lifecycleState: lifecycleState)}',
+      );
       await foregroundTaskBridge.acquire(
         clientId: _foregroundSocketWarmupClientId,
         config: buildForegroundServiceConfig(
@@ -2420,7 +2544,12 @@ class XmppService extends XmppBase
         ),
       );
       warmupAcquired = true;
-    } on Exception {
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Failed to acquire foreground warmup lease for XMPP migration.',
+        error,
+        stackTrace,
+      );
       return;
     }
 
@@ -2428,7 +2557,10 @@ class XmppService extends XmppBase
     XmppConnection? foregroundAttemptConnection;
     try {
       _setConnectionState(ConnectionState.connecting);
-      _xmppLogger.info('Migrating XMPP connection to foreground socket.');
+      _xmppLogger.info(
+        'Migrating XMPP connection to foreground socket. '
+        'fromSocket=${_socketWrapperLabel(oldConnection)}',
+      );
       await _clearSelfPresenceOnDisconnect();
       await _eventSubscription?.cancel();
       _eventSubscription = null;
@@ -2502,7 +2634,10 @@ class XmppService extends XmppBase
       }
 
       await _connection.setShouldReconnect(true);
-      _xmppLogger.info('Foreground socket migration completed.');
+      _xmppLogger.info(
+        'Foreground socket migration completed. '
+        '${_foregroundMigrationStateSummary(connection: _connection)}',
+      );
       _foregroundSocketMigrationTimer?.cancel();
       _foregroundSocketMigrationTimer = null;
     } catch (error, stackTrace) {
@@ -2555,6 +2690,10 @@ class XmppService extends XmppBase
           throw XmppAuthenticationException();
         }
         await _connection.setShouldReconnect(true);
+        _xmppLogger.info(
+          'Foreground socket migration fell back to direct socket. '
+          '${_foregroundMigrationStateSummary(connection: _connection)}',
+        );
       } catch (fallbackError, fallbackStackTrace) {
         _xmppLogger.warning(
           'Direct socket reconnect failed during foreground migration: ${fallbackError.runtimeType}.',

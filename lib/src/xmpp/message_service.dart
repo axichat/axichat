@@ -5491,7 +5491,12 @@ mixin MessageService
     }
     final RoomState? room = _roomStates[key];
     if (room == null) return false;
-    if (room.wasBanned || room.wasKicked || room.roomShutdown) return false;
+    if (room.wasBanned ||
+        room.wasKicked ||
+        room.roomShutdown ||
+        room.blocksAutoRejoin) {
+      return false;
+    }
 
     final String condition = conditionData?.condition ?? '';
     final String? errorType = conditionData?.type;

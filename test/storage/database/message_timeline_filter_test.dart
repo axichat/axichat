@@ -629,4 +629,46 @@ void main() {
       expect(messagesThroughMiddle, 2);
     },
   );
+
+  test(
+    'conversation index chat meta updates preserve unread and summary fields',
+    () async {
+      final contact = Chat(
+        jid: 'conversation-index@example.com',
+        title: 'Conversation Index',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1, 9),
+      );
+      await db.createChat(contact);
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'conversation-index-1',
+          senderJid: contact.jid,
+          chatJid: contact.jid,
+          timestamp: DateTime.utc(2024, 1, 1, 10),
+          body: 'Unread preserved',
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+        selfJid: 'self@example.com',
+      );
+
+      await db.updateConversationIndexChatMeta(
+        jid: contact.jid,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1, 11),
+        muted: true,
+        favorited: true,
+        archived: true,
+        contactJid: contact.jid,
+      );
+
+      final chat = await db.getChat(contact.jid);
+      expect(chat?.unreadCount, 1);
+      expect(chat?.lastMessage, 'Unread preserved');
+      expect(chat?.muted, isTrue);
+      expect(chat?.favorited, isTrue);
+      expect(chat?.archived, isTrue);
+      expect(chat?.lastChangeTimestamp, DateTime.utc(2024, 1, 1, 11));
+    },
+  );
 }

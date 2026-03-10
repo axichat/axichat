@@ -4,6 +4,7 @@ import 'dart:collection';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
+import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -99,12 +100,26 @@ void _mockEmailSync(MockEmailService service) {
       chat: any(named: 'chat'),
       body: any(named: 'body'),
       subject: any(named: 'subject'),
+      htmlBody: any(named: 'htmlBody'),
+      quotedStanzaId: any(named: 'quotedStanzaId'),
     ),
   ).thenAnswer((_) async => 1);
   when(
     () => service.sendAttachment(
       chat: any(named: 'chat'),
       attachment: any(named: 'attachment'),
+      subject: any(named: 'subject'),
+      htmlCaption: any(named: 'htmlCaption'),
+      quotedStanzaId: any(named: 'quotedStanzaId'),
+    ),
+  ).thenAnswer((_) async => 1);
+  when(
+    () => service.sendReply(
+      chat: any(named: 'chat'),
+      body: any(named: 'body'),
+      quotedMessage: any(named: 'quotedMessage'),
+      subject: any(named: 'subject'),
+      htmlBody: any(named: 'htmlBody'),
     ),
   ).thenAnswer((_) async => 1);
   when(
@@ -1104,6 +1119,111 @@ void main() {
     await bloc.close();
   });
 
+  test(
+    'raw email reply fan-out synthesizes a visible reply envelope',
+    () async {
+      final emailService = MockEmailService();
+      _mockEmailSync(emailService);
+      final report = FanOutSendReport(
+        shareId: 'reply-share',
+        statuses: [
+          FanOutRecipientStatus(
+            chat: Chat(
+              jid: 'dc-fresh@delta.chat',
+              title: 'fresh@example.com',
+              type: ChatType.chat,
+              lastChangeTimestamp: DateTime.now(),
+              deltaChatId: 88,
+              emailAddress: 'fresh@example.com',
+            ),
+            state: FanOutRecipientState.sent,
+            deltaMsgId: 301,
+          ),
+        ],
+      );
+      when(
+        () => emailService.fanOutSend(
+          targets: any(named: 'targets'),
+          body: any(named: 'body'),
+          htmlBody: any(named: 'htmlBody'),
+          attachment: any(named: 'attachment'),
+          htmlCaption: any(named: 'htmlCaption'),
+          shareId: any(named: 'shareId'),
+          subject: any(named: 'subject'),
+          useSubjectToken: any(named: 'useSubjectToken'),
+          tokenAsSignature: any(named: 'tokenAsSignature'),
+        ),
+      ).thenAnswer((_) async => report);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      final quotedMessage = Message(
+        stanzaID: 'quoted-reply-email',
+        senderJid: 'peer@axi.im',
+        chatJid: initialChat.jid,
+        body: ChatSubjectCodec.composeXmppBody(
+          body: 'Original body',
+          subject: 'Original subject',
+        ),
+        timestamp: DateTime.now(),
+      );
+      final syntheticReply = syntheticReplyEnvelope(
+        body: 'Reply body',
+        subject: null,
+        quotedSubject: 'Original subject',
+        quotedBody: 'Original body',
+        quotedSenderLabel: 'peer@axi.im',
+      );
+
+      bloc.add(
+        _messageSent(
+          chat: initialChat,
+          text: 'Reply body',
+          recipients: [
+            ComposerRecipient(
+              target: FanOutTarget.address(
+                address: 'fresh@example.com',
+                shareSignatureEnabled: true,
+                transport: MessageTransport.email,
+              ),
+            ),
+          ],
+          settings: _defaultChatSettings(),
+          quotedDraft: quotedMessage,
+        ),
+      );
+      await _pumpBloc();
+
+      verify(
+        () => emailService.fanOutSend(
+          targets: any(named: 'targets'),
+          body: syntheticReply.body,
+          htmlBody: HtmlContentCodec.fromPlainText(syntheticReply.body),
+          attachment: null,
+          htmlCaption: null,
+          shareId: any(named: 'shareId'),
+          subject: syntheticReply.subject,
+          useSubjectToken: true,
+          tokenAsSignature: true,
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
   test('synthetic XMPP forwarding preserves original subject and HTML', () async {
     final syntheticForwardSubject = markSyntheticForwardSubject(
       'FWD: peer@axi.im',
@@ -1802,6 +1922,91 @@ void main() {
 
       verify(() => emailService.markNoticedChat(any())).called(1);
       verify(() => emailService.markSeenMessages(any())).called(1);
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
+
+  test(
+    'email read sync still notices unseen messages after local unread is cleared',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      const settings = ChatSettingsSnapshot(
+        language: AppLanguage.system,
+        chatReadReceipts: true,
+        emailReadReceipts: true,
+        shareTokenSignatureEnabled: true,
+        autoDownloadImages: true,
+        autoDownloadVideos: false,
+        autoDownloadDocuments: false,
+        autoDownloadArchives: false,
+      );
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 7,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+        unreadCount: 0,
+        open: true,
+      );
+      final incoming = Message(
+        stanzaID: 'email-incoming-opened-chat',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 92,
+        timestamp: DateTime(2026, 1, 4, 12, 1),
+        body: 'Fresh email after local clear',
+      );
+
+      when(() => emailService.hasInMemoryReconnectContext).thenReturn(true);
+      when(
+        () => emailService.getOldestFreshMessageId(any()),
+      ).thenAnswer((_) async => null);
+      when(
+        () => emailService.markNoticedChat(any()),
+      ).thenAnswer((_) async => true);
+      when(
+        () => emailService.markSeenMessages(any()),
+      ).thenAnswer((_) async => true);
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => emailService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: settings,
+      );
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      emailMessageStreamController.add([incoming]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(() => emailService.markNoticedChat(any())).called(1);
 
       await bloc.close();
       await emailMessageStreamController.close();

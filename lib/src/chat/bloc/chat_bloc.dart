@@ -26,6 +26,7 @@ import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
+import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -466,7 +467,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _roomSelfAvatarPath;
   String? _lastReadMarkerStanzaId;
   String? _lastNoticedEmailMessageId;
-  int? _lastNoticedEmailUnreadCount;
+  int? _lastNoticedEmailCandidateCount;
   String? _lastSeenEmailSyncKey;
   int? _emailUnreadBoundaryDeltaId;
   int? _emailUnreadBoundaryUnreadCount;
@@ -581,18 +582,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (!emailService.hasInMemoryReconnectContext) {
       return;
     }
-    final hasUnread = chat.unreadCount > 0;
     final latestSeenCandidateId = seenCandidates.isNotEmpty
         ? seenCandidates.last.stanzaID
         : null;
-    if (hasUnread) {
+    if (seenCandidates.isNotEmpty) {
       final shouldNotify =
-          _lastNoticedEmailUnreadCount != chat.unreadCount ||
+          _lastNoticedEmailCandidateCount != seenCandidates.length ||
           _lastNoticedEmailMessageId != latestSeenCandidateId;
       if (shouldNotify) {
         final noticed = await emailService.markNoticedChat(chat);
         if (noticed) {
-          _lastNoticedEmailUnreadCount = chat.unreadCount;
+          _lastNoticedEmailCandidateCount = seenCandidates.length;
           _lastNoticedEmailMessageId = latestSeenCandidateId;
         }
       }
@@ -1438,7 +1438,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (resetContext) {
       _lastReadMarkerStanzaId = null;
       _lastNoticedEmailMessageId = null;
-      _lastNoticedEmailUnreadCount = null;
+      _lastNoticedEmailCandidateCount = null;
       _lastSeenEmailSyncKey = null;
       _emailUnreadBoundaryDeltaId = null;
       _emailUnreadBoundaryUnreadCount = null;
@@ -3613,9 +3613,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final bool hasCalendarTaskIcs = effectiveTaskForEmail != null;
     final hasSubject = subject?.trim().isNotEmpty == true;
     final hasBody = trimmedText.isNotEmpty;
-    final emailBody = hasBody
-        ? _composeEmailBody(trimmedText, quotedDraft)
-        : (hasSubject ? '' : null);
+    final emailBody = hasBody ? trimmedText : (hasSubject ? '' : null);
     final emailBodyTrimmed = emailBody?.trim();
     final emailHtmlBody = switch (emailBodyTrimmed) {
       final value? when value.isNotEmpty => HtmlContentCodec.fromPlainText(
@@ -3623,6 +3621,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ),
       _ => null,
     };
+    final syntheticEmailReply = _syntheticEmailReplyEnvelope(
+      body: trimmedText,
+      subject: subject,
+      quotedDraft: quotedDraft,
+    );
     final emailReplyHtmlBody = hasBody
         ? HtmlContentCodec.fromPlainText(trimmedText)
         : null;
@@ -3802,12 +3805,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final shouldSendEmailText = emailBody != null && !attachmentsViaEmail;
         if (shouldSendEmailText) {
           final shouldFanOut = _shouldFanOut(emailRecipients, chat);
+          final effectiveEmailSubject = shouldFanOut
+              ? (syntheticEmailReply?.subject ?? subject)
+              : subject;
+          final effectiveEmailBody = shouldFanOut
+              ? (syntheticEmailReply?.body ?? emailBody)
+              : emailBody;
+          final effectiveEmailHtmlBody = shouldFanOut
+              ? (syntheticEmailReply?.htmlBody ?? emailHtmlBody)
+              : emailHtmlBody;
           if (shouldFanOut) {
             final sent = await _sendFanOut(
               recipients: emailRecipients,
-              text: emailBody,
-              htmlBody: emailHtmlBody,
-              subject: subject,
+              text: effectiveEmailBody,
+              htmlBody: effectiveEmailHtmlBody,
+              subject: effectiveEmailSubject,
               chat: chat,
               settings: settings,
               emit: emit,
@@ -3816,9 +3828,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               return;
             }
           } else {
-            final shouldUseCoreReply =
-                quotedDraft != null && quotedDraft.deltaMsgId != null;
-            if (shouldUseCoreReply) {
+            if (quotedDraft != null) {
               await emailService.sendReply(
                 chat: chat,
                 body: trimmedText,
@@ -3867,6 +3877,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                     recipients: emailRecipients,
                     emit: emit,
                     subject: subject,
+                    quotedDraft: quotedDraft,
                     settings: settings,
                     retainOnSuccess: attachmentsViaXmpp,
                     captionForBundle: captionForAttachments,
@@ -3879,6 +3890,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                     recipients: emailRecipients,
                     emit: emit,
                     subject: subject,
+                    quotedDraft: quotedDraft,
                     settings: settings,
                     retainOnSuccess: attachmentsViaXmpp,
                     captionForFirstAttachment: captionForAttachments,
@@ -3899,6 +3911,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               recipients: emailRecipients,
               emit: emit,
               subject: subject,
+              quotedDraft: quotedDraft,
               settings: settings,
               caption: calendarTaskCaption,
               htmlCaption: htmlCaptionForAttachments,
@@ -4936,11 +4949,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return;
     }
-    final quotedDraft = event.quotedDraft;
     final rawCaption = event.attachment.caption?.trim();
-    final caption = rawCaption?.isNotEmpty == true
-        ? _composeEmailBody(rawCaption!, quotedDraft)
-        : null;
+    final caption = rawCaption?.isNotEmpty == true ? rawCaption : null;
     var preparedAttachment = event.attachment.copyWith(caption: caption);
     final pendingId = _nextPendingAttachmentId();
     final placeholder = PendingAttachment(
@@ -5068,6 +5078,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         recipients: emailRecipients,
         emit: emit,
         subject: event.subject,
+        quotedDraft: event.quotedDraft,
         settings: event.settings,
         retainOnSuccess: requiresXmpp,
       );
@@ -5186,6 +5197,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
     required String? subject,
+    required Message? quotedDraft,
     required ChatSettingsSnapshot settings,
     bool retainOnSuccess = false,
     String? htmlCaption,
@@ -5198,12 +5210,31 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       _replacePendingAttachment(current, emit);
     }
+    var captionText = current.attachment.caption?.trim() ?? '';
+    if (captionText.isEmpty && htmlCaption?.trim().isNotEmpty == true) {
+      captionText = HtmlContentCodec.toPlainText(htmlCaption!);
+    }
+    final syntheticAttachmentReply = _syntheticEmailReplyEnvelope(
+      body: captionText,
+      subject: subject,
+      quotedDraft: quotedDraft,
+    );
+    final effectiveSubject = syntheticAttachmentReply?.subject ?? subject;
+    final effectiveHtmlCaption =
+        syntheticAttachmentReply?.htmlBody ?? htmlCaption;
+    final effectiveAttachment = syntheticAttachmentReply == null
+        ? current.attachment
+        : current.attachment.copyWith(
+            caption: syntheticAttachmentReply.body.isEmpty
+                ? null
+                : syntheticAttachmentReply.body,
+          );
     if (_shouldFanOut(recipients, chat)) {
       final succeeded = await _sendFanOut(
         recipients: recipients,
-        attachment: current.attachment,
-        htmlCaption: htmlCaption,
-        subject: subject,
+        attachment: effectiveAttachment,
+        htmlCaption: effectiveHtmlCaption,
+        subject: effectiveSubject,
         chat: chat,
         settings: settings,
         emit: emit,
@@ -5228,9 +5259,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       await service.sendAttachment(
         chat: chat,
-        attachment: current.attachment,
-        subject: subject,
-        htmlCaption: htmlCaption,
+        attachment: effectiveAttachment,
+        subject: effectiveSubject,
+        htmlCaption: effectiveHtmlCaption,
+        quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
       );
       _handlePendingAttachmentSuccess(
         current,
@@ -5286,6 +5318,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
     required String? subject,
+    required Message? quotedDraft,
     required ChatSettingsSnapshot settings,
     String? caption,
     String? htmlCaption,
@@ -5319,15 +5352,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return false;
     }
-    final EmailAttachment resolvedAttachment = caption == null
-        ? attachment
-        : attachment.copyWith(caption: caption);
+    final syntheticAttachmentReply = _syntheticEmailReplyEnvelope(
+      body: caption ?? '',
+      subject: subject,
+      quotedDraft: quotedDraft,
+    );
+    final EmailAttachment resolvedAttachment = syntheticAttachmentReply == null
+        ? (caption == null ? attachment : attachment.copyWith(caption: caption))
+        : attachment.copyWith(
+            caption: syntheticAttachmentReply.body.isEmpty
+                ? null
+                : syntheticAttachmentReply.body,
+          );
+    final effectiveSubject = syntheticAttachmentReply?.subject ?? subject;
+    final effectiveHtmlCaption =
+        syntheticAttachmentReply?.htmlBody ?? htmlCaption;
     if (_shouldFanOut(recipients, chat)) {
       final succeeded = await _sendFanOut(
         recipients: recipients,
         attachment: resolvedAttachment,
-        htmlCaption: htmlCaption,
-        subject: subject,
+        htmlCaption: effectiveHtmlCaption,
+        subject: effectiveSubject,
         chat: chat,
         settings: settings,
         emit: emit,
@@ -5341,8 +5386,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await service.sendAttachment(
         chat: chat,
         attachment: resolvedAttachment,
-        subject: subject,
-        htmlCaption: htmlCaption,
+        subject: effectiveSubject,
+        htmlCaption: effectiveHtmlCaption,
+        quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
       );
       return true;
     } on DeltaChatException catch (error, stackTrace) {
@@ -5432,6 +5478,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
     required String? subject,
+    required Message? quotedDraft,
     required ChatSettingsSnapshot settings,
     bool retainOnSuccess = false,
     String? captionForFirstAttachment,
@@ -5458,6 +5505,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         recipients: recipients,
         emit: emit,
         subject: subject,
+        quotedDraft: quotedDraft,
         settings: settings,
         retainOnSuccess: retainOnSuccess,
         htmlCaption: shouldApplyHtmlCaption
@@ -5480,6 +5528,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
     required String? subject,
+    required Message? quotedDraft,
     required ChatSettingsSnapshot settings,
     bool retainOnSuccess = false,
     String? captionForBundle,
@@ -5487,16 +5536,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     if (attachments.isEmpty) return true;
     _markPendingAttachmentsUploading(attachments, emit);
-    final resolvedAttachment = captionForBundle == null
-        ? bundledAttachment
-        : bundledAttachment.copyWith(caption: captionForBundle);
+    final syntheticAttachmentReply = _syntheticEmailReplyEnvelope(
+      body: captionForBundle ?? '',
+      subject: subject,
+      quotedDraft: quotedDraft,
+    );
+    final resolvedAttachment = syntheticAttachmentReply == null
+        ? (captionForBundle == null
+              ? bundledAttachment
+              : bundledAttachment.copyWith(caption: captionForBundle))
+        : bundledAttachment.copyWith(
+            caption: syntheticAttachmentReply.body.isEmpty
+                ? null
+                : syntheticAttachmentReply.body,
+          );
+    final effectiveSubject = syntheticAttachmentReply?.subject ?? subject;
+    final effectiveHtmlCaption =
+        syntheticAttachmentReply?.htmlBody ?? htmlCaptionForBundle;
     try {
       if (_shouldFanOut(recipients, chat)) {
         final succeeded = await _sendFanOut(
           recipients: recipients,
           attachment: resolvedAttachment,
-          htmlCaption: htmlCaptionForBundle,
-          subject: subject,
+          htmlCaption: effectiveHtmlCaption,
+          subject: effectiveSubject,
           chat: chat,
           settings: settings,
           emit: emit,
@@ -5521,8 +5584,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await service.sendAttachment(
           chat: chat,
           attachment: resolvedAttachment,
-          subject: subject,
-          htmlCaption: htmlCaptionForBundle,
+          subject: effectiveSubject,
+          htmlCaption: effectiveHtmlCaption,
+          quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
         );
         _handleBundledAttachmentSuccess(
           attachments,
@@ -6354,15 +6418,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  String _composeEmailBody(String body, Message? quoted) {
-    if (quoted?.plainText.isNotEmpty != true) {
-      return body;
+  ({String subject, String body, String? htmlBody, String quotedStanzaId})?
+  _syntheticEmailReplyEnvelope({
+    required String body,
+    required String? subject,
+    required Message? quotedDraft,
+  }) {
+    if (quotedDraft == null) {
+      return null;
     }
-    final quotedBody = quoted!.plainText
-        .split('\n')
-        .map((line) => line.isEmpty ? '>' : '> $line')
-        .join('\n');
-    return '$quotedBody\n\n$body';
+    final quotedContent = ChatSubjectCodec.splitDisplayBody(
+      body: quotedDraft.body,
+      subject: quotedDraft.subject,
+    );
+    final envelope = syntheticReplyEnvelope(
+      body: body,
+      subject: subject,
+      quotedSubject: quotedContent.subject,
+      quotedBody: quotedContent.body,
+      quotedSenderLabel:
+          displaySafeAddress(quotedDraft.senderJid) ?? quotedDraft.senderJid,
+    );
+    final normalizedBody = envelope.body.trim();
+    return (
+      subject: envelope.subject,
+      body: normalizedBody,
+      htmlBody: normalizedBody.isEmpty
+          ? null
+          : HtmlContentCodec.fromPlainText(normalizedBody),
+      quotedStanzaId: quotedDraft.stanzaID,
+    );
   }
 
   ({

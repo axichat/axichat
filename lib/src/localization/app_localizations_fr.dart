@@ -1454,10 +1454,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Autorisations requises déjà accordées';
 
   @override
-  String get notificationsMessageToggle => 'Notifications de messages';
+  String get notificationsMessageToggle => 'Notifications en arrière-plan';
 
   @override
-  String get notificationsRequiresRestart => 'Redémarrage requis';
+  String get notificationsRequiresRestart => 'Fortement recommandé';
 
   @override
   String get notificationsDialogTitle =>

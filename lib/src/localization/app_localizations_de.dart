@@ -1458,10 +1458,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Erforderliche Berechtigungen bereits erteilt';
 
   @override
-  String get notificationsMessageToggle => 'Nachrichtenbenachrichtigungen';
+  String get notificationsMessageToggle => 'Hintergrundbenachrichtigungen';
 
   @override
-  String get notificationsRequiresRestart => 'Neustart erforderlich';
+  String get notificationsRequiresRestart => 'Dringend empfohlen';
 
   @override
   String get notificationsDialogTitle =>

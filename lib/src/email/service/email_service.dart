@@ -13,7 +13,9 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
+import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/common/transport.dart';
+import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:logging/logging.dart';
@@ -1408,6 +1410,7 @@ class EmailService {
     String? htmlBody,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? quotedStanzaId,
   }) async {
     if (kEnableDemoChats) {
       return _sendDemoEmailMessage(
@@ -1482,6 +1485,7 @@ class EmailService {
         shareId: shareId,
         localBodyOverride: localBodyOverride,
         htmlBody: normalizedHtml,
+        quotingStanzaId: quotedStanzaId,
         accountId: context.account.deltaAccountId,
       ),
     );
@@ -1518,6 +1522,7 @@ class EmailService {
     String? htmlCaption,
     bool forwarded = false,
     String? forwardedFromJid,
+    String? quotedStanzaId,
   }) async {
     if (kEnableDemoChats) {
       return _sendDemoEmailAttachment(
@@ -1577,6 +1582,7 @@ class EmailService {
         shareId: shareId,
         captionOverride: sanitizedCaption,
         htmlCaption: normalizedHtml,
+        quotingStanzaId: quotedStanzaId,
         accountId: context.account.deltaAccountId,
       ),
     );
@@ -1979,19 +1985,43 @@ class EmailService {
   String? _normalizeReplySubject({
     required String? subject,
     required String? quotedSubject,
+    String? quotedSenderLabel,
   }) {
-    final normalizedSubject = _normalizeSubject(subject);
-    if (normalizedSubject != null) {
-      return normalizedSubject;
-    }
-    final normalizedQuotedSubject = _normalizeSubject(quotedSubject);
-    if (normalizedQuotedSubject == null) {
-      return null;
-    }
-    if (normalizedQuotedSubject.toLowerCase().startsWith('re:')) {
-      return normalizedQuotedSubject;
-    }
-    return 'Re: $normalizedQuotedSubject';
+    return _normalizeSubject(
+      syntheticReplySubject(
+        subject: subject,
+        quotedSubject: _normalizeSubject(quotedSubject),
+        quotedSenderLabel: quotedSenderLabel,
+      ),
+    );
+  }
+
+  ({String subject, String body, String? htmlBody}) _syntheticReplyEnvelope(
+    Message quotedMessage, {
+    required String body,
+    required String? subject,
+  }) {
+    final quotedContent = ChatSubjectCodec.splitDisplayBody(
+      body: quotedMessage.body,
+      subject: quotedMessage.subject,
+    );
+    final envelope = syntheticReplyEnvelope(
+      body: body,
+      subject: subject,
+      quotedSubject: quotedContent.subject,
+      quotedBody: quotedContent.body,
+      quotedSenderLabel:
+          displaySafeAddress(quotedMessage.senderJid) ??
+          quotedMessage.senderJid.trim(),
+    );
+    final normalizedBody = envelope.body.trim();
+    return (
+      subject: envelope.subject,
+      body: normalizedBody,
+      htmlBody: normalizedBody.isEmpty
+          ? null
+          : HtmlContentCodec.fromPlainText(normalizedBody),
+    );
   }
 
   String? _normalizeDraftHtml({required String text, String? htmlBody}) {
@@ -2876,6 +2906,29 @@ class EmailService {
     return _notificationPayloadCodec.encodeChatJid(normalized) ?? normalized;
   }
 
+  String _notificationConversationTitle(_DeltaNotificationContext context) {
+    final displayName = context.chat?.displayName.trim();
+    if (displayName?.isNotEmpty == true) {
+      return displayName!;
+    }
+    final sender = normalizeAddress(context.message.senderJid);
+    if (sender != null && sender.isNotEmpty) {
+      return _displayNameForAddress(sender);
+    }
+    return context.message.chatJid.trim();
+  }
+
+  String _notificationSenderName(_DeltaNotificationContext context) {
+    final sender = normalizeAddress(context.message.senderJid);
+    if (sender != null && sender.isNotEmpty) {
+      final preferredDisplayName = context.chat?.type == ChatType.chat
+          ? context.chat?.contactDisplayName ?? context.chat?.title
+          : null;
+      return _displayNameForAddress(sender, displayName: preferredDisplayName);
+    }
+    return _notificationConversationTitle(context);
+  }
+
   Future<void> _notifyIncoming({
     required int chatId,
     required int msgId,
@@ -2914,8 +2967,13 @@ class EmailService {
         return;
       }
       await notificationService.sendMessageNotification(
-        title: context.chat?.title ?? context.message.senderJid,
+        title: context.chat?.displayName ?? context.message.senderJid,
         body: notificationBody,
+        senderName: _notificationSenderName(context),
+        senderKey: context.message.senderJid,
+        conversationTitle: _notificationConversationTitle(context),
+        sentAt: context.message.timestamp,
+        isGroupConversation: context.chat?.type == ChatType.groupChat,
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
@@ -2965,8 +3023,13 @@ class EmailService {
         return;
       }
       await notificationService.sendMessageNotification(
-        title: context.chat?.title ?? context.message.senderJid,
+        title: context.chat?.displayName ?? context.message.senderJid,
         body: body,
+        senderName: _notificationSenderName(context),
+        senderKey: context.message.senderJid,
+        conversationTitle: _notificationConversationTitle(context),
+        sentAt: context.message.timestamp,
+        isGroupConversation: context.chat?.type == ChatType.groupChat,
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
@@ -3016,8 +3079,13 @@ class EmailService {
         return;
       }
       await notificationService.sendMessageNotification(
-        title: context.chat?.title ?? context.message.senderJid,
+        title: context.chat?.displayName ?? context.message.senderJid,
         body: body,
+        senderName: _notificationSenderName(context),
+        senderKey: context.message.senderJid,
+        conversationTitle: _notificationConversationTitle(context),
+        sentAt: context.message.timestamp,
+        isGroupConversation: context.chat?.type == ChatType.groupChat,
         payload: threadKey,
         threadKey: threadKey,
         showPreviewOverride: showPreview,
@@ -3140,6 +3208,9 @@ class EmailService {
         source: _EmailSyncSource.connectivityConfirm,
       );
       if (connectivityLevel >= _connectivityConnectedMin) {
+        return;
+      }
+      if (connectivityLevel >= _connectivityWorkingMin) {
         return;
       }
       _applyConnectivityState(
@@ -5083,17 +5154,26 @@ class EmailService {
     final chatId = context.deltaChatId;
     if (quotedMsgId == null ||
         quotedMessage.deltaAccountId != context.account.deltaAccountId) {
-      return sendMessage(
-        chat: chat,
+      final syntheticReply = _syntheticReplyEnvelope(
+        quotedMessage,
         body: body,
         subject: subject,
-        htmlBody: htmlBody,
+      );
+      return sendMessage(
+        chat: chat,
+        body: syntheticReply.body,
+        subject: syntheticReply.subject,
+        htmlBody: syntheticReply.htmlBody,
+        quotedStanzaId: quotedMessage.stanzaID,
       );
     }
     await _ensureReady();
     final normalizedSubject = _normalizeReplySubject(
       subject: subject,
       quotedSubject: quotedMessage.subject,
+      quotedSenderLabel:
+          displaySafeAddress(quotedMessage.senderJid) ??
+          quotedMessage.senderJid.trim(),
     );
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
     final trimmedBody = body.trim();

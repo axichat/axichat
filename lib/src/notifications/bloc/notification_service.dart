@@ -39,10 +39,26 @@ const WindowRateLimit _messageNotificationGlobalRateLimit = WindowRateLimit(
 
 enum MessageNotificationChannel { chat, email }
 
+final class _MessageNotificationEntry {
+  const _MessageNotificationEntry({
+    required this.senderName,
+    required this.senderKey,
+    required this.text,
+    required this.timestamp,
+  });
+
+  final String senderName;
+  final String senderKey;
+  final String text;
+  final DateTime timestamp;
+}
+
 ///Call [init].
 class NotificationService {
   NotificationService([FlutterLocalNotificationsPlugin? plugin])
     : _plugin = plugin ?? FlutterLocalNotificationsPlugin();
+
+  static const int _messageNotificationHistoryLimit = 8;
 
   final FlutterLocalNotificationsPlugin _plugin;
   bool _initialized = false;
@@ -64,6 +80,9 @@ class NotificationService {
   final Logger _log = Logger('NotificationService');
   PackageInfo? _packageInfo;
   Future<PackageInfo>? _packageInfoFuture;
+  final Map<String, List<_MessageNotificationEntry>>
+  _messageNotificationHistoryByThread =
+      <String, List<_MessageNotificationEntry>>{};
 
   bool mute = false;
   bool chatNotificationsMuted = false;
@@ -261,6 +280,11 @@ class NotificationService {
   Future<void> sendMessageNotification({
     required String title,
     String? body,
+    String? senderName,
+    String? senderKey,
+    String? conversationTitle,
+    DateTime? sentAt,
+    bool isGroupConversation = false,
     List<FutureOr<bool>> extraConditions = const [],
     bool allowForeground = false,
     String? payload,
@@ -285,18 +309,54 @@ class NotificationService {
 
     await _ensureInitialized();
     final showPreview = showPreviewOverride ?? notificationPreviewsEnabled;
+    final resolvedConversationTitle = _resolveMessageNotificationLabel(
+      conversationTitle,
+      fallback: title,
+    );
+    final resolvedSenderName = _resolveMessageNotificationLabel(
+      senderName,
+      fallback: title,
+    );
+    final resolvedSenderKey = _resolveMessageNotificationSenderKey(
+      senderKey,
+      fallback: resolvedSenderName,
+    );
     final notificationDetails = await _messageNotificationDetails(
       showPreview: showPreview,
+      conversationTitle: resolvedConversationTitle,
+      isGroupConversation: isGroupConversation,
+      messages: _buildMessageNotificationHistory(
+        threadKey: stableKey,
+        showPreview: showPreview,
+        senderName: resolvedSenderName,
+        senderKey: resolvedSenderKey,
+        body: body,
+        sentAt: sentAt,
+      ),
     );
     final notificationId = stableKey == null || stableKey.isEmpty
         ? Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000)
         : _stableNotificationId(stableKey);
-    final String? sanitizedBody = sanitizeNotificationPreview(body);
+    final String? sanitizedBody = showPreview
+        ? sanitizeNotificationPreview(body)
+        : null;
+    final bool useMessagingStyle =
+        Platform.isAndroid && showPreview && sanitizedBody != null;
 
     await _plugin.show(
       id: notificationId,
-      title: _sanitizeMessageNotificationTitle(title),
-      body: showPreview ? sanitizedBody : null,
+      title: _resolveMessageNotificationTitle(
+        conversationTitle: resolvedConversationTitle,
+        senderName: resolvedSenderName,
+        isGroupConversation: isGroupConversation,
+      ),
+      body: _resolveMessageNotificationBody(
+        sanitizedBody: sanitizedBody,
+        senderName: resolvedSenderName,
+        conversationTitle: resolvedConversationTitle,
+        isGroupConversation: isGroupConversation,
+        useMessagingStyle: useMessagingStyle,
+      ),
       notificationDetails: notificationDetails,
       payload: payload,
     );
@@ -312,10 +372,12 @@ class NotificationService {
   Future<void> dismissMessageNotification({required String threadKey}) async {
     final normalized = threadKey.trim();
     if (normalized.isEmpty) return;
+    _messageNotificationHistoryByThread.remove(normalized);
     await cancelNotification(_stableNotificationId(normalized));
   }
 
   Future<void> dismissNotifications() async {
+    _messageNotificationHistoryByThread.clear();
     await _ensureInitialized();
     await _plugin.cancelAll();
   }
@@ -507,9 +569,27 @@ class NotificationService {
 
   Future<NotificationDetails> _messageNotificationDetails({
     required bool showPreview,
+    required String conversationTitle,
+    required bool isGroupConversation,
+    required List<Message>? messages,
   }) async {
     await _ensureInitialized();
     final packageInfo = await _resolvePackageInfo();
+    final styleInformation =
+        Platform.isAndroid &&
+            showPreview &&
+            messages != null &&
+            messages.isNotEmpty
+        ? MessagingStyleInformation(
+            Person(
+              name: _l10n.appTitle,
+              key: '${packageInfo.packageName}.self',
+            ),
+            conversationTitle: conversationTitle,
+            groupConversation: isGroupConversation,
+            messages: messages,
+          )
+        : null;
 
     final androidDetails = AndroidNotificationDetails(
       channel,
@@ -519,6 +599,7 @@ class NotificationService {
       priority: Priority.high,
       icon: androidIconPath,
       category: AndroidNotificationCategory.message,
+      styleInformation: styleInformation,
       visibility: showPreview
           ? NotificationVisibility.public
           : NotificationVisibility.private,
@@ -551,8 +632,105 @@ class NotificationService {
   String _sanitizeMessageNotificationTitle(String title) {
     final normalized = title.trim();
     if (normalized.isEmpty) return _genericMessageNotificationTitle;
-    if (normalized.isValidJid) return _genericMessageNotificationTitle;
+    final label = addressDisplayLabel(normalized)?.trim();
+    if (label?.isNotEmpty == true) {
+      return label!;
+    }
+    final safeAddress = displaySafeAddress(normalized)?.trim();
+    if (safeAddress?.isNotEmpty == true) {
+      return safeAddress!;
+    }
     return normalized;
+  }
+
+  String _resolveMessageNotificationLabel(
+    String? value, {
+    required String fallback,
+  }) {
+    final normalized = value?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      return _sanitizeMessageNotificationTitle(normalized);
+    }
+    return _sanitizeMessageNotificationTitle(fallback);
+  }
+
+  String _resolveMessageNotificationSenderKey(
+    String? value, {
+    required String fallback,
+  }) {
+    final normalized = value?.trim();
+    if (normalized != null && normalized.isNotEmpty) {
+      return normalized;
+    }
+    return fallback.toLowerCase();
+  }
+
+  List<Message>? _buildMessageNotificationHistory({
+    required String? threadKey,
+    required bool showPreview,
+    required String senderName,
+    required String senderKey,
+    required String? body,
+    required DateTime? sentAt,
+  }) {
+    if (!showPreview) {
+      return null;
+    }
+    final sanitizedBody = sanitizeNotificationPreview(body);
+    if (sanitizedBody == null) {
+      return null;
+    }
+    final entry = _MessageNotificationEntry(
+      senderName: senderName,
+      senderKey: senderKey,
+      text: sanitizedBody,
+      timestamp: sentAt ?? DateTime.now(),
+    );
+    final normalizedThreadKey = threadKey?.trim();
+    if (normalizedThreadKey == null || normalizedThreadKey.isEmpty) {
+      return <Message>[entry._toAndroidMessage()];
+    }
+    final history = _messageNotificationHistoryByThread.putIfAbsent(
+      normalizedThreadKey,
+      () => <_MessageNotificationEntry>[],
+    )..add(entry);
+    final overflow = history.length - _messageNotificationHistoryLimit;
+    if (overflow > 0) {
+      history.removeRange(0, overflow);
+    }
+    return history
+        .map((item) => item._toAndroidMessage())
+        .toList(growable: false);
+  }
+
+  String _resolveMessageNotificationTitle({
+    required String conversationTitle,
+    required String senderName,
+    required bool isGroupConversation,
+  }) {
+    if (isGroupConversation) {
+      return conversationTitle;
+    }
+    return senderName;
+  }
+
+  String? _resolveMessageNotificationBody({
+    required String? sanitizedBody,
+    required String senderName,
+    required String conversationTitle,
+    required bool isGroupConversation,
+    required bool useMessagingStyle,
+  }) {
+    if (sanitizedBody == null) {
+      return null;
+    }
+    if (useMessagingStyle) {
+      return sanitizedBody;
+    }
+    if (isGroupConversation && senderName != conversationTitle) {
+      return '$senderName: $sanitizedBody';
+    }
+    return sanitizedBody;
   }
 
   int _stableNotificationId(String key) {
@@ -586,4 +764,9 @@ class NotificationService {
       rethrow;
     }
   }
+}
+
+extension on _MessageNotificationEntry {
+  Message _toAndroidMessage() =>
+      Message(text, timestamp, Person(name: senderName, key: senderKey));
 }

@@ -1862,6 +1862,14 @@ class _ChatState extends State<Chat> {
     return roomState.isBootstrapPending;
   }
 
+  RoomState? _roomJoinFailureState(ChatState state) {
+    final roomState = state.roomState;
+    if (roomState == null || !roomState.hasJoinError) {
+      return null;
+    }
+    return roomState;
+  }
+
   CalendarAvailabilityMessage? _validatedAvailabilityMessage({
     required Message message,
     required RoomState? roomState,
@@ -4307,6 +4315,10 @@ class _ChatState extends State<Chat> {
               );
               final roomBootstrapInProgress =
                   isGroupChat && _isRoomBootstrapInProgress(state);
+              final roomJoinFailureState = isGroupChat
+                  ? _roomJoinFailureState(state)
+                  : null;
+              final roomJoinFailed = roomJoinFailureState != null;
               final shareContexts = state.shareContexts;
               final shareReplies = state.shareReplies;
               final recipients = _recipients;
@@ -5773,7 +5785,8 @@ class _ChatState extends State<Chat> {
                                           ),
                                           enabled:
                                               !isWelcomeChat &&
-                                              !roomBootstrapInProgress,
+                                              !roomBootstrapInProgress &&
+                                              !roomJoinFailed,
                                           hintText: composerHintText,
                                           recipients: recipients,
                                           availableChats: availableChats,
@@ -5879,6 +5892,13 @@ class _ChatState extends State<Chat> {
                                         if (roomBootstrapInProgress) {
                                           composerOverlayBanner =
                                               const _RoomBootstrapComposerBanner();
+                                        } else if (roomJoinFailureState !=
+                                            null) {
+                                          composerOverlayBanner =
+                                              _RoomJoinFailureComposerBanner(
+                                                detail: roomJoinFailureState
+                                                    .joinErrorText,
+                                              );
                                         }
                                       }
                                     }
@@ -13641,6 +13661,78 @@ class _RoomBootstrapComposerBanner extends StatelessWidget {
                           color: colors.mutedForeground,
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomJoinFailureComposerBanner extends StatelessWidget {
+  const _RoomJoinFailureComposerBanner({this.detail});
+
+  final String? detail;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final composerHorizontalInset = spacing.m;
+    final normalizedDetail = detail?.trim();
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      child: ColoredBox(
+        color: colors.background,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: colors.border, width: 1)),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              composerHorizontalInset,
+              spacing.m,
+              composerHorizontalInset,
+              spacing.m,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  LucideIcons.triangleAlert,
+                  size: sizing.iconButtonIconSize,
+                  color: colors.destructive,
+                ),
+                SizedBox(width: spacing.m),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        l10n.chatInviteJoinFailed,
+                        style: context.textTheme.small.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colors.destructive,
+                        ),
+                      ),
+                      if (normalizedDetail?.isNotEmpty == true) ...[
+                        SizedBox(height: spacing.xs),
+                        Text(
+                          normalizedDetail!,
+                          style: context.textTheme.small.copyWith(
+                            color: colors.mutedForeground,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

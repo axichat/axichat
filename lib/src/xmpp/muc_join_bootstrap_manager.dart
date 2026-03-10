@@ -15,6 +15,8 @@ final class MucSelfPresenceEvent extends mox.XmppEvent {
     required this.isNickChange,
     required this.statusCodes,
     this.reason,
+    this.errorCondition,
+    this.errorText,
     this.newNick,
   });
 
@@ -28,6 +30,8 @@ final class MucSelfPresenceEvent extends mox.XmppEvent {
   final bool isNickChange;
   final Set<String> statusCodes;
   final String? reason;
+  final String? errorCondition;
+  final String? errorText;
   final String? newNick;
 }
 
@@ -196,6 +200,13 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
       final occupantJid = nick.isNotEmpty
           ? fromJid.toString()
           : '$roomJid/$resolvedNick';
+      final errorNode = presence.firstTag(_errorTag);
+      final conditionNode = errorNode == null
+          ? null
+          : _findStanzaErrorConditionNode(errorNode);
+      final errorCondition = conditionNode?.tag.trim();
+      final errorTextNode = errorNode?.firstTag(_errorTextTag);
+      final errorTextRaw = errorTextNode?.innerText().trim();
       getAttributes().sendEvent(
         MucSelfPresenceEvent(
           roomJid: roomJid,
@@ -208,6 +219,10 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
           isNickChange: false,
           statusCodes: statuses,
           reason: null,
+          errorCondition: errorCondition?.isNotEmpty == true
+              ? errorCondition
+              : null,
+          errorText: errorTextRaw?.isNotEmpty == true ? errorTextRaw : null,
           newNick: null,
         ),
       );
@@ -270,6 +285,8 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
         isNickChange: isNickChange,
         statusCodes: resolvedStatuses,
         reason: reason?.isNotEmpty == true ? reason : null,
+        errorCondition: null,
+        errorText: null,
         newNick: isNickChange ? newNick : null,
       ),
     );

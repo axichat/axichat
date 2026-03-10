@@ -512,7 +512,12 @@ class ForegroundSocket extends TaskHandler {
       final port = split.length > 3 && split[3].isNotEmpty
           ? int.tryParse(split[3])
           : null;
+      _log.info(
+        'Foreground task connecting XMPP socket: '
+        'domain=${split[1]} host=$host port=$port',
+      );
       final result = await _socket!.connect(split[1], host: host, port: port);
+      _log.info('Foreground task XMPP socket connect result: $result');
       return _sendToMain([connectPrefix, result]);
     } else if (data.startsWith('$securePrefix$join')) {
       final domain = data.substring('$securePrefix$join'.length);
@@ -736,6 +741,10 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
         ),
       );
       _serviceAcquired = true;
+      _log.info(
+        'Foreground XMPP lease acquired. Connecting to '
+        '${target.host}:${target.port}',
+      );
     } on Exception {
       _detachListener();
       rethrow;
@@ -801,6 +810,10 @@ class ForegroundSocketWrapper implements XmppSocketWrapper {
   void prepareDisconnect() {}
 
   Future<void> reset() async {
+    _log.info(
+      'Resetting foreground socket wrapper. '
+      'serviceAcquired=$_serviceAcquired listenerRegistered=$_listenerRegistered',
+    );
     _connect = Completer<bool>();
     _secure = Completer<bool>();
     _secureResult = false;

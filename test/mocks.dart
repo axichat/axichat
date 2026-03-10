@@ -214,6 +214,11 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
     () => mockNotificationService.sendMessageNotification(
       title: any(named: 'title'),
       body: any(named: 'body'),
+      senderName: any(named: 'senderName'),
+      senderKey: any(named: 'senderKey'),
+      conversationTitle: any(named: 'conversationTitle'),
+      sentAt: any(named: 'sentAt'),
+      isGroupConversation: any(named: 'isGroupConversation'),
       extraConditions: any(named: 'extraConditions'),
       allowForeground: any(named: 'allowForeground'),
       payload: any(named: 'payload'),
@@ -304,6 +309,11 @@ Future<void> connectUnsuccessfully(XmppService xmppService) async {
     () => mockNotificationService.sendMessageNotification(
       title: any(named: 'title'),
       body: any(named: 'body'),
+      senderName: any(named: 'senderName'),
+      senderKey: any(named: 'senderKey'),
+      conversationTitle: any(named: 'conversationTitle'),
+      sentAt: any(named: 'sentAt'),
+      isGroupConversation: any(named: 'isGroupConversation'),
       extraConditions: any(named: 'extraConditions'),
       allowForeground: any(named: 'allowForeground'),
       payload: any(named: 'payload'),

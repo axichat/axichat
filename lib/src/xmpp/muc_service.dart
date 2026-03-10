@@ -822,18 +822,32 @@ mixin MucService on XmppBase, BaseStreamService {
       );
       final selfPresenceChanged =
           room.selfPresenceStatusCodes.isNotEmpty ||
-          room.selfPresenceReason != null;
+          room.selfPresenceReason != null ||
+          room.joinErrorCondition != null ||
+          room.joinErrorText != null;
       final occupantPresenceChanged = updatedOccupants != room.occupants;
-      if (!selfPresenceChanged && !occupantPresenceChanged) {
+      final refreshPendingChanged = room.postJoinRefreshPending;
+      if (!selfPresenceChanged &&
+          !occupantPresenceChanged &&
+          !refreshPendingChanged) {
         continue;
       }
       final updated = room.copyWith(
         occupants: updatedOccupants,
         selfPresenceStatusCodes: _emptyStatusCodes,
         selfPresenceReason: null,
+        postJoinRefreshPending: false,
       );
-      _roomStates[key] = updated;
-      _roomStreams[key]?.add(updated);
+      final cleared = RoomState(
+        roomJid: updated.roomJid,
+        occupants: updated.occupants,
+        myOccupantId: updated.myOccupantId,
+        selfPresenceStatusCodes: updated.selfPresenceStatusCodes,
+        selfPresenceReason: updated.selfPresenceReason,
+        postJoinRefreshPending: updated.postJoinRefreshPending,
+      );
+      _roomStates[key] = cleared;
+      _roomStreams[key]?.add(cleared);
     }
   }
 
@@ -905,11 +919,11 @@ mixin MucService on XmppBase, BaseStreamService {
       final currentCompleter = _mucJoinCompleters[normalizedRoom];
       if (currentCompleter == null || currentCompleter.isCompleted) return;
       final existing = roomStateFor(normalizedRoom);
-      if (existing?.hasSelfPresence == true) {
+      if (existing?.isReadyForMessaging == true) {
         _logJoinEvent(
           message: _mucJoinPollHasSelfPresenceLog,
           attemptId: attemptId,
-          hasSelfPresence: true,
+          hasSelfPresence: existing?.hasSelfPresence == true,
         );
         _completeJoinAttempt(normalizedRoom);
         return;
@@ -933,6 +947,8 @@ mixin MucService on XmppBase, BaseStreamService {
     String roomJid, {
     Set<String>? statusCodes,
     String? reason,
+    MucJoinErrorCondition? joinErrorCondition,
+    String? joinErrorText,
     bool preserveOccupants = _preserveOccupantsDefault,
   }) async {
     final key = _roomKey(roomJid);
@@ -958,6 +974,8 @@ mixin MucService on XmppBase, BaseStreamService {
       myOccupantId: preservedOccupantId,
       selfPresenceStatusCodes: statusCodes ?? _emptyStatusCodes,
       selfPresenceReason: normalizedReason,
+      joinErrorCondition: joinErrorCondition,
+      joinErrorText: joinErrorText,
     );
     _roomStates[key] = room;
     _roomStreams[key]?.add(room);
@@ -1034,9 +1052,33 @@ mixin MucService on XmppBase, BaseStreamService {
     final normalizedReason = _normalizeSubject(reason);
     final existing =
         _roomStates[key] ?? RoomState(roomJid: key, occupants: const {});
-    final updated = existing.copyWith(
+    final updated = RoomState(
+      roomJid: existing.roomJid,
+      occupants: existing.occupants,
+      myOccupantId: existing.myOccupantId,
       selfPresenceStatusCodes: statusCodes,
       selfPresenceReason: normalizedReason,
+      postJoinRefreshPending: existing.postJoinRefreshPending,
+    );
+    _roomStates[key] = updated;
+    _roomStreams[key]?.add(updated);
+  }
+
+  void _clearRoomJoinFailure(String roomJid) {
+    final key = _roomKey(roomJid);
+    final existing = _roomStates[key];
+    if (existing == null ||
+        (existing.joinErrorCondition == null &&
+            existing.joinErrorText == null)) {
+      return;
+    }
+    final updated = RoomState(
+      roomJid: existing.roomJid,
+      occupants: existing.occupants,
+      myOccupantId: existing.myOccupantId,
+      selfPresenceStatusCodes: existing.selfPresenceStatusCodes,
+      selfPresenceReason: existing.selfPresenceReason,
+      postJoinRefreshPending: existing.postJoinRefreshPending,
     );
     _roomStates[key] = updated;
     _roomStreams[key]?.add(updated);
@@ -1059,6 +1101,42 @@ mixin MucService on XmppBase, BaseStreamService {
       statusCodes: updatedStatusCodes,
       reason: existing.selfPresenceReason,
     );
+  }
+
+  void _setRoomPostJoinRefreshPending({
+    required String roomJid,
+    required bool pending,
+  }) {
+    final key = _roomKey(roomJid);
+    final existing = _roomStates[key];
+    if (existing == null) {
+      if (!pending) {
+        return;
+      }
+      final created = RoomState(
+        roomJid: key,
+        occupants: const {},
+        postJoinRefreshPending: true,
+      );
+      _roomStates[key] = created;
+      _roomStreams[key]?.add(created);
+      return;
+    }
+    if (existing.postJoinRefreshPending == pending) {
+      return;
+    }
+    final updated = RoomState(
+      roomJid: existing.roomJid,
+      occupants: existing.occupants,
+      myOccupantId: existing.myOccupantId,
+      selfPresenceStatusCodes: existing.selfPresenceStatusCodes,
+      selfPresenceReason: existing.selfPresenceReason,
+      joinErrorCondition: existing.joinErrorCondition,
+      joinErrorText: existing.joinErrorText,
+      postJoinRefreshPending: pending,
+    );
+    _roomStates[key] = updated;
+    _roomStreams[key]?.add(updated);
   }
 
   Future<RoomState> warmRoomFromHistory({
@@ -1324,6 +1402,7 @@ mixin MucService on XmppBase, BaseStreamService {
         _explicitlyLeftRooms.remove(normalizedRoom);
       }
       _markRoomJoined(normalizedRoom);
+      _clearRoomJoinFailure(normalizedRoom);
       _roomNicknames[normalizedRoom] = nickname;
       _rememberRoomNickname(roomJid: normalizedRoom, nickname: nickname);
       _seedRoomSelfOccupantId(roomJid: normalizedRoom, nickname: nickname);
@@ -1370,7 +1449,7 @@ mixin MucService on XmppBase, BaseStreamService {
       _mucJoinCompleters.remove(normalizedRoom);
       final roomState = _roomStates[normalizedRoom];
       final hasSelfPresence = roomState?.hasSelfPresence == true;
-      if (!hasSelfPresence) {
+      if (roomState?.isReadyForMessaging != true) {
         _logJoinEvent(
           message: _mucJoinTimeoutLog,
           attemptId: _joinAttemptIdForKey(normalizedRoom),
@@ -1479,11 +1558,19 @@ mixin MucService on XmppBase, BaseStreamService {
     if (!await _ensureMucSupported(jid: normalizedRoom)) {
       throw XmppMessageException();
     }
-    if (await _roomRequiresMembership(normalizedRoom)) {
+    final roomState = roomStateFor(normalizedRoom);
+    final canManageMembership =
+        roomState?.myAffiliation.isOwner == true ||
+        roomState?.myAffiliation.isAdmin == true;
+    if (canManageMembership || await _roomRequiresMembership(normalizedRoom)) {
       await changeAffiliation(
         roomJid: normalizedRoom,
         jid: normalizedInvitee,
         affiliation: OccupantAffiliation.member,
+      );
+      await _ensureRoomMembershipGranted(
+        roomJid: normalizedRoom,
+        inviteeJid: normalizedInvitee,
       );
     }
     await _sendInviteNotice(
@@ -1492,6 +1579,33 @@ mixin MucService on XmppBase, BaseStreamService {
       reason: reason,
       password: password,
     );
+  }
+
+  Future<void> _ensureRoomMembershipGranted({
+    required String roomJid,
+    required String inviteeJid,
+  }) async {
+    const verificationDelays = <Duration>[
+      Duration.zero,
+      Duration(milliseconds: 250),
+      Duration(milliseconds: 500),
+    ];
+    for (final delay in verificationDelays) {
+      if (delay > Duration.zero) {
+        await Future<void>.delayed(delay);
+      }
+      final members = await fetchRoomMembers(roomJid: roomJid);
+      final hasMembership = members.any(
+        (entry) =>
+            entry.affiliation == OccupantAffiliation.member &&
+            entry.jid != null &&
+            _sameBareJid(entry.jid!, inviteeJid),
+      );
+      if (hasMembership) {
+        return;
+      }
+    }
+    throw XmppMessageException();
   }
 
   Future<void> kickOccupant({
@@ -1716,7 +1830,9 @@ mixin MucService on XmppBase, BaseStreamService {
     String? password,
   }) async {
     final existingRoom = roomStateFor(roomJid);
-    if (existingRoom?.myOccupantId != null) {
+    if (existingRoom?.isReadyForMessaging == true &&
+        !_roomNeedsJoin(roomJid) &&
+        !hasLeftRoom(roomJid)) {
       return;
     }
     final title = await _resolveRoomTitle(
@@ -2344,6 +2460,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (existingCompleter != null) return;
     final completer = Completer<void>();
     _roomPostJoinRefreshCompleters[key] = completer;
+    _setRoomPostJoinRefreshPending(roomJid: key, pending: true);
     fireAndForget(() async {
       try {
         await _awaitInstantRoomConfigurationIfNeeded(key);
@@ -2360,6 +2477,7 @@ mixin MucService on XmppBase, BaseStreamService {
         );
         completer.complete();
       } finally {
+        _setRoomPostJoinRefreshPending(roomJid: key, pending: false);
         _roomPostJoinRefreshCompleters.remove(key);
       }
     }, operationName: _mucPostJoinRefreshOperationName);
@@ -2859,7 +2977,11 @@ mixin MucService on XmppBase, BaseStreamService {
       await _markRoomLeft(
         roomJid,
         statusCodes: statusCodes,
-        reason: event.reason,
+        reason: event.reason ?? event.errorText,
+        joinErrorCondition: MucJoinErrorCondition.fromString(
+          event.errorCondition,
+        ),
+        joinErrorText: event.errorText,
       );
       if (event.isError) {
         _completeJoinAttempt(roomJid, error: XmppMessageException());

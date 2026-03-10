@@ -79,6 +79,9 @@ class RoomMembersSheet extends StatelessWidget {
     final showAvatarSection = avatarPath?.isNotEmpty == true || canEditAvatar;
     final showMembersLoading =
         memberSections.isEmpty && roomState.isBootstrapPending;
+    final roomJoinFailed =
+        memberSections.isEmpty && !showMembersLoading && roomState.hasJoinError;
+    final roomJoinFailureDetail = roomState.joinErrorText?.trim();
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -160,6 +163,37 @@ class RoomMembersSheet extends StatelessWidget {
                             color: colors.mutedForeground,
                           ),
                         ),
+                      ],
+                    ),
+                  )
+                : roomJoinFailed
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          LucideIcons.triangleAlert,
+                          size: context.sizing.iconButtonIconSize,
+                          color: colors.destructive,
+                        ),
+                        SizedBox(height: spacing.s),
+                        Text(
+                          l10n.chatInviteJoinFailed,
+                          style: theme.muted.copyWith(
+                            color: colors.destructive,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        if (roomJoinFailureDetail?.isNotEmpty == true) ...[
+                          SizedBox(height: spacing.xs),
+                          Text(
+                            roomJoinFailureDetail!,
+                            style: theme.muted.copyWith(
+                              color: colors.mutedForeground,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ],
                     ),
                   )

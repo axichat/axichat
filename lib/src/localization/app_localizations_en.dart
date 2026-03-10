@@ -1427,10 +1427,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Required permissions already granted';
 
   @override
-  String get notificationsMessageToggle => 'Message notifications';
+  String get notificationsMessageToggle => 'Background notifications';
 
   @override
-  String get notificationsRequiresRestart => 'Requires restart';
+  String get notificationsRequiresRestart => 'Strongly recommended';
 
   @override
   String get notificationsDialogTitle => 'Enable message notifications';

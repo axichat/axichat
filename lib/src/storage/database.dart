@@ -455,6 +455,20 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> updateChat(Chat chat);
 
+  Future<void> updateConversationIndexChatMeta({
+    required String jid,
+    required DateTime lastChangeTimestamp,
+    required bool muted,
+    required bool favorited,
+    required bool archived,
+    required String contactJid,
+  });
+
+  Future<void> updateConversationIndexArchived({
+    required String jid,
+    required bool archived,
+  });
+
   Future<void> repairChatSummaryPreservingTimestamp(String jid);
 
   Future<void> clearChatsEmailFromAddress(String address);
@@ -4474,6 +4488,51 @@ WHERE email_from_address IN ($placeholderClause)
 
   @override
   Future<void> updateChat(Chat chat) => chatsAccessor.updateOne(chat);
+
+  @override
+  Future<void> updateConversationIndexChatMeta({
+    required String jid,
+    required DateTime lastChangeTimestamp,
+    required bool muted,
+    required bool favorited,
+    required bool archived,
+    required String contactJid,
+  }) async {
+    await customUpdate(
+      '''
+UPDATE chats
+SET last_change_timestamp = CASE
+      WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN ?
+      ELSE last_change_timestamp
+    END,
+    muted = ?,
+    favorited = ?,
+    archived = ?,
+    contact_jid = ?
+WHERE jid = ?
+''',
+      variables: [
+        Variable<DateTime>(lastChangeTimestamp),
+        Variable<DateTime>(lastChangeTimestamp),
+        Variable<bool>(muted),
+        Variable<bool>(favorited),
+        Variable<bool>(archived),
+        Variable<String>(contactJid),
+        Variable<String>(jid),
+      ],
+      updates: {chats},
+    );
+  }
+
+  @override
+  Future<void> updateConversationIndexArchived({
+    required String jid,
+    required bool archived,
+  }) async {
+    await (update(chats)..where((tbl) => tbl.jid.equals(jid))).write(
+      ChatsCompanion(archived: Value(archived)),
+    );
+  }
 
   @override
   Future<void> repairChatSummaryPreservingTimestamp(String jid) async {

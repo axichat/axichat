@@ -71,16 +71,13 @@ class _NotificationRequestBody extends StatelessWidget {
             !displayMode.shouldShowFor(capability)) {
           return const SizedBox.shrink();
         }
-        final bool requiresRestart =
-            backgroundMessagingEnabled != state.foregroundServiceActive;
         final String? sublabel = switch ((
           backgroundMessagingEnabled,
-          requiresRestart,
+          state.foregroundServiceActive,
           state.hasPermissions,
         )) {
-          (_, true, _) => l10n.notificationsRequiresRestart,
-          (true, false, false) => l10n.notificationsRequiresRestart,
-          _ => null,
+          (true, true, true) => null,
+          (_, _, _) => l10n.notificationsRequiresRestart,
         };
 
         return ShadSwitch(

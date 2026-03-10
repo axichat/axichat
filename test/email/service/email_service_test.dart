@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/fire_and_forget.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -9,12 +10,14 @@ import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/sync/delta_event_consumer.dart';
 import 'package:axichat/src/email/transport/email_delta_transport.dart';
+import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/synthetic_reply.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:delta_ffi/delta_safe.dart';
-import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -78,6 +81,7 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(MessageTransport.xmpp);
+    registerFallbackValue(MessageNotificationChannel.chat);
     registerFallbackValue(<FutureOr<bool>>[]);
     registerFallbackValue(MessageTimelineFilter.directOnly);
     registerFallbackValue(<String, String>{});
@@ -109,6 +113,9 @@ void main() {
     notificationService = MockNotificationService();
     transport = MockEmailDeltaTransport();
     foregroundBridge = FakeForegroundBridge();
+    when(
+      () => notificationService.notificationPreviewsEnabled,
+    ).thenReturn(true);
 
     when(() => transport.addEventListener(any())).thenAnswer((invocation) {
       listener =
@@ -173,6 +180,7 @@ void main() {
         shareId: any(named: 'shareId'),
         localBodyOverride: any(named: 'localBodyOverride'),
         htmlBody: any(named: 'htmlBody'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: any(named: 'accountId'),
       ),
     ).thenAnswer((_) async => 1);
@@ -184,6 +192,7 @@ void main() {
         shareId: any(named: 'shareId'),
         captionOverride: any(named: 'captionOverride'),
         htmlCaption: any(named: 'htmlCaption'),
+        quotingStanzaId: any(named: 'quotingStanzaId'),
         accountId: any(named: 'accountId'),
       ),
     ).thenAnswer((_) async => 1);
@@ -253,6 +262,12 @@ void main() {
         accountId: any(named: 'accountId'),
       ),
     ).thenAnswer((_) async => null);
+    when(
+      () => database.getMessageByDeltaId(
+        any(),
+        deltaAccountId: any(named: 'deltaAccountId'),
+      ),
+    ).thenAnswer((_) async => null);
     when(() => database.getChat(any())).thenAnswer((_) async => null);
     when(
       () => notificationService.sendNotification(
@@ -261,6 +276,23 @@ void main() {
         extraConditions: any(named: 'extraConditions'),
         allowForeground: any(named: 'allowForeground'),
         payload: any(named: 'payload'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
+      () => notificationService.sendMessageNotification(
+        title: any(named: 'title'),
+        body: any(named: 'body'),
+        senderName: any(named: 'senderName'),
+        senderKey: any(named: 'senderKey'),
+        conversationTitle: any(named: 'conversationTitle'),
+        sentAt: any(named: 'sentAt'),
+        isGroupConversation: any(named: 'isGroupConversation'),
+        extraConditions: any(named: 'extraConditions'),
+        allowForeground: any(named: 'allowForeground'),
+        payload: any(named: 'payload'),
+        threadKey: any(named: 'threadKey'),
+        showPreviewOverride: any(named: 'showPreviewOverride'),
+        channel: any(named: 'channel'),
       ),
     ).thenAnswer((_) async {});
   });
@@ -306,7 +338,7 @@ void main() {
 
       listener(
         DeltaCoreEvent(
-          type: DeltaEventType.msgsChanged.code,
+          type: DeltaEventType.incomingMsg.code,
           data1: chatId,
           data2: msgId,
         ),
@@ -334,12 +366,20 @@ void main() {
       await pumpMicrotasks();
 
       verify(
-        () => notificationService.sendNotification(
-          title: chat.title,
+        () => notificationService.sendMessageNotification(
+          title: chat.displayName,
           body: message.body,
+          senderName: chat.displayName,
+          senderKey: message.senderJid,
+          conversationTitle: chat.displayName,
+          sentAt: message.timestamp,
+          isGroupConversation: false,
           extraConditions: any(named: 'extraConditions'),
           allowForeground: any(named: 'allowForeground'),
-          payload: chat.jid,
+          payload: any(named: 'payload'),
+          threadKey: any(named: 'threadKey'),
+          showPreviewOverride: true,
+          channel: MessageNotificationChannel.email,
         ),
       ).called(1);
 
@@ -349,73 +389,79 @@ void main() {
 
   test(
     'flushes pending notifications after debounce when no bunch arrives',
-    () {
-      fakeAsync((async) {
-        const chatId = 9;
-        const msgId = 77;
-        final message = Message(
-          stanzaID: 'dc-msg-$msgId',
-          senderJid: 'peer@axi.im',
-          chatJid: 'dc-$chatId@delta.chat',
-          timestamp: DateTime.now(),
-          body: 'Queued hello',
-          encryptionProtocol: EncryptionProtocol.none,
-        );
-        final chat = Chat(
-          jid: 'dc-$chatId@delta.chat',
-          title: 'Peer',
-          type: ChatType.chat,
-          lastChangeTimestamp: DateTime.now(),
-          deltaChatId: chatId,
-          emailAddress: 'peer@example.com',
-        );
-        when(
-          () => database.getMessageByStanzaID('dc-msg-$msgId'),
-        ).thenAnswer((_) async => message);
-        when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+    () async {
+      const chatId = 9;
+      const msgId = 77;
+      final message = Message(
+        stanzaID: 'dc-msg-$msgId',
+        senderJid: 'peer@axi.im',
+        chatJid: 'dc-$chatId@delta.chat',
+        timestamp: DateTime.now(),
+        body: 'Queued hello',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final chat = Chat(
+        jid: 'dc-$chatId@delta.chat',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: chatId,
+        emailAddress: 'peer@example.com',
+      );
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => message);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
 
-        final service = EmailService(
-          credentialStore: credentialStore,
-          databaseBuilder: () async => database,
-          transport: transport,
-          notificationService: notificationService,
-          foregroundBridge: foregroundBridge,
-        );
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
 
-        listener(
-          DeltaCoreEvent(
-            type: DeltaEventType.msgsChanged.code,
-            data1: chatId,
-            data2: msgId,
-          ),
-        );
+      addTearDown(service.shutdown);
 
-        async.flushMicrotasks();
-        verifyNever(
-          () => notificationService.sendNotification(
-            title: any(named: 'title'),
-            body: any(named: 'body'),
-            extraConditions: any(named: 'extraConditions'),
-            allowForeground: any(named: 'allowForeground'),
-            payload: any(named: 'payload'),
-          ),
-        );
+      listener(
+        DeltaCoreEvent(
+          type: DeltaEventType.incomingMsg.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
 
-        async.elapse(const Duration(milliseconds: 600));
-        async.flushMicrotasks();
+      await pumpMicrotasks();
+      verifyNever(
+        () => notificationService.sendNotification(
+          title: any(named: 'title'),
+          body: any(named: 'body'),
+          extraConditions: any(named: 'extraConditions'),
+          allowForeground: any(named: 'allowForeground'),
+          payload: any(named: 'payload'),
+        ),
+      );
 
-        verify(
-          () => notificationService.sendNotification(
-            title: chat.title,
-            body: message.body,
-            extraConditions: any(named: 'extraConditions'),
-            allowForeground: any(named: 'allowForeground'),
-            payload: chat.jid,
-          ),
-        ).called(1);
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      await pumpMicrotasks();
 
-        addTearDown(service.shutdown);
-      });
+      verify(
+        () => notificationService.sendMessageNotification(
+          title: chat.displayName,
+          body: message.body,
+          senderName: chat.displayName,
+          senderKey: message.senderJid,
+          conversationTitle: chat.displayName,
+          sentAt: message.timestamp,
+          isGroupConversation: false,
+          extraConditions: any(named: 'extraConditions'),
+          allowForeground: any(named: 'allowForeground'),
+          payload: any(named: 'payload'),
+          threadKey: any(named: 'threadKey'),
+          showPreviewOverride: true,
+          channel: MessageNotificationChannel.email,
+        ),
+      ).called(1);
     },
   );
 
@@ -1104,6 +1150,67 @@ void main() {
   });
 
   test(
+    'working connectivity does not downgrade a ready sync state after grace',
+    () async {
+      when(() => credentialStore.read(key: any(named: 'key'))).thenAnswer((
+        invocation,
+      ) async {
+        final key = invocation.namedArguments[#key] as RegisteredCredentialKey;
+        if (key.value.contains('email_bootstrap_v1')) {
+          return 'true';
+        }
+        return null;
+      });
+
+      var connectivityCalls = 0;
+      when(() => transport.connectivity()).thenAnswer((_) async {
+        connectivityCalls++;
+        if (connectivityCalls == 1) {
+          return 1000;
+        }
+        return 3000;
+      });
+
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      try {
+        await service.ensureProvisioned(
+          displayName: 'Bob',
+          databasePrefix: 'bob',
+          databasePassphrase: 'secret',
+          jid: 'bob@axi.im',
+          passwordOverride: 'password',
+        );
+        expect(service.syncState.status, EmailSyncStatus.ready);
+
+        listener(
+          DeltaCoreEvent(
+            type: DeltaEventType.connectivityChanged.code,
+            data1: 0,
+            data2: 0,
+          ),
+        );
+        await pumpMicrotasks();
+        expect(service.syncState.status, EmailSyncStatus.ready);
+
+        await Future<void>.delayed(const Duration(milliseconds: 2300));
+        await pumpMicrotasks();
+
+        expect(service.syncState.status, EmailSyncStatus.ready);
+        expect(connectivityCalls, greaterThanOrEqualTo(2));
+      } finally {
+        await service.shutdown(jid: 'bob@axi.im');
+      }
+    },
+  );
+
+  test(
     'reconnect restart reattaches listener and reruns recovery after offline restart',
     () async {
       final service = EmailService(
@@ -1533,6 +1640,98 @@ void main() {
         () => transport.ensureChatForAddress(
           address: 'peer@example.com',
           displayName: 'Peer',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'sendReply synthesizes a visible reply for non-delta quoted messages',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 88);
+      when(
+        () => database.createMessageShare(
+          share: any(named: 'share'),
+          participants: any(named: 'participants'),
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.assignShareOriginator(
+          shareId: any(named: 'shareId'),
+          originatorDcMsgId: any(named: 'originatorDcMsgId'),
+        ),
+      ).thenAnswer((_) async {});
+
+      final chat = Chat(
+        jid: 'peer@axi.im',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+      final quotedMessage = Message(
+        stanzaID: 'quoted-xmpp-stanza',
+        senderJid: 'peer@axi.im',
+        chatJid: chat.jid,
+        body: ChatSubjectCodec.composeXmppBody(
+          body: 'Original body',
+          subject: 'Original subject',
+        ),
+        timestamp: DateTime.now(),
+      );
+      final syntheticReply = syntheticReplyEnvelope(
+        body: 'Reply body',
+        subject: null,
+        quotedSubject: 'Original subject',
+        quotedBody: 'Original body',
+        quotedSenderLabel: 'peer@axi.im',
+      );
+
+      await service.sendReply(
+        chat: chat,
+        body: 'Reply body',
+        quotedMessage: quotedMessage,
+      );
+
+      verify(
+        () => transport.sendText(
+          chatId: 88,
+          body: syntheticReply.body,
+          subject: syntheticReply.subject,
+          shareId: any(named: 'shareId'),
+          localBodyOverride: syntheticReply.body,
+          htmlBody: HtmlContentCodec.fromPlainText(syntheticReply.body),
+          quotingStanzaId: 'quoted-xmpp-stanza',
           accountId: DeltaAccountDefaults.legacyId,
         ),
       ).called(1);
