@@ -16,7 +16,7 @@
 
     <application
         android:label="@string/app_name"
-        android:name=".AxiApplication"
+        android:name="${applicationName}"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -67,10 +67,6 @@
             android:foregroundServiceType="dataSync|remoteMessaging"
             android:exported="false"
             android:stopWithTask="false" />
-        <service
-            android:name=".TaskRemovedWatcherService"
-            android:exported="false"
-            android:stopWithTask="true" />
         <meta-data
             android:name="im.axi.axichat.APP_ICON"
             android:resource="@mipmap/ic_launcher" />
