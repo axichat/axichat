@@ -12,6 +12,7 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -249,8 +250,9 @@ class EmailService {
   static const String _connectionOverrideClearedValue = '';
   static const String _showEmailsConfigKey = 'show_emails';
   static const String _showEmailsAllValue = '2';
-  static const String _fetchExistingMessagesConfigKey = 'fetch_existing_msgs';
-  static const String _fetchExistingMessagesRecentValue = '1';
+  static const String _systemConfigKeysConfigKey = 'sys.config_keys';
+  static const String _emailProvisioningBuildMarker =
+      'email-prov-20260309-1329';
   static const String _mdnsEnabledConfigKey = 'mdns_enabled';
   static const String _mdnsEnabledValue = '1';
   static const String _mailServerConfigKey = 'mail_server';
@@ -534,15 +536,14 @@ class EmailService {
   Map<String, String> _buildConnectionConfig(String address) =>
       _connectionConfigBuilder(address, _endpointConfig);
 
-  Map<String, String> _buildProvisioningOverrides(String address) =>
-      Map<String, String>.of(_buildConnectionConfig(address))
-        ..[_fetchExistingMessagesConfigKey] = _fetchExistingMessagesRecentValue;
-
   Map<String, String> _buildConfigureAccountOverrides({
     required String address,
     required String password,
-  }) =>
-      _buildProvisioningOverrides(address)..[_sendPasswordConfigKey] = password;
+  }) {
+    final overrides = Map<String, String>.of(_buildConnectionConfig(address));
+    overrides[_sendPasswordConfigKey] = password;
+    return overrides;
+  }
 
   bool _hasConnectionOverrides(Map<String, String> connectionOverrides) =>
       _connectionOverrideConfigKeys.any(connectionOverrides.containsKey);
@@ -770,6 +771,10 @@ class EmailService {
     String? addressOverride,
     bool persistCredentials = true,
   }) async {
+    _log.warning(
+      'Email provisioning marker $_emailProvisioningBuildMarker '
+      'entered ensureProvisioned for $jid',
+    );
     final scope = _scopeForJid(jid);
     final needsInit =
         _databasePrefix != databasePrefix ||
@@ -915,6 +920,36 @@ class EmailService {
     }
 
     final needsProvisioning = !alreadyProvisioned;
+    String? supportedConfigKeys;
+    try {
+      supportedConfigKeys = await _transport.getCoreConfig(
+        _systemConfigKeysConfigKey,
+        accountId: deltaAccountId,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.fine(
+        'Failed to read Delta advertised config keys during provisioning.',
+        error,
+        stackTrace,
+      );
+    }
+    _log.warning(
+      'Email provisioning decision: '
+      'accountId=$deltaAccountId '
+      'transportConfigured=$transportConfigured '
+      'requiresReconfigure=$requiresReconfigure '
+      'needsProvisioning=$needsProvisioning '
+      'advertisedConfigKeys=${supportedConfigKeys ?? '<unavailable>'}',
+    );
+    // ignore: avoid_print
+    print(
+      'AXI-EMAIL Email provisioning decision: '
+      'accountId=$deltaAccountId '
+      'transportConfigured=$transportConfigured '
+      'requiresReconfigure=$requiresReconfigure '
+      'needsProvisioning=$needsProvisioning '
+      'advertisedConfigKeys=${supportedConfigKeys ?? '<unavailable>'}',
+    );
     final pausedForProvisioning = needsProvisioning && _acceptsRuntimeWork;
     if (pausedForProvisioning) {
       await stop();
@@ -929,7 +964,7 @@ class EmailService {
     if (needsProvisioning) {
       _log.info('Configuring email account credentials');
       try {
-        final configureOverrides = _buildProvisioningOverrides(address);
+        final configureOverrides = _buildConnectionConfig(address);
         await _transport.configureAccount(
           address: address,
           password: password!,
@@ -979,7 +1014,7 @@ class EmailService {
         );
         final errorType = error.runtimeType;
         _log.warning(
-          'Failed to configure email account ($errorType)',
+          'Failed to configure email account ($errorType): ${error.message}',
           null,
           stackTrace,
         );
@@ -1022,6 +1057,10 @@ class EmailService {
       deltaAccountId: deltaAccountId,
     );
     await start();
+    _log.warning(
+      'Email provisioning marker $_emailProvisioningBuildMarker '
+      'before IMAP capability refresh for $jid',
+    );
     await _refreshImapCapabilities(force: true);
     await _applyPendingPushToken();
 
@@ -1908,7 +1947,9 @@ class EmailService {
   }
 
   String? _normalizeSubject(String? subject) {
-    return sanitizeEmailHeaderValue(subject);
+    return sanitizeEmailHeaderValue(
+      stripSyntheticForwardSubjectMarker(subject),
+    );
   }
 
   String? _normalizeReplySubject({
@@ -3515,7 +3556,6 @@ class EmailService {
   }
 
   Future<EmailImapCapabilities> _resolveImapCapabilities() async {
-    await _ensureReady();
     final idleFlag = await _readImapConfigBool(_imapIdleConfigKey);
     final idleTimeout = await _readImapConfigInt(_imapIdleTimeoutConfigKey);
     final maxConnections = await _readImapConfigInt(
@@ -4414,7 +4454,7 @@ class EmailService {
       );
       final errorType = error.runtimeType;
       _log.warning(
-        'Failed to configure email account ($errorType)',
+        'Failed to configure email account ($errorType): ${error.message}',
         null,
         stackTrace,
       );

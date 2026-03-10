@@ -38,6 +38,7 @@ const _deltaConfigKeySendServer = 'send_server';
 const _deltaConfigKeySendPort = 'send_port';
 const _deltaConfigKeySendSecurity = 'send_security';
 const _deltaConfigKeySendUser = 'send_user';
+const _deltaConfigKeySystemConfigKeys = 'sys.config_keys';
 const String _deltaSecurityModeAutomatic = 'automatic';
 const String _deltaSecurityModeAuto = 'auto';
 const String _deltaSecurityModeSsl = 'ssl';
@@ -76,8 +77,24 @@ const Duration _originIdHydrationDelay = Duration(
 const String _pendingOutgoingStanzaPrefix = 'dc-pending';
 const String _pendingOutgoingStanzaSeparator = '-';
 const bool _defaultScheduleAccountHydration = true;
+const Set<String> _deltaSensitiveConfigKeys = <String>{
+  _deltaConfigKeyMailPassword,
+  _deltaConfigKeySendPassword,
+};
 
 enum _DeltaSecurityModeResolution { auto, ssl, startTls, plain, unknown }
+
+Map<String, String> _sanitizeDeltaConfigForLog(Map<String, String> config) {
+  final sanitized = <String, String>{};
+  final sortedKeys = config.keys.toList()..sort();
+  for (final key in sortedKeys) {
+    final normalized = key.trim().toLowerCase();
+    sanitized[key] = _deltaSensitiveConfigKeys.contains(normalized)
+        ? '<redacted>'
+        : config[key] ?? '';
+  }
+  return sanitized;
+}
 
 const _deltaCredentialConfigKeys = <String>[
   _deltaConfigKeyAddress,
@@ -330,44 +347,58 @@ class EmailDeltaTransport implements ChatTransport {
     _primaryAccountId ??= resolvedAccountId;
     final context = session.context;
     final overrideKeys = additional.keys.toSet();
-    for (final key in _deltaOverrideConfigKeys) {
-      if (!overrideKeys.contains(key)) {
-        await context.setConfig(key: key, value: _deltaConfigClearedValue);
-      }
-    }
+    final configureLogConfig = _sanitizeDeltaConfigForLog(<String, String>{
+      _deltaConfigKeyAddress: address,
+      _deltaConfigKeyDisplayName: displayName,
+      ...additional,
+    });
+    _log.warning(
+      'Delta configure start. accountId=$resolvedAccountId '
+      'config=$configureLogConfig',
+    );
+    // ignore: avoid_print
+    print(
+      'AXI-EMAIL Delta configure start. accountId=$resolvedAccountId '
+      'config=$configureLogConfig',
+    );
     final completer = Completer<void>();
-    late final StreamSubscription<DeltaCoreEvent> subscription;
-    subscription = context.events().listen((event) {
-      final eventType = DeltaEventType.fromCode(event.type);
-      if (eventType == null) {
-        return;
+    StreamSubscription<DeltaCoreEvent>? subscription;
+    try {
+      for (final key in _deltaOverrideConfigKeys) {
+        if (!overrideKeys.contains(key)) {
+          await context.setConfig(key: key, value: _deltaConfigClearedValue);
+        }
       }
-      if (completer.isCompleted) {
-        return;
-      }
-      if (eventType == DeltaEventType.configureProgress) {
-        if (event.data1 == 1000) {
-          completer.complete();
-        } else if (event.data1 == 0) {
+      subscription = context.events().listen((event) {
+        final eventType = DeltaEventType.fromCode(event.type);
+        if (eventType == null) {
+          return;
+        }
+        if (completer.isCompleted) {
+          return;
+        }
+        if (eventType == DeltaEventType.configureProgress) {
+          if (event.data1 == 1000) {
+            completer.complete();
+          } else if (event.data1 == 0) {
+            completer.completeError(
+              DeltaSafeException(
+                event.data2Text ?? 'Failed to configure email account',
+              ),
+            );
+          }
+          return;
+        }
+        if (eventType == DeltaEventType.error) {
           completer.completeError(
             DeltaSafeException(
-              event.data2Text ?? 'Failed to configure email account',
+              event.data2Text ??
+                  event.data1Text ??
+                  'Failed to configure email account',
             ),
           );
         }
-        return;
-      }
-      if (eventType == DeltaEventType.error) {
-        completer.completeError(
-          DeltaSafeException(
-            event.data2Text ??
-                event.data1Text ??
-                'Failed to configure email account',
-          ),
-        );
-      }
-    });
-    try {
+      });
       await context.configureAccount(
         address: address,
         password: password,
@@ -381,8 +412,30 @@ class EmailDeltaTransport implements ChatTransport {
         },
       );
       await _enforceTransportSecurity(context: context);
+    } on DeltaSafeException catch (error, stackTrace) {
+      String? supportedConfigKeys;
+      try {
+        supportedConfigKeys = await context.getConfig(
+          _deltaConfigKeySystemConfigKeys,
+        );
+      } on Exception catch (configError, configStackTrace) {
+        _log.fine(
+          'Failed to read Delta config keys after configure failure.',
+          configError,
+          configStackTrace,
+        );
+      }
+      _log.warning(
+        'Delta configure failed. accountId=$resolvedAccountId '
+        'message=${error.message} '
+        'config=$configureLogConfig '
+        'supportedKeys=${supportedConfigKeys ?? '<unavailable>'}',
+        null,
+        stackTrace,
+      );
+      rethrow;
     } finally {
-      await subscription.cancel();
+      await subscription?.cancel();
     }
   }
 
@@ -1958,13 +2011,14 @@ class EmailDeltaTransport implements ChatTransport {
     required DeltaChat? remote,
     String? emailFromAddress,
   }) {
+    final emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
     final emailAddress = _normalizedAddress(remote?.contactAddress, chatId);
     final title = remote?.name ?? remote?.contactName ?? emailAddress;
     return Chat(
       jid: emailAddress,
       title: title,
       type: _mapChatType(remote?.type),
-      lastChangeTimestamp: DateTime.timestamp(),
+      lastChangeTimestamp: emptyTimestamp,
       encryptionProtocol: EncryptionProtocol.none,
       contactDisplayName: remote?.contactName ?? remote?.name ?? emailAddress,
       contactID: emailAddress,

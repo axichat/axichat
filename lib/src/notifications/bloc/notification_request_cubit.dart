@@ -116,6 +116,13 @@ class NotificationRequestCubit extends Cubit<NotificationRequestState> {
     return foregroundServiceActive.value;
   }
 
+  void disableForegroundService() {
+    if (!foregroundServiceActive.value) {
+      return;
+    }
+    foregroundServiceActive.value = false;
+  }
+
   void _handleForegroundServiceChanged() {
     emit(
       state.copyWith(foregroundServiceActive: foregroundServiceActive.value),

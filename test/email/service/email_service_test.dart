@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/fire_and_forget.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
@@ -151,6 +152,9 @@ void main() {
     ).thenAnswer((_) async => true);
     when(() => transport.bootstrapFromCore()).thenAnswer((_) async => true);
     when(() => transport.registerPushToken(any())).thenAnswer((_) async {});
+    when(
+      () => transport.getCoreConfig(any(), accountId: any(named: 'accountId')),
+    ).thenAnswer((_) async => null);
     when(() => transport.getCoreConfig(any())).thenAnswer((_) async => null);
     when(
       () => transport.setCoreConfig(
@@ -470,7 +474,6 @@ void main() {
     expect(
       capturedAdditional,
       equals({
-        'fetch_existing_msgs': '1',
         'show_emails': '2',
         'mdns_enabled': '1',
         'mail_server': 'axi.im',
@@ -936,8 +939,6 @@ void main() {
       expect(currentAccount!.password, 'new-password');
       expect(service.syncState.status, EmailSyncStatus.recovering);
       expect(capturedConfigurePayloads, hasLength(2));
-      expect(capturedConfigurePayloads.first['fetch_existing_msgs'], '1');
-      expect(capturedConfigurePayloads.last['fetch_existing_msgs'], '1');
       expect(capturedConfigurePayloads.last['send_pw'], 'new-password');
       expect(
         foregroundBridge.sent,
@@ -1532,6 +1533,89 @@ void main() {
         () => transport.ensureChatForAddress(
           address: 'peer@example.com',
           displayName: 'Peer',
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).called(1);
+
+      addTearDown(service.shutdown);
+    },
+  );
+
+  test(
+    'sendReply strips the legacy synthetic forward subject marker',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.ensureProvisioned(
+        displayName: 'Alice',
+        databasePrefix: 'alice',
+        databasePassphrase: 'passphrase',
+        jid: 'alice@example.org',
+        passwordOverride: 'password',
+      );
+
+      when(
+        () => transport.isConfigured(accountId: any(named: 'accountId')),
+      ).thenAnswer((_) async => true);
+      when(
+        () => transport.ensureChatForAddress(
+          address: any(named: 'address'),
+          displayName: any(named: 'displayName'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 88);
+      when(
+        () => transport.sendTextWithQuote(
+          chatId: any(named: 'chatId'),
+          body: any(named: 'body'),
+          quotedMessageId: any(named: 'quotedMessageId'),
+          quotedStanzaId: any(named: 'quotedStanzaId'),
+          subject: any(named: 'subject'),
+          htmlBody: any(named: 'htmlBody'),
+          accountId: any(named: 'accountId'),
+        ),
+      ).thenAnswer((_) async => 1);
+
+      final chat = Chat(
+        jid: 'peer@axi.im',
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.now(),
+        deltaChatId: 88,
+        emailAddress: 'peer@example.com',
+        emailFromAddress: 'alice@example.org',
+      );
+      final quotedMessage = Message(
+        stanzaID: 'quoted-stanza',
+        senderJid: 'peer@axi.im',
+        chatJid: chat.jid,
+        body: 'Forwarded content',
+        timestamp: DateTime.now(),
+        deltaMsgId: 77,
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        subject: markSyntheticForwardSubject('FWD: peer@axi.im'),
+      );
+
+      await service.sendReply(
+        chat: chat,
+        body: 'Reply body',
+        quotedMessage: quotedMessage,
+      );
+
+      verify(
+        () => transport.sendTextWithQuote(
+          chatId: 88,
+          body: 'Reply body',
+          quotedMessageId: 77,
+          quotedStanzaId: 'quoted-stanza',
+          subject: 'Re: FWD: peer@axi.im',
+          htmlBody: any(named: 'htmlBody'),
           accountId: DeltaAccountDefaults.legacyId,
         ),
       ).called(1);

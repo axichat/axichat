@@ -65,6 +65,7 @@ import 'package:axichat/src/common/message_error_l10n.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/axi_input.dart';
 import 'package:axichat/src/common/ui/context_action_button.dart';
@@ -80,6 +81,7 @@ import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
+import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
@@ -124,12 +126,40 @@ extension on MessageStatus {
   };
 }
 
-({String? subject, String body}) _displaySubjectAndBody(Message message) {
+bool _isEmailBackedMessage(Message message) =>
+    message.deltaChatId != null || message.deltaMsgId != null;
+
+({String? subject, String body}) _displaySubjectAndBody(
+  Message message, {
+  required bool isEmailMessage,
+}) {
+  if (isEmailMessage) {
+    return ChatSubjectCodec.splitEmailBody(
+      body: message.body,
+      subject: message.subject,
+    );
+  }
   return ChatSubjectCodec.splitDisplayBody(
     body: message.body,
     subject: message.subject,
   );
 }
+
+String? _previewTextForMessage(Message message) {
+  if (_isEmailBackedMessage(message)) {
+    return ChatSubjectCodec.previewEmailText(
+      body: message.body,
+      subject: message.subject,
+    );
+  }
+  return ChatSubjectCodec.previewText(
+    body: message.body,
+    subject: message.subject,
+  );
+}
+
+BorderRadius _bubbleBaseRadius(BuildContext context) =>
+    BorderRadius.circular(context.radii.squircle);
 
 EdgeInsets _bubblePadding(BuildContext context) => EdgeInsets.symmetric(
   horizontal: context.spacing.s,
@@ -1821,6 +1851,17 @@ class _ChatState extends State<Chat> {
     return null;
   }
 
+  bool _isRoomBootstrapInProgress(ChatState state) {
+    if (state.xmppConnectionState != ConnectionState.connected) {
+      return false;
+    }
+    final roomState = state.roomState;
+    if (roomState == null) {
+      return true;
+    }
+    return roomState.isBootstrapPending;
+  }
+
   CalendarAvailabilityMessage? _validatedAvailabilityMessage({
     required Message message,
     required RoomState? roomState,
@@ -2238,11 +2279,14 @@ class _ChatState extends State<Chat> {
       return;
     }
     final l10n = context.l10n;
+    final successLabel = chat.displayName.trim().isNotEmpty
+        ? chat.displayName.trim()
+        : chat.remoteJid.trim();
     context.read<ChatBloc>().add(
       ChatContactAddRequested(
         chat: chat,
-        successTitle: l10n.rosterAddTitle,
-        failureTitle: l10n.rosterAddTitle,
+        successMessage: l10n.rosterAddedToContacts(successLabel),
+        failureMessage: l10n.attachmentGalleryRosterErrorTitle,
       ),
     );
   }
@@ -4261,6 +4305,8 @@ class _ChatState extends State<Chat> {
                 currentUserId: currentUserId,
                 roomState: state.roomState,
               );
+              final roomBootstrapInProgress =
+                  isGroupChat && _isRoomBootstrapInProgress(state);
               final shareContexts = state.shareContexts;
               final shareReplies = state.shareReplies;
               final recipients = _recipients;
@@ -5197,9 +5243,38 @@ class _ChatState extends State<Chat> {
                                           showSubjectHeader = true;
                                         }
                                       } else {
-                                        final split = _displaySubjectAndBody(e);
+                                        final split = _displaySubjectAndBody(
+                                          e,
+                                          isEmailMessage: isEmailMessage,
+                                        );
                                         subjectLabel = split.subject;
                                         bodyText = split.body;
+                                      }
+                                      final rawSubjectLabel = subjectLabel;
+                                      final rawBodyText = bodyText;
+                                      final deltaMessageId = e.deltaMsgId;
+                                      final resolvedForwardHtml =
+                                          deltaMessageId == null
+                                          ? e.htmlBody
+                                          : state.emailFullHtmlByDeltaId[deltaMessageId] ??
+                                                e.htmlBody;
+                                      final forwardedSubjectSenderLabel =
+                                          syntheticForwardDisplaySenderLabel(
+                                            subjectLabel: rawSubjectLabel,
+                                            emailMarkerPresent:
+                                                isEmailMessage &&
+                                                hasSyntheticForwardHtmlMarker(
+                                                  html: resolvedForwardHtml,
+                                                ),
+                                          );
+                                      if (forwardedSubjectSenderLabel != null) {
+                                        final forwardedContent =
+                                            splitSyntheticForwardBody(bodyText);
+                                        subjectLabel = forwardedContent.subject;
+                                        bodyText = forwardedContent.body;
+                                        showSubjectHeader =
+                                            subjectLabel?.trim().isNotEmpty ==
+                                            true;
                                       }
                                       if (isEmailMessage) {
                                         final trimmedSubject = subjectLabel
@@ -5226,10 +5301,11 @@ class _ChatState extends State<Chat> {
                                           subjectLabel?.trim() ?? '';
                                       final bodyTextTrimmed = bodyText.trim();
                                       final isForwardedMessage =
+                                          forwardedSubjectSenderLabel != null ||
                                           _looksForwardedMessage(
                                             message: e,
-                                            bodyText: bodyText,
-                                            subjectLabel: subjectLabel,
+                                            bodyText: rawBodyText,
+                                            subjectLabel: rawSubjectLabel,
                                           );
                                       final isSubjectOnlyBody =
                                           showSubjectHeader &&
@@ -5373,6 +5449,8 @@ class _ChatState extends State<Chat> {
                                           'forwarded': isForwardedMessage,
                                           'forwardedFromJid':
                                               e.forwardedFromJid,
+                                          'forwardedSubjectSenderLabel':
+                                              forwardedSubjectSenderLabel,
                                           'isEmailMessage': isEmailMessage,
                                           'inviteRoom': inviteRoom,
                                           'inviteRoomName': inviteRoomName,
@@ -5693,7 +5771,9 @@ class _ChatState extends State<Chat> {
                                           key: const ValueKey<String>(
                                             'inline-composer',
                                           ),
-                                          enabled: !isWelcomeChat,
+                                          enabled:
+                                              !isWelcomeChat &&
+                                              !roomBootstrapInProgress,
                                           hintText: composerHintText,
                                           recipients: recipients,
                                           availableChats: availableChats,
@@ -5796,6 +5876,10 @@ class _ChatState extends State<Chat> {
                                           duration: animationDuration,
                                           child: composerChild,
                                         );
+                                        if (roomBootstrapInProgress) {
+                                          composerOverlayBanner =
+                                              const _RoomBootstrapComposerBanner();
+                                        }
                                       }
                                     }
                                     composerOverlayBanner ??=
@@ -6140,8 +6224,9 @@ class _ChatState extends State<Chat> {
                                                                         next,
                                                                       );
                                                                   final bubbleBaseRadius =
-                                                                      context
-                                                                          .radius;
+                                                                      _bubbleBaseRadius(
+                                                                        context,
+                                                                      );
                                                                   final bubbleCornerClearance =
                                                                       _bubbleCornerClearance(
                                                                         bubbleBaseRadius,
@@ -6463,6 +6548,9 @@ class _ChatState extends State<Chat> {
                                                                       (message.customProperties?['forwarded']
                                                                           as bool?) ??
                                                                       false;
+                                                                  final forwardedSubjectSenderLabel =
+                                                                      message.customProperties?['forwardedSubjectSenderLabel']
+                                                                          as String?;
                                                                   final forwardedFromJid =
                                                                       message.customProperties?['forwardedFromJid']
                                                                           as String?;
@@ -6904,9 +6992,22 @@ class _ChatState extends State<Chat> {
                                                                         : inviteLabel;
                                                                     final String
                                                                     inviteCardDetail =
-                                                                        inviteActionEnabled
-                                                                        ? inviteActionLabel
+                                                                        inviteRoom
+                                                                            .isNotEmpty
+                                                                        ? inviteRoom
                                                                         : inviteLabel;
+                                                                    final OutlinedBorder
+                                                                    inviteCardShape = _attachmentSurfaceShape(
+                                                                      context:
+                                                                          context,
+                                                                      isSelf:
+                                                                          self,
+                                                                      chainedPrevious:
+                                                                          bubbleTextChildren
+                                                                              .isNotEmpty,
+                                                                      chainedNext:
+                                                                          false,
+                                                                    );
                                                                     bubbleTextChildren.add(
                                                                       DynamicInlineText(
                                                                         key: ValueKey(
@@ -6929,6 +7030,8 @@ class _ChatState extends State<Chat> {
                                                                     );
                                                                     addExtra(
                                                                       _InviteAttachmentCard(
+                                                                        shape:
+                                                                            inviteCardShape,
                                                                         enabled:
                                                                             inviteActionEnabled,
                                                                         label:
@@ -6945,14 +7048,8 @@ class _ChatState extends State<Chat> {
                                                                               selfXmppJid,
                                                                         ),
                                                                       ),
-                                                                      shape: ContinuousRectangleBorder(
-                                                                        borderRadius: BorderRadius.all(
-                                                                          Radius.circular(
-                                                                            context.spacing.m +
-                                                                                context.spacing.xs,
-                                                                          ),
-                                                                        ),
-                                                                      ),
+                                                                      shape:
+                                                                          inviteCardShape,
                                                                       spacing: context
                                                                           .spacing
                                                                           .s,
@@ -7968,9 +8065,14 @@ class _ChatState extends State<Chat> {
                                                                     );
                                                                   }
                                                                   final bool
-                                                                  hasAttachmentExtras =
-                                                                      attachmentIds
-                                                                          .isNotEmpty;
+                                                                  hasBubbleExtras =
+                                                                      bubbleExtraChildren.any(
+                                                                        (
+                                                                          child,
+                                                                        ) =>
+                                                                            child
+                                                                                is _MessageExtraItem,
+                                                                      );
                                                                   final bubbleBorderRadius = _bubbleBorderRadius(
                                                                     baseRadius:
                                                                         bubbleBaseRadius,
@@ -7983,7 +8085,7 @@ class _ChatState extends State<Chat> {
                                                                     isSelected:
                                                                         isSelected,
                                                                     flattenBottom:
-                                                                        hasAttachmentExtras,
+                                                                        hasBubbleExtras,
                                                                   );
                                                                   final selectionAllowance =
                                                                       selectionOverlay !=
@@ -8766,26 +8868,32 @@ class _ChatState extends State<Chat> {
                                                                                 self,
                                                                           );
                                                                         }();
+                                                                  final resolvedForwardedSenderLabel = _forwardedSenderLabel(
+                                                                    forwardedFromJid:
+                                                                        forwardedFromJid,
+                                                                    fallbackSenderJid:
+                                                                        messageModel
+                                                                            .senderJid,
+                                                                    fallbackIsSelf:
+                                                                        self,
+                                                                    isGroupChat:
+                                                                        isGroupChat,
+                                                                    roomState: state
+                                                                        .roomState,
+                                                                    currentUserId:
+                                                                        currentUserId,
+                                                                    l10n: l10n,
+                                                                  );
                                                                   final Widget?
                                                                   forwardedPreview =
                                                                       isForwarded
                                                                       ? _ForwardedPreviewText(
-                                                                          senderLabel: _forwardedSenderLabel(
-                                                                            forwardedFromJid:
-                                                                                forwardedFromJid,
-                                                                            fallbackSenderJid:
-                                                                                messageModel.senderJid,
-                                                                            fallbackIsSelf:
-                                                                                self,
-                                                                            isGroupChat:
-                                                                                isGroupChat,
-                                                                            roomState:
-                                                                                state.roomState,
-                                                                            currentUserId:
-                                                                                currentUserId,
-                                                                            l10n:
-                                                                                l10n,
-                                                                          ),
+                                                                          senderLabel:
+                                                                              forwardedFromJid?.trim().isNotEmpty ==
+                                                                                  true
+                                                                              ? resolvedForwardedSenderLabel
+                                                                              : (forwardedSubjectSenderLabel ??
+                                                                                    resolvedForwardedSenderLabel),
                                                                           isSelf:
                                                                               self,
                                                                         )
@@ -9411,82 +9519,11 @@ class _ChatState extends State<Chat> {
     _toggleQuickReactionForMessages(messages, selected);
   }
 
-  bool _shouldPromptEmailForwarding({
-    required FanOutTarget target,
-    required List<Message> messages,
-  }) {
-    final targetChat = target.chat;
-    final isEmailTarget =
-        (targetChat?.supportsEmail ?? false) ||
-        ((target.transport ?? hintTransportForAddress(target.address))
-                ?.isEmail ??
-            false);
-    if (!isEmailTarget) {
-      return false;
-    }
-    return messages.any((message) => message.deltaMsgId != null);
-  }
-
-  Future<EmailForwardingMode?> _resolveForwardingMode({
-    required FanOutTarget target,
-    required List<Message> messages,
-  }) async {
-    if (!_shouldPromptEmailForwarding(target: target, messages: messages)) {
-      return EmailForwardingMode.original;
-    }
-    if (!mounted) return null;
-    return _showEmailForwardDialog();
-  }
-
-  Future<EmailForwardingMode?> _showEmailForwardDialog() async {
-    final l10n = context.l10n;
-    return showFadeScaleDialog<EmailForwardingMode>(
-      context: context,
-      builder: (dialogContext) => ShadDialog(
-        constraints: BoxConstraints(
-          maxWidth: dialogContext.sizing.dialogMaxWidth,
-        ),
-        title: Text(
-          l10n.chatForwardEmailWarningTitle,
-          style: dialogContext.modalHeaderTextStyle,
-        ),
-        actions: [
-          AxiButton(
-            variant: AxiButtonVariant.ghost,
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: Text(l10n.commonCancel),
-          ),
-          AxiButton.primary(
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(EmailForwardingMode.safe),
-            child: Text(l10n.chatForwardEmailOptionSafe),
-          ),
-          AxiButton(
-            variant: AxiButtonVariant.destructive,
-            onPressed: () =>
-                Navigator.of(dialogContext).pop(EmailForwardingMode.original),
-            child: Text(l10n.chatForwardEmailOptionOriginal),
-          ),
-        ],
-        child: Text(l10n.chatForwardEmailWarningMessage),
-      ),
-    );
-  }
-
   Future<void> _handleForward(Message message) async {
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
-    final forwardingMode = await _resolveForwardingMode(
-      target: target,
-      messages: [message],
-    );
-    if (!mounted || forwardingMode == null) return;
     context.read<ChatBloc>().add(
-      ChatMessageForwardRequested(
-        message: message,
-        target: target,
-        forwardingMode: forwardingMode,
-      ),
+      ChatMessageForwardRequested(message: message, target: target),
     );
   }
 
@@ -9803,18 +9840,9 @@ class _ChatState extends State<Chat> {
     final candidates = forwardable.toList();
     final target = await _selectForwardTarget();
     if (!mounted || target == null) return;
-    final forwardingMode = await _resolveForwardingMode(
-      target: target,
-      messages: candidates,
-    );
-    if (!mounted || forwardingMode == null) return;
     for (final message in candidates) {
       context.read<ChatBloc>().add(
-        ChatMessageForwardRequested(
-          message: message,
-          target: target,
-          forwardingMode: forwardingMode,
-        ),
+        ChatMessageForwardRequested(message: message, target: target),
       );
     }
   }
@@ -10569,10 +10597,15 @@ class _PinnedMessageTile extends StatelessWidget {
     required Message? message,
     required bool isSelf,
     required String? forwardedFromJid,
+    required String? forwardedSubjectSenderLabel,
   }) {
     final source = forwardedFromJid?.trim();
     if (source != null && source.isNotEmpty) {
       return source;
+    }
+    final subjectSender = forwardedSubjectSenderLabel?.trim();
+    if (subjectSender != null && subjectSender.isNotEmpty) {
+      return subjectSender;
     }
     if (isSelf) {
       return context.l10n.chatSenderYou;
@@ -10672,6 +10705,8 @@ class _PinnedMessageTile extends StatelessWidget {
         (previewProperties['reactions'] as List<ReactionPreview>?) ??
         const <ReactionPreview>[];
     final isForwarded = (previewProperties['forwarded'] as bool?) ?? false;
+    final forwardedSubjectSenderLabel =
+        previewProperties['forwardedSubjectSenderLabel'] as String?;
     final forwardedFromJid = previewProperties['forwardedFromJid'] as String?;
     final messageError =
         (previewProperties['error'] as MessageError?) ??
@@ -10912,6 +10947,12 @@ class _PinnedMessageTile extends StatelessWidget {
             _emptyText;
         final inviteRoom =
             (previewProperties['inviteRoom'] as String?)?.trim() ?? _emptyText;
+        final OutlinedBorder inviteCardShape = _attachmentSurfaceShape(
+          context: context,
+          isSelf: isSelf,
+          chainedPrevious: contentChildren.isNotEmpty,
+          chainedNext: false,
+        );
         contentChildren.add(
           _ParsedMessageBody(
             contentKey:
@@ -10926,6 +10967,7 @@ class _PinnedMessageTile extends StatelessWidget {
         );
         addExtra(
           _InviteAttachmentCard(
+            shape: inviteCardShape,
             enabled: false,
             label: inviteRoomName.isNotEmpty ? inviteRoomName : inviteLabel,
             detailLabel: inviteRoom.isNotEmpty ? inviteRoom : inviteLabel,
@@ -11219,6 +11261,7 @@ class _PinnedMessageTile extends StatelessWidget {
               message: effectiveMessage,
               isSelf: isSelf,
               forwardedFromJid: forwardedFromJid,
+              forwardedSubjectSenderLabel: forwardedSubjectSenderLabel,
             ),
             isSelf: isSelf,
           );
@@ -11235,7 +11278,7 @@ class _PinnedMessageTile extends StatelessWidget {
       backgroundColor: bubbleColor,
       borderColor: borderColor,
       borderRadius: _bubbleBorderRadius(
-        baseRadius: context.radius,
+        baseRadius: _bubbleBaseRadius(context),
         isSelf: isSelf,
         chainedPrevious: false,
         chainedNext: false,
@@ -11245,7 +11288,8 @@ class _PinnedMessageTile extends StatelessWidget {
       shadows: const <BoxShadow>[],
       bubbleWidthFraction: 1.0,
       cornerClearance:
-          _bubbleCornerClearance(context.radius) + reactionCornerClearance,
+          _bubbleCornerClearance(_bubbleBaseRadius(context)) +
+          reactionCornerClearance,
       body: Padding(
         padding: _bubblePadding(context),
         child: Column(
@@ -12404,6 +12448,7 @@ class _InviteAttachmentText extends StatelessWidget {
 
 class _InviteAttachmentCard extends StatelessWidget {
   const _InviteAttachmentCard({
+    required this.shape,
     required this.enabled,
     required this.label,
     required this.detailLabel,
@@ -12411,6 +12456,7 @@ class _InviteAttachmentCard extends StatelessWidget {
     required this.onPressed,
   });
 
+  final OutlinedBorder shape;
   final bool enabled;
   final String label;
   final String detailLabel;
@@ -12421,125 +12467,100 @@ class _InviteAttachmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    const labelMaxLines = 1;
-    const labelOverflow = TextOverflow.ellipsis;
-    const iconBackgroundAlpha = 0.15;
-    const actionButtonCount = 1;
-    final iconCornerRadius = spacing.m;
-    final cardCornerRadius = spacing.m;
+    final sizing = context.sizing;
     final padding = EdgeInsets.all(spacing.m);
-    final rowSpacing = spacing.m;
-    final detailSpacing = spacing.xs;
-    final actionSpacing = spacing.s;
-    final iconSize = spacing.m;
-    final iconWidth = spacing.l;
-    final iconHeight = spacing.xl;
-    final actionRowMinWidth =
-        (AxiIconButton.kTapTargetSize * actionButtonCount) +
-        (actionSpacing * (actionButtonCount - 1));
-    final inlineActionsMinWidth =
-        iconWidth + (rowSpacing * 2) + actionRowMinWidth;
+    final contentSpacing = spacing.s;
+    final headerSpacing = spacing.xs;
+    final accentWidth = spacing.xxs;
+    final leadingInset = sizing.menuItemIconSize + headerSpacing;
+    final Color accentColor = enabled ? colors.primary : colors.muted;
     final Color labelColor = enabled
         ? colors.foreground
         : colors.mutedForeground;
-    final Color iconColor = enabled
-        ? colors.foreground
-        : colors.mutedForeground;
+    final Color iconColor = enabled ? colors.primary : colors.mutedForeground;
     final String trimmedDetailLabel = detailLabel.trim();
-    final bool showDetailLabel = trimmedDetailLabel.isNotEmpty;
-    final Widget attachmentIcon = DecoratedBox(
-      decoration: ShapeDecoration(
-        color: colors.muted.withValues(alpha: iconBackgroundAlpha),
-        shape: SquircleBorder(
-          cornerRadius: iconCornerRadius,
-          side: BorderSide(color: colors.border),
+    final bool showDetailLabel =
+        trimmedDetailLabel.isNotEmpty && trimmedDetailLabel != label.trim();
+    return ClipPath(
+      clipper: ShapeBorderClipper(shape: shape),
+      clipBehavior: Clip.antiAlias,
+      child: DecoratedBox(
+        decoration: ShapeDecoration(
+          color: colors.card,
+          shape: shape.copyWith(side: BorderSide(color: colors.border)),
         ),
-      ),
-      child: SizedBox(
-        width: iconWidth,
-        height: iconHeight,
-        child: Center(
-          child: Icon(LucideIcons.userPlus, size: iconSize, color: iconColor),
-        ),
-      ),
-    );
-    final Widget attachmentDetails = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      spacing: detailSpacing,
-      children: [
-        _InviteAttachmentText(
-          text: label,
-          maxLines: labelMaxLines,
-          overflow: labelOverflow,
-          style: context.textTheme.small.copyWith(
-            fontWeight: FontWeight.w600,
-            color: labelColor,
-          ),
-        ),
-        if (showDetailLabel)
-          _InviteAttachmentText(
-            text: trimmedDetailLabel,
-            maxLines: labelMaxLines,
-            overflow: labelOverflow,
-            style: context.textTheme.small.copyWith(
-              color: colors.mutedForeground,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: accentWidth,
+              child: DecoratedBox(
+                decoration: BoxDecoration(color: accentColor),
+              ),
             ),
-          ),
-      ],
-    );
-    final Widget actionButton = AxiIconButton(
-      iconData: LucideIcons.check,
-      tooltip: actionLabel,
-      onPressed: enabled ? onPressed : null,
-      color: iconColor,
-    );
-    return DecoratedBox(
-      decoration: ShapeDecoration(
-        color: colors.card,
-        shape: ContinuousRectangleBorder(
-          borderRadius: BorderRadius.circular(cardCornerRadius),
-          side: BorderSide(color: colors.border),
-        ),
-      ),
-      child: Padding(
-        padding: padding,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final bool stackActions =
-                constraints.maxWidth < inlineActionsMinWidth;
-            if (stackActions) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      attachmentIcon,
-                      SizedBox(width: rowSpacing),
-                      Expanded(child: attachmentDetails),
-                    ],
-                  ),
-                  SizedBox(height: actionSpacing),
-                  Align(alignment: Alignment.centerRight, child: actionButton),
-                ],
-              );
-            }
-            return Row(
-              children: [
-                attachmentIcon,
-                SizedBox(width: rowSpacing),
-                Expanded(child: attachmentDetails),
-                SizedBox(width: rowSpacing),
-                Flexible(
-                  fit: FlexFit.loose,
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: actionButton,
-                  ),
+            Expanded(
+              child: Padding(
+                padding: padding,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  spacing: contentSpacing,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          LucideIcons.userPlus,
+                          size: sizing.menuItemIconSize,
+                          color: iconColor,
+                        ),
+                        SizedBox(width: headerSpacing),
+                        Expanded(
+                          child: _InviteAttachmentText(
+                            text: label,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: context.textTheme.small.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: labelColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (showDetailLabel)
+                      Padding(
+                        padding: EdgeInsets.only(left: leadingInset),
+                        child: _InviteAttachmentText(
+                          text: trimmedDetailLabel,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.textTheme.small.copyWith(
+                            color: colors.mutedForeground,
+                          ),
+                        ),
+                      ),
+                    if (enabled)
+                      Padding(
+                        padding: EdgeInsets.only(left: leadingInset),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: AxiButton.outline(
+                            onPressed: onPressed,
+                            child: Text(
+                              actionLabel,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
-              ],
-            );
-          },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -15051,11 +15072,7 @@ class _QuotedMessagePreview extends StatelessWidget {
     return Builder(
       builder: (context) {
         final previewText =
-            ChatSubjectCodec.previewText(
-              body: message.body,
-              subject: message.subject,
-            ) ??
-            context.l10n.chatQuotedNoContent;
+            _previewTextForMessage(message) ?? context.l10n.chatQuotedNoContent;
         return _ReplyingToPreviewText(
           senderLabel: senderLabelTrimmed,
           quoteText: previewText,
@@ -15714,10 +15731,7 @@ class _QuoteBanner extends StatelessWidget {
             child: Builder(
               builder: (context) {
                 final previewText =
-                    ChatSubjectCodec.previewText(
-                      body: message.body,
-                      subject: message.subject,
-                    ) ??
+                    _previewTextForMessage(message) ??
                     context.l10n.chatQuotedNoContent;
                 return _ReplyingToPreviewText(
                   senderLabel: senderLabel,
@@ -16338,7 +16352,7 @@ class _GuestMessageBubble extends StatelessWidget {
     final timestampColor = isSelf
         ? colors.primaryForeground
         : chatTokens.timestamp;
-    final bubbleBaseRadius = context.radius;
+    final bubbleBaseRadius = _bubbleBaseRadius(context);
     final bubbleCornerClearance = _bubbleCornerClearance(bubbleBaseRadius);
     final statusIcon = message.status?.icon;
     final messageTextSize = context

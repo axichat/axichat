@@ -241,6 +241,18 @@ extension RoomStateAvatarPermissions on RoomState {
 extension RoomStatePresence on RoomState {
   bool get hasSelfPresence =>
       selfPresenceStatusCodes.contains(MucStatusCode.selfPresence.code);
+
+  bool get hasPresentSelfOccupant {
+    final occupantId = myOccupantId;
+    if (occupantId == null || occupantId.isEmpty) {
+      return false;
+    }
+    return occupants[occupantId]?.isPresent == true;
+  }
+
+  bool get isReadyForMessaging => hasSelfPresence && hasPresentSelfOccupant;
+
+  bool get isBootstrapPending => !isReadyForMessaging || roomCreated;
 }
 
 enum MucModerationAction {

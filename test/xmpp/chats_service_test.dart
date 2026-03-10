@@ -41,6 +41,28 @@ class ChatMatcher extends Matcher {
       compareChats(chat, otherChat);
 }
 
+const String _managerAccountJid = 'user@example.com/resource';
+const String _managerPassword = 'password';
+
+mox.XmppManagerAttributes _buildManagerAttributes({
+  required Future<mox.XMLNode?> Function(mox.StanzaDetails details) sendStanza,
+}) {
+  final fullJid = mox.JID.fromString(_managerAccountJid);
+  return mox.XmppManagerAttributes(
+    sendStanza: sendStanza,
+    sendNonza: (_) {},
+    getManagerById: <T extends mox.XmppManagerBase>(_) => null,
+    sendEvent: (_) {},
+    getConnectionSettings: () =>
+        mox.ConnectionSettings(jid: fullJid, password: _managerPassword),
+    getFullJID: () => fullJid,
+    getSocket: () => throw UnimplementedError(),
+    getConnection: () => throw UnimplementedError(),
+    getNegotiatorById: <T extends mox.XmppFeatureNegotiatorBase>(String _) =>
+        null,
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -238,6 +260,54 @@ void main() {
     },
   );
 
+  test(
+    'Conversation index reconciliation repairs stale chat subtitles from stored messages.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      final peerJid = chatJids.first;
+      final messageTimestamp = DateTime.utc(2024, 1, 2, 10);
+      final snapshotTimestamp = DateTime.utc(2024, 1, 2, 12);
+
+      await database.createChat(
+        Chat.fromJid(peerJid).copyWith(
+          lastMessage: 'FWD: stale@example.com',
+          lastChangeTimestamp: DateTime.utc(2024, 1, 2, 9),
+        ),
+      );
+      await database.saveMessage(
+        Message(
+          stanzaID: 'repair-subtitle-1',
+          senderJid: peerJid,
+          chatJid: peerJid,
+          timestamp: messageTimestamp,
+          body: 'Newest stored body',
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+      );
+      final chat = await database.getChat(peerJid);
+      await database.updateChat(
+        chat!.copyWith(lastMessage: 'FWD: stale@example.com'),
+      );
+
+      await xmppService.applyConversationIndexSnapshot(
+        PubSubFetchResult<ConvItem>(
+          items: [
+            ConvItem(
+              peerBare: mox.JID.fromString(peerJid),
+              lastTimestamp: snapshotTimestamp,
+            ),
+          ],
+          isSuccess: true,
+        ),
+      );
+
+      final repaired = await database.getChat(peerJid);
+      expect(repaired?.lastMessage, 'Newest stored body');
+      expect(repaired?.lastChangeTimestamp, snapshotTimestamp.toLocal());
+    },
+  );
+
   group('openChat', () {
     test('Opens the given chat.', () async {
       await connectSuccessfully(xmppService);
@@ -332,4 +402,32 @@ void main() {
           mockConnection.sendChatState(jid: jid, state: mox.ChatState.inactive),
     ).called(1);
   });
+
+  test(
+    'MUCManager.sendAdminIq throws when the server rejects the admin IQ',
+    () async {
+      final manager = MUCManager()
+        ..register(
+          _buildManagerAttributes(
+            sendStanza: (_) async => mox.Stanza.iq(type: 'error'),
+          ),
+        );
+
+      await expectLater(
+        manager.sendAdminIq(
+          roomJid: 'room@conference.example.com',
+          items: [
+            mox.XMLNode(
+              tag: 'item',
+              attributes: {
+                'jid': 'invitee@example.com',
+                'affiliation': 'member',
+              },
+            ),
+          ],
+        ),
+        throwsA(isA<XmppMessageException>()),
+      );
+    },
+  );
 }

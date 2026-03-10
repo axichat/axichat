@@ -2832,6 +2832,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatsCreateGroupFailure => '无法创建群聊。';
 
   @override
+  String get chatsCreateGroupAlreadyExists => '已存在同名群聊。';
+
+  @override
   String get chatsRefreshFailed => '同步失败。';
 
   @override
@@ -2896,6 +2899,11 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get rosterAddTitle => '添加联系人';
+
+  @override
+  String rosterAddedToContacts(Object user) {
+    return '已将$user添加到联系人。';
+  }
 
   @override
   String get rosterEmpty => '暂无联系人';
@@ -8671,6 +8679,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get chatsCreateGroupFailure => '無法建立群組聊天。';
 
   @override
+  String get chatsCreateGroupAlreadyExists => '同名群組聊天已存在。';
+
+  @override
   String get chatsRefreshFailed => '同步失敗。';
 
   @override
@@ -8735,6 +8746,11 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get rosterAddTitle => '新增聯絡人';
+
+  @override
+  String rosterAddedToContacts(Object user) {
+    return '已將$user加入聯絡人。';
+  }
 
   @override
   String get rosterEmpty => '暫無聯絡人';

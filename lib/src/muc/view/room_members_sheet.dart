@@ -77,6 +77,8 @@ class RoomMembersSheet extends StatelessWidget {
     final avatarPath = roomAvatarPath?.trim();
     final canEditAvatar = roomState.canEditAvatar;
     final showAvatarSection = avatarPath?.isNotEmpty == true || canEditAvatar;
+    final showMembersLoading =
+        memberSections.isEmpty && roomState.isBootstrapPending;
     final Widget content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -142,7 +144,26 @@ class RoomMembersSheet extends StatelessWidget {
         Expanded(
           child: Padding(
             padding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.m),
-            child: memberSections.isEmpty
+            child: showMembersLoading
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AxiProgressIndicator(
+                          color: colors.foreground,
+                          semanticsLabel: l10n.chatMembersLoading,
+                        ),
+                        SizedBox(height: spacing.s),
+                        Text(
+                          l10n.chatMembersLoadingEllipsis,
+                          style: theme.muted.copyWith(
+                            color: colors.mutedForeground,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : memberSections.isEmpty
                 ? Center(
                     child: Text(
                       l10n.mucNoMembers,
@@ -185,41 +206,15 @@ class RoomMembersSheet extends StatelessWidget {
   }
 
   Future<List<String>?> _promptInvite(BuildContext context) async {
-    return showFadeScaleDialog<List<String>>(
+    return showAdaptiveBottomSheet<List<String>>(
       context: context,
+      isScrollControlled: true,
       useRootNavigator: false,
-      builder: (dialogContext) {
-        final mediaQuery = MediaQuery.of(dialogContext);
-        final spacing = dialogContext.spacing;
-        final sizing = dialogContext.sizing;
-        return Dialog(
-          insetPadding: EdgeInsets.fromLTRB(
-            spacing.l,
-            spacing.l,
-            spacing.l,
-            spacing.l + mediaQuery.viewInsets.bottom,
-          ),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          child: AxiModalSurface(
-            backgroundColor: dialogContext.colorScheme.card,
-            borderColor: dialogContext.colorScheme.border,
-            padding: EdgeInsets.zero,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: sizing.dialogMaxWidth,
-                maxHeight:
-                    mediaQuery.size.height * sizing.dialogMaxHeightFraction,
-              ),
-              child: _InviteChipsSheet(
-                initialRecipients: const [],
-                onClose: () => Navigator.of(dialogContext).maybePop(),
-              ),
-            ),
-          ),
-        );
-      },
+      surfacePadding: EdgeInsets.zero,
+      builder: (sheetContext) => _InviteChipsSheet(
+        initialRecipients: const [],
+        onClose: () => Navigator.of(sheetContext).maybePop(),
+      ),
     );
   }
 
@@ -928,7 +923,6 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
         onClose: widget.onClose,
       ),
       bodyPadding: EdgeInsets.zero,
-      footer: Padding(padding: actionsPadding, child: actions),
       children: [
         BlocSelector<ChatsCubit, ChatsState, List<String>>(
           bloc: locate<ChatsCubit>(),
@@ -945,8 +939,12 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
             onRecipientRemoved: _removeRecipient,
             onRecipientToggled: _toggleRecipient,
             collapsedByDefault: false,
+            horizontalPadding: 0,
           ),
         ),
+        SizedBox(height: spacing.m),
+        Padding(padding: actionsPadding, child: actions),
+        SizedBox(height: spacing.m),
       ],
     );
   }
@@ -1021,7 +1019,6 @@ class _NicknameSheet extends StatelessWidget {
         onClose: onCancel,
       ),
       bodyPadding: EdgeInsets.zero,
-      footer: Padding(padding: contentPadding, child: actions),
       children: [
         Padding(
           padding: contentPadding,
@@ -1032,6 +1029,9 @@ class _NicknameSheet extends StatelessWidget {
             onSubmitted: onSubmit,
           ),
         ),
+        SizedBox(height: spacing.m),
+        Padding(padding: contentPadding, child: actions),
+        SizedBox(height: spacing.m),
       ],
     );
   }

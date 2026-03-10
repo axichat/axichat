@@ -168,6 +168,170 @@ void main() {
     },
   );
 
+  test(
+    'saveMessage increments unread for inbound invite pseudo messages',
+    () async {
+      const selfJid = 'me@example.com';
+      const peerJid = 'peer@example.com';
+      final chat = Chat(
+        jid: peerJid,
+        title: 'Peer',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      );
+      await db.createChat(chat);
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'invite-1',
+          senderJid: peerJid,
+          chatJid: peerJid,
+          timestamp: DateTime.utc(2024, 1, 1, 12),
+          body: 'You have been invited to a group chat',
+          pseudoMessageType: PseudoMessageType.mucInvite,
+          pseudoMessageData: const {
+            'room': 'room@conference.example.com',
+            'token': 'invite-token',
+          },
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+        selfJid: selfJid,
+      );
+
+      final afterInvite = await db.getChat(peerJid);
+      expect(afterInvite?.unreadCount, 1);
+      expect(afterInvite?.lastMessage, 'You have been invited to a group chat');
+
+      await db.openChat(peerJid);
+
+      final afterOpen = await db.getChat(peerJid);
+      expect(afterOpen?.unreadCount, 0);
+    },
+  );
+
+  test(
+    'createChat rebuilds invite lastMessage from persisted messages',
+    () async {
+      const peerJid = 'peer@example.com';
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'invite-rebuild-1',
+          senderJid: peerJid,
+          chatJid: peerJid,
+          timestamp: DateTime.utc(2024, 1, 1, 12),
+          body: 'You have been invited to a group chat',
+          pseudoMessageType: PseudoMessageType.mucInvite,
+          pseudoMessageData: const {
+            'room': 'room@conference.example.com',
+            'token': 'invite-token',
+          },
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+      );
+
+      await db.customStatement('DELETE FROM chats WHERE jid = ?', [peerJid]);
+
+      await db.createChat(
+        Chat(
+          jid: peerJid,
+          title: 'Peer',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        ),
+      );
+
+      final recreated = await db.getChat(peerJid);
+      expect(recreated?.lastMessage, 'You have been invited to a group chat');
+    },
+  );
+
+  test('same-timestamp summary updates replace a forwarded preview', () async {
+    final contact = Chat(
+      jid: 'shared-summary@delta.chat',
+      title: 'Shared Summary',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+      deltaChatId: 7,
+      emailAddress: 'shared-summary@example.com',
+    );
+    await db.createChat(contact);
+
+    final sharedTimestamp = DateTime.utc(2024, 1, 5, 12);
+    await db.saveMessage(
+      Message(
+        stanzaID: 'shared-forward-1',
+        senderJid: contact.jid,
+        chatJid: contact.jid,
+        timestamp: sharedTimestamp,
+        body: 'forwarded payload',
+        subject: 'FWD: sender@example.com',
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: contact.deltaChatId,
+        deltaMsgId: 77,
+      ),
+    );
+    await db.saveMessage(
+      Message(
+        stanzaID: 'direct-summary-1',
+        senderJid: contact.jid,
+        chatJid: contact.jid,
+        timestamp: sharedTimestamp,
+        body: 'latest direct message',
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: contact.deltaChatId,
+        deltaMsgId: 78,
+      ),
+    );
+    await db.saveMessage(
+      Message(
+        stanzaID: 'direct-summary-2',
+        senderJid: contact.jid,
+        chatJid: contact.jid,
+        timestamp: sharedTimestamp,
+        body: 'latest direct message v2',
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: contact.deltaChatId,
+        deltaMsgId: 79,
+      ),
+    );
+
+    final updatedChat = await db.getChat(contact.jid);
+    expect(updatedChat?.lastMessage, 'latest direct message v2');
+  });
+
+  test(
+    'repairChatSummaryPreservingTimestamp fixes stale preview without rolling back timestamp',
+    () async {
+      final contact = Chat(
+        jid: 'repair-summary@axi.im',
+        title: 'Repair Summary',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 7, 18),
+      );
+      await db.createChat(
+        contact.copyWith(lastMessage: 'FWD: sender@example.com'),
+      );
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'repair-summary-1',
+          senderJid: contact.jid,
+          chatJid: contact.jid,
+          timestamp: DateTime.utc(2024, 1, 7, 9),
+          body: 'much newer actual message',
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+      );
+
+      await db.repairChatSummaryPreservingTimestamp(contact.jid);
+
+      final repaired = await db.getChat(contact.jid);
+      expect(repaired?.lastMessage, 'much newer actual message');
+      expect(repaired?.lastChangeTimestamp, DateTime.utc(2024, 1, 7, 18));
+    },
+  );
+
   test('countChatMessages can exclude pseudo messages', () async {
     final contact = Chat(
       jid: 'dc-1@delta.chat',
@@ -243,6 +407,102 @@ void main() {
     expect(updatedChat?.lastMessage, 'second message');
     expect(updatedChat?.lastChangeTimestamp, secondMessage.timestamp);
   });
+
+  test(
+    'roster-created placeholder chats do not pin the first imported history message',
+    () async {
+      const jid = 'roster-history@example.com';
+      await db.saveRosterItems([RosterItem.fromJid(jid)]);
+
+      final seededChat = await db.getChat(jid);
+      expect(
+        seededChat?.lastChangeTimestamp,
+        DateTime.fromMillisecondsSinceEpoch(0),
+      );
+
+      final oldestMessage = Message(
+        stanzaID: 'history-1',
+        senderJid: jid,
+        chatJid: jid,
+        timestamp: DateTime.utc(2024, 1, 1, 9),
+        body: 'oldest imported message',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final middleMessage = Message(
+        stanzaID: 'history-2',
+        senderJid: jid,
+        chatJid: jid,
+        timestamp: DateTime.utc(2024, 1, 1, 10),
+        body: 'middle imported message',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final newestMessage = Message(
+        stanzaID: 'history-3',
+        senderJid: jid,
+        chatJid: jid,
+        timestamp: DateTime.utc(2024, 1, 1, 11),
+        body: 'newest imported message',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+
+      await db.saveMessage(oldestMessage);
+      await db.saveMessage(middleMessage);
+      await db.saveMessage(newestMessage);
+
+      final updatedChat = await db.getChat(jid);
+      expect(updatedChat?.lastMessage, 'newest imported message');
+      expect(updatedChat?.lastChangeTimestamp, newestMessage.timestamp);
+    },
+  );
+
+  test(
+    'imported history repairs subtitle when chat timestamp is already newer',
+    () async {
+      const jid = 'snapshot-history@example.com';
+      final externalTimestamp = DateTime.utc(2024, 1, 1, 12);
+      await db.createChat(
+        Chat(
+          jid: jid,
+          title: 'Snapshot History',
+          type: ChatType.chat,
+          lastChangeTimestamp: externalTimestamp,
+        ),
+      );
+
+      final oldestMessage = Message(
+        stanzaID: 'snapshot-history-1',
+        senderJid: jid,
+        chatJid: jid,
+        timestamp: DateTime.utc(2024, 1, 1, 9),
+        body: 'oldest imported message',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final middleMessage = Message(
+        stanzaID: 'snapshot-history-2',
+        senderJid: jid,
+        chatJid: jid,
+        timestamp: DateTime.utc(2024, 1, 1, 10),
+        body: 'middle imported message',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+      final newestMessage = Message(
+        stanzaID: 'snapshot-history-3',
+        senderJid: jid,
+        chatJid: jid,
+        timestamp: DateTime.utc(2024, 1, 1, 11),
+        body: 'newest imported message',
+        encryptionProtocol: EncryptionProtocol.none,
+      );
+
+      await db.saveMessage(oldestMessage);
+      await db.saveMessage(middleMessage);
+      await db.saveMessage(newestMessage);
+
+      final updatedChat = await db.getChat(jid);
+      expect(updatedChat?.lastMessage, 'newest imported message');
+      expect(updatedChat?.lastChangeTimestamp, externalTimestamp);
+    },
+  );
 
   test('same-timestamp email messages follow local insertion order', () async {
     final contact = Chat(

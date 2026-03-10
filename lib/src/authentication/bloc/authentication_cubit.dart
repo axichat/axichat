@@ -2227,11 +2227,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _xmppService.cacheSelfAvatarDraft(pendingAvatar);
     }
     final bool fromSignup = _activeSignupCredentialKey != null;
-    if (fromSignup && signupWelcomeTitle != null && signupWelcomeBody != null) {
+    final resolvedWelcomeTitle =
+        signupWelcomeTitle ?? _xmppService.localizations.authSignupWelcomeTitle;
+    final resolvedWelcomeBody =
+        signupWelcomeBody ??
+        _xmppService.localizations.authSignupWelcomeMessage;
+    if (resolvedWelcomeTitle.trim().isNotEmpty &&
+        resolvedWelcomeBody.trim().isNotEmpty) {
       await syncSignupWelcomeMessage(
         allowInsert: true,
-        title: signupWelcomeTitle,
-        body: signupWelcomeBody,
+        title: resolvedWelcomeTitle,
+        body: resolvedWelcomeBody,
       );
     }
     final AuthenticationState completedState = fromSignup
@@ -2288,10 +2294,31 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         );
       }
       final chat = await db.getChat(welcomeChatJid);
-      if (chat != null &&
-          (chat.title != title || chat.contactDisplayName != title)) {
+      if (chat == null) {
+        if (!allowInsert) {
+          return;
+        }
+        await db.createChat(
+          Chat(
+            jid: welcomeChatJid,
+            title: title,
+            type: ChatType.chat,
+            lastChangeTimestamp: existing?.timestamp ?? DateTime.timestamp(),
+            contactDisplayName: title,
+            contactJid: welcomeChatJid,
+          ),
+        );
+        return;
+      }
+      if (chat.title != title ||
+          chat.contactDisplayName != title ||
+          chat.contactJid != welcomeChatJid) {
         await db.updateChat(
-          chat.copyWith(title: title, contactDisplayName: title),
+          chat.copyWith(
+            title: title,
+            contactDisplayName: title,
+            contactJid: welcomeChatJid,
+          ),
         );
       }
     } on Exception catch (error, stackTrace) {

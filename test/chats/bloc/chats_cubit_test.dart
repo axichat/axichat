@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
+import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import '../../mocks.dart';
+
+class MockXmppMucService extends Mock implements XmppService, MucService {}
 
 Chat _chat({
   required String jid,
@@ -150,5 +154,37 @@ void main() {
       ),
       ChatRouteIndex.details,
     );
+  });
+
+  test('create room conflict surfaces alreadyExists failure state', () async {
+    final xmppMucService = MockXmppMucService();
+    when(
+      () => xmppMucService.chatsStream(),
+    ).thenAnswer((_) => const Stream<List<Chat>>.empty());
+    when(
+      () => xmppMucService.recipientAddressSuggestionsStream(),
+    ).thenAnswer((_) => const Stream<List<String>>.empty());
+    when(
+      () => xmppMucService.demoResetStream,
+    ).thenAnswer((_) => const Stream<void>.empty());
+    when(() => xmppMucService.cachedChatList).thenReturn(const <Chat>[]);
+    when(
+      () => xmppMucService.createRoom(
+        name: any(named: 'name'),
+        nickname: any(named: 'nickname'),
+        avatar: any(named: 'avatar'),
+      ),
+    ).thenThrow(XmppMucCreateConflictException());
+
+    final cubit = ChatsCubit(
+      xmppService: xmppMucService,
+      homeRefreshSyncService: homeRefreshSyncService,
+    );
+    addTearDown(cubit.close);
+
+    await cubit.createChatRoom(title: 'Roomy');
+
+    expect(cubit.state.creationStatus.isFailure, isTrue);
+    expect(cubit.state.creationFailure, ChatsCreateRoomFailure.alreadyExists);
   });
 }

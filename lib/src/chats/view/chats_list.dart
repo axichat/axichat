@@ -169,7 +169,11 @@ class _ChatsListBody extends StatelessWidget {
           context.read<ChatsCubit>().clearCreationStatus();
         } else if (state.creationStatus.isFailure) {
           showToast?.call(
-            FeedbackToast.error(message: l10n.chatsCreateGroupFailure),
+            FeedbackToast.error(
+              message:
+                  state.creationFailure?.resolve(l10n) ??
+                  l10n.chatsCreateGroupFailure,
+            ),
           );
           context.read<ChatsCubit>().clearCreationStatus();
         }
@@ -918,6 +922,12 @@ class _ChatListTileState extends State<ChatListTile> {
     }
     if (CalendarSyncMessage.looksLikeEnvelope(trimmed)) {
       return null;
+    }
+    if (ChatSubjectCodec.containsInviteEnvelope(trimmed)) {
+      return context.l10n.chatInviteBodyLabel;
+    }
+    if (ChatSubjectCodec.containsInviteRevocationEnvelope(trimmed)) {
+      return context.l10n.chatInviteRevokedLabel;
     }
     final split = ChatSubjectCodec.splitXmppBody(trimmed);
     final subject = _collapsePreviewText(split.subject);

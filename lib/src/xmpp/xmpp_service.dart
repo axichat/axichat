@@ -44,7 +44,6 @@ import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
@@ -162,6 +161,8 @@ final class XmppAbortedException extends XmppException {}
 
 final class XmppMessageException extends XmppException {}
 
+final class XmppMucCreateConflictException extends XmppMessageException {}
+
 final class XmppForeignDomainException extends XmppMessageException {}
 
 final class XmppRosterException extends XmppException {}
@@ -274,6 +275,9 @@ final serverLookup = <String, IOEndpoint>{
 };
 
 const String _bookmarks2NodeXmlns = 'urn:xmpp:bookmarks:1';
+const String _bookmarks2CompatFeature = 'urn:xmpp:bookmarks:1#compat';
+const String _bookmarks2CompatPepFeature = 'urn:xmpp:bookmarks:1#compat-pep';
+const String _bookmarks2ConversionFeature = 'urn:xmpp:bookmarks-conversion:0';
 
 typedef ConnectionState = mox.XmppConnectionState;
 
@@ -2381,6 +2385,7 @@ class XmppService extends XmppBase
     }
 
     final XmppConnection oldConnection = _connection;
+    XmppConnection? foregroundAttemptConnection;
     try {
       _setConnectionState(ConnectionState.connecting);
       _xmppLogger.info('Migrating XMPP connection to foreground socket.');
@@ -2417,6 +2422,7 @@ class XmppService extends XmppBase
           'Foreground socket migration skipped: connection factory did not supply foreground socket.',
         );
       }
+      foregroundAttemptConnection = nextConnection;
 
       _connection = nextConnection;
       _configureSocketCallbacks();
@@ -2465,6 +2471,10 @@ class XmppService extends XmppBase
         error.runtimeType,
         stackTrace,
       );
+      if (foregroundAttemptConnection != null) {
+        await _disposeForegroundMigrationAttempt(foregroundAttemptConnection);
+        foregroundAttemptConnection = null;
+      }
       try {
         final XmppConnection fallbackConnection = XmppConnection();
         _connection = fallbackConnection;
@@ -2536,6 +2546,38 @@ class XmppService extends XmppBase
           );
         }
       }
+    }
+  }
+
+  Future<void> _disposeForegroundMigrationAttempt(
+    XmppConnection connection,
+  ) async {
+    try {
+      await connection.setShouldReconnect(false);
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to disable reconnection for abandoned foreground migration attempt.',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      await connection.reset();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to reset abandoned foreground migration attempt.',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      await connection.socketWrapper.closeStreams();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to close streams for abandoned foreground migration attempt.',
+        error,
+        stackTrace,
+      );
     }
   }
 
@@ -2770,12 +2812,12 @@ class XmppService extends XmppBase
   Future<V> _dbOpReturning<D extends Database, V>(
     FutureOr<V> Function(D) operation,
   ) async {
-    _xmppLogger.info('Retrieving completer for $D...');
+    _xmppLogger.fine('Retrieving completer for $D...');
 
     try {
-      _xmppLogger.info('Awaiting completer for $D...');
+      _xmppLogger.fine('Awaiting completer for $D...');
       final db = await _getDatabaseCompleter<D>().future;
-      _xmppLogger.info('Completed completer for $D.');
+      _xmppLogger.fine('Completed completer for $D.');
       return await operation(db);
     } on XmppAbortedException catch (e, s) {
       _xmppLogger.warning('Owner called reset before $D initialized.', e, s);
@@ -2793,16 +2835,16 @@ class XmppService extends XmppBase
     FutureOr<void> Function(T) operation, {
     bool awaitDatabase = false,
   }) async {
-    _xmppLogger.info('Retrieving completer for $T...');
+    _xmppLogger.fine('Retrieving completer for $T...');
 
     final completer = _getDatabaseCompleter<T>();
 
     if (!awaitDatabase && !completer.isCompleted) return;
 
     try {
-      _xmppLogger.info('Awaiting completer for $T...');
+      _xmppLogger.fine('Awaiting completer for $T...');
       final db = await completer.future;
-      _xmppLogger.info('Completed completer for $T.');
+      _xmppLogger.fine('Completed completer for $T.');
       return await operation(db);
     } on XmppAbortedException catch (_) {
       return;
@@ -2981,7 +3023,10 @@ class XmppService extends XmppBase
         selfFeatures.contains(mox.pubsubXmlns);
     final bookmarks2Supported =
         selfFeatures.contains(BookmarksManager.bookmarksNotifyFeature) ||
-        selfFeatures.contains(_bookmarks2NodeXmlns);
+        selfFeatures.contains(_bookmarks2NodeXmlns) ||
+        selfFeatures.contains(_bookmarks2CompatFeature) ||
+        selfFeatures.contains(_bookmarks2CompatPepFeature) ||
+        selfFeatures.contains(_bookmarks2ConversionFeature);
 
     final support = PubSubSupport(
       pubSubSupported: pubSubSupported,
@@ -3774,9 +3819,9 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   @override
   Future<void> commitState() async {
     await owner._dbOp<XmppStateStore>((ss) async {
-      _log.info('Saving c2s: ${state.c2s}...');
+      _log.fine('Saving c2s: ${state.c2s}...');
       await ss.write(key: clientToServerCountKey, value: state.c2s);
-      _log.info('Saving s2c: ${state.s2c}...');
+      _log.fine('Saving s2c: ${state.s2c}...');
       await ss.write(key: serverToClientCountKey, value: state.s2c);
       if (state.streamResumptionId case String resID) {
         await ss.write(key: streamResumptionIDKey, value: resID);
@@ -3792,11 +3837,11 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
     await owner._dbOp<XmppStateStore>((ss) async {
       var newState = state;
       if (ss.read(key: clientToServerCountKey) case int c2s) {
-        _log.info('Loading c2s: ${state.c2s}...');
+        _log.fine('Loading c2s: ${state.c2s}...');
         newState = newState.copyWith(c2s: c2s);
       }
       if (ss.read(key: serverToClientCountKey) case int s2c) {
-        _log.info('Loading s2c: ${state.s2c}...');
+        _log.fine('Loading s2c: ${state.s2c}...');
         newState = newState.copyWith(s2c: s2c);
       }
       if (ss.read(key: streamResumptionIDKey) case String resID) {

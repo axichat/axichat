@@ -17,7 +17,6 @@ enum XmppOperationKind {
   mamFetch,
   mucCreate,
   mucJoin,
-  mucAvatarUpdate,
   selfAvatarPublish,
 }
 

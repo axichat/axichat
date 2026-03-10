@@ -1,5 +1,6 @@
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:logging/logging.dart';
 
 void main() {
   group('SafeLogging', () {
@@ -76,6 +77,96 @@ void main() {
       expect(sanitized, startsWith(SafeLogging.redactedSecret));
       expect(sanitized, contains('log omitted'));
       expect(sanitized, isNot(contains('@')));
+    });
+
+    test('Suppresses noisy completer debug records', () {
+      final record = LogRecord(
+        Level.INFO,
+        'Retrieving completer for XmppDatabase...',
+        'XmppService',
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(record), isFalse);
+    });
+
+    test('Suppresses stream management chatter in debug records', () {
+      final record = LogRecord(
+        Level.FINE,
+        '_pendingAcks is now at 1 (caused by <r/>)',
+        "Instance of 'StreamManagementManager'",
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(record), isFalse);
+    });
+
+    test('Suppresses stream management ack traffic logs', () {
+      final record = LogRecord(
+        Level.FINEST,
+        "==> <r xmlns='urn:xmpp:sm:3'/>",
+        'XmppConnection',
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(record), isFalse);
+    });
+
+    test('Keeps non-ack XMPP traffic logs', () {
+      final record = LogRecord(
+        Level.FINEST,
+        "==> <message id='1'><body>Hello</body></message>",
+        'XmppConnection',
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(record), isTrue);
+    });
+
+    test('Keeps warnings even for noisy logger names', () {
+      final record = LogRecord(
+        Level.WARNING,
+        'Cannot send keepalives as SM is not available.',
+        'PingManager',
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(record), isTrue);
+    });
+
+    test('Suppresses c2s and s2c counter logs', () {
+      final record = LogRecord(
+        Level.INFO,
+        'C2S height jumped from 2 (local) to 5 (remote).',
+        'StreamManagementManager',
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(record), isFalse);
+    });
+
+    test('Suppresses internal handler routing logs', () {
+      final record = LogRecord(
+        Level.FINEST,
+        "Running handler for message (123) of Instance of 'MessageManager'",
+        'XmppConnection',
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(record), isFalse);
+    });
+
+    test('Suppresses app-level message error churn logs', () {
+      final record = LogRecord(
+        Level.INFO,
+        'Handling error message...',
+        'MessageService',
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(record), isFalse);
+    });
+
+    test('Keeps message marker logs', () {
+      final record = LogRecord(
+        Level.INFO,
+        'Received chat marker',
+        'MessageService',
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(record), isTrue);
     });
   });
 }

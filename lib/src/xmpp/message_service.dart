@@ -57,6 +57,8 @@ const String _mamOriginRejectedLog =
     'Rejected archive message without local account routing.';
 const String _mamGlobalNoProgressLog =
     'Global MAM sync stalled; stopping to avoid churn.';
+const String _mamQueryHardTimeoutLog =
+    'MAM query exceeded the hard timeout fallback.';
 final XmppOperationEvent _mamLoginStartEvent = XmppOperationEvent(
   kind: XmppOperationKind.mamLoginSync,
   stage: XmppOperationStage.start,
@@ -177,6 +179,7 @@ const String _pinPendingPublishesKeyName = 'pin_sync_pending_publishes';
 const String _pinPendingRetractionsKeyName = 'pin_sync_pending_retractions';
 const String _pinArchiveBootstrapKeyPrefix = 'pin_sync_archive_bootstrap_';
 const Duration _mamQueryTimeout = Duration(seconds: 90);
+const Duration _mamQueryFallbackTimeout = Duration(seconds: 5);
 const Set<String> _emptyPinPublisherSet = <String>{};
 final _pinPendingPublishesKey = XmppStateStore.registerKey(
   _pinPendingPublishesKeyName,
@@ -1100,12 +1103,53 @@ mixin MessageService
     Message message, {
     required ChatType chatType,
   }) async {
+    final resolvedChatType = await _resolvePersistedChatType(
+      jid: message.chatJid,
+      requestedChatType: chatType,
+    );
     if (_isInternalSyncEnvelope(message.body)) {
       _internalEnvelopeChats.add(message.chatJid);
     }
     await _dbOp<XmppDatabase>((db) async {
-      await db.saveMessage(message, chatType: chatType, selfJid: myJid);
+      await db.saveMessage(message, chatType: resolvedChatType, selfJid: myJid);
     });
+  }
+
+  Future<ChatType> _resolvePersistedChatType({
+    required String jid,
+    required ChatType requestedChatType,
+  }) async {
+    if (requestedChatType == ChatType.groupChat) {
+      return ChatType.groupChat;
+    }
+
+    late final mox.JID parsed;
+    try {
+      parsed = mox.JID.fromString(jid);
+    } on Exception {
+      return requestedChatType;
+    }
+    if (parsed.resource.isNotEmpty) {
+      return requestedChatType;
+    }
+
+    final bareJid = parsed.toBare().toString();
+    if (_isMucChatJid(bareJid) || roomStateFor(bareJid) != null) {
+      return ChatType.groupChat;
+    }
+
+    try {
+      final chat = await _dbOpReturning<XmppDatabase, Chat?>(
+        (db) => db.getChat(bareJid),
+      );
+      if (chat?.type == ChatType.groupChat) {
+        return ChatType.groupChat;
+      }
+    } on XmppAbortedException {
+      return requestedChatType;
+    }
+
+    return requestedChatType;
   }
 
   Future<DateTime> _resolveDemoTimestampForChat(
@@ -2671,7 +2715,8 @@ mixin MessageService
         formType: mox.mamXmlns,
         forceForm: true,
       );
-      final result = await mamManager.queryArchive(
+      final result = await _queryMamArchive(
+        mamManager: mamManager,
         to: null,
         options: options,
         rsm: mox.ResultSetManagement(
@@ -2679,7 +2724,6 @@ mixin MessageService
           after: after,
           max: pageSize,
         ),
-        timeout: _mamQueryTimeout,
       );
       if (result == null) {
         _log.warning('Global MAM query failed.');
@@ -2845,6 +2889,8 @@ mixin MessageService
     final managerJoined = managerState?.joined == true;
     final managerNick = managerState?.nick?.trim();
     final managerNickPresent = managerNick?.isNotEmpty == true;
+    final pendingConfig = _instantRoomPendingRooms.contains(normalizedRoom);
+    final roomCreated = roomState?.roomCreated == true;
     final needsJoin = _roomNeedsJoin(normalizedRoom);
     final hasSelfPresence = roomState?.hasSelfPresence == true;
     final hasSelfStatus =
@@ -2878,6 +2924,8 @@ mixin MessageService
       'conn=$connectionId '
       'socket=$socketType '
       'resource=$resourcePresent '
+      'pendingConfig=$pendingConfig '
+      'roomCreated=$roomCreated '
       'needsJoin=$needsJoin '
       'managerState=${managerState != null} '
       'managerJoined=$managerJoined '
@@ -3096,8 +3144,14 @@ mixin MessageService
       encryptionProtocol,
     );
     final offlineDemo = demoOfflineMode;
-    final isGroupChat = chatType == ChatType.groupChat;
-    if (chatType == ChatType.chat && !_isMucChatJid(jid) && jid != accountJid) {
+    final resolvedChatType = await _resolvePersistedChatType(
+      jid: jid,
+      requestedChatType: chatType,
+    );
+    final isGroupChat = resolvedChatType == ChatType.groupChat;
+    if (resolvedChatType == ChatType.chat &&
+        !_isMucChatJid(jid) &&
+        jid != accountJid) {
       if (this is AvatarService) {
         fireAndForget(
           () => (this as AvatarService).prefetchAvatarForJid(jid),
@@ -3194,11 +3248,11 @@ mixin MessageService
     );
     _rememberReadOnlyTaskShare(message);
     if (shouldStore) {
-      await _storeMessage(message, chatType: chatType);
+      await _storeMessage(message, chatType: resolvedChatType);
       onLocalMessageStored?.call(message.stanzaID);
     }
     if (resolvedEncryptionProtocol == EncryptionProtocol.omemo &&
-        chatType == ChatType.chat &&
+        resolvedChatType == ChatType.chat &&
         !_isMucChatJid(jid)) {
       final decision = await _omemoDecision(jid: jid);
       if (!decision.isAllowed) {
@@ -3245,7 +3299,7 @@ mixin MessageService
         message: message,
         quotedMessage: quotedMessage,
         extraExtensions: resolvedExtensions,
-        chatType: chatType,
+        chatType: resolvedChatType,
       );
       if (kDebugMode) {
         final to = stanza.to;
@@ -3254,7 +3308,7 @@ mixin MessageService
         final stanzaType = stanza.type ?? 'chat';
         _log.fine(
           'Outbound message stanza: '
-          'chatType=${chatType.name} '
+          'chatType=${resolvedChatType.name} '
           'type=$stanzaType '
           'toBare=$toIsBare '
           'toHasResource=$toHasResource',
@@ -3262,7 +3316,7 @@ mixin MessageService
       }
       _trackOutboundMessageSummary(
         stanza: stanza,
-        chatType: chatType,
+        chatType: resolvedChatType,
         kind: _OutboundMessageKind.message,
         chatJid: message.chatJid,
       );
@@ -3278,7 +3332,7 @@ mixin MessageService
           (db) => db.markMessageAcked(message.stanzaID),
         );
       }
-      if (chatType == ChatType.chat && !_isMucChatJid(jid)) {
+      if (resolvedChatType == ChatType.chat && !_isMucChatJid(jid)) {
         try {
           await _upsertConversationIndexForPeer(
             peerJid: jid,
@@ -3402,7 +3456,11 @@ mixin MessageService
     final resolvedEncryptionProtocol = _resolveOutboundEncryptionProtocol(
       encryptionProtocol,
     );
-    final isGroupChat = chatType == ChatType.groupChat;
+    final resolvedChatType = await _resolvePersistedChatType(
+      jid: jid,
+      requestedChatType: chatType,
+    );
+    final isGroupChat = resolvedChatType == ChatType.groupChat;
     final senderJid = isGroupChat
         ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
         : accountJid;
@@ -3454,10 +3512,10 @@ mixin MessageService
           : null,
     );
     const shouldStore = true;
-    await _storeMessage(message, chatType: chatType);
+    await _storeMessage(message, chatType: resolvedChatType);
     onLocalMessageStored?.call(message.stanzaID);
     if (resolvedEncryptionProtocol == EncryptionProtocol.omemo &&
-        chatType == ChatType.chat &&
+        resolvedChatType == ChatType.chat &&
         !_isMucChatJid(jid)) {
       final decision = await _omemoDecision(jid: jid);
       if (!decision.isAllowed) {
@@ -3572,7 +3630,7 @@ mixin MessageService
         message: message,
         quotedMessage: quotedMessage,
         extraExtensions: extraExtensions,
-        chatType: chatType,
+        chatType: resolvedChatType,
       );
       if (kDebugMode) {
         final to = stanza.to;
@@ -3581,7 +3639,7 @@ mixin MessageService
         final stanzaType = stanza.type ?? 'chat';
         _log.fine(
           'Outbound attachment stanza: '
-          'chatType=${chatType.name} '
+          'chatType=${resolvedChatType.name} '
           'type=$stanzaType '
           'toBare=$toIsBare '
           'toHasResource=$toHasResource',
@@ -3589,7 +3647,7 @@ mixin MessageService
       }
       _trackOutboundMessageSummary(
         stanza: stanza,
-        chatType: chatType,
+        chatType: resolvedChatType,
         kind: _OutboundMessageKind.attachment,
         chatJid: message.chatJid,
       );
@@ -4430,7 +4488,8 @@ mixin MessageService
         formType: mox.mamXmlns,
         forceForm: true,
       );
-      final result = await mamManager.queryArchive(
+      final result = await _queryMamArchive(
+        mamManager: mamManager,
         to: isMuc ? peerJid : null,
         options: options,
         rsm: mox.ResultSetManagement(
@@ -4438,7 +4497,6 @@ mixin MessageService
           after: after,
           max: pageSize,
         ),
-        timeout: _mamQueryTimeout,
       );
       if (result == null) {
         _log.warning('MAM query failed.');
@@ -4456,6 +4514,28 @@ mixin MessageService
       emitXmppOperation(
         success ? _mamFetchSuccessEvent : _mamFetchFailureEvent,
       );
+    }
+  }
+
+  Future<mox.MAMQueryResult?> _queryMamArchive({
+    required mox.MAMManager mamManager,
+    required mox.JID? to,
+    required mox.MAMQueryOptions options,
+    required mox.ResultSetManagement rsm,
+  }) async {
+    final hardTimeout = _mamQueryTimeout + _mamQueryFallbackTimeout;
+    try {
+      return await mamManager
+          .queryArchive(
+            to: to,
+            options: options,
+            rsm: rsm,
+            timeout: _mamQueryTimeout,
+          )
+          .timeout(hardTimeout);
+    } on TimeoutException catch (error, stackTrace) {
+      _log.warning(_mamQueryHardTimeoutLog, error, stackTrace);
+      rethrow;
     }
   }
 
@@ -4756,6 +4836,16 @@ mixin MessageService
     bool forceRefresh = false,
   }) async {
     await _ensureCapabilityCacheLoaded();
+    if (_isBareMucRoomJidForCapabilities(jid)) {
+      final capabilities = _PeerCapabilities(
+        supportsMarkers: false,
+        supportsReceipts: false,
+        features: const <String>[],
+        capabilitiesResolvedAt: DateTime.now(),
+      );
+      _capabilityCache[jid] = capabilities;
+      return capabilities;
+    }
     if (demoOfflineMode) {
       final capabilities = _demoPeerCapabilities();
       _capabilityCache[jid] = capabilities;
@@ -4811,6 +4901,19 @@ mixin MessageService
     } finally {
       _capabilityRequests.remove(jid);
     }
+  }
+
+  bool _isBareMucRoomJidForCapabilities(String jid) {
+    final normalizedRoom = _normalizeMucRoomJidCandidate(jid);
+    if (normalizedRoom == null) return false;
+    try {
+      final parsed = mox.JID.fromString(jid);
+      if (parsed.resource.isNotEmpty) return false;
+    } on Exception {
+      return false;
+    }
+    return _isMucChatJid(normalizedRoom) ||
+        roomStateFor(normalizedRoom) != null;
   }
 
   Future<XmppPeerCapabilities> resolvePeerCapabilities({

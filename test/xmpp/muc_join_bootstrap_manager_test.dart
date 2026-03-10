@@ -100,6 +100,10 @@ mox.Stanza _createPresence({
   return mox.Stanza.presence(from: from, type: type, children: [mucUser]);
 }
 
+mox.Stanza _createErrorPresence({required String from, required String to}) {
+  return mox.Stanza.presence(from: from, to: to, type: 'error');
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -260,6 +264,40 @@ void main() {
         expect(event.isNickChange, isTrue);
         expect(event.newNick, equals(_roomNickUpdated));
         expect(event.statusCodes, contains(MucStatusCode.nickChange.code));
+      },
+    );
+
+    test(
+      'JOIN-011 [HP] self-presence error without muc#user still emits a self-presence event',
+      () async {
+        final events = <mox.XmppEvent>[];
+        final manager = MucJoinBootstrapManager()
+          ..register(_buildAttributes(events: events));
+
+        final presence = _createErrorPresence(
+          from: _roomJidWithNick,
+          to: _accountJid,
+        );
+        final handler = manager.getIncomingStanzaHandlers().single;
+
+        await handler.callback(
+          presence,
+          mox.StanzaHandlerData(
+            _handlerDone,
+            _handlerCancel,
+            presence,
+            mox.TypedMap<mox.StanzaHandlerExtension>(),
+          ),
+        );
+
+        expect(events, hasLength(_singleEventCount));
+        final event = events.single as MucSelfPresenceEvent;
+        expect(event.roomJid, equals(_roomJid));
+        expect(event.occupantJid, equals(_roomJidWithNick));
+        expect(event.nick, equals(_roomNick));
+        expect(event.isAvailable, isFalse);
+        expect(event.isError, isTrue);
+        expect(event.isNickChange, isFalse);
       },
     );
   });

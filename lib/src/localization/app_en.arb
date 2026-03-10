@@ -1268,6 +1268,7 @@
   "chatsCreateGroupChatTooltip": "Create group chat",
   "chatsCreateGroupSuccess": "Group chat created.",
   "chatsCreateGroupFailure": "Could not create group chat.",
+  "chatsCreateGroupAlreadyExists": "A group chat with that name already exists.",
   "chatsRefreshFailed": "Sync failed.",
   "chatsRoomLabel": "Room",
   "chatsCreateChatRoomTitle": "Create chat room",
@@ -1303,6 +1304,12 @@
   "rosterAddTooltip": "Add to roster",
   "rosterAddLabel": "Contact",
   "rosterAddTitle": "Add contact",
+  "rosterAddedToContacts": "{user} added to contacts.",
+  "@rosterAddedToContacts": {
+    "placeholders": {
+      "user": {}
+    }
+  },
   "rosterEmpty": "No contacts yet",
   "rosterCompose": "Compose",
   "rosterRemoveConfirm": "Remove {jid} from contacts?",

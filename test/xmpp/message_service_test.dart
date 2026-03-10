@@ -5,6 +5,8 @@ import 'dart:convert';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
+import 'package:axichat/src/muc/muc_models.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -16,6 +18,10 @@ import 'package:moxxmpp/moxxmpp.dart' as mox;
 import '../mocks.dart';
 
 final messageEvents = List.generate(3, (_) => generateRandomMessageEvent());
+
+class MockMucManager extends Mock implements MUCManager {}
+
+class FakeJid extends Fake implements mox.JID {}
 
 bool compareMessages(Message a, Message b) =>
     a.stanzaID == b.stanzaID &&
@@ -38,20 +44,25 @@ void main() {
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeMessageEvent());
     registerFallbackValue(FakeUserAgent());
+    registerFallbackValue(FakeJid());
+    registerFallbackValue(FakeStanzaDetails());
     registerOmemoFallbacks();
     registerFallbackValue(mox.ChatMarker.received);
+    registerFallbackValue(MessageNotificationChannel.chat);
     resetForegroundNotifier(value: false);
   });
 
   late XmppService xmppService;
   late XmppDatabase database;
   late List<Message> messagesByTimestamp;
+  late MockMucManager mucManager;
 
   setUp(() {
     mockConnection = MockXmppConnection();
     mockCredentialStore = MockCredentialStore();
     mockStateStore = MockXmppStateStore();
     mockNotificationService = MockNotificationService();
+    mucManager = MockMucManager();
     when(
       () => mockNotificationService.sendNotification(
         title: any(named: 'title'),
@@ -332,9 +343,84 @@ void main() {
         );
       },
     );
+
+    test(
+      'Repairs stale MUC chat typing before sending a bare room message.',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const roomNick = 'me';
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        when(
+          () => mockConnection.getManager<MUCManager>(),
+        ).thenReturn(mucManager);
+        when(() => mucManager.getRoomState(any())).thenAnswer(
+          (_) async => mox.RoomState(
+            roomJid: mox.JID.fromString(roomJid),
+            joined: true,
+            nick: roomNick,
+          ),
+        );
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+        await database.createChat(
+          Chat(
+            jid: roomJid,
+            title: 'Room',
+            type: ChatType.chat,
+            myNickname: roomNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: roomJid,
+          ),
+        );
+        xmppService.updateOccupantFromPresence(
+          roomJid: roomJid,
+          occupantId: '$roomJid/$roomNick',
+          nick: roomNick,
+          realJid: xmppService.myJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+          fromPresence: true,
+        );
+
+        await xmppService.sendMessage(jid: roomJid, text: text);
+
+        verify(
+          () => mockConnection.sendMessage(
+            any(
+              that: isA<mox.MessageEvent>()
+                  .having((event) => event.type, 'type', 'groupchat')
+                  .having(
+                    (event) => event.to.toBare().toString(),
+                    'to',
+                    roomJid,
+                  ),
+            ),
+          ),
+        ).called(1);
+        final chat = await database.getChat(roomJid);
+        expect(chat?.type, ChatType.groupChat);
+      },
+    );
   });
 
   group('_acknowledgeMessage', () {
+    test('Skips disco capability probes for bare MUC room JIDs', () async {
+      const roomJid = 'room@conference.axi.im';
+      await connectSuccessfully(xmppService);
+      await xmppService.setMucServiceHost('conference.axi.im');
+
+      final capabilities = await xmppService.resolvePeerCapabilities(
+        jid: roomJid,
+      );
+
+      expect(capabilities.features, isEmpty);
+      verifyNever(() => mockConnection.discoInfoQuery(any()));
+    });
+
     test('Caches disco capabilities per peer', () async {
       final controller = StreamController<mox.XmppEvent>();
       when(

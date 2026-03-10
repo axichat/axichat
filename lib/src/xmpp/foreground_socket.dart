@@ -31,6 +31,7 @@ const emailKeepalivePrefix = 'EmailKeepalive';
 const emailKeepaliveTickPrefix = 'EmailKeepaliveTick';
 const emailKeepaliveStartCommand = 'Start';
 const emailKeepaliveStopCommand = 'Stop';
+const taskReadyPrefix = 'ForegroundTaskReady';
 const foregroundClientXmpp = 'xmpp_socket';
 const foregroundClientEmailKeepalive = 'email_keepalive';
 const _foregroundServiceId = 256;
@@ -75,12 +76,44 @@ set foregroundTaskBridge(ForegroundTaskBridge bridge) {
 }
 
 class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
-  FlutterForegroundTaskBridge();
+  FlutterForegroundTaskBridge({
+    Future<bool> Function()? isRunningService,
+    Future<void> Function(ForegroundServiceConfig config)?
+    startForegroundService,
+    Future<void> Function()? stopForegroundService,
+    void Function()? initCommunicationPort,
+    void Function(Future<void> Function(dynamic))? addTaskDataCallback,
+    void Function(Future<void> Function(dynamic))? removeTaskDataCallback,
+    void Function(String data)? sendDataToTask,
+  }) : _isRunningService = isRunningService ?? _defaultIsRunningService,
+       _startForegroundService =
+           startForegroundService ?? _defaultStartForegroundService,
+       _stopForegroundService =
+           stopForegroundService ?? _defaultStopForegroundService,
+       _initCommunicationPort =
+           initCommunicationPort ?? _defaultInitCommunicationPort,
+       _addTaskDataCallback =
+           addTaskDataCallback ?? _defaultAddTaskDataCallback,
+       _removeTaskDataCallback =
+           removeTaskDataCallback ?? _defaultRemoveTaskDataCallback,
+       _sendDataToTask = sendDataToTask ?? _defaultSendDataToTask;
 
   final Map<String, int> _usageCounts = {};
   final Map<String, ForegroundTaskMessageHandler> _listeners = {};
+  final Future<bool> Function() _isRunningService;
+  final Future<void> Function(ForegroundServiceConfig config)
+  _startForegroundService;
+  final Future<void> Function() _stopForegroundService;
+  final void Function() _initCommunicationPort;
+  final void Function(Future<void> Function(dynamic)) _addTaskDataCallback;
+  final void Function(Future<void> Function(dynamic)) _removeTaskDataCallback;
+  final void Function(String data) _sendDataToTask;
   bool _callbackRegistered = false;
+  bool _taskReady = false;
   Completer<void>? _startCompleter;
+  Completer<void>? _taskReadyCompleter;
+
+  static const Duration _taskReadyTimeout = Duration(seconds: 5);
 
   int get _totalUsage =>
       _usageCounts.values.fold(0, (previous, element) => previous + element);
@@ -88,12 +121,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   @override
   void registerListener(String clientId, ForegroundTaskMessageHandler handler) {
     _listeners[clientId] = handler;
-    if (_callbackRegistered) {
-      return;
-    }
-    FlutterForegroundTask.initCommunicationPort();
-    FlutterForegroundTask.addTaskDataCallback(_handleTaskData);
-    _callbackRegistered = true;
+    _attachCallbackIfNeeded();
   }
 
   @override
@@ -108,6 +136,10 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     if (data is! String) {
       return;
     }
+    if (data == taskReadyPrefix) {
+      _completeTaskReady();
+      return;
+    }
     for (final handler in List.of(_listeners.values)) {
       await handler(data);
     }
@@ -118,15 +150,35 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     required String clientId,
     ForegroundServiceConfig? config,
   }) async {
+    _attachCallbackIfNeeded();
+    final addedClient = !_usageCounts.containsKey(clientId);
     final totalBefore = _totalUsage;
-    _usageCounts[clientId] = (_usageCounts[clientId] ?? 0) + 1;
+    if (addedClient) {
+      _usageCounts[clientId] = 1;
+    }
     if (totalBefore > 0) {
+      final pendingStart = _startCompleter;
+      if (pendingStart == null) {
+        return;
+      }
+      try {
+        await pendingStart.future;
+      } on Exception {
+        if (addedClient) {
+          _decrementUsage(clientId);
+        }
+        _detachCallbackIfUnused();
+        rethrow;
+      }
       return;
     }
     try {
       await _startService(config ?? _defaultConfig());
     } on Exception {
-      _decrementUsage(clientId);
+      if (addedClient) {
+        _decrementUsage(clientId);
+      }
+      _detachCallbackIfUnused();
       rethrow;
     }
   }
@@ -134,9 +186,22 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   @override
   Future<void> release(String clientId) async {
     _decrementUsage(clientId);
-    if (_totalUsage == 0) {
-      await _stopService();
+    if (_totalUsage != 0) {
+      return;
     }
+    final pendingStart = _startCompleter;
+    if (pendingStart != null) {
+      try {
+        await pendingStart.future;
+      } on Exception {
+        _detachCallbackIfUnused();
+        return;
+      }
+      if (_totalUsage != 0) {
+        return;
+      }
+    }
+    await _stopService();
   }
 
   void _decrementUsage(String clientId) {
@@ -157,32 +222,21 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     }
     final completer = Completer<void>();
     _startCompleter = completer;
+    _taskReady = false;
+    _taskReadyCompleter = Completer<void>();
     initForegroundService();
     try {
-      if (await FlutterForegroundTask.isRunningService) {
+      if (await _isRunningService()) {
+        _completeTaskReady();
         completer.complete();
         return completer.future;
       }
       await _waitForResume();
-      final result = await FlutterForegroundTask.startService(
-        serviceId: _foregroundServiceId,
-        notificationTitle: config.notificationTitle,
-        notificationText: config.notificationText,
-        notificationIcon: config.notificationIcon,
-        callback: startCallback,
-        notificationInitialRoute: '/',
-      );
-      if (result is! ServiceRequestSuccess) {
-        if (_listeners.isEmpty) {
-          _detachCallbackIfUnused();
-        }
-        final error = result is ServiceRequestFailure ? result.error : null;
-        throw ForegroundServiceUnavailableException(
-          error is Exception ? error : null,
-        );
-      }
+      await _startForegroundService(config);
+      await _awaitTaskReady();
       completer.complete();
     } on Exception catch (error, stackTrace) {
+      _resetTaskReady();
       completer.completeError(error, stackTrace);
       rethrow;
     } finally {
@@ -191,7 +245,8 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   }
 
   Future<void> _stopService() async {
-    await FlutterForegroundTask.stopService();
+    await _stopForegroundService();
+    _resetTaskReady();
     _detachCallbackIfUnused();
   }
 
@@ -203,14 +258,98 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
 
   @override
   Future<void> send(List<Object> parts) async {
-    FlutterForegroundTask.sendDataToTask(parts.join(join));
+    final pendingStart = _startCompleter;
+    if (pendingStart != null) {
+      await pendingStart.future;
+    }
+    _sendDataToTask(parts.join(join));
+  }
+
+  void _attachCallbackIfNeeded() {
+    if (_callbackRegistered) {
+      return;
+    }
+    _initCommunicationPort();
+    _addTaskDataCallback(_handleTaskData);
+    _callbackRegistered = true;
   }
 
   void _detachCallbackIfUnused() {
-    if (_callbackRegistered && _listeners.isEmpty) {
-      FlutterForegroundTask.removeTaskDataCallback(_handleTaskData);
+    if (_callbackRegistered && _listeners.isEmpty && _totalUsage == 0) {
+      _removeTaskDataCallback(_handleTaskData);
       _callbackRegistered = false;
     }
+  }
+
+  Future<void> _awaitTaskReady() async {
+    if (_taskReady) {
+      return;
+    }
+    final completer = _taskReadyCompleter ??= Completer<void>();
+    try {
+      await completer.future.timeout(_taskReadyTimeout);
+    } on TimeoutException catch (error) {
+      throw ForegroundServiceUnavailableException(error);
+    }
+  }
+
+  void _completeTaskReady() {
+    _taskReady = true;
+    final completer = _taskReadyCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  void _resetTaskReady() {
+    _taskReady = false;
+    _taskReadyCompleter = null;
+  }
+
+  static Future<bool> _defaultIsRunningService() =>
+      FlutterForegroundTask.isRunningService;
+
+  static Future<void> _defaultStartForegroundService(
+    ForegroundServiceConfig config,
+  ) async {
+    final result = await FlutterForegroundTask.startService(
+      serviceId: _foregroundServiceId,
+      notificationTitle: config.notificationTitle,
+      notificationText: config.notificationText,
+      notificationIcon: config.notificationIcon,
+      callback: startCallback,
+      notificationInitialRoute: '/',
+    );
+    if (result is ServiceRequestSuccess) {
+      return;
+    }
+    final error = result is ServiceRequestFailure ? result.error : null;
+    throw ForegroundServiceUnavailableException(
+      error is Exception ? error : null,
+    );
+  }
+
+  static Future<void> _defaultStopForegroundService() =>
+      FlutterForegroundTask.stopService();
+
+  static void _defaultInitCommunicationPort() {
+    FlutterForegroundTask.initCommunicationPort();
+  }
+
+  static void _defaultAddTaskDataCallback(
+    Future<void> Function(dynamic) callback,
+  ) {
+    FlutterForegroundTask.addTaskDataCallback(callback);
+  }
+
+  static void _defaultRemoveTaskDataCallback(
+    Future<void> Function(dynamic) callback,
+  ) {
+    FlutterForegroundTask.removeTaskDataCallback(callback);
+  }
+
+  static void _defaultSendDataToTask(String data) {
+    FlutterForegroundTask.sendDataToTask(data);
   }
 }
 
@@ -353,6 +492,7 @@ class ForegroundSocket extends TaskHandler {
     _socket ??= XmppSocketWrapper();
     _dataSubscription = _socket!.getDataStream().listen(_onData);
     _eventSubscription = _socket!.getEventStream().listen(_onEvent);
+    _sendToMain([taskReadyPrefix]);
   }
 
   @override
@@ -705,20 +845,11 @@ void _configureLogging() {
     Logger.root
       ..level = Level.ALL
       ..onRecord.listen((record) {
-        final sanitizedMessage = SafeLogging.sanitizeMessage(record.message);
-        final sanitizedError = SafeLogging.sanitizeError(record.error);
-        final sanitizedStackTrace = SafeLogging.sanitizeStackTrace(
-          record.stackTrace,
-        );
-        final buffer = StringBuffer()
-          ..write('${record.level.name}: ${record.time}: $sanitizedMessage');
-        if (record.stackTrace != null) {
-          buffer
-            ..write(' Exception: $sanitizedError')
-            ..write(' Stack Trace: $sanitizedStackTrace');
+        if (!SafeLogging.shouldEmitDebugRecord(record)) {
+          return;
         }
         // ignore: avoid_print
-        print(buffer.toString());
+        print(SafeLogging.formatDebugRecord(record));
       });
     return;
   }

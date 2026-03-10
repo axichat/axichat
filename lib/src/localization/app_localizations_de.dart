@@ -2977,6 +2977,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Gruppenchat konnte nicht erstellt werden.';
 
   @override
+  String get chatsCreateGroupAlreadyExists =>
+      'Ein Gruppenchat mit diesem Namen existiert bereits.';
+
+  @override
   String get chatsRefreshFailed => 'Synchronisierung fehlgeschlagen.';
 
   @override
@@ -3041,6 +3045,11 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get rosterAddTitle => 'Kontakt hinzufügen';
+
+  @override
+  String rosterAddedToContacts(Object user) {
+    return '$user zu Kontakten hinzugefügt.';
+  }
 
   @override
   String get rosterEmpty => 'Noch keine Kontakte';

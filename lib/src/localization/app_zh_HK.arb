@@ -1142,6 +1142,7 @@
   "chatsCreateGroupChatTooltip": "建立群組聊天",
   "chatsCreateGroupSuccess": "群組聊天已建立。",
   "chatsCreateGroupFailure": "無法建立群組聊天。",
+  "chatsCreateGroupAlreadyExists": "同名群組聊天已存在。",
   "chatsRefreshFailed": "同步失敗。",
   "chatsRoomLabel": "聊天室",
   "chatsCreateChatRoomTitle": "建立聊天室",
@@ -1177,6 +1178,12 @@
   "rosterAddTooltip": "加入聯絡人",
   "rosterAddLabel": "聯絡人",
   "rosterAddTitle": "新增聯絡人",
+  "rosterAddedToContacts": "已將{user}加入聯絡人。",
+  "@rosterAddedToContacts": {
+    "placeholders": {
+      "user": {}
+    }
+  },
   "rosterEmpty": "暫無聯絡人",
   "rosterCompose": "撰寫",
   "rosterRemoveConfirm": "將 {jid} 從聯絡人移除？",

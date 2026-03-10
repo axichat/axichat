@@ -142,20 +142,22 @@ mixin RosterService on XmppBase, BaseStreamService, MessageService, MucService {
   Future<void> _ensureConversationIndexEntryForContact(String jid) async {
     final normalized = jid.trim();
     if (normalized.isEmpty) return;
-    final createdAt = DateTime.timestamp();
+    final emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(0);
     final existing = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(normalized),
     );
     if (existing == null) {
       await _dbOp<XmppDatabase>(
         (db) => db.createChat(
-          Chat.fromJid(normalized).copyWith(lastChangeTimestamp: createdAt),
+          Chat.fromJid(
+            normalized,
+          ).copyWith(lastChangeTimestamp: emptyTimestamp),
         ),
       );
     }
     await _upsertConversationIndexForPeer(
       peerJid: normalized,
-      lastTimestamp: existing?.lastChangeTimestamp ?? createdAt,
+      lastTimestamp: existing?.lastChangeTimestamp ?? emptyTimestamp,
       lastId: null,
     );
   }

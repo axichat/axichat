@@ -52,8 +52,6 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
   List<mox.StanzaHandler> getIncomingStanzaHandlers() => [
     mox.StanzaHandler(
       stanzaTag: _presenceTag,
-      tagName: 'x',
-      tagXmlns: _mucUserXmlns,
       priority: _handlerPriority,
       callback: _onPresence,
     ),

@@ -280,10 +280,24 @@ mixin AvatarService on XmppBase, MucService {
         final bareJid = event.jid.toBare().toString();
         final myBareJid = _myJid?.toBare().toString();
         final isSelf = myBareJid != null && myBareJid == bareJid;
+        final isMuc = _isMucAvatarJid(bareJid);
         _avatarLog.fine(
           'VCard avatar update received. isSelf=$isSelf '
+          'isMuc=$isMuc '
           'hasHash=${event.hash.isNotEmpty}.',
         );
+        if (isMuc) {
+          if (event.hash.isEmpty) {
+            _avatarLog.fine('MUC VCard avatar hash empty; clearing avatar.');
+            await _clearAvatarForJid(
+              bareJid,
+              reason: _avatarClearReasonVcardEmpty,
+            );
+            return;
+          }
+          await _refreshRoomAvatar(bareJid);
+          return;
+        }
         if (event.hash.isEmpty) {
           if (isSelf) {
             _avatarLog.fine('VCard avatar hash empty; ignoring for self.');

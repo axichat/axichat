@@ -883,6 +883,9 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
             contactJid: peerJid,
           ),
         );
+        if (shouldUpdateTimestamp) {
+          await db.repairChatSummaryPreservingTimestamp(peerJid);
+        }
       }
     }, awaitDatabase: true);
   }
@@ -1002,7 +1005,7 @@ class MUCManager extends mox.MUCManager {
     required String roomJid,
     required List<mox.XMLNode> items,
   }) async {
-    await getAttributes().sendStanza(
+    final result = await getAttributes().sendStanza(
       mox.StanzaDetails(
         mox.Stanza.iq(
           type: 'set',
@@ -1017,5 +1020,8 @@ class MUCManager extends mox.MUCManager {
         ),
       ),
     );
+    if (result == null || result.attributes['type'] != 'result') {
+      throw XmppMessageException();
+    }
   }
 }

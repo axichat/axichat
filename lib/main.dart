@@ -144,19 +144,10 @@ void _configureLogging() {
     Logger.root
       ..level = Level.ALL
       ..onRecord.listen((record) {
-        final sanitizedMessage = SafeLogging.sanitizeMessage(record.message);
-        final sanitizedError = SafeLogging.sanitizeError(record.error);
-        final sanitizedStackTrace = SafeLogging.sanitizeStackTrace(
-          record.stackTrace,
-        );
-        final buffer = StringBuffer()
-          ..write('${record.level.name}: ${record.time}: $sanitizedMessage');
-        if (record.stackTrace != null) {
-          buffer
-            ..write(' Exception: $sanitizedError')
-            ..write(' Stack Trace: $sanitizedStackTrace');
+        if (!SafeLogging.shouldEmitDebugRecord(record)) {
+          return;
         }
-        print(buffer.toString());
+        print(SafeLogging.formatDebugRecord(record));
       });
     return;
   }

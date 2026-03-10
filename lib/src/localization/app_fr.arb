@@ -1145,6 +1145,7 @@
   "chatsCreateGroupChatTooltip": "Créer un chat de groupe",
   "chatsCreateGroupSuccess": "Discussion de groupe créée.",
   "chatsCreateGroupFailure": "Impossible de créer la discussion de groupe.",
+  "chatsCreateGroupAlreadyExists": "Une discussion de groupe avec ce nom existe déjà.",
   "chatsRefreshFailed": "Synchronisation échouée.",
   "chatsRoomLabel": "Salle",
   "chatsCreateChatRoomTitle": "Créer une salle de chat",
@@ -1180,6 +1181,12 @@
   "rosterAddTooltip": "Ajouter au carnet d’adresses",
   "rosterAddLabel": "Ajouter un contact",
   "rosterAddTitle": "Ajouter un contact",
+  "rosterAddedToContacts": "{user} ajouté aux contacts.",
+  "@rosterAddedToContacts": {
+    "placeholders": {
+      "user": {}
+    }
+  },
   "rosterEmpty": "Aucun contact pour l’instant",
   "rosterCompose": "Composer",
   "rosterRemoveConfirm": "Retirer {jid} des contacts ?",

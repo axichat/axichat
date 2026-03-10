@@ -14,6 +14,7 @@ abstract class ChatsState with _$ChatsState {
     @Default(ChatRouteIndex.main) ChatRouteIndex openChatRoute,
     required List<Chat>? items,
     required RequestStatus creationStatus,
+    ChatsCreateRoomFailure? creationFailure,
     @Default(RequestStatus.none) RequestStatus refreshStatus,
     DateTime? lastSyncedAt,
     @Default(<String>{}) Set<String> selectedJids,

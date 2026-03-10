@@ -940,7 +940,9 @@ class _DonationRequestBanner extends StatelessWidget {
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, profileState) {
         if (!settingsState.showsDonationPrompt(
-          profileState.storedConversationMessageCount,
+          accountJid: profileState.jid,
+          storedConversationMessageCount:
+              profileState.storedConversationMessageCount,
         )) {
           return const SizedBox.shrink();
         }
@@ -995,6 +997,7 @@ class _DonationRequestBanner extends StatelessWidget {
                       size: AxiButtonSize.lg,
                       onPressed: () =>
                           context.read<SettingsCubit>().hideDonationPrompt(
+                            accountJid: profileState.jid,
                             storedConversationMessageCount:
                                 profileState.storedConversationMessageCount,
                           ),

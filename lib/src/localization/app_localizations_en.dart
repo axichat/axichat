@@ -2925,6 +2925,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatsCreateGroupFailure => 'Could not create group chat.';
 
   @override
+  String get chatsCreateGroupAlreadyExists =>
+      'A group chat with that name already exists.';
+
+  @override
   String get chatsRefreshFailed => 'Sync failed.';
 
   @override
@@ -2989,6 +2993,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get rosterAddTitle => 'Add contact';
+
+  @override
+  String rosterAddedToContacts(Object user) {
+    return '$user added to contacts.';
+  }
 
   @override
   String get rosterEmpty => 'No contacts yet';

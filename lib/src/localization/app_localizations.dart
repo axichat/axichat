@@ -5262,6 +5262,12 @@ abstract class AppLocalizations {
   /// **'Could not create group chat.'**
   String get chatsCreateGroupFailure;
 
+  /// No description provided for @chatsCreateGroupAlreadyExists.
+  ///
+  /// In en, this message translates to:
+  /// **'A group chat with that name already exists.'**
+  String get chatsCreateGroupAlreadyExists;
+
   /// No description provided for @chatsRefreshFailed.
   ///
   /// In en, this message translates to:
@@ -5381,6 +5387,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Add contact'**
   String get rosterAddTitle;
+
+  /// No description provided for @rosterAddedToContacts.
+  ///
+  /// In en, this message translates to:
+  /// **'{user} added to contacts.'**
+  String rosterAddedToContacts(Object user);
 
   /// No description provided for @rosterEmpty.
   ///

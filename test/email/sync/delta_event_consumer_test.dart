@@ -56,6 +56,9 @@ void main() {
     ).thenAnswer((_) async => null);
     when(() => database.getChat(any())).thenAnswer((_) async => null);
     when(
+      () => database.repairChatSummaryPreservingTimestamp(any()),
+    ).thenAnswer((_) async {});
+    when(
       () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
     ).thenAnswer((_) async {});
     when(() => database.deleteMessage(any())).thenAnswer((_) async {});
@@ -512,4 +515,98 @@ void main() {
     expect(persisted.timestamp, deltaTimestamp);
     verifyNever(() => database.updateMessage(any()));
   });
+
+  test(
+    'matches a pending outgoing email when Delta uses the empty-subject sentinel',
+    () async {
+      const chatId = 12;
+      const msgId = 52;
+      final chat = Chat(
+        jid: 'alice@example.com',
+        title: 'Alice',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+      );
+      final pending = Message(
+        stanzaID: 'pending-nosubject',
+        senderJid: 'me@example.com',
+        chatJid: chat.jid,
+        timestamp: DateTime.utc(2024, 1, 1, 9),
+        body: 'Body without subject',
+        deltaAccountId: DeltaAccountDefaults.legacyId,
+        deltaChatId: chatId,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        subject: '\u2060',
+        text: 'Body without subject',
+        timestamp: DateTime.utc(2024, 1, 1, 9, 0, 30),
+        isOutgoing: true,
+      );
+
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(
+        () => database.upsertEmailChatAccount(
+          chatJid: chat.jid,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async {});
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getMessageByDeltaId(
+          msgId,
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getMessageByDeltaId(msgId, chatJid: chat.jid),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getPendingOutgoingDeltaMessages(
+          deltaAccountId: DeltaAccountDefaults.legacyId,
+          deltaChatId: chatId,
+        ),
+      ).thenAnswer((_) async => [pending]);
+      when(() => database.updateMessage(any())).thenAnswer((_) async {});
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+
+      await consumer.handle(
+        DeltaCoreEvent(
+          type: DeltaEventType.msgsChanged.code,
+          data1: chatId,
+          data2: msgId,
+        ),
+      );
+
+      verifyNever(
+        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+      );
+      expect(
+        verify(() => database.updateMessage(captureAny())).captured.any(
+          (value) =>
+              value is Message &&
+              value.stanzaID == pending.stanzaID &&
+              value.deltaMsgId == msgId &&
+              value.subject == null,
+        ),
+        isTrue,
+      );
+    },
+  );
 }

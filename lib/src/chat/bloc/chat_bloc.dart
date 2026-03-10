@@ -25,6 +25,7 @@ import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/safe_logging.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -38,6 +39,7 @@ import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/util/email_address.dart';
+import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/settings/app_language.dart';
@@ -465,6 +467,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _lastReadMarkerStanzaId;
   String? _lastNoticedEmailMessageId;
   int? _lastNoticedEmailUnreadCount;
+  String? _lastSeenEmailSyncKey;
   int? _emailUnreadBoundaryDeltaId;
   int? _emailUnreadBoundaryUnreadCount;
   String? _lastOccupantTrackedStanzaId;
@@ -582,24 +585,40 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final latestSeenCandidateId = seenCandidates.isNotEmpty
         ? seenCandidates.last.stanzaID
         : null;
-    if (hasUnread || latestSeenCandidateId != null) {
+    if (hasUnread) {
       final shouldNotify =
           _lastNoticedEmailUnreadCount != chat.unreadCount ||
           _lastNoticedEmailMessageId != latestSeenCandidateId;
       if (shouldNotify) {
-        await emailService.markNoticedChat(chat);
-        _lastNoticedEmailUnreadCount = chat.unreadCount;
-        _lastNoticedEmailMessageId = latestSeenCandidateId;
+        final noticed = await emailService.markNoticedChat(chat);
+        if (noticed) {
+          _lastNoticedEmailUnreadCount = chat.unreadCount;
+          _lastNoticedEmailMessageId = latestSeenCandidateId;
+        }
       }
     }
     if (seenCandidates.isEmpty) {
+      _lastSeenEmailSyncKey = null;
       return;
     }
     final shouldSendEmailReadReceipts = _settingsSnapshot.emailReadReceipts;
+    final seenSyncKey = [
+      if (shouldSendEmailReadReceipts) 'seen' else 'displayed',
+      ...seenCandidates.map(
+        (message) => message.deltaMsgId?.toString() ?? message.stanzaID.trim(),
+      ),
+    ].join('|');
+    if (seenSyncKey == _lastSeenEmailSyncKey) {
+      return;
+    }
     if (shouldSendEmailReadReceipts) {
-      await emailService.markSeenMessages(seenCandidates);
+      final markedSeen = await emailService.markSeenMessages(seenCandidates);
+      if (markedSeen) {
+        _lastSeenEmailSyncKey = seenSyncKey;
+      }
     } else {
       await _markEmailMessagesDisplayedLocally(seenCandidates);
+      _lastSeenEmailSyncKey = seenSyncKey;
     }
   }
 
@@ -1420,6 +1439,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _lastReadMarkerStanzaId = null;
       _lastNoticedEmailMessageId = null;
       _lastNoticedEmailUnreadCount = null;
+      _lastSeenEmailSyncKey = null;
       _emailUnreadBoundaryDeltaId = null;
       _emailUnreadBoundaryUnreadCount = null;
       _loadEarlierQueue = Future<void>.value();
@@ -2135,7 +2155,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   bool _countsTowardUnread(Message message) {
     final hasBody = message.body?.trim().isNotEmpty == true;
     final hasAttachment = message.fileMetadataID?.trim().isNotEmpty == true;
-    if (!(hasBody || hasAttachment) || message.pseudoMessageType != null) {
+    final pseudoMessageType = message.pseudoMessageType;
+    if (!(hasBody || hasAttachment)) {
+      return false;
+    }
+    if (pseudoMessageType != null && !pseudoMessageType.isInvite) {
       return false;
     }
     final chat = state.chat;
@@ -2687,7 +2711,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     try {
       await _mucService.inviteUserToRoom(
         roomJid: chat.jid,
-        inviteeJid: event.jid,
+        inviteeJid: inviteeBare ?? event.jid,
         reason: event.reason,
       );
       emit(
@@ -4357,14 +4381,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _attachToast(
           state,
           ChatToast(
-            title: event.failureTitle,
+            messageText: event.failureMessage,
             variant: ChatToastVariant.destructive,
           ),
         ),
       );
       return;
     }
-    emit(_attachToast(nextState, ChatToast(title: event.successTitle)));
+    emit(_attachToast(nextState, ChatToast(messageText: event.successMessage)));
   }
 
   Future<void> _onChatRecipientEmailChatRequested(
@@ -4504,15 +4528,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final target = event.target;
     final message = event.message;
-    final plainText = message.plainText.trim();
-    final htmlBody = message.normalizedHtmlBody;
     final isEmailTarget = _isEmailForwardTarget(target);
     final targetChat = target.chat;
     final targetJid = (targetChat?.jid ?? target.address)?.trim();
-    final forwardingMode = event.forwardingMode;
-    final safeForward = isEmailTarget && forwardingMode.isSafe;
-    final resolvedHtmlBody = safeForward ? null : htmlBody;
     final emailService = _emailService;
+    final syntheticForward = _syntheticForwardEnvelope(message);
+    final syntheticXmppText = ChatSubjectCodec.composeXmppBody(
+      body: syntheticForward.body,
+      subject: syntheticForward.xmppSubject,
+    );
+    final syntheticXmppHtml = syntheticForward.xmppHtmlBody;
+    final syntheticEmailCaption = syntheticForward.body.isEmpty
+        ? null
+        : syntheticForward.body;
+    final syntheticEmailHtml = syntheticForward.emailHtmlBody;
     void emitForwardSuccess() {
       emit(
         _attachToast(
@@ -4557,8 +4586,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (isEmailTarget &&
           emailService != null &&
           resolvedEmailTarget != null &&
-          message.deltaMsgId != null &&
-          forwardingMode.isOriginal) {
+          message.deltaMsgId != null) {
         final forwarded = await emailService.forwardMessages(
           messages: [message],
           toChat: resolvedEmailTarget,
@@ -4570,8 +4598,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       final attachments = await _attachmentsForMessage(message);
       if (attachments.isNotEmpty) {
-        final caption = plainText.isNotEmpty ? plainText : null;
-        final htmlCaption = safeForward ? null : htmlBody;
         if (isEmailTarget) {
           if (emailService == null || resolvedEmailTarget == null) {
             emitForwardFailure();
@@ -4581,17 +4607,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
               attachments.length >= _emailAttachmentBundleMinimumCount;
           final bundled = await _bundleEmailAttachmentList(
             attachments: attachments,
-            caption: caption,
+            caption: syntheticEmailCaption,
           );
           for (var index = 0; index < bundled.length; index += 1) {
             final attachment = bundled[index];
-            final captionedAttachment = index == 0 && caption != null
-                ? attachment.copyWith(caption: caption)
+            final captionedAttachment =
+                index == 0 && syntheticEmailCaption != null
+                ? attachment.copyWith(caption: syntheticEmailCaption)
                 : attachment;
             await emailService.sendAttachment(
               chat: resolvedEmailTarget,
               attachment: captionedAttachment,
-              htmlCaption: index == 0 ? htmlCaption : null,
+              subject: syntheticForward.emailSubject,
+              htmlCaption: index == 0 ? syntheticEmailHtml : null,
               forwarded: true,
               forwardedFromJid: message.senderJid,
             );
@@ -4605,9 +4633,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final attachmentGroupId = attachments.length > 1 ? uuid.v4() : null;
         for (var index = 0; index < attachments.length; index += 1) {
           final attachment = attachments[index];
-          final shouldApplyCaption = caption != null && index == 0;
-          final captionedAttachment = shouldApplyCaption
-              ? attachment.copyWith(caption: caption)
+          final captionedAttachment = index == 0
+              ? attachment.copyWith(caption: syntheticXmppText)
               : attachment;
           await _messageService.sendAttachment(
             jid: targetJid!,
@@ -4615,7 +4642,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             encryptionProtocol:
                 targetChat?.encryptionProtocol ?? EncryptionProtocol.none,
             chatType: targetChat?.type ?? ChatType.chat,
-            htmlCaption: shouldApplyCaption ? resolvedHtmlBody : null,
+            htmlCaption: index == 0 ? syntheticXmppHtml : null,
             forwarded: true,
             forwardedFromJid: message.senderJid,
             transportGroupId: attachmentGroupId,
@@ -4625,10 +4652,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emitForwardSuccess();
         return;
       }
-      if (plainText.isEmpty && resolvedHtmlBody == null) {
-        emitForwardFailure();
-        return;
-      }
       if (isEmailTarget) {
         if (emailService == null || resolvedEmailTarget == null) {
           emitForwardFailure();
@@ -4636,16 +4659,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         await emailService.sendMessage(
           chat: resolvedEmailTarget,
-          body: plainText,
-          htmlBody: resolvedHtmlBody,
+          body: syntheticForward.body,
+          subject: syntheticForward.emailSubject,
+          htmlBody: syntheticEmailHtml,
           forwarded: true,
           forwardedFromJid: message.senderJid,
         );
       } else {
         await _messageService.sendMessage(
           jid: targetJid!,
-          text: plainText,
-          htmlBody: resolvedHtmlBody,
+          text: syntheticXmppText,
+          htmlBody: syntheticXmppHtml,
           forwarded: true,
           forwardedFromJid: message.senderJid,
           encryptionProtocol:
@@ -4686,6 +4710,125 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       address: address,
       displayName: target.displayName,
     );
+  }
+
+  ({
+    String emailSubject,
+    String xmppSubject,
+    String body,
+    String? emailHtmlBody,
+    String? xmppHtmlBody,
+  })
+  _syntheticForwardEnvelope(Message message) {
+    final display = message.deltaChatId != null || message.deltaMsgId != null
+        ? ChatSubjectCodec.splitEmailBody(
+            body: message.body,
+            subject: message.subject,
+          )
+        : ChatSubjectCodec.splitDisplayBody(
+            body: message.body,
+            subject: message.subject,
+          );
+    final originalSubject = display.subject?.trim();
+    var originalBody = display.body.trim();
+    if (originalBody.isEmpty) {
+      final normalizedHtml = message.normalizedHtmlBody;
+      if (normalizedHtml != null) {
+        originalBody = HtmlContentCodec.toPlainText(normalizedHtml).trim();
+        if (originalSubject != null && originalSubject.isNotEmpty) {
+          originalBody = ChatSubjectCodec.stripRepeatedSubject(
+            body: originalBody,
+            subject: originalSubject,
+          ).trim();
+        }
+      }
+    }
+    final sections = <String>[
+      if (originalSubject != null && originalSubject.isNotEmpty)
+        '$forwardedBodySubjectPrefix $originalSubject',
+      if (originalBody.isNotEmpty) originalBody,
+    ];
+    final body = sections.join('\n\n');
+    final senderLabel = _forwardedSenderDisplayLabel(message);
+    final subjectText = syntheticForwardVisibleSubject(
+      senderLabel: senderLabel,
+    );
+    final bodyHtml = _syntheticForwardBodyHtml(
+      originalSubject: originalSubject,
+      originalBody: originalBody,
+      originalHtmlBody: message.normalizedHtmlBody,
+    );
+    final emailHtml = injectSyntheticForwardHtmlMarker(bodyHtml);
+    final xmppHtml = _syntheticForwardXmppHtml(
+      subjectText: subjectText,
+      body: body,
+      bodyHtml: bodyHtml,
+    );
+    return (
+      emailSubject: subjectText,
+      xmppSubject: markSyntheticForwardSubject(subjectText),
+      body: body,
+      emailHtmlBody: emailHtml,
+      xmppHtmlBody: xmppHtml.isEmpty ? null : xmppHtml,
+    );
+  }
+
+  String? _syntheticForwardBodyHtml({
+    required String? originalSubject,
+    required String originalBody,
+    required String? originalHtmlBody,
+  }) {
+    final normalizedOriginalHtml = HtmlContentCodec.normalizeHtml(
+      originalHtmlBody,
+    );
+    final subjectHeader = originalSubject == null || originalSubject.isEmpty
+        ? null
+        : HtmlContentCodec.fromPlainText(
+            '$forwardedBodySubjectPrefix $originalSubject',
+          );
+    if (normalizedOriginalHtml != null && normalizedOriginalHtml.isNotEmpty) {
+      if (subjectHeader == null) {
+        return normalizedOriginalHtml;
+      }
+      return '$subjectHeader<br />\n<br />\n$normalizedOriginalHtml';
+    }
+    final sections = <String>[
+      if (originalSubject != null && originalSubject.isNotEmpty)
+        '$forwardedBodySubjectPrefix $originalSubject',
+      if (originalBody.isNotEmpty) originalBody,
+    ];
+    if (sections.isEmpty) {
+      return null;
+    }
+    return HtmlContentCodec.fromPlainText(sections.join('\n\n'));
+  }
+
+  String _syntheticForwardXmppHtml({
+    required String subjectText,
+    required String body,
+    required String? bodyHtml,
+  }) {
+    final subjectHtml = HtmlContentCodec.fromPlainText(subjectText);
+    if (bodyHtml != null && bodyHtml.isNotEmpty) {
+      return '$subjectHtml<br />\n<br />\n$bodyHtml';
+    }
+    if (body.isEmpty) {
+      return subjectHtml;
+    }
+    return HtmlContentCodec.fromPlainText('$subjectText\n\n$body');
+  }
+
+  String _forwardedSenderDisplayLabel(Message message) {
+    final parsed = parseJid(message.senderJid);
+    final resource = parsed?.resource.trim();
+    if (resource != null && resource.isNotEmpty) {
+      return resource;
+    }
+    final safeAddress = displaySafeAddress(message.senderJid);
+    if (safeAddress != null && safeAddress.trim().isNotEmpty) {
+      return safeAddress.trim();
+    }
+    return message.senderJid.trim();
   }
 
   Future<void> _onChatMessageResendRequested(

@@ -1149,6 +1149,7 @@
   "chatsCreateGroupChatTooltip": "Gruppenchat erstellen",
   "chatsCreateGroupSuccess": "Gruppenchat erstellt.",
   "chatsCreateGroupFailure": "Gruppenchat konnte nicht erstellt werden.",
+  "chatsCreateGroupAlreadyExists": "Ein Gruppenchat mit diesem Namen existiert bereits.",
   "chatsRefreshFailed": "Synchronisierung fehlgeschlagen.",
   "chatsRoomLabel": "Raum",
   "chatsCreateChatRoomTitle": "Chatraum erstellen",
@@ -1184,6 +1185,12 @@
   "rosterAddTooltip": "Zum Adressbuch hinzufügen",
   "rosterAddLabel": "Kontakt",
   "rosterAddTitle": "Kontakt hinzufügen",
+  "rosterAddedToContacts": "{user} zu Kontakten hinzugefügt.",
+  "@rosterAddedToContacts": {
+    "placeholders": {
+      "user": {}
+    }
+  },
   "rosterEmpty": "Noch keine Kontakte",
   "rosterCompose": "Verfassen",
   "rosterRemoveConfirm": "{jid} aus Kontakten entfernen?",

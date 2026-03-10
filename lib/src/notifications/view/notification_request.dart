@@ -91,6 +91,8 @@ class _NotificationRequestBody extends StatelessWidget {
               ? null
               : (enabled) async {
                   if (!enabled) {
+                    locate<NotificationRequestCubit>()
+                        .disableForegroundService();
                     context.read<SettingsCubit>().toggleBackgroundMessaging(
                       false,
                     );

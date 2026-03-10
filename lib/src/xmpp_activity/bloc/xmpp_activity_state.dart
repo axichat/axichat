@@ -44,8 +44,6 @@ class XmppOperation {
       XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchStart,
       XmppOperationKind.mucCreate => XmppOperationLabelKey.mucCreateStart,
       XmppOperationKind.mucJoin => XmppOperationLabelKey.mucJoinStart,
-      XmppOperationKind.mucAvatarUpdate =>
-        XmppOperationLabelKey.mucAvatarUpdateStart,
       XmppOperationKind.selfAvatarPublish =>
         XmppOperationLabelKey.selfAvatarPublishStart,
     },
@@ -68,8 +66,6 @@ class XmppOperation {
       XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchSuccess,
       XmppOperationKind.mucCreate => XmppOperationLabelKey.mucCreateSuccess,
       XmppOperationKind.mucJoin => XmppOperationLabelKey.mucJoinSuccess,
-      XmppOperationKind.mucAvatarUpdate =>
-        XmppOperationLabelKey.mucAvatarUpdateSuccess,
       XmppOperationKind.selfAvatarPublish =>
         XmppOperationLabelKey.selfAvatarPublishSuccess,
     },
@@ -92,8 +88,6 @@ class XmppOperation {
       XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchFailure,
       XmppOperationKind.mucCreate => XmppOperationLabelKey.mucCreateFailure,
       XmppOperationKind.mucJoin => XmppOperationLabelKey.mucJoinFailure,
-      XmppOperationKind.mucAvatarUpdate =>
-        XmppOperationLabelKey.mucAvatarUpdateFailure,
       XmppOperationKind.selfAvatarPublish =>
         XmppOperationLabelKey.selfAvatarPublishFailure,
     },
@@ -150,9 +144,6 @@ enum XmppOperationLabelKey {
   mucJoinStart,
   mucJoinSuccess,
   mucJoinFailure,
-  mucAvatarUpdateStart,
-  mucAvatarUpdateSuccess,
-  mucAvatarUpdateFailure,
   selfAvatarPublishStart,
   selfAvatarPublishSuccess,
   selfAvatarPublishFailure,

@@ -2979,6 +2979,10 @@ class AppLocalizationsFr extends AppLocalizations {
       'Impossible de créer la discussion de groupe.';
 
   @override
+  String get chatsCreateGroupAlreadyExists =>
+      'Une discussion de groupe avec ce nom existe déjà.';
+
+  @override
   String get chatsRefreshFailed => 'Synchronisation échouée.';
 
   @override
@@ -3044,6 +3048,11 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get rosterAddTitle => 'Ajouter un contact';
+
+  @override
+  String rosterAddedToContacts(Object user) {
+    return '$user ajouté aux contacts.';
+  }
 
   @override
   String get rosterEmpty => 'Aucun contact pour l’instant';

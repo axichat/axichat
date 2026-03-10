@@ -5,6 +5,8 @@ import 'package:axichat/src/common/html_content.dart';
 
 class ChatSubjectCodec {
   static const String _marker = '\u2060';
+  static const String _invitePrefix = 'axc-invite:';
+  static const String _inviteRevokePrefix = 'axc-invite-revoke:';
 
   static String composeXmppBody({
     required String body,
@@ -49,6 +51,17 @@ class ChatSubjectCodec {
     return splitXmppBody(body);
   }
 
+  static ({String? subject, String body}) splitEmailBody({
+    required String? body,
+    required String? subject,
+  }) {
+    final explicitSubject = subject?.trim();
+    return (
+      subject: explicitSubject?.isNotEmpty == true ? explicitSubject : null,
+      body: body ?? '',
+    );
+  }
+
   static String? previewText({
     required String? body,
     required String? subject,
@@ -71,6 +84,29 @@ class ChatSubjectCodec {
     }
     if (trimmedSubject?.isNotEmpty == true) {
       return trimmedSubject;
+    }
+    if (trimmedBody.isNotEmpty) {
+      return trimmedBody;
+    }
+    return null;
+  }
+
+  static String? previewEmailText({
+    required String? body,
+    required String? subject,
+  }) {
+    final split = splitEmailBody(body: body, subject: subject);
+    final explicitSubject = split.subject?.trim();
+    final trimmedBody = previewBodyText(
+      explicitSubject?.isNotEmpty == true
+          ? stripRepeatedSubject(body: split.body, subject: explicitSubject!)
+          : split.body,
+    ).trim();
+    if (explicitSubject?.isNotEmpty == true && trimmedBody.isNotEmpty) {
+      return '$explicitSubject — $trimmedBody';
+    }
+    if (explicitSubject?.isNotEmpty == true) {
+      return explicitSubject;
     }
     if (trimmedBody.isNotEmpty) {
       return trimmedBody;
@@ -105,6 +141,20 @@ class ChatSubjectCodec {
       return HtmlContentCodec.toPlainText(rawBody).trim();
     }
     return rawBody;
+  }
+
+  static bool containsInviteEnvelope(String? body) =>
+      _containsEnvelopeLine(body, _invitePrefix);
+
+  static bool containsInviteRevocationEnvelope(String? body) =>
+      _containsEnvelopeLine(body, _inviteRevokePrefix);
+
+  static bool _containsEnvelopeLine(String? body, String prefix) {
+    final normalized = previewBodyText(body);
+    if (normalized.isEmpty) {
+      return false;
+    }
+    return normalized.split('\n').any((line) => line.trim().startsWith(prefix));
   }
 
   static bool _startsWithIgnoreCase(String value, String prefix) =>

@@ -455,6 +455,8 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> updateChat(Chat chat);
 
+  Future<void> repairChatSummaryPreservingTimestamp(String jid);
+
   Future<void> clearChatsEmailFromAddress(String address);
 
   Stream<Chat?> watchChat(String jid);
@@ -2363,7 +2365,6 @@ WHERE transport IS NULL
     _log.fine('Persisting message');
     final resolvedMessageId = message.id ?? uuid.v4();
     final trimmedBody = message.body?.trim();
-    final hasBody = trimmedBody?.isNotEmpty == true;
     final trimmedMetadataId = message.fileMetadataID?.trim();
     final hasAttachment = trimmedMetadataId?.isNotEmpty == true;
     final messageTimestamp = message.timestamp ?? DateTime.timestamp();
@@ -2372,19 +2373,25 @@ WHERE transport IS NULL
       fileMetadataId: trimmedMetadataId,
     );
     final bool shouldUpdateChatSummary = !isInternalSync;
+    final currentChat = await getChat(message.chatJid);
     final bool isSelfMessage = sameNormalizedAddressValue(
       message.senderJid,
       selfJid,
     );
     final bool shouldIncrementUnread =
         shouldUpdateChatSummary &&
-        (hasBody || hasAttachment) &&
-        message.pseudoMessageType == null &&
+        _messageCountsTowardUnread(
+          trimmedBody: trimmedBody,
+          fileMetadataId: message.fileMetadataID,
+          pseudoMessageType: message.pseudoMessageType,
+        ) &&
         !isSelfMessage;
     final int unreadIncrement = shouldIncrementUnread ? 1 : 0;
-    final DateTime? existingLastChangeTimestamp = shouldUpdateChatSummary
-        ? null
-        : (await getChat(message.chatJid))?.lastChangeTimestamp;
+    final bool shouldRepairSummaryAfterSave =
+        shouldUpdateChatSummary &&
+        currentChat?.lastChangeTimestamp.isAfter(messageTimestamp) == true;
+    final DateTime? existingLastChangeTimestamp =
+        currentChat?.lastChangeTimestamp;
     final DateTime resolvedLastChangeTimestamp = shouldUpdateChatSummary
         ? messageTimestamp
         : (existingLastChangeTimestamp ??
@@ -2393,6 +2400,8 @@ WHERE transport IS NULL
         ? await _messagePreview(
             trimmedBody: trimmedBody,
             subject: message.subject,
+            deltaChatId: message.deltaChatId,
+            deltaMsgId: message.deltaMsgId,
             fileMetadataId: message.fileMetadataID,
             hasAttachment: hasAttachment,
             pseudoMessageType: message.pseudoMessageType,
@@ -2451,6 +2460,9 @@ WHERE transport IS NULL
             timestamp: messageTimestamp,
             lastMessage: lastMessagePreview,
           );
+          if (shouldRepairSummaryAfterSave) {
+            await repairChatSummaryPreservingTimestamp(message.chatJid);
+          }
         }
         return;
       }
@@ -2474,6 +2486,9 @@ WHERE transport IS NULL
           timestamp: messageTimestamp,
           lastMessage: lastMessagePreview,
         );
+        if (shouldRepairSummaryAfterSave) {
+          await repairChatSummaryPreservingTimestamp(message.chatJid);
+        }
       }
 
       final incomingBody = messageToSave.body?.trim();
@@ -2515,16 +2530,32 @@ WHERE transport IS NULL
     });
   }
 
+  bool _messageCountsTowardUnread({
+    required String? trimmedBody,
+    required String? fileMetadataId,
+    required PseudoMessageType? pseudoMessageType,
+  }) {
+    final hasBody = trimmedBody?.isNotEmpty == true;
+    final hasAttachment = fileMetadataId?.trim().isNotEmpty == true;
+    if (!(hasBody || hasAttachment)) {
+      return false;
+    }
+    if (pseudoMessageType == null) {
+      return true;
+    }
+    return pseudoMessageType.isInvite;
+  }
+
   Future<String?> _messagePreview({
     required String? trimmedBody,
     required String? subject,
+    required int? deltaChatId,
+    required int? deltaMsgId,
     required String? fileMetadataId,
     required bool hasAttachment,
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
   }) async {
-    const invitePrefix = 'axc-invite:';
-    const inviteRevokePrefix = 'axc-invite-revoke:';
     if (pseudoMessageType == PseudoMessageType.mucInvite ||
         pseudoMessageType == PseudoMessageType.mucInviteRevocation) {
       return pseudoMessageType == PseudoMessageType.mucInvite
@@ -2532,19 +2563,35 @@ WHERE transport IS NULL
           : 'Invite revoked';
     }
 
+    final bool isEmailMessage = deltaChatId != null || deltaMsgId != null;
+    if (isEmailMessage) {
+      final preview = ChatSubjectCodec.previewEmailText(
+        body: trimmedBody,
+        subject: subject,
+      );
+      if (preview != null) {
+        return preview;
+      }
+    }
     final split = ChatSubjectCodec.splitDisplayBody(
       body: trimmedBody,
       subject: subject,
     );
     final String? trimmedSubject = split.subject?.trim();
     final previewBody = ChatSubjectCodec.previewBodyText(split.body).trim();
+    if (ChatSubjectCodec.containsInviteEnvelope(previewBody)) {
+      return 'You have been invited to a group chat';
+    }
+    if (ChatSubjectCodec.containsInviteRevocationEnvelope(previewBody)) {
+      return 'Invite revoked';
+    }
     if (previewBody.isNotEmpty) {
       final lines = previewBody.split('\n');
       final filtered = lines
           .where(
             (line) =>
-                !line.trim().startsWith(invitePrefix) &&
-                !line.trim().startsWith(inviteRevokePrefix),
+                !ChatSubjectCodec.containsInviteEnvelope(line) &&
+                !ChatSubjectCodec.containsInviteRevocationEnvelope(line),
           )
           .toList();
       final cleaned = filtered.join('\n').trim();
@@ -2603,7 +2650,7 @@ SET last_change_timestamp = CASE
     last_message = CASE
       WHEN ? = 0 THEN last_message
       WHEN last_message IS NULL OR LENGTH(TRIM(last_message)) <= ? THEN ?
-      WHEN last_change_timestamp IS NULL OR last_change_timestamp < ? THEN ?
+      WHEN last_change_timestamp IS NULL OR last_change_timestamp <= ? THEN ?
       ELSE last_message
     END
 WHERE jid = ?
@@ -2781,18 +2828,21 @@ WHERE jid = ?
       final lastMessagePreview = await _messagePreview(
         trimmedBody: lastMessage?.body?.trim(),
         subject: lastMessage?.subject,
+        deltaChatId: lastMessage?.deltaChatId,
+        deltaMsgId: lastMessage?.deltaMsgId,
         fileMetadataId: lastMessage?.fileMetadataID,
         hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
         pseudoMessageType: lastMessage?.pseudoMessageType,
         pseudoMessageData: lastMessage?.pseudoMessageData,
       );
       final String? trimmedBody = existing.body?.trim();
-      final bool hasBody = trimmedBody?.isNotEmpty == true;
-      final bool hasAttachment = existing.fileMetadataID?.isNotEmpty == true;
       final bool shouldDecrementUnread =
-          (hasBody || hasAttachment) &&
-          !existing.displayed &&
-          existing.pseudoMessageType == null;
+          _messageCountsTowardUnread(
+            trimmedBody: trimmedBody,
+            fileMetadataId: existing.fileMetadataID,
+            pseudoMessageType: existing.pseudoMessageType,
+          ) &&
+          !existing.displayed;
       final int nextUnreadCount = lastMessage == null
           ? 0
           : shouldDecrementUnread && chat.unreadCount > 0
@@ -2966,12 +3016,13 @@ WHERE email_from_address IN ($placeholderClause)
     final unreadDecrements = <String, int>{};
     for (final message in messagesToDelete) {
       final trimmedBody = message.body?.trim();
-      final hasBody = trimmedBody?.isNotEmpty == true;
-      final hasAttachment = message.fileMetadataID?.trim().isNotEmpty == true;
       final shouldDecrement =
-          (hasBody || hasAttachment) &&
-          !message.displayed &&
-          message.pseudoMessageType == null;
+          _messageCountsTowardUnread(
+            trimmedBody: trimmedBody,
+            fileMetadataId: message.fileMetadataID,
+            pseudoMessageType: message.pseudoMessageType,
+          ) &&
+          !message.displayed;
       if (!shouldDecrement) {
         continue;
       }
@@ -3262,6 +3313,8 @@ WHERE email_from_address IN ($placeholderClause)
         : await _messagePreview(
             trimmedBody: trimmedBody,
             subject: lastMessage.subject,
+            deltaChatId: lastMessage.deltaChatId,
+            deltaMsgId: lastMessage.deltaMsgId,
             fileMetadataId: lastMessage.fileMetadataID,
             hasAttachment: hasAttachment,
             pseudoMessageType: lastMessage.pseudoMessageType,
@@ -4395,10 +4448,16 @@ WHERE email_from_address IN ($placeholderClause)
 
   @override
   Future<void> createChat(Chat chat) async {
-    final lastMessage = await getLastMessageForChat(chat.jid);
+    const summaryFilter = MessageTimelineFilter.allWithContact;
+    final lastMessage = await getLastMessageForChat(
+      chat.jid,
+      filter: summaryFilter,
+    );
     final lastMessagePreview = await _messagePreview(
       trimmedBody: lastMessage?.body?.trim(),
       subject: lastMessage?.subject,
+      deltaChatId: lastMessage?.deltaChatId,
+      deltaMsgId: lastMessage?.deltaMsgId,
       fileMetadataId: lastMessage?.fileMetadataID,
       hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
       pseudoMessageType: lastMessage?.pseudoMessageType,
@@ -4415,6 +4474,39 @@ WHERE email_from_address IN ($placeholderClause)
 
   @override
   Future<void> updateChat(Chat chat) => chatsAccessor.updateOne(chat);
+
+  @override
+  Future<void> repairChatSummaryPreservingTimestamp(String jid) async {
+    const summaryFilter = MessageTimelineFilter.allWithContact;
+    final chat = await getChat(jid);
+    if (chat == null) {
+      return;
+    }
+    final lastMessage = await getLastMessageForChat(jid, filter: summaryFilter);
+    final lastMessagePreview = await _messagePreview(
+      trimmedBody: lastMessage?.body?.trim(),
+      subject: lastMessage?.subject,
+      deltaChatId: lastMessage?.deltaChatId,
+      deltaMsgId: lastMessage?.deltaMsgId,
+      fileMetadataId: lastMessage?.fileMetadataID,
+      hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
+      pseudoMessageType: lastMessage?.pseudoMessageType,
+      pseudoMessageData: lastMessage?.pseudoMessageData,
+    );
+    final DateTime nextTimestamp = switch (lastMessage?.timestamp) {
+      final DateTime timestamp
+          when timestamp.isAfter(chat.lastChangeTimestamp) =>
+        timestamp,
+      _ => chat.lastChangeTimestamp,
+    };
+    final updated = chat.copyWith(
+      lastMessage: lastMessagePreview,
+      lastChangeTimestamp: nextTimestamp,
+    );
+    if (updated != chat) {
+      await chatsAccessor.updateOne(updated);
+    }
+  }
 
   @override
   Future<void> clearChatsEmailFromAddress(String address) async {
@@ -4437,10 +4529,13 @@ WHERE email_from_address IN ($placeholderClause)
 
   @override
   Future<Chat?> openChat(String jid) async {
-    final lastMessage = await getLastMessageForChat(jid);
+    const summaryFilter = MessageTimelineFilter.allWithContact;
+    final lastMessage = await getLastMessageForChat(jid, filter: summaryFilter);
     final lastMessagePreview = await _messagePreview(
       trimmedBody: lastMessage?.body?.trim(),
       subject: lastMessage?.subject,
+      deltaChatId: lastMessage?.deltaChatId,
+      deltaMsgId: lastMessage?.deltaMsgId,
       fileMetadataId: lastMessage?.fileMetadataID,
       hasAttachment: lastMessage?.fileMetadataID?.isNotEmpty == true,
       pseudoMessageType: lastMessage?.pseudoMessageType,
@@ -4752,8 +4847,13 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Future<void> saveRosterItem(RosterItem item) async {
     _log.info('Saving roster item');
+    final emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(
+      _emptyTimestampMillis,
+    );
     await transaction(() async {
-      await createChat(Chat.fromJid(item.jid));
+      await createChat(
+        Chat.fromJid(item.jid).copyWith(lastChangeTimestamp: emptyTimestamp),
+      );
       await rosterAccessor.insertOrUpdateOne(item);
       await invitesAccessor.deleteOne(item.jid);
     });
@@ -4762,7 +4862,9 @@ WHERE email_from_address IN ($placeholderClause)
   @override
   Future<void> saveRosterItems(List<RosterItem> items) async {
     if (items.isEmpty) return;
-    final now = DateTime.timestamp();
+    final emptyTimestamp = DateTime.fromMillisecondsSinceEpoch(
+      _emptyTimestampMillis,
+    );
     await transaction(() async {
       await batch((batch) {
         batch.insertAll(
@@ -4773,7 +4875,7 @@ WHERE email_from_address IN ($placeholderClause)
                   jid: item.jid,
                   title: _chatTitleForIdentifier(item.jid),
                   type: ChatType.chat,
-                  lastChangeTimestamp: now,
+                  lastChangeTimestamp: emptyTimestamp,
                   contactJid: Value(item.jid),
                 ),
               )
@@ -5580,6 +5682,7 @@ WHERE value IS NOT NULL AND trim(value) != ''
       chats,
     )..where((tbl) => tbl.emailAddress.isNotNull())).get();
     final canonical = <String, Chat>{};
+    final impactedSummaryJids = <String>{};
     for (final chat in emailChats) {
       final email = chat.emailAddress;
       if (email == null || email.trim().isEmpty) {
@@ -5628,6 +5731,7 @@ WHERE value IS NOT NULL AND trim(value) != ''
           ),
         );
         await (delete(chats)..where((tbl) => tbl.jid.equals(chat.jid))).go();
+        impactedSummaryJids.add(normalized);
       } else {
         await (update(messages)..where((tbl) => tbl.chatJid.equals(chat.jid)))
             .write(MessagesCompanion(chatJid: Value(normalized)));
@@ -5644,7 +5748,14 @@ WHERE value IS NOT NULL AND trim(value) != ''
           jid: normalized,
           contactJid: normalized,
         );
+        impactedSummaryJids.add(normalized);
       }
+    }
+    for (final jid in impactedSummaryJids) {
+      if (await getChat(jid) == null) {
+        continue;
+      }
+      await _refreshChatSummaryAfterTrim(jid: jid);
     }
   }
 

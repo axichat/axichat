@@ -117,9 +117,13 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(state.copyWith(emailComposerWatermarkEnabled: enabled));
   }
 
-  void trackDonationPromptMessageCount(int storedConversationMessageCount) {
+  void trackDonationPromptMessageCount({
+    required String? accountJid,
+    required int storedConversationMessageCount,
+  }) {
     final syncedState = state.syncDonationPromptMessageCount(
-      storedConversationMessageCount,
+      accountJid: accountJid,
+      storedConversationMessageCount: storedConversationMessageCount,
     );
     if (syncedState == state) {
       return;
@@ -127,9 +131,13 @@ class SettingsCubit extends HydratedCubit<SettingsState> {
     emit(syncedState);
   }
 
-  void hideDonationPrompt({required int storedConversationMessageCount}) {
+  void hideDonationPrompt({
+    required String? accountJid,
+    required int storedConversationMessageCount,
+  }) {
     final syncedState = state.syncDonationPromptMessageCount(
-      storedConversationMessageCount,
+      accountJid: accountJid,
+      storedConversationMessageCount: storedConversationMessageCount,
     );
     final nextState = syncedState.copyWith(
       donationPromptNextDisplayMessageCount:

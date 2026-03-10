@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
+import 'package:axichat/src/email/util/email_header_safety.dart';
 import 'package:axichat/src/email/util/share_token_html.dart';
 import 'package:axichat/src/storage/models.dart';
 
@@ -102,7 +103,8 @@ bool _signaturesMatch(String? first, String? second) {
   return first == second;
 }
 
-String? _normalizeSubject(String? value) => _normalizeText(value);
+String? _normalizeSubject(String? value) =>
+    _normalizeText(sanitizeEmailSubjectValue(value));
 
 String? _normalizeText(String? value) {
   final normalized = value

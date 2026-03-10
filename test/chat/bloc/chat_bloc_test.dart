@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
@@ -10,13 +13,14 @@ import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
-import 'package:flutter/material.dart' show Locale;
+import 'package:flutter/material.dart' show AppLifecycleState, Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -122,6 +126,7 @@ void main() {
 
   setUpAll(() {
     registerFallbackValue(<FanOutTarget>[]);
+    registerFallbackValue(<Message>[fallbackMessage]);
     registerFallbackValue(MessageTimelineFilter.allWithContact);
     registerFallbackValue(OccupantAffiliation.none);
     registerFallbackValue(OccupantRole.none);
@@ -951,6 +956,9 @@ void main() {
   });
 
   test('forwarding supports a raw XMPP address target', () async {
+    final syntheticForwardSubject = markSyntheticForwardSubject(
+      'FWD: peer@axi.im',
+    );
     final message = Message(
       stanzaID: 'forward-xmpp',
       senderJid: initialChat.jid,
@@ -960,12 +968,12 @@ void main() {
     );
     when(
       () => messageService.sendMessage(
-        jid: 'fresh@axi.im',
-        text: 'Forward me',
+        jid: any(named: 'jid'),
+        text: any(named: 'text'),
         encryptionProtocol: EncryptionProtocol.none,
-        htmlBody: null,
+        htmlBody: any(named: 'htmlBody'),
         forwarded: true,
-        forwardedFromJid: initialChat.jid,
+        forwardedFromJid: any(named: 'forwardedFromJid'),
         chatType: ChatType.chat,
       ),
     ).thenAnswer((_) async {});
@@ -998,9 +1006,13 @@ void main() {
     verify(
       () => messageService.sendMessage(
         jid: 'fresh@axi.im',
-        text: 'Forward me',
+        text: ChatSubjectCodec.composeXmppBody(
+          body: 'Forward me',
+          subject: syntheticForwardSubject,
+        ),
         encryptionProtocol: EncryptionProtocol.none,
-        htmlBody: null,
+        htmlBody:
+            '${HtmlContentCodec.fromPlainText('FWD: peer@axi.im')}<br />\n<br />\nForward me',
         forwarded: true,
         forwardedFromJid: initialChat.jid,
         chatType: ChatType.chat,
@@ -1011,6 +1023,7 @@ void main() {
   });
 
   test('forwarding supports a raw email address target', () async {
+    const syntheticForwardSubject = 'FWD: peer@axi.im';
     final emailService = MockEmailService();
     _mockEmailSync(emailService);
     final message = Message(
@@ -1081,10 +1094,83 @@ void main() {
       () => emailService.sendMessage(
         chat: resolvedEmailChat,
         body: 'Forward me by email',
-        subject: null,
-        htmlBody: null,
+        subject: syntheticForwardSubject,
+        htmlBody: injectSyntheticForwardHtmlMarker('Forward me by email'),
         forwarded: true,
         forwardedFromJid: initialChat.jid,
+      ),
+    ).called(1);
+
+    await bloc.close();
+  });
+
+  test('synthetic XMPP forwarding preserves original subject and HTML', () async {
+    final syntheticForwardSubject = markSyntheticForwardSubject(
+      'FWD: peer@axi.im',
+    );
+    final message = Message(
+      stanzaID: 'forward-xmpp-html',
+      senderJid: initialChat.jid,
+      chatJid: initialChat.jid,
+      body: ChatSubjectCodec.composeXmppBody(
+        body: 'Bold body',
+        subject: 'Original subject',
+      ),
+      htmlBody: '<p><strong>Bold body</strong></p>',
+      timestamp: DateTime.now(),
+    );
+    when(
+      () => messageService.sendMessage(
+        jid: any(named: 'jid'),
+        text: any(named: 'text'),
+        encryptionProtocol: EncryptionProtocol.none,
+        htmlBody: any(named: 'htmlBody'),
+        forwarded: true,
+        forwardedFromJid: any(named: 'forwardedFromJid'),
+        chatType: ChatType.chat,
+      ),
+    ).thenAnswer((_) async {});
+
+    final bloc = ChatBloc(
+      jid: initialChat.jid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(initialChat);
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+
+    bloc.add(
+      ChatMessageForwardRequested(
+        message: message,
+        target: FanOutTarget.address(
+          address: 'fresh@axi.im',
+          shareSignatureEnabled: true,
+          transport: MessageTransport.xmpp,
+        ),
+      ),
+    );
+    await _pumpBloc();
+
+    verify(
+      () => messageService.sendMessage(
+        jid: 'fresh@axi.im',
+        text: ChatSubjectCodec.composeXmppBody(
+          body: 'Subject: Original subject\n\nBold body',
+          subject: syntheticForwardSubject,
+        ),
+        encryptionProtocol: EncryptionProtocol.none,
+        htmlBody:
+            '${HtmlContentCodec.fromPlainText('FWD: peer@axi.im')}<br />\n<br />\n'
+            '${HtmlContentCodec.fromPlainText('Subject: Original subject')}<br />\n<br />\n'
+            '<p><strong>Bold body</strong></p>',
+        forwarded: true,
+        forwardedFromJid: initialChat.jid,
+        chatType: ChatType.chat,
       ),
     ).called(1);
 
@@ -1632,6 +1718,95 @@ void main() {
     await bloc.close();
     await emailMessageStreamController.close();
   });
+
+  test(
+    'email read sync does not repeat seen work for the same unseen messages',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      const settings = ChatSettingsSnapshot(
+        language: AppLanguage.system,
+        chatReadReceipts: true,
+        emailReadReceipts: true,
+        shareTokenSignatureEnabled: true,
+        autoDownloadImages: true,
+        autoDownloadVideos: false,
+        autoDownloadDocuments: false,
+        autoDownloadArchives: false,
+      );
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 7,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+        unreadCount: 1,
+      );
+      final incoming = Message(
+        stanzaID: 'email-incoming-1',
+        senderJid: 'peer@example.com',
+        chatJid: emailChat.jid,
+        deltaChatId: emailChat.deltaChatId,
+        deltaMsgId: 91,
+        timestamp: DateTime(2026, 1, 4, 12),
+        body: 'Fresh email',
+      );
+
+      when(() => emailService.hasInMemoryReconnectContext).thenReturn(true);
+      when(
+        () => emailService.getOldestFreshMessageId(any()),
+      ).thenAnswer((_) async => null);
+      when(
+        () => emailService.markNoticedChat(any()),
+      ).thenAnswer((_) async => true);
+      when(
+        () => emailService.markSeenMessages(any()),
+      ).thenAnswer((_) async => true);
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => emailService.pinnedMessagesStream(any()),
+      ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: settings,
+      );
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      emailMessageStreamController.add([incoming]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      emailMessageStreamController.add([incoming]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(() => emailService.markNoticedChat(any())).called(1);
+      verify(() => emailService.markSeenMessages(any())).called(1);
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
 
   test('catch-up paginates MAM when reconnecting after gap', () async {
     final xmppService = MockXmppService();

@@ -142,6 +142,23 @@ final class MucBookmark {
     );
   }
 
+  static MucBookmark? fromPubSubItem(mox.PubSubItem item) {
+    final payload = item.payload;
+    if (payload != null) {
+      final parsed = fromBookmarks2Xml(payload, itemId: item.id);
+      if (parsed != null) return parsed;
+    }
+
+    final rawRoomJid = _normalizeBareJid(item.id);
+    if (rawRoomJid == null || rawRoomJid.isEmpty) return null;
+
+    try {
+      return MucBookmark(roomBare: mox.JID.fromString(rawRoomJid).toBare());
+    } on Exception {
+      return null;
+    }
+  }
+
   mox.XMLNode toBookmarks2Xml() {
     final trimmedName = _normalize(name);
     final trimmedNick = _normalize(nick);
@@ -596,9 +613,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
   }
 
   MucBookmark? _parseItem(mox.PubSubItem item) {
-    final payload = item.payload;
-    if (payload == null) return null;
-    return MucBookmark.fromBookmarks2Xml(payload, itemId: item.id);
+    return MucBookmark.fromPubSubItem(item);
   }
 
   MucBookmark _mergeBookmarks({

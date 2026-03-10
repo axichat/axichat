@@ -141,4 +141,16 @@ void main() {
     expect(update.bookmark.autojoin, isTrue);
     expect(update.bookmark.nick, equals(_roomNick));
   });
+
+  test('MucBookmark parses id-only pubsub items', () {
+    final item = mox.PubSubItem(id: _roomJid, node: _bookmarksNode);
+
+    final bookmark = MucBookmark.fromPubSubItem(item);
+
+    expect(bookmark, isNotNull);
+    expect(bookmark?.roomBare.toString(), equals(_roomJid));
+    expect(bookmark?.name, isNull);
+    expect(bookmark?.autojoin, isFalse);
+    expect(bookmark?.nick, isNull);
+  });
 }

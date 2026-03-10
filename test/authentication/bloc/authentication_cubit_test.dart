@@ -9,6 +9,7 @@ import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart'
     as provisioning;
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -29,6 +30,8 @@ const invalidUsername = 'invalidUsername';
 const invalidPassword = 'invalidPassword';
 const signupWelcomeTitle = 'Axichat';
 const signupWelcomeBody = 'Welcome to Axichat!';
+const _welcomeChatJid = 'axichat@welcome.axichat.invalid';
+const _welcomeStanzaId = 'signup-welcome.axichat';
 const bool clearEmailCredentialsOnLogout = true;
 
 Uri _registrationMatcher() =>
@@ -60,6 +63,7 @@ void main() {
   late MockEmailService mockEmailService;
   late MockHomeRefreshSyncService mockHomeRefreshSyncService;
   late Map<String, String?> credentialStorage;
+  late AppLocalizations localizations;
 
   setUp(() {
     mockXmppService = MockXmppService();
@@ -72,6 +76,7 @@ void main() {
     mockHomeRefreshSyncService = MockHomeRefreshSyncService();
     mockHttpClient = MockHttpClient();
     mockProvisioningClient = MockEmailProvisioningClient();
+    localizations = lookupAppLocalizations(const Locale('en'));
 
     when(
       () => mockEmailService.clearStoredCredentials(
@@ -145,8 +150,37 @@ void main() {
     when(() => mockXmppService.connected).thenReturn(false);
     when(() => mockXmppService.databasesInitialized).thenReturn(false);
     when(() => mockXmppService.myJid).thenReturn(null);
+    when(() => mockXmppService.localizations).thenReturn(localizations);
+    when(() => mockXmppService.database).thenAnswer((_) async => mockDatabase);
     when(() => mockXmppService.setClientState(any())).thenAnswer((_) async {});
     when(() => mockXmppService.clearSessionTokens()).thenAnswer((_) async {});
+    when(() => mockDatabase.getMessageByStanzaID(_welcomeStanzaId)).thenAnswer(
+      (_) async => Message(
+        stanzaID: _welcomeStanzaId,
+        senderJid: _welcomeChatJid,
+        chatJid: _welcomeChatJid,
+        body: localizations.authSignupWelcomeMessage,
+        timestamp: DateTime.utc(2026, 3, 6),
+        acked: true,
+        received: true,
+      ),
+    );
+    when(
+      () => mockDatabase.saveMessage(any(), chatType: any(named: 'chatType')),
+    ).thenAnswer((_) async {});
+    when(() => mockDatabase.updateMessage(any())).thenAnswer((_) async {});
+    when(() => mockDatabase.getChat(_welcomeChatJid)).thenAnswer(
+      (_) async => Chat(
+        jid: _welcomeChatJid,
+        title: localizations.authSignupWelcomeTitle,
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2026, 3, 6),
+        contactDisplayName: localizations.authSignupWelcomeTitle,
+        contactJid: _welcomeChatJid,
+      ),
+    );
+    when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
+    when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
 
     when(() => mockHomeRefreshSyncService.start()).thenAnswer((_) {});
     when(() => mockHomeRefreshSyncService.close()).thenAnswer((_) async {});
@@ -1110,9 +1144,6 @@ void main() {
         AuthenticationLogInInProgress(fromSignup: true),
         AuthenticationCompleteFromSignup(),
       ],
-      verify: (_) {
-        verifyNever(() => mockDatabase.saveMessage(any()));
-      },
     );
 
     test('syncSignupWelcomeMessage seeds the welcome chat message.', () async {
@@ -1168,6 +1199,53 @@ void main() {
       expect(updatedChat.title, equals(welcomeTitle));
       expect(updatedChat.contactDisplayName, equals(welcomeTitle));
     });
+
+    test(
+      'syncSignupWelcomeMessage recreates the welcome chat when the message exists but the chat is missing.',
+      () async {
+        const welcomeChatJid = 'axichat@welcome.axichat.invalid';
+        const welcomeStanzaId = 'signup-welcome.axichat';
+        const welcomeTitle = 'Axichat';
+        const welcomeBody = 'Welcome to Axichat!';
+        final existingMessage = Message(
+          stanzaID: welcomeStanzaId,
+          senderJid: welcomeChatJid,
+          chatJid: welcomeChatJid,
+          body: welcomeBody,
+          timestamp: DateTime.utc(2026, 3, 6),
+          acked: true,
+          received: true,
+        );
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+        );
+        when(
+          () => mockDatabase.getMessageByStanzaID(welcomeStanzaId),
+        ).thenAnswer((_) async => existingMessage);
+        when(
+          () => mockDatabase.getChat(welcomeChatJid),
+        ).thenAnswer((_) async => null);
+
+        await bloc.syncSignupWelcomeMessage(
+          allowInsert: true,
+          title: welcomeTitle,
+          body: welcomeBody,
+        );
+
+        verifyNever(() => mockDatabase.saveMessage(any()));
+        final createdChat =
+            verify(() => mockDatabase.createChat(captureAny())).captured.single
+                as Chat;
+        expect(createdChat.jid, equals(welcomeChatJid));
+        expect(createdChat.title, equals(welcomeTitle));
+        expect(createdChat.contactDisplayName, equals(welcomeTitle));
+        expect(createdChat.contactJid, equals(welcomeChatJid));
+      },
+    );
 
     test(
       'syncSignupWelcomeMessage updates the existing welcome message body and clears html.',
@@ -1257,6 +1335,54 @@ void main() {
         verifyNever(() => mockDatabase.saveMessage(any()));
         verifyNever(() => mockDatabase.updateMessage(any()));
         verifyNever(() => mockDatabase.getChat(any()));
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Rolls back the provisioned email account after captcha rejection.',
+      setUp: () {
+        when(
+          () => mockHttpClient.post(
+            _registrationMatcher(),
+            body: any(named: 'body'),
+          ),
+        ).thenAnswer(
+          (_) async => Response(
+            'There was an error registering the account: Incorrect captcha',
+            400,
+          ),
+        );
+      },
+      build: () => AuthenticationCubit(
+        credentialStore: mockCredentialStore,
+        initialEndpointConfig: const EndpointConfig(),
+        xmppService: mockXmppService,
+        emailService: mockEmailService,
+        httpClient: mockHttpClient,
+        emailProvisioningClient: mockProvisioningClient,
+      ),
+      act: (bloc) => bloc.signup(
+        username: validUsername,
+        password: validPassword,
+        confirmPassword: validPassword,
+        captchaID: captchaId,
+        captcha: captchaText,
+        rememberMe: false,
+        passwordWasSkipped: false,
+        welcomeTitle: signupWelcomeTitle,
+        welcomeBody: signupWelcomeBody,
+      ),
+      expect: () => const [
+        AuthenticationSignUpInProgress(),
+        AuthenticationSignupFailure(AuthRawMessage('Incorrect captcha')),
+      ],
+      verify: (_) {
+        verify(
+          () => mockProvisioningClient.deleteAccount(
+            email: 'prov@axi.im',
+            password: validPassword,
+          ),
+        ).called(1);
       },
     );
 

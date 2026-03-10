@@ -426,6 +426,7 @@ class DeltaEventConsumer {
           await db.updateChat(
             stored.copyWith(lastChangeTimestamp: lastTimestamp),
           );
+          await db.repairChatSummaryPreservingTimestamp(stored.jid);
         }
       }
     }
@@ -1437,7 +1438,7 @@ class DeltaEventConsumer {
     required XmppDatabase db,
     required Message message,
   }) async {
-    final preview = ChatSubjectCodec.previewText(
+    final preview = ChatSubjectCodec.previewEmailText(
       body: message.body,
       subject: message.subject,
     );
@@ -1460,7 +1461,7 @@ class DeltaEventConsumer {
       return null;
     }
     final sanitizedSubject = sanitizeEmailSubjectValue(message.subject);
-    final previewText = ChatSubjectCodec.previewText(
+    final previewText = ChatSubjectCodec.previewEmailText(
       body: message.text,
       subject: sanitizedSubject,
     );
@@ -1654,6 +1655,7 @@ class DeltaEventConsumer {
     if (chat == null) return;
     if (!chat.lastChangeTimestamp.isBefore(timestamp)) return;
     await db.updateChat(chat.copyWith(lastChangeTimestamp: timestamp));
+    await db.repairChatSummaryPreservingTimestamp(chat.jid);
   }
 
   ChatType _mapChatType(int? type) {

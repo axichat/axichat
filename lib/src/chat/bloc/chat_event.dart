@@ -3,14 +3,6 @@
 
 part of 'chat_bloc.dart';
 
-enum EmailForwardingMode { original, safe }
-
-extension EmailForwardingModeExtensions on EmailForwardingMode {
-  bool get isOriginal => this == EmailForwardingMode.original;
-
-  bool get isSafe => this == EmailForwardingMode.safe;
-}
-
 sealed class ChatEvent extends Equatable {
   const ChatEvent();
 }
@@ -448,16 +440,16 @@ final class ChatSpamStatusRequested extends ChatEvent {
 final class ChatContactAddRequested extends ChatEvent {
   const ChatContactAddRequested({
     required this.chat,
-    required this.successTitle,
-    required this.failureTitle,
+    required this.successMessage,
+    required this.failureMessage,
   });
 
   final Chat chat;
-  final String successTitle;
-  final String failureTitle;
+  final String successMessage;
+  final String failureMessage;
 
   @override
-  List<Object?> get props => [chat, successTitle, failureTitle];
+  List<Object?> get props => [chat, successMessage, failureMessage];
 }
 
 final class ChatRecipientEmailChatRequested extends ChatEvent {
@@ -525,15 +517,13 @@ final class ChatMessageForwardRequested extends ChatEvent {
   const ChatMessageForwardRequested({
     required this.message,
     required this.target,
-    this.forwardingMode = EmailForwardingMode.original,
   });
 
   final Message message;
   final FanOutTarget target;
-  final EmailForwardingMode forwardingMode;
 
   @override
-  List<Object?> get props => [message, target, forwardingMode];
+  List<Object?> get props => [message, target];
 }
 
 final class ChatMessageResendRequested extends ChatEvent {

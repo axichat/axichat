@@ -420,8 +420,11 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    final profileState = context.read<ProfileCubit>().state;
     context.read<SettingsCubit>().trackDonationPromptMessageCount(
-      context.read<ProfileCubit>().state.storedConversationMessageCount,
+      accountJid: profileState.jid,
+      storedConversationMessageCount:
+          profileState.storedConversationMessageCount,
     );
   }
 
@@ -671,13 +674,16 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
               listeners: [
                 BlocListener<ProfileCubit, ProfileState>(
                   listenWhen: (previous, current) =>
+                      previous.jid != current.jid ||
                       previous.storedConversationMessageCount !=
-                      current.storedConversationMessageCount,
+                          current.storedConversationMessageCount,
                   listener: (context, state) {
                     context
                         .read<SettingsCubit>()
                         .trackDonationPromptMessageCount(
-                          state.storedConversationMessageCount,
+                          accountJid: state.jid,
+                          storedConversationMessageCount:
+                              state.storedConversationMessageCount,
                         );
                   },
                 ),

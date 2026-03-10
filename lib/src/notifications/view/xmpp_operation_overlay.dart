@@ -715,12 +715,6 @@ String _resolveOperationLabel(
     XmppOperationLabelKey.mucJoinStart => l10n.xmppOperationMucJoinStart,
     XmppOperationLabelKey.mucJoinSuccess => l10n.xmppOperationMucJoinSuccess,
     XmppOperationLabelKey.mucJoinFailure => l10n.xmppOperationMucJoinFailure,
-    XmppOperationLabelKey.mucAvatarUpdateStart =>
-      l10n.xmppOperationMucAvatarUpdateStart,
-    XmppOperationLabelKey.mucAvatarUpdateSuccess =>
-      l10n.xmppOperationMucAvatarUpdateSuccess,
-    XmppOperationLabelKey.mucAvatarUpdateFailure =>
-      l10n.xmppOperationMucAvatarUpdateFailure,
     XmppOperationLabelKey.selfAvatarPublishStart =>
       l10n.xmppOperationSelfAvatarPublishStart,
     XmppOperationLabelKey.selfAvatarPublishSuccess =>

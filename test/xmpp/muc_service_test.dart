@@ -1,12 +1,13 @@
-import 'dart:typed_data';
-
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -39,11 +40,15 @@ const String _subjectRaw = '  Roadmap  ';
 const String _subjectTrimmed = 'Roadmap';
 const String _subjectEmpty = '   ';
 const String _mucDiscoFeature = 'http://jabber.org/protocol/muc';
+const String _mucMembersOnlyFeature = 'muc_membersonly';
 const String _mucOwnerXmlns = 'http://jabber.org/protocol/muc#owner';
 const String _mucAdminXmlns = 'http://jabber.org/protocol/muc#admin';
 const String _mucRoomInfoFormType = 'http://jabber.org/protocol/muc#roominfo';
 const String _mucRoomConfigFormType =
     'http://jabber.org/protocol/muc#roomconfig';
+const String _bookmarksCompatFeature = 'urn:xmpp:bookmarks:1#compat';
+const String _bookmarksCompatPepFeature = 'urn:xmpp:bookmarks:1#compat-pep';
+const String _bookmarksConversionFeature = 'urn:xmpp:bookmarks-conversion:0';
 const String _discoInfoXmlns = 'http://jabber.org/protocol/disco#info';
 const String _dataFormXmlns = 'jabber:x:data';
 const String _dataFormTag = 'x';
@@ -82,6 +87,8 @@ final DateTime _fixedTimestamp = DateTime(2024, 1, 1);
 
 class MockMucManager extends Mock implements MUCManager {}
 
+class MockMamManager extends Mock implements mox.MAMManager {}
+
 class MockDiscoManager extends Mock implements mox.DiscoManager {}
 
 class MockDiscoItem extends Mock implements mox.DiscoItem {}
@@ -95,6 +102,10 @@ class FakeStanzaError extends Fake implements mox.StanzaError {}
 class FakeMucError extends Fake implements mox.MUCError {}
 
 class FakeJid extends Fake implements mox.JID {}
+
+class FakeMamQueryOptions extends Fake implements mox.MAMQueryOptions {}
+
+class FakeResultSetManagement extends Fake implements mox.ResultSetManagement {}
 
 const List<int> _pngLikeBytes = <int>[
   0x89,
@@ -134,6 +145,8 @@ void main() {
     registerFallbackValue(fallbackMessage);
     registerFallbackValue(fallbackChat);
     registerFallbackValue(FakeJid());
+    registerFallbackValue(FakeMamQueryOptions());
+    registerFallbackValue(FakeResultSetManagement());
     registerFallbackValue(_fallbackChatType);
     registerFallbackValue(_emptyXmlNodeList);
     registerFallbackValue(MessageTimelineFilter.directOnly);
@@ -145,6 +158,7 @@ void main() {
   late XmppService xmppService;
   late StreamController<mox.XmppEvent> eventStreamController;
   late MockMucManager mucManager;
+  late MockMamManager mamManager;
   late MockDiscoManager discoManager;
   late MucJoinBootstrapManager joinBootstrapManager;
 
@@ -156,6 +170,7 @@ void main() {
     mockNotificationService = MockNotificationService();
     eventStreamController = StreamController<mox.XmppEvent>.broadcast();
     mucManager = MockMucManager();
+    mamManager = MockMamManager();
     discoManager = MockDiscoManager();
     joinBootstrapManager = MucJoinBootstrapManager();
 
@@ -289,6 +304,35 @@ void main() {
 
       expect(xmppService.mucServiceHost, equals(_accountDomain));
     });
+
+    test(
+      'DISC-014 [HP] refreshPubSubSupport treats bookmarks compatibility features as bookmarks support',
+      () async {
+        final selfInfo = MockDiscoInfo();
+        when(() => selfInfo.features).thenReturn([
+          mox.pubsubXmlns,
+          _bookmarksCompatFeature,
+          _bookmarksCompatPepFeature,
+          _bookmarksConversionFeature,
+        ]);
+        final hostInfo = MockDiscoInfo();
+        when(() => hostInfo.features).thenReturn([mox.pubsubXmlns]);
+
+        when(() => discoManager.discoInfoQuery(any())).thenAnswer((
+          invocation,
+        ) async {
+          final target = invocation.positionalArguments.first as mox.JID;
+          final bare = target.toBare().toString();
+          final info = bare == _accountBareJid ? selfInfo : hostInfo;
+          return moxlib.Result<mox.StanzaError, mox.DiscoInfo>(info);
+        });
+
+        final support = await xmppService.refreshPubSubSupport(force: true);
+
+        expect(support.canUseBookmarks2, isTrue);
+        expect(support.bookmarks2Supported, isTrue);
+      },
+    );
 
     test('DISC-011 [HP] discoverRooms returns room items', () async {
       final roomItem = MockDiscoItem();
@@ -554,6 +598,73 @@ void main() {
             maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
         );
+      },
+    );
+
+    test(
+      'JOIN-016 [HP] ensureJoined rejoins newly created rooms before treating them as send-ready',
+      () async {
+        final managerRoomState = mox.RoomState(
+          roomJid: mox.JID.fromString(_roomJidBare),
+          joined: true,
+          nick: _roomNick,
+        );
+        when(
+          () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
+        ).thenAnswer((_) async => managerRoomState);
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => mox.Stanza.iq(type: _iqTypeResult));
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: _roomJid,
+              occupantJid: _roomJidWithSelfNick,
+              nick: _roomNick,
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {MucStatusCode.selfPresence.code},
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: _roomJidWithSelfNick,
+            nick: _roomNick,
+            affiliation: OccupantAffiliation.owner.xmlValue,
+            role: OccupantRole.moderator.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: false,
+            statusCodes: {
+              MucStatusCode.selfPresence.code,
+              MucStatusCode.roomCreated.code,
+            },
+          ),
+        );
+        await pumpEventQueue();
+
+        await xmppService.ensureJoined(roomJid: _roomJid);
+
+        verify(
+          () => mucManager.joinRoom(
+            mox.JID.fromString(_roomJidBare),
+            _roomNick,
+            maxHistoryStanzas: _defaultHistoryStanzas,
+          ),
+        ).called(1);
       },
     );
 
@@ -864,6 +975,132 @@ void main() {
     );
 
     test(
+      'CREATE-002 [HP] createRoom fails closed when the room already exists',
+      () async {
+        await xmppService.setMucServiceHost(_serviceJid);
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: 'planning-room@$_serviceJid',
+              occupantJid: 'planning-room@$_serviceJid/me',
+              nick: 'me',
+              affiliation: OccupantAffiliation.member.xmlValue,
+              role: OccupantRole.participant.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {MucStatusCode.selfPresence.code},
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+        when(() => mucManager.leaveRoom(any())).thenAnswer(
+          (_) async => const moxlib.Result<bool, mox.MUCError>(true),
+        );
+
+        final events = await captureXmppOperations(() async {
+          await expectLater(
+            xmppService.createRoom(name: _roomName, nickname: 'me'),
+            throwsA(isA<XmppMucCreateConflictException>()),
+          );
+        });
+        final createEvents = events
+            .where((event) => event.kind == XmppOperationKind.mucCreate)
+            .toList(growable: false);
+
+        expect(createEvents, hasLength(2));
+        expect(createEvents.first.stage, XmppOperationStage.start);
+        expect(createEvents.last.stage, XmppOperationStage.end);
+        expect(createEvents.last.isSuccess, isFalse);
+        expect(xmppService.roomStateFor('planning-room@$_serviceJid'), isNull);
+        verify(() => mucManager.leaveRoom(any())).called(1);
+        verifyNever(() => mockDatabase.createChat(any()));
+      },
+    );
+
+    test(
+      'CREATE-003 [HP] createRoom seeds a local room avatar before the remote update completes',
+      () async {
+        const roomJid = 'planning-room@$_serviceJid';
+        final payload = AvatarUploadPayload(
+          bytes: Uint8List.fromList(_pngLikeBytes),
+          mimeType: 'image/png',
+          width: 1,
+          height: 1,
+          hash: 'created-room-avatar-hash',
+        );
+        await xmppService.setMucServiceHost(_serviceJid);
+        when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
+        when(() => mockDatabase.getChat(roomJid)).thenAnswer(
+          (_) async => Chat(
+            jid: roomJid,
+            title: _roomName,
+            type: ChatType.groupChat,
+            myNickname: 'me',
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: roomJid,
+          ),
+        );
+        when(
+          () => mockDatabase.updateChatAvatar(
+            jid: any(named: 'jid'),
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: roomJid,
+              occupantJid: '$roomJid/me',
+              nick: 'me',
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {
+                MucStatusCode.selfPresence.code,
+                MucStatusCode.roomCreated.code,
+              },
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => null);
+
+        await xmppService.createRoom(
+          name: _roomName,
+          nickname: 'me',
+          avatar: payload,
+        );
+        await pumpEventQueue();
+
+        verify(
+          () => mockDatabase.updateChatAvatar(
+            jid: roomJid,
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
       'JOIN-025 [HP] joining a room triggers room history sync operation events',
       () async {
         await xmppService.setMucServiceHost(_serviceJid);
@@ -1040,7 +1277,56 @@ void main() {
     );
 
     test(
-      'ROOM-AVATAR-001 [HP] updateRoomAvatar emits room avatar operation events',
+      'MAM-001 [HP] hanging archive queries fail via the hard timeout fallback',
+      () {
+        when(
+          () => mockConnection.getManager<mox.MAMManager>(),
+        ).thenReturn(mamManager);
+        when(
+          () => mamManager.queryArchive(
+            to: any(named: 'to'),
+            options: any(named: 'options'),
+            rsm: any(named: 'rsm'),
+            timeout: any(named: 'timeout'),
+          ),
+        ).thenAnswer((_) => Completer<mox.MAMQueryResult?>().future);
+
+        fakeAsync((async) {
+          final events = <XmppOperationEvent>[];
+          final subscription = xmppService.xmppOperationStream.listen(
+            events.add,
+          );
+          addTearDown(subscription.cancel);
+
+          Object? capturedError;
+          xmppService
+              .fetchLatestFromArchive(jid: _inviteeJid)
+              .then<void>(
+                (_) {},
+                onError: (Object error, StackTrace _) {
+                  capturedError = error;
+                },
+              );
+
+          async.flushMicrotasks();
+          async.elapse(const Duration(seconds: 96));
+          async.flushMicrotasks();
+
+          final mamEvents = events
+              .where((event) => event.kind == XmppOperationKind.mamFetch)
+              .toList(growable: false);
+
+          expect(mamEvents, hasLength(2));
+          expect(mamEvents.first.stage, XmppOperationStage.start);
+          expect(mamEvents.last.stage, XmppOperationStage.end);
+          expect(mamEvents.last.isSuccess, isFalse);
+          expect(capturedError, isA<TimeoutException>());
+        });
+      },
+    );
+
+    test(
+      'ROOM-AVATAR-001 [HP] updateRoomAvatar does not emit xmpp operation events',
       () async {
         const expectedHash = 'expected-room-avatar-hash';
         final payload = AvatarUploadPayload(
@@ -1132,14 +1418,80 @@ void main() {
           () =>
               xmppService.updateRoomAvatar(roomJid: _roomJid, avatar: payload),
         );
-        final avatarEvents = events
-            .where((event) => event.kind == XmppOperationKind.mucAvatarUpdate)
-            .toList(growable: false);
 
-        expect(avatarEvents, hasLength(2));
-        expect(avatarEvents.first.stage, XmppOperationStage.start);
-        expect(avatarEvents.last.stage, XmppOperationStage.end);
-        expect(avatarEvents.last.isSuccess, isTrue);
+        expect(events, isEmpty);
+      },
+    );
+
+    test(
+      'ROOM-AVATAR-002 [HP] MUC vCard avatar updates refresh room avatars',
+      () async {
+        const roomAvatarHash = 'room-avatar-hash';
+        final encodedAvatar = base64Encode(_pngLikeBytes);
+        await xmppService.setMucServiceHost(_serviceJid);
+        when(() => mockDatabase.getChat(_roomJid)).thenAnswer(
+          (_) async => Chat(
+            jid: _roomJid,
+            title: _roomName,
+            type: ChatType.groupChat,
+            myNickname: _roomNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: _roomJid,
+          ),
+        );
+        when(
+          () => mockDatabase.updateChatAvatar(
+            jid: any(named: 'jid'),
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        ).thenAnswer((_) async {});
+        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          final type = stanza.attributes[_typeAttr]?.toString();
+          if (stanza.firstTag('vCard', xmlns: 'vcard-temp') != null &&
+              type == _iqTypeGet) {
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(
+                    tag: 'vCard',
+                    xmlns: 'vcard-temp',
+                    children: [
+                      mox.XMLNode(
+                        tag: 'PHOTO',
+                        children: [
+                          mox.XMLNode(tag: 'BINVAL', text: encodedAvatar),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+          return Future<mox.XMLNode?>.value(null);
+        });
+
+        eventStreamController.add(
+          mox.VCardAvatarUpdatedEvent(
+            mox.JID.fromString(_roomJid),
+            roomAvatarHash,
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        verify(
+          () => mockDatabase.updateChatAvatar(
+            jid: _roomJid,
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        ).called(1);
       },
     );
   });
@@ -1200,8 +1552,11 @@ void main() {
       () async {
         when(() => mockConnection.generateId()).thenReturn(_stanzaId);
         when(
-          () =>
-              mockDatabase.saveMessage(any(), chatType: any(named: 'chatType')),
+          () => mockDatabase.saveMessage(
+            any(),
+            chatType: any(named: 'chatType'),
+            selfJid: any(named: 'selfJid'),
+          ),
         ).thenAnswer((_) async {});
         when(
           () => mockConnection.sendMessage(any()),
@@ -1230,6 +1585,116 @@ void main() {
         expect(axiInvite?.roomJid, equals(_roomJid));
         expect(axiInvite?.inviter, equals(_accountBareJid));
         expect(axiInvite?.invitee, equals(_inviteeJid));
+      },
+    );
+
+    test(
+      'DINV-011 [HP] inviteUserToRoom grants membership before inviting to members-only rooms',
+      () async {
+        final info = MockRoomInformation();
+        when(
+          () => info.features,
+        ).thenReturn(const <String>[_mucDiscoFeature, _mucMembersOnlyFeature]);
+        when(() => mucManager.queryRoomInformation(any())).thenAnswer(
+          (_) async => moxlib.Result<mox.RoomInformation, mox.MUCError>(info),
+        );
+        when(
+          () => mucManager.sendAdminIq(
+            roomJid: any(named: 'roomJid'),
+            items: any(named: 'items'),
+          ),
+        ).thenAnswer((_) async {});
+        when(() => mockConnection.generateId()).thenReturn(_stanzaId);
+        when(
+          () => mockDatabase.saveMessage(
+            any(),
+            chatType: any(named: 'chatType'),
+            selfJid: any(named: 'selfJid'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+
+        await xmppService.inviteUserToRoom(
+          roomJid: _roomJid,
+          inviteeJid: _inviteeJid,
+          reason: _inviteReasonRaw,
+          password: _invitePasswordRaw,
+        );
+
+        final captured =
+            verify(
+                  () => mucManager.sendAdminIq(
+                    roomJid: _roomJid,
+                    items: captureAny(named: 'items'),
+                  ),
+                ).captured.single
+                as List<mox.XMLNode>;
+
+        final item = captured.single;
+        expect(item.attributes[_jidAttr], equals(_inviteeJid));
+        expect(
+          item.attributes[_affiliationAttr],
+          equals(OccupantAffiliation.member.xmlValue),
+        );
+        verify(() => mockConnection.sendMessage(any())).called(1);
+      },
+    );
+
+    test(
+      'DINV-012 [HP] inviteUserToRoom normalizes invitee JIDs to bare form',
+      () async {
+        const inviteeFullJid = 'friend@axi.im/phone';
+        final info = MockRoomInformation();
+        when(
+          () => info.features,
+        ).thenReturn(const <String>[_mucDiscoFeature, _mucMembersOnlyFeature]);
+        when(() => mucManager.queryRoomInformation(any())).thenAnswer(
+          (_) async => moxlib.Result<mox.RoomInformation, mox.MUCError>(info),
+        );
+        when(
+          () => mucManager.sendAdminIq(
+            roomJid: any(named: 'roomJid'),
+            items: any(named: 'items'),
+          ),
+        ).thenAnswer((_) async {});
+        when(() => mockConnection.generateId()).thenReturn(_stanzaId);
+        when(
+          () => mockDatabase.saveMessage(
+            any(),
+            chatType: any(named: 'chatType'),
+            selfJid: any(named: 'selfJid'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+
+        await xmppService.inviteUserToRoom(
+          roomJid: _roomJid,
+          inviteeJid: inviteeFullJid,
+          reason: _inviteReasonRaw,
+        );
+
+        final capturedAdminItems =
+            verify(
+                  () => mucManager.sendAdminIq(
+                    roomJid: _roomJid,
+                    items: captureAny(named: 'items'),
+                  ),
+                ).captured.single
+                as List<mox.XMLNode>;
+        final capturedMessage =
+            verify(
+                  () => mockConnection.sendMessage(captureAny()),
+                ).captured.single
+                as mox.MessageEvent;
+        final axiInvite = capturedMessage.get<AxiMucInvitePayload>();
+
+        expect(capturedAdminItems.single.attributes[_jidAttr], _inviteeJid);
+        expect(capturedMessage.to.toBare().toString(), _inviteeJid);
+        expect(axiInvite?.invitee, _inviteeJid);
       },
     );
   });

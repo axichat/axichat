@@ -11,6 +11,16 @@ class SafeLogging {
   static const String redactedAccount = '<account>';
   static const String redactedPath = '<path>';
   static const String redactedSecret = '<secret>';
+  static const Set<String> _suppressedDebugLoggerNames = <String>{
+    'AwaitableDataSender',
+    'PingManager',
+    'StreamManagementManager',
+    'XmppStreamManagementManager',
+  };
+  static const Set<String> _suppressedDebugMessages = <String>{
+    'Handling error message...',
+    'Updating message error',
+  };
 
   static const int _minSecretLength = 32;
   static const int _minSecretPreviewLength = 8;
@@ -36,6 +46,17 @@ class SafeLogging {
 
   static final RegExp _xmppTrafficFirstTagPattern = RegExp(
     r'^<\s*([A-Za-z0-9:_-]+)',
+  );
+  static final RegExp _xmppStreamManagementAckTrafficPattern = RegExp(
+    r'''^(?:==>|<==)\s*<(?:a|r)\b[^>]*\bxmlns\s*=\s*['"]urn:xmpp:sm:\d+['"]''',
+    caseSensitive: false,
+  );
+  static final RegExp _xmppStreamManagementCounterPattern = RegExp(
+    r'\b(?:c2s|s2c)\b',
+    caseSensitive: false,
+  );
+  static final RegExp _xmppInternalHandlerPattern = RegExp(
+    r'^(Running handler for|Processing ended early for|Lock aquired for)\b',
   );
   static final RegExp _xmppTrafficTypeAttrPattern = RegExp(
     r'''\btype\s*=\s*['"]([^'"]+)['"]''',
@@ -135,7 +156,67 @@ class SafeLogging {
     );
   }
 
+  static bool shouldEmitDebugRecord(LogRecord record) {
+    if (record.level >= Level.WARNING) {
+      return true;
+    }
+
+    if (_xmppStreamManagementAckTrafficPattern.hasMatch(record.message)) {
+      return false;
+    }
+
+    if (record.message.startsWith(_xmppTrafficOutPrefix) ||
+        record.message.startsWith(_xmppTrafficInPrefix)) {
+      return true;
+    }
+
+    if (_loggerNameContainsAny(
+          record.loggerName,
+          _suppressedDebugLoggerNames,
+        ) &&
+        record.level < Level.INFO) {
+      return false;
+    }
+
+    if (_xmppStreamManagementCounterPattern.hasMatch(record.message)) {
+      return false;
+    }
+
+    if (_xmppInternalHandlerPattern.hasMatch(record.message)) {
+      return false;
+    }
+
+    if (_suppressedDebugMessages.contains(record.message)) {
+      return false;
+    }
+
+    return !record.message.contains('completer for ');
+  }
+
+  static String formatDebugRecord(LogRecord record) {
+    final sanitizedMessage = sanitizeMessage(record.message);
+    final sanitizedError = sanitizeError(record.error);
+    final sanitizedStackTrace = sanitizeStackTrace(record.stackTrace);
+    final buffer = StringBuffer()
+      ..write('${record.level.name}: ${record.time}: $sanitizedMessage');
+    if (record.stackTrace != null) {
+      buffer
+        ..write(' Exception: $sanitizedError')
+        ..write(' Stack Trace: $sanitizedStackTrace');
+    }
+    return buffer.toString();
+  }
+
   static String sanitizeMessage(String message) => _sanitize(message);
+
+  static bool _loggerNameContainsAny(String loggerName, Set<String> names) {
+    for (final name in names) {
+      if (loggerName.contains(name)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   static String sanitizeError(Object? error) =>
       error == null ? '' : _sanitize(error.toString());

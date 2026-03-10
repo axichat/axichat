@@ -11,6 +11,7 @@ import 'package:axichat/src/common/search/search_models.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -69,6 +70,16 @@ class _ChatViewResults {
   final List<Chat> visibleItems;
   final List<Chat> archivedItems;
   final List<Chat> selectedChats;
+}
+
+enum ChatsCreateRoomFailure {
+  alreadyExists,
+  unknown;
+
+  String resolve(AppLocalizations l10n) => switch (this) {
+    ChatsCreateRoomFailure.alreadyExists => l10n.chatsCreateGroupAlreadyExists,
+    ChatsCreateRoomFailure.unknown => l10n.chatsCreateGroupFailure,
+  };
 }
 
 class ChatsCubit extends Cubit<ChatsState> {
@@ -684,7 +695,12 @@ class ChatsCubit extends Cubit<ChatsState> {
     String? nickname,
     AvatarUploadPayload? avatar,
   }) async {
-    emit(state.copyWith(creationStatus: RequestStatus.loading));
+    emit(
+      state.copyWith(
+        creationStatus: RequestStatus.loading,
+        creationFailure: null,
+      ),
+    );
     final mucService = _chatsService as MucService;
     try {
       final roomJid = await mucService.createRoom(
@@ -692,19 +708,38 @@ class ChatsCubit extends Cubit<ChatsState> {
         nickname: nickname,
         avatar: avatar,
       );
-      emit(state.copyWith(creationStatus: RequestStatus.success));
+      emit(
+        state.copyWith(
+          creationStatus: RequestStatus.success,
+          creationFailure: null,
+        ),
+      );
       fireAndForget(
         () => openChat(jid: roomJid),
         operationName: 'ChatsCubit.openCreatedRoom',
       );
+    } on XmppMucCreateConflictException {
+      emit(
+        state.copyWith(
+          creationStatus: RequestStatus.failure,
+          creationFailure: ChatsCreateRoomFailure.alreadyExists,
+        ),
+      );
     } on Exception {
-      emit(state.copyWith(creationStatus: RequestStatus.failure));
+      emit(
+        state.copyWith(
+          creationStatus: RequestStatus.failure,
+          creationFailure: ChatsCreateRoomFailure.unknown,
+        ),
+      );
     }
   }
 
   void clearCreationStatus() {
     if (state.creationStatus.isNone) return;
-    emit(state.copyWith(creationStatus: RequestStatus.none));
+    emit(
+      state.copyWith(creationStatus: RequestStatus.none, creationFailure: null),
+    );
   }
 
   Future<void> refreshHomeSync() {
