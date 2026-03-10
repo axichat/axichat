@@ -96,6 +96,9 @@ Future<void> main() async {
   await startupSettingsCubit.close();
 
   await notificationInitFuture;
+  if (capability.canForegroundService) {
+    await resetForegroundServiceIfRunning();
+  }
 
   final bool hasNotificationPermissions = await notificationPermissionsFuture;
   withForeground =

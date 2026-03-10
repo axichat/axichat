@@ -6,7 +6,6 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.MotionEvent
 import android.widget.Toast
-import com.pravera.flutter_foreground_task.service.ForegroundServiceManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterView
 
@@ -44,13 +43,6 @@ class MainActivity : FlutterActivity() {
     return super.dispatchTouchEvent(event)
   }
 
-  override fun onDestroy() {
-    if (shouldStopForegroundServiceOnTaskClose()) {
-      stopForegroundServiceOnTaskClose()
-    }
-    super.onDestroy()
-  }
-
   private fun isTouchObscured(event: MotionEvent): Boolean {
     val obscured = event.flags and MotionEvent.FLAG_WINDOW_IS_OBSCURED != 0
     val partiallyObscured = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -78,25 +70,6 @@ class MainActivity : FlutterActivity() {
     }
     return Intent.ACTION_MAIN == intent.action &&
         intent.hasCategory(Intent.CATEGORY_LAUNCHER)
-  }
-
-  private fun shouldStopForegroundServiceOnTaskClose(): Boolean {
-    if (!isTaskRoot || !isFinishing) {
-      return false
-    }
-    return !isChangingConfigurations
-  }
-
-  private fun stopForegroundServiceOnTaskClose() {
-    val manager = ForegroundServiceManager()
-    if (!manager.isRunningService()) {
-      return
-    }
-    try {
-      manager.stop(applicationContext)
-    } catch (_: Exception) {
-      // The service may already be stopping as the task closes.
-    }
   }
 
   private val flutterView: FlutterView?
