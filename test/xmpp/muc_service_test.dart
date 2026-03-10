@@ -602,7 +602,7 @@ void main() {
     );
 
     test(
-      'JOIN-016 [HP] ensureJoined rejoins newly created rooms before treating them as send-ready',
+      'JOIN-016 [HP] ensureJoined clears roomCreated after instant room configuration succeeds',
       () async {
         final managerRoomState = mox.RoomState(
           roomJid: mox.JID.fromString(_roomJidBare),
@@ -658,13 +658,72 @@ void main() {
 
         await xmppService.ensureJoined(roomJid: _roomJid);
 
-        verify(
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room?.roomCreated, isFalse);
+        verifyNever(
           () => mucManager.joinRoom(
-            mox.JID.fromString(_roomJidBare),
-            _roomNick,
-            maxHistoryStanzas: _defaultHistoryStanzas,
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
-        ).called(1);
+        );
+      },
+    );
+
+    test(
+      'JOIN-017 [HP] ensureJoined configures a newly created room only once',
+      () async {
+        final managerRoomState = mox.RoomState(
+          roomJid: mox.JID.fromString(_roomJidBare),
+          joined: true,
+          nick: _roomNick,
+        );
+        when(
+          () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
+        ).thenAnswer((_) async => managerRoomState);
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => mox.Stanza.iq(type: _iqTypeResult));
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer(
+          (_) async =>
+              const moxlib.Result<bool, mox.MUCError>(_presenceAvailable),
+        );
+
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: _roomJidWithSelfNick,
+            nick: _roomNick,
+            affiliation: OccupantAffiliation.owner.xmlValue,
+            role: OccupantRole.moderator.xmlValue,
+            isAvailable: true,
+            isError: false,
+            isNickChange: false,
+            statusCodes: {
+              MucStatusCode.selfPresence.code,
+              MucStatusCode.roomCreated.code,
+            },
+          ),
+        );
+        await pumpEventQueue();
+
+        await xmppService.ensureJoined(roomJid: _roomJid);
+        await xmppService.ensureJoined(roomJid: _roomJid);
+
+        verify(() => mockConnection.sendStanza(any())).called(1);
+        verifyNever(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        );
       },
     );
 
@@ -1808,6 +1867,34 @@ void main() {
           room?.occupants[occupantId]?.role,
           equals(OccupantRole.moderator),
         );
+      },
+    );
+
+    test(
+      'REG-008 [HP] owner affiliation queries use the admin namespace',
+      () async {
+        mox.StanzaDetails? capturedDetails;
+        final query = mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: const [],
+        );
+        final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
+
+        when(() => mockConnection.sendStanza(any())).thenAnswer((
+          invocation,
+        ) async {
+          capturedDetails =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          return response;
+        });
+
+        await xmppService.fetchRoomOwners(roomJid: _roomJid);
+
+        final stanza = capturedDetails?.stanza;
+        expect(stanza, isNotNull);
+        expect(stanza!.firstTag(_queryTag, xmlns: _mucAdminXmlns), isNotNull);
+        expect(stanza.firstTag(_queryTag, xmlns: _mucOwnerXmlns), isNull);
       },
     );
   });

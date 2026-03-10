@@ -1042,6 +1042,25 @@ mixin MucService on XmppBase, BaseStreamService {
     _roomStreams[key]?.add(updated);
   }
 
+  void _clearSelfPresenceStatusCode({
+    required String roomJid,
+    required String statusCode,
+  }) {
+    final key = _roomKey(roomJid);
+    final existing = _roomStates[key];
+    if (existing == null ||
+        !existing.selfPresenceStatusCodes.contains(statusCode)) {
+      return;
+    }
+    final updatedStatusCodes = Set<String>.of(existing.selfPresenceStatusCodes)
+      ..remove(statusCode);
+    _applySelfPresenceStatus(
+      roomJid: key,
+      statusCodes: updatedStatusCodes,
+      reason: existing.selfPresenceReason,
+    );
+  }
+
   Future<RoomState> warmRoomFromHistory({
     required String roomJid,
     int limit = 200,
@@ -1401,7 +1420,9 @@ mixin MucService on XmppBase, BaseStreamService {
         return;
       }
     }
-    if (!forceRejoin && room?.hasSelfPresence == true && !_roomNeedsJoin(key)) {
+    if (!forceRejoin &&
+        room?.isReadyForMessaging == true &&
+        !_roomNeedsJoin(key)) {
       await _awaitInstantRoomConfigurationIfNeeded(key);
       return;
     }
@@ -2251,6 +2272,10 @@ mixin MucService on XmppBase, BaseStreamService {
       }
       _instantRoomConfiguredRooms.add(key);
       _instantRoomPendingRooms.remove(key);
+      _clearSelfPresenceStatusCode(
+        roomJid: key,
+        statusCode: MucStatusCode.roomCreated.code,
+      );
       completer.complete();
     } catch (error, stackTrace) {
       completer.completeError(error, stackTrace);

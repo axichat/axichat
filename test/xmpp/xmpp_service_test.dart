@@ -7,10 +7,12 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
+import 'package:flutter/widgets.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
@@ -31,6 +33,38 @@ class _FakePathProviderPlatform extends PathProviderPlatform {
 
   @override
   Future<String?> getApplicationSupportPath() async => supportPath;
+}
+
+class _FakeForegroundBridge implements ForegroundTaskBridge {
+  final Set<String> acquiredClients = <String>{};
+  final Map<String, ForegroundTaskMessageHandler> _listeners =
+      <String, ForegroundTaskMessageHandler>{};
+
+  @override
+  Future<void> acquire({
+    required String clientId,
+    ForegroundServiceConfig? config,
+  }) async {
+    acquiredClients.add(clientId);
+  }
+
+  @override
+  Future<void> release(String clientId) async {
+    acquiredClients.remove(clientId);
+  }
+
+  @override
+  Future<void> send(List<Object> parts) async {}
+
+  @override
+  void registerListener(String clientId, ForegroundTaskMessageHandler handler) {
+    _listeners[clientId] = handler;
+  }
+
+  @override
+  void unregisterListener(String clientId) {
+    _listeners.remove(clientId);
+  }
 }
 
 class RecordingMamManager extends mox.MAMManager {
@@ -854,6 +888,15 @@ void main() {
       ).called(1);
     });
 
+    test('Uses the Axichat entity capabilities manager wrapper.', () {
+      final runtimeTypes = xmppService.featureManagers
+          .map((manager) => manager.runtimeType.toString())
+          .toList(growable: false);
+
+      expect(runtimeTypes, contains('_AxiEntityCapabilitiesManager'));
+      expect(runtimeTypes, isNot(contains('EntityCapabilitiesManager')));
+    });
+
     test(
       'Given invalid credentials, throws an XmppAuthenticationException.',
       () async {
@@ -1019,4 +1062,157 @@ void main() {
       },
     );
   });
+
+  test(
+    'Failed foreground migration releases the abandoned foreground connection',
+    () async {
+      final originalBridge = foregroundTaskBridge;
+      final bridge = _FakeForegroundBridge();
+      final foregroundConnection = MockXmppConnection();
+      final fallbackConnection = MockXmppConnection();
+      final settings = XmppConnectionSettings(
+        jid: mox.JID.fromString(jid),
+        password: password,
+      );
+
+      foregroundTaskBridge = bridge;
+      withForeground = true;
+      foregroundServiceActive.value = false;
+      addTearDown(() {
+        foregroundTaskBridge = originalBridge;
+        withForeground = false;
+        foregroundServiceActive.value = false;
+      });
+
+      void prepareAdditionalConnection(
+        MockXmppConnection connection, {
+        required XmppSocketWrapper socketWrapper,
+      }) {
+        when(() => connection.hasConnectionSettings).thenReturn(true);
+        when(() => connection.connectionSettings).thenReturn(settings);
+        when(() => connection.socketWrapper).thenReturn(socketWrapper);
+        when(
+          () => connection.registerFeatureNegotiators(any()),
+        ).thenAnswer((_) async {});
+        when(() => connection.registerManagers(any())).thenAnswer((_) async {});
+        when(() => connection.loadStreamState()).thenAnswer((_) async {});
+        when(
+          () => connection.setShouldReconnect(any()),
+        ).thenAnswer((_) async {});
+        when(() => connection.setUserAgent(any())).thenAnswer((_) {});
+        when(() => connection.setFastToken(any())).thenAnswer((_) {});
+        when(
+          () => connection.asBroadcastStream(),
+        ).thenAnswer((_) => const Stream<mox.XmppEvent>.empty());
+        when(
+          () => connection.omemoActivityStream,
+        ).thenAnswer((_) => const Stream<mox.OmemoActivityEvent>.empty());
+        when(() => connection.enableCarbons()).thenAnswer((_) async => true);
+        when(() => connection.requestRoster()).thenAnswer(
+          (_) =>
+              Future<
+                moxlib.Result<mox.RosterRequestResult, mox.RosterError>?
+              >.value(null),
+        );
+        when(
+          () => connection.requestBlocklist(),
+        ).thenAnswer((_) => Future<List<String>?>.value(null));
+        when(() => connection.discoInfoQuery(any())).thenAnswer((_) async {
+          final discoInfo = mox.DiscoInfo(
+            const [mox.mamXmlns],
+            const [],
+            const [],
+            null,
+            mox.JID.fromString(jid),
+          );
+          return moxlib.Result<mox.StanzaError, mox.DiscoInfo>(discoInfo);
+        });
+        when(() => connection.saltedPassword).thenReturn('');
+        when(() => connection.disconnect()).thenAnswer((_) async {});
+      }
+
+      prepareMockConnection();
+      when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+      when(() => mockConnection.connectionSettings).thenReturn(settings);
+      when(
+        () => mockConnection.isReconnecting(),
+      ).thenAnswer((_) async => false);
+      when(() => mockConnection.disconnect()).thenAnswer((_) async {});
+
+      final foregroundSocket = ForegroundSocketWrapper(bridge: bridge);
+      prepareAdditionalConnection(
+        foregroundConnection,
+        socketWrapper: foregroundSocket,
+      );
+      when(
+        () => foregroundConnection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        ),
+      ).thenAnswer((_) async {
+        await bridge.acquire(clientId: foregroundClientXmpp);
+        return const moxlib.Result<bool, mox.XmppError>(false);
+      });
+      when(() => foregroundConnection.reset()).thenAnswer((_) async {
+        await bridge.release(foregroundClientXmpp);
+      });
+
+      prepareAdditionalConnection(
+        fallbackConnection,
+        socketWrapper: XmppSocketWrapper(),
+      );
+      when(
+        () => fallbackConnection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        ),
+      ).thenAnswer((_) async => const moxlib.Result<bool, mox.XmppError>(true));
+      when(() => fallbackConnection.reset()).thenAnswer((_) async {});
+
+      var connectionBuilds = 0;
+      xmppService = XmppService(
+        buildConnection: () {
+          connectionBuilds++;
+          if (connectionBuilds == 1) {
+            return mockConnection;
+          }
+          if (connectionBuilds == 2) {
+            return foregroundConnection;
+          }
+          return fallbackConnection;
+        },
+        buildStateStore: (_, _) => mockStateStore,
+        buildDatabase: (_, _) => database,
+        notificationService: mockNotificationService,
+      );
+
+      await connectSuccessfully(xmppService);
+      eventStreamController.add(
+        mox.ConnectionStateChangedEvent(
+          ConnectionState.connected,
+          ConnectionState.connecting,
+        ),
+      );
+      await pumpEventQueue();
+      TestWidgetsFlutterBinding.ensureInitialized()
+          .handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      foregroundServiceActive.value = true;
+
+      await xmppService.ensureForegroundSocketIfActive();
+
+      expect(bridge.acquiredClients, isEmpty);
+      verify(
+        () => foregroundConnection.connect(
+          shouldReconnect: false,
+          waitForConnection: true,
+          waitUntilLogin: true,
+        ),
+      ).called(1);
+      verify(() => foregroundConnection.reset()).called(1);
+
+      await xmppService.close();
+    },
+  );
 }

@@ -427,6 +427,162 @@ void main() {
     },
   );
 
+  test(
+    'refreshChatlistSnapshot keeps unread cleared while the chat is open',
+    () async {
+      const chatId = 18;
+      const msgId = 102;
+      final chat = Chat(
+        jid: 'alice-open@example.com',
+        title: 'Alice Open',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+        open: true,
+        unreadCount: 0,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Fresh unread email',
+        timestamp: DateTime.utc(2024, 1, 2, 4, 5, 6),
+      );
+
+      when(() => context.getChatlist()).thenAnswer(
+        (_) async => const [
+          DeltaChatlistEntry(chatId: chatId, msgId: DeltaMessageId.dayMarker),
+        ],
+      );
+      when(
+        () => context.getChatlist(flags: DeltaChatlistFlags.archivedOnly),
+      ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+      when(
+        () => database.getDeltaChats(accountId: DeltaAccountDefaults.legacyId),
+      ).thenAnswer((_) async => [chat]);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+      when(() => context.getFreshMessageCountSafe(chatId)).thenAnswer(
+        (_) async => const DeltaFreshMessageCount(count: 16, supported: true),
+      );
+      when(
+        () => context.getChatMessageIds(chatId: chatId),
+      ).thenAnswer((_) async => [msgId]);
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getMessageDeltaSnapshot(chat.jid),
+      ).thenAnswer((_) async => []);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(
+        () => database.getChatMessages(
+          chat.jid,
+          start: 0,
+          end: 1,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).thenAnswer(
+        (_) async => [
+          Message(
+            stanzaID: 'dc-msg-$msgId',
+            senderJid: chat.jid,
+            chatJid: chat.jid,
+            body: 'Fresh unread email',
+            timestamp: deltaMessage.timestamp,
+            deltaAccountId: DeltaAccountDefaults.legacyId,
+            deltaChatId: chatId,
+            deltaMsgId: msgId,
+          ),
+        ],
+      );
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+
+      await consumer.refreshChatlistSnapshot();
+
+      final updatedChats = verify(
+        () => database.updateChat(captureAny()),
+      ).captured.whereType<Chat>().where((updated) => updated.jid == chat.jid);
+
+      expect(updatedChats, isNotEmpty);
+      expect(updatedChats.every((updated) => updated.unreadCount == 0), isTrue);
+    },
+  );
+
+  test(
+    'bootstrapFromCore keeps unread cleared while the chat is open',
+    () async {
+      const chatId = 19;
+      const msgId = 103;
+      final chat = Chat(
+        jid: 'bootstrap-open@example.com',
+        title: 'Bootstrap Open',
+        type: ChatType.chat,
+        lastChangeTimestamp: DateTime.utc(2024, 1, 1),
+        transport: MessageTransport.email,
+        encryptionProtocol: EncryptionProtocol.none,
+        deltaChatId: chatId,
+        open: true,
+        unreadCount: 0,
+      );
+      final deltaMessage = DeltaMessage(
+        id: msgId,
+        chatId: chatId,
+        text: 'Offline unread email',
+        timestamp: DateTime.utc(2024, 1, 2, 6, 7, 8),
+      );
+
+      when(() => context.getChatlist()).thenAnswer(
+        (_) async => const [DeltaChatlistEntry(chatId: chatId, msgId: msgId)],
+      );
+      when(
+        () => context.getChatlist(flags: DeltaChatlistFlags.archivedOnly),
+      ).thenAnswer((_) async => const <DeltaChatlistEntry>[]);
+      when(
+        () => database.getChatByDeltaChatId(
+          chatId,
+          accountId: DeltaAccountDefaults.legacyId,
+        ),
+      ).thenAnswer((_) async => chat);
+      when(() => database.getChat(chat.jid)).thenAnswer((_) async => chat);
+      when(() => context.getFreshMessageCountSafe(chatId)).thenAnswer(
+        (_) async => const DeltaFreshMessageCount(count: 8, supported: true),
+      );
+      when(
+        () => context.getChatMessageIds(chatId: chatId),
+      ).thenAnswer((_) async => [msgId]);
+      when(
+        () => context.getMessage(msgId),
+      ).thenAnswer((_) async => deltaMessage);
+      when(
+        () => database.getMessageByStanzaID('dc-msg-$msgId'),
+      ).thenAnswer((_) async => null);
+      when(() => database.updateChat(any())).thenAnswer((_) async {});
+      when(() => database.getFileMetadata(any())).thenAnswer((_) async => null);
+
+      await consumer.bootstrapFromCore();
+
+      final updatedChats = verify(
+        () => database.updateChat(captureAny()),
+      ).captured.whereType<Chat>().where((updated) => updated.jid == chat.jid);
+
+      expect(updatedChats, isNotEmpty);
+      expect(updatedChats.every((updated) => updated.unreadCount == 0), isTrue);
+      verify(
+        () => database.saveMessage(any(), selfJid: any(named: 'selfJid')),
+      ).called(1);
+    },
+  );
+
   test('does not match a stale pending outgoing email hours later', () async {
     const chatId = 9;
     const msgId = 41;

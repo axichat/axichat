@@ -251,6 +251,8 @@ class EmailService {
   static const String _showEmailsConfigKey = 'show_emails';
   static const String _showEmailsAllValue = '2';
   static const String _systemConfigKeysConfigKey = 'sys.config_keys';
+  static const String _fetchExistingMsgsConfigKey = 'fetch_existing_msgs';
+  static const String _fetchExistingMsgsEnabledValue = '1';
   static const String _emailProvisioningBuildMarker =
       'email-prov-20260309-1329';
   static const String _mdnsEnabledConfigKey = 'mdns_enabled';
@@ -539,10 +541,24 @@ class EmailService {
   Map<String, String> _buildConfigureAccountOverrides({
     required String address,
     required String password,
+    bool fetchExistingMessages = false,
   }) {
     final overrides = Map<String, String>.of(_buildConnectionConfig(address));
     overrides[_sendPasswordConfigKey] = password;
+    if (fetchExistingMessages) {
+      overrides[_fetchExistingMsgsConfigKey] = _fetchExistingMsgsEnabledValue;
+    }
     return overrides;
+  }
+
+  bool _coreAdvertisesConfigKey(String? advertisedConfigKeys, String key) {
+    if (advertisedConfigKeys == null || advertisedConfigKeys.trim().isEmpty) {
+      return false;
+    }
+    return advertisedConfigKeys
+        .split(RegExp(r'\s+'))
+        .where((candidate) => candidate.isNotEmpty)
+        .contains(key);
   }
 
   bool _hasConnectionOverrides(Map<String, String> connectionOverrides) =>
@@ -962,12 +978,20 @@ class EmailService {
     }
 
     if (needsProvisioning) {
+      final provisioningPassword = password!;
       _log.info('Configuring email account credentials');
       try {
-        final configureOverrides = _buildConnectionConfig(address);
+        final configureOverrides = _buildConfigureAccountOverrides(
+          address: address,
+          password: provisioningPassword,
+          fetchExistingMessages: _coreAdvertisesConfigKey(
+            supportedConfigKeys,
+            _fetchExistingMsgsConfigKey,
+          ),
+        );
         await _transport.configureAccount(
           address: address,
-          password: password!,
+          password: provisioningPassword,
           displayName: displayName,
           additional: configureOverrides,
           accountId: deltaAccountId,

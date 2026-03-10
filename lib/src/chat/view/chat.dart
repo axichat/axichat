@@ -7181,9 +7181,14 @@ class _ChatState extends State<Chat> {
                                                                     final bool
                                                                     shouldRenderEmailHtmlBody =
                                                                         isEmailMessage &&
-                                                                        normalizedHtmlBody !=
-                                                                            null &&
-                                                                        hasRichHtmlBody;
+                                                                        HtmlContentCodec.shouldRenderRichEmailHtml(
+                                                                          normalizedHtmlBody:
+                                                                              normalizedHtmlBody,
+                                                                          normalizedHtmlText:
+                                                                              normalizedHtmlText,
+                                                                          renderedText:
+                                                                              messageText,
+                                                                        );
                                                                     final String
                                                                     displayMessageText =
                                                                         isEmailMessage &&
@@ -7679,7 +7684,7 @@ class _ChatState extends State<Chat> {
                                                                             );
                                                                       final String
                                                                       preparedHtmlBody = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-                                                                        normalizedHtmlBody,
+                                                                        normalizedHtmlBody!,
                                                                         allowRemoteImages:
                                                                             shouldLoadImages,
                                                                       );
@@ -10849,7 +10854,12 @@ class _PinnedMessageTile extends StatelessWidget {
         !HtmlContentCodec.isPlainTextHtml(normalizedHtmlBody);
     final bool hasHtmlFallbackText = normalizedHtmlText?.isNotEmpty == true;
     final bool shouldRenderEmailHtmlBody =
-        isEmailMessage && normalizedHtmlBody != null && hasRichHtmlBody;
+        isEmailMessage &&
+        HtmlContentCodec.shouldRenderRichEmailHtml(
+          normalizedHtmlBody: normalizedHtmlBody,
+          normalizedHtmlText: normalizedHtmlText,
+          renderedText: renderedText,
+        );
     final bool shouldRenderTextContent =
         !hideTaskText && !hideFragmentText && !hideAvailabilityText;
     final messageText =
@@ -10998,7 +11008,7 @@ class _PinnedMessageTile extends StatelessWidget {
       } else if (shouldRenderTextContent && shouldRenderEmailHtmlBody) {
         final preparedHtmlBody =
             HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
-              normalizedHtmlBody,
+              normalizedHtmlBody!,
               allowRemoteImages: settings.autoLoadEmailImages,
             );
         if (preparedHtmlBody.trim().isNotEmpty) {
@@ -13563,6 +13573,70 @@ class _ReadOnlyComposerBanner extends StatelessWidget {
                       SizedBox(height: spacing.xs),
                       Text(
                         l10n.chatUnarchivePrompt,
+                        style: context.textTheme.small.copyWith(
+                          color: colors.mutedForeground,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoomBootstrapComposerBanner extends StatelessWidget {
+  const _RoomBootstrapComposerBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final l10n = context.l10n;
+    final spacing = context.spacing;
+    final composerHorizontalInset = spacing.m;
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      child: ColoredBox(
+        color: colors.background,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: colors.border, width: 1)),
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              composerHorizontalInset,
+              spacing.m,
+              composerHorizontalInset,
+              spacing.m,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AxiProgressIndicator(
+                  color: colors.foreground,
+                  semanticsLabel: l10n.xmppOperationMucJoinStart,
+                ),
+                SizedBox(width: spacing.m),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        l10n.xmppOperationMucJoinStart,
+                        style: context.textTheme.small.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      SizedBox(height: spacing.xs),
+                      Text(
+                        l10n.chatMembersLoadingEllipsis,
                         style: context.textTheme.small.copyWith(
                           color: colors.mutedForeground,
                         ),

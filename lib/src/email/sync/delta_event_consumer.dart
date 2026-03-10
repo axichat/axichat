@@ -383,8 +383,14 @@ class DeltaEventConsumer {
         }
       }
       final freshCount = await _context.getFreshMessageCountSafe(chatId);
-      if (freshCount.supported && freshCount.count != updated.unreadCount) {
-        updated = updated.copyWith(unreadCount: freshCount.count);
+      if (freshCount.supported) {
+        final unreadCount = _resolvedFreshUnreadCount(
+          chatOpen: updated.open,
+          freshCount: freshCount,
+        );
+        if (unreadCount != updated.unreadCount) {
+          updated = updated.copyWith(unreadCount: unreadCount);
+        }
       }
       if (updated != chat) {
         await db.updateChat(updated);
@@ -569,8 +575,14 @@ class DeltaEventConsumer {
         }
       }
       final freshCount = await _context.getFreshMessageCountSafe(chatId);
-      if (freshCount.supported && freshCount.count != updated.unreadCount) {
-        updated = updated.copyWith(unreadCount: freshCount.count);
+      if (freshCount.supported) {
+        final unreadCount = _resolvedFreshUnreadCount(
+          chatOpen: updated.open,
+          freshCount: freshCount,
+        );
+        if (unreadCount != updated.unreadCount) {
+          updated = updated.copyWith(unreadCount: unreadCount);
+        }
       }
       if (freshCount.supported && freshCount.count > 0) {
         await _syncChatMessages(chatId);
@@ -837,15 +849,26 @@ class DeltaEventConsumer {
     if (!freshCount.supported) {
       return;
     }
-    if (chat.open) {
-      if (chat.unreadCount != _emptyUnreadCount) {
-        await db.updateChat(chat.copyWith(unreadCount: _emptyUnreadCount));
-      }
-      return;
+    final unreadCount = _resolvedFreshUnreadCount(
+      chatOpen: chat.open,
+      freshCount: freshCount,
+    );
+    if (unreadCount != chat.unreadCount) {
+      await db.updateChat(chat.copyWith(unreadCount: unreadCount));
     }
-    if (freshCount.count != chat.unreadCount) {
-      await db.updateChat(chat.copyWith(unreadCount: freshCount.count));
+  }
+
+  int _resolvedFreshUnreadCount({
+    required bool chatOpen,
+    required DeltaFreshMessageCount freshCount,
+  }) {
+    if (!freshCount.supported) {
+      return _emptyUnreadCount;
     }
+    if (chatOpen) {
+      return _emptyUnreadCount;
+    }
+    return freshCount.count;
   }
 
   Future<void> _syncChatMessages(int chatId) async {

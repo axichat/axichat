@@ -441,6 +441,36 @@ class XmppStreamReady {
   bool get isResumed => resumed;
 }
 
+class _AxiEntityCapabilitiesManager extends mox.EntityCapabilitiesManager {
+  _AxiEntityCapabilitiesManager(
+    super.capabilityHashBase, {
+    required bool Function(mox.JID jid) shouldIgnoreJid,
+  }) : _shouldIgnoreJid = shouldIgnoreJid;
+
+  final bool Function(mox.JID jid) _shouldIgnoreJid;
+
+  @override
+  // ignore: invalid_use_of_visible_for_testing_member
+  Future<mox.StanzaHandlerData> onPresence(
+    mox.Stanza stanza,
+    mox.StanzaHandlerData state,
+  ) async {
+    final from = stanza.from;
+    if (from != null) {
+      try {
+        final jid = mox.JID.fromString(from);
+        if (_shouldIgnoreJid(jid)) {
+          return state;
+        }
+      } on Exception {
+        // Fall through and let the base manager handle malformed JIDs.
+      }
+    }
+    // ignore: invalid_use_of_visible_for_testing_member
+    return super.onPresence(stanza, state);
+  }
+}
+
 class XmppService extends XmppBase
     with
         BaseStreamService,
@@ -945,7 +975,10 @@ class XmppService extends XmppBase
           emailBlocklistNotifyFeature,
         ])),
         XmppKeepAliveManager(),
-        mox.EntityCapabilitiesManager(_capabilityHashBase),
+        _AxiEntityCapabilitiesManager(
+          _capabilityHashBase,
+          shouldIgnoreJid: _shouldIgnoreEntityCapabilityJid,
+        ),
         SafePubSubManager(),
         mox.CSIManager(),
         mox.StableIdManager(),
@@ -960,6 +993,13 @@ class XmppService extends XmppBase
       ]);
 
     return managers;
+  }
+
+  bool _shouldIgnoreEntityCapabilityJid(mox.JID jid) {
+    if (jid.resource.isNotEmpty) {
+      return false;
+    }
+    return jid.domain == mucServiceHost;
   }
 
   @override

@@ -315,6 +315,28 @@ pre, code {
     }
   }
 
+  static bool shouldRenderRichEmailHtml({
+    required String? normalizedHtmlBody,
+    required String? normalizedHtmlText,
+    required String renderedText,
+  }) {
+    if (normalizedHtmlBody == null) {
+      return false;
+    }
+    if (isPlainTextHtml(normalizedHtmlBody)) {
+      return false;
+    }
+    final comparableRenderedText = _normalizePlainText(renderedText);
+    if (comparableRenderedText.isEmpty) {
+      return true;
+    }
+    final comparableHtmlText = _normalizePlainText(normalizedHtmlText ?? '');
+    if (comparableHtmlText.isEmpty) {
+      return true;
+    }
+    return comparableRenderedText != comparableHtmlText;
+  }
+
   static List<String> imageSources(String html) {
     try {
       final fragment = html_parser.parseFragment(_truncateHtmlInput(html));
