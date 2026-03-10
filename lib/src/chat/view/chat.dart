@@ -927,7 +927,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
 
 class _ChatState extends State<Chat> {
   static bool get _debugShowAllComposerBanners => kDebugMode && false;
-  static bool get _debugCycleComposerBanners => kDebugMode && true;
+  static bool get _debugCycleComposerBanners => kDebugMode && false;
 
   late final ShadPopoverController _emojiPopoverController;
   late final FocusNode _focusNode;
@@ -13904,15 +13904,7 @@ class _ComposerAttachedBannerSurface extends StatelessWidget {
               top: BorderSide(color: borderColor ?? colors.border, width: 1),
             ),
           ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              spacing.l,
-              spacing.l,
-              spacing.l,
-              spacing.l,
-            ),
-            child: child,
-          ),
+          child: Padding(padding: EdgeInsets.all(spacing.m), child: child),
         ),
       ),
     );

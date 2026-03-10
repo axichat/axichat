@@ -119,6 +119,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     CalendarReminderController? reminderController,
     CalendarStorageManager? calendarStorageManager,
     Storage? hydratedStorage,
+    Future<Directory> Function(String directoryName) temporaryDirectoryBuilder =
+        appOwnedTemporaryDirectory,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
@@ -138,6 +140,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
        _reminderController = reminderController,
        _calendarStorageManager = calendarStorageManager,
        _hydratedStorage = hydratedStorage,
+       _temporaryDirectoryBuilder = temporaryDirectoryBuilder,
        _endpointResolver = endpointResolver,
        _authRequestTimeout = authRequestTimeout,
        super(initialState ?? const AuthenticationNone()) {
@@ -264,6 +267,8 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final CalendarReminderController? _reminderController;
   final CalendarStorageManager? _calendarStorageManager;
   final Storage? _hydratedStorage;
+  final Future<Directory> Function(String directoryName)
+  _temporaryDirectoryBuilder;
   final EndpointResolver _endpointResolver;
   late final http.Client _httpClient;
   late final http.Client? _ownedHttpClient;
@@ -2855,7 +2860,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   }
 
   Future<void> _deleteBurnTemporaryDirectory(String directoryName) async {
-    final directory = await appOwnedTemporaryDirectory(directoryName);
+    final directory = await _temporaryDirectoryBuilder(directoryName);
     try {
       final deleted = await deleteAppOwnedDirectoryTree(
         directory: directory,

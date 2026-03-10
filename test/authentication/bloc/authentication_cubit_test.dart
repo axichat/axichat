@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
@@ -2246,14 +2247,24 @@ void main() {
 
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Burn logout disconnects the xmpp service, wipes disk and emits [AuthenticationNone].',
-      build: () => AuthenticationCubit(
-        credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
-        xmppService: mockXmppService,
-        httpClient: mockHttpClient,
-        emailProvisioningClient: mockProvisioningClient,
-        initialState: const AuthenticationComplete(),
-      ),
+      build: () {
+        final tempRoot = Directory.systemTemp.createTempSync('auth_burn');
+        addTearDown(() async {
+          if (tempRoot.existsSync()) {
+            await tempRoot.delete(recursive: true);
+          }
+        });
+        return AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          temporaryDirectoryBuilder: (directoryName) async =>
+              Directory('${tempRoot.path}/$directoryName'),
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+      },
       act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
       expect: () => [const AuthenticationNone()],
       verify: (bloc) {
@@ -2265,16 +2276,26 @@ void main() {
 
     blocTest<AuthenticationCubit, AuthenticationState>(
       'Burn logout clears email storage when enabled.',
-      build: () => AuthenticationCubit(
-        credentialStore: mockCredentialStore,
-        initialEndpointConfig: const EndpointConfig(),
-        xmppService: mockXmppService,
-        emailService: mockEmailService,
-        homeRefreshSyncService: mockHomeRefreshSyncService,
-        httpClient: mockHttpClient,
-        emailProvisioningClient: mockProvisioningClient,
-        initialState: const AuthenticationComplete(),
-      ),
+      build: () {
+        final tempRoot = Directory.systemTemp.createTempSync('auth_burn');
+        addTearDown(() async {
+          if (tempRoot.existsSync()) {
+            await tempRoot.delete(recursive: true);
+          }
+        });
+        return AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          homeRefreshSyncService: mockHomeRefreshSyncService,
+          temporaryDirectoryBuilder: (directoryName) async =>
+              Directory('${tempRoot.path}/$directoryName'),
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+      },
       act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
       expect: () => [const AuthenticationNone()],
       verify: (_) {
@@ -2287,6 +2308,12 @@ void main() {
       build: () {
         credentialStorage['jid'] = validJid;
         credentialStorage['${validJid}_database_prefix'] = 'burn-db';
+        final tempRoot = Directory.systemTemp.createTempSync('auth_burn');
+        addTearDown(() async {
+          if (tempRoot.existsSync()) {
+            await tempRoot.delete(recursive: true);
+          }
+        });
         return AuthenticationCubit(
           credentialStore: mockCredentialStore,
           xmppService: mockXmppService,
@@ -2296,6 +2323,8 @@ void main() {
           reminderController: mockCalendarReminderController,
           calendarStorageManager: mockCalendarStorageManager,
           hydratedStorage: mockHydratedStorage,
+          temporaryDirectoryBuilder: (directoryName) async =>
+              Directory('${tempRoot.path}/$directoryName'),
           httpClient: mockHttpClient,
           emailProvisioningClient: mockProvisioningClient,
           initialState: const AuthenticationComplete(
@@ -2304,7 +2333,9 @@ void main() {
         );
       },
       act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
-      expect: () => [const AuthenticationNone()],
+      expect: () => [
+        const AuthenticationNone(config: EndpointConfig(smtpEnabled: false)),
+      ],
       verify: (_) {
         verify(
           () => mockEmailService.burn(jid: validJid, databasePrefix: 'burn-db'),
