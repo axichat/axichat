@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-deltachat = { git = "https://github.com/deltachat/deltachat-core-rust", package = "deltachat_ffi", default-features = false, features = ["vendored"] }
-deltachat_core = { git = "https://github.com/deltachat/deltachat-core-rust", package = "deltachat", default-features = false, features = ["internals", "vendored"] }
+deltachat = { git = "https://gitlab.com/axichat/deltachat-core-rust.git", rev = "a84cede719c48d408a9e4a19be1b5d5c852d4cfc", package = "deltachat_ffi", default-features = false, features = ["vendored"] }
+deltachat_core = { git = "https://gitlab.com/axichat/deltachat-core-rust.git", rev = "a84cede719c48d408a9e4a19be1b5d5c852d4cfc", package = "deltachat", default-features = false, features = ["internals", "vendored"] }
 brotli = { version = "8", default-features = false, features = ["std"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }

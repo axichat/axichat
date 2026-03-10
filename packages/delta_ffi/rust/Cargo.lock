@@ -1042,7 +1042,7 @@ dependencies = [
 [[package]]
 name = "deltachat"
 version = "2.22.0"
-source = "git+https://github.com/deltachat/deltachat-core-rust#8b4c718b6b1076678dd77a7eb0426cff25077e91"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
 dependencies = [
  "anyhow",
  "astral-tokio-tar",
@@ -1125,7 +1125,7 @@ dependencies = [
 [[package]]
 name = "deltachat-contact-tools"
 version = "0.0.0"
-source = "git+https://github.com/deltachat/deltachat-core-rust#8b4c718b6b1076678dd77a7eb0426cff25077e91"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
 dependencies = [
  "anyhow",
  "chrono",
@@ -1136,7 +1136,7 @@ dependencies = [
 [[package]]
 name = "deltachat-jsonrpc"
 version = "2.22.0"
-source = "git+https://github.com/deltachat/deltachat-core-rust#8b4c718b6b1076678dd77a7eb0426cff25077e91"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
 dependencies = [
  "anyhow",
  "async-channel 2.5.0",
@@ -1157,12 +1157,12 @@ dependencies = [
 [[package]]
 name = "deltachat-time"
 version = "1.0.0"
-source = "git+https://github.com/deltachat/deltachat-core-rust#8b4c718b6b1076678dd77a7eb0426cff25077e91"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
 
 [[package]]
 name = "deltachat_derive"
 version = "2.0.0"
-source = "git+https://github.com/deltachat/deltachat-core-rust#8b4c718b6b1076678dd77a7eb0426cff25077e91"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
 dependencies = [
  "quote",
  "syn",
@@ -1171,7 +1171,7 @@ dependencies = [
 [[package]]
 name = "deltachat_ffi"
 version = "2.22.0"
-source = "git+https://github.com/deltachat/deltachat-core-rust#8b4c718b6b1076678dd77a7eb0426cff25077e91"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
 dependencies = [
  "anyhow",
  "deltachat",
@@ -1757,7 +1757,7 @@ dependencies = [
 [[package]]
 name = "format-flowed"
 version = "1.0.0"
-source = "git+https://github.com/deltachat/deltachat-core-rust#8b4c718b6b1076678dd77a7eb0426cff25077e91"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
 
 [[package]]
 name = "funty"
@@ -4301,7 +4301,7 @@ dependencies = [
 [[package]]
 name = "ratelimit"
 version = "1.0.0"
-source = "git+https://github.com/deltachat/deltachat-core-rust#8b4c718b6b1076678dd77a7eb0426cff25077e91"
+source = "git+https://gitlab.com/axichat/deltachat-core-rust.git?rev=a84cede719c48d408a9e4a19be1b5d5c852d4cfc#a84cede719c48d408a9e4a19be1b5d5c852d4cfc"
 
 [[package]]
 name = "rcgen"

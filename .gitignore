@@ -54,6 +54,7 @@ app.*.map.json
 chatmail/core/.git/
 chatmail/core/build/
 chatmail/core/target/
+/vendor/deltachat-core-rust/
 /dist/
 deltachat-android-main/
 moxxy-master/

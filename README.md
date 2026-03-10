@@ -58,10 +58,10 @@
     <img alt="Download the Android APK" src="https://img.shields.io/badge/Download%20the%20APK-1BA5FF?style=for-the-badge&logo=android&logoColor=white" />
   </a>
   <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-windows.zip">
-    <img alt="Download the Windows build" src="https://img.shields.io/badge/Download%20Windows-4178D4?style=for-the-badge&logo=windows&logoColor=white" />
+    <img alt="Download the portable Windows zip" src="https://img.shields.io/badge/Portable%20Windows%20.zip-4178D4?style=for-the-badge&logo=windows&logoColor=white" />
   </a>
   <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-linux.tar.gz">
-    <img alt="Download the Linux build" src="https://img.shields.io/badge/Download%20Linux-2CA5E0?style=for-the-badge&logo=linux&logoColor=white" />
+    <img alt="Download the portable Linux tar.gz" src="https://img.shields.io/badge/Portable%20Linux%20.tar.gz-2CA5E0?style=for-the-badge&logo=linux&logoColor=white" />
   </a>
 </div>
 
@@ -280,13 +280,75 @@
 
 ## Downloading & Installing
 
-1. Pick the platform button above (APK, Windows `.zip`, or Linux `.tar.gz`).
+Use the buttons above for the APK and the portable desktop builds. Some GitHub releases also
+include installer/package assets. Open the matching GitHub release and pick the asset that fits
+your platform:
+
+- **Android** – `app-production-release.apk`
+- **Windows installer** – `axichat-windows-setup.exe`
+- **Windows portable** – `axichat-windows.zip`
+- **Linux Debian/Ubuntu package** – `axichat-linux-amd64.deb`
+- **Linux portable** – `axichat-linux.tar.gz`
+- **Linux Flatpak** – Flathub once the listing is live
+
+Prefer the installer/package when your release includes one. Use the portable `.zip` or `.tar.gz`
+only when you specifically want a portable build, because portable builds do **not** create Start
+menu or applications-menu entries automatically.
+
+1. Pick the matching asset for your platform.
 2. Verify the checksum/signature provided in the GitHub Release notes.
-3. Install:
-    - **Android** – Sideload the APK or deploy through your preferred device manager.
-    - **Windows** – Extract the archive and run `Axichat.exe`.
-    - **Linux** – Extract into a directory and launch `./axichat` (see `linux/axichat.desktop` for
-      desktop entry guidance).
+3. Install it using the matching instructions below.
+
+### Android
+
+- Install from F-Droid or sideload the APK.
+
+### Linux
+
+- **Flathub** – Once the Flathub listing is live, install Axichat from Flathub. Flatpak installs
+  show up in the desktop applications menu automatically.
+- **Debian/Ubuntu `.deb`** – If your release includes `axichat-linux-amd64.deb`, install it with
+  `sudo apt install ./axichat-linux-amd64.deb`. The package should add Axichat to your
+  applications menu automatically.
+- **Portable `.tar.gz`** – Extract the archive into a stable folder such as
+  `~/.local/opt/axichat`, then launch `~/.local/opt/axichat/axichat`.
+
+  To promote the portable build into a normal desktop application, create a local `.desktop`
+  launcher that points at the extracted bundle:
+
+  ```bash
+  install -d "$HOME/.local/share/applications"
+  cat > "$HOME/.local/share/applications/im.axi.axichat.desktop" <<EOF
+  [Desktop Entry]
+  Type=Application
+  Name=Axichat
+  Comment=Free chat+email client
+  Exec=$HOME/.local/opt/axichat/axichat
+  Icon=$HOME/.local/opt/axichat/data/app_icon.png
+  Categories=Network;Chat;InstantMessaging;Email;
+  StartupWMClass=axichat
+  Terminal=false
+  EOF
+  update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+  ```
+
+  If you extracted the archive somewhere else, replace the `Exec=` and `Icon=` paths above to
+  match your folder.
+
+### Windows
+
+- **Installer `.exe`** – If your release includes `axichat-windows-setup.exe`, run it and keep the
+  default options. It should create the Start menu entry automatically.
+- **Portable `.zip`** – Extract the archive into a stable folder such as
+  `%LocalAppData%\Programs\Axichat`, then run `Axichat.exe`.
+
+  To promote the portable build into a normal Windows application:
+
+  1. Right-click `Axichat.exe`, choose `Show more options`, then choose `Send to` ->
+     `Desktop (create shortcut)`.
+  2. Press `Win + R`, run `shell:Programs`, and move that shortcut into the folder that opens.
+  3. Open Start, search for `Axichat`, then pin it to Start or the taskbar if you want one-click
+     access.
 
 <hr />
 

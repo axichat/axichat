@@ -1,0 +1,30 @@
+app-id: im.axi.axichat
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+command: axichat
+finish-args:
+  - --device=dri
+  - --share=ipc
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --talk-name=org.freedesktop.secrets
+modules:
+  - name: axichat-bundle
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 axichat /app/bin/axichat
+      - mkdir -p /app/lib /app/data
+      - cp -a lib/. /app/lib/
+      - cp -a data/. /app/data/
+      - install -Dm644 im.axi.axichat.desktop /app/share/applications/im.axi.axichat.desktop
+      - install -Dm644 im.axi.axichat.metainfo.xml /app/share/metainfo/im.axi.axichat.metainfo.xml
+      - install -Dm644 data/app_icon.png /app/share/icons/hicolor/256x256/apps/im.axi.axichat.png
+    sources:
+      - type: dir
+        path: ../../build/linux/x64/release/bundle
+      - type: file
+        path: im.axi.axichat.desktop
+      - type: file
+        path: im.axi.axichat.metainfo.xml

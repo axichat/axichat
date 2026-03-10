@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>im.axi.axichat</id>
+  <name>Axichat</name>
+  <summary>Open-source XMPP and email client with calendar, no FCM or trackers.</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <developer_name>Axichat</developer_name>
+  <launchable type="desktop-id">im.axi.axichat.desktop</launchable>
+  <url type="homepage">https://axi.chat</url>
+  <url type="bugtracker">https://gitlab.com/axichat/axichat/-/issues</url>
+  <url type="vcs-browser">https://gitlab.com/axichat/axichat</url>
+  <description>
+    <p>Axichat is an open-source XMPP and email client with a unified inbox, integrated calendar tools, first-party push notifications, and no Firebase, trackers, or vendor lock-in.</p>
+    <p>It combines chat, email, reminders, tasks, and availability sharing in one app so communication and planning stay in the same workflow.</p>
+    <ul>
+      <li>Unified chat and email conversations</li>
+      <li>Group chats, reactions, and delivery/read receipts</li>
+      <li>Integrated calendar, reminders, and tasks</li>
+      <li>Natural-language scheduling and availability sharing</li>
+      <li>No Google, Firebase, or tracker dependencies</li>
+    </ul>
+  </description>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/axichat/axichat/master/metadata/en-US/images/mockups/01.png</image>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/axichat/axichat/master/metadata/en-US/images/mockups/04.png</image>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/axichat/axichat/master/metadata/en-US/images/mockups/06.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+</component>

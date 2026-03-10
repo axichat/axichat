@@ -19,6 +19,10 @@ definitions:
       name: Install OpenSSL Windows
       script: |
         choco install openssl --version 3.1.1 -y
+    - &inno_setup_install_windows
+      name: Install Inno Setup Windows
+      script: |
+        choco install innosetup -y
     - &refresh_path_windows
       name: Refresh Path
       script: |
@@ -99,7 +103,9 @@ definitions:
         
         echo $env:GITHUB_TOKEN | gh auth login --with-token
         
-        gh release upload $env:CM_TAG 'build\windows\x64\runner\release.zip#axichat windows'
+        gh release upload $env:CM_TAG `
+          dist\axichat-windows.zip `
+          dist\axichat-windows-setup.exe
     - &github_release_upload_linux
       name: Upload to Linux GitHub Releases
       script: |
@@ -108,7 +114,9 @@ definitions:
 
         echo $GITHUB_TOKEN | gh auth login --with-token
 
-        gh release upload $CM_TAG dist/axichat-linux-$CM_TAG.tar.gz#axichat-linux
+        gh release upload $CM_TAG \
+          dist/axichat-linux.tar.gz \
+          dist/axichat-linux-amd64.deb
 
 workflows:
   test-workflow:
@@ -196,7 +204,7 @@ workflows:
       - *build_runner
       - name: Shorebird Release
         script: |
-          shorebird release android --flavor production --artifact=apk \
+          shorebird release android --flavor production --artifact=apk -- \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
           --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
           --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
@@ -228,6 +236,7 @@ workflows:
         script: |
           shorebird patch android --flavor production \
           --release-version=${{ inputs.release_version }} \
+          -- \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
           --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
           --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
@@ -262,7 +271,7 @@ workflows:
       - *build_runner
       - name: Shorebird Release Development
         script: |
-          shorebird release android --flavor development --artifact=apk \
+          shorebird release android --flavor development --artifact=apk -- \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
           --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
           --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
@@ -294,6 +303,7 @@ workflows:
         script: |
           shorebird patch android --flavor development \
           --release-version=${{ inputs.release_version }} \
+          -- \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
           --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
           --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
@@ -324,28 +334,34 @@ workflows:
       - *fetch_dependencies
       - *build_runner
       - *openssl_install_windows
+      - *inno_setup_install_windows
       - *refresh_path_windows
       - name: Configure for Windows
         script: |
           flutter config --enable-windows-desktop
       - name: Shorebird Release
         script: |
-          & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production `
+          & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production -- `
             --dart-define=EMAIL_PUBLIC_TOKEN=$env:EMAIL_PUBLIC_TOKEN `
             --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$env:AXI_GMAIL_OAUTH_CLIENT_ID `
             --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$env:AXI_OUTLOOK_OAUTH_CLIENT_ID `
             --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$env:AXI_YAHOO_OAUTH_CLIENT_ID 
       - name: Export bundle
         script: |
+          mkdir dist
           Copy-Item -Path C:\Windows\System32\msvcp140.dll -Destination build/windows/x64/runner/Release 
           Copy-Item -Path C:\Windows\System32\vcruntime140.dll -Destination build/windows/x64/runner/Release 
           Copy-Item -Path C:\Windows\System32\vcruntime140_1.dll -Destination build/windows/x64/runner/Release 
-          cd build/windows/x64/runner/Release
-          7z a -r ../release.zip ./*
+          7z a -r dist\axichat-windows.zip build\windows\x64\runner\Release\*
+      - name: Build Windows Installer
+        script: |
+          $version = $env:CM_TAG.TrimStart('v')
+          iscc /DAppVersion=$version /DAppSourceDir=build\windows\x64\runner\Release /DAppOutputDir=dist packaging\windows\axichat.iss
       - *github_release_create_windows
       - *github_release_upload_windows
     artifacts:
-      - build\windows\x64\runner\release.zip
+      - dist\axichat-windows.zip
+      - dist\axichat-windows-setup.exe
   release-linux-workflow:
     name: Linux Release Workflow
     triggering:
@@ -377,7 +393,7 @@ workflows:
           flutter config --enable-linux-desktop
       - name: Shorebird Release Linux
         script: |
-          shorebird release linux --flavor production \
+          shorebird release linux --flavor production -- \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
           --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
           --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
@@ -385,8 +401,12 @@ workflows:
       - name: Package Linux Bundle
         script: |
           mkdir -p dist
-          tar -czf dist/axichat-linux-$CM_TAG.tar.gz -C build/linux/x64/release/bundle .
+          tar -czf dist/axichat-linux.tar.gz -C build/linux/x64/release/bundle .
+      - name: Package Debian Bundle
+        script: |
+          ./tool/package_deb.sh build/linux/x64/release/bundle "$CM_TAG" dist
       - *github_release_create_android
       - *github_release_upload_linux
     artifacts:
-      - dist/axichat-linux-*.tar.gz
+      - dist/axichat-linux.tar.gz
+      - dist/axichat-linux-amd64.deb
