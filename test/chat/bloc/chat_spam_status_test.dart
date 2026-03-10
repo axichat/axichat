@@ -44,7 +44,9 @@ void main() {
     mucService = MockMucService();
 
     when(
-      () => notificationService.dismissNotifications(),
+      () => notificationService.dismissMessageNotification(
+        threadKey: any(named: 'threadKey'),
+      ),
     ).thenAnswer((_) async {});
     when(
       () => chatsService.chatStream(any()),

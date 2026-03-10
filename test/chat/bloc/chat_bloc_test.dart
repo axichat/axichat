@@ -172,7 +172,9 @@ void main() {
     chatStreamController = StreamController<Chat?>.broadcast();
 
     when(
-      () => notificationService.dismissNotifications(),
+      () => notificationService.dismissMessageNotification(
+        threadKey: any(named: 'threadKey'),
+      ),
     ).thenAnswer((_) async {});
     when(
       () => mucService.roomStateStream(any()),

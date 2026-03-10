@@ -1585,15 +1585,9 @@ mixin MucService on XmppBase, BaseStreamService {
     required String roomJid,
     required String inviteeJid,
   }) async {
-    const verificationDelays = <Duration>[
-      Duration.zero,
-      Duration(milliseconds: 250),
-      Duration(milliseconds: 500),
-    ];
-    for (final delay in verificationDelays) {
-      if (delay > Duration.zero) {
-        await Future<void>.delayed(delay);
-      }
+    final deadline = DateTime.timestamp().add(_roomQueryTimeout);
+    var retryDelay = const Duration(milliseconds: 250);
+    while (true) {
       final members = await fetchRoomMembers(roomJid: roomJid);
       final hasMembership = members.any(
         (entry) =>
@@ -1603,6 +1597,15 @@ mixin MucService on XmppBase, BaseStreamService {
       );
       if (hasMembership) {
         return;
+      }
+      final remaining = deadline.difference(DateTime.timestamp());
+      if (remaining <= Duration.zero) {
+        break;
+      }
+      final delay = retryDelay < remaining ? retryDelay : remaining;
+      await Future<void>.delayed(delay);
+      if (retryDelay < const Duration(seconds: 2)) {
+        retryDelay = Duration(milliseconds: retryDelay.inMilliseconds * 2);
       }
     }
     throw XmppMessageException();

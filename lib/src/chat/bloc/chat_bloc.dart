@@ -43,6 +43,7 @@ import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -363,7 +364,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (jid != null) {
       final chatLookupJid = _chatLookupJid;
       if (chatLookupJid == null) return;
-      _notificationService.dismissNotifications();
+      final threadKey =
+          _notificationPayloadCodec.encodeChatJid(chatLookupJid) ??
+          chatLookupJid.trim();
+      if (threadKey.isNotEmpty) {
+        _notificationService.dismissMessageNotification(threadKey: threadKey);
+      }
       _chatSubscription = _chatsService.chatStream(chatLookupJid).listen((
         chat,
       ) {
@@ -407,6 +413,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   static const int _emptyMessageCount = 0;
   static const CalendarFragmentPolicy _calendarFragmentPolicy =
       CalendarFragmentPolicy();
+  static const NotificationPayloadCodec _notificationPayloadCodec =
+      NotificationPayloadCodec();
 
   bool get _forceAllWithContactViewFilter {
     return _isEmailChat;
