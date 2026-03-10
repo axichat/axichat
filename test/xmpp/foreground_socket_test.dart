@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -138,6 +139,40 @@ void main() {
       await Future.wait([acquire, release]);
 
       expect(stopCalls, equals(1));
+    });
+  });
+
+  group('resetForegroundServiceIfRunning', () {
+    test('stops a running foreground service', () async {
+      var stopped = false;
+
+      final result = await resetForegroundServiceIfRunning(
+        isAndroid: true,
+        isRunningService: () async => true,
+        stopForegroundService: () async {
+          stopped = true;
+          return const ServiceRequestSuccess();
+        },
+      );
+
+      expect(result, isTrue);
+      expect(stopped, isTrue);
+    });
+
+    test('does nothing when no foreground service is running', () async {
+      var stopCalls = 0;
+
+      final result = await resetForegroundServiceIfRunning(
+        isAndroid: true,
+        isRunningService: () async => false,
+        stopForegroundService: () async {
+          stopCalls++;
+          return const ServiceRequestSuccess();
+        },
+      );
+
+      expect(result, isFalse);
+      expect(stopCalls, isZero);
     });
   });
 }

@@ -9,6 +9,7 @@ import 'package:axichat/src/common/flavor_prefix.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'
@@ -351,6 +352,55 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   static void _defaultSendDataToTask(String data) {
     FlutterForegroundTask.sendDataToTask(data);
   }
+}
+
+final _foregroundTaskResetLog = Logger('ForegroundTaskReset');
+
+Future<bool> resetForegroundServiceIfRunning({
+  bool? isAndroid,
+  Future<bool> Function()? isRunningService,
+  Future<ServiceRequestResult> Function()? stopForegroundService,
+}) async {
+  if (!(isAndroid ?? Platform.isAndroid)) {
+    return false;
+  }
+
+  final checkService =
+      isRunningService ?? () => FlutterForegroundTask.isRunningService;
+  final stopService =
+      stopForegroundService ?? () => FlutterForegroundTask.stopService();
+
+  try {
+    if (!await checkService()) {
+      return false;
+    }
+    final result = await stopService();
+    if (result is ServiceRequestSuccess) {
+      _foregroundTaskResetLog.info(
+        'Stopped stale foreground service before session startup.',
+      );
+      return true;
+    }
+    final error = result is ServiceRequestFailure ? result.error : null;
+    _foregroundTaskResetLog.warning(
+      'Failed to stop stale foreground service before session startup.',
+      error is Exception ? error : null,
+    );
+  } on MissingPluginException catch (error, stackTrace) {
+    _foregroundTaskResetLog.warning(
+      'Foreground task plugin unavailable while resetting service.',
+      error,
+      stackTrace,
+    );
+  } on Exception catch (error, stackTrace) {
+    _foregroundTaskResetLog.warning(
+      'Failed to reset running foreground service.',
+      error,
+      stackTrace,
+    );
+  }
+
+  return false;
 }
 
 Future<void> _waitForResume() async {
