@@ -144,12 +144,23 @@ class CredentialStore
   Future<bool> deleteAll({bool burn = false}) async {
     try {
       _log.info('Deleting all values...');
-      if (!capability.canFssBatchOperation) {
-        for (final key in RegisteredCredentialKey._registeredKeys) {
-          await _secureStorage.delete(key: key.value);
+      if (burn) {
+        final keys = <String>{};
+        try {
+          keys.addAll((await _secureStorage.readAll()).keys);
+        } on Exception {
+          for (final key in RegisteredCredentialKey._registeredKeys) {
+            keys.add(key.value);
+          }
         }
-      } else {
-        await _secureStorage.deleteAll();
+        final orderedKeys = keys.toList(growable: false)..sort();
+        for (final key in orderedKeys) {
+          await _secureStorage.delete(key: key);
+        }
+        return true;
+      }
+      for (final key in RegisteredCredentialKey._registeredKeys) {
+        await _secureStorage.delete(key: key.value);
       }
       return true;
     } on Exception catch (e) {

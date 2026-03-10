@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
@@ -67,7 +68,7 @@ const int _attachmentVideoMaxPixels = 32 * 1024 * 1024;
 const int _attachmentVideoMinDimensionPixels = 1;
 const int _attachmentVideoMinBytes = 1;
 const double _attachmentVideoMinDimension = 1.0;
-const String _attachmentShareDirName = 'attachment_shares';
+const String _attachmentShareDirName = attachmentShareTempDirectoryName;
 const String _attachmentShareDirPrefix = 'share_';
 const int _attachmentShareNameMaxLength = 120;
 const int _attachmentSaveNameMaxLength = _attachmentShareNameMaxLength;

@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -18,7 +19,7 @@ class EmailAttachmentOptimizer {
   static const _pngCompressionLevel = 6;
   static const int _maxWebBytes = 5 * 1024 * 1024;
   static const Duration _optimizedCleanupDelay = Duration(hours: 1);
-  static const _optimizedDirectoryName = 'email_attachments';
+  static const _optimizedDirectoryName = emailAttachmentTempDirectoryName;
   static const _optimizedFilePrefix = 'attachment_';
   static const _jpegExtension = '.jpg';
   static const _pngExtension = '.png';

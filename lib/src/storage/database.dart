@@ -11,6 +11,7 @@ import 'package:axichat/src/calendar/utils/calendar_snapshot_metadata.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:drift/drift.dart';
@@ -5886,7 +5887,21 @@ WHERE value IS NOT NULL AND trim(value) != ''
     const databaseWalSuffix = '-wal';
     const databaseShmSuffix = '-shm';
     const databaseJournalSuffix = '-journal';
-    final basePath = _file.path;
+    final prefix = _databasePrefixFromFilePath();
+    if (prefix == null) {
+      _log.warning(
+        'Skipped database file cleanup for unexpected path ${_file.path}',
+      );
+      return;
+    }
+    final expectedDatabaseFile = await dbFileFor(prefix);
+    final basePath = expectedDatabaseFile.path;
+    if (!appOwnedPathsMatch(expectedPath: basePath, actualPath: _file.path)) {
+      _log.warning(
+        'Skipped database file cleanup for unexpected path ${_file.path}',
+      );
+      return;
+    }
     final candidates = <File>[
       File(basePath),
       File('$basePath$databaseWalSuffix'),
@@ -5894,13 +5909,22 @@ WHERE value IS NOT NULL AND trim(value) != ''
       File('$basePath$databaseJournalSuffix'),
     ];
     for (final candidate in candidates) {
-      if (!await candidate.exists()) {
-        continue;
-      }
       try {
-        await candidate.delete();
-      } on Exception {
-        // Ignore deletion failures for cleanup operations.
+        final deleted = await deleteAppOwnedFile(
+          file: candidate,
+          expectedPath: candidate.path,
+        );
+        if (!deleted) {
+          _log.warning(
+            'Skipped database artifact cleanup for unexpected path ${candidate.path}',
+          );
+        }
+      } on FileSystemException catch (error, stackTrace) {
+        _log.warning(
+          'Failed to delete database artifact ${candidate.path}',
+          error,
+          stackTrace,
+        );
       }
     }
     await _deleteAttachmentRootDirectory();
@@ -5912,14 +5936,22 @@ WHERE value IS NOT NULL AND trim(value) != ''
       return;
     }
     final Directory directory = await _attachmentDirectoryForPrefix(prefix);
-    if (!await directory.exists()) {
-      return;
-    }
-    const bool recursiveDelete = true;
     try {
-      await directory.delete(recursive: recursiveDelete);
-    } on Exception {
-      // Ignore cleanup failures.
+      final deleted = await deleteAppOwnedDirectoryTree(
+        directory: directory,
+        expectedPath: directory.path,
+      );
+      if (!deleted) {
+        _log.warning(
+          'Skipped attachment cleanup for unexpected path ${directory.path}',
+        );
+      }
+    } on FileSystemException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to delete attachment directory ${directory.path}',
+        error,
+        stackTrace,
+      );
     }
   }
 }

@@ -125,7 +125,7 @@ const AxiMotion axiMotion = AxiMotion(
   tapFocusAlpha: 0.32,
   composerBannerSlideOffset: Offset(0.0, 0.22),
   composerBannerTransitionDuration: Duration(milliseconds: 280),
-  composerBannerMinVisibilityDuration: Duration(milliseconds: 300),
+  composerBannerMinVisibilityDuration: Duration(milliseconds: 500),
   statusBannerSlideOffset: Offset(0.0, -(1 / 12)),
   statusBannerSuccessDuration: Duration(milliseconds: 900),
 );

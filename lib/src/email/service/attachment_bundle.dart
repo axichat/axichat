@@ -6,12 +6,12 @@ import 'dart:io';
 import 'dart:isolate';
 
 import 'package:archive/archive_io.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/file_name_safety.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
-const String emailAttachmentBundleDirName = 'email_attachments';
+const String emailAttachmentBundleDirName = emailAttachmentTempDirectoryName;
 const String emailAttachmentBundleNamePrefix = 'attachments_';
 const String emailAttachmentBundleExtension = '.zip';
 const String emailAttachmentBundleMimeType = 'application/zip';
@@ -67,9 +67,8 @@ final class EmailAttachmentBundler {
         EmailAttachmentBundleFailure.tooManyFiles,
       );
     }
-    final tempDir = await getTemporaryDirectory();
-    final bundleDir = Directory(
-      p.join(tempDir.path, emailAttachmentBundleDirName),
+    final bundleDir = await appOwnedTemporaryDirectory(
+      emailAttachmentBundleDirName,
     );
     if (!await bundleDir.exists()) {
       await bundleDir.create(recursive: true);

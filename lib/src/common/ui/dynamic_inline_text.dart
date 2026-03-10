@@ -4,7 +4,10 @@
 import 'dart:async';
 import 'dart:math';
 
-import 'package:flutter/gestures.dart' show kLongPressTimeout, kTouchSlop;
+import 'package:axichat/src/common/ui/squircle_border.dart';
+import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:flutter/gestures.dart'
+    show TapGestureRecognizer, kLongPressTimeout, kTouchSlop;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -12,6 +15,22 @@ typedef LinkTapCallback = void Function(String url);
 
 const double _detailStartGap = 8.0;
 const double _detailSpacing = 6.0;
+
+class DynamicInlineDetailAction {
+  const DynamicInlineDetailAction({
+    required this.onTap,
+    required this.backgroundColor,
+    required this.borderRadius,
+    this.padding = EdgeInsets.zero,
+    this.minimumHeight = 0.0,
+  });
+
+  final VoidCallback onTap;
+  final Color backgroundColor;
+  final double borderRadius;
+  final EdgeInsets padding;
+  final double minimumHeight;
+}
 
 class DynamicTextLink {
   const DynamicTextLink({required this.range, required this.url});
@@ -25,6 +44,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
     super.key,
     required this.text,
     required this.details,
+    this.detailActions = const <int, DynamicInlineDetailAction>{},
     this.links = const [],
     this.onLinkTap,
     this.onLinkLongPress,
@@ -32,6 +52,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
 
   final TextSpan text;
   final List<InlineSpan> details;
+  final Map<int, DynamicInlineDetailAction> detailActions;
   final List<DynamicTextLink> links;
   final LinkTapCallback? onLinkTap;
   final LinkTapCallback? onLinkLongPress;
@@ -41,6 +62,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
       DynamicInlineTextRenderObject(
         text: text,
         details: details,
+        detailActions: detailActions,
         textDirection: Directionality.of(context),
         textScaler:
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
@@ -57,6 +79,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
     renderObject
       ..text = text
       ..details = details
+      ..detailActions = detailActions
       ..textDirection = Directionality.of(context)
       ..textScaler =
           MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling
@@ -70,6 +93,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
   DynamicInlineTextRenderObject({
     required TextSpan text,
     required List<InlineSpan> details,
+    required Map<int, DynamicInlineDetailAction> detailActions,
     required TextDirection textDirection,
     required TextScaler textScaler,
     List<DynamicTextLink> links = const [],
@@ -77,6 +101,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
     LinkTapCallback? onLinkLongPress,
   }) : _text = text,
        _details = details,
+       _detailActions = Map.unmodifiable(detailActions),
        _textDirection = textDirection,
        _textScaler = textScaler,
        _links = List.unmodifiable(links),
@@ -94,10 +119,19 @@ class DynamicInlineTextRenderObject extends RenderBox {
   }
 
   List<InlineSpan> _details;
+  Map<int, DynamicInlineDetailAction> _detailActions;
 
   set details(List<InlineSpan> value) {
     if (value == _details) return;
     _details = value;
+    markNeedsLayout();
+    markNeedsSemanticsUpdate();
+  }
+
+  set detailActions(Map<int, DynamicInlineDetailAction> value) {
+    if (mapEquals(_detailActions, value)) return;
+    _detailActions = Map.unmodifiable(value);
+    _cancelDetailTap();
     markNeedsLayout();
     markNeedsSemanticsUpdate();
   }
@@ -147,12 +181,38 @@ class DynamicInlineTextRenderObject extends RenderBox {
     }
   }
 
+  late final TapGestureRecognizer _detailTapGestureRecognizer =
+      TapGestureRecognizer(debugOwner: this)
+        ..onTap = _handleDetailTap
+        ..onTapCancel = _cancelDetailTap;
+
   @override
   bool hitTestSelf(Offset position) =>
-      _links.isNotEmpty && (_onLinkTap != null || _onLinkLongPress != null);
+      (_links.isNotEmpty && (_onLinkTap != null || _onLinkLongPress != null)) ||
+      _detailActions.isNotEmpty;
 
   @override
   void handleEvent(PointerEvent event, covariant BoxHitTestEntry entry) {
+    if (_detailActions.isNotEmpty) {
+      if (event is PointerDownEvent) {
+        final detailIndex = _detailActionIndexAtOffset(entry.localPosition);
+        if (detailIndex != null) {
+          _pressedDetailActionIndex = detailIndex;
+          _detailTapPointer = event.pointer;
+          _detailTapGestureRecognizer.addPointer(event);
+          return;
+        }
+      }
+      if (_detailTapPointer == event.pointer) {
+        if (event is PointerCancelEvent) {
+          _cancelDetailTap();
+        }
+        return;
+      }
+      if (event is PointerCancelEvent) {
+        _cancelDetailTap();
+      }
+    }
     if (_links.isEmpty || _textPainter.text == null) return;
     if (event is PointerDownEvent) {
       _startLinkLongPress(entry.localPosition, event.pointer);
@@ -212,11 +272,15 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
   late TextPainter _textPainter;
   late List<TextPainter> _detailPainters;
+  late List<double> _detailWidths;
+  late List<double> _detailHeights;
 
   Timer? _linkLongPressTimer;
   Offset? _linkLongPressOrigin;
   int? _linkLongPressPointer;
   bool _linkLongPressTriggered = false;
+  int? _detailTapPointer;
+  int? _pressedDetailActionIndex;
 
   bool _hasWidgetSpan(InlineSpan span) {
     var found = false;
@@ -282,10 +346,31 @@ class DynamicInlineTextRenderObject extends RenderBox {
     _linkLongPressPointer = null;
   }
 
+  void _cancelDetailTap() {
+    _detailTapPointer = null;
+    _pressedDetailActionIndex = null;
+  }
+
+  void _handleDetailTap() {
+    final pressedDetailActionIndex = _pressedDetailActionIndex;
+    final callback = pressedDetailActionIndex == null
+        ? null
+        : _detailActions[pressedDetailActionIndex]?.onTap;
+    _cancelDetailTap();
+    callback?.call();
+  }
+
   @override
   void detach() {
     _cancelLinkLongPress();
+    _cancelDetailTap();
     super.detach();
+  }
+
+  @override
+  void dispose() {
+    _detailTapGestureRecognizer.dispose();
+    super.dispose();
   }
 
   Size _layout(double maxWidth) {
@@ -301,6 +386,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
     _canInlineDetails = false;
     _textLineMetrics = const [];
     _detailLineMetrics = const [];
+    _detailWidths = const [];
+    _detailHeights = const [];
 
     _textPainter = TextPainter(
       text: text,
@@ -314,6 +401,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
     _detailPainters = [];
     _detailLineMetrics = [];
+    _detailWidths = [];
+    _detailHeights = [];
     if (_details.isNotEmpty) {
       _detailsWidth = hasBodyText ? _detailStartGap : 0.0;
     }
@@ -328,9 +417,20 @@ class DynamicInlineTextRenderObject extends RenderBox {
       final lineMetrics = painter.computeLineMetrics();
       if (lineMetrics.isNotEmpty) {
         final metrics = lineMetrics.first;
-        _detailsWidth += metrics.width;
-        _detailsHeight = max(_detailsHeight, metrics.height);
+        final action = _detailActions[index];
+        final detailWidth = metrics.width + (action?.padding.horizontal ?? 0);
+        final detailHeight = max(
+          metrics.height + (action?.padding.vertical ?? 0),
+          action?.minimumHeight ?? 0,
+        );
+        _detailsWidth += detailWidth;
+        _detailsHeight = max(_detailsHeight, detailHeight);
         _detailLineMetrics.add(metrics);
+        _detailWidths.add(detailWidth);
+        _detailHeights.add(detailHeight);
+      } else {
+        _detailWidths.add(0);
+        _detailHeights.add(0);
       }
       _detailPainters.add(painter);
       final hasTrailingDetail = index < _details.length - 1;
@@ -399,13 +499,94 @@ class DynamicInlineTextRenderObject extends RenderBox {
       final dy = _canInlineDetails && lastLine != null
           ? offset.dy + lastLine.baseline - detailBaseline
           : offset.dy + baseTextHeight;
-      painter.paint(context.canvas, Offset(dx, dy));
-      dx += painter.width;
+      final action = _detailActions[i];
+      final horizontalPadding = action?.padding.horizontal ?? 0.0;
+      final detailWidth = _detailWidths.length > i
+          ? _detailWidths[i]
+          : painter.width;
+      final detailHeight = _detailHeights.length > i
+          ? _detailHeights[i]
+          : metrics?.height ?? painter.height;
+      final textHeight = metrics?.height ?? painter.height;
+      final backgroundTop = dy - ((detailHeight - textHeight) / 2);
+      if (action != null) {
+        final backgroundRect = Rect.fromLTWH(
+          dx,
+          backgroundTop,
+          detailWidth,
+          detailHeight,
+        );
+        context.canvas.drawPath(
+          SquircleBorder(
+            cornerRadius: action.borderRadius,
+          ).getOuterPath(backgroundRect),
+          Paint()
+            ..color = action.backgroundColor
+            ..isAntiAlias = true,
+        );
+      }
+      painter.paint(
+        context.canvas,
+        Offset(
+          dx + (horizontalPadding / 2),
+          backgroundTop + ((detailHeight - painter.height) / 2),
+        ),
+      );
+      dx += detailWidth;
       final hasTrailingDetail = i < _detailPainters.length - 1;
       if (hasTrailingDetail) {
         dx += _detailSpacing;
       }
     }
+  }
+
+  int? _detailActionIndexAtOffset(Offset position) {
+    if (_detailActions.isEmpty || _detailPainters.isEmpty) {
+      return null;
+    }
+    final hasBodyText = _textPainter.text?.toPlainText().isNotEmpty == true;
+    final baseTextHeight = hasBodyText ? _textPainter.height : 0.0;
+    final lastLine = _textLineMetrics.isNotEmpty ? _textLineMetrics.last : null;
+    final detailStartGap = hasBodyText ? _detailStartGap : 0.0;
+    var dx = _canInlineDetails
+        ? _finalLineWidth + detailStartGap
+        : size.width - _detailsWidth;
+    for (var i = 0; i < _detailPainters.length; i++) {
+      final action = _detailActions[i];
+      final painter = _detailPainters[i];
+      final metrics = _detailLineMetrics.length > i
+          ? _detailLineMetrics[i]
+          : null;
+      final detailWidth = _detailWidths.length > i
+          ? _detailWidths[i]
+          : painter.width;
+      final detailHeight = _detailHeights.length > i
+          ? _detailHeights[i]
+          : metrics?.height ?? painter.height;
+      if (action != null) {
+        final detailBaseline =
+            metrics?.baseline ?? painter.computeLineMetrics().first.baseline;
+        final dy = _canInlineDetails && lastLine != null
+            ? lastLine.baseline - detailBaseline
+            : baseTextHeight;
+        final textHeight = metrics?.height ?? painter.height;
+        final backgroundTop = dy - ((detailHeight - textHeight) / 2);
+        final rect = Rect.fromLTWH(
+          dx,
+          backgroundTop,
+          detailWidth,
+          detailHeight,
+        );
+        if (rect.contains(position)) {
+          return i;
+        }
+      }
+      dx += detailWidth;
+      if (i < _detailPainters.length - 1) {
+        dx += _detailSpacing;
+      }
+    }
+    return null;
   }
 
   @override

@@ -25,6 +25,7 @@ import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
@@ -2301,6 +2302,7 @@ class XmppService extends XmppBase
 
   Future<void> burn() async {
     await _deleteAvatarCacheDirectory();
+    await _deleteDemoAttachmentDirectory();
 
     await _dbOp<XmppStateStore>((ss) async {
       _xmppLogger.info('Wiping state store...');
@@ -2313,6 +2315,29 @@ class XmppService extends XmppBase
       await db.close();
       await db.deleteFile();
     });
+  }
+
+  Future<void> _deleteDemoAttachmentDirectory() async {
+    final baseDir = await getApplicationSupportDirectory();
+    final expectedPath = p.join(baseDir.path, 'demo_attachments');
+    final directory = Directory(expectedPath);
+    try {
+      final deleted = await deleteAppOwnedDirectoryTree(
+        directory: directory,
+        expectedPath: expectedPath,
+      );
+      if (!deleted) {
+        _xmppLogger.warning(
+          'Skipped demo attachment cleanup for unexpected path ${directory.path}',
+        );
+      }
+    } on FileSystemException catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Failed to delete demo attachment directory ${directory.path}',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   @override

@@ -147,6 +147,11 @@ void main() {
       () => transport.deconfigureAccount(accountId: any(named: 'accountId')),
     ).thenAnswer((_) async {});
     when(() => transport.deleteStorageArtifacts()).thenAnswer((_) async {});
+    when(
+      () => transport.deleteStorageArtifacts(
+        databasePrefix: any(named: 'databasePrefix'),
+      ),
+    ).thenAnswer((_) async {});
     when(() => transport.notifyNetworkAvailable()).thenAnswer((_) async {});
     when(() => transport.notifyNetworkLost()).thenAnswer((_) async {});
     when(() => transport.connectivity()).thenAnswer((_) async => 4000);
@@ -1398,6 +1403,25 @@ void main() {
     expect(service.activeAccount, isNull);
     expect(service.sessionCredentials, isNull);
   });
+
+  test(
+    'burn deletes storage artifacts for an explicit database prefix',
+    () async {
+      final service = EmailService(
+        credentialStore: credentialStore,
+        databaseBuilder: () async => database,
+        transport: transport,
+        notificationService: notificationService,
+        foregroundBridge: foregroundBridge,
+      );
+
+      await service.burn(jid: 'bob@axi.im', databasePrefix: 'bob');
+
+      verify(
+        () => transport.deleteStorageArtifacts(databasePrefix: 'bob'),
+      ).called(1);
+    },
+  );
 
   test(
     'fanOutSend preserves participant count when retrying a subset',

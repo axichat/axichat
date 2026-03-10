@@ -7,15 +7,24 @@ import 'package:flutter/material.dart';
 const TextSpan _emptyDetailsText = TextSpan(text: '');
 
 class ChatInlineDetails extends StatelessWidget {
-  const ChatInlineDetails({super.key, required this.details});
+  const ChatInlineDetails({
+    super.key,
+    required this.details,
+    this.detailActions = const <int, DynamicInlineDetailAction>{},
+  });
 
   final List<InlineSpan> details;
+  final Map<int, DynamicInlineDetailAction> detailActions;
 
   @override
   Widget build(BuildContext context) {
     if (details.isEmpty) {
       return const SizedBox.shrink();
     }
-    return DynamicInlineText(text: _emptyDetailsText, details: details);
+    return DynamicInlineText(
+      text: _emptyDetailsText,
+      details: details,
+      detailActions: detailActions,
+    );
   }
 }

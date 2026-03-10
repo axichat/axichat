@@ -73,5 +73,27 @@ void main() {
       );
       expect(identical(storage, secondCall), isTrue);
     });
+
+    test(
+      'burn clears guest storage and deletes auth storage from disk',
+      () async {
+        final guestStorage = await manager.ensureGuestStorage();
+        final authStorage = await manager.ensureAuthStorage(
+          passphrase: 'secret-passphrase',
+        );
+
+        await guestStorage.write('guest_key', 'guest-value');
+        await authStorage.write('auth_key', 'auth-value');
+
+        expect(await Hive.boxExists(authStorageBoxName), isTrue);
+
+        await manager.burn();
+
+        expect(guestStorage.read('guest_key'), isNull);
+        expect(manager.authStorage, isNull);
+        expect(registry.storageForPrefix(authStoragePrefix), isNull);
+        expect(await Hive.boxExists(authStorageBoxName), isFalse);
+      },
+    );
   });
 }

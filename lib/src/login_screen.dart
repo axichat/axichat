@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
 import 'package:axichat/src/authentication/view/debug_delete_credentials.dart';
@@ -13,6 +15,7 @@ import 'package:axichat/src/calendar/storage/calendar_state_storage_codec.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/calendar/storage/storage_builders.dart';
 import 'package:axichat/src/chat/view/chat.dart';
+import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/startup/auth_bootstrap.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -40,6 +43,7 @@ class _LoginScreenState extends State<LoginScreen>
   _AuthFlow _selectedFlow = _AuthFlow.login;
   late AuthProgressController _authProgressController;
   bool _didSeedAuthState = false;
+  bool _didPrecacheAxichatAppIcon = false;
   bool _completionHandled = false;
   DateTime? _autoLoginRequestedAt;
 
@@ -57,6 +61,10 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_didPrecacheAxichatAppIcon) {
+      _didPrecacheAxichatAppIcon = true;
+      unawaited(precacheAxichatAppIcon(context));
+    }
     if (_didSeedAuthState) {
       return;
     }
@@ -222,6 +230,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   Future<void> _preloadHomeScreenCache() async {
     final preloads = <Future<void>>[
+      precacheAxichatAppIcon(context),
       _preloadSelfAvatarCache(),
       _preloadChatListCache(),
       _preloadCalendarShortcutCache(),

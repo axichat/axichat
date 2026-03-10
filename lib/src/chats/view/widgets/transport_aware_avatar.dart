@@ -10,6 +10,34 @@ import 'package:flutter/material.dart';
 
 const String _axichatAppIconAssetPath = 'assets/icons/app_icon_source.png';
 
+ImageProvider<Object> axichatAppIconProvider(
+  BuildContext context, {
+  required double size,
+}) {
+  final baseSize = size < context.sizing.iconButtonTapTarget
+      ? context.sizing.iconButtonTapTarget
+      : size;
+  final devicePixelRatio = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1;
+  final scaledSize = (baseSize * devicePixelRatio).ceil();
+  final cacheExtent = scaledSize > 0 ? scaledSize : 1;
+  return ResizeImage.resizeIfNeeded(
+    cacheExtent,
+    cacheExtent,
+    const AssetImage(_axichatAppIconAssetPath),
+  );
+}
+
+Future<void> precacheAxichatAppIcon(
+  BuildContext context, {
+  double? size,
+}) async {
+  final resolvedSize = size ?? context.sizing.iconButtonTapTarget;
+  await precacheImage(
+    axichatAppIconProvider(context, size: resolvedSize),
+    context,
+  );
+}
+
 class SelfIdentitySnapshot {
   const SelfIdentitySnapshot({required this.selfJid, required this.avatarPath});
 
@@ -123,17 +151,20 @@ class AxichatAppIconAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final shape = SquircleBorder(cornerRadius: context.radii.squircle);
+    final imageProvider = axichatAppIconProvider(context, size: size);
     return SizedBox.square(
       dimension: size,
       child: ClipPath(
+        clipBehavior: Clip.antiAliasWithSaveLayer,
         clipper: ShapeBorderClipper(shape: shape),
-        child: Image.asset(
-          _axichatAppIconAssetPath,
+        child: Image(
+          image: imageProvider,
           width: size,
           height: size,
           fit: BoxFit.cover,
           filterQuality: FilterQuality.high,
           isAntiAlias: true,
+          gaplessPlayback: true,
         ),
       ),
     );

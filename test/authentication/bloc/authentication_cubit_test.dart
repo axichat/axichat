@@ -62,6 +62,9 @@ void main() {
   late MockEmailProvisioningClient mockProvisioningClient;
   late MockEmailService mockEmailService;
   late MockHomeRefreshSyncService mockHomeRefreshSyncService;
+  late MockCalendarReminderController mockCalendarReminderController;
+  late MockCalendarStorageManager mockCalendarStorageManager;
+  late MockHydratedStorage mockHydratedStorage;
   late Map<String, String?> credentialStorage;
   late AppLocalizations localizations;
 
@@ -74,6 +77,9 @@ void main() {
     mockNotificationService = MockNotificationService();
     mockEmailService = MockEmailService();
     mockHomeRefreshSyncService = MockHomeRefreshSyncService();
+    mockCalendarReminderController = MockCalendarReminderController();
+    mockCalendarStorageManager = MockCalendarStorageManager();
+    mockHydratedStorage = MockHydratedStorage();
     mockHttpClient = MockHttpClient();
     mockProvisioningClient = MockEmailProvisioningClient();
     localizations = lookupAppLocalizations(const Locale('en'));
@@ -96,6 +102,9 @@ void main() {
     when(
       () => mockEmailService.syncStateStream,
     ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
+    when(
+      () => mockNotificationService.dismissNotifications(),
+    ).thenAnswer((_) async {});
     when(() => mockEmailService.hasActiveSession).thenReturn(false);
     when(() => mockEmailService.hasInMemoryReconnectContext).thenReturn(true);
     when(
@@ -187,6 +196,11 @@ void main() {
     when(
       () => mockHomeRefreshSyncService.syncOnLogin(),
     ).thenAnswer((_) async {});
+    when(
+      () => mockCalendarReminderController.clearAll(),
+    ).thenAnswer((_) async {});
+    when(() => mockCalendarStorageManager.burn()).thenAnswer((_) async {});
+    when(() => mockHydratedStorage.clear()).thenAnswer((_) async {});
 
     credentialStorage = <String, String?>{
       'password_prehashed_v1': true.toString(),
@@ -240,6 +254,12 @@ void main() {
     ).thenAnswer((_) async {});
     when(
       () => mockEmailService.burn(jid: any(named: 'jid')),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockEmailService.burn(
+        jid: any(named: 'jid'),
+        databasePrefix: any(named: 'databasePrefix'),
+      ),
     ).thenAnswer((_) async {});
 
     when(
@@ -1888,6 +1908,12 @@ void main() {
           () => mockEmailService.burn(jid: any(named: 'jid')),
         ).thenAnswer((_) async {});
         when(
+          () => mockEmailService.burn(
+            jid: any(named: 'jid'),
+            databasePrefix: any(named: 'databasePrefix'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
           () => mockProvisioningClient.deleteAccount(
             email: 'user@axi.im',
             password: validPassword,
@@ -2115,6 +2141,12 @@ void main() {
       when(
         () => mockEmailService.burn(jid: any(named: 'jid')),
       ).thenAnswer((_) async {});
+      when(
+        () => mockEmailService.burn(
+          jid: any(named: 'jid'),
+          databasePrefix: any(named: 'databasePrefix'),
+        ),
+      ).thenAnswer((_) async {});
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
@@ -2247,6 +2279,40 @@ void main() {
       expect: () => [const AuthenticationNone()],
       verify: (_) {
         verify(() => mockEmailService.burn(jid: any(named: 'jid'))).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Burn logout wipes hydrated app state and uses the stored email database prefix even when SMTP is disabled.',
+      build: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['${validJid}_database_prefix'] = 'burn-db';
+        return AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          homeRefreshSyncService: mockHomeRefreshSyncService,
+          notificationService: mockNotificationService,
+          reminderController: mockCalendarReminderController,
+          calendarStorageManager: mockCalendarStorageManager,
+          hydratedStorage: mockHydratedStorage,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(
+            config: EndpointConfig(smtpEnabled: false),
+          ),
+        );
+      },
+      act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
+      expect: () => [const AuthenticationNone()],
+      verify: (_) {
+        verify(
+          () => mockEmailService.burn(jid: validJid, databasePrefix: 'burn-db'),
+        ).called(1);
+        verify(() => mockCalendarReminderController.clearAll()).called(1);
+        verify(() => mockNotificationService.dismissNotifications()).called(1);
+        verify(() => mockHydratedStorage.clear()).called(1);
+        verify(() => mockCalendarStorageManager.burn()).called(1);
       },
     );
   });

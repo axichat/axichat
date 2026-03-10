@@ -1329,8 +1329,11 @@ class EmailService {
     _runtimePhase = _EmailRuntimePhase.stopped;
   }
 
-  Future<void> burn({String? jid}) async {
+  Future<void> burn({String? jid, String? databasePrefix}) async {
     final scope = _scopeForOptionalJid(jid);
+    final resolvedDatabasePrefix = databasePrefix?.trim().isNotEmpty == true
+        ? databasePrefix!.trim()
+        : _databasePrefix;
     _runtimePhase = _EmailRuntimePhase.disposing;
     await stop();
     try {
@@ -1339,9 +1342,18 @@ class EmailService {
       _log.warning('Failed to deconfigure email account', error, stackTrace);
     }
     await _transport.dispose();
-    await _transport.deleteStorageArtifacts();
-    if (scope != null && _databasePrefix != null) {
-      await _clearStockPurgeKey(scope: scope, databasePrefix: _databasePrefix!);
+    if (resolvedDatabasePrefix == null) {
+      await _transport.deleteStorageArtifacts();
+    } else {
+      await _transport.deleteStorageArtifacts(
+        databasePrefix: resolvedDatabasePrefix,
+      );
+    }
+    if (scope != null && resolvedDatabasePrefix != null) {
+      await _clearStockPurgeKey(
+        scope: scope,
+        databasePrefix: resolvedDatabasePrefix,
+      );
     }
     if (scope != null) {
       await _clearCredentials(scope);

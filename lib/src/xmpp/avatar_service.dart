@@ -180,6 +180,7 @@ mixin AvatarService on XmppBase, MucService {
   final LinkedHashMap<String, Uint8List> _safeAvatarBytesCache =
       LinkedHashMap();
   final Map<String, Future<Uint8List?>> _avatarLoadsInFlight = {};
+  final Map<String, Future<void>> _avatarFileOperations = {};
   DateTime? _selfAvatarRepairLastAttempt;
 
   Uint8List? cachedAvatarBytes(String path) {
@@ -428,6 +429,7 @@ mixin AvatarService on XmppBase, MucService {
     _avatarBytesCache.clear();
     _safeAvatarBytesCache.clear();
     _avatarLoadsInFlight.clear();
+    _avatarFileOperations.clear();
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
     _selfAvatarBootstrapReplay = null;
@@ -1752,63 +1754,92 @@ mixin AvatarService on XmppBase, MucService {
   Future<Uint8List?> _loadAvatarBytesInternal(String normalizedPath) async {
     if (normalizedPath.isEmpty) return null;
 
-    final cacheDirectory = await _avatarCacheDirectory();
-    if (!_isSafeAvatarCachePath(
-      cacheDirectory: cacheDirectory,
-      filePath: normalizedPath,
-    )) {
-      _avatarLog.warning('Rejected avatar path outside cache directory.');
-      await _invalidateCachedAvatarPath(normalizedPath, deleteFile: false);
-      return null;
+    return _runAvatarFileOperation(normalizedPath, () async {
+      final cacheDirectory = await _avatarCacheDirectory();
+      if (!_isSafeAvatarCachePath(
+        cacheDirectory: cacheDirectory,
+        filePath: normalizedPath,
+      )) {
+        _avatarLog.warning('Rejected avatar path outside cache directory.');
+        await _invalidateCachedAvatarPath(normalizedPath, deleteFile: false);
+        return null;
+      }
+
+      final cached = cachedAvatarBytes(normalizedPath);
+      if (cached != null && cached.isNotEmpty) {
+        return cached;
+      }
+
+      final file = File(normalizedPath);
+      if (!await file.exists()) {
+        _avatarLog.fine('Cached avatar file missing; clearing stale path.');
+        await _invalidateCachedAvatarPath(normalizedPath, deleteFile: false);
+        return null;
+      }
+      try {
+        final bytes = await file.readAsBytes();
+        if (bytes.isEmpty) {
+          _avatarLog.warning('Cached avatar file empty; clearing cache entry.');
+          await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
+          return null;
+        }
+        final isEncrypted = p.extension(normalizedPath).toLowerCase() == '.enc';
+        if (!isEncrypted) {
+          _cacheAvatarBytes(normalizedPath, bytes);
+          return bytes;
+        }
+        if (avatarEncryptionKey == null) {
+          _avatarLog.warning(
+            'Avatar key unavailable; cannot decrypt cached avatar.',
+          );
+          return null;
+        }
+        final decrypted = await _decryptAvatarBytes(bytes);
+        if (decrypted.isEmpty) {
+          _avatarLog.warning(
+            'Cached avatar decrypted to an empty payload; clearing cache entry.',
+          );
+          await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
+          return null;
+        }
+        _cacheAvatarBytes(normalizedPath, decrypted);
+        return decrypted;
+      } on Exception catch (error, stackTrace) {
+        _avatarLog.warning(
+          'Failed to load cached avatar; deleting corrupted cache entry.',
+          error,
+          stackTrace,
+        );
+        await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
+        return null;
+      }
+    });
+  }
+
+  Future<T> _runAvatarFileOperation<T>(
+    String path,
+    Future<T> Function() operation,
+  ) async {
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) {
+      return operation();
     }
 
-    final cached = cachedAvatarBytes(normalizedPath);
-    if (cached != null && cached.isNotEmpty) {
-      return cached;
+    final previous = _avatarFileOperations[normalizedPath];
+    final completer = Completer<void>();
+    final next = completer.future;
+    _avatarFileOperations[normalizedPath] = next;
+    if (previous != null) {
+      await previous;
     }
 
-    final file = File(normalizedPath);
-    if (!await file.exists()) {
-      _avatarLog.fine('Cached avatar file missing; clearing stale path.');
-      await _invalidateCachedAvatarPath(normalizedPath, deleteFile: false);
-      return null;
-    }
     try {
-      final bytes = await file.readAsBytes();
-      if (bytes.isEmpty) {
-        _avatarLog.warning('Cached avatar file empty; clearing cache entry.');
-        await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
-        return null;
+      return await operation();
+    } finally {
+      completer.complete();
+      if (identical(_avatarFileOperations[normalizedPath], next)) {
+        _avatarFileOperations.remove(normalizedPath);
       }
-      final isEncrypted = p.extension(normalizedPath).toLowerCase() == '.enc';
-      if (!isEncrypted) {
-        _cacheAvatarBytes(normalizedPath, bytes);
-        return bytes;
-      }
-      if (avatarEncryptionKey == null) {
-        _avatarLog.warning(
-          'Avatar key unavailable; cannot decrypt cached avatar.',
-        );
-        return null;
-      }
-      final decrypted = await _decryptAvatarBytes(bytes);
-      if (decrypted.isEmpty) {
-        _avatarLog.warning(
-          'Cached avatar decrypted to an empty payload; clearing cache entry.',
-        );
-        await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
-        return null;
-      }
-      _cacheAvatarBytes(normalizedPath, decrypted);
-      return decrypted;
-    } on Exception catch (error, stackTrace) {
-      _avatarLog.warning(
-        'Failed to load cached avatar; deleting corrupted cache entry.',
-        error,
-        stackTrace,
-      );
-      await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
-      return null;
     }
   }
 
@@ -2036,11 +2067,31 @@ mixin AvatarService on XmppBase, MucService {
     final contentHash = sha256.convert(bytes).toString();
     final filename = '$contentHash.enc';
     final file = File(p.join(directory.path, filename));
-    final encrypted = await _encryptAvatarBytes(bytes);
-    await file.writeAsBytes(encrypted, flush: true);
-    final rawBytes = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
-    _cacheAvatarBytes(file.path, rawBytes);
-    return file.path;
+
+    return _runAvatarFileOperation(file.path, () async {
+      final encrypted = await _encryptAvatarBytes(bytes);
+      final tempFile = File(
+        '${file.path}.${DateTime.timestamp().microsecondsSinceEpoch}.tmp',
+      );
+      try {
+        await tempFile.writeAsBytes(encrypted, flush: true);
+        if (await file.exists()) {
+          await file.delete();
+        }
+        await tempFile.rename(file.path);
+      } on Exception {
+        try {
+          if (await tempFile.exists()) {
+            await tempFile.delete();
+          }
+        } on Exception {}
+        rethrow;
+      }
+
+      final rawBytes = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
+      _cacheAvatarBytes(file.path, rawBytes);
+      return file.path;
+    });
   }
 
   Future<Directory> _avatarCacheDirectory() async {
@@ -2061,10 +2112,24 @@ mixin AvatarService on XmppBase, MucService {
     _avatarBytesCache.clear();
     _safeAvatarBytesCache.clear();
     final supportDir = await getApplicationSupportDirectory();
-    final directory =
-        _avatarDirectory ?? Directory(p.join(supportDir.path, 'avatars'));
-    if (await directory.exists()) {
-      await directory.delete(recursive: true);
+    final expectedPath = p.join(supportDir.path, 'avatars');
+    final directory = _avatarDirectory ?? Directory(expectedPath);
+    try {
+      final deleted = await deleteAppOwnedDirectoryTree(
+        directory: directory,
+        expectedPath: expectedPath,
+      );
+      if (!deleted) {
+        _avatarLog.warning(
+          'Skipped avatar cache cleanup for unexpected path ${directory.path}',
+        );
+      }
+    } on FileSystemException catch (error, stackTrace) {
+      _avatarLog.warning(
+        'Failed to delete avatar cache directory ${directory.path}',
+        error,
+        stackTrace,
+      );
     }
     _avatarDirectory = null;
   }

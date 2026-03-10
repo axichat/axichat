@@ -234,11 +234,21 @@ void main() {
       final storedPath = storedRoster?.avatarPath;
       expect(storedPath, isNotNull);
 
-      final avatarFile = File(storedPath!);
-      expect(await avatarFile.exists(), isTrue);
+      final corruptPath = p.join(File(storedPath!).parent.path, 'corrupt.enc');
+      final avatarFile = File(corruptPath);
       await avatarFile.writeAsBytes(const <int>[1, 2, 3, 4], flush: true);
+      await database.updateRosterAvatar(
+        jid: contactJid,
+        avatarPath: corruptPath,
+        avatarHash: 'avatar-hash',
+      );
+      await database.updateChatAvatar(
+        jid: contactJid,
+        avatarPath: corruptPath,
+        avatarHash: 'avatar-hash',
+      );
 
-      final bytes = await xmppService.loadAvatarBytes(storedPath);
+      final bytes = await xmppService.loadAvatarBytes(corruptPath);
 
       expect(bytes, isNull);
       expect(await avatarFile.exists(), isFalse);

@@ -3,8 +3,8 @@
 
 import 'dart:io';
 
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:intl/intl.dart' as intl;
-import 'package:path_provider/path_provider.dart';
 
 import 'package:axichat/src/storage/models.dart';
 
@@ -108,7 +108,12 @@ class ChatHistoryExporter {
   }
 
   static Future<File> _createExportFile(String label) async {
-    final tempDir = await getTemporaryDirectory();
+    final tempDir = await appOwnedTemporaryDirectory(
+      chatHistoryExportTempDirectoryName,
+    );
+    if (!await tempDir.exists()) {
+      await tempDir.create(recursive: true);
+    }
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final fileName = '${sanitizeLabel(label)}-$timestamp.txt';
     return File('${tempDir.path}/$fileName');
@@ -116,7 +121,12 @@ class ChatHistoryExporter {
 
   static Future<File> _renameExportFile(File file, String label) async {
     try {
-      final tempDir = await getTemporaryDirectory();
+      final tempDir = await appOwnedTemporaryDirectory(
+        chatHistoryExportTempDirectoryName,
+      );
+      if (!await tempDir.exists()) {
+        await tempDir.create(recursive: true);
+      }
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = '${sanitizeLabel(label)}-$timestamp.txt';
       return file.rename('${tempDir.path}/$fileName');

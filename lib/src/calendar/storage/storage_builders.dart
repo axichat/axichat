@@ -16,6 +16,8 @@ const _authBoxName = 'auth_calendar';
 
 String get guestStoragePrefix => _guestPrefix;
 String get authStoragePrefix => _authPrefix;
+String get guestStorageBoxName => _guestBoxName;
+String get authStorageBoxName => _authBoxName;
 
 Future<Storage> buildGuestCalendarStorage() {
   return CalendarHydratedStorage.open(

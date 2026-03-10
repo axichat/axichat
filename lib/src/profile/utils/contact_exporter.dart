@@ -3,8 +3,8 @@
 
 import 'dart:io';
 
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:path_provider/path_provider.dart';
 
 enum ContactExportFormat { csv, vcard }
 
@@ -138,7 +138,12 @@ Future<File> _writeExportFile(
   String label,
   String extension,
 ) async {
-  final Directory tempDir = await getTemporaryDirectory();
+  final Directory tempDir = await appOwnedTemporaryDirectory(
+    contactExportTempDirectoryName,
+  );
+  if (!await tempDir.exists()) {
+    await tempDir.create(recursive: true);
+  }
   final int timestamp = DateTime.now().millisecondsSinceEpoch;
   final String fileName = '$label-$timestamp.$extension';
   final File file = File('${tempDir.path}/$fileName');

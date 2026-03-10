@@ -6,6 +6,8 @@ import 'dart:isolate';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/common/policy.dart';
 import 'package:axichat/main.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/email/service/email_provisioning_client.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
@@ -17,6 +19,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:delta_ffi/delta_safe.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:http/http.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:mocktail/mocktail.dart';
@@ -46,6 +49,14 @@ class MockEmailService extends Mock implements EmailService {}
 
 class MockHomeRefreshSyncService extends Mock
     implements HomeRefreshSyncService {}
+
+class MockCalendarReminderController extends Mock
+    implements CalendarReminderController {}
+
+class MockCalendarStorageManager extends Mock
+    implements CalendarStorageManager {}
+
+class MockHydratedStorage extends Mock implements Storage {}
 
 class MockEmailProvisioningClient extends Mock
     implements EmailProvisioningClient {}

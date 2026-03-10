@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/email_metadata.dart';
@@ -2047,16 +2048,22 @@ class EmailDeltaTransport implements ChatTransport {
       File('${databaseFile.path}-journal'),
     ];
     for (final candidate in candidates) {
-      if (await candidate.exists()) {
-        try {
-          await candidate.delete();
-        } on IOException catch (error, stackTrace) {
+      try {
+        final deleted = await deleteAppOwnedFile(
+          file: candidate,
+          expectedPath: candidate.path,
+        );
+        if (!deleted) {
           _log.warning(
-            'Failed to delete Delta database artifact ${candidate.path}',
-            error,
-            stackTrace,
+            'Skipped Delta database artifact cleanup for unexpected path ${candidate.path}',
           );
         }
+      } on IOException catch (error, stackTrace) {
+        _log.warning(
+          'Failed to delete Delta database artifact ${candidate.path}',
+          error,
+          stackTrace,
+        );
       }
     }
   }
@@ -2130,24 +2137,32 @@ class EmailDeltaTransport implements ChatTransport {
 
   Future<void> _resetAccountsStorage(String prefix) async {
     final directory = await _accountsDirectory(prefix);
-    if (await directory.exists()) {
-      try {
-        await directory.delete(recursive: true);
-      } on IOException catch (error, stackTrace) {
+    try {
+      final deleted = await deleteAppOwnedDirectoryTree(
+        directory: directory,
+        expectedPath: directory.path,
+      );
+      if (!deleted) {
         _log.warning(
-          'Failed to delete Delta accounts directory ${directory.path}',
-          error,
-          stackTrace,
+          'Skipped Delta accounts cleanup for unexpected path ${directory.path}',
         );
       }
+    } on IOException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to delete Delta accounts directory ${directory.path}',
+        error,
+        stackTrace,
+      );
     }
     final databaseFile = await _deltaDatabaseFile(prefix);
     await _deleteDatabaseArtifacts(databaseFile);
   }
 
-  Future<void> deleteStorageArtifacts() async {
-    final prefix = _databasePrefix;
-    if (prefix == null) {
+  Future<void> deleteStorageArtifacts({String? databasePrefix}) async {
+    final prefix = databasePrefix?.trim().isNotEmpty == true
+        ? databasePrefix!.trim()
+        : _databasePrefix;
+    if (prefix == null || prefix.isEmpty) {
       return;
     }
     await _resetAccountsStorage(prefix);

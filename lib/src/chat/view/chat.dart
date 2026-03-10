@@ -950,7 +950,7 @@ class _ChatState extends State<Chat> {
   ChatCalendarSyncCoordinator? _fallbackChatCalendarCoordinator;
   final _oneTimeAllowedAttachmentStanzaIds = <String>{};
   final _loadedEmailImageMessageIds = <String>{};
-  final _inlineEmailTextMessageIds = <String>{};
+  final _inlineEmailBodyOverrideMessageIds = <String>{};
   final _animatedMessageIds = <String>{};
   var _hydratedAnimatedMessages = false;
   static final Map<String, double> _scrollOffsetCache = {};
@@ -1065,12 +1065,12 @@ class _ChatState extends State<Chat> {
     }
   }
 
-  bool _showsInlineEmailText(String messageId) {
+  bool _usesAlternateInlineEmailBody(String messageId) {
     final normalizedMessageId = messageId.trim();
     if (normalizedMessageId.isEmpty) {
       return false;
     }
-    return _inlineEmailTextMessageIds.contains(normalizedMessageId);
+    return _inlineEmailBodyOverrideMessageIds.contains(normalizedMessageId);
   }
 
   void _toggleInlineEmailBody(String messageId) {
@@ -1079,10 +1079,60 @@ class _ChatState extends State<Chat> {
       return;
     }
     setState(() {
-      if (!_inlineEmailTextMessageIds.add(normalizedMessageId)) {
-        _inlineEmailTextMessageIds.remove(normalizedMessageId);
+      if (!_inlineEmailBodyOverrideMessageIds.add(normalizedMessageId)) {
+        _inlineEmailBodyOverrideMessageIds.remove(normalizedMessageId);
       }
     });
+  }
+
+  ({
+    List<InlineSpan> details,
+    Map<int, DynamicInlineDetailAction> detailActions,
+  })
+  _emailInlineDetailActionData({
+    required BuildContext context,
+    required List<InlineSpan> details,
+    required bool enabled,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    if (!enabled) {
+      return (
+        details: details,
+        detailActions: const <int, DynamicInlineDetailAction>{},
+      );
+    }
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final actionTextStyle = context.textTheme.small.copyWith(
+      color: colors.secondaryForeground,
+      fontSize: 11.0,
+      height: 1.0,
+      fontWeight: FontWeight.w600,
+      textBaseline: TextBaseline.alphabetic,
+    );
+    final actionIndex = details.length;
+    return (
+      details: <InlineSpan>[
+        ...details,
+        TextSpan(text: label, style: actionTextStyle),
+      ],
+      detailActions: <int, DynamicInlineDetailAction>{
+        actionIndex: DynamicInlineDetailAction(
+          onTap: onTap,
+          backgroundColor: colors.secondary,
+          borderRadius: context.radii.squircleSm,
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.xs,
+            vertical: spacing.xxs,
+          ),
+          minimumHeight:
+              (actionTextStyle.fontSize ?? spacing.s) +
+              spacing.xs +
+              (context.borderSide.width * 2),
+        ),
+      },
+    );
   }
 
   void _typingListener() {
@@ -5609,12 +5659,7 @@ class _ChatState extends State<Chat> {
                                         .watch<SettingsCubit>()
                                         .animationDuration;
                                     final overlayAnimationDuration =
-                                        settingsAnimationDuration ==
-                                            Duration.zero
-                                        ? Duration.zero
-                                        : context
-                                              .motion
-                                              .composerBannerTransitionDuration;
+                                        settingsAnimationDuration;
                                     final quoting = state.quoting;
                                     final quotedMessage =
                                         quoting ??
@@ -6742,7 +6787,7 @@ class _ChatState extends State<Chat> {
                                                                             .xxs,
                                                                   );
                                                                   final reactionCornerClearance =
-                                                                      spacing.m;
+                                                                      spacing.s;
                                                                   final recipientCutoutDepth =
                                                                       spacing.m;
                                                                   final recipientCutoutRadius =
@@ -7619,23 +7664,37 @@ class _ChatState extends State<Chat> {
                                                                               displayMessageText,
                                                                         );
                                                                     final bool
+                                                                    hasEmailHtmlBody =
+                                                                        isEmailMessage &&
+                                                                        normalizedHtmlBody !=
+                                                                            null;
+                                                                    final bool
+                                                                    usesAlternateInlineEmailBody =
+                                                                        _usesAlternateInlineEmailBody(
+                                                                          messageModel
+                                                                              .stanzaID,
+                                                                        );
+                                                                    final bool
+                                                                    defaultShowsInlineEmailHtmlBody =
+                                                                        shouldRenderTextContent &&
+                                                                        !hasAttachmentCaption &&
+                                                                        hasEmailHtmlBody &&
+                                                                        (!hasVisibleEmailText ||
+                                                                            shouldPreferRichEmailHtml);
+                                                                    final bool
                                                                     shouldShowEmailHtmlAction =
                                                                         shouldRenderTextContent &&
                                                                         !hasAttachmentCaption &&
-                                                                        shouldPreferRichEmailHtml &&
+                                                                        hasEmailHtmlBody &&
                                                                         hasVisibleEmailText;
                                                                     final bool
                                                                     shouldRenderInlineEmailHtmlBody =
-                                                                        isEmailMessage &&
+                                                                        hasEmailHtmlBody &&
                                                                         shouldRenderTextContent &&
                                                                         !hasAttachmentCaption &&
-                                                                        normalizedHtmlBody !=
-                                                                            null &&
-                                                                        (!hasVisibleEmailText ||
-                                                                            (shouldPreferRichEmailHtml &&
-                                                                                !_showsInlineEmailText(
-                                                                                  messageModel.stanzaID,
-                                                                                )));
+                                                                        (defaultShowsInlineEmailHtmlBody
+                                                                            ? !usesAlternateInlineEmailBody
+                                                                            : usesAlternateInlineEmailBody);
                                                                     final List<
                                                                       InlineSpan
                                                                     >
@@ -7707,6 +7766,23 @@ class _ChatState extends State<Chat> {
                                                                         ),
                                                                       );
                                                                     } else if (shouldCollapseEmailPreview) {
+                                                                      final (
+                                                                        details: collapsedPreviewDetails,
+                                                                        detailActions: collapsedPreviewDetailActions,
+                                                                      ) = _emailInlineDetailActionData(
+                                                                        context:
+                                                                            context,
+                                                                        details:
+                                                                            messageDetails,
+                                                                        enabled:
+                                                                            shouldShowEmailHtmlAction,
+                                                                        label: l10n
+                                                                            .chatMessageViewHtmlAction,
+                                                                        onTap: () => _toggleInlineEmailBody(
+                                                                          messageModel
+                                                                              .stanzaID,
+                                                                        ),
+                                                                      );
                                                                       bubbleTextChildren.add(
                                                                         Text(
                                                                           collapsedEmailPreviewText,
@@ -7718,21 +7794,6 @@ class _ChatState extends State<Chat> {
                                                                               baseTextStyle,
                                                                         ),
                                                                       );
-                                                                      if (shouldShowEmailHtmlAction) {
-                                                                        bubbleTextChildren.add(
-                                                                          Padding(
-                                                                            padding: EdgeInsets.only(
-                                                                              top: context.spacing.xs,
-                                                                            ),
-                                                                            child: _EmailHtmlActionButton(
-                                                                              label: l10n.chatMessageViewHtmlAction,
-                                                                              onPressed: () => _toggleInlineEmailBody(
-                                                                                messageModel.stanzaID,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        );
-                                                                      }
                                                                       bubbleTextChildren.add(
                                                                         Padding(
                                                                           padding: EdgeInsets.only(
@@ -7741,7 +7802,9 @@ class _ChatState extends State<Chat> {
                                                                           ),
                                                                           child: ChatInlineDetails(
                                                                             details:
-                                                                                messageDetails,
+                                                                                collapsedPreviewDetails,
+                                                                            detailActions:
+                                                                                collapsedPreviewDetailActions,
                                                                           ),
                                                                         ),
                                                                       );
@@ -7786,6 +7849,24 @@ class _ChatState extends State<Chat> {
                                                                       shouldShowImageGallery =
                                                                           hasRemoteHtmlImages &&
                                                                           shouldRenderHtmlBody;
+                                                                      final (
+                                                                        details: htmlBodyDetails,
+                                                                        detailActions: htmlBodyDetailActions,
+                                                                      ) = _emailInlineDetailActionData(
+                                                                        context:
+                                                                            context,
+                                                                        details:
+                                                                            messageDetails,
+                                                                        enabled:
+                                                                            shouldShowEmailHtmlAction &&
+                                                                            shouldRenderHtmlBody,
+                                                                        label: l10n
+                                                                            .chatMessageShowTextAction,
+                                                                        onTap: () => _toggleInlineEmailBody(
+                                                                          messageModel
+                                                                              .stanzaID,
+                                                                        ),
+                                                                      );
                                                                       if (!shouldRenderHtmlBody &&
                                                                           emailFallbackText !=
                                                                               null &&
@@ -7849,22 +7930,6 @@ class _ChatState extends State<Chat> {
                                                                           ),
                                                                         );
                                                                       }
-                                                                      if (shouldShowEmailHtmlAction &&
-                                                                          shouldRenderHtmlBody) {
-                                                                        bubbleTextChildren.add(
-                                                                          Padding(
-                                                                            padding: EdgeInsets.only(
-                                                                              top: context.spacing.xs,
-                                                                            ),
-                                                                            child: _EmailHtmlActionButton(
-                                                                              label: l10n.chatMessageShowTextAction,
-                                                                              onPressed: () => _toggleInlineEmailBody(
-                                                                                messageModel.stanzaID,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        );
-                                                                      }
                                                                       bubbleTextChildren.add(
                                                                         Padding(
                                                                           padding: EdgeInsets.only(
@@ -7873,11 +7938,30 @@ class _ChatState extends State<Chat> {
                                                                           ),
                                                                           child: ChatInlineDetails(
                                                                             details:
-                                                                                messageDetails,
+                                                                                htmlBodyDetails,
+                                                                            detailActions:
+                                                                                htmlBodyDetailActions,
                                                                           ),
                                                                         ),
                                                                       );
                                                                     } else if (shouldRenderTextContent) {
+                                                                      final (
+                                                                        details: textBodyDetails,
+                                                                        detailActions: textBodyDetailActions,
+                                                                      ) = _emailInlineDetailActionData(
+                                                                        context:
+                                                                            context,
+                                                                        details:
+                                                                            messageDetails,
+                                                                        enabled:
+                                                                            shouldShowEmailHtmlAction,
+                                                                        label: l10n
+                                                                            .chatMessageViewHtmlAction,
+                                                                        onTap: () => _toggleInlineEmailBody(
+                                                                          messageModel
+                                                                              .stanzaID,
+                                                                        ),
+                                                                      );
                                                                       if (trimmedDisplayMessageText
                                                                           .isNotEmpty) {
                                                                         bubbleTextChildren.add(
@@ -7891,9 +7975,9 @@ class _ChatState extends State<Chat> {
                                                                             linkStyle:
                                                                                 linkStyle,
                                                                             details:
-                                                                                shouldShowEmailHtmlAction
-                                                                                ? const []
-                                                                                : messageDetails,
+                                                                                textBodyDetails,
+                                                                            detailActions:
+                                                                                textBodyDetailActions,
                                                                             onLinkTap:
                                                                                 _handleLinkTap,
                                                                             onLinkLongPress:
@@ -7901,31 +7985,7 @@ class _ChatState extends State<Chat> {
                                                                           ),
                                                                         );
                                                                       }
-                                                                      if (shouldShowEmailHtmlAction) {
-                                                                        bubbleTextChildren.add(
-                                                                          Padding(
-                                                                            padding: EdgeInsets.only(
-                                                                              top: context.spacing.xs,
-                                                                            ),
-                                                                            child: _EmailHtmlActionButton(
-                                                                              label: l10n.chatMessageViewHtmlAction,
-                                                                              onPressed: () => _toggleInlineEmailBody(
-                                                                                messageModel.stanzaID,
-                                                                              ),
-                                                                            ),
-                                                                          ),
-                                                                        );
-                                                                        bubbleTextChildren.add(
-                                                                          Padding(
-                                                                            padding: EdgeInsets.only(
-                                                                              top: context.spacing.xs,
-                                                                            ),
-                                                                            child: ChatInlineDetails(
-                                                                              details: messageDetails,
-                                                                            ),
-                                                                          ),
-                                                                        );
-                                                                      } else if (trimmedDisplayMessageText
+                                                                      if (trimmedDisplayMessageText
                                                                           .isEmpty) {
                                                                         bubbleTextChildren.add(
                                                                           Padding(
@@ -7933,7 +7993,8 @@ class _ChatState extends State<Chat> {
                                                                               top: context.spacing.xs,
                                                                             ),
                                                                             child: ChatInlineDetails(
-                                                                              details: messageDetails,
+                                                                              details: textBodyDetails,
+                                                                              detailActions: textBodyDetailActions,
                                                                             ),
                                                                           ),
                                                                         );
@@ -8552,6 +8613,7 @@ class _ChatState extends State<Chat> {
                                                                                 ? CutoutStyle(
                                                                                     depth: reactionCutoutDepth,
                                                                                     cornerRadius: reactionCutoutRadius,
+                                                                                    shapeCornerRadius: context.radii.squircle,
                                                                                     padding: reactionCutoutPadding,
                                                                                     offset: reactionStripOffset,
                                                                                     minThickness: reactionCutoutMinThickness,
@@ -11330,7 +11392,7 @@ class _PinnedMessageTile extends StatelessWidget {
       horizontal: spacing.xs,
       vertical: spacing.xxs,
     );
-    final reactionCornerClearance = spacing.m;
+    final reactionCornerClearance = spacing.s;
     final recipientCutoutDepth = spacing.m;
     final recipientCutoutRadius = spacing.m;
     final recipientCutoutPadding = EdgeInsets.fromLTRB(
@@ -11356,6 +11418,7 @@ class _PinnedMessageTile extends StatelessWidget {
       reactionStyle = CutoutStyle(
         depth: reactionCutoutDepth,
         cornerRadius: reactionCutoutRadius,
+        shapeCornerRadius: context.radii.squircle,
         padding: reactionCutoutPadding,
         offset: reactionStripOffset,
         minThickness: reactionCutoutMinThickness,
@@ -11894,7 +11957,6 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
   final spacing = context.spacing;
   final reactionChipSpacing = 0.0;
   final reactionOverflowSpacing = spacing.xs;
-  final reactionOverflowGlyphWidth = spacing.m;
   if (reactions.isEmpty || maxContentWidth <= 0) {
     return const _CutoutLayoutResult(
       items: <ReactionPreview>[],
@@ -11908,13 +11970,18 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
   final textScaler = mediaQuery == null
       ? TextScaler.noScaling
       : mediaQuery.textScaler;
+  final reactionOverflowGlyphWidth = measureReactionOverflowGlyphWidth(
+    context: context,
+    textDirection: textDirection,
+    textScaler: textScaler,
+  );
 
   final visible = <ReactionPreview>[];
   final additions = <double>[];
   double used = 0;
 
   final limit = maxContentWidth.isFinite
-      ? math.max(0.0, maxContentWidth - 1)
+      ? math.max(0.0, maxContentWidth)
       : maxContentWidth;
 
   for (final reaction in reactions) {
@@ -11939,23 +12006,32 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
   double totalWidth = used;
 
   if (truncated) {
-    var spacing = visible.isEmpty ? 0 : reactionChipSpacing;
+    if (visible.isEmpty) {
+      final firstReaction = reactions.first;
+      final firstWidth = measureReactionChipWidth(
+        context: context,
+        reaction: firstReaction,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      );
+      visible.add(firstReaction);
+      additions.add(firstWidth);
+      totalWidth = firstWidth;
+    }
+    var spacing = visible.length > 1 ? reactionChipSpacing : 0.0;
     final glyphWidth = reactionOverflowGlyphWidth;
-    while (visible.isNotEmpty &&
+    while (visible.length > 1 &&
         limit.isFinite &&
         totalWidth + spacing + reactionOverflowSpacing + glyphWidth > limit) {
       totalWidth -= additions.removeLast();
       visible.removeLast();
-      spacing = visible.isEmpty ? 0 : reactionChipSpacing;
+      spacing = visible.length > 1 ? reactionChipSpacing : 0.0;
     }
-    if (visible.isEmpty) {
-      totalWidth = math.min(glyphWidth, maxContentWidth);
-    } else {
-      totalWidth = math.min(
-        maxContentWidth,
-        totalWidth + spacing + reactionOverflowSpacing + glyphWidth,
-      );
-    }
+    final overflowSpacing = visible.length > 1 ? reactionOverflowSpacing : 0.0;
+    totalWidth = math.min(
+      maxContentWidth,
+      totalWidth + spacing + overflowSpacing + glyphWidth,
+    );
   } else {
     totalWidth = math.min(maxContentWidth, totalWidth);
   }
@@ -12010,6 +12086,23 @@ double measureReactionChipWidth({
   }
 
   return width;
+}
+
+double measureReactionOverflowGlyphWidth({
+  required BuildContext context,
+  required TextDirection textDirection,
+  required TextScaler textScaler,
+}) {
+  final painter = TextPainter(
+    text: TextSpan(
+      text: context.l10n.commonEllipsis,
+      style: reactionOverflowTextStyle(context),
+    ),
+    maxLines: 1,
+    textDirection: textDirection,
+    textScaler: textScaler,
+  )..layout();
+  return painter.width;
 }
 
 _CutoutLayoutResult<chat_models.Chat> _layoutRecipientStrip({
@@ -12193,7 +12286,9 @@ class _ReactionStrip extends StatelessWidget {
         }
         if (layout.overflowed) {
           if (children.isNotEmpty) {
-            children.add(SizedBox(width: overflowSpacing));
+            children.add(
+              SizedBox(width: items.length > 1 ? overflowSpacing : 0.0),
+            );
           }
           children.add(const _ReactionOverflowGlyph());
         }
@@ -12208,27 +12303,22 @@ class _ReactionOverflowGlyph extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
-    final l10n = context.l10n;
-    final spacing = context.spacing;
-    final glyphSize = spacing.m;
-    return SizedBox(
-      width: glyphSize,
-      height: glyphSize,
-      child: Center(
-        child: Text(
-          l10n.commonEllipsis,
-          style: context.textTheme.small
-              .copyWith(
-                fontWeight: FontWeight.w600,
-                color: colors.mutedForeground,
-                height: 1,
-              )
-              .apply(leadingDistribution: TextLeadingDistribution.even),
-        ),
-      ),
+    return Text(
+      context.l10n.commonEllipsis,
+      style: reactionOverflowTextStyle(context),
     );
   }
+}
+
+TextStyle reactionOverflowTextStyle(BuildContext context) {
+  final colors = context.colorScheme;
+  return context.textTheme.small
+      .copyWith(
+        fontWeight: FontWeight.w600,
+        color: colors.mutedForeground,
+        height: 1,
+      )
+      .apply(leadingDistribution: TextLeadingDistribution.even);
 }
 
 class _ReplyStrip extends StatelessWidget {
@@ -12926,7 +13016,6 @@ class _ComposerNotice extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
-    final sizing = context.sizing;
     final textTheme = context.textTheme;
     final actionLabel = this.actionLabel;
     final onAction = this.onAction;
@@ -12952,9 +13041,15 @@ class _ComposerNotice extends StatelessWidget {
       backgroundColor: background,
       borderColor: colors.border,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(icon, size: sizing.menuItemIconSize, color: foreground),
+          _ComposerBannerLeading(
+            child: Icon(
+              icon,
+              size: context.sizing.menuItemIconSize,
+              color: foreground,
+            ),
+          ),
           SizedBox(width: context.spacing.s),
           Expanded(
             child: Text(
@@ -12966,25 +13061,29 @@ class _ComposerNotice extends StatelessWidget {
             ),
           ),
           if (actionLabel != null && onAction != null)
-            AxiButton(
-              variant: AxiButtonVariant.ghost,
-              size: AxiButtonSize.sm,
-              onPressed: onAction,
-              child: Text(
-                actionLabel,
-                style: textTheme.p.copyWith(color: foreground),
+            _ComposerBannerTrailing(
+              child: AxiButton(
+                variant: AxiButtonVariant.ghost,
+                size: AxiButtonSize.sm,
+                onPressed: onAction,
+                child: Text(
+                  actionLabel,
+                  style: textTheme.p.copyWith(color: foreground),
+                ),
               ),
             ),
           if (onDismiss != null)
-            AxiIconButton.ghost(
-              iconData: LucideIcons.x,
-              tooltip: context.l10n.commonClose,
-              onPressed: onDismiss,
-              color: foreground,
-              backgroundColor: Colors.transparent,
-              iconSize: sizing.menuItemIconSize,
-              buttonSize: sizing.menuItemHeight,
-              tapTargetSize: sizing.menuItemHeight,
+            _ComposerBannerTrailing(
+              child: AxiIconButton.ghost(
+                iconData: LucideIcons.x,
+                tooltip: context.l10n.commonClose,
+                onPressed: onDismiss,
+                color: foreground,
+                backgroundColor: Colors.transparent,
+                iconSize: context.sizing.menuItemIconSize,
+                buttonSize: context.sizing.menuItemHeight,
+                tapTargetSize: context.sizing.menuItemHeight,
+              ),
             ),
         ],
       ),
@@ -13631,33 +13730,37 @@ class _ReadOnlyComposerBanner extends StatelessWidget {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final sizing = context.sizing;
+    final titleIndent = context.sizing.menuItemIconSize + spacing.s;
     final textTheme = context.textTheme;
     return _ComposerAttachedBannerSurface(
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            LucideIcons.archive,
-            size: sizing.menuItemIconSize,
-            color: colors.mutedForeground,
-          ),
-          SizedBox(width: spacing.s),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _ComposerBannerLeading(
+                child: Icon(
+                  LucideIcons.archive,
+                  size: context.sizing.menuItemIconSize,
+                  color: colors.mutedForeground,
+                ),
+              ),
+              SizedBox(width: spacing.s),
+              Expanded(
+                child: Text(
                   l10n.chatReadOnly,
                   style: textTheme.p.copyWith(fontWeight: FontWeight.w600),
                 ),
-                SizedBox(height: spacing.xxs),
-                Text(
-                  l10n.chatUnarchivePrompt,
-                  style: textTheme.p.copyWith(color: colors.mutedForeground),
-                ),
-              ],
+              ),
+            ],
+          ),
+          SizedBox(height: spacing.xxs),
+          Padding(
+            padding: EdgeInsets.only(left: titleIndent),
+            child: Text(
+              l10n.chatUnarchivePrompt,
+              style: textTheme.p.copyWith(color: colors.mutedForeground),
             ),
           ),
         ],
@@ -13674,31 +13777,36 @@ class _RoomBootstrapComposerBanner extends StatelessWidget {
     final colors = context.colorScheme;
     final l10n = context.l10n;
     final spacing = context.spacing;
+    final titleIndent = context.sizing.menuItemIconSize + spacing.s;
     final textTheme = context.textTheme;
     return _ComposerAttachedBannerSurface(
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AxiProgressIndicator(
-            color: colors.foreground,
-            semanticsLabel: l10n.xmppOperationMucJoinStart,
-          ),
-          SizedBox(width: spacing.s),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _ComposerBannerLeading(
+                child: AxiProgressIndicator(
+                  color: colors.foreground,
+                  semanticsLabel: l10n.xmppOperationMucJoinStart,
+                ),
+              ),
+              SizedBox(width: spacing.s),
+              Expanded(
+                child: Text(
                   l10n.xmppOperationMucJoinStart,
                   style: textTheme.p.copyWith(fontWeight: FontWeight.w600),
                 ),
-                SizedBox(height: spacing.xxs),
-                Text(
-                  l10n.chatMembersLoadingEllipsis,
-                  style: textTheme.p.copyWith(color: colors.mutedForeground),
-                ),
-              ],
+              ),
+            ],
+          ),
+          SizedBox(height: spacing.xxs),
+          Padding(
+            padding: EdgeInsets.only(left: titleIndent),
+            child: Text(
+              l10n.chatMembersLoadingEllipsis,
+              style: textTheme.p.copyWith(color: colors.mutedForeground),
             ),
           ),
         ],
@@ -13718,40 +13826,48 @@ class _RoomJoinFailureComposerBanner extends StatelessWidget {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final normalizedDetail = detail?.trim();
+    final titleIndent = context.sizing.menuItemIconSize + spacing.s;
     final textTheme = context.textTheme;
     return _ComposerAttachedBannerSurface(
-      backgroundColor: colors.destructive.withValues(alpha: 0.08),
-      child: Row(
+      backgroundColor: Color.alphaBlend(
+        colors.destructive.withValues(alpha: 0.08),
+        colors.card,
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            LucideIcons.triangleAlert,
-            size: context.sizing.iconButtonIconSize,
-            color: colors.destructive,
-          ),
-          SizedBox(width: spacing.s),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _ComposerBannerLeading(
+                child: Icon(
+                  LucideIcons.triangleAlert,
+                  size: context.sizing.menuItemIconSize,
+                  color: colors.destructive,
+                ),
+              ),
+              SizedBox(width: spacing.s),
+              Expanded(
+                child: Text(
                   l10n.chatInviteJoinFailed,
                   style: textTheme.p.copyWith(
                     fontWeight: FontWeight.w600,
                     color: colors.destructive,
                   ),
                 ),
-                if (normalizedDetail?.isNotEmpty == true) ...[
-                  SizedBox(height: spacing.xxs),
-                  Text(
-                    normalizedDetail!,
-                    style: textTheme.p.copyWith(color: colors.mutedForeground),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
+          if (normalizedDetail?.isNotEmpty == true) ...[
+            SizedBox(height: spacing.xxs),
+            Padding(
+              padding: EdgeInsets.only(left: titleIndent),
+              child: Text(
+                normalizedDetail!,
+                style: textTheme.p.copyWith(color: colors.mutedForeground),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -13774,15 +13890,16 @@ class _ComposerAttachedBannerSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
-    return SafeArea(
-      top: false,
-      left: false,
-      right: false,
-      bottom: false,
-      child: ColoredBox(
-        color: backgroundColor ?? colors.card,
+    return SizedBox(
+      width: double.infinity,
+      child: SafeArea(
+        top: false,
+        left: false,
+        right: false,
+        bottom: false,
         child: DecoratedBox(
           decoration: BoxDecoration(
+            color: backgroundColor ?? colors.card,
             border: Border(
               top: BorderSide(color: borderColor ?? colors.border, width: 1),
             ),
@@ -13790,15 +13907,40 @@ class _ComposerAttachedBannerSurface extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.fromLTRB(
               spacing.l,
-              spacing.m,
               spacing.l,
-              spacing.m,
+              spacing.l,
+              spacing.l,
             ),
-            child: SizedBox(width: double.infinity, child: child),
+            child: child,
           ),
         ),
       ),
     );
+  }
+}
+
+class _ComposerBannerLeading extends StatelessWidget {
+  const _ComposerBannerLeading({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox.square(
+      dimension: context.sizing.menuItemIconSize,
+      child: Center(child: child),
+    );
+  }
+}
+
+class _ComposerBannerTrailing extends StatelessWidget {
+  const _ComposerBannerTrailing({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return child;
   }
 }
 
@@ -15957,7 +16099,7 @@ class _QuoteBanner extends StatelessWidget {
     );
     return _ComposerAttachedBannerSurface(
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Expanded(
             child: Builder(
@@ -15978,15 +16120,17 @@ class _QuoteBanner extends StatelessWidget {
             ),
           ),
           SizedBox(width: spacing.s),
-          AxiIconButton.ghost(
-            iconData: LucideIcons.x,
-            tooltip: context.l10n.chatCancelReply,
-            onPressed: onClear,
-            color: colors.mutedForeground,
-            backgroundColor: Colors.transparent,
-            iconSize: context.sizing.menuItemIconSize,
-            buttonSize: context.sizing.menuItemHeight,
-            tapTargetSize: context.sizing.menuItemHeight,
+          _ComposerBannerTrailing(
+            child: AxiIconButton.ghost(
+              iconData: LucideIcons.x,
+              tooltip: context.l10n.chatCancelReply,
+              onPressed: onClear,
+              color: colors.mutedForeground,
+              backgroundColor: Colors.transparent,
+              iconSize: context.sizing.menuItemIconSize,
+              buttonSize: context.sizing.menuItemHeight,
+              tapTargetSize: context.sizing.menuItemHeight,
+            ),
           ),
         ],
       ),
@@ -16014,53 +16158,24 @@ class _ComposerBannerVisibility extends StatefulWidget {
       _ComposerBannerVisibilityState();
 }
 
-class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController controller0;
-  late CurvedAnimation curve0;
-  late Animation<double> opacity;
-  late Animation<Offset> slide;
-
+class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility> {
   Widget? displayedChild;
+  bool shown = false;
   DateTime? shownAt;
   Timer? hideTimer;
+  Timer? removeTimer;
 
   @override
   void initState() {
     super.initState();
-    controller0 = AnimationController(
-      vsync: this,
-      duration: widget.animationDuration,
-      value: widget.visible && widget.child != null ? 1 : 0,
-    );
-    curve0 = CurvedAnimation(
-      parent: controller0,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
-    opacity = curve0;
-    slide = Tween<Offset>(
-      begin: widget.slideOffset,
-      end: Offset.zero,
-    ).animate(curve0);
     displayedChild = widget.visible ? widget.child : null;
-    shownAt = widget.visible && widget.child != null
-        ? DateTime.timestamp()
-        : null;
+    shown = widget.visible && widget.child != null;
+    shownAt = shown ? DateTime.timestamp() : null;
   }
 
   @override
   void didUpdateWidget(covariant _ComposerBannerVisibility oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.animationDuration != widget.animationDuration) {
-      controller0.duration = widget.animationDuration;
-    }
-    if (oldWidget.slideOffset != widget.slideOffset) {
-      slide = Tween<Offset>(
-        begin: widget.slideOffset,
-        end: Offset.zero,
-      ).animate(curve0);
-    }
     _syncVisibility();
   }
 
@@ -16068,22 +16183,19 @@ class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility>
     final nextChild = widget.child;
     if (widget.visible && nextChild != null) {
       hideTimer?.cancel();
-      displayedChild = nextChild;
-      shownAt = DateTime.timestamp();
-      if (widget.animationDuration == Duration.zero) {
-        controller0
-          ..stop()
-          ..value = 1;
-        return;
-      }
-      controller0.animateTo(
-        1,
-        duration: widget.animationDuration,
-        curve: Curves.easeOutCubic,
-      );
+      removeTimer?.cancel();
+      final shouldRefreshShownAt =
+          !shown || !identical(displayedChild, nextChild);
+      setState(() {
+        displayedChild = nextChild;
+        shown = true;
+        if (shouldRefreshShownAt) {
+          shownAt = DateTime.timestamp();
+        }
+      });
       return;
     }
-    if (displayedChild == null) {
+    if (displayedChild == null || !shown) {
       return;
     }
     final elapsed = shownAt == null
@@ -16092,45 +16204,45 @@ class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility>
     final remaining = widget.minimumVisibleDuration - elapsed;
     if (remaining > Duration.zero) {
       hideTimer?.cancel();
-      hideTimer = Timer(remaining, _hideDisplayedChild);
+      hideTimer = Timer(remaining, _beginHide);
       return;
     }
-    _hideDisplayedChild();
+    _beginHide();
   }
 
-  Future<void> _hideDisplayedChild() async {
+  void _beginHide() {
     hideTimer?.cancel();
     hideTimer = null;
-    if (widget.visible) {
+    if (widget.visible || displayedChild == null || !shown) {
       return;
     }
+    removeTimer?.cancel();
     if (widget.animationDuration == Duration.zero) {
-      controller0
-        ..stop()
-        ..value = 0;
-      if (!mounted || widget.visible) return;
       setState(() {
+        shown = false;
         displayedChild = null;
         shownAt = null;
       });
       return;
     }
-    await controller0.animateTo(
-      0,
-      duration: widget.animationDuration,
-      curve: Curves.easeInCubic,
-    );
-    if (!mounted || widget.visible) return;
     setState(() {
-      displayedChild = null;
-      shownAt = null;
+      shown = false;
+    });
+    removeTimer = Timer(widget.animationDuration, () {
+      if (!mounted || widget.visible) {
+        return;
+      }
+      setState(() {
+        displayedChild = null;
+        shownAt = null;
+      });
     });
   }
 
   @override
   void dispose() {
     hideTimer?.cancel();
-    controller0.dispose();
+    removeTimer?.cancel();
     super.dispose();
   }
 
@@ -16141,18 +16253,26 @@ class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility>
       return const SizedBox.shrink();
     }
     return TickerMode(
-      enabled: controller0.value > 0 || widget.visible,
+      enabled: shown || widget.visible,
       child: IgnorePointer(
-        ignoring: !widget.visible,
+        ignoring: !shown,
         child: ExcludeSemantics(
-          excluding: !widget.visible,
-          child: ClipRect(
-            child: FadeTransition(
-              opacity: opacity,
-              child: SizeTransition(
-                sizeFactor: curve0,
-                axisAlignment: 1,
-                child: SlideTransition(position: slide, child: child),
+          excluding: !shown,
+          child: AnimatedSize(
+            duration: widget.animationDuration,
+            curve: shown ? Curves.easeOutCubic : Curves.easeInCubic,
+            alignment: Alignment.bottomCenter,
+            clipBehavior: Clip.hardEdge,
+            child: ClipRect(
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                heightFactor: shown ? 1 : 0,
+                child: AnimatedSlide(
+                  duration: widget.animationDuration,
+                  curve: shown ? Curves.easeOutCubic : Curves.easeInCubic,
+                  offset: shown ? Offset.zero : widget.slideOffset,
+                  child: child,
+                ),
               ),
             ),
           ),
@@ -16262,12 +16382,14 @@ class _DebugComposerBannerCycleState extends State<_DebugComposerBannerCycle> {
       _ComposerAttachedBannerSurface(
         key: const ValueKey<String>('debug-email-sync-banner'),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(
-              LucideIcons.mailWarning,
-              size: context.sizing.menuItemIconSize,
-              color: colors.destructive,
+            _ComposerBannerLeading(
+              child: Icon(
+                LucideIcons.mailWarning,
+                size: context.sizing.menuItemIconSize,
+                color: colors.destructive,
+              ),
             ),
             SizedBox(width: context.spacing.s),
             Expanded(
@@ -16304,7 +16426,13 @@ class _DebugComposerBannerCycleState extends State<_DebugComposerBannerCycle> {
           curve: Curves.easeOutCubic,
           reverseCurve: Curves.easeInCubic,
         );
-        return FadeTransition(opacity: curved, child: child);
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0.0, 0.08),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        );
       },
       child: banner,
     );
@@ -16383,6 +16511,7 @@ class _ParsedMessageBody extends StatefulWidget {
     required this.linkStyle,
     required this.details,
     required this.onLinkTap,
+    this.detailActions = const <int, DynamicInlineDetailAction>{},
     this.onLinkLongPress,
     this.contentKey,
   });
@@ -16391,33 +16520,13 @@ class _ParsedMessageBody extends StatefulWidget {
   final TextStyle baseStyle;
   final TextStyle linkStyle;
   final List<InlineSpan> details;
+  final Map<int, DynamicInlineDetailAction> detailActions;
   final ValueChanged<String> onLinkTap;
   final ValueChanged<String>? onLinkLongPress;
   final Object? contentKey;
 
   @override
   State<_ParsedMessageBody> createState() => _ParsedMessageBodyState();
-}
-
-class _EmailHtmlActionButton extends StatelessWidget {
-  const _EmailHtmlActionButton({required this.label, required this.onPressed});
-
-  final String label;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AxiButton.secondary(
-          size: AxiButtonSize.sm,
-          onPressed: onPressed,
-          child: Text(label),
-        ),
-      ],
-    );
-  }
 }
 
 class _ParsedMessageBodyState extends State<_ParsedMessageBody> {
@@ -16469,6 +16578,7 @@ class _ParsedMessageBodyState extends State<_ParsedMessageBody> {
       key: textKey,
       text: _parsed.body,
       details: widget.details,
+      detailActions: widget.detailActions,
       links: _parsed.links,
       onLinkTap: handleLinkTap,
       onLinkLongPress: handleLinkLongPress,

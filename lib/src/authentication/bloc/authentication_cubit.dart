@@ -8,7 +8,10 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
@@ -18,15 +21,16 @@ import 'package:axichat/src/email/service/email_provisioning_client.dart'
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
+import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
-import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:xml/xml.dart';
@@ -111,6 +115,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required XmppService xmppService,
     EmailService? emailService,
     HomeRefreshSyncService? homeRefreshSyncService,
+    NotificationService? notificationService,
+    CalendarReminderController? reminderController,
+    CalendarStorageManager? calendarStorageManager,
+    Storage? hydratedStorage,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
@@ -126,6 +134,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
              xmppService: xmppService,
              emailService: emailService,
            ),
+       _notificationService = notificationService,
+       _reminderController = reminderController,
+       _calendarStorageManager = calendarStorageManager,
+       _hydratedStorage = hydratedStorage,
        _endpointResolver = endpointResolver,
        _authRequestTimeout = authRequestTimeout,
        super(initialState ?? const AuthenticationNone()) {
@@ -248,6 +260,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final XmppService _xmppService;
   EmailService? _emailService;
   final HomeRefreshSyncService _homeRefreshSyncService;
+  final NotificationService? _notificationService;
+  final CalendarReminderController? _reminderController;
+  final CalendarStorageManager? _calendarStorageManager;
+  final Storage? _hydratedStorage;
   final EndpointResolver _endpointResolver;
   late final http.Client _httpClient;
   late final http.Client? _ownedHttpClient;
@@ -2759,36 +2775,42 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Normal logout blocked for device-only password account.');
       return;
     }
+    final burnContext = severity == LogoutSeverity.burn
+        ? await _resolveBurnCleanupContext()
+        : null;
     await _homeRefreshSyncService.close();
     if (severity == LogoutSeverity.normal) {
       await _xmppService.clearSessionTokens();
     }
-    if (endpointConfig.smtpEnabled) {
-      if (severity == LogoutSeverity.burn) {
-        await _emailService?.burn();
+    if (severity == LogoutSeverity.burn) {
+      if (burnContext?.databasePrefix == null) {
+        await _emailService?.burn(jid: burnContext?.jid);
       } else {
-        await _emailService?.shutdown(
-          clearCredentials: severity == LogoutSeverity.normal,
+        await _emailService?.burn(
+          jid: burnContext?.jid,
+          databasePrefix: burnContext?.databasePrefix,
         );
       }
+    } else if (endpointConfig.smtpEnabled) {
+      await _emailService?.shutdown(
+        clearCredentials: severity == LogoutSeverity.normal,
+      );
     }
 
     if (severity != LogoutSeverity.burn) {
       await _xmppService.disconnect();
     }
 
-    switch (severity) {
-      case LogoutSeverity.auto:
-        break;
-      case LogoutSeverity.normal:
-        await _credentialStore.delete(key: jidStorageKey);
-        await _credentialStore.delete(key: passwordStorageKey);
-        await _credentialStore.delete(key: passwordPreHashedStorageKey);
-        await _clearSkippedPasswordSecrets();
-      case LogoutSeverity.burn:
-        await _credentialStore.deleteAll(burn: true);
-        _passwordWasSkipped = false;
-        await _xmppService.burn();
+    if (severity == LogoutSeverity.normal) {
+      await _credentialStore.delete(key: jidStorageKey);
+      await _credentialStore.delete(key: passwordStorageKey);
+      await _credentialStore.delete(key: passwordPreHashedStorageKey);
+      await _clearSkippedPasswordSecrets();
+    } else if (severity == LogoutSeverity.burn) {
+      await _credentialStore.deleteAll(burn: true);
+      _passwordWasSkipped = false;
+      await _xmppService.burn();
+      await _burnAdditionalLocalState();
     }
 
     if (severity == LogoutSeverity.burn) {
@@ -2798,6 +2820,59 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     _emailService?.clearSessionCredentials();
     _emit(const AuthenticationNone());
     _updateEmailForegroundKeepalive();
+  }
+
+  Future<({String? jid, String? databasePrefix})>
+  _resolveBurnCleanupContext() async {
+    final storedLogin = await _readStoredLoginCredentials();
+    final storedJid = storedLogin.jid?.trim();
+    final activeJid = _xmppService.myJid?.trim();
+    final resolvedJid = switch ((storedJid, activeJid)) {
+      (final String jid, _) when jid.isNotEmpty => jid,
+      (_, final String jid) when jid.isNotEmpty => jid,
+      _ => null,
+    };
+    if (resolvedJid == null) {
+      return (jid: null, databasePrefix: null);
+    }
+    final databaseSecrets = await _readDatabaseSecrets(resolvedJid);
+    final prefix = databaseSecrets.prefix?.trim();
+    return (
+      jid: resolvedJid,
+      databasePrefix: prefix == null || prefix.isEmpty ? null : prefix,
+    );
+  }
+
+  Future<void> _burnAdditionalLocalState() async {
+    await _reminderController?.clearAll();
+    await _notificationService?.dismissNotifications();
+    await _hydratedStorage?.clear();
+    await _calendarStorageManager?.burn();
+    await _deleteBurnTemporaryDirectory(emailAttachmentTempDirectoryName);
+    await _deleteBurnTemporaryDirectory(attachmentShareTempDirectoryName);
+    await _deleteBurnTemporaryDirectory(chatHistoryExportTempDirectoryName);
+    await _deleteBurnTemporaryDirectory(contactExportTempDirectoryName);
+  }
+
+  Future<void> _deleteBurnTemporaryDirectory(String directoryName) async {
+    final directory = await appOwnedTemporaryDirectory(directoryName);
+    try {
+      final deleted = await deleteAppOwnedDirectoryTree(
+        directory: directory,
+        expectedPath: directory.path,
+      );
+      if (!deleted) {
+        _log.warning(
+          'Skipped burn cleanup for unexpected temp path ${directory.path}',
+        );
+      }
+    } on FileSystemException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to delete temporary burn directory ${directory.path}',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   Future<void> changePassword({
