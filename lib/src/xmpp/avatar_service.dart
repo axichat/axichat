@@ -179,6 +179,7 @@ mixin AvatarService on XmppBase, MucService {
   final LinkedHashMap<String, Uint8List> _avatarBytesCache = LinkedHashMap();
   final LinkedHashMap<String, Uint8List> _safeAvatarBytesCache =
       LinkedHashMap();
+  final Map<String, Future<Uint8List?>> _avatarLoadsInFlight = {};
   DateTime? _selfAvatarRepairLastAttempt;
 
   Uint8List? cachedAvatarBytes(String path) {
@@ -426,6 +427,7 @@ mixin AvatarService on XmppBase, MucService {
     _configuredAvatarNodes.clear();
     _avatarBytesCache.clear();
     _safeAvatarBytesCache.clear();
+    _avatarLoadsInFlight.clear();
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
     _selfAvatarBootstrapReplay = null;
@@ -1731,13 +1733,32 @@ mixin AvatarService on XmppBase, MucService {
     final normalizedPath = path.trim();
     if (normalizedPath.isEmpty) return null;
 
+    final replay = _avatarLoadsInFlight[normalizedPath];
+    if (replay != null) {
+      return replay;
+    }
+
+    final nextReplay = _loadAvatarBytesInternal(normalizedPath);
+    _avatarLoadsInFlight[normalizedPath] = nextReplay;
+    try {
+      return await nextReplay;
+    } finally {
+      if (identical(_avatarLoadsInFlight[normalizedPath], nextReplay)) {
+        _avatarLoadsInFlight.remove(normalizedPath);
+      }
+    }
+  }
+
+  Future<Uint8List?> _loadAvatarBytesInternal(String normalizedPath) async {
+    if (normalizedPath.isEmpty) return null;
+
     final cacheDirectory = await _avatarCacheDirectory();
     if (!_isSafeAvatarCachePath(
       cacheDirectory: cacheDirectory,
       filePath: normalizedPath,
     )) {
       _avatarLog.warning('Rejected avatar path outside cache directory.');
-      _evictCachedAvatarBytes(normalizedPath);
+      await _invalidateCachedAvatarPath(normalizedPath, deleteFile: false);
       return null;
     }
 
@@ -1747,10 +1768,18 @@ mixin AvatarService on XmppBase, MucService {
     }
 
     final file = File(normalizedPath);
-    if (!await file.exists()) return null;
+    if (!await file.exists()) {
+      _avatarLog.fine('Cached avatar file missing; clearing stale path.');
+      await _invalidateCachedAvatarPath(normalizedPath, deleteFile: false);
+      return null;
+    }
     try {
       final bytes = await file.readAsBytes();
-      if (bytes.isEmpty) return null;
+      if (bytes.isEmpty) {
+        _avatarLog.warning('Cached avatar file empty; clearing cache entry.');
+        await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
+        return null;
+      }
       final isEncrypted = p.extension(normalizedPath).toLowerCase() == '.enc';
       if (!isEncrypted) {
         _cacheAvatarBytes(normalizedPath, bytes);
@@ -1763,21 +1792,91 @@ mixin AvatarService on XmppBase, MucService {
         return null;
       }
       final decrypted = await _decryptAvatarBytes(bytes);
-      if (decrypted.isEmpty) return null;
+      if (decrypted.isEmpty) {
+        _avatarLog.warning(
+          'Cached avatar decrypted to an empty payload; clearing cache entry.',
+        );
+        await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
+        return null;
+      }
       _cacheAvatarBytes(normalizedPath, decrypted);
       return decrypted;
-    } catch (error, stackTrace) {
+    } on Exception catch (error, stackTrace) {
       _avatarLog.warning(
         'Failed to load cached avatar; deleting corrupted cache entry.',
         error,
         stackTrace,
       );
-      _evictCachedAvatarBytes(normalizedPath);
-      try {
-        await file.delete();
-      } catch (_) {}
+      await _invalidateCachedAvatarPath(normalizedPath, deleteFile: true);
       return null;
     }
+  }
+
+  Future<void> _invalidateCachedAvatarPath(
+    String path, {
+    required bool deleteFile,
+  }) async {
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) return;
+
+    _evictCachedAvatarBytes(normalizedPath);
+    try {
+      await _dbOp<XmppDatabase>(
+        (db) => db.clearAvatarReferencesForPath(path: normalizedPath),
+        awaitDatabase: true,
+      );
+    } on XmppAbortedException {
+      return;
+    }
+
+    await _clearSelfAvatarReferenceIfPathMatches(normalizedPath);
+    await _clearPendingSelfAvatarIfPathMatches(normalizedPath);
+
+    if (!deleteFile) return;
+    final file = File(normalizedPath);
+    try {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } on Exception catch (error, stackTrace) {
+      _avatarLog.fine(
+        'Failed to delete invalid cached avatar file.',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  Future<void> _clearSelfAvatarReferenceIfPathMatches(String path) async {
+    if (!isStateStoreReady) return;
+
+    String? storedPath;
+    try {
+      storedPath = await _dbOpReturning<XmppStateStore, String?>(
+        (ss) => ss.read(key: selfAvatarPathKey) as String?,
+      );
+    } on XmppAbortedException {
+      return;
+    }
+    if (storedPath?.trim() != path) return;
+
+    try {
+      await _dbOp<XmppStateStore>((ss) async {
+        await ss.write(key: selfAvatarPathKey, value: null);
+        await ss.write(key: selfAvatarHashKey, value: null);
+      }, awaitDatabase: true);
+    } on XmppAbortedException {
+      return;
+    }
+
+    owner._notifySelfAvatarUpdated(null);
+  }
+
+  Future<void> _clearPendingSelfAvatarIfPathMatches(String path) async {
+    if (!isStateStoreReady) return;
+    final pending = await _readPendingSelfAvatarPublish();
+    if (pending?.path.trim() != path) return;
+    await _clearPendingSelfAvatarPublish();
   }
 
   bool _isSelfAvatarTarget(String targetJid) =>

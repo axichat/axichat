@@ -142,12 +142,72 @@ pre, code {
   };
   static const Set<String> _sanitizedVoidTags = <String>{'br', 'hr', 'img'};
   static const Set<String> _plainTextHtmlTags = <String>{
+    'a',
+    'b',
     'body',
     'br',
     'div',
+    'em',
+    'font',
     'html',
+    'i',
     'p',
+    'small',
     'span',
+    'strong',
+    'sub',
+    'sup',
+    'u',
+  };
+  static const Set<String> _plainTextHtmlIgnoredTags = <String>{
+    'head',
+    'link',
+    'meta',
+    'style',
+    'title',
+  };
+  static const Set<String> _plainTextHtmlGlobalAttributes = <String>{
+    'class',
+    'dir',
+    'id',
+    'lang',
+    'title',
+  };
+  static const Set<String> _plainTextHtmlLinkAttributes = <String>{
+    'href',
+    'rel',
+    'target',
+    'title',
+  };
+  static const Set<String> _plainTextHtmlFontAttributes = <String>{
+    'color',
+    'face',
+    'size',
+  };
+  static const Set<String> _plainTextHtmlStyleProperties = <String>{
+    'background-color',
+    'color',
+    'direction',
+    'display',
+    'font-family',
+    'font-size',
+    'font-style',
+    'font-weight',
+    'line-height',
+    'margin',
+    'margin-bottom',
+    'margin-left',
+    'margin-right',
+    'margin-top',
+    'padding',
+    'padding-bottom',
+    'padding-left',
+    'padding-right',
+    'padding-top',
+    'text-align',
+    'text-decoration',
+    'unicode-bidi',
+    'white-space',
   };
   static const String _directionAttribute = 'dir';
   static const Set<String> _plainTextDirectionValues = <String>{
@@ -205,13 +265,20 @@ pre, code {
     final trimmed = html.trim();
     if (trimmed.isEmpty) return true;
     try {
-      final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
+      final document = _prepareEmailHtmlDocument(
+        trimmed,
+        allowRemoteImages: false,
+        includeWebViewChrome: false,
+      );
+      final nodes = document.body?.nodes.isNotEmpty == true
+          ? document.body!.nodes
+          : document.nodes;
       final budget = _HtmlNodeBudget(
         maxNodes: _maxHtmlNodeCount,
         maxDepth: _maxHtmlDepth,
         maxDuration: _maxHtmlParseDuration,
       );
-      return _isPlainTextNodes(fragment.nodes, budget, 0);
+      return _isPlainTextNodes(nodes, budget, 0);
     } on Exception {
       return false;
     }
@@ -691,6 +758,9 @@ pre, code {
       }
       if (node is dom.Element) {
         final tag = (node.localName ?? '').toLowerCase();
+        if (_plainTextHtmlIgnoredTags.contains(tag)) {
+          continue;
+        }
         if (!_plainTextHtmlTags.contains(tag)) {
           return false;
         }
@@ -714,13 +784,60 @@ pre, code {
     if (node.attributes.isEmpty) {
       return true;
     }
+    final tag = (node.localName ?? '').toLowerCase();
     for (final entry in node.attributes.entries) {
       final attributeName = entry.key.toString().trim().toLowerCase();
-      if (attributeName != _directionAttribute) {
+      if (attributeName == 'style') {
+        if (!_hasOnlyAllowedPlainTextStyles(entry.value)) {
+          return false;
+        }
+        continue;
+      }
+      if (_plainTextHtmlGlobalAttributes.contains(attributeName)) {
+        if (attributeName != _directionAttribute) {
+          continue;
+        }
+        final directionValue = entry.value.toString().trim().toLowerCase();
+        if (_plainTextDirectionValues.contains(directionValue)) {
+          continue;
+        }
         return false;
       }
-      final directionValue = entry.value.toString().trim().toLowerCase();
-      if (!_plainTextDirectionValues.contains(directionValue)) {
+      if (tag == 'a' && _plainTextHtmlLinkAttributes.contains(attributeName)) {
+        continue;
+      }
+      if (tag == 'font' &&
+          _plainTextHtmlFontAttributes.contains(attributeName)) {
+        continue;
+      }
+      if (attributeName.startsWith('aria-') ||
+          attributeName.startsWith('data-')) {
+        continue;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  static bool _hasOnlyAllowedPlainTextStyles(String rawStyle) {
+    final style = rawStyle.trim();
+    if (style.isEmpty) {
+      return true;
+    }
+    final declarations = style
+        .split(';')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty);
+    for (final declaration in declarations) {
+      final separatorIndex = declaration.indexOf(':');
+      if (separatorIndex <= 0) {
+        return false;
+      }
+      final property = declaration
+          .substring(0, separatorIndex)
+          .trim()
+          .toLowerCase();
+      if (!_plainTextHtmlStyleProperties.contains(property)) {
         return false;
       }
     }

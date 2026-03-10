@@ -2548,7 +2548,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get commonShow => '显示';
 
   @override
-  String get chatMessageViewHtmlAction => '查看 HTML';
+  String get chatMessageViewHtmlAction => '显示 HTML';
+
+  @override
+  String get chatMessageShowTextAction => '显示文本';
 
   @override
   String get commonHide => '隐藏';
@@ -8401,7 +8404,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get commonShow => '顯示';
 
   @override
-  String get chatMessageViewHtmlAction => '查看 HTML';
+  String get chatMessageViewHtmlAction => '顯示 HTML';
+
+  @override
+  String get chatMessageShowTextAction => '顯示文字';
 
   @override
   String get commonHide => '隱藏';

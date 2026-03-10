@@ -18,6 +18,9 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     required this.tapSplashAlpha,
     required this.tapHoverAlpha,
     required this.tapFocusAlpha,
+    required this.composerBannerSlideOffset,
+    required this.composerBannerTransitionDuration,
+    required this.composerBannerMinVisibilityDuration,
     required this.statusBannerSlideOffset,
     required this.statusBannerSuccessDuration,
   });
@@ -35,6 +38,9 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
   final double tapSplashAlpha;
   final double tapHoverAlpha;
   final double tapFocusAlpha;
+  final Offset composerBannerSlideOffset;
+  final Duration composerBannerTransitionDuration;
+  final Duration composerBannerMinVisibilityDuration;
   final Offset statusBannerSlideOffset;
   final Duration statusBannerSuccessDuration;
 
@@ -53,6 +59,9 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
     double? tapSplashAlpha,
     double? tapHoverAlpha,
     double? tapFocusAlpha,
+    Offset? composerBannerSlideOffset,
+    Duration? composerBannerTransitionDuration,
+    Duration? composerBannerMinVisibilityDuration,
     Offset? statusBannerSlideOffset,
     Duration? statusBannerSuccessDuration,
   }) {
@@ -78,6 +87,14 @@ class AxiMotion extends ThemeExtension<AxiMotion> {
       tapSplashAlpha: tapSplashAlpha ?? this.tapSplashAlpha,
       tapHoverAlpha: tapHoverAlpha ?? this.tapHoverAlpha,
       tapFocusAlpha: tapFocusAlpha ?? this.tapFocusAlpha,
+      composerBannerSlideOffset:
+          composerBannerSlideOffset ?? this.composerBannerSlideOffset,
+      composerBannerTransitionDuration:
+          composerBannerTransitionDuration ??
+          this.composerBannerTransitionDuration,
+      composerBannerMinVisibilityDuration:
+          composerBannerMinVisibilityDuration ??
+          this.composerBannerMinVisibilityDuration,
       statusBannerSlideOffset:
           statusBannerSlideOffset ?? this.statusBannerSlideOffset,
       statusBannerSuccessDuration:
@@ -106,6 +123,9 @@ const AxiMotion axiMotion = AxiMotion(
   tapSplashAlpha: 0.18,
   tapHoverAlpha: 0.08,
   tapFocusAlpha: 0.32,
+  composerBannerSlideOffset: Offset(0.0, 0.22),
+  composerBannerTransitionDuration: Duration(milliseconds: 280),
+  composerBannerMinVisibilityDuration: Duration(milliseconds: 300),
   statusBannerSlideOffset: Offset(0.0, -(1 / 12)),
   statusBannerSuccessDuration: Duration(milliseconds: 900),
 );

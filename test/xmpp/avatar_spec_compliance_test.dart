@@ -11,8 +11,20 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:path/path.dart' as p;
+// ignore: depend_on_referenced_packages
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 import '../mocks.dart';
+
+class _FakePathProviderPlatform extends PathProviderPlatform {
+  _FakePathProviderPlatform(this.supportPath);
+
+  final String supportPath;
+
+  @override
+  Future<String?> getApplicationSupportPath() async => supportPath;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -183,4 +195,63 @@ void main() {
       expect(publishEvents.last.isSuccess, isFalse);
     },
   );
+
+  test('Corrupted cached avatar clears stale roster and chat paths', () async {
+    const contactJid = 'contact@example.com';
+    final originalPathProvider = PathProviderPlatform.instance;
+    final tempDir = await Directory.systemTemp.createTemp('axichat-avatar-');
+    final supportDir = Directory(p.join(tempDir.path, 'support'));
+    await supportDir.create(recursive: true);
+    PathProviderPlatform.instance = _FakePathProviderPlatform(supportDir.path);
+
+    try {
+      await database.saveRosterItems([
+        const RosterItem(
+          jid: contactJid,
+          title: 'contact',
+          presence: Presence.chat,
+          subscription: Subscription.both,
+        ),
+      ]);
+
+      await xmppService.storeAvatarBytesForJid(
+        jid: contactJid,
+        bytes: Uint8List.fromList(const <int>[
+          0x89,
+          0x50,
+          0x4E,
+          0x47,
+          0x0D,
+          0x0A,
+          0x1A,
+          0x0A,
+          0x00,
+        ]),
+        hash: 'avatar-hash',
+      );
+
+      final storedRoster = await database.getRosterItem(contactJid);
+      final storedPath = storedRoster?.avatarPath;
+      expect(storedPath, isNotNull);
+
+      final avatarFile = File(storedPath!);
+      expect(await avatarFile.exists(), isTrue);
+      await avatarFile.writeAsBytes(const <int>[1, 2, 3, 4], flush: true);
+
+      final bytes = await xmppService.loadAvatarBytes(storedPath);
+
+      expect(bytes, isNull);
+      expect(await avatarFile.exists(), isFalse);
+
+      final updatedRoster = await database.getRosterItem(contactJid);
+      final updatedChat = await database.getChat(contactJid);
+      expect(updatedRoster?.avatarPath, isNull);
+      expect(updatedRoster?.avatarHash, isNull);
+      expect(updatedChat?.avatarPath, isNull);
+      expect(updatedChat?.avatarHash, isNull);
+    } finally {
+      PathProviderPlatform.instance = originalPathProvider;
+      await tempDir.delete(recursive: true);
+    }
+  });
 }

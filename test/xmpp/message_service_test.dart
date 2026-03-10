@@ -405,20 +405,248 @@ void main() {
         expect(chat?.type, ChatType.groupChat);
       },
     );
+
+    test(
+      'Repairs stale MUC manager joined state from ready self presence before sending.',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        const roomNick = 'me';
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+        when(
+          () => mockConnection.getManager<MUCManager>(),
+        ).thenReturn(mucManager);
+        final managerRoomState = mox.RoomState(
+          roomJid: mox.JID.fromString(roomJid),
+          joined: false,
+          nick: roomNick,
+        );
+        when(
+          () => mucManager.getRoomState(any()),
+        ).thenAnswer((_) async => managerRoomState);
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+        await database.createChat(
+          Chat(
+            jid: roomJid,
+            title: 'Room',
+            type: ChatType.groupChat,
+            myNickname: roomNick,
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: roomJid,
+          ),
+        );
+        xmppService.updateOccupantFromPresence(
+          roomJid: roomJid,
+          occupantId: '$roomJid/$roomNick',
+          nick: roomNick,
+          realJid: xmppService.myJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+          fromPresence: true,
+        );
+
+        await xmppService.sendMessage(jid: roomJid, text: text);
+
+        verifyNever(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        );
+        verify(
+          () => mockConnection.sendMessage(
+            any(
+              that: isA<mox.MessageEvent>()
+                  .having((event) => event.type, 'type', 'groupchat')
+                  .having(
+                    (event) => event.to.toBare().toString(),
+                    'to',
+                    roomJid,
+                  ),
+            ),
+          ),
+        ).called(1);
+      },
+    );
+  });
+
+  group('reactToMessage', () {
+    const sameDomainJid = 'friend@axi.im';
+    const emoji = '\u{1F44D}';
+
+    test('Allows same-domain reactions when disco fails', () async {
+      await connectSuccessfully(xmppService);
+      when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+          mox.ServiceUnavailableError(),
+        ),
+      );
+      when(() => mockConnection.generateId()).thenReturn(uuid.v4());
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
+
+      const stanzaId = 'same-domain-reaction';
+      await database.saveMessage(
+        Message(
+          stanzaID: stanzaId,
+          senderJid: sameDomainJid,
+          chatJid: sameDomainJid,
+          timestamp: DateTime.timestamp(),
+          body: 'hello',
+        ),
+      );
+
+      await xmppService.reactToMessage(stanzaID: stanzaId, emoji: emoji);
+
+      verify(
+        () => mockConnection.sendMessage(
+          any(
+            that: isA<mox.MessageEvent>().having(
+              (event) =>
+                  event.extensions.get<mox.MessageReactionsData>()?.messageId,
+              'reaction target',
+              stanzaId,
+            ),
+          ),
+        ),
+      ).called(1);
+      final reactions = await database.getReactionsForMessageSender(
+        messageId: stanzaId,
+        senderJid: xmppService.myJid!,
+      );
+      expect(
+        reactions.map((reaction) => reaction.emoji).toList(),
+        equals(const <String>[emoji]),
+      );
+    });
+
+    test(
+      'Applies inbound reactions when the target matches message originID',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        const stanzaId = 'stored-stanza-id';
+        const originId = 'stable-origin-id';
+        await database.saveMessage(
+          Message(
+            stanzaID: stanzaId,
+            originID: originId,
+            senderJid: sameDomainJid,
+            chatJid: sameDomainJid,
+            timestamp: DateTime.timestamp(),
+            body: 'hello',
+          ),
+        );
+
+        final reactionEvent = mox.MessageEvent(
+          mox.JID.fromString(sameDomainJid),
+          mox.JID.fromString(jid),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            const mox.MessageReactionsData(originId, <String>[emoji]),
+          ]),
+          id: uuid.v4(),
+          type: 'chat',
+        );
+
+        controller.add(reactionEvent);
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final reactions = await database.getReactionsForMessageSender(
+          messageId: stanzaId,
+          senderJid: sameDomainJid,
+        );
+        expect(
+          reactions.map((reaction) => reaction.emoji).toList(),
+          equals(const <String>[emoji]),
+        );
+
+        await controller.close();
+      },
+    );
+  });
+
+  group('sendReadMarker', () {
+    test('Allows @axi.im read markers when disco fails', () async {
+      const axiPeerJid = 'friend@axi.im';
+      const stanzaId = 'axi-read-marker';
+      await connectSuccessfully(xmppService);
+      when(() => mockConnection.discoInfoQuery(any())).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+          mox.ServiceUnavailableError(),
+        ),
+      );
+      when(
+        () => mockConnection.sendChatMarker(
+          to: any(named: 'to'),
+          stanzaID: any(named: 'stanzaID'),
+          marker: any(named: 'marker'),
+          messageType: any(named: 'messageType'),
+        ),
+      ).thenAnswer((_) async => true);
+
+      await xmppService.sendReadMarker(axiPeerJid, stanzaId);
+
+      verify(
+        () => mockConnection.sendChatMarker(
+          to: axiPeerJid,
+          stanzaID: stanzaId,
+          marker: mox.ChatMarker.received,
+          messageType: 'chat',
+        ),
+      ).called(1);
+      verify(
+        () => mockConnection.sendChatMarker(
+          to: axiPeerJid,
+          stanzaID: stanzaId,
+          marker: mox.ChatMarker.displayed,
+          messageType: 'chat',
+        ),
+      ).called(1);
+    });
   });
 
   group('_acknowledgeMessage', () {
-    test('Skips disco capability probes for bare MUC room JIDs', () async {
-      const roomJid = 'room@conference.axi.im';
+    test(
+      'Assumes reaction support for bare MUC room JIDs without disco',
+      () async {
+        const roomJid = 'room@conference.axi.im';
+        await connectSuccessfully(xmppService);
+        await xmppService.setMucServiceHost('conference.axi.im');
+
+        final capabilities = await xmppService.resolvePeerCapabilities(
+          jid: roomJid,
+        );
+
+        expect(capabilities.features, contains(mox.messageReactionsXmlns));
+        verifyNever(() => mockConnection.discoInfoQuery(roomJid));
+      },
+    );
+
+    test('Assumes current peer capabilities for @axi.im contacts', () async {
       await connectSuccessfully(xmppService);
-      await xmppService.setMucServiceHost('conference.axi.im');
 
       final capabilities = await xmppService.resolvePeerCapabilities(
-        jid: roomJid,
+        jid: 'friend@axi.im',
       );
 
-      expect(capabilities.features, isEmpty);
-      verifyNever(() => mockConnection.discoInfoQuery(any()));
+      expect(capabilities.features, contains(mox.chatMarkersXmlns));
+      expect(capabilities.features, contains(mox.deliveryXmlns));
+      expect(capabilities.features, contains(mox.messageReactionsXmlns));
+      expect(capabilities.features, contains(mox.chatStateXmlns));
+      expect(capabilities.features, contains(mox.omemoXmlns));
     });
 
     test('Caches disco capabilities per peer', () async {

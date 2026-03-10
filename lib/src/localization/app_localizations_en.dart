@@ -2632,7 +2632,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonShow => 'Show';
 
   @override
-  String get chatMessageViewHtmlAction => 'View HTML';
+  String get chatMessageViewHtmlAction => 'Show HTML';
+
+  @override
+  String get chatMessageShowTextAction => 'Show text';
 
   @override
   String get commonHide => 'Hide';

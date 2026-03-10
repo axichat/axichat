@@ -643,10 +643,6 @@ mixin MucService on XmppBase, BaseStreamService {
     } on Exception {
       return false;
     }
-    final managerState = await _mucManagerRoomState(normalizedRoom);
-    if (managerState == null || managerState.joined != true) {
-      return false;
-    }
     final roomState = roomStateFor(normalizedRoom);
     if (roomState == null) return false;
     if (_instantRoomPendingRooms.contains(normalizedRoom)) {
@@ -665,6 +661,17 @@ mixin MucService on XmppBase, BaseStreamService {
     if (myOccupantId == null || myOccupantId.isEmpty) return false;
     final occupant = roomState.occupants[myOccupantId];
     if (occupant?.isPresent != true) return false;
+    final managerState = await _mucManagerRoomState(normalizedRoom);
+    if (managerState == null) {
+      return false;
+    }
+    if (managerState.joined != true) {
+      managerState.joined = true;
+      final selfNick = occupant?.nick.trim();
+      if (selfNick?.isNotEmpty == true) {
+        managerState.nick = selfNick;
+      }
+    }
     return true;
   }
 
@@ -1498,12 +1505,6 @@ mixin MucService on XmppBase, BaseStreamService {
           codes.contains(MucStatusCode.roomShutdown.code)) {
         return;
       }
-    }
-    if (!forceRejoin &&
-        room?.isReadyForMessaging == true &&
-        !_roomNeedsJoin(key)) {
-      await _awaitInstantRoomConfigurationIfNeeded(key);
-      return;
     }
     final hasPresenceForSend = await _hasMucPresenceForSend(roomJid: key);
     if (hasPresenceForSend && !forceRejoin) {

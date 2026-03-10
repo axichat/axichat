@@ -1018,6 +1018,7 @@
   "commonUnarchive": "Aus Archiv holen",
   "commonShow": "Einblenden",
   "chatMessageViewHtmlAction": "HTML anzeigen",
+  "chatMessageShowTextAction": "Text anzeigen",
   "commonHide": "Ausblenden",
   "blocklistBlockUser": "Benutzer blockieren",
   "blocklistWaitingForUnblock": "Warte auf Entsperrung",

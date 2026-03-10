@@ -4773,8 +4773,14 @@ abstract class AppLocalizations {
   /// No description provided for @chatMessageViewHtmlAction.
   ///
   /// In en, this message translates to:
-  /// **'View HTML'**
+  /// **'Show HTML'**
   String get chatMessageViewHtmlAction;
+
+  /// No description provided for @chatMessageShowTextAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Show text'**
+  String get chatMessageShowTextAction;
 
   /// No description provided for @commonHide.
   ///

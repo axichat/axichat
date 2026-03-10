@@ -652,6 +652,52 @@ void main() {
     );
 
     test(
+      'JOIN-015B [HP] ensureJoined repairs stale manager joined state from ready room presence',
+      () async {
+        final managerRoomState = mox.RoomState(
+          roomJid: mox.JID.fromString(_roomJidBare),
+          joined: false,
+          nick: _roomNick,
+        );
+        when(
+          () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
+        ).thenAnswer((_) async => managerRoomState);
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer(
+          (_) async =>
+              const moxlib.Result<bool, mox.MUCError>(_presenceAvailable),
+        );
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: _roomNick,
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+          isPresent: true,
+          fromPresence: true,
+        );
+
+        await xmppService.ensureJoined(roomJid: _roomJid);
+
+        expect(managerRoomState.joined, isTrue);
+        verifyNever(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        );
+      },
+    );
+
+    test(
       'JOIN-016 [HP] ensureJoined clears roomCreated after instant room configuration succeeds',
       () async {
         final managerRoomState = mox.RoomState(

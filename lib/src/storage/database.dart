@@ -528,6 +528,8 @@ abstract interface class XmppDatabase implements Database {
     required String? avatarHash,
   });
 
+  Future<void> clearAvatarReferencesForPath({required String path});
+
   Future<void> markChatsMarkerResponsive({required bool responsive});
 
   Future<void> updateChatState({
@@ -4828,6 +4830,44 @@ WHERE jid = ?
         avatarHash: Value(avatarHash),
       ),
     );
+  }
+
+  @override
+  Future<void> clearAvatarReferencesForPath({required String path}) async {
+    final normalizedPath = path.trim();
+    if (normalizedPath.isEmpty) return;
+
+    await transaction(() async {
+      await (update(
+        roster,
+      )..where((tbl) => tbl.avatarPath.equals(normalizedPath))).write(
+        const RosterCompanion(
+          avatarPath: Value<String?>(null),
+          avatarHash: Value<String?>(null),
+        ),
+      );
+      await (update(
+        roster,
+      )..where((tbl) => tbl.contactAvatarPath.equals(normalizedPath))).write(
+        const RosterCompanion(contactAvatarPath: Value<String?>(null)),
+      );
+      await (update(
+        chats,
+      )..where((tbl) => tbl.avatarPath.equals(normalizedPath))).write(
+        const ChatsCompanion(
+          avatarPath: Value<String?>(null),
+          avatarHash: Value<String?>(null),
+        ),
+      );
+      await (update(
+        chats,
+      )..where((tbl) => tbl.contactAvatarPath.equals(normalizedPath))).write(
+        const ChatsCompanion(
+          contactAvatarPath: Value<String?>(null),
+          contactAvatarHash: Value<String?>(null),
+        ),
+      );
+    });
   }
 
   @override

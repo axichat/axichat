@@ -1014,6 +1014,7 @@
   "commonUnarchive": "Désarchiver",
   "commonShow": "Afficher",
   "chatMessageViewHtmlAction": "Afficher le HTML",
+  "chatMessageShowTextAction": "Afficher le texte",
   "commonHide": "Masquer",
   "blocklistBlockUser": "Bloquer l’utilisateur",
   "blocklistWaitingForUnblock": "En attente de déblocage",

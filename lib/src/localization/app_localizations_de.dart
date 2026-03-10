@@ -2684,6 +2684,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get chatMessageViewHtmlAction => 'HTML anzeigen';
 
   @override
+  String get chatMessageShowTextAction => 'Text anzeigen';
+
+  @override
   String get commonHide => 'Ausblenden';
 
   @override
