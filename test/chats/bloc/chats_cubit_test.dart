@@ -18,6 +18,7 @@ Chat _chat({
   required String title,
   required DateTime timestamp,
   bool spam = false,
+  bool favorited = false,
   DateTime? spamUpdatedAt,
 }) {
   return Chat(
@@ -26,6 +27,7 @@ Chat _chat({
     type: ChatType.chat,
     lastChangeTimestamp: timestamp,
     spam: spam,
+    favorited: favorited,
     spamUpdatedAt: spamUpdatedAt,
   );
 }
@@ -132,6 +134,32 @@ void main() {
     );
 
     expect(cubit.state.spamVisibleItems.first.jid, 'first@example.com');
+  });
+
+  test('visible chats keep favorites at the top', () async {
+    final now = DateTime(2024, 1, 1, 12, 0);
+    final items = <Chat>[
+      _chat(
+        jid: 'newest@axi.im',
+        title: 'Newest',
+        timestamp: now.add(const Duration(hours: 1)),
+      ),
+      _chat(
+        jid: 'favorite@axi.im',
+        title: 'Favorite',
+        timestamp: now,
+        favorited: true,
+      ),
+    ];
+    when(() => xmppService.cachedChatList).thenReturn(items);
+
+    final cubit = ChatsCubit(
+      xmppService: xmppService,
+      homeRefreshSyncService: homeRefreshSyncService,
+    );
+    addTearDown(cubit.close);
+
+    expect(cubit.state.visibleItems.first.jid, 'favorite@axi.im');
   });
 
   test('stored details route falls back to main without a focused message', () {

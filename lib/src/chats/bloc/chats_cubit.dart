@@ -72,6 +72,19 @@ class _ChatViewResults {
   final List<Chat> selectedChats;
 }
 
+int _compareVisibleChats(
+  Chat a,
+  Chat b, {
+  required SearchSortOrder searchSortOrder,
+}) {
+  if (a.favorited != b.favorited) {
+    return a.favorited ? -1 : 1;
+  }
+  return searchSortOrder.isNewestFirst
+      ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
+      : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp);
+}
+
 enum ChatsCreateRoomFailure {
   alreadyExists,
   unknown;
@@ -357,9 +370,8 @@ class ChatsCubit extends Cubit<ChatsState> {
             .where(matchesQuery)
             .toList(growable: false)
           ..sort(
-            (a, b) => searchSortOrder.isNewestFirst
-                ? b.lastChangeTimestamp.compareTo(a.lastChangeTimestamp)
-                : a.lastChangeTimestamp.compareTo(b.lastChangeTimestamp),
+            (a, b) =>
+                _compareVisibleChats(a, b, searchSortOrder: searchSortOrder),
           );
 
     final archivedItems = items

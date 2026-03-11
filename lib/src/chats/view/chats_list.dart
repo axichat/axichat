@@ -1298,8 +1298,12 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
         ),
       ],
     );
+    final paddedActionWrap = Padding(
+      padding: EdgeInsetsDirectional.only(bottom: scaled(context.spacing.xs)),
+      child: actionWrap,
+    );
     if (addressLabel.isEmpty) {
-      return actionWrap;
+      return paddedActionWrap;
     }
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1311,7 +1315,7 @@ class _ChatActionPanelState extends State<_ChatActionPanel> {
           style: context.textTheme.muted,
         ),
         SizedBox(height: spacing),
-        actionWrap,
+        paddedActionWrap,
       ],
     );
   }

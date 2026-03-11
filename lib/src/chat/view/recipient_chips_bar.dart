@@ -482,7 +482,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   })
   _computeSuggestionPools() {
     final allowAddressTargets = widget.allowAddressTargets;
-    final availableChats = widget.availableChats;
+    final availableChats = widget.availableChats
+        .where((chat) => !chat.isAxichatWelcomeThread)
+        .toList(growable: false);
     final recipients = widget.recipients;
     final nextAvailable = availableChats
         .where(
@@ -502,6 +504,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       void addDomainFrom(String? address) {
         if (_isRoomNick(address)) return;
         if (_isOwnAddress(address)) return;
+        if (_isWelcomeThreadAddress(address)) return;
         final domain = _extractDomain(address);
         if (domain != null) {
           domains.add(domain);
@@ -534,6 +537,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         if (value == null || value.isEmpty) return;
         if (_isRoomNick(value)) return;
         if (_isOwnAddress(value)) return;
+        if (_isWelcomeThreadAddress(value)) return;
         addresses.add(value);
       }
 
@@ -611,6 +615,9 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       return false;
     }
     if (_isOwnAddress(value)) {
+      return false;
+    }
+    if (_isWelcomeThreadAddress(value)) {
       return false;
     }
     _handleRecipientAdded(
@@ -870,6 +877,11 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final normalized = _normalizeAddress(raw);
     final own = _ownNormalizedJid;
     return normalized != null && own != null && normalized == own;
+  }
+
+  bool _isWelcomeThreadAddress(String? raw) {
+    final bare = bareAddress(raw) ?? raw?.trim();
+    return isAxichatWelcomeThreadJid(bare);
   }
 
   Iterable<FanOutTarget> _autocompleteOptions(
