@@ -743,7 +743,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         return form;
       }
 
-      return SafeArea(top: false, bottom: false, child: form);
+      return form;
     }
 
     return LayoutBuilder(
@@ -796,7 +796,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
         if (!isSheet) {
           return surfaced;
         }
-        return SafeArea(top: false, bottom: false, child: surfaced);
+        return surfaced;
       },
     );
   }

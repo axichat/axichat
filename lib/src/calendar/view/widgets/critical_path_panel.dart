@@ -1218,6 +1218,7 @@ Future<String?> promptCriticalPathName({
   final result = await showAdaptiveBottomSheet<String>(
     context: modalContext,
     isScrollControlled: true,
+    preferDialogOnMobile: true,
     dialogMaxWidth: 420,
     surfacePadding: EdgeInsets.all(context.spacing.m),
     showCloseButton: false,
@@ -1225,7 +1226,6 @@ Future<String?> promptCriticalPathName({
       return StatefulBuilder(
         builder: (context, _) {
           final textTheme = context.textTheme;
-          FocusScope.of(dialogContext).requestFocus(focusNode);
           return ShadForm(
             key: formKey,
             autovalidateMode: ShadAutovalidateMode.disabled,
@@ -1253,6 +1253,7 @@ Future<String?> promptCriticalPathName({
                         AxiTextFormField(
                           controller: controller,
                           focusNode: focusNode,
+                          autofocus: true,
                           keyboardType: TextInputType.text,
                           textInputAction: TextInputAction.done,
                           placeholder: Text(

@@ -173,12 +173,9 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   ? message.htmlBody
                   : state.emailFullHtmlByDeltaId[deltaMessageId] ??
                         message.htmlBody;
-              final String? resolvedQuotedText = deltaMessageId == null
-                  ? null
-                  : state.emailQuotedTextByDeltaId[deltaMessageId];
-              final String? resolvedHtmlText = resolvedHtmlBody == null
-                  ? null
-                  : HtmlContentCodec.toPlainText(resolvedHtmlBody).trim();
+              final normalizedHtmlBody = resolvedHtmlBody?.trim();
+              final hasHtmlBody =
+                  normalizedHtmlBody != null && normalizedHtmlBody.isNotEmpty;
               final shouldLoadImages =
                   settings.autoLoadEmailImages ||
                   (message.id != null &&
@@ -187,17 +184,22 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   ? null
                   : () => widget.onEmailImagesApproved(message.id!);
               final bool hasRemoteHtmlImages =
-                  resolvedHtmlBody != null &&
-                  HtmlContentCodec.containsRemoteImages(resolvedHtmlBody);
-              final String? quotedFallbackText =
-                  (resolvedHtmlText == null || resolvedHtmlText.isEmpty) &&
-                      resolvedQuotedText?.trim().isNotEmpty == true
-                  ? resolvedQuotedText!.trim()
-                  : null;
+                  hasHtmlBody &&
+                  !shouldLoadImages &&
+                  HtmlContentCodec.containsRemoteImages(normalizedHtmlBody);
+              final String? fallbackBodyText = switch (message.body?.trim()) {
+                final String text when text.isNotEmpty => text,
+                _ => null,
+              };
+              final String? fallbackQuotedText = deltaMessageId == null
+                  ? null
+                  : switch (state.emailQuotedTextByDeltaId[deltaMessageId]
+                        ?.trim()) {
+                      final String text when text.isNotEmpty => text,
+                      _ => null,
+                    };
               final String? emailFallbackText =
-                  resolvedHtmlText?.isNotEmpty == true
-                  ? resolvedHtmlText
-                  : quotedFallbackText;
+                  fallbackBodyText ?? fallbackQuotedText;
               final bool shouldShowImageGallery = hasRemoteHtmlImages;
               final xmppCapabilities = state.xmppCapabilities;
               final supportsMarkers =
@@ -269,8 +271,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                     spacing: spacing.l,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      if (resolvedHtmlBody != null &&
-                          resolvedHtmlBody.isNotEmpty)
+                      if (hasHtmlBody)
                         DecoratedBox(
                           decoration: ShapeDecoration(
                             color: context.colorScheme.card,
@@ -282,7 +283,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                             ),
                           ),
                           child: EmailHtmlWebView(
-                            html: resolvedHtmlBody,
+                            html: normalizedHtmlBody,
                             allowRemoteImages: shouldLoadImages,
                             backgroundColor: context.colorScheme.card,
                             textColor: context.colorScheme.foreground,
@@ -293,7 +294,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                                 context.sizing.dialogMaxHeightFraction,
                             minHeight: context.sizing.attachmentPreviewExtent,
                             clampHeightToMax: false,
-                            disableInternalScroll: true,
                             onLinkTap: (url) => _handleLinkTap(context, url),
                           ),
                         )
@@ -585,7 +585,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
         var creating = false;
         return StatefulBuilder(
           builder: (context, setState) {
-            return ShadDialog(
+            return AxiDialog(
               constraints: BoxConstraints(
                 maxWidth: context.sizing.dialogMaxWidth,
               ),
@@ -826,7 +826,7 @@ class _TextDumpDialog extends StatelessWidget {
     final maxHeight =
         MediaQuery.sizeOf(context).height *
         context.sizing.dialogMaxHeightFraction;
-    return ShadDialog(
+    return AxiDialog(
       constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
       title: Text(title, style: context.modalHeaderTextStyle),
       actions: [

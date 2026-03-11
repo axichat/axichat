@@ -530,6 +530,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) {
       return;
     }
+    FocusManager.instance.primaryFocus?.unfocus();
     final notifier = _bottomNavIndexNotifier;
     if (notifier == null) {
       return;

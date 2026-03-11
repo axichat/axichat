@@ -977,16 +977,23 @@ class _DragTabLabel extends StatelessWidget {
         child: Align(alignment: Alignment.center, child: label),
       ),
     );
-    if (!shake) {
-      return labelContent;
-    }
-    return _RotatingDragTabLabel(child: labelContent);
+    return _RotatingDragTabLabel(
+      active: shake,
+      scaleDuration: duration,
+      child: labelContent,
+    );
   }
 }
 
 class _RotatingDragTabLabel extends StatefulWidget {
-  const _RotatingDragTabLabel({required this.child});
+  const _RotatingDragTabLabel({
+    required this.active,
+    required this.scaleDuration,
+    required this.child,
+  });
 
+  final bool active;
+  final Duration scaleDuration;
   final Widget child;
 
   @override
@@ -997,8 +1004,22 @@ class _RotatingDragTabLabelState extends State<_RotatingDragTabLabel>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: baseAnimationDuration,
-  )..repeat();
+    duration: calendarSlotHoverAnimationDuration,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _syncAnimation();
+  }
+
+  @override
+  void didUpdateWidget(covariant _RotatingDragTabLabel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active != oldWidget.active) {
+      _syncAnimation();
+    }
+  }
 
   @override
   void dispose() {
@@ -1006,18 +1027,37 @@ class _RotatingDragTabLabelState extends State<_RotatingDragTabLabel>
     super.dispose();
   }
 
+  void _syncAnimation() {
+    if (widget.active) {
+      _controller.repeat();
+      return;
+    }
+    _controller
+      ..stop()
+      ..value = 0;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final maxAngle =
-        (context.spacing.xxs / context.sizing.iconButtonSize) * 2.0;
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final phase = _controller.value * math.pi * 2;
-        final angle = math.sin(phase) * maxAngle;
-        return Transform.rotate(angle: angle, child: child);
-      },
-      child: widget.child,
+    const activeScale = 1.15;
+    const maxAngle = math.pi / 6;
+    return AnimatedScale(
+      alignment: Alignment.center,
+      curve: Curves.easeOutBack,
+      duration: widget.scaleDuration,
+      scale: widget.active ? activeScale : 1,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) {
+          if (!widget.active) {
+            return child!;
+          }
+          final phase = _controller.value * math.pi * 2;
+          final angle = math.sin(phase) * maxAngle;
+          return Transform.rotate(angle: angle, child: child);
+        },
+        child: widget.child,
+      ),
     );
   }
 }

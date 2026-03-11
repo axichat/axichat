@@ -1396,6 +1396,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         LocationAutocompleteHelper.fromState(locate<T>().state);
     final CalendarMethod? collectionMethod =
         locate<T>().state.model.collection?.method;
+    final calendarBloc = locate<T>();
 
     try {
       final BuildContext modalContext = context.calendarModalContext;
@@ -1409,7 +1410,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           final double maxHeight =
               mediaQuery.size.height - mediaQuery.viewPadding.vertical;
           return BlocProvider.value(
-            value: locate<T>(),
+            value: calendarBloc,
             child: Builder(
               builder: (context) => EditTaskDropdown<T>(
                 task: displayTask,
@@ -1421,7 +1422,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                 scaffoldMessenger: scaffoldMessenger,
                 locationHelper: locationHelper,
                 onTaskUpdated: (updatedTask) {
-                  locate<T>().add(CalendarEvent.taskUpdated(task: updatedTask));
+                  context.read<T>().add(
+                    CalendarEvent.taskUpdated(task: updatedTask),
+                  );
                 },
                 onOccurrenceUpdated: shouldUpdateOccurrence
                     ? (
@@ -1431,7 +1434,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                         required bool checklistTouched,
                       }) {
                         if (scheduleTouched || checklistTouched) {
-                          locate<T>().add(
+                          context.read<T>().add(
                             CalendarEvent.taskOccurrenceUpdated(
                               taskId: baseId,
                               occurrenceId: task.id,
@@ -1454,7 +1457,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
                       }
                     : null,
                 onTaskDeleted: (taskId) {
-                  locate<T>().add(CalendarEvent.taskDeleted(taskId: taskId));
+                  context.read<T>().add(
+                    CalendarEvent.taskDeleted(taskId: taskId),
+                  );
                   Navigator.of(sheetContext).maybePop();
                 },
               ),

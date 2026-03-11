@@ -243,6 +243,7 @@ class RoomMembersSheet extends StatelessWidget {
     return showAdaptiveBottomSheet<List<String>>(
       context: context,
       isScrollControlled: true,
+      preferDialogOnMobile: true,
       useRootNavigator: false,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) => _InviteChipsSheet(
@@ -267,6 +268,7 @@ class RoomMembersSheet extends StatelessWidget {
     final result = await showAdaptiveBottomSheet<String>(
       context: context,
       isScrollControlled: true,
+      preferDialogOnMobile: true,
       useRootNavigator: false,
       showCloseButton: false,
       dialogMaxWidth: dialogMaxWidth,

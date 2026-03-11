@@ -57,7 +57,6 @@ class QuickAddModal extends StatefulWidget {
   final QuickAddModalSurface surface;
   final LocationAutocompleteHelper locationHelper;
   final String? initialValidationMessage;
-  final bool hasCalendarBloc;
   final BaseCalendarBloc? Function()? locateCalendarBloc;
 
   const QuickAddModal({
@@ -69,7 +68,6 @@ class QuickAddModal extends StatefulWidget {
     this.surface = QuickAddModalSurface.dialog,
     required this.locationHelper,
     this.initialValidationMessage,
-    this.hasCalendarBloc = false,
     this.locateCalendarBloc,
   });
 
@@ -213,7 +211,7 @@ class _QuickAddModalState extends State<QuickAddModal>
             onAddToCriticalPath: _queueCriticalPathForDraft,
             queuedPaths: _queuedPaths(),
             onRemoveQueuedPath: _removeQueuedCriticalPath,
-            hasCalendarBloc: widget.hasCalendarBloc,
+            hasCalendarBloc: widget.locateCalendarBloc != null,
             formError: _formError,
             titleValidator: _validateTaskTitle,
             titleAutovalidateMode: _titleAutovalidateMode,
@@ -268,7 +266,7 @@ class _QuickAddModalState extends State<QuickAddModal>
               onAddToCriticalPath: _queueCriticalPathForDraft,
               queuedPaths: _queuedPaths(),
               onRemoveQueuedPath: _removeQueuedCriticalPath,
-              hasCalendarBloc: widget.hasCalendarBloc,
+              hasCalendarBloc: widget.locateCalendarBloc != null,
               formError: _formError,
               titleValidator: _validateTaskTitle,
               titleAutovalidateMode: _titleAutovalidateMode,
@@ -572,14 +570,7 @@ class _QuickAddModalState extends State<QuickAddModal>
 
   BaseCalendarBloc? _locateCalendarBloc() {
     final resolveBloc = widget.locateCalendarBloc;
-    if (resolveBloc == null) {
-      return null;
-    }
-    try {
-      return resolveBloc();
-    } on FlutterError {
-      return null;
-    }
+    return resolveBloc?.call();
   }
 
   Future<void> _handleCancelPressed() async {
@@ -1595,18 +1586,6 @@ Future<void> showQuickAddModal({
   String? initialValidationMessage,
   BaseCalendarBloc? Function()? locateCalendarBloc,
 }) {
-  BaseCalendarBloc? resolveBloc() {
-    final resolveBloc = locateCalendarBloc;
-    if (resolveBloc == null) {
-      return null;
-    }
-    try {
-      return resolveBloc();
-    } on FlutterError {
-      return null;
-    }
-  }
-
   final commandSurface = resolveCommandSurface(context);
   final bool isDesktop =
       !kIsWeb &&
@@ -1623,7 +1602,6 @@ Future<void> showQuickAddModal({
       context: context,
       useRootNavigator: _calendarUseRootNavigator,
       builder: (dialogContext) {
-        final bool hasBloc = resolveBloc() != null;
         Widget child = QuickAddModal(
           surface: surface,
           prefilledDateTime: prefilledDateTime,
@@ -1631,7 +1609,6 @@ Future<void> showQuickAddModal({
           onTaskAdded: onTaskAdded,
           locationHelper: locationHelper,
           initialValidationMessage: initialValidationMessage,
-          hasCalendarBloc: hasBloc,
           locateCalendarBloc: locateCalendarBloc,
           onDismiss: () {
             if (Navigator.of(dialogContext).canPop()) {
@@ -1655,7 +1632,6 @@ Future<void> showQuickAddModal({
     dialogMaxWidth: 760,
     showCloseButton: false,
     builder: (sheetContext) {
-      final bool hasBloc = resolveBloc() != null;
       Widget child = QuickAddModal(
         surface: surface,
         prefilledDateTime: prefilledDateTime,
@@ -1663,7 +1639,6 @@ Future<void> showQuickAddModal({
         onTaskAdded: onTaskAdded,
         locationHelper: locationHelper,
         initialValidationMessage: initialValidationMessage,
-        hasCalendarBloc: hasBloc,
         locateCalendarBloc: locateCalendarBloc,
         onDismiss: useSheet
             ? null

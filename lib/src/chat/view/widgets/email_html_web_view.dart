@@ -7,8 +7,23 @@ import 'dart:math' as math;
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
+String _prepareEmailHtmlData(Map<String, Object> arguments) {
+  final html = arguments['html']! as String;
+  final allowRemoteImages = arguments['allowRemoteImages']! as bool;
+  final themeStyle = arguments['themeStyle']! as String;
+  final preparedHtml = HtmlContentCodec.prepareEmailHtmlForWebView(
+    html,
+    allowRemoteImages: allowRemoteImages,
+  );
+  if (preparedHtml.contains('</head>')) {
+    return preparedHtml.replaceFirst('</head>', '$themeStyle</head>');
+  }
+  return '$themeStyle$preparedHtml';
+}
 
 class EmailHtmlWebView extends StatefulWidget {
   const EmailHtmlWebView({
@@ -103,6 +118,8 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   InAppWebViewController? _controller;
   bool _isLoading = true;
   double? _contentHeight;
+  String? _preparedHtmlData;
+  String? _preparedHtmlInputKey;
 
   double get _resolvedHeight {
     final measuredHeight = _contentHeight ?? widget.minHeight;
@@ -113,59 +130,108 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _refreshPreparedHtml(reload: _controller != null);
+  }
+
+  @override
   void didUpdateWidget(covariant EmailHtmlWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.html != widget.html ||
         oldWidget.allowRemoteImages != widget.allowRemoteImages ||
-        oldWidget.maxHeight != widget.maxHeight ||
-        oldWidget.minHeight != widget.minHeight) {
+        oldWidget.backgroundColor != widget.backgroundColor ||
+        oldWidget.textColor != widget.textColor ||
+        oldWidget.linkColor != widget.linkColor) {
       _contentHeight = null;
-      _loadHtml();
+      _preparedHtmlInputKey = null;
+      _refreshPreparedHtml(reload: _controller != null);
     }
+  }
+
+  void _refreshPreparedHtml({required bool reload}) {
+    final brightness = context.brightness;
+    final inputKey = [
+      widget.html.hashCode,
+      widget.allowRemoteImages,
+      brightness.name,
+      widget.backgroundColor.toARGB32(),
+    ].join(':');
+    if (_preparedHtmlInputKey == inputKey) {
+      return;
+    }
+    _preparedHtmlInputKey = inputKey;
+    unawaited(
+      _prepareHtmlData(
+        inputKey: inputKey,
+        reload: reload,
+        brightness: brightness,
+      ),
+    );
+  }
+
+  Future<void> _prepareHtmlData({
+    required String inputKey,
+    required bool reload,
+    required Brightness brightness,
+  }) async {
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        if (!reload) {
+          _preparedHtmlData = null;
+        }
+      });
+    }
+    final themeStyle = _buildThemeStyle(brightness: brightness);
+    String preparedHtmlData;
+    try {
+      preparedHtmlData = await compute(_prepareEmailHtmlData, {
+        'html': widget.html,
+        'allowRemoteImages': widget.allowRemoteImages,
+        'themeStyle': themeStyle,
+      });
+    } on Exception {
+      preparedHtmlData = '$themeStyle${widget.html}';
+    }
+    if (!mounted || _preparedHtmlInputKey != inputKey) {
+      return;
+    }
+    _preparedHtmlData = preparedHtmlData;
+    if (reload) {
+      await _loadHtml();
+      return;
+    }
+    setState(() {});
   }
 
   Future<void> _loadHtml() async {
     final controller = _controller;
-    if (controller == null) return;
+    final preparedHtmlData = _preparedHtmlData;
+    if (controller == null || preparedHtmlData == null) return;
     if (mounted) {
       setState(() {
         _isLoading = true;
       });
     }
     await controller.loadData(
-      data: _sourceHtml,
+      data: preparedHtmlData,
       baseUrl: _emailWebViewUri,
       historyUrl: _emailWebViewUri,
     );
   }
 
-  String get _sourceHtml {
-    final preparedHtml = HtmlContentCodec.prepareEmailHtmlForWebView(
-      widget.html,
-      allowRemoteImages: widget.allowRemoteImages,
-    );
-    final brightness = context.brightness;
-    final colorSchemeValue = brightness == Brightness.dark ? 'dark' : 'light';
-    final themeStyle =
-        '''
+  String _buildThemeStyle({required Brightness brightness}) {
+    final fallbackBackgroundColor = brightness == Brightness.dark
+        ? const Color(0xFFFFFFFF)
+        : widget.backgroundColor;
+    return '''
 <style id="axichat-email-webview-theme">
-:root { color-scheme: $colorSchemeValue !important; }
 html, body {
-  background-color: ${_cssColor(widget.backgroundColor)} !important;
-  color: ${_cssColor(widget.textColor)} !important;
-}
-body, p, div, span, li, td, th, blockquote, pre, code, h1, h2, h3, h4, h5, h6 {
-  color: ${_cssColor(widget.textColor)} !important;
-}
-a, a:visited {
-  color: ${_cssColor(widget.linkColor)} !important;
+  background-color: ${_cssColor(fallbackBackgroundColor)} !important;
 }
 </style>
 ''';
-    if (preparedHtml.contains('</head>')) {
-      return preparedHtml.replaceFirst('</head>', '$themeStyle</head>');
-    }
-    return '$themeStyle$preparedHtml';
   }
 
   String _cssColor(Color color) {
@@ -230,87 +296,90 @@ a, a:visited {
       height: _resolvedHeight,
       child: Stack(
         children: [
-          InAppWebView(
-            initialData: InAppWebViewInitialData(
-              data: _sourceHtml,
-              baseUrl: _emailWebViewUri,
-              historyUrl: _emailWebViewUri,
-            ),
-            initialSettings: InAppWebViewSettings(
-              javaScriptEnabled: true,
-              transparentBackground: true,
-              useShouldOverrideUrlLoading: true,
-              useHybridComposition: widget.useHybridComposition,
-              supportZoom: widget.simplifyLayout,
-              useWideViewPort: widget.simplifyLayout,
-              loadWithOverviewMode: widget.simplifyLayout,
-              layoutAlgorithm: widget.simplifyLayout
-                  ? LayoutAlgorithm.TEXT_AUTOSIZING
-                  : null,
-              initialScale: widget.simplifyLayout ? 0 : 100,
-              textZoom: widget.simplifyLayout ? 110 : 100,
-              minimumFontSize: widget.simplifyLayout ? 14 : 14,
-              minimumLogicalFontSize: widget.simplifyLayout ? 14 : 14,
-              preferredContentMode: UserPreferredContentMode.MOBILE,
-              disableVerticalScroll: widget.disableInternalScroll,
-              disableHorizontalScroll: widget.disableInternalScroll,
-              verticalScrollBarEnabled: !widget.disableInternalScroll,
-              horizontalScrollBarEnabled: !widget.disableInternalScroll,
-            ),
-            onWebViewCreated: (controller) {
-              _controller = controller;
-              if (widget.onBackgroundTap != null) {
-                controller.addJavaScriptHandler(
-                  handlerName: _backgroundTapHandlerName,
-                  callback: (_) {
-                    widget.onBackgroundTap?.call();
-                    return null;
+          if (_preparedHtmlData != null)
+            InAppWebView(
+              initialData: InAppWebViewInitialData(
+                data: _preparedHtmlData!,
+                baseUrl: _emailWebViewUri,
+                historyUrl: _emailWebViewUri,
+              ),
+              initialSettings: InAppWebViewSettings(
+                javaScriptEnabled: true,
+                transparentBackground: true,
+                useShouldOverrideUrlLoading: true,
+                useHybridComposition: widget.useHybridComposition,
+                supportZoom: widget.simplifyLayout,
+                useWideViewPort: widget.simplifyLayout,
+                loadWithOverviewMode: widget.simplifyLayout,
+                layoutAlgorithm: widget.simplifyLayout
+                    ? LayoutAlgorithm.TEXT_AUTOSIZING
+                    : null,
+                initialScale: widget.simplifyLayout ? 0 : 100,
+                textZoom: widget.simplifyLayout ? 110 : 100,
+                minimumFontSize: widget.simplifyLayout ? 14 : 14,
+                minimumLogicalFontSize: widget.simplifyLayout ? 14 : 14,
+                preferredContentMode: UserPreferredContentMode.MOBILE,
+                disableVerticalScroll: widget.disableInternalScroll,
+                disableHorizontalScroll: widget.disableInternalScroll,
+                verticalScrollBarEnabled: !widget.disableInternalScroll,
+                horizontalScrollBarEnabled: !widget.disableInternalScroll,
+              ),
+              onWebViewCreated: (controller) {
+                _controller = controller;
+                if (widget.onBackgroundTap != null) {
+                  controller.addJavaScriptHandler(
+                    handlerName: _backgroundTapHandlerName,
+                    callback: (_) {
+                      widget.onBackgroundTap?.call();
+                      return null;
+                    },
+                  );
+                }
+              },
+              shouldOverrideUrlLoading: (controller, navigationAction) async {
+                final url =
+                    navigationAction.request.url?.toString().trim() ?? '';
+                if (url.isEmpty ||
+                    url == 'about:blank' ||
+                    url.startsWith(_emailWebViewBaseUrl)) {
+                  return NavigationActionPolicy.ALLOW;
+                }
+                widget.onLinkTap(url);
+                return NavigationActionPolicy.CANCEL;
+              },
+              onLoadStop: (controller, url) async {
+                await _measureContentHeight();
+                await _installBackgroundTapBridge();
+                unawaited(_scheduleRemeasurements());
+                if (!mounted) return;
+                setState(() {
+                  _isLoading = false;
+                });
+              },
+              onContentSizeChanged:
+                  (controller, oldContentSize, newContentSize) {
+                    final nextHeight = newContentSize.height;
+                    if (!mounted || nextHeight <= 0) {
+                      return;
+                    }
+                    setState(() {
+                      _contentHeight = math.max(widget.minHeight, nextHeight);
+                    });
                   },
-                );
-              }
-            },
-            shouldOverrideUrlLoading: (controller, navigationAction) async {
-              final url = navigationAction.request.url?.toString().trim() ?? '';
-              if (url.isEmpty ||
-                  url == 'about:blank' ||
-                  url.startsWith(_emailWebViewBaseUrl)) {
-                return NavigationActionPolicy.ALLOW;
-              }
-              widget.onLinkTap(url);
-              return NavigationActionPolicy.CANCEL;
-            },
-            onLoadStop: (controller, url) async {
-              await _measureContentHeight();
-              await _installBackgroundTapBridge();
-              unawaited(_scheduleRemeasurements());
-              if (!mounted) return;
-              setState(() {
-                _isLoading = false;
-              });
-            },
-            onContentSizeChanged: (controller, oldContentSize, newContentSize) {
-              final nextHeight = newContentSize.height;
-              if (!mounted || nextHeight <= 0) {
-                return;
-              }
-              setState(() {
-                _contentHeight = math.max(widget.minHeight, nextHeight);
-              });
-            },
-            onReceivedError: (controller, request, error) {
-              if (!mounted) return;
-              setState(() {
-                _isLoading = false;
-              });
-            },
-            onReceivedHttpError: (controller, request, errorResponse) {
-              if (!mounted) return;
-              setState(() {
-                _isLoading = false;
-              });
-            },
-          ),
-          if (_isLoading)
+              onReceivedError: (controller, request, error) {
+                if (!mounted) return;
+                setState(() {
+                  _isLoading = false;
+                });
+              },
+              onReceivedHttpError: (controller, request, errorResponse) {
+                if (!mounted) return;
+                setState(() {
+                  _isLoading = false;
+                });
+              },
+            ),
+          if (_isLoading || _preparedHtmlData == null)
             Positioned.fill(
               child: ColoredBox(
                 color: context.colorScheme.card,

@@ -20,6 +20,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
   required WidgetBuilder builder,
   bool isScrollControlled = false,
   bool useSafeArea = true,
+  bool preferDialogOnMobile = false,
   bool showDragHandle = false,
   bool enableDrag = true,
   bool useRootNavigator = false,
@@ -32,7 +33,9 @@ Future<T?> showAdaptiveBottomSheet<T>({
   double? dialogMaxHeightFraction,
   EdgeInsetsGeometry? surfacePadding,
 }) {
-  final commandSurface = resolveCommandSurface(context);
+  final commandSurface = preferDialogOnMobile
+      ? CommandSurface.menu
+      : resolveCommandSurface(context);
   final colorScheme = ShadTheme.of(context).colorScheme;
   final spacing = context.spacing;
   final sizing = context.sizing;

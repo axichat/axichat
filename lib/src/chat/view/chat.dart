@@ -15,6 +15,7 @@ import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
+import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
@@ -24,6 +25,7 @@ import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/sync/calendar_availability_share_coordinator.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_coordinator.dart';
 import 'package:axichat/src/calendar/utils/calendar_fragment_policy.dart';
+import 'package:axichat/src/calendar/utils/calendar_state_waiter.dart';
 import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
@@ -1695,6 +1697,60 @@ class _ChatState extends State<Chat> {
     }
   }
 
+  Future<String?> _copyTaskToPersonalCalendar(CalendarTask task) async {
+    if (!mounted) {
+      return null;
+    }
+    if (!context.read<CalendarStorageManager>().isAuthStorageReady) {
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.chatCalendarTaskCopyUnavailableMessage,
+      );
+      return null;
+    }
+    if (context.read<CalendarBloc>().state.model.tasks.containsKey(task.id)) {
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.chatCalendarTaskCopyAlreadyAddedMessage,
+      );
+      return null;
+    }
+    context.read<CalendarBloc>().add(
+      CalendarEvent.tasksImported(tasks: <CalendarTask>[task]),
+    );
+    final bool copied = await waitForTasksInCalendar(
+      bloc: context.read<CalendarBloc>(),
+      taskIds: <String>{task.id},
+    );
+    if (!mounted || !copied) {
+      return null;
+    }
+    return context.read<CalendarBloc>().id;
+  }
+
+  Future<bool> _copyCriticalPathToPersonalCalendar(
+    CalendarModel model,
+    String pathId,
+    Set<String> taskIds,
+  ) async {
+    if (!mounted) {
+      return false;
+    }
+    if (!context.read<CalendarStorageManager>().isAuthStorageReady) {
+      FeedbackSystem.showInfo(
+        context,
+        context.l10n.chatCriticalPathCopyUnavailableMessage,
+      );
+      return false;
+    }
+    context.read<CalendarBloc>().add(CalendarEvent.modelImported(model: model));
+    return waitForCriticalPathTasks(
+      bloc: context.read<CalendarBloc>(),
+      pathId: pathId,
+      taskIds: taskIds,
+    );
+  }
+
   _AvailabilityTaskDraft? _availabilityTaskDraft(
     CalendarAvailabilityRequest request,
   ) {
@@ -2195,6 +2251,7 @@ class _ChatState extends State<Chat> {
         locate<SettingsCubit>().animationDuration;
     final colors = context.colorScheme;
     final motion = context.motion;
+    final chatBloc = locate<ChatBloc>();
     final scrimBase = context.brightness == Brightness.dark
         ? colors.background
         : colors.foreground;
@@ -2221,16 +2278,16 @@ class _ChatState extends State<Chat> {
                 return SizedBox(
                   width: drawerWidth,
                   child: BlocProvider.value(
-                    value: locate<ChatBloc>(),
+                    value: chatBloc,
                     child: Builder(
-                      builder: (dialogContext) => _RoomMembersDrawerContent(
+                      builder: (context) => _RoomMembersDrawerContent(
                         onInvite: (jid) {
-                          final chatState = locate<ChatBloc>().state;
+                          final chatState = context.read<ChatBloc>().state;
                           final chat = chatState.chat;
                           if (chat == null) {
                             return;
                           }
-                          locate<ChatBloc>().add(
+                          context.read<ChatBloc>().add(
                             ChatInviteRequested(
                               jid,
                               chat: chat,
@@ -2239,12 +2296,12 @@ class _ChatState extends State<Chat> {
                           );
                         },
                         onAction: (occupantId, action, actionLabel) {
-                          final chatState = locate<ChatBloc>().state;
+                          final chatState = context.read<ChatBloc>().state;
                           final chat = chatState.chat;
                           if (chat == null) {
                             return;
                           }
-                          locate<ChatBloc>().add(
+                          context.read<ChatBloc>().add(
                             ChatModerationActionRequested(
                               occupantId: occupantId,
                               action: action,
@@ -2255,12 +2312,12 @@ class _ChatState extends State<Chat> {
                           );
                         },
                         onChangeNickname: (nick) {
-                          final chatState = locate<ChatBloc>().state;
+                          final chatState = context.read<ChatBloc>().state;
                           final chat = chatState.chat;
                           if (chat == null) {
                             return;
                           }
-                          locate<ChatBloc>().add(
+                          context.read<ChatBloc>().add(
                             ChatNicknameChangeRequested(
                               nickname: nick,
                               chatJid: chat.jid,
@@ -2269,12 +2326,12 @@ class _ChatState extends State<Chat> {
                           );
                         },
                         onLeaveRoom: () {
-                          final chatState = locate<ChatBloc>().state;
+                          final chatState = context.read<ChatBloc>().state;
                           final chat = chatState.chat;
                           if (chat == null) {
                             return;
                           }
-                          locate<ChatBloc>().add(
+                          context.read<ChatBloc>().add(
                             ChatLeaveRoomRequested(
                               chatJid: chat.jid,
                               chatType: chat.type,
@@ -3375,6 +3432,7 @@ class _ChatState extends State<Chat> {
     if (!mounted) return;
     final l10n = context.l10n;
     final locate = context.read;
+    final chatBloc = locate<ChatBloc>();
     await showAdaptiveBottomSheet<void>(
       context: context,
       showDragHandle: true,
@@ -3386,7 +3444,7 @@ class _ChatState extends State<Chat> {
         final colors = sheetContext.colorScheme;
         final spacing = sheetContext.spacing;
         return BlocProvider.value(
-          value: locate<ChatBloc>(),
+          value: chatBloc,
           child: Builder(
             builder: (context) {
               return AxiSheetScaffold.scroll(
@@ -4075,16 +4133,6 @@ class _ChatState extends State<Chat> {
                 await context.read<ChatSearchCubit>().updateEmailService(
                   emailService,
                 );
-                if (!context.mounted) {
-                  return;
-                }
-                try {
-                  context.read<ChatCalendarBloc>().updateEmailService(
-                    emailService,
-                  );
-                } on FlutterError {
-                  // Chat calendar not available in this context.
-                }
               },
             ),
             BlocListener<ChatSearchCubit, ChatSearchState>(
@@ -5064,15 +5112,9 @@ class _ChatState extends State<Chat> {
                                     }
 
                                     bool isPinnedMessage(Message message) {
-                                      final stanzaId = message.stanzaID.trim();
-                                      if (stanzaId.isNotEmpty &&
-                                          pinnedMessageIds.contains(stanzaId)) {
-                                        return true;
-                                      }
-                                      final originId = message.originID?.trim();
-                                      return originId != null &&
-                                          originId.isNotEmpty &&
-                                          pinnedMessageIds.contains(originId);
+                                      return message.referenceIds.any(
+                                        pinnedMessageIds.contains,
+                                      );
                                     }
 
                                     final filteredItems = _cachedFilteredItems;
@@ -6064,6 +6106,14 @@ class _ChatState extends State<Chat> {
                                               personalCalendarAvailable,
                                           canAddToChatCalendar:
                                               chatCalendarAvailable,
+                                          onCopyTaskToPersonalCalendar:
+                                              personalCalendarAvailable
+                                              ? _copyTaskToPersonalCalendar
+                                              : null,
+                                          onCopyCriticalPathToPersonalCalendar:
+                                              personalCalendarAvailable
+                                              ? _copyCriticalPathToPersonalCalendar
+                                              : null,
                                           locate: context.read,
                                           roomState: state.roomState,
                                           metadataFor: (metadataId) =>
@@ -6682,6 +6732,28 @@ class _ChatState extends State<Chat> {
                                                                             mox.messageReactionsXmlns,
                                                                           ) ??
                                                                           false);
+                                                                  final requiresMucReference = messageModel.awaitsMucReference(
+                                                                    isGroupChat:
+                                                                        chatEntity
+                                                                            ?.type ==
+                                                                        ChatType
+                                                                            .groupChat,
+                                                                    isEmailBacked:
+                                                                        isEmailChat,
+                                                                  );
+                                                                  final loadingMucReference = messageModel.waitsForOwnMucReference(
+                                                                    isGroupChat:
+                                                                        chatEntity
+                                                                            ?.type ==
+                                                                        ChatType
+                                                                            .groupChat,
+                                                                    isEmailBacked:
+                                                                        isEmailChat,
+                                                                    selfJid:
+                                                                        selfXmppJid,
+                                                                    myOccupantId:
+                                                                        myOccupantId,
+                                                                  );
                                                                   final isSingleSelection =
                                                                       !_multiSelectActive &&
                                                                       _selectedMessageId ==
@@ -6699,6 +6771,9 @@ class _ChatState extends State<Chat> {
                                                                   final showReactionManager =
                                                                       canReact &&
                                                                       isSingleSelection;
+                                                                  final reactionManagerDisabled =
+                                                                      showReactionManager &&
+                                                                      requiresMucReference;
                                                                   final showCompactReactions =
                                                                       !showReplyStrip &&
                                                                       reactions
@@ -7542,6 +7617,10 @@ class _ChatState extends State<Chat> {
                                                                                     demoEmailCalendarEnabled,
                                                                                 requireImportConfirmation: !self,
                                                                                 allowChatCopy: !demoEmailCalendarEnabled,
+                                                                                canAddToPersonalCalendar: personalCalendarAvailable,
+                                                                                onCopyToPersonalCalendar: personalCalendarAvailable
+                                                                                    ? _copyTaskToPersonalCalendar
+                                                                                    : null,
                                                                                 demoQuickAdd:
                                                                                     demoEmailCalendarEnabled &&
                                                                                     !self,
@@ -7566,8 +7645,10 @@ class _ChatState extends State<Chat> {
                                                                               personalCalendarAvailable,
                                                                           canAddToChat:
                                                                               chatCalendarAvailable,
-                                                                          locate:
-                                                                              context.read,
+                                                                          onCopyToPersonalCalendar:
+                                                                              personalCalendarAvailable
+                                                                              ? _copyCriticalPathToPersonalCalendar
+                                                                              : null,
                                                                         ),
                                                                         orElse: () => CalendarFragmentCard(
                                                                           fragment:
@@ -8686,6 +8767,12 @@ class _ChatState extends State<Chat> {
                                                                         .requestFocus();
                                                                   }
 
+                                                                  final VoidCallback?
+                                                                  replyAction =
+                                                                      requiresMucReference
+                                                                      ? null
+                                                                      : onReply;
+
                                                                   VoidCallback?
                                                                   onForward;
                                                                   if (!(isInviteMessage ||
@@ -8764,7 +8851,8 @@ class _ChatState extends State<Chat> {
                                                                   }
                                                                   VoidCallback?
                                                                   onPinToggle;
-                                                                  if (canTogglePins) {
+                                                                  if (canTogglePins &&
+                                                                      !requiresMucReference) {
                                                                     onPinToggle = () {
                                                                       final chat =
                                                                           chatEntity;
@@ -8806,7 +8894,7 @@ class _ChatState extends State<Chat> {
                                                                   final Widget
                                                                   actionBar = _MessageActionBar(
                                                                     onReply:
-                                                                        onReply,
+                                                                        replyAction,
                                                                     onForward:
                                                                         onForward,
                                                                     onCopy:
@@ -8819,12 +8907,20 @@ class _ChatState extends State<Chat> {
                                                                         onAddToCalendar,
                                                                     onDetails:
                                                                         onDetails,
+                                                                    replyLoading:
+                                                                        loadingMucReference,
                                                                     onSelect:
                                                                         onSelect,
                                                                     onResend:
                                                                         onResend,
                                                                     onEdit:
                                                                         onEdit,
+                                                                    pinDisabled:
+                                                                        requiresMucReference &&
+                                                                        canTogglePins,
+                                                                    pinLoading:
+                                                                        loadingMucReference &&
+                                                                        canTogglePins,
                                                                     onPinToggle:
                                                                         onPinToggle,
                                                                     isPinned:
@@ -8877,6 +8973,10 @@ class _ChatState extends State<Chat> {
                                                                       ? _ReactionManager(
                                                                           reactions:
                                                                               reactions,
+                                                                          disabled:
+                                                                              reactionManagerDisabled,
+                                                                          disabledLoading:
+                                                                              loadingMucReference,
                                                                           onToggle:
                                                                               (
                                                                                 emoji,
@@ -8887,6 +8987,10 @@ class _ChatState extends State<Chat> {
                                                                           onAddCustom: () => _handleReactionSelection(
                                                                             messageModel,
                                                                           ),
+                                                                          disabledMessage:
+                                                                              loadingMucReference
+                                                                              ? context.l10n.chatMucReferencePending
+                                                                              : context.l10n.chatMucReferenceUnavailable,
                                                                         )
                                                                       : null;
                                                                   final measuredBubbleWidth =
@@ -9551,14 +9655,11 @@ class _ChatState extends State<Chat> {
                                           opacity: exitAnimation,
                                           child: child,
                                         );
-                                  return TickerMode(
-                                    enabled: false,
-                                    child: IgnorePointer(
-                                      ignoring: true,
-                                      child: ExcludeSemantics(
-                                        excluding: true,
-                                        child: exiting,
-                                      ),
+                                  return IgnorePointer(
+                                    ignoring: true,
+                                    child: ExcludeSemantics(
+                                      excluding: true,
+                                      child: exiting,
                                     ),
                                   );
                                 }
@@ -9582,14 +9683,11 @@ class _ChatState extends State<Chat> {
                                         opacity: enterAnimation,
                                         child: child,
                                       );
-                                return TickerMode(
-                                  enabled: !isExiting,
-                                  child: IgnorePointer(
-                                    ignoring: isExiting,
-                                    child: ExcludeSemantics(
-                                      excluding: isExiting,
-                                      child: entering,
-                                    ),
+                                return IgnorePointer(
+                                  ignoring: isExiting,
+                                  child: ExcludeSemantics(
+                                    excluding: isExiting,
+                                    child: entering,
                                   ),
                                 );
                               },
@@ -10253,6 +10351,7 @@ class _ChatState extends State<Chat> {
     return showAdaptiveBottomSheet<FanOutTarget>(
       context: context,
       isScrollControlled: true,
+      preferDialogOnMobile: true,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) =>
           _ForwardRecipientSheet(availableChats: options),
@@ -10375,6 +10474,8 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
     required this.canShowCalendarTasks,
     required this.canAddToPersonalCalendar,
     required this.canAddToChatCalendar,
+    required this.onCopyTaskToPersonalCalendar,
+    required this.onCopyCriticalPathToPersonalCalendar,
     required this.locate,
     required this.roomState,
     required this.metadataFor,
@@ -10401,6 +10502,14 @@ class _ChatPinnedMessagesPanel extends StatefulWidget {
   final bool canShowCalendarTasks;
   final bool canAddToPersonalCalendar;
   final bool canAddToChatCalendar;
+  final Future<String?> Function(CalendarTask task)?
+  onCopyTaskToPersonalCalendar;
+  final Future<bool> Function(
+    CalendarModel model,
+    String pathId,
+    Set<String> taskIds,
+  )?
+  onCopyCriticalPathToPersonalCalendar;
   final T Function<T>() locate;
   final RoomState? roomState;
   final FileMetadataData? Function(String) metadataFor;
@@ -10519,6 +10628,9 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
               canShowCalendarTasks: widget.canShowCalendarTasks,
               canAddToPersonalCalendar: widget.canAddToPersonalCalendar,
               canAddToChatCalendar: widget.canAddToChatCalendar,
+              onCopyTaskToPersonalCalendar: widget.onCopyTaskToPersonalCalendar,
+              onCopyCriticalPathToPersonalCalendar:
+                  widget.onCopyCriticalPathToPersonalCalendar,
               locate: widget.locate,
               isHydrating: widget.pinnedMessagesHydrating,
               accountJid: widget.accountJid,
@@ -10595,6 +10707,8 @@ class _PinnedMessageTile extends StatelessWidget {
     required this.canShowCalendarTasks,
     required this.canAddToPersonalCalendar,
     required this.canAddToChatCalendar,
+    required this.onCopyTaskToPersonalCalendar,
+    required this.onCopyCriticalPathToPersonalCalendar,
     required this.locate,
     required this.isHydrating,
     required this.accountJid,
@@ -10617,6 +10731,14 @@ class _PinnedMessageTile extends StatelessWidget {
   final bool canShowCalendarTasks;
   final bool canAddToPersonalCalendar;
   final bool canAddToChatCalendar;
+  final Future<String?> Function(CalendarTask task)?
+  onCopyTaskToPersonalCalendar;
+  final Future<bool> Function(
+    CalendarModel model,
+    String pathId,
+    Set<String> taskIds,
+  )?
+  onCopyCriticalPathToPersonalCalendar;
   final T Function<T>() locate;
   final bool isHydrating;
   final String? accountJid;
@@ -11269,6 +11391,8 @@ class _PinnedMessageTile extends StatelessWidget {
                 task: calendarTask,
                 readOnly: calendarTaskReadOnly,
                 requireImportConfirmation: !isSelf,
+                canAddToPersonalCalendar: canAddToPersonalCalendar,
+                onCopyToPersonalCalendar: onCopyTaskToPersonalCalendar,
                 demoQuickAdd:
                     kEnableDemoChats &&
                     chat.defaultTransport.isEmail &&
@@ -11290,7 +11414,7 @@ class _PinnedMessageTile extends StatelessWidget {
           footerDetails: fragmentFooterDetails,
           canAddToPersonal: canAddToPersonalCalendar,
           canAddToChat: canAddToChatCalendar,
-          locate: locate,
+          onCopyToPersonalCalendar: onCopyCriticalPathToPersonalCalendar,
         ),
       );
     } else if (calendarFragment != null && calendarTask == null) {
@@ -11369,16 +11493,32 @@ class _PinnedMessageTile extends StatelessWidget {
       }
     }
 
+    final pinActionBlocked =
+        messageForPin != null &&
+        messageForPin.awaitsMucReference(
+          isGroupChat: chat.type == ChatType.groupChat,
+          isEmailBacked: chat.isEmailBacked,
+        );
+    final pinActionPending =
+        messageForPin != null &&
+        messageForPin.waitsForOwnMucReference(
+          isGroupChat: chat.type == ChatType.groupChat,
+          isEmailBacked: chat.isEmailBacked,
+          selfJid: accountJid,
+          myOccupantId: roomState?.myOccupantId,
+        );
     final Widget? unpinAction = canTogglePins && messageForPin != null
         ? AxiIconButton.destructive(
-            onPressed: () => locate<ChatBloc>().add(
-              ChatMessagePinRequested(
-                message: messageForPin,
-                pin: false,
-                chat: chat,
-                roomState: roomState,
-              ),
-            ),
+            onPressed: pinActionBlocked
+                ? null
+                : () => locate<ChatBloc>().add(
+                    ChatMessagePinRequested(
+                      message: messageForPin,
+                      pin: false,
+                      chat: chat,
+                      roomState: roomState,
+                    ),
+                  ),
             iconData: LucideIcons.pinOff,
             tooltip: l10n.chatUnpinMessage,
             backgroundColor: colors.secondary,
@@ -11386,6 +11526,7 @@ class _PinnedMessageTile extends StatelessWidget {
             iconSize: context.sizing.menuItemIconSize,
             buttonSize: context.sizing.menuItemHeight,
             tapTargetSize: context.sizing.menuItemHeight,
+            loading: pinActionPending,
           )
         : null;
     final showReplyStrip = isEmailMessage && replyParticipants.isNotEmpty;
@@ -11621,7 +11762,17 @@ class _ChatCalendarScope extends StatelessWidget {
         reminderController: reminderController,
         availabilityCoordinator: availabilityCoordinator,
       )..add(const CalendarEvent.started()),
-      child: child,
+      child: BlocListener<SettingsCubit, SettingsState>(
+        listenWhen: (previous, current) =>
+            previous.endpointConfig != current.endpointConfig,
+        listener: (context, settings) {
+          final locate = context.read;
+          locate<ChatCalendarBloc>().updateEmailService(
+            settings.endpointConfig.smtpEnabled ? locate<EmailService>() : null,
+          );
+        },
+        child: child,
+      ),
     );
   }
 }
@@ -11942,12 +12093,9 @@ class _ChatCalendarOverlayVisibilityState
             position: slide,
             child: FadeScaleTransition(animation: opacity, child: widget.child),
           );
-    return TickerMode(
-      enabled: visible,
-      child: IgnorePointer(
-        ignoring: !visible,
-        child: ExcludeSemantics(excluding: !visible, child: transitionChild),
-      ),
+    return IgnorePointer(
+      ignoring: !visible,
+      child: ExcludeSemantics(excluding: !visible, child: transitionChild),
     );
   }
 }
@@ -14286,24 +14434,30 @@ class _MessageActionBar extends StatelessWidget {
     required this.shareStatus,
     required this.onAddToCalendar,
     required this.onDetails,
+    this.replyLoading = false,
     this.onSelect,
     this.onResend,
     this.onEdit,
+    this.pinDisabled = false,
+    this.pinLoading = false,
     this.onPinToggle,
     required this.isPinned,
     this.onRevokeInvite,
   });
 
-  final VoidCallback onReply;
+  final VoidCallback? onReply;
   final VoidCallback? onForward;
   final VoidCallback onCopy;
   final VoidCallback onShare;
   final RequestStatus shareStatus;
   final VoidCallback onAddToCalendar;
   final VoidCallback onDetails;
+  final bool replyLoading;
   final VoidCallback? onSelect;
   final VoidCallback? onResend;
   final VoidCallback? onEdit;
+  final bool pinDisabled;
+  final bool pinLoading;
   final VoidCallback? onPinToggle;
   final bool isPinned;
   final VoidCallback? onRevokeInvite;
@@ -14318,7 +14472,9 @@ class _MessageActionBar extends StatelessWidget {
     double scaled(double value) => textScaler.scale(value);
     final actions = <Widget>[
       ContextActionButton(
-        icon: Icon(LucideIcons.reply, size: iconSize),
+        icon: replyLoading
+            ? AxiProgressIndicator(color: context.colorScheme.foreground)
+            : Icon(LucideIcons.reply, size: iconSize),
         label: l10n.chatActionReply,
         onPressed: onReply,
       ),
@@ -14348,12 +14504,14 @@ class _MessageActionBar extends StatelessWidget {
           label: l10n.chatActionRevoke,
           onPressed: onRevokeInvite,
         ),
-      if (onPinToggle != null)
+      if (onPinToggle != null || pinLoading || pinDisabled)
         ContextActionButton(
-          icon: Icon(
-            isPinned ? LucideIcons.pinOff : LucideIcons.pin,
-            size: iconSize,
-          ),
+          icon: pinLoading
+              ? AxiProgressIndicator(color: context.colorScheme.foreground)
+              : Icon(
+                  isPinned ? LucideIcons.pinOff : LucideIcons.pin,
+                  size: iconSize,
+                ),
           label: isPinned ? l10n.chatUnpinMessage : l10n.chatPinMessage,
           onPressed: onPinToggle,
         ),
@@ -15319,11 +15477,17 @@ class _ReactionManager extends StatefulWidget {
     required this.reactions,
     required this.onToggle,
     required this.onAddCustom,
+    this.disabled = false,
+    this.disabledLoading = false,
+    this.disabledMessage,
   });
 
   final List<ReactionPreview> reactions;
   final ValueChanged<String> onToggle;
   final VoidCallback onAddCustom;
+  final bool disabled;
+  final bool disabledLoading;
+  final String? disabledMessage;
 
   @override
   State<_ReactionManager> createState() => _ReactionManagerState();
@@ -15381,6 +15545,24 @@ class _ReactionManagerState extends State<_ReactionManager> {
         crossAxisAlignment: CrossAxisAlignment.start,
         spacing: spacing.s,
         children: [
+          if (widget.disabled)
+            Row(
+              children: [
+                if (widget.disabledLoading) ...[
+                  AxiProgressIndicator(color: colors.mutedForeground),
+                  SizedBox(width: spacing.s),
+                ],
+                Expanded(
+                  child: Text(
+                    widget.disabledMessage ??
+                        (widget.disabledLoading
+                            ? context.l10n.chatMucReferencePending
+                            : context.l10n.chatMucReferenceUnavailable),
+                    style: textTheme.muted,
+                  ),
+                ),
+              ],
+            ),
           if (hasReactions)
             Wrap(
               spacing: spacing.s,
@@ -15390,7 +15572,9 @@ class _ReactionManagerState extends State<_ReactionManager> {
                   _ReactionManagerChip(
                     key: ValueKey(reaction.emoji),
                     data: reaction,
-                    onToggle: () => widget.onToggle(reaction.emoji),
+                    onToggle: widget.disabled
+                        ? null
+                        : () => widget.onToggle(reaction.emoji),
                   ),
               ],
             )
@@ -15399,12 +15583,13 @@ class _ReactionManagerState extends State<_ReactionManager> {
               context.l10n.chatReactionsNone,
               style: textTheme.small.copyWith(color: colors.mutedForeground),
             ),
-          Text(
-            hasReactions
-                ? context.l10n.chatReactionsPrompt
-                : context.l10n.chatReactionsPick,
-            style: textTheme.muted,
-          ),
+          if (!widget.disabled)
+            Text(
+              hasReactions
+                  ? context.l10n.chatReactionsPrompt
+                  : context.l10n.chatReactionsPick,
+              style: textTheme.muted,
+            ),
           Wrap(
             spacing: spacing.s,
             runSpacing: spacing.s,
@@ -15412,9 +15597,13 @@ class _ReactionManagerState extends State<_ReactionManager> {
               for (final emoji in _reactionQuickChoices)
                 _ReactionQuickButton(
                   emoji: emoji,
-                  onPressed: () => widget.onToggle(emoji),
+                  onPressed: widget.disabled
+                      ? null
+                      : () => widget.onToggle(emoji),
                 ),
-              _ReactionAddButton(onPressed: widget.onAddCustom),
+              _ReactionAddButton(
+                onPressed: widget.disabled ? null : widget.onAddCustom,
+              ),
             ],
           ),
         ],
@@ -15431,7 +15620,7 @@ class _ReactionManagerChip extends StatelessWidget {
   });
 
   final ReactionPreview data;
-  final VoidCallback onToggle;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -15480,7 +15669,7 @@ class _ReactionQuickButton extends StatelessWidget {
   const _ReactionQuickButton({required this.emoji, required this.onPressed});
 
   final String emoji;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -15491,7 +15680,7 @@ class _ReactionQuickButton extends StatelessWidget {
 class _ReactionAddButton extends StatelessWidget {
   const _ReactionAddButton({required this.onPressed});
 
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {
@@ -16323,49 +16512,46 @@ class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility> {
             key: ValueKey<Object>(switchKey),
             child: displayedChild!,
           );
-    return TickerMode(
-      enabled: displayedChild != null || widget.visible,
-      child: AnimatedSize(
+    return AnimatedSize(
+      duration: widget.animationDuration,
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.bottomCenter,
+      clipBehavior: Clip.hardEdge,
+      child: AnimatedSwitcher(
         duration: widget.animationDuration,
-        curve: Curves.easeOutCubic,
-        alignment: Alignment.bottomCenter,
-        clipBehavior: Clip.hardEdge,
-        child: AnimatedSwitcher(
-          duration: widget.animationDuration,
-          reverseDuration: widget.animationDuration,
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          layoutBuilder: (currentChild, previousChildren) {
-            return Stack(
-              alignment: Alignment.bottomCenter,
-              children: [
-                ...previousChildren,
-                if (currentChild case final Widget current) current,
-              ],
-            );
-          },
-          transitionBuilder: (child, animation) {
-            final curved = CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-              reverseCurve: Curves.easeInCubic,
-            );
-            return ClipRect(
-              child: SlideTransition(
-                position: Tween<Offset>(
-                  begin: widget.slideOffset,
-                  end: Offset.zero,
-                ).animate(curved),
-                child: SizeTransition(
-                  sizeFactor: curved,
-                  axisAlignment: 1.0,
-                  child: child,
-                ),
+        reverseDuration: widget.animationDuration,
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        layoutBuilder: (currentChild, previousChildren) {
+          return Stack(
+            alignment: Alignment.bottomCenter,
+            children: [
+              ...previousChildren,
+              if (currentChild case final Widget current) current,
+            ],
+          );
+        },
+        transitionBuilder: (child, animation) {
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return ClipRect(
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: widget.slideOffset,
+                end: Offset.zero,
+              ).animate(curved),
+              child: SizeTransition(
+                sizeFactor: curved,
+                axisAlignment: 1.0,
+                child: child,
               ),
-            );
-          },
-          child: currentChild,
-        ),
+            ),
+          );
+        },
+        child: currentChild,
       ),
     );
   }

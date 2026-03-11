@@ -2,7 +2,6 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
-import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/chat_calendar_bloc.dart';
 import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
@@ -15,6 +14,7 @@ import 'package:axichat/src/chat/view/widgets/calendar_critical_path_copy_sheet.
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 const List<InlineSpan> _emptyInlineSpans = <InlineSpan>[];
 
@@ -25,16 +25,24 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     required this.tasks,
     required this.canAddToPersonal,
     required this.canAddToChat,
-    required this.locate,
+    this.onCopyToPersonalCalendar,
     this.footerDetails = _emptyInlineSpans,
-  });
+  }) : assert(
+         !canAddToPersonal || onCopyToPersonalCalendar != null,
+         'Personal calendar access must be wired explicitly when enabled.',
+       );
 
   final CalendarCriticalPath path;
   final List<CalendarTask> tasks;
   final List<InlineSpan> footerDetails;
   final bool canAddToPersonal;
   final bool canAddToChat;
-  final T Function<T>() locate;
+  final Future<bool> Function(
+    CalendarModel model,
+    String pathId,
+    Set<String> taskIds,
+  )?
+  onCopyToPersonalCalendar;
 
   @override
   Widget build(BuildContext context) {
@@ -73,32 +81,30 @@ class ChatCalendarCriticalPathCard extends StatelessWidget {
     final CalendarCriticalPath? importPath = importModel.criticalPaths[path.id];
     final Set<String> taskIds = <String>{}
       ..addAll(importPath?.taskIds ?? const <String>[]);
+    final onCopyToPersonalCalendar = this.onCopyToPersonalCalendar;
+    final bool canCopyToPersonal =
+        canAddToPersonal && onCopyToPersonalCalendar != null;
+    final bool canCopyToChat = canAddToChat;
     bool didCopy = false;
-    if (decision.addToPersonal && canAddToPersonal) {
-      try {
-        final bool copied = await _copyCriticalPathToCalendar(
-          bloc: locate<CalendarBloc>(),
-          model: importModel,
-          pathId: path.id,
-          taskIds: taskIds,
-        );
-        didCopy = didCopy || copied;
-      } on FlutterError {
-        // Ignore missing bloc.
-      }
+    if (decision.addToPersonal && canCopyToPersonal) {
+      final bool copied = await onCopyToPersonalCalendar(
+        importModel,
+        path.id,
+        taskIds,
+      );
+      didCopy = didCopy || copied;
     }
-    if (decision.addToChat && canAddToChat) {
-      try {
-        final bool copied = await _copyCriticalPathToCalendar(
-          bloc: locate<ChatCalendarBloc>(),
-          model: importModel,
-          pathId: path.id,
-          taskIds: taskIds,
-        );
-        didCopy = didCopy || copied;
-      } on FlutterError {
-        // Ignore missing bloc.
+    if (decision.addToChat && canCopyToChat) {
+      if (!context.mounted) {
+        return;
       }
+      final bool copied = await _copyCriticalPathToCalendar(
+        bloc: context.read<ChatCalendarBloc>(),
+        model: importModel,
+        pathId: path.id,
+        taskIds: taskIds,
+      );
+      didCopy = didCopy || copied;
     }
 
     if (!context.mounted) {
