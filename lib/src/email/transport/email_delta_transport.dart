@@ -446,7 +446,6 @@ class EmailDeltaTransport implements ChatTransport {
     final sessions = await _resolveSessions();
     for (final session in sessions) {
       await _enforceTransportSecurity(context: session.context);
-      await session.consumer.purgeDeltaStockMessages();
     }
     if (_accounts != null) {
       await _accounts!.startIo();
@@ -598,17 +597,6 @@ class EmailDeltaTransport implements ChatTransport {
     await stop();
     await _teardownContext();
     _eventListeners.clear();
-  }
-
-  Future<void> purgeStockMessages({int? accountId}) async {
-    if (_databasePrefix == null || _databasePassphrase == null) {
-      return;
-    }
-    await _ensureContextReady();
-    final sessions = await _resolveSessions(accountId: accountId);
-    for (final session in sessions) {
-      await session.consumer.purgeDeltaStockMessages();
-    }
   }
 
   Future<bool> bootstrapFromCore({int? accountId}) async {

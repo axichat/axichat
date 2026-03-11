@@ -302,7 +302,6 @@ class EmailService {
   static const int _emailLocalPartMinLength = 1;
   static const String _unknownEmailPassword = '';
   static const String _emailBootstrapKeyPrefix = 'email_bootstrap_v1';
-  static const String _emailStockPurgeKeyPrefix = 'email_stock_purge_v1';
   static const String _connectionOverrideKeyPrefix =
       'email_connection_overrides_v1';
   static const String _credentialTrueValue = 'true';
@@ -523,8 +522,6 @@ class EmailService {
   final Map<String, RegisteredCredentialKey> _passwordKeys = {};
   final Set<String> _ephemeralProvisionedScopes = {};
   final Set<String> _ephemeralConnectionOverrideScopes = {};
-  final Map<String, RegisteredCredentialKey> _stockPurgeKeys = {};
-  final Set<String> _ephemeralStockPurgeScopes = {};
   final _authFailureController = StreamController<DeltaChatException>.broadcast(
     sync: true,
   );
@@ -1053,18 +1050,6 @@ class EmailService {
           accountId: deltaAccountId,
         );
         _resetImapCapabilities();
-        if (await _shouldPurgeStockMessages(
-          scope: scope,
-          databasePrefix: databasePrefix,
-          persistCredentials: shouldPersistCredentials,
-        )) {
-          await _transport.purgeStockMessages(accountId: deltaAccountId);
-          await _markStockPurgeCompleted(
-            scope: scope,
-            databasePrefix: databasePrefix,
-            persistCredentials: shouldPersistCredentials,
-          );
-        }
         await _markConnectionOverridesApplied(
           scope: scope,
           persistCredentials: shouldPersistCredentials,
@@ -4387,52 +4372,6 @@ class EmailService {
     );
   }
 
-  RegisteredCredentialKey _stockPurgeKeyFor({
-    required String scope,
-    required String databasePrefix,
-  }) {
-    final identifier = '${_emailStockPurgeKeyPrefix}_${databasePrefix}_$scope';
-    return _stockPurgeKeys.putIfAbsent(
-      identifier,
-      () => CredentialStore.registerKey(identifier),
-    );
-  }
-
-  Future<bool> _shouldPurgeStockMessages({
-    required String scope,
-    required String databasePrefix,
-    required bool persistCredentials,
-  }) async {
-    if (!persistCredentials) {
-      return !_ephemeralStockPurgeScopes.contains(scope);
-    }
-    final key = _stockPurgeKeyFor(scope: scope, databasePrefix: databasePrefix);
-    return (await _credentialStore.read(key: key)) != _credentialTrueValue;
-  }
-
-  Future<void> _markStockPurgeCompleted({
-    required String scope,
-    required String databasePrefix,
-    required bool persistCredentials,
-  }) async {
-    if (!persistCredentials) {
-      _ephemeralStockPurgeScopes.add(scope);
-      return;
-    }
-    final key = _stockPurgeKeyFor(scope: scope, databasePrefix: databasePrefix);
-    await _credentialStore.write(key: key, value: _credentialTrueValue);
-  }
-
-  Future<void> _clearStockPurgeKey({
-    required String scope,
-    required String databasePrefix,
-  }) async {
-    final identifier = '${_emailStockPurgeKeyPrefix}_${databasePrefix}_$scope';
-    _stockPurgeKeys.remove(identifier);
-    _ephemeralStockPurgeScopes.remove(scope);
-    await _credentialStore.delete(key: CredentialStore.registerKey(identifier));
-  }
-
   String _scopeForJid(String jid) => normalizedAddressKeyOrEmpty(jid);
 
   String? _scopeForOptionalJid(String? jid) =>
@@ -4572,23 +4511,6 @@ class EmailService {
         additional: configureOverrides,
         accountId: account.deltaAccountId,
       );
-      final databasePrefix = _databasePrefix;
-      final shouldPersistCredentials = !_ephemeralProvisionedScopes.contains(
-        scope,
-      );
-      if (databasePrefix != null &&
-          await _shouldPurgeStockMessages(
-            scope: scope,
-            databasePrefix: databasePrefix,
-            persistCredentials: shouldPersistCredentials,
-          )) {
-        await _transport.purgeStockMessages(accountId: account.deltaAccountId);
-        await _markStockPurgeCompleted(
-          scope: scope,
-          databasePrefix: databasePrefix,
-          persistCredentials: shouldPersistCredentials,
-        );
-      }
     } on DeltaSafeException catch (error, stackTrace) {
       final mapped = DeltaChatExceptionMapper.fromDeltaSafe(
         error,
@@ -4736,7 +4658,6 @@ class EmailService {
     }
     _ephemeralProvisionedScopes.remove(scope);
     _ephemeralConnectionOverrideScopes.remove(scope);
-    _ephemeralStockPurgeScopes.remove(scope);
   }
 
   Future<T> _guardDeltaOperation<T>({

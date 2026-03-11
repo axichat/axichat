@@ -962,9 +962,10 @@ class DeltaEventConsumer {
     Chat? chat,
     bool skipSystemChatCheck = false,
   }) async {
-    if (_isDeltaStockMessage(msg) ||
-        (!skipSystemChatCheck && await _isDeltaSystemChat(chatId))) {
-      _log.finer('Dropping Delta stock message msgId=${msg.id} chatId=$chatId');
+    if (!skipSystemChatCheck && await _isDeltaSystemChat(chatId)) {
+      _log.finer(
+        'Dropping Delta system-chat message msgId=${msg.id} chatId=$chatId',
+      );
       return;
     }
     final resolvedChat = chat ?? await _ensureChat(chatId);
@@ -1910,74 +1911,16 @@ class DeltaEventConsumer {
     return sanitized;
   }
 
-  Future<void> purgeDeltaStockMessages() async {
-    try {
-      final db = await _db();
-      final chats = await db.getChats(start: 0, end: 0);
-      for (final chat in chats) {
-        if (chat.deltaChatId == null) continue;
-        final messages = await db.getAllMessagesForChat(chat.jid);
-        if (messages.isEmpty) {
-          continue;
-        }
-        final metadataIds = messages
-            .map((message) => message.fileMetadataID?.trim())
-            .whereType<String>()
-            .where((id) => id.isNotEmpty)
-            .toSet()
-            .toList(growable: false);
-        final metadataList = metadataIds.isEmpty
-            ? const <FileMetadataData>[]
-            : await db.getFileMetadataForIds(metadataIds);
-        final metadataById = {
-          for (final metadata in metadataList) metadata.id: metadata,
-        };
-        final staleStanzaIds = <String>[];
-        for (final message in messages) {
-          final stanzaId = message.stanzaID.trim();
-          if (stanzaId.isEmpty) {
-            continue;
-          }
-          if (_matchesDeltaWelcomeText(message.body) ||
-              _matchesDeltaWelcomeText(message.subject)) {
-            staleStanzaIds.add(stanzaId);
-            continue;
-          }
-          final metadataId = message.fileMetadataID?.trim();
-          if (metadataId != null && metadataId.isNotEmpty) {
-            final metadata = metadataById[metadataId];
-            if (_matchesDeltaWelcomeAttachment(metadata?.filename) ||
-                _matchesDeltaWelcomeAttachment(metadata?.path)) {
-              staleStanzaIds.add(stanzaId);
-            }
-          }
-        }
-        if (staleStanzaIds.isNotEmpty) {
-          await db.deleteMessagesByStanzaIds(staleStanzaIds);
-        }
-      }
-    } on StateError catch (error, stackTrace) {
-      _log.fine(
-        'Skipping Delta stock purge because the database is unavailable.',
-        error,
-        stackTrace,
-      );
-    } catch (error, stackTrace) {
-      _log.warning('Failed to purge Delta stock messages.', error, stackTrace);
-    }
-  }
-
   bool _isDeltaMessageMarkerId(int msgId) =>
       msgId == DeltaMessageId.marker1 || msgId == DeltaMessageId.dayMarker;
 
-  bool _isDeltaStockMessage(DeltaMessage msg) =>
-      _matchesDeltaWelcomeText(msg.text) ||
-      _matchesDeltaWelcomeText(msg.subject) ||
-      _matchesDeltaWelcomeAttachment(msg.fileName) ||
-      _matchesDeltaWelcomeAttachment(msg.filePath);
-
   Future<bool> _isDeltaSystemChat(int chatId) async {
     final remote = await _context.getChat(chatId);
+    final contactId = remote?.contactId;
+    if (contactId == DeltaContactId.device ||
+        contactId == DeltaContactId.info) {
+      return true;
+    }
     final normalized = _normalizedAddress(remote?.contactAddress, chatId);
     return normalized == fallbackEmailAddressForChat(chatId);
   }
@@ -2000,41 +1943,4 @@ String _stripSubjectHeader(String body, String subject) {
   var remainder = trimmedBody.substring(subject.length);
   remainder = remainder.replaceFirst(RegExp(r'^\s+'), '');
   return remainder;
-}
-
-bool _matchesDeltaWelcomeText(String? text) {
-  if (text == null) return false;
-  final normalized = text.toLowerCase();
-  if (normalized.contains('autocrypt setup message')) {
-    return true;
-  }
-  final mentionsDelta =
-      normalized.contains('delta chat') || normalized.contains('deltachat');
-  if (normalized.contains('messages in this chat are generated locally')) {
-    return true;
-  }
-  final generatedLocally =
-      normalized.contains('generated locally') ||
-      normalized.contains('created locally') ||
-      normalized.contains('generated automatically');
-  final mentionsSetup =
-      normalized.contains('setup message') ||
-      normalized.contains('autocrypt setup message');
-  final mentionsDevice = normalized.contains('device message');
-  if (generatedLocally && (mentionsDelta || mentionsDevice || mentionsSetup)) {
-    return true;
-  }
-  return normalized.contains('welcome to delta chat') ||
-      normalized.contains('welcome to deltachat') ||
-      normalized.contains('generated locally by your delta chat app') ||
-      (mentionsDelta && mentionsDevice) ||
-      (mentionsDelta && mentionsSetup);
-}
-
-bool _matchesDeltaWelcomeAttachment(String? value) {
-  if (value == null) return false;
-  final normalized = value.toLowerCase();
-  return normalized.contains('welcome-image') ||
-      normalized.endsWith('welcome.jpg') ||
-      normalized.contains('core-welcome');
 }

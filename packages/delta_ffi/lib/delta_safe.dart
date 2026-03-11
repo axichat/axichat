@@ -87,6 +87,14 @@ typedef _DcGetMsgMimeHeadersDart = ffi.Pointer<ffi.Char> Function(
   int,
 );
 
+typedef _DcChatGetContactIdNative = ffi.Uint32 Function(
+  ffi.Pointer<dc_chat_t>,
+);
+
+typedef _DcChatGetContactIdDart = int Function(
+  ffi.Pointer<dc_chat_t>,
+);
+
 typedef _DcGetOauth2UrlNative = ffi.Pointer<ffi.Char> Function(
   ffi.Pointer<dc_context_t>,
   ffi.Pointer<ffi.Char>,
@@ -163,6 +171,38 @@ final class _DeltaOptionalMimeHeaders {
 
 final _DeltaOptionalMimeHeaders _deltaOptionalMimeHeaders =
     _DeltaOptionalMimeHeaders();
+
+final class _DeltaOptionalChatContactId {
+  _DeltaOptionalChatContactId() : _getContactId = _loadGetContactId();
+
+  final _DcChatGetContactIdDart? _getContactId;
+
+  static _DcChatGetContactIdDart? _loadGetContactId() {
+    try {
+      final library = loadDeltaLibrary();
+      final symbol =
+          library.lookup<ffi.NativeFunction<_DcChatGetContactIdNative>>(
+        'dc_chat_get_contact_id',
+      );
+      return symbol.asFunction<_DcChatGetContactIdDart>();
+    } on Object catch (error) {
+      if (error is! ArgumentError && error is! UnsupportedError) {
+        rethrow;
+      }
+      return null;
+    }
+  }
+
+  int? read(ffi.Pointer<dc_chat_t> chat) {
+    final fn = _getContactId;
+    if (fn == null) return null;
+    final contactId = fn(chat);
+    return contactId == _zeroValue ? null : contactId;
+  }
+}
+
+final _DeltaOptionalChatContactId _deltaOptionalChatContactId =
+    _DeltaOptionalChatContactId();
 
 final class _DeltaOptionalOauth2Url {
   _DeltaOptionalOauth2Url() : _getOauth2Url = _loadOauth2Url();
@@ -741,7 +781,8 @@ class DeltaContextHandle {
         bindings: _bindings,
       );
       final type = _bindings.dc_chat_get_type(chatPtr);
-      final contactId = _primaryContactIdForChat(chatId);
+      final contactId = _deltaOptionalChatContactId.read(chatPtr) ??
+          _primaryContactIdForChat(chatId);
       String? contactAddress;
       String? contactName;
       if (contactId != null) {

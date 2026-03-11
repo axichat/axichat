@@ -175,9 +175,6 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
-      () => transport.purgeStockMessages(accountId: any(named: 'accountId')),
-    ).thenAnswer((_) async {});
-    when(
       () => transport.sendText(
         chatId: any(named: 'chatId'),
         body: any(named: 'body'),
@@ -977,7 +974,7 @@ void main() {
             invocation.namedArguments[#additional] as Map<String, String>;
         capturedConfigurePayloads.add(Map<String, String>.of(additional));
         if (password == 'new-password') {
-          throw const DeltaSafeException('Email configuration timed out');
+          throw const DeltaConfigurationTimeoutException();
         }
       });
 
@@ -2106,7 +2103,7 @@ void main() {
           displayName: 'Peer',
           accountId: any(named: 'accountId'),
         ),
-      ).thenThrow(const DeltaSafeException('chat lookup failed'));
+      ).thenThrow(const DeltaOperationException('chat lookup failed'));
       when(
         () => transport.getFreshMessageCount(
           77,
