@@ -6,14 +6,9 @@
   <h2>The best of instant messaging, email, and calendar all in one.</h2>
 </div>
 
-<div align="center">
-  <p>Axichat is a free open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and cutting-edge UI.</p>
-  <p>Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at <a href="https://github.com/axichat/selfhost">https://github.com/axichat/selfhost</a>.</p>
-</div>
-
-<div align="center">
-  <p><strong>Note:</strong> Axichat is under active development, so things may break. It was not vibe-coded.</p>
-</div>
+<p>Axichat is a free open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and cutting-edge UI.</p>
+<p>Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at <a href="https://github.com/axichat/selfhost">https://github.com/axichat/selfhost</a>.</p>
+<p><strong>Note:</strong> Axichat is under active development, so things may break. It was not vibe-coded.</p>
 
 <div align="center">
   <a href="https://f-droid.org/packages/im.axi.axichat">
@@ -37,6 +32,9 @@
   </a>
 </div>
 
+<br />
+<br />
+
 <div align="center">
   <a href="https://github.com/axichat/axichat/blob/master/LICENSE.txt">
     <img alt="License" src="https://img.shields.io/github/license/axichat/axichat?style=for-the-badge" />
@@ -51,6 +49,9 @@
     <img alt="Website" src="https://img.shields.io/badge/Website-axi.chat-111827?style=for-the-badge&logo=googlechrome&logoColor=white" />
   </a>
 </div>
+
+<br />
+<br />
 
 <div align="center">
   <a href="assets/readme/Axichat_demo_24fps.mp4">
