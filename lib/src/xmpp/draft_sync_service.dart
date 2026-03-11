@@ -393,7 +393,8 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
         jids: payload.recipientJids,
         body: payload.body,
         subject: payload.subject,
-        quotingStanzaId: null,
+        quotingStanzaId: payload.quotingStanzaId,
+        quotingReferenceKind: payload.quotingReferenceKind,
         attachmentMetadataIds: payload.attachmentMetadataIds,
         draftUpdatedAt: payload.updatedAt.toUtc(),
         draftSourceId: payload.sourceId,
@@ -423,6 +424,8 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       recipients: recipients,
       subject: draft.subject,
       body: draft.body,
+      quotingStanzaId: draft.quotingStanzaId,
+      quotingReferenceKind: draft.quotingReferenceKind,
       attachments: attachments,
     );
   }

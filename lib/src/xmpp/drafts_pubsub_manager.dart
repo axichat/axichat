@@ -8,6 +8,7 @@ import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/storage/models/file_models.dart';
+import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
@@ -31,6 +32,8 @@ const String _recipientRoleDefault = 'to';
 const String _subjectTag = 'subject';
 const String _bodyTag = 'body';
 const String _htmlTag = 'html';
+const String _quoteIdAttr = 'quote_id';
+const String _quoteKindAttr = 'quote_kind';
 const String _attachmentsTag = 'attachments';
 const String _attachmentTag = 'attachment';
 const String _attachmentIdAttr = 'id';
@@ -266,6 +269,8 @@ final class DraftSyncPayload {
     this.subject,
     this.body,
     this.html,
+    this.quotingStanzaId,
+    this.quotingReferenceKind,
     this.attachments = const <DraftAttachmentRef>[],
   });
 
@@ -276,6 +281,8 @@ final class DraftSyncPayload {
   final String? subject;
   final String? body;
   final String? html;
+  final String? quotingStanzaId;
+  final MessageReferenceKind? quotingReferenceKind;
   final List<DraftAttachmentRef> attachments;
 
   List<String> get recipientJids =>
@@ -292,6 +299,8 @@ final class DraftSyncPayload {
     String? subject,
     String? body,
     String? html,
+    String? quotingStanzaId,
+    MessageReferenceKind? quotingReferenceKind,
     List<DraftAttachmentRef>? attachments,
   }) {
     return DraftSyncPayload(
@@ -302,6 +311,8 @@ final class DraftSyncPayload {
       subject: subject ?? this.subject,
       body: body ?? this.body,
       html: html ?? this.html,
+      quotingStanzaId: quotingStanzaId ?? this.quotingStanzaId,
+      quotingReferenceKind: quotingReferenceKind ?? this.quotingReferenceKind,
       attachments: attachments ?? this.attachments,
     );
   }
@@ -354,6 +365,13 @@ final class DraftSyncPayload {
       node.firstTag(_htmlTag)?.innerText(),
       maxBytes: draftSyncMaxHtmlBytes,
     );
+    final quotingStanzaId = _normalizeText(
+      node.attributes[_quoteIdAttr]?.toString(),
+      maxBytes: draftSyncMaxIdBytes,
+    );
+    final quotingReferenceKind = _parseReferenceKind(
+      node.attributes[_quoteKindAttr]?.toString(),
+    );
 
     final attachmentsNode = node.firstTag(_attachmentsTag);
     final attachments =
@@ -374,6 +392,8 @@ final class DraftSyncPayload {
       subject: subject,
       body: body,
       html: html,
+      quotingStanzaId: quotingStanzaId,
+      quotingReferenceKind: quotingReferenceKind,
       attachments: attachments,
     );
   }
@@ -396,6 +416,11 @@ final class DraftSyncPayload {
       html,
       maxBytes: draftSyncMaxHtmlBytes,
     );
+    final normalizedQuoteId = _normalizeText(
+      quotingStanzaId,
+      maxBytes: draftSyncMaxIdBytes,
+    );
+    final normalizedQuoteKind = _referenceKindAttrValue(quotingReferenceKind);
     final limitedRecipients = recipients.length > draftSyncMaxRecipients
         ? recipients.take(draftSyncMaxRecipients).toList(growable: false)
         : recipients;
@@ -409,6 +434,8 @@ final class DraftSyncPayload {
         _draftSyncIdAttr: syncId,
         _draftUpdatedAtAttr: updatedAtIso,
         _draftSourceIdAttr: ?normalizedSourceId,
+        _quoteIdAttr: ?normalizedQuoteId,
+        _quoteKindAttr: ?normalizedQuoteKind,
       },
       children: [
         if (limitedRecipients.isNotEmpty)
@@ -441,6 +468,24 @@ final class DraftSyncPayload {
     final clamped = clampUtf8Value(trimmed, maxBytes: maxBytes);
     if (clamped == null || clamped.trim().isEmpty) return null;
     return clamped;
+  }
+
+  static MessageReferenceKind? _parseReferenceKind(String? value) {
+    return switch (value?.trim()) {
+      'stanza' => MessageReferenceKind.stanzaId,
+      'origin' => MessageReferenceKind.originId,
+      'muc' => MessageReferenceKind.mucStanzaId,
+      _ => null,
+    };
+  }
+
+  static String? _referenceKindAttrValue(MessageReferenceKind? kind) {
+    return switch (kind) {
+      MessageReferenceKind.stanzaId => 'stanza',
+      MessageReferenceKind.originId => 'origin',
+      MessageReferenceKind.mucStanzaId => 'muc',
+      null => null,
+    };
   }
 }
 

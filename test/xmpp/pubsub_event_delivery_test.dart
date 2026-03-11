@@ -1,5 +1,7 @@
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
+import 'package:axichat/src/xmpp/drafts_pubsub_manager.dart';
+import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
@@ -152,5 +154,23 @@ void main() {
     expect(bookmark?.name, isNull);
     expect(bookmark?.autojoin, isFalse);
     expect(bookmark?.nick, isNull);
+  });
+
+  test('DraftSyncPayload round-trips quoted reference metadata', () {
+    final payload = DraftSyncPayload(
+      syncId: 'draft-sync-id',
+      updatedAt: DateTime.utc(2026, 3, 11, 12),
+      sourceId: 'device-a',
+      recipients: const [DraftRecipient(jid: _peerBareJid, role: 'to')],
+      body: 'hello',
+      quotingStanzaId: 'quoted-origin-id',
+      quotingReferenceKind: MessageReferenceKind.originId,
+    );
+
+    final parsed = DraftSyncPayload.fromXml(payload.toXml());
+
+    expect(parsed, isNotNull);
+    expect(parsed?.quotingStanzaId, 'quoted-origin-id');
+    expect(parsed?.quotingReferenceKind, MessageReferenceKind.originId);
   });
 }
