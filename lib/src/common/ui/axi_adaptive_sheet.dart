@@ -20,7 +20,6 @@ Future<T?> showAdaptiveBottomSheet<T>({
   required WidgetBuilder builder,
   bool isScrollControlled = false,
   bool useSafeArea = true,
-  bool preferDialogOnMobile = false,
   bool showDragHandle = false,
   bool enableDrag = true,
   bool useRootNavigator = false,
@@ -33,9 +32,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
   double? dialogMaxHeightFraction,
   EdgeInsetsGeometry? surfacePadding,
 }) {
-  final commandSurface = preferDialogOnMobile
-      ? CommandSurface.menu
-      : resolveCommandSurface(context);
+  final commandSurface = resolveCommandSurface(context);
   final colorScheme = ShadTheme.of(context).colorScheme;
   final spacing = context.spacing;
   final sizing = context.sizing;
@@ -125,22 +122,15 @@ Future<T?> showAdaptiveBottomSheet<T>({
     barrierColor: barrierColor,
     useRootNavigator: useRootNavigator,
     barrierDismissible: isDismissible,
-    useSafeArea: false,
+    useSafeArea: useSafeArea,
     builder: (dialogContext) {
       final mediaQuery = MediaQuery.of(dialogContext);
       final Size size = mediaQuery.size;
-      final EdgeInsets viewInsets = mediaQuery.viewInsets;
       final Widget child = _AxiSheetChrome(
         showCloseButton: showCloseButton,
         showDragHandle: false,
         onClose: () => Navigator.of(dialogContext).maybePop(),
         child: builder(dialogContext),
-      );
-      final EdgeInsets dialogInsets = EdgeInsets.fromLTRB(
-        resolvedInsets.left,
-        resolvedInsets.top,
-        resolvedInsets.right,
-        resolvedInsets.bottom + viewInsets.bottom,
       );
       final Widget constrainedChild = ConstrainedBox(
         constraints: BoxConstraints(
@@ -149,11 +139,8 @@ Future<T?> showAdaptiveBottomSheet<T>({
         ),
         child: child,
       );
-      final Widget wrappedChild = useSafeArea
-          ? SafeArea(child: constrainedChild)
-          : constrainedChild;
       return Dialog(
-        insetPadding: dialogInsets,
+        insetPadding: resolvedInsets,
         backgroundColor: Colors.transparent,
         elevation: 0,
         shadowColor: Colors.transparent,
@@ -161,7 +148,7 @@ Future<T?> showAdaptiveBottomSheet<T>({
           backgroundColor: resolvedBackground,
           borderColor: colorScheme.border,
           padding: resolvedSurfacePadding,
-          child: wrappedChild,
+          child: constrainedChild,
         ),
       );
     },

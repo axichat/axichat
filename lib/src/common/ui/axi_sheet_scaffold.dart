@@ -6,6 +6,14 @@ import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
+double _sheetKeyboardInset(BuildContext context) {
+  final route = ModalRoute.of(context);
+  if (route is! ModalBottomSheetRoute) {
+    return 0;
+  }
+  return MediaQuery.viewInsetsOf(context).bottom;
+}
+
 class AxiSheetHeader extends StatelessWidget {
   const AxiSheetHeader({
     required this.title,
@@ -108,7 +116,7 @@ class AxiSheetScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final Widget? fixedBody = body;
     final List<Widget>? scrollChildren = _scrollChildren;
-    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final double keyboardInset = _sheetKeyboardInset(context);
     if (fixedBody != null) {
       final Widget insetBody = Padding(
         padding: footer == null
@@ -197,7 +205,7 @@ class _AxiSheetScrollableBodyState extends State<_AxiSheetScrollableBody> {
           right: context.spacing.m,
           bottom: context.spacing.m,
         );
-    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final double keyboardInset = _sheetKeyboardInset(context);
     final double scrollExtent = _scrollExtent;
     const double scrollExtentThreshold = 0;
     final double footerSpacing = context.spacing.s;

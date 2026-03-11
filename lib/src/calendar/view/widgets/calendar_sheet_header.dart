@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -23,7 +24,7 @@ class CalendarSheetCloseButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ModalCloseButton(
-      onPressed: onClose,
+      onPressed: () => closeSheetWithKeyboardDismiss(context, onClose),
       tooltip: tooltip ?? MaterialLocalizations.of(context).closeButtonTooltip,
       iconData: iconData,
       backgroundColor: Colors.transparent,

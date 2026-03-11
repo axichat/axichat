@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/modal_close_button.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -38,8 +39,12 @@ class AxiDialog extends StatelessWidget {
           BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
       scrollable: scrollable,
       radius: context.radius,
+      removeBorderRadiusWhenTiny: false,
       closeIcon: ModalCloseButton(
-        onPressed: () => Navigator.of(context).pop(),
+        onPressed: () => closeSheetWithKeyboardDismiss(
+          context,
+          () => Navigator.of(context).pop(),
+        ),
         color: ShadTheme.of(context).colorScheme.mutedForeground,
         backgroundColor: Colors.transparent,
         borderColor: Colors.transparent,

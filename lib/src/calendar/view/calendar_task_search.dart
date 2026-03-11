@@ -19,8 +19,10 @@ import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/edit_task_dropdown.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_modal_scope.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_task_list_tile.dart';
 import 'package:axichat/src/calendar/view/feedback_system.dart';
 import 'package:axichat/src/calendar/view/task_edit_session_tracker.dart';
+import 'package:axichat/src/calendar/view/widgets/task_tile_surface.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -331,7 +333,11 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
         return LayoutBuilder(
           builder: (context, constraints) {
             final mediaQuery = MediaQuery.of(context);
-            final double keyboardInset = mediaQuery.viewInsets.bottom;
+            final bool isSheetRoute =
+                ModalRoute.of(context) is ModalBottomSheetRoute;
+            final double keyboardInset = isSheetRoute
+                ? mediaQuery.viewInsets.bottom
+                : 0;
             final double maxHeight = constraints.hasBoundedHeight
                 ? constraints.maxHeight
                 : mediaQuery.size.height;
@@ -417,6 +423,7 @@ class _CalendarTaskSearchSheetState<B extends BaseCalendarBloc>
                                 )
                               : _SearchResultTile(
                                   task: task,
+                                  trailing: trailing,
                                   onTap: () => _handleTaskSelected(task),
                                 );
                           return tile;
@@ -709,66 +716,42 @@ class _EmptySearchState extends StatelessWidget {
 }
 
 class _SearchResultTile extends StatelessWidget {
-  const _SearchResultTile({required this.task, required this.onTap});
+  const _SearchResultTile({
+    required this.task,
+    required this.onTap,
+    this.trailing,
+  });
 
   final CalendarTask task;
   final VoidCallback onTap;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
-    final ShadColorScheme colors = context.colorScheme;
-    final String? subtitle = _subtitle(context);
+    final BorderSide borderSide = context.borderSide;
+    final double stripWidth = context.spacing.xs;
+    final BoxDecoration decoration = BoxDecoration(
+      color: calendarContainerColor,
+      border: Border.all(color: calendarBorderColor, width: borderSide.width),
+    );
+    final Color hoverColor = calendarSidebarBackgroundColor.withValues(
+      alpha: 0.5,
+    );
     return CalendarTaskTitleHoverReporter(
       title: task.title,
-      child: AxiTapBounce(
-        child: ShadFocusable(
-          canRequestFocus: true,
-          builder: (context, _, _) {
-            final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
-              borderRadius: BorderRadius.circular(context.radii.squircle),
-            );
-            return Material(
-              type: MaterialType.transparency,
-              shape: shape,
-              clipBehavior: Clip.antiAlias,
-              child: ShadGestureDetector(
-                cursor: SystemMouseCursors.click,
-                onTap: onTap,
-                child: DecoratedBox(
-                  decoration: ShapeDecoration(color: colors.card, shape: shape),
-                  child: Padding(
-                    padding: EdgeInsets.all(context.spacing.m),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(task.title, style: context.textTheme.small.strong),
-                        if (subtitle != null) ...[
-                          SizedBox(height: context.spacing.xxs),
-                          Text(subtitle, style: context.textTheme.muted),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
+      child: TaskTileSurface(
+        margin: EdgeInsets.zero,
+        decoration: decoration,
+        leadingStripeColor: task.priorityColor,
+        leadingStripeWidth: stripWidth,
+        onTap: onTap,
+        hoverColor: hoverColor,
+        child: Padding(
+          padding: EdgeInsets.only(left: context.spacing.xs),
+          child: CalendarTaskListTile(task: task, trailing: trailing),
         ),
       ),
     );
-  }
-
-  String? _subtitle(BuildContext context) {
-    if (task.scheduledTime != null) {
-      return TimeFormatter.formatFriendlyDateTime(
-        context.l10n,
-        task.scheduledTime!,
-      );
-    }
-    if (task.deadline != null) {
-      return _formatDeadlineLabel(context, task.deadline!);
-    }
-    return task.description?.isNotEmpty == true ? task.description : null;
   }
 }
 

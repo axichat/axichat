@@ -170,9 +170,14 @@ class _DayEventEditorFormState extends State<_DayEventEditorForm> {
     final TextStyle titleStyle = context.textTheme.h4.copyWith(
       color: calendarTitleColor,
     );
-    final double keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final double safeBottom = MediaQuery.viewPaddingOf(context).bottom;
-    final bool keyboardOpen = keyboardInset > safeBottom;
+    final bool isSheetRoute = ModalRoute.of(context) is ModalBottomSheetRoute;
+    final double keyboardInset = isSheetRoute
+        ? MediaQuery.viewInsetsOf(context).bottom
+        : 0;
+    final double safeBottom = isSheetRoute
+        ? MediaQuery.viewPaddingOf(context).bottom
+        : 0;
+    final bool keyboardOpen = isSheetRoute && keyboardInset > safeBottom;
     final CalendarIcsMeta? icsMeta = widget.existing?.icsMeta;
     final List<CalendarRawProperty> rawProperties =
         icsMeta?.rawProperties ?? _emptyRawProperties;

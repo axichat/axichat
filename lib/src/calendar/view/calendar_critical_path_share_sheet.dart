@@ -26,7 +26,6 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<void> showCalendarCriticalPathShareSheet({
   required BuildContext context,
@@ -47,12 +46,9 @@ Future<void> showCalendarCriticalPathShareSheet({
     );
     return;
   }
-  final result = await showAdaptiveBottomSheet<bool>(
+  final result = await showFadeScaleDialog<bool>(
     context: modalContext,
-    isScrollControlled: true,
-    preferDialogOnMobile: true,
-    surfacePadding: EdgeInsets.zero,
-    builder: (sheetContext) => CalendarCriticalPathShareSheet(
+    builder: (_) => CalendarCriticalPathShareSheet(
       path: path,
       tasks: tasks,
       availableChats: available,
@@ -131,6 +127,7 @@ class _CalendarCriticalPathShareSheetState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = context.l10n;
     final rosterItems =
         context.read<RosterCubit>().state.items ??
         (context.read<RosterCubit>()[RosterCubit.itemsCacheKey]
@@ -146,29 +143,27 @@ class _CalendarCriticalPathShareSheetState
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
     );
-    final header = AxiSheetHeader(
-      title: Text(context.l10n.calendarCriticalPathShareTitle),
-      subtitle: Text(context.l10n.calendarCriticalPathShareSubtitle),
-      onClose: () => Navigator.of(context).maybePop(),
-    );
-    return AxiSheetScaffold.scroll(
-      header: header,
-      bodyPadding: EdgeInsets.zero,
-      children: [
-        Padding(
-          padding: _criticalPathShareContentPadding(context),
-          child: _CriticalPathShareSectionLabel(
-            text: context.l10n.calendarCriticalPathShareTargetLabel,
-          ),
-        ),
-        if (widget.availableChats.isEmpty)
-          Padding(
-            padding: _criticalPathShareContentPadding(context),
-            child: _CriticalPathShareEmptyMessage(
-              message: context.l10n.calendarCriticalPathShareMissingChats,
+    return AxiInputDialog(
+      title: Text(l10n.calendarCriticalPathShareTitle),
+      callbackText: l10n.calendarCriticalPathShareButtonLabel,
+      loading: _isSending,
+      callback: _handleSharePressed,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            l10n.calendarCriticalPathShareSubtitle,
+            style: context.textTheme.muted.copyWith(
+              color: context.colorScheme.mutedForeground,
             ),
-          )
-        else
+          ),
+          SizedBox(height: context.spacing.m),
+          Text(
+            l10n.calendarCriticalPathShareTargetLabel.toUpperCase(),
+            style: context.textTheme.sectionLabelM,
+          ),
+          SizedBox(height: context.spacing.s),
           BlocSelector<ChatsCubit, ChatsState, List<String>>(
             bloc: widget.locate<ChatsCubit>(),
             selector: (state) => state.recipientAddressSuggestions,
@@ -184,21 +179,14 @@ class _CalendarCriticalPathShareSheetState
                   collapsedByDefault: false,
                   allowAddressTargets: false,
                   showSuggestionsWhenEmpty: true,
+                  horizontalPadding: 0,
                   onRecipientAdded: _handleRecipientAdded,
                   onRecipientRemoved: _handleRecipientRemoved,
                   onRecipientToggled: _handleRecipientToggled,
                 ),
           ),
-        SizedBox(height: context.spacing.m),
-        Padding(
-          padding: _criticalPathShareContentPadding(context),
-          child: _CriticalPathShareActionRow(
-            isBusy: _isSending,
-            onPressed: _handleSharePressed,
-            label: context.l10n.calendarCriticalPathShareButtonLabel,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -329,67 +317,5 @@ class _CalendarCriticalPathShareSheetState
         .toList(growable: false);
     final CalendarCriticalPath path = widget.path.copyWith(taskIds: orderedIds);
     return CalendarFragment.criticalPath(path: path, tasks: widget.tasks);
-  }
-}
-
-class _CriticalPathShareSectionLabel extends StatelessWidget {
-  const _CriticalPathShareSectionLabel({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(text.toUpperCase(), style: context.textTheme.sectionLabelM);
-  }
-}
-
-class _CriticalPathShareActionRow extends StatelessWidget {
-  const _CriticalPathShareActionRow({
-    required this.isBusy,
-    required this.onPressed,
-    required this.label,
-  });
-
-  final bool isBusy;
-  final VoidCallback onPressed;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: AxiButton.primary(
-        onPressed: isBusy ? null : onPressed,
-        loading: isBusy,
-        widthBehavior: AxiButtonWidth.fit,
-        leading: Icon(
-          LucideIcons.share2,
-          size: context.sizing.iconButtonIconSize,
-        ),
-        child: Text(label),
-      ),
-    );
-  }
-}
-
-EdgeInsets _criticalPathShareContentPadding(BuildContext context) =>
-    EdgeInsets.symmetric(horizontal: context.spacing.m);
-
-class _CriticalPathShareEmptyMessage extends StatelessWidget {
-  const _CriticalPathShareEmptyMessage({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: context.spacing.s),
-      child: Text(
-        message,
-        style: context.textTheme.small.copyWith(
-          color: context.colorScheme.mutedForeground,
-        ),
-      ),
-    );
   }
 }

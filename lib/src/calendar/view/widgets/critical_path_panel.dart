@@ -1215,91 +1215,59 @@ Future<String?> promptCriticalPathName({
   final FocusNode focusNode = FocusNode();
   final GlobalKey<ShadFormState> formKey = GlobalKey<ShadFormState>();
   final BuildContext modalContext = context.calendarModalContext;
-  final result = await showAdaptiveBottomSheet<String>(
+  final result = await showFadeScaleDialog<String>(
     context: modalContext,
-    isScrollControlled: true,
-    preferDialogOnMobile: true,
-    dialogMaxWidth: 420,
-    surfacePadding: EdgeInsets.all(context.spacing.m),
-    showCloseButton: false,
     builder: (dialogContext) {
       return StatefulBuilder(
         builder: (context, _) {
           final textTheme = context.textTheme;
-          return ShadForm(
-            key: formKey,
-            autovalidateMode: ShadAutovalidateMode.disabled,
-            fieldIdSeparator: null,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                CalendarSheetHeader(
-                  title: title,
-                  onClose: () => Navigator.of(dialogContext).maybePop(),
-                ),
-                SizedBox(height: context.spacing.s),
-                Flexible(
-                  fit: FlexFit.loose,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          context.l10n.calendarCriticalPathNamePrompt,
-                          style: textTheme.muted,
-                        ),
-                        SizedBox(height: context.spacing.s),
-                        AxiTextFormField(
-                          controller: controller,
-                          focusNode: focusNode,
-                          autofocus: true,
-                          keyboardType: TextInputType.text,
-                          textInputAction: TextInputAction.done,
-                          placeholder: Text(
-                            context.l10n.calendarCriticalPathNamePlaceholder,
-                          ),
-                          validator: (value) {
-                            final String trimmed = value.trim();
-                            if (trimmed.isEmpty) {
-                              return context
-                                  .l10n
-                                  .calendarCriticalPathNameEmptyError;
-                            }
-                            return null;
-                          },
-                          onSubmitted: (value) {
-                            if (formKey.currentState?.validate() ?? false) {
-                              Navigator.of(dialogContext).pop(value.trim());
-                            }
-                          },
-                        ),
-                      ],
-                    ),
+          return AxiInputDialog(
+            title: Text(title, style: context.modalHeaderTextStyle),
+            callbackText: context.l10n.commonSave,
+            callback: () {
+              if (!(formKey.currentState?.validate() ?? false)) {
+                focusNode.requestFocus();
+                return;
+              }
+              Navigator.of(dialogContext).pop(controller.text.trim());
+            },
+            content: ShadForm(
+              key: formKey,
+              autovalidateMode: ShadAutovalidateMode.disabled,
+              fieldIdSeparator: null,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    context.l10n.calendarCriticalPathNamePrompt,
+                    style: textTheme.muted,
                   ),
-                ),
-                SizedBox(height: context.spacing.m),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    AxiButton.outline(
-                      onPressed: () => Navigator.of(dialogContext).maybePop(),
-                      child: Text(context.l10n.commonCancel),
+                  SizedBox(height: context.spacing.s),
+                  AxiTextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    autofocus: true,
+                    keyboardType: TextInputType.text,
+                    textInputAction: TextInputAction.done,
+                    placeholder: Text(
+                      context.l10n.calendarCriticalPathNamePlaceholder,
                     ),
-                    SizedBox(width: context.spacing.xxs),
-                    AxiButton.primary(
-                      onPressed: () {
-                        if (!(formKey.currentState?.validate() ?? false)) {
-                          focusNode.requestFocus();
-                          return;
-                        }
-                        Navigator.of(dialogContext).pop(controller.text.trim());
-                      },
-                      child: Text(context.l10n.commonSave),
-                    ),
-                  ],
-                ),
-              ],
+                    validator: (value) {
+                      final String trimmed = value.trim();
+                      if (trimmed.isEmpty) {
+                        return context.l10n.calendarCriticalPathNameEmptyError;
+                      }
+                      return null;
+                    },
+                    onSubmitted: (value) {
+                      if (formKey.currentState?.validate() ?? false) {
+                        Navigator.of(dialogContext).pop(value.trim());
+                      }
+                    },
+                  ),
+                ],
+              ),
             ),
           );
         },

@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
@@ -56,7 +57,9 @@ class AxiInputDialog extends StatelessWidget {
     );
     final actionButtons = <Widget>[
       AxiButton.outline(
-        onPressed: canPop ? () => context.pop() : null,
+        onPressed: canPop
+            ? () => closeSheetWithKeyboardDismiss(context, () => context.pop())
+            : null,
         child: Text(context.l10n.commonCancel),
       ),
       ...actions,
@@ -77,7 +80,8 @@ class AxiInputDialog extends StatelessWidget {
           children: [
             AxiSheetHeader(
               title: title,
-              onClose: () => context.pop(),
+              onClose: () =>
+                  closeSheetWithKeyboardDismiss(context, () => context.pop()),
               showCloseButton: showCloseButton,
               padding: headerPadding,
             ),
