@@ -1234,7 +1234,12 @@ mixin MucService on XmppBase, BaseStreamService {
         clearExplicitLeave: true,
         emitOperation: false,
       );
-      if (roomStateFor(key)?.roomCreated != true) {
+      if (!_roomWasCreatedDuringCreateAttempt(
+        roomJid: key,
+        hadInstantRoomConfiguredBeforeCreate:
+            hadInstantRoomConfiguredBeforeCreate,
+        hadInstantRoomPendingBeforeCreate: hadInstantRoomPendingBeforeCreate,
+      )) {
         _mucLog.warning(_mucCreateConflictLog);
         await _restoreRejectedCreateAttempt(
           roomJid: key,
@@ -1292,15 +1297,10 @@ mixin MucService on XmppBase, BaseStreamService {
         }
       }, operationName: _mucUpsertBookmarkOperationName);
       if (avatar != null) {
-        fireAndForget(() async {
-          final updated = await updateRoomAvatar(
-            roomJid: roomJid,
-            avatar: avatar,
-          );
-          if (!updated) {
-            _mucLog.fine(_roomAvatarUpdateFailedLog);
-          }
-        }, operationName: _mucCreateRoomOperationName);
+        fireAndForget(
+          () => _publishCreatedRoomAvatar(roomJid: roomJid, avatar: avatar),
+          operationName: _mucCreateRoomOperationName,
+        );
       }
       success = true;
       return roomJid;
@@ -1309,6 +1309,26 @@ mixin MucService on XmppBase, BaseStreamService {
         success ? _mucCreateSuccessEvent : _mucCreateFailureEvent,
       );
     }
+  }
+
+  bool _roomWasCreatedDuringCreateAttempt({
+    required String roomJid,
+    required bool hadInstantRoomConfiguredBeforeCreate,
+    required bool hadInstantRoomPendingBeforeCreate,
+  }) {
+    final key = _roomKey(roomJid);
+    if (roomStateFor(key)?.roomCreated == true) {
+      return true;
+    }
+    if (!hadInstantRoomPendingBeforeCreate &&
+        _instantRoomPendingRooms.contains(key)) {
+      return true;
+    }
+    if (!hadInstantRoomConfiguredBeforeCreate &&
+        _instantRoomConfiguredRooms.contains(key)) {
+      return true;
+    }
+    return false;
   }
 
   Future<void> _restoreRejectedCreateAttempt({
@@ -2443,6 +2463,28 @@ mixin MucService on XmppBase, BaseStreamService {
       await _ensureInstantRoomConfiguration(roomJid: key);
     } on Exception catch (error, stackTrace) {
       _mucLog.fine(_instantRoomConfigFailedLog, error, stackTrace);
+    }
+  }
+
+  Future<void> _publishCreatedRoomAvatar({
+    required String roomJid,
+    required AvatarUploadPayload avatar,
+  }) async {
+    const maxAttempts = 3;
+    const retryDelay = Duration(milliseconds: 350);
+
+    await _awaitInstantRoomConfigurationIfNeeded(roomJid);
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      final updated = await updateRoomAvatar(roomJid: roomJid, avatar: avatar);
+      if (updated) {
+        return;
+      }
+      if (attempt == maxAttempts - 1) {
+        _mucLog.fine(_roomAvatarUpdateFailedLog);
+        return;
+      }
+      await Future<void>.delayed(retryDelay);
     }
   }
 

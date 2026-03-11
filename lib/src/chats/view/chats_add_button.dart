@@ -262,7 +262,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                           .commitCrop(rect),
                                       onShuffle: () => context
                                           .read<AvatarEditorCubit>()
-                                          .shuffleCarousel(context.colorScheme),
+                                          .shuffleTemplate(context.colorScheme),
                                       onUpload: () => context
                                           .read<AvatarEditorCubit>()
                                           .pickImage(),
@@ -273,14 +273,12 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                       hasUserSelectedAvatar:
                                           avatarState.hasUserSelectedAvatar,
                                       canShuffleBackground:
-                                          avatarState.hasCarouselPreview &&
                                           avatarState.canShuffleBackground,
                                       onShuffleBackground:
-                                          avatarState.hasCarouselPreview &&
-                                              avatarState.canShuffleBackground
+                                          avatarState.canShuffleBackground
                                           ? () => context
                                                 .read<AvatarEditorCubit>()
-                                                .shuffleCarouselBackground(
+                                                .shuffleBackground(
                                                   context.colorScheme,
                                                 )
                                           : null,

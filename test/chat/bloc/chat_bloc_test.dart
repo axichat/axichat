@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
+import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
@@ -15,13 +16,12 @@ import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
-import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
-import 'package:flutter/material.dart' show AppLifecycleState, Locale;
+import 'package:flutter/material.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -129,6 +129,31 @@ void _mockEmailSync(MockEmailService service) {
   when(() => service.getQuotedMessage(any())).thenAnswer((_) async => null);
 }
 
+Chat _groupChat(String jid, {String title = 'Room'}) => Chat(
+  jid: jid,
+  title: title,
+  type: ChatType.groupChat,
+  lastChangeTimestamp: DateTime.now(),
+);
+
+Occupant _occupant({
+  required String occupantId,
+  required String nick,
+  String? realJid,
+  OccupantAffiliation affiliation = OccupantAffiliation.none,
+  OccupantRole role = OccupantRole.none,
+  bool isPresent = true,
+}) {
+  return Occupant(
+    occupantId: occupantId,
+    nick: nick,
+    realJid: realJid,
+    affiliation: affiliation,
+    role: role,
+    isPresent: isPresent,
+  );
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -185,6 +210,7 @@ void main() {
       (invocation) async =>
           RoomState(roomJid: invocation.namedArguments[#roomJid] as String),
     );
+    when(() => mucService.seedDummyRoomData(any())).thenAnswer((_) async {});
     when(
       () => mucService.trackOccupantsFromMessages(any(), any()),
     ).thenAnswer((_) {});
@@ -625,7 +651,10 @@ void main() {
     );
     await _pumpBloc();
 
-    expect(bloc.state.composerError, 'Select at least one recipient.');
+    expect(
+      bloc.state.composerError,
+      ChatMessageKey.chatComposerSelectRecipient,
+    );
     verifyNever(
       () => emailService.fanOutSend(
         targets: any(named: 'targets'),
@@ -665,12 +694,7 @@ void main() {
         quotedStanzaId: any(named: 'quotedStanzaId'),
         useSubjectToken: any(named: 'useSubjectToken'),
       ),
-    ).thenThrow(
-      const FanOutValidationException(
-        FanOutValidationFailure.tooManyRecipients,
-        maxRecipients: 2,
-      ),
-    );
+    ).thenThrow(const FanOutTooManyRecipientsException(2));
 
     final bloc = ChatBloc(
       jid: emailChat.jid,
@@ -706,10 +730,7 @@ void main() {
 
     expect(
       bloc.state.composerError,
-      FanOutValidationFailure.tooManyRecipients.message(
-        lookupAppLocalizations(const Locale('en')),
-        maxRecipients: 2,
-      ),
+      ChatMessageKey.fanOutErrorTooManyRecipients,
     );
 
     await bloc.close();
@@ -1036,7 +1057,10 @@ void main() {
 
     syncController.add(const EmailSyncState.offline('Network down'));
     await _pumpBloc();
-    expect(bloc.state.composerError, 'Network down');
+    expect(
+      bloc.state.composerError,
+      ChatMessageKey.messageErrorServiceUnavailable,
+    );
 
     syncController.add(const EmailSyncState.ready());
     await _pumpBloc();
@@ -2258,4 +2282,299 @@ void main() {
     await bloc.close();
     await connectivityController.close();
   });
+
+  test(
+    'room member sections keep participants separate from visitors and skip unresolved occupants',
+    () async {
+      final roomStateController = StreamController<RoomState>.broadcast();
+      when(
+        () => mucService.roomStateStream(any()),
+      ).thenAnswer((_) => roomStateController.stream);
+
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+      const participantOccupantId = '$roomJid/alice';
+      const visitorOccupantId = '$roomJid/bob';
+      const unresolvedOccupantId = '$roomJid/ghost';
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      roomStateController.add(
+        RoomState(
+          roomJid: roomJid,
+          myOccupantId: selfOccupantId,
+          occupants: <String, Occupant>{
+            selfOccupantId: _occupant(
+              occupantId: selfOccupantId,
+              nick: 'self',
+              realJid: 'self@axi.im',
+              affiliation: OccupantAffiliation.owner,
+              role: OccupantRole.moderator,
+            ),
+            participantOccupantId: _occupant(
+              occupantId: participantOccupantId,
+              nick: 'alice',
+              realJid: 'alice@axi.im',
+              affiliation: OccupantAffiliation.none,
+              role: OccupantRole.participant,
+            ),
+            visitorOccupantId: _occupant(
+              occupantId: visitorOccupantId,
+              nick: 'bob',
+              role: OccupantRole.visitor,
+            ),
+            unresolvedOccupantId: _occupant(
+              occupantId: unresolvedOccupantId,
+              nick: 'ghost',
+              isPresent: false,
+            ),
+          },
+        ),
+      );
+      await _pumpBloc();
+      await _pumpBloc();
+
+      final participantSection = bloc.state.roomMemberSections.firstWhere(
+        (section) => section.kind == RoomMemberSectionKind.participants,
+      );
+      final visitorSection = bloc.state.roomMemberSections.firstWhere(
+        (section) => section.kind == RoomMemberSectionKind.visitors,
+      );
+
+      expect(
+        participantSection.members.map((member) => member.occupant.nick),
+        equals(const <String>['alice']),
+      );
+      expect(
+        participantSection.members.single.directChatJid,
+        equals('alice@axi.im'),
+      );
+      expect(
+        visitorSection.members.map((member) => member.occupant.nick),
+        equals(const <String>['bob']),
+      );
+      expect(
+        bloc.state.roomMemberSections
+            .expand((section) => section.members)
+            .map((member) => member.occupant.nick),
+        isNot(contains('ghost')),
+      );
+
+      await bloc.close();
+      await roomStateController.close();
+    },
+  );
+
+  test(
+    'room member actions respect affiliation authority and exposed real JIDs',
+    () async {
+      final roomStateController = StreamController<RoomState>.broadcast();
+      when(
+        () => mucService.roomStateStream(any()),
+      ).thenAnswer((_) => roomStateController.stream);
+
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+      const memberOccupantId = '$roomJid/alice';
+      const participantOccupantId = '$roomJid/bob';
+      const ownerOccupantId = '$roomJid/carol';
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      roomStateController.add(
+        RoomState(
+          roomJid: roomJid,
+          myOccupantId: selfOccupantId,
+          occupants: <String, Occupant>{
+            selfOccupantId: _occupant(
+              occupantId: selfOccupantId,
+              nick: 'self',
+              realJid: 'self@axi.im',
+              affiliation: OccupantAffiliation.admin,
+              role: OccupantRole.moderator,
+            ),
+            memberOccupantId: _occupant(
+              occupantId: memberOccupantId,
+              nick: 'alice',
+              realJid: 'alice@axi.im',
+              affiliation: OccupantAffiliation.member,
+              role: OccupantRole.participant,
+            ),
+            participantOccupantId: _occupant(
+              occupantId: participantOccupantId,
+              nick: 'bob',
+              affiliation: OccupantAffiliation.none,
+              role: OccupantRole.participant,
+            ),
+            ownerOccupantId: _occupant(
+              occupantId: ownerOccupantId,
+              nick: 'carol',
+              realJid: 'carol@axi.im',
+              affiliation: OccupantAffiliation.owner,
+              role: OccupantRole.moderator,
+            ),
+          },
+        ),
+      );
+      await _pumpBloc();
+      await _pumpBloc();
+
+      RoomMemberEntry memberEntry(String nick) {
+        return bloc.state.roomMemberSections
+            .expand((section) => section.members)
+            .firstWhere((member) => member.occupant.nick == nick);
+      }
+
+      expect(
+        memberEntry('alice').actions,
+        equals(const <MucModerationAction>[
+          MucModerationAction.kick,
+          MucModerationAction.ban,
+          MucModerationAction.moderator,
+        ]),
+      );
+      expect(memberEntry('alice').directChatJid, equals('alice@axi.im'));
+      expect(
+        memberEntry('bob').actions,
+        equals(const <MucModerationAction>[
+          MucModerationAction.kick,
+          MucModerationAction.moderator,
+        ]),
+      );
+      expect(memberEntry('bob').directChatJid, isNull);
+      expect(memberEntry('carol').actions, isEmpty);
+      expect(memberEntry('carol').directChatJid, equals('carol@axi.im'));
+
+      await bloc.close();
+      await roomStateController.close();
+    },
+  );
+
+  test(
+    'members do not receive moderation buttons and moderation completers finish',
+    () async {
+      final roomStateController = StreamController<RoomState>.broadcast();
+      when(
+        () => mucService.roomStateStream(any()),
+      ).thenAnswer((_) => roomStateController.stream);
+
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+      const targetOccupantId = '$roomJid/alice';
+      final groupChat = _groupChat(roomJid);
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(groupChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      roomStateController.add(
+        RoomState(
+          roomJid: roomJid,
+          myOccupantId: selfOccupantId,
+          occupants: <String, Occupant>{
+            selfOccupantId: _occupant(
+              occupantId: selfOccupantId,
+              nick: 'self',
+              realJid: 'self@axi.im',
+              affiliation: OccupantAffiliation.member,
+              role: OccupantRole.participant,
+            ),
+            targetOccupantId: _occupant(
+              occupantId: targetOccupantId,
+              nick: 'alice',
+              realJid: 'alice@axi.im',
+              affiliation: OccupantAffiliation.member,
+              role: OccupantRole.participant,
+            ),
+          },
+        ),
+      );
+      await _pumpBloc();
+      await _pumpBloc();
+
+      final targetEntry = bloc.state.roomMemberSections
+          .expand((section) => section.members)
+          .firstWhere((member) => member.occupant.nick == 'alice');
+      expect(targetEntry.actions, isEmpty);
+
+      final adminRoomState = RoomState(
+        roomJid: roomJid,
+        myOccupantId: selfOccupantId,
+        occupants: <String, Occupant>{
+          selfOccupantId: _occupant(
+            occupantId: selfOccupantId,
+            nick: 'self',
+            realJid: 'self@axi.im',
+            affiliation: OccupantAffiliation.admin,
+            role: OccupantRole.moderator,
+          ),
+          targetOccupantId: _occupant(
+            occupantId: targetOccupantId,
+            nick: 'alice',
+            realJid: 'alice@axi.im',
+            affiliation: OccupantAffiliation.member,
+            role: OccupantRole.participant,
+          ),
+        },
+      );
+      final completer = Completer<void>();
+
+      bloc.add(
+        ChatModerationActionRequested(
+          occupantId: targetOccupantId,
+          action: MucModerationAction.kick,
+          actionLabel: 'Kick',
+          chat: groupChat,
+          roomState: adminRoomState,
+          completer: completer,
+        ),
+      );
+
+      await completer.future.timeout(const Duration(seconds: 1));
+      verify(
+        () => mucService.kickOccupant(
+          roomJid: roomJid,
+          nick: 'alice',
+          reason: null,
+        ),
+      ).called(1);
+
+      await bloc.close();
+      await roomStateController.close();
+    },
+  );
 }

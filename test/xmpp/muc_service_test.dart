@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:axichat/main.dart';
@@ -13,6 +14,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
+import 'package:path/path.dart' as p;
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 
 import '../mocks.dart';
 
@@ -107,6 +110,15 @@ class FakeMamQueryOptions extends Fake implements mox.MAMQueryOptions {}
 
 class FakeResultSetManagement extends Fake implements mox.ResultSetManagement {}
 
+class _FakePathProviderPlatform extends PathProviderPlatform {
+  _FakePathProviderPlatform(this.supportPath);
+
+  final String supportPath;
+
+  @override
+  Future<String?> getApplicationSupportPath() async => supportPath;
+}
+
 const List<int> _pngLikeBytes = <int>[
   0x89,
   0x50,
@@ -178,6 +190,8 @@ void main() {
   late MockMamManager mamManager;
   late MockDiscoManager discoManager;
   late MucJoinBootstrapManager joinBootstrapManager;
+  late PathProviderPlatform originalPathProvider;
+  late Directory tempDir;
 
   setUp(() async {
     mockConnection = MockXmppConnection();
@@ -190,6 +204,11 @@ void main() {
     mamManager = MockMamManager();
     discoManager = MockDiscoManager();
     joinBootstrapManager = MucJoinBootstrapManager();
+    originalPathProvider = PathProviderPlatform.instance;
+    tempDir = await Directory.systemTemp.createTemp('axichat-muc-avatar-');
+    final supportDir = Directory(p.join(tempDir.path, 'support'));
+    await supportDir.create(recursive: true);
+    PathProviderPlatform.instance = _FakePathProviderPlatform(supportDir.path);
 
     prepareMockConnection();
     when(() => mockConnection.discoInfoQuery(any())).thenAnswer((
@@ -278,6 +297,8 @@ void main() {
   tearDown(() async {
     await eventStreamController.close();
     await xmppService.close();
+    PathProviderPlatform.instance = originalPathProvider;
+    await tempDir.delete(recursive: true);
     resetMocktailState();
   });
 
@@ -1117,6 +1138,9 @@ void main() {
           );
           return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
         });
+        when(() => mucManager.leaveRoom(any())).thenAnswer(
+          (_) async => const moxlib.Result<bool, mox.MUCError>(true),
+        );
         when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
           final details =
               invocation.positionalArguments.first as mox.StanzaDetails;
@@ -1397,6 +1421,179 @@ void main() {
             avatarHash: any(named: 'avatarHash'),
           ),
         ).called(1);
+      },
+    );
+
+    test(
+      'CREATE-004 [HP] createRoom waits for instant room configuration before publishing the room avatar',
+      () async {
+        const roomJid = 'planning-room@$_serviceJid';
+        const expectedHash = 'created-room-avatar-hash';
+        final payload = AvatarUploadPayload(
+          bytes: Uint8List.fromList(_pngLikeBytes),
+          mimeType: 'image/png',
+          width: 1,
+          height: 1,
+          hash: expectedHash,
+        );
+        final requests = <String>[];
+
+        await xmppService.setMucServiceHost(_serviceJid);
+        when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
+        when(() => mockDatabase.getChat(roomJid)).thenAnswer(
+          (_) async => Chat(
+            jid: roomJid,
+            title: _roomName,
+            type: ChatType.groupChat,
+            myNickname: 'me',
+            lastChangeTimestamp: DateTime.timestamp(),
+            contactJid: roomJid,
+          ),
+        );
+        when(
+          () => mockDatabase.updateChatAvatar(
+            jid: any(named: 'jid'),
+            avatarPath: any(named: 'avatarPath'),
+            avatarHash: any(named: 'avatarHash'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: roomJid,
+              occupantJid: '$roomJid/me',
+              nick: 'me',
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {
+                MucStatusCode.selfPresence.code,
+                MucStatusCode.roomCreated.code,
+              },
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
+          final details =
+              invocation.positionalArguments.first as mox.StanzaDetails;
+          final stanza = details.stanza;
+          final type = stanza.attributes[_typeAttr]?.toString();
+          final ownerQuery = stanza.firstTag(_queryTag, xmlns: _mucOwnerXmlns);
+
+          if (ownerQuery != null && type == _iqTypeSet) {
+            final form = ownerQuery.firstTag(
+              _dataFormTag,
+              xmlns: _dataFormXmlns,
+            );
+            final fieldNames = form
+                ?.findTags(_fieldTag)
+                .map((field) => field.attributes['var']?.toString() ?? '')
+                .toList(growable: false);
+            final isInstantConfig =
+                fieldNames != null &&
+                fieldNames.length == 1 &&
+                fieldNames.single == 'FORM_TYPE';
+            requests.add(
+              isInstantConfig ? 'instant-config-set' : 'avatar-config-set',
+            );
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(type: _iqTypeResult),
+            );
+          }
+
+          if (ownerQuery != null && type == _iqTypeGet) {
+            requests.add('avatar-config-get');
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(
+                    tag: _queryTag,
+                    xmlns: _mucOwnerXmlns,
+                    children: [
+                      mox.XMLNode.xmlns(
+                        tag: _dataFormTag,
+                        xmlns: _dataFormXmlns,
+                        attributes: {'type': 'form'},
+                        children: [
+                          _formTypeField(_mucRoomConfigFormType),
+                          _singleValueField('muc#roomconfig_avatar', ''),
+                          _singleValueField('muc#roomconfig_avatar_hash', ''),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (stanza.firstTag('vCard', xmlns: 'vcard-temp') != null &&
+              type == _iqTypeSet) {
+            requests.add('avatar-vcard-set');
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(type: _iqTypeResult),
+            );
+          }
+
+          if (stanza.firstTag(_queryTag, xmlns: _discoInfoXmlns) != null) {
+            requests.add('room-info-get');
+            return Future<mox.XMLNode?>.value(
+              mox.Stanza.iq(
+                type: _iqTypeResult,
+                children: [
+                  mox.XMLNode.xmlns(
+                    tag: _queryTag,
+                    xmlns: _discoInfoXmlns,
+                    children: [
+                      mox.XMLNode.xmlns(
+                        tag: _dataFormTag,
+                        xmlns: _dataFormXmlns,
+                        attributes: {'type': 'result'},
+                        children: [
+                          _formTypeField(_mucRoomInfoFormType),
+                          _singleValueField(
+                            'muc#roominfo_avatar_hash',
+                            expectedHash,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return Future<mox.XMLNode?>.value(null);
+        });
+
+        await xmppService.createRoom(
+          name: _roomName,
+          nickname: 'me',
+          avatar: payload,
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        expect(
+          requests,
+          containsAllInOrder(<String>[
+            'instant-config-set',
+            'avatar-config-get',
+            'avatar-config-set',
+          ]),
+        );
+        verifyNever(() => mucManager.leaveRoom(any()));
       },
     );
 

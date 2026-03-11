@@ -858,18 +858,20 @@ class _RoomMembersDrawerContent extends StatelessWidget {
   const _RoomMembersDrawerContent({
     required this.onInvite,
     required this.onAction,
+    required this.onOpenDirectChat,
     required this.onChangeNickname,
     required this.onLeaveRoom,
     required this.onClose,
   });
 
   final ValueChanged<String> onInvite;
-  final void Function(
+  final Future<void> Function(
     String occupantId,
     MucModerationAction action,
     String actionLabel,
   )
   onAction;
+  final Future<void> Function(String jid) onOpenDirectChat;
   final ValueChanged<String> onChangeNickname;
   final VoidCallback onLeaveRoom;
   final VoidCallback onClose;
@@ -915,6 +917,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
               roomState.myRole.isModerator,
           onInvite: onInvite,
           onAction: onAction,
+          onOpenDirectChat: onOpenDirectChat,
           roomAvatarPath: state.chat?.avatarPath,
           onChangeNickname: onChangeNickname,
           onLeaveRoom: onLeaveRoom,
@@ -2282,12 +2285,13 @@ class _ChatState extends State<Chat> {
                     child: Builder(
                       builder: (context) => _RoomMembersDrawerContent(
                         onInvite: (jid) {
-                          final chatState = context.read<ChatBloc>().state;
+                          final locate = context.read;
+                          final chatState = locate<ChatBloc>().state;
                           final chat = chatState.chat;
                           if (chat == null) {
                             return;
                           }
-                          context.read<ChatBloc>().add(
+                          locate<ChatBloc>().add(
                             ChatInviteRequested(
                               jid,
                               chat: chat,
@@ -2296,28 +2300,37 @@ class _ChatState extends State<Chat> {
                           );
                         },
                         onAction: (occupantId, action, actionLabel) {
-                          final chatState = context.read<ChatBloc>().state;
+                          final locate = context.read;
+                          final chatState = locate<ChatBloc>().state;
                           final chat = chatState.chat;
                           if (chat == null) {
-                            return;
+                            return Future<void>.value();
                           }
-                          context.read<ChatBloc>().add(
+                          final completer = Completer<void>();
+                          locate<ChatBloc>().add(
                             ChatModerationActionRequested(
                               occupantId: occupantId,
                               action: action,
                               actionLabel: actionLabel,
                               chat: chat,
                               roomState: chatState.roomState,
+                              completer: completer,
                             ),
                           );
+                          return completer.future;
+                        },
+                        onOpenDirectChat: (jid) {
+                          final locate = context.read;
+                          return locate<ChatsCubit>().openChat(jid: jid);
                         },
                         onChangeNickname: (nick) {
-                          final chatState = context.read<ChatBloc>().state;
+                          final locate = context.read;
+                          final chatState = locate<ChatBloc>().state;
                           final chat = chatState.chat;
                           if (chat == null) {
                             return;
                           }
-                          context.read<ChatBloc>().add(
+                          locate<ChatBloc>().add(
                             ChatNicknameChangeRequested(
                               nickname: nick,
                               chatJid: chat.jid,
@@ -2326,12 +2339,13 @@ class _ChatState extends State<Chat> {
                           );
                         },
                         onLeaveRoom: () {
-                          final chatState = context.read<ChatBloc>().state;
+                          final locate = context.read;
+                          final chatState = locate<ChatBloc>().state;
                           final chat = chatState.chat;
                           if (chat == null) {
                             return;
                           }
-                          context.read<ChatBloc>().add(
+                          locate<ChatBloc>().add(
                             ChatLeaveRoomRequested(
                               chatJid: chat.jid,
                               chatType: chat.type,
@@ -10348,13 +10362,9 @@ class _ChatState extends State<Chat> {
         (context.read<ChatsCubit>().state.items ?? const <chat_models.Chat>[])
             .cast<chat_models.Chat>()
             .toList(growable: false);
-    return showAdaptiveBottomSheet<FanOutTarget>(
+    return showFadeScaleDialog<FanOutTarget>(
       context: context,
-      isScrollControlled: true,
-      preferDialogOnMobile: true,
-      surfacePadding: EdgeInsets.zero,
-      builder: (sheetContext) =>
-          _ForwardRecipientSheet(availableChats: options),
+      builder: (_) => _ForwardRecipientSheet(availableChats: options),
     );
   }
 
@@ -17910,12 +17920,6 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     Navigator.of(context).pop(selected);
   }
 
-  Future<void> _handleClose() async {
-    FocusManager.instance.primaryFocus?.unfocus();
-    if (!mounted) return;
-    Navigator.of(context).maybePop();
-  }
-
   Future<MessageTransport?> _resolveAddressTransport(String address) async {
     final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final supportsEmail = endpointConfig.smtpEnabled;
@@ -17943,11 +17947,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final spacing = context.spacing;
     final locate = context.read;
-    final iconSize = context.sizing.iconButtonIconSize;
-    final sectionSpacing = spacing.m;
-    final contentPadding = EdgeInsets.symmetric(horizontal: spacing.m);
     final profileJid = context.watch<ProfileCubit>().state.jid;
     final trimmedProfileJid = profileJid.trim();
     final String? selfJid = trimmedProfileJid.isNotEmpty
@@ -17957,55 +17957,37 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
     );
-    final header = AxiSheetHeader(
+    return AxiInputDialog(
       title: Text(l10n.chatForwardDialogTitle),
-      onClose: _handleClose,
-    );
-    return AxiSheetScaffold.scroll(
-      header: header,
-      bodyPadding: EdgeInsets.zero,
-      children: [
-        BlocSelector<ChatsCubit, ChatsState, List<String>>(
-          bloc: locate<ChatsCubit>(),
-          selector: (state) => state.recipientAddressSuggestions,
-          builder: (context, recipientAddressSuggestions) {
-            final rosterItems =
-                context.watch<RosterCubit>().state.items ??
-                (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
-                    as List<RosterItem>?) ??
-                const <RosterItem>[];
-            return RecipientChipsBar(
-              recipients: _recipients,
-              availableChats: widget.availableChats,
-              rosterItems: rosterItems,
-              databaseSuggestionAddresses: recipientAddressSuggestions,
-              selfJid: locate<ChatsCubit>().selfJid,
-              selfIdentity: selfIdentity,
-              latestStatuses: const {},
-              collapsedByDefault: false,
-              allowAddressTargets: true,
-              showSuggestionsWhenEmpty: true,
-              horizontalPadding: 0,
-              onRecipientAdded: _handleRecipientAdded,
-              onRecipientRemoved: _handleRecipientRemoved,
-              onRecipientToggled: _handleRecipientToggled,
-            );
-          },
-        ),
-        SizedBox(height: sectionSpacing),
-        Padding(
-          padding: contentPadding,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: AxiButton.primary(
-              onPressed: _canSend ? _handleSend : null,
-              leading: Icon(LucideIcons.send, size: iconSize),
-              child: Text(l10n.commonSend),
-            ),
-          ),
-        ),
-        SizedBox(height: sectionSpacing),
-      ],
+      callbackText: l10n.commonSend,
+      callback: _canSend ? _handleSend : null,
+      content: BlocSelector<ChatsCubit, ChatsState, List<String>>(
+        bloc: locate<ChatsCubit>(),
+        selector: (state) => state.recipientAddressSuggestions,
+        builder: (context, recipientAddressSuggestions) {
+          final rosterItems =
+              context.watch<RosterCubit>().state.items ??
+              (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
+                  as List<RosterItem>?) ??
+              const <RosterItem>[];
+          return RecipientChipsBar(
+            recipients: _recipients,
+            availableChats: widget.availableChats,
+            rosterItems: rosterItems,
+            databaseSuggestionAddresses: recipientAddressSuggestions,
+            selfJid: locate<ChatsCubit>().selfJid,
+            selfIdentity: selfIdentity,
+            latestStatuses: const {},
+            collapsedByDefault: false,
+            allowAddressTargets: true,
+            showSuggestionsWhenEmpty: true,
+            horizontalPadding: 0,
+            onRecipientAdded: _handleRecipientAdded,
+            onRecipientRemoved: _handleRecipientRemoved,
+            onRecipientToggled: _handleRecipientToggled,
+          );
+        },
+      ),
     );
   }
 }

@@ -2636,6 +2636,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mucSendInvites => '发送邀请';
 
   @override
+  String get mucInviteEligibleRecipientsOnly =>
+      '只有你所在域名或 axi.im 上的一对一 XMPP 联系人才能被邀请加入聊天室。';
+
+  @override
   String get mucChangeNicknameTitle => '更改昵称';
 
   @override
@@ -2669,6 +2673,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mucSectionMembers => '成员';
 
   @override
+  String get mucSectionParticipants => '参与者';
+
+  @override
   String get mucSectionVisitors => '访客';
 
   @override
@@ -2681,10 +2688,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mucRoleMember => '成员';
 
   @override
+  String get mucRoleParticipant => '参与者';
+
+  @override
   String get mucRoleVisitor => '访客';
 
   @override
   String get mucRoleModerator => '版主';
+
+  @override
+  String get mucActionOpenChat => '打开聊天';
 
   @override
   String get mucActionKick => '移出';
@@ -8498,6 +8511,10 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get mucSendInvites => '發送邀請';
 
   @override
+  String get mucInviteEligibleRecipientsOnly =>
+      '只有你所在網域或 axi.im 上的一對一 XMPP 聯絡人才能被邀請加入聊天室。';
+
+  @override
   String get mucChangeNicknameTitle => '更改暱稱';
 
   @override
@@ -8531,6 +8548,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get mucSectionMembers => '成員';
 
   @override
+  String get mucSectionParticipants => '參與者';
+
+  @override
   String get mucSectionVisitors => '訪客';
 
   @override
@@ -8543,10 +8563,16 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String get mucRoleMember => '成員';
 
   @override
+  String get mucRoleParticipant => '參與者';
+
+  @override
   String get mucRoleVisitor => '訪客';
 
   @override
   String get mucRoleModerator => '版主';
+
+  @override
+  String get mucActionOpenChat => '打開聊天';
 
   @override
   String get mucActionKick => '移出';

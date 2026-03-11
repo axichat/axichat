@@ -637,6 +637,7 @@ final class ChatModerationActionRequested extends ChatEvent {
     required this.chat,
     required this.roomState,
     this.reason,
+    this.completer,
   });
 
   final String occupantId;
@@ -645,6 +646,7 @@ final class ChatModerationActionRequested extends ChatEvent {
   final Chat chat;
   final RoomState? roomState;
   final String? reason;
+  final Completer<void>? completer;
 
   @override
   List<Object?> get props => [
@@ -654,6 +656,7 @@ final class ChatModerationActionRequested extends ChatEvent {
     chat,
     roomState,
     reason,
+    completer,
   ];
 }
 

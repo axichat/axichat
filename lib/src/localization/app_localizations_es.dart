@@ -2766,6 +2766,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mucSendInvites => 'Enviar invitaciones';
 
   @override
+  String get mucInviteEligibleRecipientsOnly =>
+      'Solo los contactos XMPP 1:1 de tu dominio o de axi.im pueden ser invitados a salas.';
+
+  @override
   String get mucChangeNicknameTitle => 'Cambiar apodo';
 
   @override
@@ -2800,6 +2804,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mucSectionMembers => 'Miembros';
 
   @override
+  String get mucSectionParticipants => 'Participantes';
+
+  @override
   String get mucSectionVisitors => 'Visitantes';
 
   @override
@@ -2812,10 +2819,16 @@ class AppLocalizationsEs extends AppLocalizations {
   String get mucRoleMember => 'Miembro';
 
   @override
+  String get mucRoleParticipant => 'Participante';
+
+  @override
   String get mucRoleVisitor => 'Visitante';
 
   @override
   String get mucRoleModerator => 'Moderador';
+
+  @override
+  String get mucActionOpenChat => 'Abrir chat';
 
   @override
   String get mucActionKick => 'Expulsar';

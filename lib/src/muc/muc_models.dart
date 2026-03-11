@@ -68,6 +68,14 @@ enum OccupantAffiliation {
 
   bool get canManagePins => isOwner || isAdmin || isMember;
 
+  int get authorityRank => switch (this) {
+    OccupantAffiliation.owner => 3,
+    OccupantAffiliation.admin => 2,
+    OccupantAffiliation.member => 1,
+    OccupantAffiliation.none => 0,
+    OccupantAffiliation.outcast => -1,
+  };
+
   String get xmlValue => switch (this) {
     OccupantAffiliation.owner => 'owner',
     OccupantAffiliation.admin => 'admin',
@@ -135,6 +143,7 @@ class Occupant {
 
   bool get isModerator => role.isModerator;
   bool get isOffline => !isPresent;
+  bool get hasResolvedMembershipState => !affiliation.isNone || !role.isNone;
 
   Occupant copyWith({
     String? occupantId,
@@ -198,6 +207,8 @@ class RoomState {
 
   List<Occupant> get members => _occupantGroups.members;
 
+  List<Occupant> get participants => _occupantGroups.participants;
+
   List<Occupant> get visitors => _occupantGroups.visitors;
 
   bool get roomCreated =>
@@ -220,10 +231,12 @@ class RoomState {
     final admins = <Occupant>[];
     final moderators = <Occupant>[];
     final members = <Occupant>[];
+    final participants = <Occupant>[];
     final visitors = <Occupant>[];
 
     for (final occupant in occupants.values) {
       if (occupant.affiliation.isOutcast) continue;
+      if (!occupant.hasResolvedMembershipState) continue;
       if (occupant.affiliation.isOwner) {
         owners.add(occupant);
       } else if (occupant.affiliation.isAdmin) {
@@ -232,6 +245,8 @@ class RoomState {
         moderators.add(occupant);
       } else if (occupant.affiliation.isMember) {
         members.add(occupant);
+      } else if (occupant.role.isParticipant) {
+        participants.add(occupant);
       } else if (occupant.affiliation.isNone) {
         visitors.add(occupant);
       }
@@ -241,6 +256,7 @@ class RoomState {
     _sortByNick(admins);
     _sortByNick(moderators);
     _sortByNick(members);
+    _sortByNick(participants);
     _sortByNick(visitors);
 
     return _RoomOccupantGroups(
@@ -248,6 +264,7 @@ class RoomState {
       admins: admins,
       moderators: moderators,
       members: members,
+      participants: participants,
       visitors: visitors,
     );
   }
@@ -324,18 +341,27 @@ enum MucModerationAction {
   bool get isRoleChange => this == moderator || this == participant;
 }
 
-enum RoomMemberSectionKind { owners, admins, moderators, members, visitors }
+enum RoomMemberSectionKind {
+  owners,
+  admins,
+  moderators,
+  members,
+  participants,
+  visitors,
+}
 
 class RoomMemberEntry {
   const RoomMemberEntry({
     required this.occupant,
     required this.actions,
     this.avatarPath,
+    this.directChatJid,
   });
 
   final Occupant occupant;
   final List<MucModerationAction> actions;
   final String? avatarPath;
+  final String? directChatJid;
 }
 
 class RoomMemberSection {
@@ -351,6 +377,7 @@ class _RoomOccupantGroups {
     required this.admins,
     required this.moderators,
     required this.members,
+    required this.participants,
     required this.visitors,
   });
 
@@ -358,5 +385,6 @@ class _RoomOccupantGroups {
   final List<Occupant> admins;
   final List<Occupant> moderators;
   final List<Occupant> members;
+  final List<Occupant> participants;
   final List<Occupant> visitors;
 }

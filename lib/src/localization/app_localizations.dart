@@ -4926,6 +4926,12 @@ abstract class AppLocalizations {
   /// **'Send invites'**
   String get mucSendInvites;
 
+  /// No description provided for @mucInviteEligibleRecipientsOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Only 1:1 XMPP contacts on your domain or axi.im can be invited to rooms.'**
+  String get mucInviteEligibleRecipientsOnly;
+
   /// No description provided for @mucChangeNicknameTitle.
   ///
   /// In en, this message translates to:
@@ -4992,6 +4998,12 @@ abstract class AppLocalizations {
   /// **'Members'**
   String get mucSectionMembers;
 
+  /// No description provided for @mucSectionParticipants.
+  ///
+  /// In en, this message translates to:
+  /// **'Participants'**
+  String get mucSectionParticipants;
+
   /// No description provided for @mucSectionVisitors.
   ///
   /// In en, this message translates to:
@@ -5016,6 +5028,12 @@ abstract class AppLocalizations {
   /// **'Member'**
   String get mucRoleMember;
 
+  /// No description provided for @mucRoleParticipant.
+  ///
+  /// In en, this message translates to:
+  /// **'Participant'**
+  String get mucRoleParticipant;
+
   /// No description provided for @mucRoleVisitor.
   ///
   /// In en, this message translates to:
@@ -5027,6 +5045,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Moderator'**
   String get mucRoleModerator;
+
+  /// No description provided for @mucActionOpenChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Open chat'**
+  String get mucActionOpenChat;
 
   /// No description provided for @mucActionKick.
   ///

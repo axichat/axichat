@@ -1683,11 +1683,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       RoomMemberSectionKind.admins: <RoomMemberEntry>[],
       RoomMemberSectionKind.moderators: <RoomMemberEntry>[],
       RoomMemberSectionKind.members: <RoomMemberEntry>[],
+      RoomMemberSectionKind.participants: <RoomMemberEntry>[],
       RoomMemberSectionKind.visitors: <RoomMemberEntry>[],
     };
 
     for (final occupant in roomState.occupants.values) {
       if (!seen.add(occupant.occupantId)) continue;
+      if (!occupant.hasResolvedMembershipState) continue;
       final kind = _memberSectionKindFor(occupant);
       membersByKind[kind]!.add(
         RoomMemberEntry(
@@ -1701,6 +1703,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             roomState: roomState,
             avatarPathsByBareJid: avatarPathsByBareJid,
             selfAvatarPath: selfAvatarPath,
+          ),
+          directChatJid: _directChatJidForOccupant(
+            occupant: occupant,
+            roomState: roomState,
           ),
         ),
       );
@@ -1725,6 +1731,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     addSection(RoomMemberSectionKind.admins);
     addSection(RoomMemberSectionKind.moderators);
     addSection(RoomMemberSectionKind.members);
+    addSection(RoomMemberSectionKind.participants);
     addSection(RoomMemberSectionKind.visitors);
     return sections;
   }
@@ -1742,6 +1749,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (occupant.affiliation.isMember) {
       return RoomMemberSectionKind.members;
     }
+    if (occupant.role.isParticipant) {
+      return RoomMemberSectionKind.participants;
+    }
     return RoomMemberSectionKind.visitors;
   }
 
@@ -1752,41 +1762,145 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (occupant.occupantId == roomState.myOccupantId) return const [];
     final myAffiliation = roomState.myAffiliation;
     final myRole = roomState.myRole;
-    final isOwner = myAffiliation.isOwner;
-    final isAdmin = myAffiliation.isAdmin;
-    final isModerator = myRole.isModerator;
-    final canSetRoles = isOwner || isAdmin || isModerator;
+    final hasRealJid = _normalizedBareJid(occupant.realJid) != null;
     final actions = <MucModerationAction>[];
-    if (canSetRoles) {
+    if (_canKickOccupant(
+      myAffiliation: myAffiliation,
+      myRole: myRole,
+      occupant: occupant,
+    )) {
       actions.add(MucModerationAction.kick);
     }
-    if ((isOwner || isAdmin) && occupant.realJid?.isNotEmpty == true) {
+    if (_canBanOccupant(
+      myAffiliation: myAffiliation,
+      occupant: occupant,
+      hasRealJid: hasRealJid,
+    )) {
       actions.add(MucModerationAction.ban);
     }
-    if (isOwner || isAdmin) {
-      if (!occupant.affiliation.isMember) {
-        actions.add(MucModerationAction.member);
-      }
-      if (isOwner) {
-        if (!occupant.affiliation.isAdmin) {
-          actions.add(MucModerationAction.admin);
-        }
-        if (!occupant.affiliation.isOwner) {
-          actions.add(MucModerationAction.owner);
-        }
-      }
-      if (occupant.role.isModerator) {
-        actions.add(MucModerationAction.participant);
-      } else {
-        actions.add(MucModerationAction.moderator);
-      }
+    if (_canChangeAffiliationTo(
+      myAffiliation: myAffiliation,
+      occupant: occupant,
+      nextAffiliation: OccupantAffiliation.member,
+      hasRealJid: hasRealJid,
+    )) {
+      actions.add(MucModerationAction.member);
     }
-    if (canSetRoles && !actions.contains(MucModerationAction.participant)) {
-      if (occupant.role.isModerator) {
-        actions.add(MucModerationAction.participant);
-      }
+    if (_canChangeAffiliationTo(
+      myAffiliation: myAffiliation,
+      occupant: occupant,
+      nextAffiliation: OccupantAffiliation.admin,
+      hasRealJid: hasRealJid,
+    )) {
+      actions.add(MucModerationAction.admin);
+    }
+    if (_canChangeAffiliationTo(
+      myAffiliation: myAffiliation,
+      occupant: occupant,
+      nextAffiliation: OccupantAffiliation.owner,
+      hasRealJid: hasRealJid,
+    )) {
+      actions.add(MucModerationAction.owner);
+    }
+    if (_canGrantModerator(myAffiliation: myAffiliation, occupant: occupant)) {
+      actions.add(MucModerationAction.moderator);
+    }
+    if (_canRevokeModerator(myAffiliation: myAffiliation, occupant: occupant)) {
+      actions.add(MucModerationAction.participant);
     }
     return actions;
+  }
+
+  bool _canKickOccupant({
+    required OccupantAffiliation myAffiliation,
+    required OccupantRole myRole,
+    required Occupant occupant,
+  }) {
+    if (!myRole.isModerator &&
+        !myAffiliation.isAdmin &&
+        !myAffiliation.isOwner) {
+      return false;
+    }
+    if (myAffiliation.authorityRank < occupant.affiliation.authorityRank) {
+      return false;
+    }
+    if (occupant.role.isModerator) {
+      return myAffiliation.isAdmin || myAffiliation.isOwner;
+    }
+    return occupant.role.isParticipant || occupant.role.isVisitor;
+  }
+
+  bool _canBanOccupant({
+    required OccupantAffiliation myAffiliation,
+    required Occupant occupant,
+    required bool hasRealJid,
+  }) {
+    if (!hasRealJid) return false;
+    if (myAffiliation.isOwner) return true;
+    if (myAffiliation.isAdmin) {
+      return occupant.affiliation.isMember || occupant.affiliation.isNone;
+    }
+    return false;
+  }
+
+  bool _canChangeAffiliationTo({
+    required OccupantAffiliation myAffiliation,
+    required Occupant occupant,
+    required OccupantAffiliation nextAffiliation,
+    required bool hasRealJid,
+  }) {
+    if (!hasRealJid) return false;
+    if (occupant.affiliation == nextAffiliation) return false;
+    if (myAffiliation.isOwner) {
+      return true;
+    }
+    if (!myAffiliation.isAdmin) {
+      return false;
+    }
+    return nextAffiliation.isMember && occupant.affiliation.isNone;
+  }
+
+  bool _canGrantModerator({
+    required OccupantAffiliation myAffiliation,
+    required Occupant occupant,
+  }) {
+    if (!myAffiliation.isOwner && !myAffiliation.isAdmin) {
+      return false;
+    }
+    if (occupant.role.isModerator) {
+      return false;
+    }
+    return occupant.affiliation.isMember || occupant.affiliation.isNone;
+  }
+
+  bool _canRevokeModerator({
+    required OccupantAffiliation myAffiliation,
+    required Occupant occupant,
+  }) {
+    if (!myAffiliation.isOwner && !myAffiliation.isAdmin) {
+      return false;
+    }
+    if (!occupant.role.isModerator) {
+      return false;
+    }
+    return occupant.affiliation.isMember || occupant.affiliation.isNone;
+  }
+
+  String? _directChatJidForOccupant({
+    required Occupant occupant,
+    required RoomState roomState,
+  }) {
+    if (occupant.occupantId == roomState.myOccupantId) {
+      return null;
+    }
+    final realJid = _normalizedBareJid(occupant.realJid);
+    if (realJid == null) {
+      return null;
+    }
+    if (realJid == _normalizedBareJid(roomState.roomJid)) {
+      return null;
+    }
+    return realJid;
   }
 
   String? _avatarPathForOccupant({
@@ -2996,12 +3110,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatModerationActionRequested event,
     Emitter<ChatState> emit,
   ) async {
+    final completer = event.completer;
     final chat = event.chat;
     if (chat.type != ChatType.groupChat || event.roomState == null) {
+      if (completer != null && !completer.isCompleted) {
+        completer.complete();
+      }
       return;
     }
     final occupant = event.roomState!.occupants[event.occupantId];
-    if (occupant == null) return;
+    if (occupant == null) {
+      if (completer != null && !completer.isCompleted) {
+        completer.complete();
+      }
+      return;
+    }
     try {
       switch (event.action) {
         case MucModerationAction.kick:
@@ -3063,7 +3186,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           toastId: state.toastId + 1,
         ),
       );
-    } catch (error, stackTrace) {
+    } on Exception catch (error, stackTrace) {
       _log.fine(
         'Moderation action ${event.action.name} failed for ${occupant.nick}',
         error,
@@ -3078,6 +3201,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           toastId: state.toastId + 1,
         ),
       );
+    } finally {
+      if (completer != null && !completer.isCompleted) {
+        completer.complete();
+      }
     }
   }
 
