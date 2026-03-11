@@ -16652,19 +16652,26 @@ class _GuestScriptEntry {
   final MessageStatus status;
 }
 
-class _GuestChatState extends State<GuestChat> {
-  static const double _guestHeaderSpacing = 12;
-  static const double _guestStatusIconSize = 13;
-  static const double _guestBubbleTopSpacing = 8;
-  static const double _guestBubbleBottomSpacing = 12;
+class _GuestPreviewMessage {
+  const _GuestPreviewMessage({
+    required this.id,
+    required this.message,
+    this.animateEntry = false,
+  });
 
+  final String id;
+  final ChatMessage message;
+  final bool animateEntry;
+}
+
+class _GuestChatState extends State<GuestChat> {
   final _emojiPopoverController = ShadPopoverController();
   late final FocusNode _focusNode;
   late final TextEditingController _textController;
   late final ScrollController _scrollController;
   late ChatUser _selfUser;
   late ChatUser _axiUser;
-  late List<ChatMessage> _messages;
+  late List<_GuestPreviewMessage> _messages;
   Locale? _lastLocale;
   var _composerHasText = false;
   bool get _composerHasContent => _composerHasText;
@@ -16675,7 +16682,7 @@ class _GuestChatState extends State<GuestChat> {
     _focusNode = FocusNode();
     _textController = TextEditingController();
     _scrollController = ScrollController();
-    _messages = const <ChatMessage>[];
+    _messages = const <_GuestPreviewMessage>[];
     _textController.addListener(_handleComposerChanged);
   }
 
@@ -16759,19 +16766,22 @@ class _GuestChatState extends State<GuestChat> {
     ),
   ];
 
-  List<ChatMessage> _scriptMessagesForLocale(AppLocalizations l10n) {
+  List<_GuestPreviewMessage> _scriptMessagesForLocale(AppLocalizations l10n) {
     final now = DateTime.now();
-    return _previewScript(l10n)
+    return _previewScript(l10n).indexed
         .map(
-          (entry) => ChatMessage(
-            user: entry.isSelf ? _selfUser : _axiUser,
-            createdAt: now.subtract(entry.offset),
-            text: entry.text,
-            status: entry.status,
+          (indexedEntry) => _GuestPreviewMessage(
+            id: 'guest-script-${indexedEntry.$1}',
+            message: ChatMessage(
+              user: indexedEntry.$2.isSelf ? _selfUser : _axiUser,
+              createdAt: now.subtract(indexedEntry.$2.offset),
+              text: indexedEntry.$2.text,
+              status: indexedEntry.$2.status,
+            ),
           ),
         )
         .toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      ..sort((a, b) => b.message.createdAt.compareTo(a.message.createdAt));
   }
 
   void _handleComposerChanged() {
@@ -16782,20 +16792,19 @@ class _GuestChatState extends State<GuestChat> {
     });
   }
 
-  double _bubbleMaxWidth(double maxWidth) {
-    final isCompact = maxWidth < smallScreen;
-    final fraction = isCompact ? 0.8 : 0.8;
-    return math.min(maxWidth * fraction, maxWidth);
-  }
-
   void _handleSend() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
-    final message = ChatMessage(
-      user: _selfUser,
-      createdAt: DateTime.now(),
-      text: text,
-      status: MessageStatus.sent,
+    final createdAt = DateTime.now();
+    final message = _GuestPreviewMessage(
+      id: 'guest-message-${createdAt.microsecondsSinceEpoch}',
+      animateEntry: true,
+      message: ChatMessage(
+        user: _selfUser,
+        createdAt: createdAt,
+        text: text,
+        status: MessageStatus.sent,
+      ),
     );
     setState(() {
       _messages.insert(0, message);
@@ -16808,10 +16817,15 @@ class _GuestChatState extends State<GuestChat> {
 
   Future<void> _scrollToLatest() async {
     if (!_scrollController.hasClients) return;
+    final animationDuration = context.read<SettingsCubit>().animationDuration;
+    if (animationDuration == Duration.zero) {
+      _scrollController.jumpTo(0);
+      return;
+    }
     await _scrollController.animateTo(
       0,
-      duration: baseAnimationDuration,
-      curve: Curves.easeOut,
+      duration: animationDuration,
+      curve: Curves.easeOutCubic,
     );
   }
 
@@ -16854,89 +16868,61 @@ class _GuestChatState extends State<GuestChat> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final isDesktopWidth = size.width >= smallScreen;
     final spacing = context.spacing;
-    final guestHorizontalPadding = isDesktopWidth ? spacing.l : spacing.m;
     final colors = context.colorScheme;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: colors.background,
-        border: Border(left: BorderSide(color: colors.border)),
+        border: Border(left: context.borderSide),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _GuestChatHeader(
-            contact: _axiUser,
-            spacing: _guestHeaderSpacing,
-            horizontalPadding: guestHorizontalPadding,
-          ),
+          _GuestChatHeader(contact: _axiUser),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final maxBubbleWidth = _bubbleMaxWidth(constraints.maxWidth);
+                final maxBubbleWidth = math.min(
+                  context.sizing.dialogMaxWidth,
+                  math.max(0.0, constraints.maxWidth - (spacing.m * 2)),
+                );
                 return ListView.builder(
                   controller: _scrollController,
                   reverse: true,
                   padding: EdgeInsets.zero,
                   itemCount: _messages.length,
                   itemBuilder: (context, index) {
-                    final message = _messages[index];
+                    final entry = _messages[index];
+                    final message = entry.message;
                     final previous = index + 1 < _messages.length
-                        ? _messages[index + 1]
+                        ? _messages[index + 1].message
                         : null;
-                    final next = index == 0 ? null : _messages[index - 1];
+                    final next = index == 0
+                        ? null
+                        : _messages[index - 1].message;
                     return _GuestMessageBubble(
+                      entry: entry,
                       message: message,
                       previous: previous,
                       next: next,
                       selfUserId: _selfUser.id,
                       maxWidth: maxBubbleWidth,
-                      topSpacing: _guestBubbleTopSpacing,
-                      bottomSpacing: _guestBubbleBottomSpacing,
-                      statusIconSize: _guestStatusIconSize,
-                      horizontalPadding: guestHorizontalPadding,
                     );
                   },
                 );
               },
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: context.colorScheme.background,
-                border: Border(
-                  top: BorderSide(color: context.colorScheme.border),
-                ),
-              ),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  guestHorizontalPadding,
-                  12,
-                  guestHorizontalPadding,
-                  0,
-                ),
-                child: ChatCutoutComposer(
-                  controller: _textController,
-                  focusNode: _focusNode,
-                  hintText: context.l10n.chatComposerMessageHint,
-                  onSend: _handleSend,
-                  actions: _composerAccessories(
-                    canSend: _composerHasContent,
-                    attachmentsEnabled: false,
-                  ),
-                  sendEnabled: _composerHasContent,
-                  sendOnEnter: context
-                      .watch<SettingsCubit>()
-                      .state
-                      .chatSendOnEnter,
-                ),
-              ),
+          _GuestComposerSection(
+            controller: _textController,
+            focusNode: _focusNode,
+            actions: _composerAccessories(
+              canSend: _composerHasContent,
+              attachmentsEnabled: false,
             ),
+            sendEnabled: _composerHasContent,
+            onSend: _handleSend,
           ),
         ],
       ),
@@ -16945,15 +16931,9 @@ class _GuestChatState extends State<GuestChat> {
 }
 
 class _GuestChatHeader extends StatelessWidget {
-  const _GuestChatHeader({
-    required this.contact,
-    required this.spacing,
-    required this.horizontalPadding,
-  });
+  const _GuestChatHeader({required this.contact});
 
   final ChatUser contact;
-  final double spacing;
-  final double horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -16966,18 +16946,18 @@ class _GuestChatHeader extends StatelessWidget {
         ? contact.firstName!
         : contact.id;
     return SizedBox(
-      height: kToolbarHeight,
+      height: context.sizing.appBarHeight,
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: colors.background,
           border: Border(bottom: context.borderSide),
         ),
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          padding: EdgeInsets.symmetric(horizontal: context.spacing.m),
           child: Row(
             children: [
               AxichatAppIconAvatar(size: context.sizing.iconButtonSize),
-              SizedBox(width: spacing),
+              SizedBox(width: context.spacing.m),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -17009,33 +16989,91 @@ class _GuestChatHeader extends StatelessWidget {
   }
 }
 
+class _GuestComposerSection extends StatelessWidget {
+  const _GuestComposerSection({
+    required this.controller,
+    required this.focusNode,
+    required this.actions,
+    required this.sendEnabled,
+    required this.onSend,
+  });
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final List<ChatComposerAccessory> actions;
+  final bool sendEnabled;
+  final VoidCallback onSend;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final colors = context.colorScheme;
+    final horizontalPadding = spacing.l;
+    final cutoutBalanceInset = context.sizing.iconButtonTapTarget / 2;
+    final rightPadding = math.max(0.0, horizontalPadding - cutoutBalanceInset);
+    final keyboardVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      bottom: !keyboardVisible,
+      child: SizedBox(
+        width: double.infinity,
+        child: ColoredBox(
+          color: colors.background,
+          child: DecoratedBox(
+            decoration: BoxDecoration(border: Border(top: context.borderSide)),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                horizontalPadding,
+                spacing.m,
+                rightPadding,
+                spacing.s,
+              ),
+              child: ChatCutoutComposer(
+                controller: controller,
+                focusNode: focusNode,
+                hintText: context.l10n.chatComposerMessageHint,
+                semanticsLabel: context.l10n.chatComposerSemantics,
+                onSend: onSend,
+                actions: actions,
+                sendEnabled: sendEnabled,
+                sendOnEnter: context
+                    .watch<SettingsCubit>()
+                    .state
+                    .chatSendOnEnter,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _GuestMessageBubble extends StatelessWidget {
   const _GuestMessageBubble({
+    required this.entry,
     required this.message,
     required this.previous,
     required this.next,
     required this.selfUserId,
     required this.maxWidth,
-    required this.topSpacing,
-    required this.bottomSpacing,
-    required this.statusIconSize,
-    required this.horizontalPadding,
   });
 
+  final _GuestPreviewMessage entry;
   final ChatMessage message;
   final ChatMessage? previous;
   final ChatMessage? next;
   final String selfUserId;
   final double maxWidth;
-  final double topSpacing;
-  final double bottomSpacing;
-  final double statusIconSize;
-  final double horizontalPadding;
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final chatTokens = context.chatTheme;
+    final spacing = context.spacing;
+    final settings = context.watch<SettingsCubit>().state;
     final isSelf = message.user.id == selfUserId;
     final chainedPrev = _chatMessagesShouldChain(message, previous);
     final chainedNext = _chatMessagesShouldChain(message, next);
@@ -17048,42 +17086,35 @@ class _GuestMessageBubble extends StatelessWidget {
     final bubbleBaseRadius = _bubbleBaseRadius(context);
     final bubbleCornerClearance = _bubbleCornerClearance(bubbleBaseRadius);
     final statusIcon = message.status?.icon;
-    final messageTextSize = context
-        .watch<SettingsCubit>()
-        .state
-        .messageTextSize;
+    final baseStyle = context.textTheme.small.copyWith(
+      color: textColor,
+      fontSize: settings.messageTextSize.fontSize,
+      height: 1.3,
+    );
+    final linkStyle = baseStyle.copyWith(
+      color: isSelf ? colors.primaryForeground : colors.primary,
+      decoration: TextDecoration.underline,
+      fontWeight: FontWeight.w600,
+    );
+    final detailStyle = context.textTheme.muted.copyWith(
+      color: timestampColor,
+      height: 1.0,
+      textBaseline: TextBaseline.alphabetic,
+    );
+    TextSpan iconDetailSpan(IconData icon) => TextSpan(
+      text: String.fromCharCode(icon.codePoint),
+      style: detailStyle.copyWith(
+        fontFamily: icon.fontFamily,
+        package: icon.fontPackage,
+      ),
+    );
     final timeLabel =
         '${message.createdAt.hour.toString().padLeft(2, '0')}:${message.createdAt.minute.toString().padLeft(2, '0')}';
-    final inlineText = DynamicInlineText(
-      key: ValueKey(message.createdAt.microsecondsSinceEpoch),
-      text: TextSpan(
-        text: message.text,
-        style: context.textTheme.small.copyWith(
-          color: textColor,
-          fontSize: messageTextSize.fontSize,
-          height: 1.3,
-        ),
-      ),
-      details: [
-        TextSpan(
-          text: timeLabel,
-          style: context.textTheme.muted.copyWith(
-            color: timestampColor,
-            fontSize: statusIconSize,
-          ),
-        ),
-        if (isSelf && statusIcon != null)
-          TextSpan(
-            text: String.fromCharCode(statusIcon.codePoint),
-            style: TextStyle(
-              color: timestampColor,
-              fontSize: statusIconSize,
-              fontFamily: statusIcon.fontFamily,
-              package: statusIcon.fontPackage,
-            ),
-          ),
-      ],
-    );
+    final details = <InlineSpan>[
+      TextSpan(text: timeLabel, style: detailStyle),
+      iconDetailSpan(LucideIcons.messageCircle),
+      if (isSelf && statusIcon != null) iconDetailSpan(statusIcon),
+    ];
 
     final bubble = ChatBubbleSurface(
       isSelf: isSelf,
@@ -17096,44 +17127,67 @@ class _GuestMessageBubble extends StatelessWidget {
         chainedNext: chainedNext,
       ),
       shadowOpacity: 0,
-      shadows: _selectedBubbleShadows(colors.primary),
+      shadows: const <BoxShadow>[],
       bubbleWidthFraction: 1.0,
       cornerClearance: bubbleCornerClearance,
-      body: Padding(padding: _bubblePadding(context), child: inlineText),
+      body: Padding(
+        padding: _bubblePadding(context),
+        child: _ParsedMessageBody(
+          contentKey: entry.id,
+          text: message.text,
+          baseStyle: baseStyle,
+          linkStyle: linkStyle,
+          details: details,
+          onLinkTap: (_) {},
+        ),
+      ),
     );
-    final showSenderLabel = !chainedPrev;
-    Widget bubbleWithLabel = bubble;
-    if (showSenderLabel) {
-      bubbleWithLabel = Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: isSelf
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start,
-        children: [
-          _MessageSenderLabel(
+    final senderLabel = !chainedPrev
+        ? _MessageSenderLabel(
             user: message.user,
             isSelf: isSelf,
             selfLabel: context.l10n.chatSenderYou,
             leftInset: 0.0,
-          ),
-          bubble,
-        ],
-      );
-    }
+          )
+        : null;
+    final bubbleStack = _ReplyPreviewBubbleColumn(
+      forwardedPreview: null,
+      quotedPreview: null,
+      senderLabel: senderLabel,
+      bubble: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: bubble,
+      ),
+      previewMaxWidth: maxWidth,
+      spacing: spacing.s,
+      previewSpacing: spacing.xxs,
+      alignEnd: isSelf,
+    );
+    final animatedBubble = AxiAnimatedSize(
+      duration: _bubbleFocusDuration,
+      reverseDuration: _bubbleFocusDuration,
+      curve: _bubbleFocusCurve,
+      alignment: isSelf ? Alignment.topRight : Alignment.topLeft,
+      clipBehavior: Clip.none,
+      child: bubbleStack,
+    );
+    final arrival = _MessageArrivalAnimator(
+      key: ValueKey('guest-arrival-${entry.id}'),
+      animate: entry.animateEntry,
+      isSelf: isSelf,
+      child: animatedBubble,
+    );
 
     return Padding(
       padding: EdgeInsets.only(
-        top: chainedPrev ? 2 : topSpacing,
-        bottom: chainedNext ? 4 : bottomSpacing,
-        left: horizontalPadding,
-        right: horizontalPadding,
+        top: chainedPrev ? spacing.xxs : spacing.s,
+        bottom: chainedNext ? spacing.xxs : spacing.m,
+        left: spacing.m,
+        right: spacing.m,
       ),
       child: Align(
         alignment: isSelf ? Alignment.centerRight : Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          child: bubbleWithLabel,
-        ),
+        child: arrival,
       ),
     );
   }

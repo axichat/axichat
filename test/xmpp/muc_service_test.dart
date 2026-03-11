@@ -613,6 +613,14 @@ void main() {
     test(
       'JOIN-015 [EC] ensureJoined skips rejoin when already present',
       () async {
+        final managerRoomState = mox.RoomState(
+          roomJid: mox.JID.fromString(_roomJidBare),
+          joined: true,
+          nick: _roomNick,
+        );
+        when(
+          () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
+        ).thenAnswer((_) async => managerRoomState);
         when(
           () => mucManager.joinRoom(
             any(),
@@ -698,6 +706,63 @@ void main() {
     );
 
     test(
+      'JOIN-015C [HP] joinRoom clears stale local self presence before waiting for fresh self presence',
+      () async {
+        final managerRoomState = mox.RoomState(
+          roomJid: mox.JID.fromString(_roomJidBare),
+          joined: true,
+          nick: _roomNick,
+        );
+        when(
+          () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
+        ).thenAnswer((_) async => managerRoomState);
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          final roomBeforePresence = xmppService.roomStateFor(_roomJid);
+          expect(roomBeforePresence?.hasSelfPresence, isFalse);
+          expect(roomBeforePresence?.hasPresentSelfOccupant, isFalse);
+          expect(managerRoomState.joined, isFalse);
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: _roomJid,
+              occupantJid: _roomJidWithSelfNick,
+              nick: _roomNick,
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {MucStatusCode.selfPresence.code},
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: _roomNick,
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+          isPresent: true,
+          fromPresence: true,
+        );
+
+        await xmppService.joinRoom(roomJid: _roomJid, nickname: _roomNick);
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room?.hasSelfPresence, isTrue);
+        expect(room?.hasPresentSelfOccupant, isTrue);
+      },
+    );
+
+    test(
       'JOIN-016 [HP] ensureJoined clears roomCreated after instant room configuration succeeds',
       () async {
         final managerRoomState = mox.RoomState(
@@ -763,6 +828,27 @@ void main() {
             maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
         );
+      },
+    );
+
+    test(
+      'JOIN-016B [HP] trackOccupantsFromMessages does not treat message senders as present occupants',
+      () {
+        xmppService.trackOccupantsFromMessages(_roomJid, [
+          Message(
+            stanzaID: 'msg-1',
+            chatJid: _roomJid,
+            senderJid: _roomJidWithSelfNick,
+            body: 'hello',
+            timestamp: DateTime.timestamp(),
+          ),
+        ]);
+
+        final room = xmppService.roomStateFor(_roomJid);
+        final occupant = room?.occupants[_roomJidWithSelfNick];
+        expect(occupant, isNotNull);
+        expect(occupant?.isPresent, isFalse);
+        expect(room?.hasPresentSelfOccupant, isFalse);
       },
     );
 
