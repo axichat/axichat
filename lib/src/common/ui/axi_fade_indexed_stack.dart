@@ -176,7 +176,7 @@ class _AxiFadeIndexedStackFadeOutInState
   }
 }
 
-class _AxiFadeIndexedStackChild extends StatefulWidget {
+class _AxiFadeIndexedStackChild extends StatelessWidget {
   const _AxiFadeIndexedStackChild({
     required this.visible,
     required this.duration,
@@ -192,70 +192,22 @@ class _AxiFadeIndexedStackChild extends StatefulWidget {
   final Widget child;
 
   @override
-  State<_AxiFadeIndexedStackChild> createState() =>
-      _AxiFadeIndexedStackChildState();
-}
-
-class _AxiFadeIndexedStackChildState extends State<_AxiFadeIndexedStackChild> {
-  late bool _shouldTick;
-
-  @override
-  void initState() {
-    super.initState();
-    _shouldTick = widget.visible;
-  }
-
-  @override
-  void didUpdateWidget(covariant _AxiFadeIndexedStackChild oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!widget.overlapChildren) {
-      _shouldTick = widget.visible;
-      return;
-    }
-    if (widget.visible) {
-      _shouldTick = true;
-      return;
-    }
-    if (widget.duration == Duration.zero) {
-      _shouldTick = false;
-      return;
-    }
-    _shouldTick = true;
-  }
-
-  void _handleFadeEnd() {
-    if (!widget.overlapChildren || !mounted || widget.visible || !_shouldTick) {
-      return;
-    }
-    setState(() {
-      _shouldTick = false;
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final double resolvedOpacity = widget.visible
+    final double resolvedOpacity = visible
         ? _fadeVisibleOpacity
         : _fadeHiddenOpacity;
-    final animatedChild = TickerMode(
-      enabled: _shouldTick,
-      child: IgnorePointer(
-        ignoring: !widget.visible,
-        child: AnimatedOpacity(
-          opacity: resolvedOpacity,
-          duration: widget.duration,
-          curve: widget.curve,
-          onEnd: _handleFadeEnd,
-          child: ExcludeSemantics(
-            excluding: !widget.visible,
-            child: widget.child,
-          ),
-        ),
+    final animatedChild = IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedOpacity(
+        opacity: resolvedOpacity,
+        duration: duration,
+        curve: curve,
+        child: ExcludeSemantics(excluding: !visible, child: child),
       ),
     );
-    if (widget.overlapChildren) {
+    if (overlapChildren) {
       return animatedChild;
     }
-    return Offstage(offstage: !widget.visible, child: animatedChild);
+    return Offstage(offstage: !visible, child: animatedChild);
   }
 }

@@ -8,7 +8,6 @@ import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<bool?> showNotificationDialog(
   BuildContext context,
@@ -19,7 +18,7 @@ Future<bool?> showNotificationDialog(
       BlocBuilder<NotificationRequestCubit, NotificationRequestState>(
         bloc: locate<NotificationRequestCubit>(),
         builder: (context, state) {
-          return ShadDialog(
+          return AxiDialog(
             constraints: BoxConstraints(
               maxWidth: context.sizing.dialogMaxWidth,
             ),

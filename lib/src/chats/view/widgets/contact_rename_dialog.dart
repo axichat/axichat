@@ -5,7 +5,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ContactRenameDialog extends StatefulWidget {
   const ContactRenameDialog({required this.initialValue, super.key});
@@ -60,7 +59,7 @@ class _ContactRenameDialogState extends State<ContactRenameDialog> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
-    return ShadDialog(
+    return AxiDialog(
       constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
       title: Text(
         l10n.chatContactRenameTitle,

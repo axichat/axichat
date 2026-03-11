@@ -6,7 +6,6 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<MessageTransport?> showTransportChoiceDialog(
   BuildContext context, {
@@ -43,7 +42,7 @@ Future<MessageTransport?> showTransportChoiceDialog(
               onPressed: () => pop(MessageTransport.xmpp),
               child: Text(chatLabel),
             );
-      return ShadDialog(
+      return AxiDialog(
         constraints: BoxConstraints(
           maxWidth: dialogContext.sizing.dialogMaxWidth,
         ),

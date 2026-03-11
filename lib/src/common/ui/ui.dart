@@ -19,6 +19,7 @@ export 'axi_confirm.dart';
 export 'axi_context_menu_region.dart';
 export 'axi_cutout.dart';
 export 'axi_delete_menu_item.dart';
+export 'axi_dialog.dart';
 export 'axi_dialog_fab.dart';
 export 'axi_fab.dart';
 export 'modal_close_button.dart';

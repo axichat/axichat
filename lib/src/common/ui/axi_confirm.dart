@@ -5,7 +5,6 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<bool?> confirm(
   BuildContext context, {
@@ -47,7 +46,7 @@ Future<bool?> confirm(
               onPressed: () => pop(true),
               child: Text(resolvedConfirmLabel),
             );
-      return ShadDialog(
+      return AxiDialog(
         constraints: BoxConstraints(
           maxWidth: dialogContext.sizing.dialogMaxWidth,
         ),
@@ -132,7 +131,7 @@ class _EmailSendConfirmationDialogState
         : attachmentLines.join('\n');
     final maxPreviewHeight = context.sizing.menuItemHeight * 5;
     final pop = Navigator.of(context).pop;
-    return ShadDialog(
+    return AxiDialog(
       constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
       title: Text(
         l10n.emailSendConfirmTitle,

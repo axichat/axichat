@@ -630,15 +630,11 @@ class _ChatListTileState extends State<ChatListTile> {
       if (!value.isFinite) {
         return value;
       }
-      try {
-        final scaledValue = textScaler.scale(value);
-        if (!scaledValue.isFinite || scaledValue <= 0) {
-          return value;
-        }
-        return scaledValue;
-      } on AssertionError {
+      final scaledValue = textScaler.scale(value);
+      if (!scaledValue.isFinite || scaledValue <= 0) {
         return value;
       }
+      return scaledValue;
     }
 
     final scaleFactor = textScaler.scale(1);
@@ -988,7 +984,7 @@ class _ChatListTileState extends State<ChatListTile> {
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return ShadDialog(
+            return AxiDialog(
               constraints: BoxConstraints(
                 maxWidth: context.sizing.dialogMaxWidth,
               ),

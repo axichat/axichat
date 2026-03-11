@@ -4,7 +4,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum LinkAction { open, copy }
 
@@ -20,7 +19,7 @@ Future<LinkAction?> showLinkActionDialog(
     context: context,
     builder: (dialogContext) {
       final pop = Navigator.of(dialogContext).pop;
-      return ShadDialog(
+      return AxiDialog(
         constraints: BoxConstraints(
           maxWidth: dialogContext.sizing.dialogMaxWidth,
         ),

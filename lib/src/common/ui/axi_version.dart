@@ -21,7 +21,7 @@ class AxiVersion extends StatelessWidget {
         return ShadGestureDetector(
           onTap: () => showFadeScaleDialog(
             context: context,
-            builder: (context) => ShadDialog(
+            builder: (context) => AxiDialog(
               constraints: BoxConstraints(
                 maxWidth: context.sizing.dialogMaxWidth,
               ),

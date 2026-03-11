@@ -4,7 +4,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 final class AttachmentApprovalDecision {
   const AttachmentApprovalDecision({
@@ -48,7 +47,7 @@ class _AttachmentApprovalDialogState extends State<AttachmentApprovalDialog> {
   Widget build(BuildContext context) {
     final pop = Navigator.of(context).pop;
     final spacing = context.spacing;
-    return ShadDialog(
+    return AxiDialog(
       constraints: BoxConstraints(maxWidth: context.sizing.dialogMaxWidth),
       title: Text(widget.title, style: context.modalHeaderTextStyle),
       actions: [
