@@ -138,7 +138,10 @@ Future<void> _deleteAppOwnedDirectoryContents({
 
 String _normalizeDirectoryName(String directoryName) {
   final trimmed = directoryName.trim();
-  if (trimmed.isEmpty || p.basename(trimmed) != trimmed) {
+  if (trimmed.isEmpty ||
+      trimmed == '.' ||
+      trimmed == '..' ||
+      p.basename(trimmed) != trimmed) {
     throw ArgumentError.value(
       directoryName,
       'directoryName',
