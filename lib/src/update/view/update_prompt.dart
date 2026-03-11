@@ -134,7 +134,7 @@ class UpdatePromptOverlay extends StatelessWidget {
     UpdateActionFailure actionFailure,
   ) => switch (actionFailure) {
     UpdateActionFailure.openStoreFailed => context.l10n.updateActionOpenFailed,
-    UpdateActionFailure.playUpdateFailed => context.l10n.updateActionFailed,
+    UpdateActionFailure.startUpdateFailed => context.l10n.updateActionFailed,
     UpdateActionFailure.userDeclined => context.l10n.updateActionDeclined,
   };
 }

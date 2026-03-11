@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:axichat/src/common/shorebird_push.dart';
 import 'package:axichat/src/update/update_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:logging/logging.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -13,8 +15,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('resolveUpdateChannel', () {
-    test('returns none on web', () {
-      final channel = resolveUpdateChannel(
+    test('returns none on web', () async {
+      final channel = await resolveUpdateChannel(
         platform: TargetPlatform.android,
         isWeb: true,
         shorebirdEnabled: true,
@@ -23,8 +25,8 @@ void main() {
       expect(channel, UpdateChannel.none);
     });
 
-    test('routes iOS to the App Store', () {
-      final channel = resolveUpdateChannel(
+    test('routes iOS to the App Store', () async {
+      final channel = await resolveUpdateChannel(
         platform: TargetPlatform.iOS,
         isWeb: false,
         shorebirdEnabled: true,
@@ -33,8 +35,8 @@ void main() {
       expect(channel, UpdateChannel.appStore);
     });
 
-    test('routes Shorebird-enabled Android builds to Play', () {
-      final channel = resolveUpdateChannel(
+    test('routes Shorebird-enabled Android builds to Play', () async {
+      final channel = await resolveUpdateChannel(
         platform: TargetPlatform.android,
         isWeb: false,
         shorebirdEnabled: true,
@@ -43,14 +45,46 @@ void main() {
       expect(channel, UpdateChannel.playStore);
     });
 
-    test('routes Shorebird-disabled Android builds to F-Droid', () {
-      final channel = resolveUpdateChannel(
+    test('routes Shorebird-disabled Android builds to F-Droid', () async {
+      final channel = await resolveUpdateChannel(
         platform: TargetPlatform.android,
         isWeb: false,
         shorebirdEnabled: false,
       );
 
       expect(channel, UpdateChannel.fdroid);
+    });
+
+    test('routes Windows builds to GitHub releases', () async {
+      final channel = await resolveUpdateChannel(
+        platform: TargetPlatform.windows,
+        isWeb: false,
+        shorebirdEnabled: true,
+      );
+
+      expect(channel, UpdateChannel.githubRelease);
+    });
+
+    test('routes Flatpak Linux builds to Flatpak', () async {
+      final channel = await resolveUpdateChannel(
+        platform: TargetPlatform.linux,
+        isWeb: false,
+        shorebirdEnabled: true,
+        flatpakSandboxDetector: () async => true,
+      );
+
+      expect(channel, UpdateChannel.flatpak);
+    });
+
+    test('routes non-Flatpak Linux builds to GitHub releases', () async {
+      final channel = await resolveUpdateChannel(
+        platform: TargetPlatform.linux,
+        isWeb: false,
+        shorebirdEnabled: true,
+        flatpakSandboxDetector: () async => false,
+      );
+
+      expect(channel, UpdateChannel.githubRelease);
     });
   });
 
@@ -172,6 +206,92 @@ void main() {
       },
     );
 
+    test('uses GitHub releases for Windows updates', () async {
+      final service = UpdateService(
+        httpClient: MockClient((request) async {
+          expect(
+            request.url.toString(),
+            'https://api.github.com/repos/axichat/axichat/releases/latest',
+          );
+          return http.Response(
+            jsonEncode({
+              'tag_name': 'v2.0.0',
+              'html_url':
+                  'https://github.com/axichat/axichat/releases/tag/v2.0.0',
+              'assets': [
+                {'name': 'axichat-windows-setup.exe'},
+              ],
+            }),
+            200,
+          );
+        }),
+        packageInfoLoader: () async => _packageInfo(),
+        targetPlatformResolver: () => TargetPlatform.windows,
+        shorebirdBackend: _RecordingShorebirdBackend(
+          status: ShorebirdUpdateStatus.upToDate,
+        ),
+      );
+      addTearDown(service.dispose);
+
+      final result = await service.checkForUpdates();
+
+      expect(result.channel, UpdateChannel.githubRelease);
+      expect(result.currentOffer?.kind, UpdateOfferKind.externalStore);
+      expect(result.currentOffer?.availableVersion, '2.0.0');
+      expect(
+        result.currentOffer?.storeUrl,
+        Uri.parse('https://github.com/axichat/axichat/releases/tag/v2.0.0'),
+      );
+    });
+
+    test('uses the Flatpak backend for Flatpak Linux builds', () async {
+      final service = UpdateService(
+        httpClient: MockClient((_) async => throw UnimplementedError()),
+        packageInfoLoader: () async => _packageInfo(),
+        targetPlatformResolver: () => TargetPlatform.linux,
+        flatpakSandboxDetector: () async => true,
+        flatpakBackend: _FakeStoreBackend(
+          offer: const UpdateOffer(
+            id: 'flatpak:abc123',
+            kind: UpdateOfferKind.flatpakUpdate,
+            channel: UpdateChannel.flatpak,
+          ),
+        ),
+        shorebirdBackend: _RecordingShorebirdBackend(
+          status: ShorebirdUpdateStatus.upToDate,
+        ),
+      );
+      addTearDown(service.dispose);
+
+      final result = await service.checkForUpdates();
+
+      expect(result.channel, UpdateChannel.flatpak);
+      expect(result.currentOffer?.kind, UpdateOfferKind.flatpakUpdate);
+      expect(result.currentOffer?.id, 'flatpak:abc123');
+    });
+
+    test('starts Flatpak updates through the backend', () async {
+      final flatpakBackend = _InteractiveStoreBackend();
+      final service = UpdateService(
+        httpClient: MockClient((_) async => throw UnimplementedError()),
+        flatpakBackend: flatpakBackend,
+        shorebirdBackend: _RecordingShorebirdBackend(
+          status: ShorebirdUpdateStatus.upToDate,
+        ),
+      );
+      addTearDown(service.dispose);
+      final offer = const UpdateOffer(
+        id: 'flatpak:abc123',
+        kind: UpdateOfferKind.flatpakUpdate,
+        channel: UpdateChannel.flatpak,
+      );
+
+      final failure = await service.startUpdate(offer);
+
+      expect(failure, isNull);
+      expect(flatpakBackend.startedOffers, [offer]);
+    });
+
     test('returns an open-store failure when launching throws', () async {
       final service = UpdateService(
         httpClient: MockClient((_) async => throw UnimplementedError()),
@@ -246,7 +366,26 @@ final class _FakeStoreBackend implements UpdateStoreBackend {
   Future<UpdateOffer?> check({
     required UpdateChannel channel,
     required PackageInfo packageInfo,
+    required TargetPlatform platform,
   }) async => offer;
+}
+
+final class _InteractiveStoreBackend
+    implements UpdateStoreBackend, InteractiveUpdateBackend {
+  final List<UpdateOffer> startedOffers = <UpdateOffer>[];
+
+  @override
+  Future<UpdateOffer?> check({
+    required UpdateChannel channel,
+    required PackageInfo packageInfo,
+    required TargetPlatform platform,
+  }) async => null;
+
+  @override
+  Future<UpdateActionFailure?> startUpdate(UpdateOffer offer) async {
+    startedOffers.add(offer);
+    return null;
+  }
 }
 
 final class _RecordingShorebirdBackend implements ShorebirdPatchBackend {
@@ -275,5 +414,6 @@ final class _ThrowingStoreBackend implements UpdateStoreBackend {
   Future<UpdateOffer?> check({
     required UpdateChannel channel,
     required PackageInfo packageInfo,
+    required TargetPlatform platform,
   }) => Future<UpdateOffer?>.error(error);
 }

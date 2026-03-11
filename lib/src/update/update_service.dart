@@ -4,7 +4,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:axichat/src/common/legal_urls.dart';
 import 'package:axichat/src/common/shorebird_push.dart';
+import 'package:axichat/src/update/flatpak_update_portal.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -19,9 +21,11 @@ enum UpdateChannel {
   none,
   playStore,
   appStore,
-  fdroid;
+  fdroid,
+  githubRelease,
+  flatpak;
 
-  bool get isStore => this != none;
+  bool get isStore => this != none && this != githubRelease;
 }
 
 enum UpdateOfferKind {
@@ -29,6 +33,7 @@ enum UpdateOfferKind {
   playFlexible,
   playCompleteFlexible,
   externalStore,
+  flatpakUpdate,
   shorebirdRestart;
 
   bool get isPlayFlow =>
@@ -39,10 +44,11 @@ enum UpdateOfferKind {
   bool get isStoreOffer => this != UpdateOfferKind.shorebirdRestart;
 }
 
-enum UpdateActionFailure { openStoreFailed, playUpdateFailed, userDeclined }
+enum UpdateActionFailure { openStoreFailed, startUpdateFailed, userDeclined }
 
 typedef PackageInfoLoader = Future<PackageInfo> Function();
 typedef TargetPlatformResolver = TargetPlatform Function();
+typedef FlatpakSandboxDetector = Future<bool> Function();
 typedef UrlLauncher =
     Future<bool> Function(
       Uri url, {
@@ -51,18 +57,24 @@ typedef UrlLauncher =
       String? webOnlyWindowName,
     });
 
-UpdateChannel resolveUpdateChannel({
+Future<UpdateChannel> resolveUpdateChannel({
   required TargetPlatform platform,
   required bool isWeb,
   required bool shorebirdEnabled,
-}) {
+  FlatpakSandboxDetector? flatpakSandboxDetector,
+}) async {
   if (isWeb) {
     return UpdateChannel.none;
+  }
+  if (platform == TargetPlatform.linux) {
+    final isFlatpak = await (flatpakSandboxDetector ?? isFlatpakSandbox)();
+    return isFlatpak ? UpdateChannel.flatpak : UpdateChannel.githubRelease;
   }
   return switch (platform) {
     TargetPlatform.iOS => UpdateChannel.appStore,
     TargetPlatform.android =>
       shorebirdEnabled ? UpdateChannel.playStore : UpdateChannel.fdroid,
+    TargetPlatform.windows => UpdateChannel.githubRelease,
     _ => UpdateChannel.none,
   };
 }
@@ -107,11 +119,16 @@ abstract interface class UpdateStoreBackend {
   Future<UpdateOffer?> check({
     required UpdateChannel channel,
     required PackageInfo packageInfo,
+    required TargetPlatform platform,
   });
 }
 
 abstract interface class ShorebirdPatchBackend {
   Future<ShorebirdCheckResult> check({required bool applyUpdate});
+}
+
+abstract interface class InteractiveUpdateBackend {
+  Future<UpdateActionFailure?> startUpdate(UpdateOffer offer);
 }
 
 abstract interface class DisposableUpdateBackend {
@@ -123,16 +140,20 @@ final class UpdateService {
     required http.Client httpClient,
     PackageInfoLoader? packageInfoLoader,
     TargetPlatformResolver? targetPlatformResolver,
+    FlatpakSandboxDetector? flatpakSandboxDetector,
     bool isWeb = kIsWeb,
     UrlLauncher? launchUrlOverride,
     Logger? logger,
     UpdateStoreBackend? playStoreBackend,
     UpdateStoreBackend? appStoreBackend,
     UpdateStoreBackend? fdroidBackend,
+    UpdateStoreBackend? githubReleaseBackend,
+    UpdateStoreBackend? flatpakBackend,
     ShorebirdPatchBackend? shorebirdBackend,
   }) : _packageInfoLoader = packageInfoLoader ?? PackageInfo.fromPlatform,
        _targetPlatformResolver =
            targetPlatformResolver ?? (() => defaultTargetPlatform),
+       _flatpakSandboxDetector = flatpakSandboxDetector ?? isFlatpakSandbox,
        _isWeb = isWeb,
        _launchUrl = launchUrlOverride ?? launchUrl,
        _log = logger ?? Logger('UpdateService'),
@@ -141,32 +162,47 @@ final class UpdateService {
            appStoreBackend ?? _AppStoreUpdateBackend(httpClient: httpClient),
        _fdroidBackend =
            fdroidBackend ?? _FdroidUpdateBackend(httpClient: httpClient),
+       _githubReleaseBackend =
+           githubReleaseBackend ??
+           _GitHubReleaseUpdateBackend(httpClient: httpClient),
+       _flatpakBackend =
+           flatpakBackend ??
+           _FlatpakUpdateBackend(portal: createFlatpakUpdatePortal()),
        _shorebirdBackend =
            shorebirdBackend ??
            _ShorebirdPatchBackend(shorebird: ShorebirdUpdater());
 
   final PackageInfoLoader _packageInfoLoader;
   final TargetPlatformResolver _targetPlatformResolver;
+  final FlatpakSandboxDetector _flatpakSandboxDetector;
   final bool _isWeb;
   final UrlLauncher _launchUrl;
   final Logger _log;
   final UpdateStoreBackend _playStoreBackend;
   final UpdateStoreBackend _appStoreBackend;
   final UpdateStoreBackend _fdroidBackend;
+  final UpdateStoreBackend _githubReleaseBackend;
+  final UpdateStoreBackend _flatpakBackend;
   final ShorebirdPatchBackend _shorebirdBackend;
 
   PackageInfo? _packageInfo;
 
   Future<UpdateCheckResult> checkForUpdates() async {
-    final channel = resolveUpdateChannel(
-      platform: _targetPlatformResolver(),
+    final targetPlatform = _targetPlatformResolver();
+    final channel = await resolveUpdateChannel(
+      platform: targetPlatform,
       isWeb: _isWeb,
       shorebirdEnabled: kEnableShorebird,
+      flatpakSandboxDetector: _flatpakSandboxDetector,
     );
     final packageInfo = await _loadPackageInfo();
     final storeOffer = packageInfo == null
         ? null
-        : await _checkStoreOffer(channel: channel, packageInfo: packageInfo);
+        : await _checkUpdateOffer(
+            channel: channel,
+            packageInfo: packageInfo,
+            platform: targetPlatform,
+          );
     final shorebirdResult = await _shorebirdBackend.check(
       applyUpdate: storeOffer == null,
     );
@@ -193,12 +229,22 @@ final class UpdateService {
       UpdateOfferKind.playFlexible => _performFlexibleUpdate(),
       UpdateOfferKind.playCompleteFlexible => _completeFlexibleUpdate(),
       UpdateOfferKind.externalStore => _openStoreUrl(offer.storeUrl),
+      UpdateOfferKind.flatpakUpdate => _startBackendUpdate(
+        backend: _flatpakBackend,
+        offer: offer,
+      ),
       UpdateOfferKind.shorebirdRestart => null,
     };
   }
 
   void dispose() {
-    final backends = [_appStoreBackend, _fdroidBackend, _playStoreBackend];
+    final backends = [
+      _appStoreBackend,
+      _fdroidBackend,
+      _playStoreBackend,
+      _githubReleaseBackend,
+      _flatpakBackend,
+    ];
     for (final backend in backends) {
       if (backend is DisposableUpdateBackend) {
         (backend as DisposableUpdateBackend).dispose();
@@ -231,21 +277,28 @@ final class UpdateService {
     }
   }
 
-  Future<UpdateOffer?> _checkStoreOffer({
+  Future<UpdateOffer?> _checkUpdateOffer({
     required UpdateChannel channel,
     required PackageInfo packageInfo,
+    required TargetPlatform platform,
   }) async {
     final backend = switch (channel) {
       UpdateChannel.playStore => _playStoreBackend,
       UpdateChannel.appStore => _appStoreBackend,
       UpdateChannel.fdroid => _fdroidBackend,
+      UpdateChannel.githubRelease => _githubReleaseBackend,
+      UpdateChannel.flatpak => _flatpakBackend,
       UpdateChannel.none => null,
     };
     if (backend == null) {
       return null;
     }
     try {
-      return await backend.check(channel: channel, packageInfo: packageInfo);
+      return await backend.check(
+        channel: channel,
+        packageInfo: packageInfo,
+        platform: platform,
+      );
     } on PlatformException catch (error, stackTrace) {
       if (_isExpectedPlayStoreCheckFailure(channel: channel, error: error)) {
         _log.info(
@@ -254,14 +307,14 @@ final class UpdateService {
         return null;
       }
       _log.warning(
-        'Failed to check for a store update on $channel.',
+        'Failed to check for an update on $channel.',
         error,
         stackTrace,
       );
       return null;
     } on Exception catch (error, stackTrace) {
       _log.warning(
-        'Failed to check for a store update on $channel.',
+        'Failed to check for an update on $channel.',
         error,
         stackTrace,
       );
@@ -317,6 +370,16 @@ final class UpdateService {
     return int.tryParse(raw);
   }
 
+  Future<UpdateActionFailure?> _startBackendUpdate({
+    required UpdateStoreBackend backend,
+    required UpdateOffer offer,
+  }) async {
+    if (backend is! InteractiveUpdateBackend) {
+      return UpdateActionFailure.startUpdateFailed;
+    }
+    return (backend as InteractiveUpdateBackend).startUpdate(offer);
+  }
+
   Future<UpdateActionFailure?> _performImmediateUpdate() async {
     try {
       final result = await InAppUpdate.performImmediateUpdate();
@@ -324,11 +387,11 @@ final class UpdateService {
         AppUpdateResult.success => null,
         AppUpdateResult.userDeniedUpdate => UpdateActionFailure.userDeclined,
         AppUpdateResult.inAppUpdateFailed =>
-          UpdateActionFailure.playUpdateFailed,
+          UpdateActionFailure.startUpdateFailed,
       };
     } on PlatformException catch (error, stackTrace) {
       _log.warning('Immediate Play update failed.', error, stackTrace);
-      return UpdateActionFailure.playUpdateFailed;
+      return UpdateActionFailure.startUpdateFailed;
     }
   }
 
@@ -339,12 +402,12 @@ final class UpdateService {
         return UpdateActionFailure.userDeclined;
       }
       if (result == AppUpdateResult.inAppUpdateFailed) {
-        return UpdateActionFailure.playUpdateFailed;
+        return UpdateActionFailure.startUpdateFailed;
       }
       return null;
     } on PlatformException catch (error, stackTrace) {
       _log.warning('Flexible Play update failed.', error, stackTrace);
-      return UpdateActionFailure.playUpdateFailed;
+      return UpdateActionFailure.startUpdateFailed;
     }
   }
 
@@ -358,7 +421,7 @@ final class UpdateService {
         error,
         stackTrace,
       );
-      return UpdateActionFailure.playUpdateFailed;
+      return UpdateActionFailure.startUpdateFailed;
     }
   }
 
@@ -389,6 +452,7 @@ final class _PlayStoreUpdateBackend implements UpdateStoreBackend {
   Future<UpdateOffer?> check({
     required UpdateChannel channel,
     required PackageInfo packageInfo,
+    required TargetPlatform platform,
   }) async {
     final info = await InAppUpdate.checkForUpdate();
     final availability = info.updateAvailability;
@@ -473,6 +537,7 @@ final class _AppStoreUpdateBackend
   Future<UpdateOffer?> check({
     required UpdateChannel channel,
     required PackageInfo packageInfo,
+    required TargetPlatform platform,
   }) async {
     if (!_initialized) {
       await _upgrader.initialize().timeout(_requestTimeout);
@@ -520,6 +585,7 @@ final class _FdroidUpdateBackend
   Future<UpdateOffer?> check({
     required UpdateChannel channel,
     required PackageInfo packageInfo,
+    required TargetPlatform platform,
   }) async {
     final installedBuild = int.tryParse(packageInfo.buildNumber);
     if (installedBuild == null) {
@@ -573,6 +639,300 @@ final class _FdroidUpdateBackend
 
   @override
   void dispose() {}
+}
+
+final class _GitHubReleaseUpdateBackend implements UpdateStoreBackend {
+  _GitHubReleaseUpdateBackend({required http.Client httpClient})
+    : _httpClient = httpClient,
+      _repositoryUri = Uri.parse(githubUrl),
+      _log = Logger('GitHubReleaseUpdateBackend');
+
+  final http.Client _httpClient;
+  final Uri _repositoryUri;
+  final Logger _log;
+
+  static const Duration _requestTimeout = Duration(seconds: 8);
+
+  @override
+  Future<UpdateOffer?> check({
+    required UpdateChannel channel,
+    required PackageInfo packageInfo,
+    required TargetPlatform platform,
+  }) async {
+    final releaseApiUri = _releaseApiUri();
+    if (releaseApiUri == null) {
+      return null;
+    }
+    http.Response response;
+    try {
+      response = await _httpClient
+          .get(
+            releaseApiUri,
+            headers: const {
+              'Accept': 'application/vnd.github+json',
+              'X-GitHub-Api-Version': '2022-11-28',
+              'User-Agent': 'Axichat Update Checker',
+            },
+          )
+          .timeout(_requestTimeout);
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to fetch GitHub release metadata.',
+        error,
+        stackTrace,
+      );
+      return null;
+    }
+    if (response.statusCode != 200) {
+      return null;
+    }
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      return null;
+    }
+    if (!_hasSupportedDesktopAsset(decoded, platform)) {
+      return null;
+    }
+    final availableVersion = _availableVersion(decoded);
+    if (availableVersion == null) {
+      return null;
+    }
+    if (!_isRemoteVersionNewer(
+      installedVersion: packageInfo.version,
+      availableVersion: availableVersion,
+    )) {
+      return null;
+    }
+    final releaseUrl =
+        Uri.tryParse(decoded['html_url'] as String? ?? '') ??
+        Uri.parse('${_repositoryUri.toString()}/releases');
+    return UpdateOffer(
+      id: 'github:$availableVersion',
+      kind: UpdateOfferKind.externalStore,
+      channel: channel,
+      availableVersion: availableVersion,
+      storeUrl: releaseUrl,
+    );
+  }
+
+  Uri? _releaseApiUri() {
+    final segments = _repositoryUri.pathSegments
+        .where((item) => item.isNotEmpty)
+        .toList();
+    if (segments.length < 2) {
+      return null;
+    }
+    final owner = segments[0];
+    final repo = segments[1];
+    return Uri.https('api.github.com', '/repos/$owner/$repo/releases/latest');
+  }
+
+  bool _hasSupportedDesktopAsset(
+    Map<String, dynamic> release,
+    TargetPlatform platform,
+  ) {
+    final assets = release['assets'];
+    if (assets is! List) {
+      return false;
+    }
+    final assetNames = assets
+        .whereType<Map<String, dynamic>>()
+        .map((asset) => asset['name'])
+        .whereType<String>();
+    return switch (platform) {
+      TargetPlatform.windows => assetNames.any(
+        (name) =>
+            name == 'axichat-windows-setup.exe' ||
+            name == 'axichat-windows.zip',
+      ),
+      TargetPlatform.linux => assetNames.any(
+        (name) =>
+            name == 'axichat-linux.tar.gz' ||
+            (name.startsWith('axichat-linux-') && name.endsWith('.deb')),
+      ),
+      _ => false,
+    };
+  }
+
+  String? _availableVersion(Map<String, dynamic> release) {
+    final tagName = release['tag_name'] as String?;
+    final name = release['name'] as String?;
+    return _extractSemanticVersion(tagName) ?? _extractSemanticVersion(name);
+  }
+
+  bool _isRemoteVersionNewer({
+    required String installedVersion,
+    required String availableVersion,
+  }) {
+    if (installedVersion == availableVersion) {
+      return false;
+    }
+    final installedParts = _parseSemanticVersion(installedVersion);
+    final availableParts = _parseSemanticVersion(availableVersion);
+    if (installedParts == null || availableParts == null) {
+      return false;
+    }
+    for (var index = 0; index < installedParts.length; index++) {
+      final installedPart = installedParts[index];
+      final availablePart = availableParts[index];
+      if (availablePart > installedPart) {
+        return true;
+      }
+      if (availablePart < installedPart) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  String? _extractSemanticVersion(String? raw) {
+    final parsed = _parseSemanticVersion(raw);
+    if (parsed == null) {
+      return null;
+    }
+    return '${parsed[0]}.${parsed[1]}.${parsed[2]}';
+  }
+
+  List<int>? _parseSemanticVersion(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    final match = RegExp(r'v?(\d+)\.(\d+)\.(\d+)').firstMatch(raw);
+    if (match == null) {
+      return null;
+    }
+    return [
+      int.parse(match.group(1)!),
+      int.parse(match.group(2)!),
+      int.parse(match.group(3)!),
+    ];
+  }
+}
+
+final class _FlatpakUpdateBackend
+    implements
+        UpdateStoreBackend,
+        InteractiveUpdateBackend,
+        DisposableUpdateBackend {
+  _FlatpakUpdateBackend({required FlatpakUpdatePortal? portal})
+    : _portal = portal,
+      _log = Logger('FlatpakUpdateBackend');
+
+  final FlatpakUpdatePortal? _portal;
+  final Logger _log;
+
+  FlatpakUpdateMonitor? _monitor;
+  StreamSubscription<FlatpakUpdateInfo>? _updateSubscription;
+  Completer<void>? _firstCheckCompleter;
+  FlatpakUpdateInfo? _latestUpdateInfo;
+  bool _monitorInitialized = false;
+
+  static const Duration _monitorTimeout = Duration(seconds: 8);
+  static const Duration _initialSignalTimeout = Duration(seconds: 2);
+
+  @override
+  Future<UpdateOffer?> check({
+    required UpdateChannel channel,
+    required PackageInfo packageInfo,
+    required TargetPlatform platform,
+  }) async {
+    await _ensureMonitor();
+    await _awaitInitialSignal();
+    final updateInfo = _latestUpdateInfo;
+    if (updateInfo == null || !updateInfo.hasUpdate) {
+      return null;
+    }
+    return UpdateOffer(
+      id: 'flatpak:${updateInfo.remoteCommit ?? 'unknown'}',
+      kind: UpdateOfferKind.flatpakUpdate,
+      channel: channel,
+    );
+  }
+
+  @override
+  Future<UpdateActionFailure?> startUpdate(UpdateOffer offer) async {
+    final monitor = _monitor;
+    if (monitor == null) {
+      return UpdateActionFailure.startUpdateFailed;
+    }
+    try {
+      await monitor.update().timeout(_monitorTimeout);
+      return null;
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Starting the Flatpak update failed.', error, stackTrace);
+      return UpdateActionFailure.startUpdateFailed;
+    }
+  }
+
+  @override
+  void dispose() {
+    final subscription = _updateSubscription;
+    _updateSubscription = null;
+    if (subscription != null) {
+      unawaited(subscription.cancel());
+    }
+    final monitor = _monitor;
+    _monitor = null;
+    if (monitor != null) {
+      unawaited(monitor.close());
+    }
+  }
+
+  Future<void> _ensureMonitor() async {
+    if (_monitorInitialized) {
+      return;
+    }
+    _monitorInitialized = true;
+    _firstCheckCompleter = Completer<void>();
+    final portal = _portal;
+    if (portal == null) {
+      _completeFirstCheck();
+      return;
+    }
+    try {
+      final monitor = await portal.createUpdateMonitor().timeout(
+        _monitorTimeout,
+      );
+      _monitor = monitor;
+      _updateSubscription = monitor.updateAvailable.listen(
+        (updateInfo) {
+          _latestUpdateInfo = updateInfo;
+          _completeFirstCheck();
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          _log.warning('Flatpak update monitor failed.', error, stackTrace);
+          _completeFirstCheck();
+        },
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to create the Flatpak update monitor.',
+        error,
+        stackTrace,
+      );
+      _completeFirstCheck();
+    }
+  }
+
+  Future<void> _awaitInitialSignal() async {
+    final completer = _firstCheckCompleter;
+    if (completer == null || completer.isCompleted) {
+      return;
+    }
+    try {
+      await completer.future.timeout(_initialSignalTimeout);
+    } on TimeoutException {
+      _completeFirstCheck();
+    }
+  }
+
+  void _completeFirstCheck() {
+    final completer = _firstCheckCompleter;
+    if (completer == null || completer.isCompleted) {
+      return;
+    }
+    completer.complete();
+  }
 }
 
 final class _ShorebirdPatchBackend implements ShorebirdPatchBackend {
