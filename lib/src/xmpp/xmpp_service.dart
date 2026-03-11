@@ -25,7 +25,6 @@ import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/defer.dart';
 import 'package:axichat/src/common/event_manager.dart';
@@ -526,9 +525,11 @@ class XmppService extends XmppBase
   final Logger _xmppLogger = Logger('XmppService');
   var _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
   var _database = ImpatientCompleter(Completer<XmppDatabase>());
-  var _hasInitializedDatabases = false;
   StreamController<void> _databaseReloadController =
-      StreamController<void>.broadcast();
+      StreamController<void>.broadcast(sync: true);
+  var _lifecycleEpoch = 0;
+  var _activeDbOperations = 0;
+  Completer<void>? _dbOperationsDrained;
   StreamController<StoredAvatar?> _selfAvatarController =
       StreamController<StoredAvatar?>.broadcast();
   StoredAvatar? _cachedSelfAvatar;
@@ -1360,7 +1361,6 @@ class XmppService extends XmppBase
     required String databasePrefix,
     required String databasePassphrase,
   }) async {
-    final shouldNotify = _hasInitializedDatabases;
     _databasePrefix = databasePrefix;
     _reconnectBlocked = false;
     _ensureNetworkAvailabilityListener();
@@ -1388,10 +1388,7 @@ class XmppService extends XmppBase
         await _buildDatabase(databasePrefix, databasePassphrase),
       );
     }
-    _hasInitializedDatabases = true;
-    if (shouldNotify) {
-      _notifyDatabaseReloaded();
-    }
+    _notifyDatabaseReloaded();
     await _initializeAvatarEncryption(databasePassphrase);
     _demoOfflineMode = kEnableDemoChats && jid == kDemoSelfJid;
     _setConnectionState(ConnectionState.notConnected);
@@ -1710,7 +1707,6 @@ class XmppService extends XmppBase
       defer: _reset,
       operation: () async {
         try {
-          final shouldNotify = _hasInitializedDatabases;
           _xmppLogger.info('Opening databases...');
           if (!_stateStore.isCompleted) {
             _stateStore.complete(await _stateStoreFactory(prefix, passphrase));
@@ -1718,10 +1714,7 @@ class XmppService extends XmppBase
           if (!_database.isCompleted) {
             _database.complete(await _buildDatabase(prefix, passphrase));
           }
-          _hasInitializedDatabases = true;
-          if (shouldNotify) {
-            _notifyDatabaseReloaded();
-          }
+          _notifyDatabaseReloaded();
           await _initializeAvatarEncryption(passphrase);
         } on Exception catch (e) {
           _xmppLogger.severe('Failed to create databases:', e);
@@ -2300,46 +2293,6 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<void> burn() async {
-    await _deleteAvatarCacheDirectory();
-    await _deleteDemoAttachmentDirectory();
-
-    await _dbOp<XmppStateStore>((ss) async {
-      _xmppLogger.info('Wiping state store...');
-      await ss.deleteAll(burn: true);
-    });
-
-    await _dbOp<XmppDatabase>((db) async {
-      _xmppLogger.info('Wiping database...');
-      await db.deleteAll();
-      await db.close();
-      await db.deleteFile();
-    });
-  }
-
-  Future<void> _deleteDemoAttachmentDirectory() async {
-    final baseDir = await getApplicationSupportDirectory();
-    final expectedPath = p.join(baseDir.path, 'demo_attachments');
-    final directory = Directory(expectedPath);
-    try {
-      final deleted = await deleteAppOwnedDirectoryTree(
-        directory: directory,
-        expectedPath: expectedPath,
-      );
-      if (!deleted) {
-        _xmppLogger.warning(
-          'Skipped demo attachment cleanup for unexpected path ${directory.path}',
-        );
-      }
-    } on FileSystemException catch (error, stackTrace) {
-      _xmppLogger.warning(
-        'Failed to delete demo attachment directory ${directory.path}',
-        error,
-        stackTrace,
-      );
-    }
-  }
-
   @override
   Future<void> disconnect() async {
     _xmppLogger.info('Logging out...');
@@ -2408,20 +2361,9 @@ class XmppService extends XmppBase
     _xmppLogger.warning(
       'Stale connection detected after $timeoutCount consecutive timeouts.',
     );
-    _sessionReconnectEnabled = false;
-    _reconnectBlocked = true;
-    fireAndForget(() async {
-      try {
-        await _connection.setShouldReconnect(false);
-      } catch (error, stackTrace) {
-        _xmppLogger.fine(
-          'Failed to disable reconnection after stale connection.',
-          error,
-          stackTrace,
-        );
-      }
-    }, operationName: 'XmppService.disableReconnectAfterStale');
-    _setConnectionState(ConnectionState.error);
+    if (!connected) {
+      _setConnectionState(ConnectionState.notConnected);
+    }
   }
 
   bool _isTimeoutSocketError(SocketException error) {
@@ -2789,6 +2731,9 @@ class XmppService extends XmppBase
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
 
+    _lifecycleEpoch += 1;
+    _myJid = null;
+    _synchronousConnection = Completer<void>();
     _setConnectionState(ConnectionState.notConnected);
     _pingController.stop();
     await _stopNetworkAvailabilityListener();
@@ -2861,27 +2806,32 @@ class XmppService extends XmppBase
     await _connection.socketWrapper.closeStreams();
     _connection = await _connectionFactory();
     _configureSocketCallbacks();
+    if (_activeDbOperations != 0) {
+      await _dbOperationsDrained?.future;
+    }
 
-    if (!_stateStore.isCompleted) {
+    final previousStateStore = _stateStore;
+    final previousDatabase = _database;
+    _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
+    _database = ImpatientCompleter(Completer<XmppDatabase>());
+    _notifyDatabaseReloaded();
+
+    if (!previousStateStore.isCompleted) {
       _xmppLogger.warning('Cancelling state store initialization...');
-      _stateStore.completeError(XmppAbortedException());
+      previousStateStore.completeError(XmppAbortedException());
     } else {
       _xmppLogger.info('Closing state store...');
-      await _stateStore.value?.close();
+      await previousStateStore.value?.close();
     }
-    _stateStore = ImpatientCompleter(Completer<XmppStateStore>());
 
-    if (!_database.isCompleted) {
+    if (!previousDatabase.isCompleted) {
       _xmppLogger.warning('Cancelling database initialization...');
-      _database.completeError(XmppAbortedException());
+      previousDatabase.completeError(XmppAbortedException());
     } else {
       _xmppLogger.info('Closing database...');
-      await _database.value?.close();
+      await previousDatabase.value?.close();
     }
-    _database = ImpatientCompleter(Completer<XmppDatabase>());
 
-    _myJid = null;
-    _synchronousConnection = Completer<void>();
     _streamResumptionAttempted = false;
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;
@@ -2934,7 +2884,7 @@ class XmppService extends XmppBase
       _streamReadyController = StreamController<XmppStreamReady>.broadcast();
     }
     if (_databaseReloadController.isClosed) {
-      _databaseReloadController = StreamController<void>.broadcast();
+      _databaseReloadController = StreamController<void>.broadcast(sync: true);
     }
     if (_selfAvatarController.isClosed) {
       _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
@@ -3017,14 +2967,41 @@ class XmppService extends XmppBase
     FutureOr<V> Function(D) operation,
   ) async {
     _xmppLogger.fine('Retrieving completer for $D...');
+    final operationEpoch = _lifecycleEpoch;
 
     try {
+      if (operationEpoch != _lifecycleEpoch ||
+          !_synchronousConnection.isCompleted ||
+          _myJid == null) {
+        throw XmppAbortedException();
+      }
       _xmppLogger.fine('Awaiting completer for $D...');
       final db = await _getDatabaseCompleter<D>().future;
       _xmppLogger.fine('Completed completer for $D.');
-      return await operation(db);
+      if (operationEpoch != _lifecycleEpoch ||
+          !_synchronousConnection.isCompleted ||
+          _myJid == null) {
+        throw XmppAbortedException();
+      }
+      _activeDbOperations += 1;
+      _dbOperationsDrained ??= Completer<void>();
+      try {
+        final value = await operation(db);
+        if (operationEpoch != _lifecycleEpoch) {
+          throw XmppAbortedException();
+        }
+        return value;
+      } finally {
+        if (_activeDbOperations != 0) {
+          _activeDbOperations -= 1;
+          if (_activeDbOperations == 0) {
+            _dbOperationsDrained?.complete();
+            _dbOperationsDrained = null;
+          }
+        }
+      }
     } on XmppAbortedException catch (e, s) {
-      _xmppLogger.warning('Owner called reset before $D initialized.', e, s);
+      _xmppLogger.finer('Owner called reset before $D initialized.', e, s);
       rethrow;
     } on XmppException {
       rethrow;
@@ -3040,16 +3017,43 @@ class XmppService extends XmppBase
     bool awaitDatabase = false,
   }) async {
     _xmppLogger.fine('Retrieving completer for $T...');
+    final operationEpoch = _lifecycleEpoch;
 
     final completer = _getDatabaseCompleter<T>();
 
     if (!awaitDatabase && !completer.isCompleted) return;
 
     try {
+      if (operationEpoch != _lifecycleEpoch ||
+          !_synchronousConnection.isCompleted ||
+          _myJid == null) {
+        throw XmppAbortedException();
+      }
       _xmppLogger.fine('Awaiting completer for $T...');
       final db = await completer.future;
       _xmppLogger.fine('Completed completer for $T.');
-      return await operation(db);
+      if (operationEpoch != _lifecycleEpoch ||
+          !_synchronousConnection.isCompleted ||
+          _myJid == null) {
+        throw XmppAbortedException();
+      }
+      _activeDbOperations += 1;
+      _dbOperationsDrained ??= Completer<void>();
+      try {
+        await operation(db);
+        if (operationEpoch != _lifecycleEpoch) {
+          throw XmppAbortedException();
+        }
+      } finally {
+        if (_activeDbOperations != 0) {
+          _activeDbOperations -= 1;
+          if (_activeDbOperations == 0) {
+            _dbOperationsDrained?.complete();
+            _dbOperationsDrained = null;
+          }
+        }
+      }
+      return;
     } on XmppAbortedException catch (_) {
       return;
     } on XmppException {

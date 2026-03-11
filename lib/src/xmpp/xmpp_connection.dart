@@ -44,7 +44,6 @@ class XmppConnection extends mox.XmppConnection {
              XmppConnectivityManager.forXmppConnection(
                domainProvider: domainProvider.provide,
                shouldContinue: reconnectionPolicy.getShouldReconnect,
-               networkAvailability: NetworkAvailabilityService.instance,
              ),
          negotiationsHandler: negotiationsHandler,
          socket: socketWrapper,
@@ -540,19 +539,16 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   XmppConnectivityManager._(
     this._endpoints, {
     required String? Function() domainProvider,
-    NetworkAvailabilityService? networkAvailability,
     Duration? pollInterval,
     Duration? waitTimeout,
     this.shouldContinue,
   }) : _domainProvider = domainProvider,
-       _networkAvailability = networkAvailability,
        _pollInterval = pollInterval ?? _defaultPollInterval,
        _waitTimeout = waitTimeout ?? const Duration(minutes: 1);
 
   final List<IOEndpoint> _endpoints;
   final String? Function() _domainProvider;
   final Future<bool> Function()? shouldContinue;
-  final NetworkAvailabilityService? _networkAvailability;
 
   final Duration _pollInterval;
   final Duration? _waitTimeout;
@@ -563,13 +559,11 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   XmppConnectivityManager.forXmppConnection({
     required String? Function() domainProvider,
     required Future<bool> Function() shouldContinue,
-    NetworkAvailabilityService? networkAvailability,
     Duration? pollInterval,
     Duration? waitTimeout,
   }) : this._(
          const [],
          domainProvider: domainProvider,
-         networkAvailability: networkAvailability,
          pollInterval: pollInterval,
          waitTimeout: waitTimeout,
          shouldContinue: shouldContinue,
@@ -579,24 +573,18 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
   static const _offlineErrnos = <int>{
     50, // ENETDOWN (macOS)
     51, // ENETUNREACH (macOS)
-    60, // ETIMEDOUT (macOS)
     64, // EHOSTDOWN (macOS)
     65, // EHOSTUNREACH (macOS)
     103, // ECONNABORTED (Linux)
     101, // ENETUNREACH (Linux)
-    110, // ETIMEDOUT (Linux)
     113, // EHOSTUNREACH (Linux)
     10050, // WSAENETDOWN (Windows)
     10051, // WSAENETUNREACH (Windows)
-    10060, // WSAETIMEDOUT (Windows)
     10065, // WSAEHOSTUNREACH (Windows)
   };
 
   @override
   Future<bool> hasConnection() {
-    if (_networkAvailability?.current == NetworkAvailability.unavailable) {
-      return Future.value(false);
-    }
     final endpoints = _resolveEndpoints();
     if (endpoints.isEmpty) {
       return Future.value(true);
@@ -612,26 +600,12 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     var hasWarned = false;
     while (!await hasConnection()) {
       if (shouldContinue != null && !await shouldContinue!()) return;
-      if (_networkAvailability?.current == NetworkAvailability.unavailable) {
-        await _networkAvailability?.waitForAvailable(timeout: _waitTimeout);
-        final timeout = _waitTimeout;
-        if (timeout != null && stopwatch.elapsed >= timeout && !hasWarned) {
-          _log.warning(
-            'Connectivity still unavailable after ${timeout.inSeconds} seconds. Holding reconnection until connectivity resumes.',
-          );
-          hasWarned = true;
-          return;
-        }
-        continue;
-      }
-
       final timeout = _waitTimeout;
       if (timeout != null && stopwatch.elapsed >= timeout && !hasWarned) {
         _log.warning(
-          'Connectivity still unavailable after ${timeout.inSeconds} seconds. Holding reconnection until connectivity resumes.',
+          'Connectivity still unavailable after ${timeout.inSeconds} seconds. Continuing to retry.',
         );
         hasWarned = true;
-        return;
       }
       await Future.delayed(_pollInterval);
     }
@@ -662,7 +636,6 @@ class XmppConnectivityManager extends mox.ConnectivityManager {
     return message.contains('network is unreachable') ||
         message.contains('no route to host') ||
         message.contains('not connected') ||
-        message.contains('timed out') ||
         message.contains('connection abort');
   }
 

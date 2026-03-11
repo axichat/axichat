@@ -969,7 +969,7 @@ void main() {
     );
   });
 
-  group('burn', () {
+  group('disconnect', () {
     setUp(() async {
       xmppService = XmppService(
         buildConnection: () => mockConnection,
@@ -985,47 +985,39 @@ void main() {
       await pumpEventQueue();
     });
 
-    tearDown(() {
-      resetMocktailState();
-    });
-
-    test('Burn removes the avatar cache directory.', () async {
-      final originalPathProvider = PathProviderPlatform.instance;
-      final tempDir = await Directory.systemTemp.createTemp('axichat-burn-');
-      final supportDir = Directory(p.join(tempDir.path, 'support'));
-      await supportDir.create(recursive: true);
-      PathProviderPlatform.instance = _FakePathProviderPlatform(
-        supportDir.path,
-      );
-      final avatarDirectory = Directory(p.join(supportDir.path, 'avatars'));
-
-      try {
-        when(
-          () => mockStateStore.deleteAll(burn: true),
-        ).thenAnswer((_) async => true);
-
-        await xmppService.cacheSelfAvatarDraft(
-          AvatarUploadPayload(
-            bytes: Uint8List.fromList(<int>[1, 2, 3, 4]),
-            mimeType: 'image/png',
-            width: 1,
-            height: 1,
-            hash: 'burn-avatar-hash',
+    test(
+      'Disconnect does not surface database stream errors to live subscriptions.',
+      () async {
+        final errors = <Object>[];
+        final subscriptions = <StreamSubscription<dynamic>>[
+          (xmppService as ChatsService).chatsStream().listen(
+            (_) {},
+            onError: errors.add,
           ),
-        );
+          (xmppService as MessageService).draftsStream().listen(
+            (_) {},
+            onError: errors.add,
+          ),
+          (xmppService as RosterService).rosterStream().listen(
+            (_) {},
+            onError: errors.add,
+          ),
+          (xmppService as RosterService).invitesStream().listen(
+            (_) {},
+            onError: errors.add,
+          ),
+        ];
 
-        expect(await avatarDirectory.exists(), isTrue);
+        await pumpEventQueue();
+        await xmppService.disconnect();
+        await pumpEventQueue();
 
-        await xmppService.burn();
-
-        expect(await avatarDirectory.exists(), isFalse);
-      } finally {
-        PathProviderPlatform.instance = originalPathProvider;
-        if (await tempDir.exists()) {
-          await tempDir.delete(recursive: true);
+        expect(errors, isEmpty);
+        for (final subscription in subscriptions) {
+          await subscription.cancel();
         }
-      }
-    });
+      },
+    );
   });
 
   group('XmppConnection', () {});

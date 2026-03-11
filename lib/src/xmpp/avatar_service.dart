@@ -2108,32 +2108,6 @@ mixin AvatarService on XmppBase, MucService {
     return directory;
   }
 
-  Future<void> _deleteAvatarCacheDirectory() async {
-    _avatarBytesCache.clear();
-    _safeAvatarBytesCache.clear();
-    final supportDir = await getApplicationSupportDirectory();
-    final expectedPath = p.join(supportDir.path, 'avatars');
-    final directory = _avatarDirectory ?? Directory(expectedPath);
-    try {
-      final deleted = await deleteAppOwnedDirectoryTree(
-        directory: directory,
-        expectedPath: expectedPath,
-      );
-      if (!deleted) {
-        _avatarLog.warning(
-          'Skipped avatar cache cleanup for unexpected path ${directory.path}',
-        );
-      }
-    } on FileSystemException catch (error, stackTrace) {
-      _avatarLog.warning(
-        'Failed to delete avatar cache directory ${directory.path}',
-        error,
-        stackTrace,
-      );
-    }
-    _avatarDirectory = null;
-  }
-
   bool _isSafeAvatarCachePath({
     required Directory cacheDirectory,
     required String filePath,

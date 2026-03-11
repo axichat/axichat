@@ -12,14 +12,23 @@ mixin BaseStreamService on XmppBase {
   }) {
     return databaseReloadStream
         .startWith(null)
-        .asyncMap(
-          (_) => _dbOpReturning<D, Stream<List<T>>>((db) async {
-            final stream = await watchFunction(db);
-            final initial = await getFunction(db);
-            return stream.startWith(initial);
-          }),
-        )
-        .switchMap((stream) => stream);
+        .switchMap((_) async* {
+          if (!isDatabaseReady) {
+            return;
+          }
+          try {
+            final stream = await _dbOpReturning<D, Stream<List<T>>>((db) async {
+              final reset = databaseReloadStream.first;
+              final watchStream = await watchFunction(db);
+              final initial = await getFunction(db);
+              return watchStream.takeUntil(reset).startWith(initial);
+            });
+            yield* stream;
+          } on XmppAbortedException {
+            return;
+          }
+        })
+        .handleError((_, _) {}, test: (error) => error is XmppAbortedException);
   }
 
   /// Creates a single-item stream for watching individual entities
@@ -28,9 +37,21 @@ mixin BaseStreamService on XmppBase {
   }) async* {
     yield* databaseReloadStream
         .startWith(null)
-        .asyncMap(
-          (_) => _dbOpReturning<D, Stream<T>>((db) => watchFunction(db)),
-        )
-        .switchMap((stream) => stream);
+        .switchMap((_) async* {
+          if (!isDatabaseReady) {
+            return;
+          }
+          try {
+            final stream = await _dbOpReturning<D, Stream<T>>(
+              (db) async => (await watchFunction(
+                db,
+              )).takeUntil(databaseReloadStream.first),
+            );
+            yield* stream;
+          } on XmppAbortedException {
+            return;
+          }
+        })
+        .handleError((_, _) {}, test: (error) => error is XmppAbortedException);
   }
 }

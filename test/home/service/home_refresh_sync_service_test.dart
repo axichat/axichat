@@ -141,7 +141,7 @@ void main() {
     },
   );
 
-  test('close cancels unread refresh progression during shutdown', () async {
+  test('close waits for unread refresh progression during shutdown', () async {
     when(() => mockEmailService.hasActiveSession).thenReturn(true);
     when(
       () => mockEmailService.canReconnectConfiguredSession(),
@@ -157,6 +157,9 @@ void main() {
       xmppService: mockXmppService,
       emailService: mockEmailService,
     );
+    final updates = <HomeRefreshSyncUpdate>[];
+    final updatesSubscription = service.syncUpdates.listen(updates.add);
+    addTearDown(updatesSubscription.cancel);
 
     final refreshFuture = service.refreshUnreadOnly();
     await untilCalled(
@@ -172,9 +175,14 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(closeCompleted, isFalse);
     fetchCompleter.complete(true);
-    await closeFuture;
     await refreshFuture;
+    await closeFuture;
+    await Future<void>.delayed(Duration.zero);
 
-    verifyNever(() => mockEmailService.refreshChatlistFromCore());
+    verify(() => mockEmailService.refreshChatlistFromCore()).called(1);
+    expect(updates.map((update) => update.phase), [
+      HomeRefreshSyncPhase.running,
+      HomeRefreshSyncPhase.success,
+    ]);
   });
 }
