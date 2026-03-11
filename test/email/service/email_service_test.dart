@@ -1340,7 +1340,7 @@ void main() {
     await shutdownFuture;
   });
 
-  test('burn blocks re-entry while dispose is in flight', () async {
+  test('shutdown blocks re-entry while dispose is in flight', () async {
     final service = EmailService(
       credentialStore: credentialStore,
       databaseBuilder: () async => database,
@@ -1362,7 +1362,10 @@ void main() {
     final disposeCompleter = Completer<void>();
     when(() => transport.dispose()).thenAnswer((_) => disposeCompleter.future);
 
-    final burnFuture = service.burn(jid: 'bob@axi.im');
+    final shutdownFuture = service.shutdown(
+      jid: 'bob@axi.im',
+      clearCredentials: true,
+    );
     await untilCalled(() => transport.dispose());
 
     await service.ensureEventChannelActive();
@@ -1373,81 +1376,7 @@ void main() {
     verifyNever(() => transport.notifyNetworkAvailable());
 
     disposeCompleter.complete();
-    await burnFuture;
-  });
-
-  test('burn clears in-memory session credentials', () async {
-    final service = EmailService(
-      credentialStore: credentialStore,
-      databaseBuilder: () async => database,
-      transport: transport,
-      notificationService: notificationService,
-      foregroundBridge: foregroundBridge,
-    );
-
-    await service.ensureProvisioned(
-      displayName: 'Bob',
-      databasePrefix: 'bob',
-      databasePassphrase: 'secret',
-      jid: 'bob@axi.im',
-      passwordOverride: 'password',
-    );
-    service.cacheSessionCredentials(
-      address: 'bob@axi.im',
-      password: 'password',
-    );
-
-    await service.burn(jid: 'bob@axi.im');
-
-    expect(service.hasActiveSession, isFalse);
-    expect(service.activeAccount, isNull);
-    expect(service.sessionCredentials, isNull);
-  });
-
-  test(
-    'burn deletes storage artifacts for an explicit database prefix',
-    () async {
-      final service = EmailService(
-        credentialStore: credentialStore,
-        databaseBuilder: () async => database,
-        transport: transport,
-        notificationService: notificationService,
-        foregroundBridge: foregroundBridge,
-      );
-
-      await service.burn(jid: 'bob@axi.im', databasePrefix: 'bob');
-
-      verify(
-        () => transport.deleteStorageArtifacts(databasePrefix: 'bob'),
-      ).called(1);
-    },
-  );
-
-  test('burn ignores an invalid explicit database prefix', () async {
-    final service = EmailService(
-      credentialStore: credentialStore,
-      databaseBuilder: () async => database,
-      transport: transport,
-      notificationService: notificationService,
-      foregroundBridge: foregroundBridge,
-    );
-
-    await service.ensureProvisioned(
-      displayName: 'Bob',
-      databasePrefix: 'bob',
-      databasePassphrase: 'secret',
-      jid: 'bob@axi.im',
-      passwordOverride: 'password',
-    );
-
-    await service.burn(jid: 'bob@axi.im', databasePrefix: '../escape');
-
-    verifyNever(
-      () => transport.deleteStorageArtifacts(databasePrefix: '../escape'),
-    );
-    verify(
-      () => transport.deleteStorageArtifacts(databasePrefix: 'bob'),
-    ).called(1);
+    await shutdownFuture;
   });
 
   test(

@@ -21,6 +21,7 @@ class EmailProvisioningCredentials {
 enum EmailProvisioningApiErrorCode {
   unauthorized,
   unavailable,
+  invalidConfiguration,
   invalidResponse,
   network,
   authenticationFailed,
@@ -125,8 +126,9 @@ class EmailProvisioningClient {
     if (scheme == 'https') return;
     const allowInsecure = !kReleaseMode && kAllowInsecureEmailProvisioning;
     if (!allowInsecure) {
-      throw StateError(
-        'Email provisioning base URL must use HTTPS in this build.',
+      throw const EmailProvisioningApiException(
+        code: EmailProvisioningApiErrorCode.invalidConfiguration,
+        debugMessage: 'Email provisioning base URL must use HTTPS.',
       );
     }
     _log.warning(
@@ -410,8 +412,10 @@ class EmailProvisioningClient {
 
   static Uri _normalizeBase(Uri baseUrl) {
     if (baseUrl.scheme.isEmpty || baseUrl.host.isEmpty) {
-      throw StateError(
-        'Email provisioning base URL must include a scheme and host.',
+      throw const EmailProvisioningApiException(
+        code: EmailProvisioningApiErrorCode.invalidConfiguration,
+        debugMessage:
+            'Email provisioning base URL must include a scheme and host.',
       );
     }
     return baseUrl;

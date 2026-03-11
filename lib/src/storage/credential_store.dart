@@ -141,24 +141,9 @@ class CredentialStore
   }
 
   @override
-  Future<bool> deleteAll({bool burn = false}) async {
+  Future<bool> deleteAll() async {
     try {
       _log.info('Deleting all values...');
-      if (burn) {
-        final keys = <String>{};
-        try {
-          keys.addAll((await _secureStorage.readAll()).keys);
-        } on Exception {
-          for (final key in RegisteredCredentialKey._registeredKeys) {
-            keys.add(key.value);
-          }
-        }
-        final orderedKeys = keys.toList(growable: false)..sort();
-        for (final key in orderedKeys) {
-          await _secureStorage.delete(key: key);
-        }
-        return true;
-      }
       for (final key in RegisteredCredentialKey._registeredKeys) {
         await _secureStorage.delete(key: key.value);
       }
@@ -218,7 +203,7 @@ class _DemoCredentialStore extends CredentialStore {
   }
 
   @override
-  Future<bool> deleteAll({bool burn = false}) async {
+  Future<bool> deleteAll() async {
     _values.clear();
     return true;
   }

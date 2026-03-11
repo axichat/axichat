@@ -6,7 +6,6 @@ import 'dart:collection';
 
 import 'package:axichat/src/storage/database.dart';
 import 'package:hive_ce/hive.dart';
-import 'package:logging/logging.dart';
 
 abstract class KeyValueDatabase<K, V> implements Database {
   FutureOr<V?> read({required K key});
@@ -19,7 +18,7 @@ abstract class KeyValueDatabase<K, V> implements Database {
 
   Future<bool> writeAll({required Map<K, V?> data});
 
-  Future<bool> deleteAll({bool burn = false});
+  Future<bool> deleteAll();
 }
 
 class RegisteredStateKey {
@@ -45,8 +44,6 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
   XmppStateStore._();
 
   static XmppStateStore? _instance;
-
-  final _log = Logger('XmppStateStore');
 
   static const boxName = '.axichat.state_store';
 
@@ -137,16 +134,11 @@ class XmppStateStore implements KeyValueDatabase<RegisteredStateKey, Object> {
   }
 
   @override
-  Future<bool> deleteAll({bool burn = false}) async {
+  Future<bool> deleteAll() async {
     if (!initialized) return false;
-    if (burn) {
-      _log.info('Deleting state store box from disk...');
-      await Hive.box(boxName).deleteFromDisk();
-    } else {
-      await Hive.box(
-        boxName,
-      ).deleteAll(RegisteredStateKey._registeredKeys.map((k) => k.value));
-    }
+    await Hive.box(
+      boxName,
+    ).deleteAll(RegisteredStateKey._registeredKeys.map((k) => k.value));
     return true;
   }
 

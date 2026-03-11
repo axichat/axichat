@@ -1,11 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
-import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
@@ -20,8 +17,6 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive_ce/hive.dart';
-import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:http/http.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -67,9 +62,6 @@ void main() {
   late MockEmailProvisioningClient mockProvisioningClient;
   late MockEmailService mockEmailService;
   late MockHomeRefreshSyncService mockHomeRefreshSyncService;
-  late MockCalendarReminderController mockCalendarReminderController;
-  late MockCalendarStorageManager mockCalendarStorageManager;
-  late MockHydratedStorage mockHydratedStorage;
   late Map<String, String?> credentialStorage;
   late AppLocalizations localizations;
 
@@ -79,12 +71,8 @@ void main() {
     mockCredentialStore = MockCredentialStore();
     mockStateStore = MockXmppStateStore();
     mockDatabase = MockXmppDatabase();
-    mockNotificationService = MockNotificationService();
     mockEmailService = MockEmailService();
     mockHomeRefreshSyncService = MockHomeRefreshSyncService();
-    mockCalendarReminderController = MockCalendarReminderController();
-    mockCalendarStorageManager = MockCalendarStorageManager();
-    mockHydratedStorage = MockHydratedStorage();
     mockHttpClient = MockHttpClient();
     mockProvisioningClient = MockEmailProvisioningClient();
     localizations = lookupAppLocalizations(const Locale('en'));
@@ -107,9 +95,6 @@ void main() {
     when(
       () => mockEmailService.syncStateStream,
     ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
-    when(
-      () => mockNotificationService.dismissNotifications(),
-    ).thenAnswer((_) async {});
     when(() => mockEmailService.hasActiveSession).thenReturn(false);
     when(() => mockEmailService.hasInMemoryReconnectContext).thenReturn(true);
     when(
@@ -140,6 +125,7 @@ void main() {
     when(
       () => mockEmailService.handleNetworkAvailable(),
     ).thenAnswer((_) async {});
+    when(() => mockEmailService.handleNetworkLost()).thenAnswer((_) async {});
     when(
       () => mockEmailService.ensureProvisioned(
         displayName: any(named: 'displayName'),
@@ -201,12 +187,6 @@ void main() {
     when(
       () => mockHomeRefreshSyncService.syncOnLogin(),
     ).thenAnswer((_) async {});
-    when(
-      () => mockCalendarReminderController.clearAll(),
-    ).thenAnswer((_) async {});
-    when(() => mockCalendarStorageManager.burn()).thenAnswer((_) async {});
-    when(() => mockHydratedStorage.clear()).thenAnswer((_) async {});
-
     credentialStorage = <String, String?>{
       'password_prehashed_v1': true.toString(),
     };
@@ -238,13 +218,6 @@ void main() {
       return true;
     });
 
-    when(
-      () => mockCredentialStore.deleteAll(burn: any(named: 'burn')),
-    ).thenAnswer((_) async {
-      credentialStorage.clear();
-      return true;
-    });
-
     when(() => mockCredentialStore.close()).thenAnswer((_) async {});
 
     when(() => mockXmppService.disconnect()).thenAnswer((_) async {});
@@ -257,16 +230,6 @@ void main() {
         clearCredentials: any(named: 'clearCredentials'),
       ),
     ).thenAnswer((_) async {});
-    when(
-      () => mockEmailService.burn(jid: any(named: 'jid')),
-    ).thenAnswer((_) async {});
-    when(
-      () => mockEmailService.burn(
-        jid: any(named: 'jid'),
-        databasePrefix: any(named: 'databasePrefix'),
-      ),
-    ).thenAnswer((_) async {});
-
     when(
       () => mockProvisioningClient.createAccount(
         localpart: any(named: 'localpart'),
@@ -1892,16 +1855,12 @@ void main() {
   group('unregister', () {
     setUp(() {
       when(
-        () => mockCredentialStore.deleteAll(burn: any(named: 'burn')),
-      ).thenAnswer((_) async => true);
-      when(() => mockXmppService.burn()).thenAnswer((_) async {});
-      when(
         () => mockHttpClient.post(any(), body: any(named: 'body')),
       ).thenAnswer((_) async => Response('', 200));
     });
 
     blocTest<AuthenticationCubit, AuthenticationState>(
-      'Burns credentials after successful unregister.',
+      'Logs out after successful unregister.',
       setUp: () {
         when(() => mockEmailService.currentAccount(validJid)).thenAnswer(
           (_) async => const EmailAccount(
@@ -1909,15 +1868,6 @@ void main() {
             password: validPassword,
           ),
         );
-        when(
-          () => mockEmailService.burn(jid: any(named: 'jid')),
-        ).thenAnswer((_) async {});
-        when(
-          () => mockEmailService.burn(
-            jid: any(named: 'jid'),
-            databasePrefix: any(named: 'databasePrefix'),
-          ),
-        ).thenAnswer((_) async {});
         when(
           () => mockProvisioningClient.deleteAccount(
             email: 'user@axi.im',
@@ -1950,8 +1900,14 @@ void main() {
             password: validPassword,
           ),
         ).called(1);
-        verify(() => mockXmppService.burn()).called(1);
-        verify(() => mockEmailService.burn(jid: any(named: 'jid'))).called(1);
+        verify(() => mockXmppService.clearSessionTokens()).called(1);
+        verify(() => mockXmppService.disconnect()).called(1);
+        verify(
+          () => mockEmailService.shutdown(
+            jid: any(named: 'jid'),
+            clearCredentials: clearEmailCredentialsOnLogout,
+          ),
+        ).called(1);
       },
     );
 
@@ -2082,7 +2038,7 @@ void main() {
         ),
       ],
       verify: (_) {
-        verifyNever(() => mockXmppService.burn());
+        verifyNever(() => mockXmppService.disconnect());
       },
     );
   });
@@ -2134,22 +2090,9 @@ void main() {
         () => mockCredentialStore.delete(key: any(named: 'key')),
       ).thenAnswer((_) async => true);
       when(
-        () => mockCredentialStore.deleteAll(burn: any(named: 'burn')),
-      ).thenAnswer((_) async => true);
-      when(() => mockXmppService.burn()).thenAnswer((_) async {});
-      when(
         () => mockEmailService.shutdown(
           jid: any(named: 'jid'),
           clearCredentials: any(named: 'clearCredentials'),
-        ),
-      ).thenAnswer((_) async {});
-      when(
-        () => mockEmailService.burn(jid: any(named: 'jid')),
-      ).thenAnswer((_) async {});
-      when(
-        () => mockEmailService.burn(
-          jid: any(named: 'jid'),
-          databasePrefix: any(named: 'databasePrefix'),
         ),
       ).thenAnswer((_) async {});
     });
@@ -2273,6 +2216,43 @@ void main() {
       },
     );
 
+    test(
+      'Connectivity error does not force automatic logout for authenticated sessions.',
+      () async {
+        final connectivityController =
+            StreamController<ConnectionState>.broadcast();
+        when(
+          () => mockXmppService.connectivityStream,
+        ).thenAnswer((_) => connectivityController.stream);
+        when(
+          () => mockXmppService.hasInMemoryReconnectContext,
+        ).thenReturn(false);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          homeRefreshSyncService: mockHomeRefreshSyncService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        final emittedStates = <AuthenticationState>[];
+        final subscription = bloc.stream.listen(emittedStates.add);
+
+        connectivityController.add(ConnectionState.error);
+        await Future<void>.delayed(Duration.zero);
+
+        expect(emittedStates, isEmpty);
+        verify(() => mockEmailService.handleNetworkLost()).called(1);
+
+        await subscription.cancel();
+        await connectivityController.close();
+        await bloc.close();
+      },
+    );
+
     blocTest<AuthenticationCubit, AuthenticationState>(
       'User initiated logout clears email credentials when enabled.',
       build: () => AuthenticationCubit(
@@ -2294,185 +2274,6 @@ void main() {
             clearCredentials: clearEmailCredentialsOnLogout,
           ),
         ).called(1);
-      },
-    );
-
-    blocTest<AuthenticationCubit, AuthenticationState>(
-      'Burn logout disconnects the xmpp service, wipes disk and emits [AuthenticationNone].',
-      build: () {
-        final tempRoot = Directory.systemTemp.createTempSync('auth_burn');
-        addTearDown(() async {
-          if (tempRoot.existsSync()) {
-            await tempRoot.delete(recursive: true);
-          }
-        });
-        return AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          initialEndpointConfig: const EndpointConfig(),
-          xmppService: mockXmppService,
-          temporaryDirectoryBuilder: (directoryName) async =>
-              Directory('${tempRoot.path}/$directoryName'),
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-          initialState: const AuthenticationComplete(),
-        );
-      },
-      act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
-      expect: () => [const AuthenticationNone()],
-      verify: (bloc) {
-        verify(() => mockCredentialStore.deleteAll(burn: true)).called(1);
-        verify(() => mockXmppService.burn()).called(1);
-        verify(() => mockXmppService.disconnect()).called(1);
-      },
-    );
-
-    blocTest<AuthenticationCubit, AuthenticationState>(
-      'Burn logout clears email storage when enabled.',
-      build: () {
-        final tempRoot = Directory.systemTemp.createTempSync('auth_burn');
-        addTearDown(() async {
-          if (tempRoot.existsSync()) {
-            await tempRoot.delete(recursive: true);
-          }
-        });
-        return AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          initialEndpointConfig: const EndpointConfig(),
-          xmppService: mockXmppService,
-          emailService: mockEmailService,
-          homeRefreshSyncService: mockHomeRefreshSyncService,
-          temporaryDirectoryBuilder: (directoryName) async =>
-              Directory('${tempRoot.path}/$directoryName'),
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-          initialState: const AuthenticationComplete(),
-        );
-      },
-      act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
-      expect: () => [const AuthenticationNone()],
-      verify: (_) {
-        verify(() => mockEmailService.burn(jid: any(named: 'jid'))).called(1);
-      },
-    );
-
-    blocTest<AuthenticationCubit, AuthenticationState>(
-      'Burn logout wipes hydrated app state and uses the stored email database prefix even when SMTP is disabled.',
-      build: () {
-        credentialStorage['jid'] = validJid;
-        credentialStorage['${validJid}_database_prefix'] = 'burn-db';
-        final tempRoot = Directory.systemTemp.createTempSync('auth_burn');
-        addTearDown(() async {
-          if (tempRoot.existsSync()) {
-            await tempRoot.delete(recursive: true);
-          }
-        });
-        return AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          xmppService: mockXmppService,
-          emailService: mockEmailService,
-          homeRefreshSyncService: mockHomeRefreshSyncService,
-          notificationService: mockNotificationService,
-          reminderController: mockCalendarReminderController,
-          calendarStorageManager: mockCalendarStorageManager,
-          hydratedStorage: mockHydratedStorage,
-          temporaryDirectoryBuilder: (directoryName) async =>
-              Directory('${tempRoot.path}/$directoryName'),
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-          initialState: const AuthenticationComplete(
-            config: EndpointConfig(smtpEnabled: false),
-          ),
-        );
-      },
-      act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
-      expect: () => [
-        const AuthenticationNone(config: EndpointConfig(smtpEnabled: false)),
-      ],
-      verify: (_) {
-        verify(
-          () => mockEmailService.burn(jid: validJid, databasePrefix: 'burn-db'),
-        ).called(1);
-        verify(() => mockCalendarReminderController.clearAll()).called(1);
-        verify(() => mockNotificationService.dismissNotifications()).called(1);
-        verify(() => mockHydratedStorage.clear()).called(1);
-        verify(() => mockCalendarStorageManager.burn()).called(1);
-      },
-    );
-
-    blocTest<AuthenticationCubit, AuthenticationState>(
-      'Burn logout ignores an invalid stored email database prefix.',
-      build: () {
-        credentialStorage['jid'] = validJid;
-        credentialStorage['${validJid}_database_prefix'] = '../burn-db';
-        final tempRoot = Directory.systemTemp.createTempSync('auth_burn');
-        addTearDown(() async {
-          if (tempRoot.existsSync()) {
-            await tempRoot.delete(recursive: true);
-          }
-        });
-        return AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          xmppService: mockXmppService,
-          emailService: mockEmailService,
-          homeRefreshSyncService: mockHomeRefreshSyncService,
-          temporaryDirectoryBuilder: (directoryName) async =>
-              Directory('${tempRoot.path}/$directoryName'),
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-          initialState: const AuthenticationComplete(
-            config: EndpointConfig(smtpEnabled: false),
-          ),
-        );
-      },
-      act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
-      expect: () => [
-        const AuthenticationNone(config: EndpointConfig(smtpEnabled: false)),
-      ],
-      verify: (_) {
-        verify(() => mockEmailService.burn(jid: validJid)).called(1);
-        verifyNever(
-          () => mockEmailService.burn(
-            jid: validJid,
-            databasePrefix: any(named: 'databasePrefix'),
-          ),
-        );
-      },
-    );
-
-    test(
-      'Burn logout deletes the hydrated fallback box and replaces it with ephemeral storage.',
-      () async {
-        final tempRoot = await Directory.systemTemp.createTemp('auth_hydrated');
-        addTearDown(() async {
-          if (tempRoot.existsSync()) {
-            await tempRoot.delete(recursive: true);
-          }
-        });
-        Hive.init(tempRoot.path);
-        final fallbackStorage = await HydratedStorage.build(
-          storageDirectory: HydratedStorageDirectory(tempRoot.path),
-        );
-        final registry = CalendarStorageRegistry(fallback: fallbackStorage);
-        await registry.write('settings_state', 'value');
-        expect(await HydratedStorage.hive.boxExists('hydrated_box'), isTrue);
-
-        final bloc = AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          xmppService: mockXmppService,
-          hydratedStorage: registry,
-          homeRefreshSyncService: mockHomeRefreshSyncService,
-          temporaryDirectoryBuilder: (directoryName) async =>
-              Directory('${tempRoot.path}/$directoryName'),
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-          initialState: const AuthenticationComplete(),
-        );
-        addTearDown(() => bloc.close());
-
-        await bloc.logout(severity: LogoutSeverity.burn);
-
-        expect(await HydratedStorage.hive.boxExists('hydrated_box'), isFalse);
-        expect(registry.fallbackStorage, isA<InMemoryStorage>());
       },
     );
   });

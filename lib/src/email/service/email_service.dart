@@ -7,7 +7,6 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
-import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
@@ -165,6 +164,22 @@ class EmailProvisioningException implements Exception {
 
   @override
   String toString() => 'EmailProvisioningException($failure)';
+}
+
+enum EmailServiceFailure {
+  missingAddress,
+  stopping,
+  chatPersistTimeout,
+  missingRecipientMetadata,
+}
+
+class EmailServiceException implements Exception {
+  const EmailServiceException(this.failure);
+
+  final EmailServiceFailure failure;
+
+  @override
+  String toString() => 'EmailServiceException($failure)';
 }
 
 enum FanOutValidationFailure {
@@ -1152,7 +1167,7 @@ class EmailService {
       key: _addressKeyForScope(scope),
     );
     if (address == null || address.isEmpty) {
-      throw StateError('No email address found.');
+      throw const EmailServiceException(EmailServiceFailure.missingAddress);
     }
     final deltaAccountId = await _ensureEmailAccountSession(
       createIfMissing: false,
@@ -1230,7 +1245,7 @@ class EmailService {
       return;
     }
     if (_blocksRuntimeReentry) {
-      throw StateError('Email service is stopping.');
+      throw const EmailServiceException(EmailServiceFailure.stopping);
     }
     if (!_listenerAttached) {
       _transport.addEventListener(_eventListener);
@@ -1321,53 +1336,6 @@ class EmailService {
       }
     }
     await _transport.dispose();
-    _databasePrefix = null;
-    _databasePassphrase = null;
-    _activeAccount = null;
-    _sessionCredentials = null;
-    _activeCredentialScope = null;
-    _pendingPushToken = null;
-    _runtimePhase = _EmailRuntimePhase.stopped;
-  }
-
-  Future<void> burn({String? jid, String? databasePrefix}) async {
-    final scope = _scopeForOptionalJid(jid);
-    final explicitDatabasePrefix = databasePrefix?.trim();
-    final normalizedExplicitPrefix = tryNormalizeAppOwnedPathSegment(
-      explicitDatabasePrefix,
-    );
-    if (explicitDatabasePrefix != null &&
-        explicitDatabasePrefix.isNotEmpty &&
-        normalizedExplicitPrefix == null) {
-      _log.warning(
-        'Ignoring invalid explicit email database prefix during burn cleanup.',
-      );
-    }
-    final resolvedDatabasePrefix = normalizedExplicitPrefix ?? _databasePrefix;
-    _runtimePhase = _EmailRuntimePhase.disposing;
-    await stop();
-    try {
-      await _transport.deconfigureAccount();
-    } on Exception catch (error, stackTrace) {
-      _log.warning('Failed to deconfigure email account', error, stackTrace);
-    }
-    await _transport.dispose();
-    if (resolvedDatabasePrefix == null) {
-      await _transport.deleteStorageArtifacts();
-    } else {
-      await _transport.deleteStorageArtifacts(
-        databasePrefix: resolvedDatabasePrefix,
-      );
-    }
-    if (scope != null && resolvedDatabasePrefix != null) {
-      await _clearStockPurgeKey(
-        scope: scope,
-        databasePrefix: resolvedDatabasePrefix,
-      );
-    }
-    if (scope != null) {
-      await _clearCredentials(scope);
-    }
     _databasePrefix = null;
     _databasePassphrase = null;
     _activeAccount = null;
@@ -3835,7 +3803,7 @@ class EmailService {
       throw StateError('Call ensureProvisioned before using EmailService.');
     }
     if (_blocksRuntimeReentry) {
-      throw StateError('Email service is stopping.');
+      throw const EmailServiceException(EmailServiceFailure.stopping);
     }
     if (!_acceptsRuntimeWork) {
       await start();
@@ -4148,7 +4116,7 @@ class EmailService {
           .timeout(const Duration(seconds: 10));
       return chat;
     } on TimeoutException {
-      throw StateError('Email chat $chatId was not persisted within timeout.');
+      throw const EmailServiceException(EmailServiceFailure.chatPersistTimeout);
     }
   }
 
@@ -4227,7 +4195,9 @@ class EmailService {
     }
     final domain = _domainFromAddress(address) ?? config.domain;
     if (domain.isEmpty) {
-      throw StateError('Unable to resolve email server host.');
+      throw const EmailProvisioningException(
+        EmailProvisioningFailure.configurationFailed,
+      );
     }
     return domain;
   }
@@ -4727,8 +4697,8 @@ class EmailService {
       return activeDeltaChatId;
     }
     if (requireRecipientMetadata) {
-      throw StateError(
-        'Email chat ${resolvedChat.jid} missing recipient metadata.',
+      throw const EmailServiceException(
+        EmailServiceFailure.missingRecipientMetadata,
       );
     }
     return null;

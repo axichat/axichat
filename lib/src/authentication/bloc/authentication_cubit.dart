@@ -8,9 +8,6 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:axichat/main.dart';
-import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
-import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
-import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
@@ -22,17 +19,15 @@ import 'package:axichat/src/email/service/email_provisioning_client.dart'
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
+import 'package:bloc/bloc.dart';
 import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
-import 'package:hive_ce/hive.dart';
-import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:xml/xml.dart';
@@ -101,14 +96,11 @@ enum AuthMessageKey {
 
 enum LogoutSeverity {
   auto,
-  normal,
-  burn;
+  normal;
 
   bool get isAuto => this == auto;
 
   bool get isNormal => this == normal;
-
-  bool get isBurn => this == burn;
 }
 
 class AuthenticationCubit extends Cubit<AuthenticationState> {
@@ -117,12 +109,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required XmppService xmppService,
     EmailService? emailService,
     HomeRefreshSyncService? homeRefreshSyncService,
-    NotificationService? notificationService,
-    CalendarReminderController? reminderController,
-    CalendarStorageManager? calendarStorageManager,
-    Storage? hydratedStorage,
-    Future<Directory> Function(String directoryName) temporaryDirectoryBuilder =
-        appOwnedTemporaryDirectory,
     http.Client? httpClient,
     provisioning.EmailProvisioningClient? emailProvisioningClient,
     AuthenticationState? initialState,
@@ -138,11 +124,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
              xmppService: xmppService,
              emailService: emailService,
            ),
-       _notificationService = notificationService,
-       _reminderController = reminderController,
-       _calendarStorageManager = calendarStorageManager,
-       _hydratedStorage = hydratedStorage,
-       _temporaryDirectoryBuilder = temporaryDirectoryBuilder,
        _endpointResolver = endpointResolver,
        _authRequestTimeout = authRequestTimeout,
        super(initialState ?? const AuthenticationNone()) {
@@ -187,11 +168,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           } else if (connectionState == ConnectionState.notConnected ||
               connectionState == ConnectionState.error) {
             await _emailService?.handleNetworkLost();
-            if (connectionState == ConnectionState.error &&
-                state is AuthenticationComplete &&
-                !_xmppService.hasInMemoryReconnectContext) {
-              await logout(severity: LogoutSeverity.auto);
-            }
           }
           return connectionState;
         })
@@ -265,12 +241,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   final XmppService _xmppService;
   EmailService? _emailService;
   final HomeRefreshSyncService _homeRefreshSyncService;
-  final NotificationService? _notificationService;
-  final CalendarReminderController? _reminderController;
-  final CalendarStorageManager? _calendarStorageManager;
-  final Storage? _hydratedStorage;
-  final Future<Directory> Function(String directoryName)
-  _temporaryDirectoryBuilder;
   final EndpointResolver _endpointResolver;
   late final http.Client _httpClient;
   late final http.Client? _ownedHttpClient;
@@ -525,6 +495,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     if (error.code == provisioning.EmailProvisioningApiErrorCode.network ||
         error.code == provisioning.EmailProvisioningApiErrorCode.unavailable) {
       return const AuthKeyMessage(AuthMessageKey.emailServerUnreachable);
+    }
+    if (error.code ==
+        provisioning.EmailProvisioningApiErrorCode.invalidConfiguration) {
+      return const AuthKeyMessage(AuthMessageKey.signupFailedTryAgain);
     }
     if (error.code ==
             provisioning.EmailProvisioningApiErrorCode.alreadyExists ||
@@ -2163,15 +2137,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Email provisioning pending: ${error.failure}');
       _lastEmailProvisioningError = null;
       return _ProvisioningStatus.pendingRecoverable;
-    } catch (error, stackTrace) {
-      if (error is Error && error is! StateError) {
-        _log.severe(
-          'Unexpected error during email provisioning',
-          error,
-          stackTrace,
-        );
-        rethrow;
-      }
+    } on EmailServiceException catch (error, stackTrace) {
       _log.warning('Email provisioning failed', error, stackTrace);
       if (enforceProvisioning) {
         if (allowOfflineOnRecoverable) {
@@ -2786,36 +2752,17 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Normal logout blocked for device-only password account.');
       return;
     }
-    final burnContext = severity == LogoutSeverity.burn
-        ? await _resolveBurnCleanupContext()
-        : null;
     await _homeRefreshSyncService.close();
     if (severity == LogoutSeverity.normal) {
       await _xmppService.clearSessionTokens();
     }
-    if (severity == LogoutSeverity.burn) {
-      if (burnContext?.databasePrefix == null) {
-        await _emailService?.burn(jid: burnContext?.jid);
-      } else {
-        await _emailService?.burn(
-          jid: burnContext?.jid,
-          databasePrefix: burnContext?.databasePrefix,
-        );
-      }
-    } else if (endpointConfig.smtpEnabled) {
+    if (endpointConfig.smtpEnabled) {
       await _emailService?.shutdown(
         clearCredentials: severity == LogoutSeverity.normal,
       );
     }
 
-    if (severity != LogoutSeverity.burn) {
-      await _xmppService.disconnect();
-    } else if (severity == LogoutSeverity.burn) {
-      await _credentialStore.deleteAll(burn: true);
-      _passwordWasSkipped = false;
-      await _xmppService.burn();
-      await _burnAdditionalLocalState();
-    }
+    await _xmppService.disconnect();
 
     if (severity == LogoutSeverity.normal) {
       await _credentialStore.delete(key: jidStorageKey);
@@ -2824,48 +2771,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _clearSkippedPasswordSecrets();
     }
 
-    if (severity == LogoutSeverity.burn) {
-      await _xmppService.disconnect();
-      _emailService?.clearSessionCredentials();
-      _emit(const AuthenticationNone());
-      _updateEmailForegroundKeepalive();
-      return;
-    }
     _emailService?.clearSessionCredentials();
     _emit(const AuthenticationNone());
     _updateEmailForegroundKeepalive();
-  }
-
-  Future<({String? jid, String? databasePrefix})>
-  _resolveBurnCleanupContext() async {
-    final storedLogin = await _readStoredLoginCredentials();
-    final storedJid = storedLogin.jid?.trim();
-    final activeJid = _xmppService.myJid?.trim();
-    final resolvedJid = switch ((storedJid, activeJid)) {
-      (final String jid, _) when jid.isNotEmpty => jid,
-      (_, final String jid) when jid.isNotEmpty => jid,
-      _ => null,
-    };
-    if (resolvedJid == null) {
-      return (jid: null, databasePrefix: null);
-    }
-    final databaseSecrets = await _readDatabaseSecrets(resolvedJid);
-    final prefix = databaseSecrets.prefix?.trim();
-    return (
-      jid: resolvedJid,
-      databasePrefix: prefix == null || prefix.isEmpty ? null : prefix,
-    );
-  }
-
-  Future<void> _burnAdditionalLocalState() async {
-    await _reminderController?.clearAll();
-    await _notificationService?.dismissNotifications();
-    await _burnHydratedStorage();
-    await _calendarStorageManager?.burn();
-    await _deleteBurnTemporaryDirectory(emailAttachmentTempDirectoryName);
-    await _deleteBurnTemporaryDirectory(attachmentShareTempDirectoryName);
-    await _deleteBurnTemporaryDirectory(chatHistoryExportTempDirectoryName);
-    await _deleteBurnTemporaryDirectory(contactExportTempDirectoryName);
   }
 
   String? _validatedDatabasePrefix(
@@ -2882,45 +2790,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return null;
     }
     return normalized;
-  }
-
-  Future<void> _burnHydratedStorage() async {
-    final storage = _hydratedStorage;
-    if (storage == null) {
-      return;
-    }
-    if (storage is! CalendarStorageRegistry) {
-      await storage.clear();
-      return;
-    }
-    await storage.fallbackStorage.clear();
-    await storage.fallbackStorage.close();
-    const hydratedBoxName = 'hydrated_box';
-    if (await Hive.boxExists(hydratedBoxName)) {
-      await Hive.deleteBoxFromDisk(hydratedBoxName);
-    }
-    storage.replaceFallbackStorage(InMemoryStorage());
-  }
-
-  Future<void> _deleteBurnTemporaryDirectory(String directoryName) async {
-    final directory = await _temporaryDirectoryBuilder(directoryName);
-    try {
-      final deleted = await deleteAppOwnedDirectoryTree(
-        directory: directory,
-        expectedPath: directory.path,
-      );
-      if (!deleted) {
-        _log.warning(
-          'Skipped burn cleanup for unexpected temp path ${directory.path}',
-        );
-      }
-    } on FileSystemException catch (error, stackTrace) {
-      _log.warning(
-        'Failed to delete temporary burn directory ${directory.path}',
-        error,
-        stackTrace,
-      );
-    }
   }
 
   Future<void> changePassword({
@@ -3102,6 +2971,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
               provisioning.EmailProvisioningApiErrorCode.unavailable) {
         return const AuthKeyMessage(AuthMessageKey.emailServerUnreachable);
       }
+      if (error.code ==
+          provisioning.EmailProvisioningApiErrorCode.invalidConfiguration) {
+        return const AuthKeyMessage(AuthMessageKey.passwordChangeFailed);
+      }
       final detail = _userVisibleProvisioningErrorDetail(error.debugMessage);
       if (detail != null) {
         return AuthRawMessage(detail);
@@ -3222,7 +3095,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       }
 
       if (!shouldDeleteXmppAccount) {
-        await logout(severity: LogoutSeverity.burn);
+        await logout(severity: LogoutSeverity.normal);
         await _removeCompletedAccountRecord(normalizedUsername, effectiveHost);
         return;
       }
@@ -3242,7 +3115,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         return;
       }
       if (response.statusCode == 200) {
-        await logout(severity: LogoutSeverity.burn);
+        await logout(severity: LogoutSeverity.normal);
         await _removeCompletedAccountRecord(normalizedUsername, effectiveHost);
         return;
       }
@@ -3339,6 +3212,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         password: newPassword,
         persistCredentials: rememberMe,
       );
+    } on EmailServiceException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to refresh email credentials after password change',
+        error,
+        stackTrace,
+      );
+      return EmailPasswordRefreshResult.reconnectPending;
+    } on EmailProvisioningException catch (error, stackTrace) {
+      _log.warning(
+        'Failed to refresh email credentials after password change',
+        error,
+        stackTrace,
+      );
+      return EmailPasswordRefreshResult.reconnectPending;
     } on Exception catch (error, stackTrace) {
       _log.warning(
         'Failed to refresh email credentials after password change',
@@ -3413,6 +3300,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           error.code ==
               provisioning.EmailProvisioningApiErrorCode.unavailable) {
         return const AuthKeyMessage(AuthMessageKey.emailServerUnreachable);
+      }
+      if (error.code ==
+          provisioning.EmailProvisioningApiErrorCode.invalidConfiguration) {
+        return const AuthKeyMessage(AuthMessageKey.accountDeletionFailed);
       }
       final detail = _userVisibleProvisioningErrorDetail(error.debugMessage);
       if (detail != null) {

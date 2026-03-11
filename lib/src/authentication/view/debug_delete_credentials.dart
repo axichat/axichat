@@ -16,7 +16,7 @@ class DeleteCredentialsButton extends StatelessWidget {
     return AxiIconButton.ghost(
       iconData: LucideIcons.delete,
       onPressed: () async {
-        await context.read<CredentialStore>().deleteAll(burn: true);
+        await context.read<CredentialStore>().deleteAll();
       },
     );
   }

@@ -50,7 +50,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
-import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
 import 'package:provider/provider.dart';
@@ -207,12 +206,6 @@ class _AxichatState extends State<Axichat> {
                       emailService: context.read<EmailService>(),
                       homeRefreshSyncService: context
                           .read<HomeRefreshSyncService>(),
-                      notificationService: context.read<NotificationService>(),
-                      reminderController: context
-                          .read<CalendarReminderController>(),
-                      calendarStorageManager: context
-                          .read<CalendarStorageManager>(),
-                      hydratedStorage: HydratedBloc.storage,
                       initialEndpointConfig: context
                           .read<SettingsCubit>()
                           .state

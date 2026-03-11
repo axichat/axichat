@@ -107,11 +107,6 @@ class CalendarStorageManager extends ChangeNotifier {
     }
   }
 
-  Future<void> burn() async {
-    await _clearGuestStorageFromDisk();
-    await _clearAuthStorageFromDisk();
-  }
-
   /// Unregisters and forgets the authenticated storage reference.
   void clearAuthStorage() {
     _registry.unregisterPrefix(authStoragePrefix);

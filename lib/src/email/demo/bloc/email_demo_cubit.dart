@@ -145,6 +145,16 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
           detail: null,
         ),
       );
+    } on EmailServiceException catch (error, stackTrace) {
+      const String logMessage = 'Provisioning failed';
+      _log.warning(logMessage, error, stackTrace);
+      emit(
+        state.copyWith(
+          status: EmailDemoStatus.provisionFailed,
+          failure: EmailDemoFailure.unexpected,
+          detail: null,
+        ),
+      );
     }
   }
 

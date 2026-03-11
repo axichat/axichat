@@ -686,6 +686,8 @@ class EmailContactImportService {
             displayName: contact.displayName,
           );
           imported += _nextIndex;
+        } on EmailServiceException {
+          failed += _nextIndex;
         } on Exception {
           failed += _nextIndex;
         }
