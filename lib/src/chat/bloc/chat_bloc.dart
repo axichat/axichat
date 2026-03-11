@@ -6660,17 +6660,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   };
 
   ChatMessageKey _chatMessageKeyForFanOutFailure(
-    FanOutValidationFailure reason,
-  ) => switch (reason) {
-    FanOutValidationFailure.noRecipients =>
-      ChatMessageKey.fanOutErrorNoRecipients,
-    FanOutValidationFailure.resolveFailed =>
-      ChatMessageKey.fanOutErrorResolveFailed,
-    FanOutValidationFailure.tooManyRecipients =>
+    FanOutValidationException error,
+  ) => switch (error) {
+    FanOutNoRecipientsException() => ChatMessageKey.fanOutErrorNoRecipients,
+    FanOutResolveFailedException() => ChatMessageKey.fanOutErrorResolveFailed,
+    FanOutTooManyRecipientsException() =>
       ChatMessageKey.fanOutErrorTooManyRecipients,
-    FanOutValidationFailure.emptyMessage =>
-      ChatMessageKey.fanOutErrorEmptyMessage,
-    FanOutValidationFailure.invalidShareToken =>
+    FanOutEmptyMessageException() => ChatMessageKey.fanOutErrorEmptyMessage,
+    FanOutInvalidShareTokenException() =>
       ChatMessageKey.fanOutErrorInvalidShareToken,
   };
 
@@ -6766,7 +6763,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       return true;
     } on FanOutValidationException catch (error) {
-      final key = _chatMessageKeyForFanOutFailure(error.reason);
+      final key = _chatMessageKeyForFanOutFailure(error);
       emit(state.copyWith(composerError: key));
       return false;
     } on Exception catch (error, stackTrace) {

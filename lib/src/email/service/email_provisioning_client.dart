@@ -18,34 +18,86 @@ class EmailProvisioningCredentials {
   final String password;
 }
 
-enum EmailProvisioningApiErrorCode {
-  unauthorized,
-  unavailable,
-  invalidConfiguration,
-  invalidResponse,
-  network,
-  authenticationFailed,
-  notFound,
-  alreadyExists,
-}
-
-class EmailProvisioningApiException implements Exception {
+sealed class EmailProvisioningApiException implements Exception {
   const EmailProvisioningApiException({
-    required this.code,
     this.statusCode,
     this.isRecoverable = false,
     this.debugMessage,
   });
 
-  final EmailProvisioningApiErrorCode code;
   final bool isRecoverable;
   final int? statusCode;
   final String? debugMessage;
 
   @override
   String toString() =>
-      'EmailProvisioningApiException($code, status: $statusCode): '
+      '$runtimeType(status: $statusCode): '
       '${debugMessage ?? ''}';
+}
+
+final class EmailProvisioningApiUnauthorizedException
+    extends EmailProvisioningApiException {
+  const EmailProvisioningApiUnauthorizedException({
+    super.statusCode,
+    super.debugMessage,
+  });
+}
+
+final class EmailProvisioningApiUnavailableException
+    extends EmailProvisioningApiException {
+  const EmailProvisioningApiUnavailableException({
+    super.statusCode,
+    super.debugMessage,
+  }) : super(isRecoverable: true);
+}
+
+final class EmailProvisioningApiInvalidConfigurationException
+    extends EmailProvisioningApiException {
+  const EmailProvisioningApiInvalidConfigurationException({
+    super.statusCode,
+    super.debugMessage,
+  });
+}
+
+final class EmailProvisioningApiInvalidResponseException
+    extends EmailProvisioningApiException {
+  const EmailProvisioningApiInvalidResponseException({
+    super.statusCode,
+    super.isRecoverable,
+    super.debugMessage,
+  });
+}
+
+final class EmailProvisioningApiNetworkException
+    extends EmailProvisioningApiException {
+  const EmailProvisioningApiNetworkException({
+    super.statusCode,
+    super.debugMessage,
+  }) : super(isRecoverable: true);
+}
+
+final class EmailProvisioningApiAuthenticationFailedException
+    extends EmailProvisioningApiException {
+  const EmailProvisioningApiAuthenticationFailedException({
+    super.statusCode,
+    super.debugMessage,
+  }) : super(isRecoverable: true);
+}
+
+final class EmailProvisioningApiNotFoundException
+    extends EmailProvisioningApiException {
+  const EmailProvisioningApiNotFoundException({
+    super.statusCode,
+    super.debugMessage,
+  });
+}
+
+final class EmailProvisioningApiAlreadyExistsException
+    extends EmailProvisioningApiException {
+  const EmailProvisioningApiAlreadyExistsException({
+    super.statusCode,
+    super.debugMessage,
+  });
 }
 
 class EmailProvisioningClient {
@@ -126,8 +178,7 @@ class EmailProvisioningClient {
     if (scheme == 'https') return;
     const allowInsecure = !kReleaseMode && kAllowInsecureEmailProvisioning;
     if (!allowInsecure) {
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.invalidConfiguration,
+      throw const EmailProvisioningApiInvalidConfigurationException(
         debugMessage: 'Email provisioning base URL must use HTTPS.',
       );
     }
@@ -140,9 +191,7 @@ class EmailProvisioningClient {
   void _ensureConfigured() {
     if (!_requirePublicToken) return;
     if (_publicTokenConfigured) return;
-    throw const EmailProvisioningApiException(
-      code: EmailProvisioningApiErrorCode.unavailable,
-    );
+    throw const EmailProvisioningApiUnavailableException();
   }
 
   Future<EmailProvisioningCredentials> createAccount({
@@ -152,14 +201,12 @@ class EmailProvisioningClient {
     _ensureConfigured();
     final normalizedLocalpart = localpart.trim();
     if (normalizedLocalpart.isEmpty) {
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.invalidResponse,
+      throw const EmailProvisioningApiInvalidResponseException(
         debugMessage: 'Signup rejected: empty localpart.',
       );
     }
     if (password.trim().isEmpty) {
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.invalidResponse,
+      throw const EmailProvisioningApiInvalidResponseException(
         debugMessage: 'Signup rejected: empty password.',
       );
     }
@@ -180,9 +227,7 @@ class EmailProvisioningClient {
         error,
         stackTrace,
       );
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.network,
-        isRecoverable: true,
+      throw const EmailProvisioningApiNetworkException(
         debugMessage: 'Signup request failed: network error.',
       );
     }
@@ -193,25 +238,21 @@ class EmailProvisioningClient {
 
     if (response.statusCode == 401) {
       _log.severe('Email provisioning unauthorized.');
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.unauthorized,
+      throw const EmailProvisioningApiUnauthorizedException(
         debugMessage: 'Signup request unauthorized.',
       );
     }
 
     if (response.statusCode >= 500) {
       _log.warning('Email provisioning unavailable: ${response.statusCode}');
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.unavailable,
-        isRecoverable: true,
+      throw const EmailProvisioningApiUnavailableException(
         debugMessage: 'Signup request failed: server unavailable.',
       );
     }
 
     if (response.statusCode == 403) {
       _log.severe('Email provisioning forbidden.');
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.unauthorized,
+      throw const EmailProvisioningApiUnauthorizedException(
         debugMessage: 'Signup request forbidden.',
       );
     }
@@ -219,8 +260,7 @@ class EmailProvisioningClient {
     if (response.statusCode == 409) {
       final detail = _errorMessageFrom(response.body);
       _log.info('Email provisioning rejected duplicate signup.');
-      throw EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.alreadyExists,
+      throw EmailProvisioningApiAlreadyExistsException(
         statusCode: response.statusCode,
         debugMessage:
             detail ?? 'Signup request rejected: account already exists.',
@@ -234,8 +274,7 @@ class EmailProvisioningClient {
         'Email provisioning rejected request '
         '(${response.statusCode}).',
       );
-      throw EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.invalidResponse,
+      throw EmailProvisioningApiInvalidResponseException(
         isRecoverable: recoverable,
         statusCode: response.statusCode,
         debugMessage: detail ?? 'Signup request rejected.',
@@ -243,8 +282,7 @@ class EmailProvisioningClient {
     }
 
     _log.warning('Email provisioning failed: ${response.statusCode}');
-    throw EmailProvisioningApiException(
-      code: EmailProvisioningApiErrorCode.invalidResponse,
+    throw EmailProvisioningApiInvalidResponseException(
       statusCode: response.statusCode,
       debugMessage: 'Signup request failed: unexpected status.',
     );
@@ -273,9 +311,7 @@ class EmailProvisioningClient {
         error,
         stackTrace,
       );
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.network,
-        isRecoverable: true,
+      throw const EmailProvisioningApiNetworkException(
         debugMessage: 'Email account deletion request failed.',
       );
     }
@@ -288,17 +324,14 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode == 401) {
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.authenticationFailed,
-        isRecoverable: true,
+      throw const EmailProvisioningApiAuthenticationFailedException(
         debugMessage: 'Delete account rejected: authentication failed.',
       );
     }
 
     if (response.statusCode == 403) {
       _log.severe('Email account deletion forbidden.');
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.unauthorized,
+      throw const EmailProvisioningApiUnauthorizedException(
         debugMessage: 'Delete account forbidden.',
       );
     }
@@ -307,9 +340,7 @@ class EmailProvisioningClient {
       _log.warning(
         'Email account deletion unavailable: ${response.statusCode}',
       );
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.unavailable,
-        isRecoverable: true,
+      throw const EmailProvisioningApiUnavailableException(
         debugMessage: 'Delete account unavailable.',
       );
     }
@@ -319,8 +350,7 @@ class EmailProvisioningClient {
       'Email account deletion failed (${response.statusCode})'
       '.',
     );
-    throw EmailProvisioningApiException(
-      code: EmailProvisioningApiErrorCode.invalidResponse,
+    throw EmailProvisioningApiInvalidResponseException(
       statusCode: response.statusCode,
       debugMessage: detail ?? 'Delete account failed: invalid response.',
     );
@@ -351,9 +381,7 @@ class EmailProvisioningClient {
         error,
         stackTrace,
       );
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.network,
-        isRecoverable: true,
+      throw const EmailProvisioningApiNetworkException(
         debugMessage: 'Change password request failed: network error.',
       );
     }
@@ -363,32 +391,26 @@ class EmailProvisioningClient {
     }
 
     if (response.statusCode == 401) {
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.authenticationFailed,
-        isRecoverable: true,
+      throw const EmailProvisioningApiAuthenticationFailedException(
         debugMessage: 'Change password rejected: authentication failed.',
       );
     }
 
     if (response.statusCode == 404) {
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.notFound,
+      throw const EmailProvisioningApiNotFoundException(
         debugMessage: 'Change password rejected: account not found.',
       );
     }
 
     if (response.statusCode >= 500) {
       _log.warning('Email password change unavailable: ${response.statusCode}');
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.unavailable,
-        isRecoverable: true,
+      throw const EmailProvisioningApiUnavailableException(
         debugMessage: 'Change password unavailable.',
       );
     }
 
     final detail = _errorMessageFrom(response.body);
-    throw EmailProvisioningApiException(
-      code: EmailProvisioningApiErrorCode.invalidResponse,
+    throw EmailProvisioningApiInvalidResponseException(
       statusCode: response.statusCode,
       debugMessage: detail ?? 'Change password failed: invalid response.',
     );
@@ -412,8 +434,7 @@ class EmailProvisioningClient {
 
   static Uri _normalizeBase(Uri baseUrl) {
     if (baseUrl.scheme.isEmpty || baseUrl.host.isEmpty) {
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.invalidConfiguration,
+      throw const EmailProvisioningApiInvalidConfigurationException(
         debugMessage:
             'Email provisioning base URL must include a scheme and host.',
       );
@@ -447,8 +468,7 @@ class EmailProvisioningClient {
       return EmailProvisioningCredentials(email: email, password: password);
     } on FormatException catch (error, stackTrace) {
       _log.warning('Invalid email provisioning response', error, stackTrace);
-      throw const EmailProvisioningApiException(
-        code: EmailProvisioningApiErrorCode.invalidResponse,
+      throw const EmailProvisioningApiInvalidResponseException(
         debugMessage: 'Signup response invalid.',
       );
     }

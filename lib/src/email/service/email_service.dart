@@ -141,80 +141,122 @@ class EmailImapCapabilities {
   int get hashCode => Object.hash(idleSupported, connectionLimit, idleCutoff);
 }
 
-enum EmailProvisioningFailure {
-  missingAddress,
-  missingPassword,
-  accountUnavailable,
-  timeout,
-  networkUnavailable,
-  authFailed,
-  configurationFailed,
-}
-
-class EmailProvisioningException implements Exception {
-  const EmailProvisioningException(
-    this.failure, {
+sealed class EmailProvisioningException implements Exception {
+  const EmailProvisioningException({
     this.isRecoverable = false,
     this.shouldWipeCredentials = false,
   });
 
-  final EmailProvisioningFailure failure;
   final bool isRecoverable;
   final bool shouldWipeCredentials;
 
   @override
-  String toString() => 'EmailProvisioningException($failure)';
+  String toString() => runtimeType.toString();
 }
 
-enum EmailServiceFailure {
-  missingAddress,
-  stopping,
-  chatPersistTimeout,
-  missingRecipientMetadata,
+final class EmailProvisioningMissingAddressException
+    extends EmailProvisioningException {
+  const EmailProvisioningMissingAddressException();
 }
 
-class EmailServiceException implements Exception {
-  const EmailServiceException(this.failure);
+final class EmailProvisioningMissingPasswordException
+    extends EmailProvisioningException {
+  const EmailProvisioningMissingPasswordException();
+}
 
-  final EmailServiceFailure failure;
+final class EmailProvisioningAccountUnavailableException
+    extends EmailProvisioningException {
+  const EmailProvisioningAccountUnavailableException();
+}
+
+final class EmailProvisioningTimeoutException
+    extends EmailProvisioningException {
+  const EmailProvisioningTimeoutException() : super(isRecoverable: true);
+}
+
+final class EmailProvisioningNetworkUnavailableException
+    extends EmailProvisioningException {
+  const EmailProvisioningNetworkUnavailableException()
+    : super(isRecoverable: true);
+}
+
+final class EmailProvisioningAuthenticationFailedException
+    extends EmailProvisioningException {
+  const EmailProvisioningAuthenticationFailedException()
+    : super(shouldWipeCredentials: true);
+}
+
+final class EmailProvisioningConfigurationException
+    extends EmailProvisioningException {
+  const EmailProvisioningConfigurationException();
+}
+
+sealed class EmailServiceException implements Exception {
+  const EmailServiceException();
 
   @override
-  String toString() => 'EmailServiceException($failure)';
+  String toString() => runtimeType.toString();
 }
 
-enum FanOutValidationFailure {
-  noRecipients,
-  resolveFailed,
-  tooManyRecipients,
-  emptyMessage,
-  invalidShareToken,
+final class EmailServiceMissingAddressException extends EmailServiceException {
+  const EmailServiceMissingAddressException();
 }
 
-extension FanOutValidationFailureX on FanOutValidationFailure {
-  String message(AppLocalizations l10n, {int? maxRecipients}) {
-    switch (this) {
-      case FanOutValidationFailure.noRecipients:
-        return l10n.fanOutErrorNoRecipients;
-      case FanOutValidationFailure.resolveFailed:
-        return l10n.fanOutErrorResolveFailed;
-      case FanOutValidationFailure.tooManyRecipients:
-        return l10n.fanOutErrorTooManyRecipients(maxRecipients ?? 0);
-      case FanOutValidationFailure.emptyMessage:
-        return l10n.fanOutErrorEmptyMessage;
-      case FanOutValidationFailure.invalidShareToken:
-        return l10n.fanOutErrorInvalidShareToken;
-    }
-  }
+final class EmailServiceStoppingException extends EmailServiceException {
+  const EmailServiceStoppingException();
 }
 
-class FanOutValidationException implements Exception {
-  const FanOutValidationException(this.reason, {this.maxRecipients});
+final class EmailServiceChatPersistTimeoutException
+    extends EmailServiceException {
+  const EmailServiceChatPersistTimeoutException();
+}
 
-  final FanOutValidationFailure reason;
-  final int? maxRecipients;
+final class EmailServiceMissingRecipientMetadataException
+    extends EmailServiceException {
+  const EmailServiceMissingRecipientMetadataException();
+}
+
+sealed class FanOutValidationException implements Exception {
+  const FanOutValidationException();
+
+  int? get maxRecipients => null;
+
+  String message(AppLocalizations l10n) => switch (this) {
+    FanOutNoRecipientsException() => l10n.fanOutErrorNoRecipients,
+    FanOutResolveFailedException() => l10n.fanOutErrorResolveFailed,
+    FanOutTooManyRecipientsException(:final maxRecipients) =>
+      l10n.fanOutErrorTooManyRecipients(maxRecipients),
+    FanOutEmptyMessageException() => l10n.fanOutErrorEmptyMessage,
+    FanOutInvalidShareTokenException() => l10n.fanOutErrorInvalidShareToken,
+  };
 
   @override
-  String toString() => 'FanOutValidationException($reason)';
+  String toString() => runtimeType.toString();
+}
+
+final class FanOutNoRecipientsException extends FanOutValidationException {
+  const FanOutNoRecipientsException();
+}
+
+final class FanOutResolveFailedException extends FanOutValidationException {
+  const FanOutResolveFailedException();
+}
+
+final class FanOutTooManyRecipientsException extends FanOutValidationException {
+  const FanOutTooManyRecipientsException(this._maxRecipients);
+
+  final int _maxRecipients;
+
+  @override
+  int get maxRecipients => _maxRecipients;
+}
+
+final class FanOutEmptyMessageException extends FanOutValidationException {
+  const FanOutEmptyMessageException();
+}
+
+final class FanOutInvalidShareTokenException extends FanOutValidationException {
+  const FanOutInvalidShareTokenException();
 }
 
 class EmailService {
@@ -853,9 +895,7 @@ class EmailService {
               ? address
               : preferredAddress);
     if (selectedAddress == null || selectedAddress.isEmpty) {
-      throw const EmailProvisioningException(
-        EmailProvisioningFailure.missingAddress,
-      );
+      throw const EmailProvisioningMissingAddressException();
     }
     if (address == null || address != selectedAddress) {
       address = selectedAddress;
@@ -990,9 +1030,7 @@ class EmailService {
     }
 
     if (needsProvisioning && !hasPassword) {
-      throw const EmailProvisioningException(
-        EmailProvisioningFailure.missingPassword,
-      );
+      throw const EmailProvisioningMissingPasswordException();
     }
 
     if (needsProvisioning) {
@@ -1066,27 +1104,18 @@ class EmailService {
           await _clearCredentials(scope);
         }
         if (isTimeout) {
-          throw const EmailProvisioningException(
-            EmailProvisioningFailure.timeout,
-            isRecoverable: true,
-          );
+          throw const EmailProvisioningTimeoutException();
         }
         if (mapped.code == DeltaChatErrorCode.network ||
             mapped.code == DeltaChatErrorCode.server) {
-          throw const EmailProvisioningException(
-            EmailProvisioningFailure.networkUnavailable,
-            isRecoverable: true,
-          );
+          throw const EmailProvisioningNetworkUnavailableException();
         }
         final isAuthFailure =
             mapped.code == DeltaChatErrorCode.permission ||
             mapped.code == DeltaChatErrorCode.auth;
-        throw EmailProvisioningException(
-          isAuthFailure
-              ? EmailProvisioningFailure.authFailed
-              : EmailProvisioningFailure.configurationFailed,
-          shouldWipeCredentials: isAuthFailure,
-        );
+        throw isAuthFailure
+            ? const EmailProvisioningAuthenticationFailedException()
+            : const EmailProvisioningConfigurationException();
       }
     } else {
       _log.fine(
@@ -1135,9 +1164,7 @@ class EmailService {
 
     if (_transport.accountsActive) {
       if (!createIfMissing) {
-        throw const EmailProvisioningException(
-          EmailProvisioningFailure.accountUnavailable,
-        );
+        throw const EmailProvisioningAccountUnavailableException();
       }
       final deltaAccountId = await _transport.createAccount();
       await _transport.ensureAccountSession(deltaAccountId);
@@ -1167,7 +1194,7 @@ class EmailService {
       key: _addressKeyForScope(scope),
     );
     if (address == null || address.isEmpty) {
-      throw const EmailServiceException(EmailServiceFailure.missingAddress);
+      throw const EmailServiceMissingAddressException();
     }
     final deltaAccountId = await _ensureEmailAccountSession(
       createIfMissing: false,
@@ -1245,7 +1272,7 @@ class EmailService {
       return;
     }
     if (_blocksRuntimeReentry) {
-      throw const EmailServiceException(EmailServiceFailure.stopping);
+      throw const EmailServiceStoppingException();
     }
     if (!_listenerAttached) {
       _transport.addEventListener(_eventListener);
@@ -1630,21 +1657,14 @@ class EmailService {
     }
     await _ensureReady();
     if (targets.isEmpty) {
-      throw const FanOutValidationException(
-        FanOutValidationFailure.noRecipients,
-      );
+      throw const FanOutNoRecipientsException();
     }
     final targetChatsByJid = await _resolveFanOutTargets(targets);
     if (targetChatsByJid.isEmpty) {
-      throw const FanOutValidationException(
-        FanOutValidationFailure.resolveFailed,
-      );
+      throw const FanOutResolveFailedException();
     }
     if (targetChatsByJid.length > _maxFanOutRecipients) {
-      throw const FanOutValidationException(
-        FanOutValidationFailure.tooManyRecipients,
-        maxRecipients: _maxFanOutRecipients,
-      );
+      throw const FanOutTooManyRecipientsException(_maxFanOutRecipients);
     }
     final trimmedBody = body?.trim() ?? '';
     final normalizedHtmlBody = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -1658,9 +1678,7 @@ class EmailService {
     final hasAttachment = attachment != null;
     final normalizedHtmlCaption = HtmlContentCodec.normalizeHtml(htmlCaption);
     if (!hasBody && !hasAttachment && !hasSubject) {
-      throw const FanOutValidationException(
-        FanOutValidationFailure.emptyMessage,
-      );
+      throw const FanOutEmptyMessageException();
     }
     final db = await _databaseBuilder();
     final existingShare = shareId == null
@@ -1863,9 +1881,7 @@ class EmailService {
     String? quotedStanzaId,
   }) async {
     if (targets.isEmpty) {
-      throw const FanOutValidationException(
-        FanOutValidationFailure.noRecipients,
-      );
+      throw const FanOutNoRecipientsException();
     }
     final effectiveShareId = shareId ?? ShareTokenCodec.generateShareId();
     final statuses = <FanOutRecipientStatus>[];
@@ -2068,9 +2084,7 @@ class EmailService {
       return ShareTokenCodec.subjectToken(shareId);
     } on ArgumentError catch (error, stackTrace) {
       _log.warning(_shareTokenInvalidLog, error, stackTrace);
-      throw const FanOutValidationException(
-        FanOutValidationFailure.invalidShareToken,
-      );
+      throw const FanOutInvalidShareTokenException();
     }
   }
 
@@ -3803,7 +3817,7 @@ class EmailService {
       throw StateError('Call ensureProvisioned before using EmailService.');
     }
     if (_blocksRuntimeReentry) {
-      throw const EmailServiceException(EmailServiceFailure.stopping);
+      throw const EmailServiceStoppingException();
     }
     if (!_acceptsRuntimeWork) {
       await start();
@@ -4116,7 +4130,7 @@ class EmailService {
           .timeout(const Duration(seconds: 10));
       return chat;
     } on TimeoutException {
-      throw const EmailServiceException(EmailServiceFailure.chatPersistTimeout);
+      throw const EmailServiceChatPersistTimeoutException();
     }
   }
 
@@ -4195,9 +4209,7 @@ class EmailService {
     }
     final domain = _domainFromAddress(address) ?? config.domain;
     if (domain.isEmpty) {
-      throw const EmailProvisioningException(
-        EmailProvisioningFailure.configurationFailed,
-      );
+      throw const EmailProvisioningConfigurationException();
     }
     return domain;
   }
@@ -4507,9 +4519,7 @@ class EmailService {
       normalizedAddress = _normalizeLinkedAccountAddress(storedAddress ?? '');
     }
     if (normalizedAddress.isEmpty) {
-      throw const EmailProvisioningException(
-        EmailProvisioningFailure.missingAddress,
-      );
+      throw const EmailProvisioningMissingAddressException();
     }
     final deltaAccountId = await _ensureEmailAccountSession(
       createIfMissing: false,
@@ -4546,9 +4556,7 @@ class EmailService {
     }
     final EmailAccount? credentials = await _accountForScope(scope);
     if (credentials == null || credentials.password.isEmpty) {
-      throw const EmailProvisioningException(
-        EmailProvisioningFailure.missingPassword,
-      );
+      throw const EmailProvisioningMissingPasswordException();
     }
     final String displayName = _displayNameForAddress(account.address);
     final Map<String, String> configureOverrides =
@@ -4594,20 +4602,14 @@ class EmailService {
       );
       if (mapped.code == DeltaChatErrorCode.network ||
           mapped.code == DeltaChatErrorCode.server) {
-        throw const EmailProvisioningException(
-          EmailProvisioningFailure.networkUnavailable,
-          isRecoverable: true,
-        );
+        throw const EmailProvisioningNetworkUnavailableException();
       }
       final isAuthFailure =
           mapped.code == DeltaChatErrorCode.permission ||
           mapped.code == DeltaChatErrorCode.auth;
-      throw EmailProvisioningException(
-        isAuthFailure
-            ? EmailProvisioningFailure.authFailed
-            : EmailProvisioningFailure.configurationFailed,
-        shouldWipeCredentials: isAuthFailure,
-      );
+      throw isAuthFailure
+          ? const EmailProvisioningAuthenticationFailedException()
+          : const EmailProvisioningConfigurationException();
     }
   }
 
@@ -4697,9 +4699,7 @@ class EmailService {
       return activeDeltaChatId;
     }
     if (requireRecipientMetadata) {
-      throw const EmailServiceException(
-        EmailServiceFailure.missingRecipientMetadata,
-      );
+      throw const EmailServiceMissingRecipientMetadataException();
     }
     return null;
   }

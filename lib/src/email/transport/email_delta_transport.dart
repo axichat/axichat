@@ -383,7 +383,7 @@ class EmailDeltaTransport implements ChatTransport {
             completer.complete();
           } else if (event.data1 == 0) {
             completer.completeError(
-              DeltaSafeException(
+              DeltaOperationException(
                 event.data2Text ?? 'Failed to configure email account',
               ),
             );
@@ -392,7 +392,7 @@ class EmailDeltaTransport implements ChatTransport {
         }
         if (eventType == DeltaEventType.error) {
           completer.completeError(
-            DeltaSafeException(
+            DeltaOperationException(
               event.data2Text ??
                   event.data1Text ??
                   'Failed to configure email account',
@@ -409,7 +409,7 @@ class EmailDeltaTransport implements ChatTransport {
       await completer.future.timeout(
         const Duration(seconds: 60),
         onTimeout: () {
-          throw const DeltaSafeException('Email configuration timed out');
+          throw const DeltaConfigurationTimeoutException();
         },
       );
       await _enforceTransportSecurity(context: context);
@@ -518,9 +518,11 @@ class EmailDeltaTransport implements ChatTransport {
         }
         return;
       case _DeltaSecurityModeResolution.plain:
-        throw const DeltaSafeException(_emailSecurityModePlainError);
+        throw const DeltaTransportSecurityException(
+          _emailSecurityModePlainError,
+        );
       case _DeltaSecurityModeResolution.unknown:
-        throw DeltaSafeException(
+        throw DeltaTransportSecurityException(
           '$_emailSecurityModeUnknownPrefix$transportLabel'
           '$_emailSecurityModeUnknownSuffix',
         );

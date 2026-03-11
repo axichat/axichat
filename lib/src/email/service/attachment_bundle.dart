@@ -32,21 +32,48 @@ const String _bundlePayloadFilesKey = 'files';
 const String _bundleFilePathKey = 'file_path';
 const String _bundleFileNameKey = 'file_name';
 
-enum EmailAttachmentBundleFailure {
-  emptySelection,
-  tooManyFiles,
-  tooLarge,
-  missingFile,
-  invalidEntityType,
-  symlinkNotAllowed,
-  invalidPayload,
+sealed class EmailAttachmentBundleException implements Exception {
+  const EmailAttachmentBundleException({this.path});
+
+  final String? path;
+
+  @override
+  String toString() => runtimeType.toString();
 }
 
-class EmailAttachmentBundleException implements Exception {
-  const EmailAttachmentBundleException(this.reason, {this.path});
+final class EmailAttachmentBundleEmptySelectionException
+    extends EmailAttachmentBundleException {
+  const EmailAttachmentBundleEmptySelectionException();
+}
 
-  final EmailAttachmentBundleFailure reason;
-  final String? path;
+final class EmailAttachmentBundleTooManyFilesException
+    extends EmailAttachmentBundleException {
+  const EmailAttachmentBundleTooManyFilesException();
+}
+
+final class EmailAttachmentBundleTooLargeException
+    extends EmailAttachmentBundleException {
+  const EmailAttachmentBundleTooLargeException();
+}
+
+final class EmailAttachmentBundleMissingFileException
+    extends EmailAttachmentBundleException {
+  const EmailAttachmentBundleMissingFileException({super.path});
+}
+
+final class EmailAttachmentBundleInvalidEntityTypeException
+    extends EmailAttachmentBundleException {
+  const EmailAttachmentBundleInvalidEntityTypeException({super.path});
+}
+
+final class EmailAttachmentBundleSymlinkNotAllowedException
+    extends EmailAttachmentBundleException {
+  const EmailAttachmentBundleSymlinkNotAllowedException({super.path});
+}
+
+final class EmailAttachmentBundleInvalidPayloadException
+    extends EmailAttachmentBundleException {
+  const EmailAttachmentBundleInvalidPayloadException();
 }
 
 final class EmailAttachmentBundler {
@@ -58,14 +85,10 @@ final class EmailAttachmentBundler {
   }) async {
     final attachmentList = attachments.toList(growable: false);
     if (attachmentList.isEmpty) {
-      throw const EmailAttachmentBundleException(
-        EmailAttachmentBundleFailure.emptySelection,
-      );
+      throw const EmailAttachmentBundleEmptySelectionException();
     }
     if (attachmentList.length > _bundleMaxFileCount) {
-      throw const EmailAttachmentBundleException(
-        EmailAttachmentBundleFailure.tooManyFiles,
-      );
+      throw const EmailAttachmentBundleTooManyFilesException();
     }
     final bundleDir = await appOwnedTemporaryDirectory(
       emailAttachmentBundleDirName,
@@ -86,23 +109,18 @@ final class EmailAttachmentBundler {
         followLinks: false,
       );
       if (entityType == FileSystemEntityType.link) {
-        throw EmailAttachmentBundleException(
-          EmailAttachmentBundleFailure.symlinkNotAllowed,
+        throw EmailAttachmentBundleSymlinkNotAllowedException(
           path: attachment.path,
         );
       }
       if (entityType != FileSystemEntityType.file) {
-        throw EmailAttachmentBundleException(
-          EmailAttachmentBundleFailure.invalidEntityType,
+        throw EmailAttachmentBundleInvalidEntityTypeException(
           path: attachment.path,
         );
       }
       final file = File(attachment.path);
       if (!await file.exists()) {
-        throw EmailAttachmentBundleException(
-          EmailAttachmentBundleFailure.missingFile,
-          path: attachment.path,
-        );
+        throw EmailAttachmentBundleMissingFileException(path: attachment.path);
       }
       final attachmentSize = attachment.sizeBytes;
       final safeSize = attachmentSize < _bundleMinFileSizeBytes
@@ -110,9 +128,7 @@ final class EmailAttachmentBundler {
           : attachmentSize;
       totalBytes += safeSize;
       if (totalBytes > _bundleMaxTotalBytes) {
-        throw const EmailAttachmentBundleException(
-          EmailAttachmentBundleFailure.tooLarge,
-        );
+        throw const EmailAttachmentBundleTooLargeException();
       }
       final sanitizedName = _sanitizeBundleFileName(
         explicitName: attachment.fileName,
@@ -189,42 +205,29 @@ String _buildBundleFallbackName(int index) =>
 void _writeBundle(Map<String, Object?> payload) {
   final rawPath = payload[_bundlePayloadPathKey];
   if (rawPath is! String || rawPath.trim().isEmpty) {
-    throw const EmailAttachmentBundleException(
-      EmailAttachmentBundleFailure.invalidPayload,
-    );
+    throw const EmailAttachmentBundleInvalidPayloadException();
   }
   final rawFiles = payload[_bundlePayloadFilesKey];
   if (rawFiles is! List) {
-    throw const EmailAttachmentBundleException(
-      EmailAttachmentBundleFailure.invalidPayload,
-    );
+    throw const EmailAttachmentBundleInvalidPayloadException();
   }
   final encoder = ZipFileEncoder()..create(rawPath);
   try {
     for (final entry in rawFiles) {
       if (entry is! Map) {
-        throw const EmailAttachmentBundleException(
-          EmailAttachmentBundleFailure.invalidPayload,
-        );
+        throw const EmailAttachmentBundleInvalidPayloadException();
       }
       final filePath = entry[_bundleFilePathKey];
       final fileName = entry[_bundleFileNameKey];
       if (filePath is! String || filePath.trim().isEmpty) {
-        throw const EmailAttachmentBundleException(
-          EmailAttachmentBundleFailure.invalidPayload,
-        );
+        throw const EmailAttachmentBundleInvalidPayloadException();
       }
       if (fileName is! String || fileName.trim().isEmpty) {
-        throw const EmailAttachmentBundleException(
-          EmailAttachmentBundleFailure.invalidPayload,
-        );
+        throw const EmailAttachmentBundleInvalidPayloadException();
       }
       final file = File(filePath);
       if (!file.existsSync()) {
-        throw EmailAttachmentBundleException(
-          EmailAttachmentBundleFailure.missingFile,
-          path: filePath,
-        );
+        throw EmailAttachmentBundleMissingFileException(path: filePath);
       }
       encoder.addFile(file, fileName);
     }

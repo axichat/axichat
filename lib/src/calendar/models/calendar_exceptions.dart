@@ -1,40 +1,83 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-abstract class CalendarException implements Exception {
-  const CalendarException(this.message, [this.context]);
+sealed class CalendarException implements Exception {
+  const CalendarException();
 
-  final String message;
-  final String? context;
+  String get message;
+
+  String? get context => null;
 
   @override
   String toString() =>
       'CalendarException: $message${context != null ? ' ($context)' : ''}';
 }
 
-class CalendarStorageException extends CalendarException {
-  const CalendarStorageException(super.message, [super.context]);
+final class CalendarStorageException extends CalendarException {
+  const CalendarStorageException(this.message, [this.context]);
+
+  @override
+  final String message;
+
+  @override
+  final String? context;
 }
 
-class CalendarSyncException extends CalendarException {
-  const CalendarSyncException(super.message, [super.context]);
+final class CalendarSyncException extends CalendarException {
+  const CalendarSyncException(this.message, [this.context]);
+
+  @override
+  final String message;
+
+  @override
+  final String? context;
 }
 
-class CalendarValidationException extends CalendarException {
+final class CalendarValidationException extends CalendarException {
   const CalendarValidationException(String field, String reason)
-    : super('Validation failed', 'field=$field reason=$reason');
+    : _field = field,
+      _reason = reason;
+
+  final String _field;
+  final String _reason;
+
+  @override
+  String get message => 'Validation failed';
+
+  @override
+  String get context => 'field=$_field reason=$_reason';
 }
 
-class CalendarTaskNotFoundException extends CalendarException {
-  const CalendarTaskNotFoundException(String taskId)
-    : super('Task not found', 'taskId=$taskId');
+final class CalendarTaskNotFoundException extends CalendarException {
+  const CalendarTaskNotFoundException(String taskId) : _taskId = taskId;
+
+  final String _taskId;
+
+  @override
+  String get message => 'Task not found';
+
+  @override
+  String get context => 'taskId=$_taskId';
 }
 
-class CalendarDayEventNotFoundException extends CalendarException {
-  const CalendarDayEventNotFoundException(String eventId)
-    : super('Day event not found', 'eventId=$eventId');
+final class CalendarDayEventNotFoundException extends CalendarException {
+  const CalendarDayEventNotFoundException(String eventId) : _eventId = eventId;
+
+  final String _eventId;
+
+  @override
+  String get message => 'Day event not found';
+
+  @override
+  String get context => 'eventId=$_eventId';
 }
 
-class CalendarConflictException extends CalendarException {
-  const CalendarConflictException(super.message, [super.context]);
+final class CalendarConflictException extends CalendarException {
+  const CalendarConflictException(this.message, [this.context]);
+
+  @override
+  final String message;
+
+  @override
+  final String? context;
 }

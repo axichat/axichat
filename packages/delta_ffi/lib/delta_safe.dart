@@ -45,7 +45,9 @@ class DeltaSafe {
     });
 
     if (ctx == ffi.nullptr) {
-      throw const DeltaSafeException('Failed to allocate Delta Chat context');
+      throw const DeltaAllocationException(
+        'Failed to allocate Delta Chat context',
+      );
     }
 
     return DeltaContextHandle._owned(_bindings, ctx);
@@ -59,7 +61,7 @@ class DeltaSafe {
       return _bindings.dc_accounts_new(dirPtr, writable ? 1 : 0);
     });
     if (accounts == ffi.nullptr) {
-      throw const DeltaSafeException('Failed to allocate Delta accounts');
+      throw const DeltaAllocationException('Failed to allocate Delta accounts');
     }
     return DeltaAccountsHandle._(_bindings, accounts);
   }
@@ -479,7 +481,7 @@ class DeltaContextHandle {
     if (result == 0) {
       final isOpen = _maybeIsOpen();
       if (isOpen != true) {
-        throw const DeltaSafeException('Failed to open context');
+        throw const DeltaOperationException('Failed to open context');
       }
     }
     _opened = true;
@@ -657,7 +659,7 @@ class DeltaContextHandle {
     _ensureState(_opened, _deltaSendTextOperation);
     final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
     if (deltaMessage == ffi.nullptr) {
-      throw const DeltaSafeException(_deltaMessageAllocationError);
+      throw const DeltaAllocationException(_deltaMessageAllocationError);
     }
     try {
       _withCString(message, (msgPtr) {
@@ -694,7 +696,7 @@ class DeltaContextHandle {
     _ensureState(_opened, _deltaSendAttachmentOperation);
     final message = _bindings.dc_msg_new(_context, viewType);
     if (message == ffi.nullptr) {
-      throw const DeltaSafeException(_deltaMessageAllocationError);
+      throw const DeltaAllocationException(_deltaMessageAllocationError);
     }
     try {
       if (text != null && text.isNotEmpty) {
@@ -1448,7 +1450,7 @@ class DeltaContextHandle {
     _ensureState(_opened, _deltaSendQuotedOperation);
     final deltaMessage = _bindings.dc_msg_new(_context, DeltaMessageType.text);
     if (deltaMessage == ffi.nullptr) {
-      throw const DeltaSafeException(_deltaMessageAllocationError);
+      throw const DeltaAllocationException(_deltaMessageAllocationError);
     }
     try {
       _withCString(message, (msgPtr) {
@@ -1615,7 +1617,7 @@ class DeltaAccountsHandle {
     }
     final accountId = _bindings.dc_accounts_add_account(_accounts);
     if (accountId == 0) {
-      throw const DeltaSafeException('Failed to allocate Delta account');
+      throw const DeltaAllocationException('Failed to allocate Delta account');
     }
     return accountId;
   }
@@ -1645,7 +1647,7 @@ class DeltaAccountsHandle {
         ? _bindings.dc_accounts_add_closed_account(_accounts)
         : _bindings.dc_accounts_add_account(_accounts);
     if (accountId == 0) {
-      throw const DeltaSafeException('Failed to allocate Delta account');
+      throw const DeltaAllocationException('Failed to allocate Delta account');
     }
     return accountId;
   }
@@ -1658,7 +1660,7 @@ class DeltaAccountsHandle {
   DeltaContextHandle contextFor(int accountId) {
     final ctx = _bindings.dc_accounts_get_account(_accounts, accountId);
     if (ctx == ffi.nullptr) {
-      throw DeltaSafeException('Account $accountId is unavailable');
+      throw DeltaAccountUnavailableException(accountId);
     }
     return DeltaContextHandle._borrowed(
       _bindings,
@@ -1899,7 +1901,7 @@ class _DeltaEventLoop {
     _emitter ??= _emitterFactory();
     if (_emitter == null || _emitter == ffi.nullptr) {
       _controller.addError(
-        const DeltaSafeException('Failed to obtain Delta event emitter'),
+        const DeltaOperationException('Failed to obtain Delta event emitter'),
       );
       await _controller.close();
       return;
@@ -1981,13 +1983,41 @@ class _DeltaEventLoop {
   }
 }
 
-class DeltaSafeException implements Exception {
+sealed class DeltaSafeException implements Exception {
   const DeltaSafeException(this.message);
 
   final String message;
 
   @override
-  String toString() => 'DeltaSafeException: $message';
+  String toString() => '$runtimeType: $message';
+}
+
+final class DeltaAllocationException extends DeltaSafeException {
+  const DeltaAllocationException(super.message);
+}
+
+final class DeltaOperationException extends DeltaSafeException {
+  const DeltaOperationException(super.message);
+}
+
+final class DeltaStateException extends DeltaSafeException {
+  const DeltaStateException(super.message);
+}
+
+final class DeltaAccountUnavailableException extends DeltaSafeException {
+  const DeltaAccountUnavailableException(this.accountId)
+      : super('Account $accountId is unavailable');
+
+  final int accountId;
+}
+
+final class DeltaConfigurationTimeoutException extends DeltaSafeException {
+  const DeltaConfigurationTimeoutException()
+      : super('Email configuration timed out');
+}
+
+final class DeltaTransportSecurityException extends DeltaSafeException {
+  const DeltaTransportSecurityException(super.message);
 }
 
 class _DeltaRawEvent {
@@ -2122,7 +2152,7 @@ void _ensureSuccess(
   if (code == 0) {
     final details = errorProvider?.call();
     final suffix = details == null || details.isEmpty ? '' : ': $details';
-    throw DeltaSafeException('Failed to $operation$suffix');
+    throw DeltaOperationException('Failed to $operation$suffix');
   }
 }
 
@@ -2134,12 +2164,12 @@ void _ensurePositive(
   if (value <= 0) {
     final details = errorProvider?.call();
     final suffix = details == null || details.isEmpty ? '' : ': $details';
-    throw DeltaSafeException('Failed to $operation$suffix (code: $value)');
+    throw DeltaOperationException('Failed to $operation$suffix (code: $value)');
   }
 }
 
 void _ensureState(bool predicate, String operation) {
   if (!predicate) {
-    throw DeltaSafeException('Cannot $operation before opening the context');
+    throw DeltaStateException('Cannot $operation before opening the context');
   }
 }

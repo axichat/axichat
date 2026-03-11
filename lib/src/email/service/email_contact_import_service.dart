@@ -107,10 +107,85 @@ const Set<String> _nicknameHeaderKeys = <String>{
   _headerNickKey,
 };
 
-class EmailContactImportException implements Exception {
-  const EmailContactImportException(this.reason);
+sealed class EmailContactImportException implements Exception {
+  const EmailContactImportException();
 
-  final EmailContactImportFailureReason reason;
+  EmailContactImportFailureReason get reason;
+
+  @override
+  String toString() => runtimeType.toString();
+}
+
+final class EmailContactImportNoEmailAccountException
+    extends EmailContactImportException {
+  const EmailContactImportNoEmailAccountException();
+
+  @override
+  EmailContactImportFailureReason get reason =>
+      EmailContactImportFailureReason.noEmailAccount;
+}
+
+final class EmailContactImportEmptyFileException
+    extends EmailContactImportException {
+  const EmailContactImportEmptyFileException();
+
+  @override
+  EmailContactImportFailureReason get reason =>
+      EmailContactImportFailureReason.emptyFile;
+}
+
+final class EmailContactImportReadFailureException
+    extends EmailContactImportException {
+  const EmailContactImportReadFailureException();
+
+  @override
+  EmailContactImportFailureReason get reason =>
+      EmailContactImportFailureReason.readFailure;
+}
+
+final class EmailContactImportFileTooLargeException
+    extends EmailContactImportException {
+  const EmailContactImportFileTooLargeException();
+
+  @override
+  EmailContactImportFailureReason get reason =>
+      EmailContactImportFailureReason.fileTooLarge;
+}
+
+final class EmailContactImportUnsupportedFileTypeException
+    extends EmailContactImportException {
+  const EmailContactImportUnsupportedFileTypeException();
+
+  @override
+  EmailContactImportFailureReason get reason =>
+      EmailContactImportFailureReason.unsupportedFileType;
+}
+
+final class EmailContactImportNoContactsException
+    extends EmailContactImportException {
+  const EmailContactImportNoContactsException();
+
+  @override
+  EmailContactImportFailureReason get reason =>
+      EmailContactImportFailureReason.noContacts;
+}
+
+final class EmailContactImportTooManyContactsException
+    extends EmailContactImportException {
+  const EmailContactImportTooManyContactsException();
+
+  @override
+  EmailContactImportFailureReason get reason =>
+      EmailContactImportFailureReason.tooManyContacts;
+}
+
+final class EmailContactImportFailedException
+    extends EmailContactImportException {
+  const EmailContactImportFailedException();
+
+  @override
+  EmailContactImportFailureReason get reason =>
+      EmailContactImportFailureReason.importFailed;
 }
 
 class EmailContactImportService {
@@ -124,25 +199,19 @@ class EmailContactImportService {
     required EmailContactImportFormat format,
   }) async {
     if (!_emailService.hasActiveSession) {
-      throw const EmailContactImportException(
-        EmailContactImportFailureReason.noEmailAccount,
-      );
+      throw const EmailContactImportNoEmailAccountException();
     }
     _validateFileExtension(file, format: format);
     final String content = await _readFile(file);
     if (content.trim().isEmpty) {
-      throw const EmailContactImportException(
-        EmailContactImportFailureReason.emptyFile,
-      );
+      throw const EmailContactImportEmptyFileException();
     }
     final List<EmailContactImportContact> contacts = _parseContacts(
       content,
       format: format,
     );
     if (contacts.isEmpty) {
-      throw const EmailContactImportException(
-        EmailContactImportFailureReason.noContacts,
-      );
+      throw const EmailContactImportNoContactsException();
     }
     return _importContacts(contacts);
   }
@@ -159,9 +228,7 @@ class EmailContactImportService {
         ? extension.substring(_nextIndex)
         : extension;
     if (!format.allowedExtensions.contains(normalizedExtension)) {
-      throw const EmailContactImportException(
-        EmailContactImportFailureReason.unsupportedFileType,
-      );
+      throw const EmailContactImportUnsupportedFileTypeException();
     }
   }
 
@@ -169,9 +236,7 @@ class EmailContactImportService {
     try {
       final length = await file.length();
       if (length > _maxImportBytes) {
-        throw const EmailContactImportException(
-          EmailContactImportFailureReason.fileTooLarge,
-        );
+        throw const EmailContactImportFileTooLargeException();
       }
       final List<int> bytes = await file.readAsBytes();
       final String content = _decodeFileBytes(bytes);
@@ -179,13 +244,9 @@ class EmailContactImportService {
     } on EmailContactImportException {
       rethrow;
     } on FileSystemException {
-      throw const EmailContactImportException(
-        EmailContactImportFailureReason.readFailure,
-      );
+      throw const EmailContactImportReadFailureException();
     } on FormatException {
-      throw const EmailContactImportException(
-        EmailContactImportFailureReason.readFailure,
-      );
+      throw const EmailContactImportReadFailureException();
     }
   }
 
@@ -263,9 +324,7 @@ class EmailContactImportService {
 
   void _enforceContactLimit(int count) {
     if (count > _maxContactCount) {
-      throw const EmailContactImportException(
-        EmailContactImportFailureReason.tooManyContacts,
-      );
+      throw const EmailContactImportTooManyContactsException();
     }
   }
 
@@ -699,9 +758,7 @@ class EmailContactImportService {
     }
 
     if (imported == _startIndex && failed > _startIndex) {
-      throw const EmailContactImportException(
-        EmailContactImportFailureReason.importFailed,
-      );
+      throw const EmailContactImportFailedException();
     }
 
     return EmailContactImportSummary(

@@ -45,10 +45,35 @@ class DraftSearchSnapshot extends Equatable {
 
 enum DraftSendFailureType { noRecipients, noContent, sendFailed }
 
-class DraftSendValidationException implements Exception {
-  const DraftSendValidationException(this.type);
+sealed class DraftSendValidationException implements Exception {
+  const DraftSendValidationException();
 
-  final DraftSendFailureType type;
+  DraftSendFailureType get type;
+
+  @override
+  String toString() => runtimeType.toString();
+}
+
+final class DraftSendNoRecipientsException
+    extends DraftSendValidationException {
+  const DraftSendNoRecipientsException();
+
+  @override
+  DraftSendFailureType get type => DraftSendFailureType.noRecipients;
+}
+
+final class DraftSendNoContentException extends DraftSendValidationException {
+  const DraftSendNoContentException();
+
+  @override
+  DraftSendFailureType get type => DraftSendFailureType.noContent;
+}
+
+final class DraftSendFailedException extends DraftSendValidationException {
+  const DraftSendFailedException();
+
+  @override
+  DraftSendFailureType get type => DraftSendFailureType.sendFailed;
 }
 
 class DraftXmppTarget extends Equatable {
@@ -351,15 +376,13 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       throw StateError('EmailService unavailable for email draft send.');
     }
     if (targets.isEmpty) {
-      throw const DraftSendValidationException(
-        DraftSendFailureType.noRecipients,
-      );
+      throw const DraftSendNoRecipientsException();
     }
     final trimmedBody = body.trim();
     final hasSubject = subject?.trim().isNotEmpty == true;
     final hasAttachments = attachments.isNotEmpty;
     if (!hasSubject && trimmedBody.isEmpty && attachments.isEmpty) {
-      throw const DraftSendValidationException(DraftSendFailureType.noContent);
+      throw const DraftSendNoContentException();
     }
     final htmlBody = trimmedBody.isNotEmpty
         ? HtmlContentCodec.fromPlainText(trimmedBody)
@@ -427,12 +450,10 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     final hasBody = trimmedBody.isNotEmpty;
     final hasAttachments = attachments.isNotEmpty;
     if (!hasBody && !hasAttachments) {
-      throw const DraftSendValidationException(DraftSendFailureType.noContent);
+      throw const DraftSendNoContentException();
     }
     if (targets.isEmpty) {
-      throw const DraftSendValidationException(
-        DraftSendFailureType.noRecipients,
-      );
+      throw const DraftSendNoRecipientsException();
     }
     final attachmentGroupId = hasAttachments && attachments.length > 1
         ? uuid.v4()
@@ -514,7 +535,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     if (!report.hasFailures) {
       return;
     }
-    throw const DraftSendValidationException(DraftSendFailureType.sendFailed);
+    throw const DraftSendFailedException();
   }
 
   List<Draft> _computeVisibleItems(List<Draft> items) {
