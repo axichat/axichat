@@ -1188,6 +1188,31 @@ class Reactions extends Table {
 }
 
 @Freezed(toJson: false, fromJson: false)
+abstract class ReactionState with _$ReactionState {
+  const factory ReactionState({
+    required String messageID,
+    required String senderJid,
+    required DateTime updatedAt,
+    required bool identityVerified,
+  }) = _ReactionState;
+}
+
+@UseRowClass(ReactionState)
+class ReactionStates extends Table {
+  TextColumn get messageID => text().references(Messages, #stanzaID)();
+
+  TextColumn get senderJid => text()();
+
+  DateTimeColumn get updatedAt => dateTime()();
+
+  BoolColumn get identityVerified =>
+      boolean().withDefault(const Constant(true))();
+
+  @override
+  Set<Column> get primaryKey => {messageID, senderJid};
+}
+
+@Freezed(toJson: false, fromJson: false)
 abstract class Notification with _$Notification {
   const factory Notification({
     required int id,

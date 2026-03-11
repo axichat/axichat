@@ -2974,6 +2974,8 @@ mixin MessageService
         messageId: message.stanzaID,
         senderJid: sender,
         emojis: emojis,
+        updatedAt: DateTime.timestamp().toUtc(),
+        identityVerified: true,
       ),
     );
   }
@@ -4571,25 +4573,40 @@ mixin MessageService
 
   Future<void> sendReadMarker(String to, String stanzaID) async {
     if (!await _canSendChatMarkers(to: to)) return;
+    final normalizedStanzaId = stanzaID.trim();
+    if (normalizedStanzaId.isEmpty) {
+      return;
+    }
+    final resolvedMessage = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByStanzaID(normalizedStanzaId),
+    );
+    final markerId =
+        resolvedMessage
+            ?.outboundReference(
+              isGroupChat: false,
+              directPolicy: DirectMessageReferencePolicy.preferOriginId,
+            )
+            ?.value ??
+        normalizedStanzaId;
     final messageType = _chatStateMessageType(to);
-    _connection.sendChatMarker(
+    await _connection.sendChatMarker(
       to: to,
-      stanzaID: stanzaID,
+      stanzaID: markerId,
       marker: mox.ChatMarker.received,
       messageType: messageType,
     );
 
     await _connection.sendChatMarker(
       to: to,
-      stanzaID: stanzaID,
+      stanzaID: markerId,
       marker: mox.ChatMarker.displayed,
       messageType: messageType,
     );
 
     await _dbOp<XmppDatabase>((db) async {
-      db.markMessageDisplayed(stanzaID, chatJid: to);
-      db.markMessageReceived(stanzaID, chatJid: to);
-      db.markMessageAcked(stanzaID, chatJid: to);
+      await db.markMessageDisplayed(markerId, chatJid: to);
+      await db.markMessageReceived(markerId, chatJid: to);
+      await db.markMessageAcked(markerId, chatJid: to);
     });
   }
 
@@ -5988,7 +6005,7 @@ mixin MessageService
     final String? occupantId = occupantData?.id;
     final chatJid = _messageChatJidForEvent(event);
     return await _dbOpReturning<XmppDatabase, bool>((db) async {
-      if (await db.getMessageByOriginID(correction.id, chatJid: chatJid)
+      if (await db.getMessageByReferenceId(correction.id, chatJid: chatJid)
           case final message?) {
         if (!message.authorizedForMutation(
               from: event.from,
@@ -6020,7 +6037,7 @@ mixin MessageService
     final String? occupantId = occupantData?.id;
     final chatJid = _messageChatJidForEvent(event);
     return await _dbOpReturning<XmppDatabase, bool>((db) async {
-      if (await db.getMessageByOriginID(retraction.id, chatJid: chatJid)
+      if (await db.getMessageByReferenceId(retraction.id, chatJid: chatJid)
           case final message?) {
         if (!message.authorizedForMutation(
           from: event.from,
@@ -6146,16 +6163,46 @@ mixin MessageService
       );
       return !event.displayable;
     }
-    final senderJid = _canonicalReactionSenderJid(
+    final senderIdentity = _resolveReactionSenderIdentity(
       senderJid: rawSenderJid,
       chatJid: message.chatJid,
       isGroupChat: isGroupChat,
     );
+    if (!isGroupChat &&
+        !_isDirectReactionSenderAuthorized(
+          message: message,
+          senderJid: senderIdentity.senderJid,
+        )) {
+      _log.warning('Rejected direct reaction from unauthorized sender');
+      return !event.displayable;
+    }
+    final existingState = await _dbOpReturning<XmppDatabase, ReactionState?>(
+      (db) => db.getReactionState(
+        messageId: message.stanzaID,
+        senderJid: senderIdentity.senderJid,
+      ),
+    );
+    if (isGroupChat &&
+        !senderIdentity.identityVerified &&
+        existingState == null) {
+      _log.warning('Rejected room reaction without verified sender identity');
+      return !event.displayable;
+    }
+    final updatedAt = _reactionUpdateTimestamp(event);
+    if (_isStaleDelayedReactionUpdate(
+      event: event,
+      existingState: existingState,
+    )) {
+      _log.fine('Dropped stale delayed reaction update');
+      return !event.displayable;
+    }
     await _dbOp<XmppDatabase>((db) async {
       await db.replaceReactions(
         messageId: message.stanzaID,
-        senderJid: senderJid,
+        senderJid: senderIdentity.senderJid,
         emojis: sanitizedEmojis,
+        updatedAt: updatedAt,
+        identityVerified: senderIdentity.identityVerified,
       );
     });
     return !event.displayable;
@@ -7272,19 +7319,22 @@ mixin MessageService
     }).toList();
   }
 
-  String _canonicalReactionSenderJid({
+  ({String senderJid, bool identityVerified}) _resolveReactionSenderIdentity({
     required String senderJid,
     required String chatJid,
     required bool isGroupChat,
   }) {
     final accountJid = myJid;
     if (!isGroupChat) {
-      return bareAddress(senderJid) ?? senderJid;
+      return (
+        senderJid: bareAddress(senderJid) ?? senderJid,
+        identityVerified: true,
+      );
     }
     final normalizedChatJid = bareAddress(chatJid) ?? chatJid;
     if (accountJid != null &&
         sameNormalizedAddressValue(senderJid, accountJid)) {
-      return accountJid;
+      return (senderJid: accountJid, identityVerified: true);
     }
     final roomState = roomStateFor(normalizedChatJid);
     if (roomState != null) {
@@ -7293,22 +7343,73 @@ mixin MessageService
           myOccupantId != null &&
           myOccupantId.isNotEmpty &&
           senderJid == myOccupantId) {
-        return accountJid;
+        return (senderJid: accountJid, identityVerified: true);
       }
       final occupant = roomState.occupants[senderJid];
       final realJid = occupant?.realJid?.trim();
       if (realJid != null && realJid.isNotEmpty) {
         if (accountJid != null &&
             sameNormalizedAddressValue(realJid, accountJid)) {
-          return accountJid;
+          return (senderJid: accountJid, identityVerified: true);
         }
-        return bareAddress(realJid) ?? realJid;
+        return (
+          senderJid: bareAddress(realJid) ?? realJid,
+          identityVerified: true,
+        );
       }
     }
     if (senderJid.startsWith('$normalizedChatJid/')) {
-      return senderJid;
+      return (senderJid: senderJid, identityVerified: false);
     }
-    return bareAddress(senderJid) ?? senderJid;
+    return (
+      senderJid: bareAddress(senderJid) ?? senderJid,
+      identityVerified: false,
+    );
+  }
+
+  String _canonicalReactionSenderJid({
+    required String senderJid,
+    required String chatJid,
+    required bool isGroupChat,
+  }) => _resolveReactionSenderIdentity(
+    senderJid: senderJid,
+    chatJid: chatJid,
+    isGroupChat: isGroupChat,
+  ).senderJid;
+
+  bool _isDirectReactionSenderAuthorized({
+    required Message message,
+    required String senderJid,
+  }) {
+    final accountJid = myJid;
+    if (accountJid != null &&
+        sameNormalizedAddressValue(senderJid, accountJid)) {
+      return true;
+    }
+    return sameNormalizedAddressValue(senderJid, message.chatJid);
+  }
+
+  DateTime _reactionUpdateTimestamp(mox.MessageEvent event) =>
+      (event.extensions.get<mox.DelayedDeliveryData>()?.timestamp ??
+              DateTime.timestamp())
+          .toUtc();
+
+  bool _isStaleDelayedReactionUpdate({
+    required mox.MessageEvent event,
+    required ReactionState? existingState,
+  }) {
+    final delayedAt = event.extensions
+        .get<mox.DelayedDeliveryData>()
+        ?.timestamp
+        .toUtc();
+    if (delayedAt == null) {
+      return false;
+    }
+    final previous = existingState?.updatedAt.toUtc();
+    if (previous == null) {
+      return false;
+    }
+    return previous.isAfter(delayedAt);
   }
 
   String _messageChatJidForEvent(mox.MessageEvent event) {

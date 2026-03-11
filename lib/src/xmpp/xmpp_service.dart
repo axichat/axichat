@@ -1944,6 +1944,7 @@ class XmppService extends XmppBase
   Future<void> _seedDemoReactions(List<DemoChatScript> scripts) async {
     if (!_demoOfflineMode) return;
     await _dbOp<XmppDatabase>((db) async {
+      final updatedAt = DateTime.timestamp().toUtc();
       for (final script in scripts) {
         final chat = script.chat;
         final messages = script.messages;
@@ -1954,11 +1955,15 @@ class XmppService extends XmppBase
               messageId: message.stanzaID,
               senderJid: kDemoSelfJid,
               emojis: const [],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
             await db.replaceReactions(
               messageId: message.stanzaID,
               senderJid: chat.jid,
               emojis: const [],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
           }
           continue;
@@ -1995,6 +2000,8 @@ class XmppService extends XmppBase
                 _demoReactionLaugh,
                 _demoReactionSparkles,
               ],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
             await db.replaceReactions(
               messageId: franklinMessage.stanzaID,
@@ -2004,6 +2011,8 @@ class XmppService extends XmppBase
                 _demoReactionFire,
                 _demoReactionThumbsUp,
               ],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
             await db.replaceReactions(
               messageId: franklinMessage.stanzaID,
@@ -2013,6 +2022,8 @@ class XmppService extends XmppBase
                 _demoReactionHeart,
                 _demoReactionScroll,
               ],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
             await db.replaceReactions(
               messageId: franklinMessage.stanzaID,
@@ -2022,6 +2033,8 @@ class XmppService extends XmppBase
                 _demoReactionFire,
                 _demoReactionThumbsUp,
               ],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
             await db.replaceReactions(
               messageId: franklinMessage.stanzaID,
@@ -2031,6 +2044,8 @@ class XmppService extends XmppBase
                 _demoReactionMind,
                 _demoReactionThumbsUp,
               ],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
             await db.replaceReactions(
               messageId: franklinMessage.stanzaID,
@@ -2040,6 +2055,8 @@ class XmppService extends XmppBase
                 _demoReactionMoney,
                 _demoReactionFire,
               ],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
           }
 
@@ -2057,11 +2074,15 @@ class XmppService extends XmppBase
               messageId: madisonSecondMessage.stanzaID,
               senderJid: kDemoSelfJid,
               emojis: const [_demoReactionThumbsUp, _demoReactionMind],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
             await db.replaceReactions(
               messageId: madisonSecondMessage.stanzaID,
               senderJid: 'george@axi.im',
               emojis: const [_demoReactionClap],
+              updatedAt: updatedAt,
+              identityVerified: true,
             );
           }
           continue;
@@ -2076,6 +2097,8 @@ class XmppService extends XmppBase
           messageId: targetMessage.stanzaID,
           senderJid: reactor,
           emojis: const [_demoReactionThumbsUp],
+          updatedAt: updatedAt,
+          identityVerified: true,
         );
       }
     }, awaitDatabase: true);

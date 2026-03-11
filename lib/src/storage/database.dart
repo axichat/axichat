@@ -156,10 +156,17 @@ abstract interface class XmppDatabase implements Database {
     required String senderJid,
   });
 
+  Future<ReactionState?> getReactionState({
+    required String messageId,
+    required String senderJid,
+  });
+
   Future<void> replaceReactions({
     required String messageId,
     required String senderJid,
     required List<String> emojis,
+    required DateTime updatedAt,
+    required bool identityVerified,
   });
 
   Future<void> saveMessage(
@@ -939,7 +946,7 @@ class MessageCopiesAccessor
       (select(table)..where((tbl) => tbl.shareId.equals(shareId))).get();
 }
 
-@DriftAccessor(tables: [Reactions, Messages])
+@DriftAccessor(tables: [Reactions, ReactionStates, Messages])
 class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
     with _$ReactionsAccessorMixin {
   ReactionsAccessor(super.attachedDatabase);
@@ -982,6 +989,10 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
     reactions,
   )..where((table) => table.messageID.equals(messageId))).go();
 
+  Future<void> deleteByMessages(Iterable<String> messageIds) => (delete(
+    reactions,
+  )..where((table) => table.messageID.isIn(messageIds))).go();
+
   Future<void> deleteByMessageAndSender({
     required String messageId,
     required String senderJid,
@@ -992,6 +1003,39 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
                 table.senderJid.equals(senderJid),
           ))
           .go();
+
+  Future<ReactionState?> selectStateByMessageAndSender({
+    required String messageId,
+    required String senderJid,
+  }) =>
+      (select(reactionStates)..where(
+            (table) =>
+                table.messageID.equals(messageId) &
+                table.senderJid.equals(senderJid),
+          ))
+          .getSingleOrNull();
+
+  Future<void> upsertState({
+    required String messageId,
+    required String senderJid,
+    required DateTime updatedAt,
+    required bool identityVerified,
+  }) => into(reactionStates).insertOnConflictUpdate(
+    ReactionStatesCompanion.insert(
+      messageID: messageId,
+      senderJid: senderJid,
+      updatedAt: updatedAt.toUtc(),
+      identityVerified: Value(identityVerified),
+    ),
+  );
+
+  Future<void> deleteStatesByMessage(String messageId) => (delete(
+    reactionStates,
+  )..where((table) => table.messageID.equals(messageId))).go();
+
+  Future<void> deleteStatesByMessages(Iterable<String> messageIds) => (delete(
+    reactionStates,
+  )..where((table) => table.messageID.isIn(messageIds))).go();
 }
 
 @DriftAccessor(tables: [Drafts])
@@ -1407,6 +1451,7 @@ class EmailSpamlistAccessor
     OmemoRatchets,
     OmemoBundleCaches,
     Reactions,
+    ReactionStates,
     Notifications,
     FileMetadata,
     Roster,
@@ -1499,7 +1544,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 34;
+  int get schemaVersion => 35;
 
   @override
   MigrationStrategy get migration {
@@ -1764,6 +1809,9 @@ WHERE transport IS NULL
             'ALTER TABLE ${drafts.actualTableName} '
             'ADD COLUMN quoting_reference_kind INTEGER NULL',
           );
+        }
+        if (from < 35) {
+          await m.createTable(reactionStates);
         }
       },
       beforeOpen: (_) async {
@@ -2046,7 +2094,11 @@ WHERE transport IS NULL
   Future<void> deleteMessagesByStanzaIds(Iterable<String> stanzaIds) async {
     final ids = stanzaIds.toList(growable: false);
     if (ids.isEmpty) return;
-    await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(ids))).go();
+    await transaction(() async {
+      await reactionsAccessor.deleteByMessages(ids);
+      await reactionsAccessor.deleteStatesByMessages(ids);
+      await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(ids))).go();
+    });
   }
 
   @override
@@ -2380,10 +2432,21 @@ WHERE transport IS NULL
   );
 
   @override
+  Future<ReactionState?> getReactionState({
+    required String messageId,
+    required String senderJid,
+  }) => reactionsAccessor.selectStateByMessageAndSender(
+    messageId: messageId,
+    senderJid: senderJid,
+  );
+
+  @override
   Future<void> replaceReactions({
     required String messageId,
     required String senderJid,
     required List<String> emojis,
+    required DateTime updatedAt,
+    required bool identityVerified,
   }) async {
     await transaction(() async {
       await reactionsAccessor.deleteByMessageAndSender(
@@ -2400,6 +2463,12 @@ WHERE transport IS NULL
           mode: InsertMode.insertOrIgnore,
         );
       }
+      await reactionsAccessor.upsertState(
+        messageId: messageId,
+        senderJid: senderJid,
+        updatedAt: updatedAt,
+        identityVerified: identityVerified,
+      );
     });
   }
 
@@ -2945,6 +3014,7 @@ WHERE jid = ?
     }
     await transaction(() async {
       await reactionsAccessor.deleteByMessage(stanzaID);
+      await reactionsAccessor.deleteStatesByMessage(stanzaID);
       if (existing.id != null) {
         metadataIds.addAll(await deleteMessageAttachments(existing.id!));
       }
@@ -3169,6 +3239,9 @@ WHERE email_from_address IN ($placeholderClause)
           reactions,
         )..where((tbl) => tbl.messageID.isIn(batch))).go();
         await (delete(
+          reactionStates,
+        )..where((tbl) => tbl.messageID.isIn(batch))).go();
+        await (delete(
           pinnedMessages,
         )..where((tbl) => tbl.messageStanzaId.isIn(batch))).go();
         await (delete(messages)..where((tbl) => tbl.stanzaID.isIn(batch))).go();
@@ -3207,6 +3280,7 @@ WHERE email_from_address IN ($placeholderClause)
     try {
       await transaction(() async {
         await delete(reactions).go();
+        await delete(reactionStates).go();
         await delete(messageParticipants).go();
         await delete(messageCopies).go();
         await delete(messageShares).go();
