@@ -5995,7 +5995,11 @@ QueryExecutor _openInMemoryDatabase() {
 
 Future<File> dbFileFor(String prefix) async {
   final path = (await getApplicationDocumentsDirectory()).path;
-  return File(p.join(path, '$prefix.axichat.drift'));
+  final trimmedPrefix = prefix.trim();
+  final normalizedPrefix = trimmedPrefix.isEmpty
+      ? trimmedPrefix
+      : normalizeAppOwnedPathSegment(trimmedPrefix);
+  return File(p.join(path, '$normalizedPrefix.axichat.drift'));
 }
 
 String _escapeLikePattern(String input) {

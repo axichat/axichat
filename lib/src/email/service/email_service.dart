@@ -7,6 +7,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:axichat/src/common/anti_abuse_sync.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/email_validation.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
@@ -1331,9 +1332,18 @@ class EmailService {
 
   Future<void> burn({String? jid, String? databasePrefix}) async {
     final scope = _scopeForOptionalJid(jid);
-    final resolvedDatabasePrefix = databasePrefix?.trim().isNotEmpty == true
-        ? databasePrefix!.trim()
-        : _databasePrefix;
+    final explicitDatabasePrefix = databasePrefix?.trim();
+    final normalizedExplicitPrefix = tryNormalizeAppOwnedPathSegment(
+      explicitDatabasePrefix,
+    );
+    if (explicitDatabasePrefix != null &&
+        explicitDatabasePrefix.isNotEmpty &&
+        normalizedExplicitPrefix == null) {
+      _log.warning(
+        'Ignoring invalid explicit email database prefix during burn cleanup.',
+      );
+    }
+    final resolvedDatabasePrefix = normalizedExplicitPrefix ?? _databasePrefix;
     _runtimePhase = _EmailRuntimePhase.disposing;
     await stop();
     try {
@@ -2246,6 +2256,9 @@ class EmailService {
   Future<bool> performBackgroundFetch({
     Duration timeout = _imapSyncFetchTimeout,
   }) async {
+    if (_blocksRuntimeReentry) {
+      return false;
+    }
     if (_databasePrefix == null || _databasePassphrase == null) {
       return false;
     }
@@ -2262,14 +2275,35 @@ class EmailService {
   }
 
   Future<void> syncContactsFromCore() async {
+    if (!hasActiveSession || _blocksRuntimeReentry) {
+      return;
+    }
     _cancelContactsSyncTimer();
     await _contactsSyncQueue.run(_syncContactsFromCore);
   }
 
   Future<void> _syncContactsFromCore() async {
-    await _ensureReady();
-    final contacts = await getContacts(flags: _deltaContactListFlags);
-    final blocked = await getBlockedContacts();
+    if (!await _ensureBackgroundSyncReady()) {
+      return;
+    }
+    final contactIds = await _transport.getContactIds(
+      flags: _deltaContactListFlags,
+    );
+    if (!_acceptsRuntimeWork || _blocksRuntimeReentry) {
+      return;
+    }
+    final contacts = await _hydrateContactsByIds(contactIds);
+    if (!_acceptsRuntimeWork || _blocksRuntimeReentry) {
+      return;
+    }
+    final blockedIds = await _transport.getBlockedContactIds();
+    if (!_acceptsRuntimeWork || _blocksRuntimeReentry) {
+      return;
+    }
+    final blocked = await _hydrateContactsByIds(blockedIds);
+    if (!_acceptsRuntimeWork || _blocksRuntimeReentry) {
+      return;
+    }
     final db = await _databaseBuilder();
     final contactsByNativeId = <String, String>{};
     final contactsByAddress = <String, DeltaContact>{};
@@ -2295,7 +2329,9 @@ class EmailService {
 
   Future<void> refreshChatlistFromCore() async {
     await _chatlistSyncQueue.run(() async {
-      await _ensureReady();
+      if (!await _ensureBackgroundSyncReady()) {
+        return;
+      }
       await _transport.refreshChatlistSnapshot();
     });
   }
@@ -3804,6 +3840,14 @@ class EmailService {
     if (!_acceptsRuntimeWork) {
       await start();
     }
+  }
+
+  Future<bool> _ensureBackgroundSyncReady() async {
+    if (_blocksRuntimeReentry || !hasActiveSession) {
+      return false;
+    }
+    await ensureEventChannelActive();
+    return _acceptsRuntimeWork && !_blocksRuntimeReentry;
   }
 
   Future<int> _sendDemoEmailMessage({

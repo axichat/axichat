@@ -3,6 +3,7 @@
 
 import 'dart:io';
 
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -12,9 +13,36 @@ const String chatHistoryExportTempDirectoryName = 'chat_history_exports';
 const String contactExportTempDirectoryName = 'contact_exports';
 
 Future<Directory> appOwnedTemporaryDirectory(String directoryName) async {
-  final normalizedName = _normalizeDirectoryName(directoryName);
+  final normalizedName = normalizeAppOwnedPathSegment(directoryName);
   final tempDirectory = await getTemporaryDirectory();
   return Directory(p.join(tempDirectory.path, normalizedName));
+}
+
+String normalizeAppOwnedPathSegment(String pathSegment) {
+  final trimmed = pathSegment.trim();
+  if (trimmed.isEmpty ||
+      trimmed == '.' ||
+      trimmed == '..' ||
+      p.basename(trimmed) != trimmed) {
+    throw ArgumentError.value(
+      pathSegment,
+      'pathSegment',
+      'Expected a single path segment.',
+    );
+  }
+  return trimmed;
+}
+
+String? tryNormalizeAppOwnedPathSegment(String? pathSegment) {
+  final trimmed = pathSegment?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  try {
+    return normalizeAppOwnedPathSegment(trimmed);
+  } on ArgumentError {
+    return null;
+  }
 }
 
 bool appOwnedPathsMatch({
@@ -99,6 +127,8 @@ Future<bool> deleteAppOwnedFile({
       await Link(normalizedPath).delete();
       return true;
     case FileSystemEntityType.directory:
+    case FileSystemEntityType.unixDomainSock:
+    case FileSystemEntityType.pipe:
       return false;
   }
   return false;
@@ -132,23 +162,13 @@ Future<void> _deleteAppOwnedDirectoryContents({
           rootPath: rootPath,
         );
         await childDirectory.delete();
+      case FileSystemEntityType.unixDomainSock:
+      case FileSystemEntityType.pipe:
+        throw StateError(
+          'Refusing to delete unsupported filesystem entity: $entityPath',
+        );
     }
   }
-}
-
-String _normalizeDirectoryName(String directoryName) {
-  final trimmed = directoryName.trim();
-  if (trimmed.isEmpty ||
-      trimmed == '.' ||
-      trimmed == '..' ||
-      p.basename(trimmed) != trimmed) {
-    throw ArgumentError.value(
-      directoryName,
-      'directoryName',
-      'Expected a single directory name.',
-    );
-  }
-  return trimmed;
 }
 
 String? _normalizeAbsolutePath(String path) {
@@ -157,4 +177,47 @@ String? _normalizeAbsolutePath(String path) {
     return null;
   }
   return p.normalize(trimmed);
+}
+
+final class InMemoryStorage implements Storage {
+  final Map<String, dynamic> _values = <String, dynamic>{};
+  bool _closed = false;
+
+  @override
+  Future<void> clear() async {
+    if (_closed) {
+      return;
+    }
+    _values.clear();
+  }
+
+  @override
+  Future<void> close() async {
+    _values.clear();
+    _closed = true;
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    if (_closed) {
+      return;
+    }
+    _values.remove(key);
+  }
+
+  @override
+  dynamic read(String key) {
+    if (_closed) {
+      return null;
+    }
+    return _values[key];
+  }
+
+  @override
+  Future<void> write(String key, dynamic value) async {
+    if (_closed) {
+      return;
+    }
+    _values[key] = value;
+  }
 }

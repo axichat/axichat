@@ -11,7 +11,7 @@ class CalendarStorageRegistry implements Storage {
     : _fallback = fallback,
       _log = Logger('CalendarStorageRegistry');
 
-  final Storage _fallback;
+  Storage _fallback;
   final Logger _log;
   final Map<String, Storage> _prefixToStorage = {};
 
@@ -33,6 +33,12 @@ class CalendarStorageRegistry implements Storage {
 
   /// Returns the registered storage for [prefix] if present.
   Storage? storageForPrefix(String prefix) => _prefixToStorage[prefix];
+
+  Storage get fallbackStorage => _fallback;
+
+  void replaceFallbackStorage(Storage storage) {
+    _fallback = storage;
+  }
 
   Storage _storageFor(String key) {
     for (final entry in _prefixToStorage.entries) {

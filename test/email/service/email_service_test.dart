@@ -1423,6 +1423,33 @@ void main() {
     },
   );
 
+  test('burn ignores an invalid explicit database prefix', () async {
+    final service = EmailService(
+      credentialStore: credentialStore,
+      databaseBuilder: () async => database,
+      transport: transport,
+      notificationService: notificationService,
+      foregroundBridge: foregroundBridge,
+    );
+
+    await service.ensureProvisioned(
+      displayName: 'Bob',
+      databasePrefix: 'bob',
+      databasePassphrase: 'secret',
+      jid: 'bob@axi.im',
+      passwordOverride: 'password',
+    );
+
+    await service.burn(jid: 'bob@axi.im', databasePrefix: '../escape');
+
+    verifyNever(
+      () => transport.deleteStorageArtifacts(databasePrefix: '../escape'),
+    );
+    verify(
+      () => transport.deleteStorageArtifacts(databasePrefix: 'bob'),
+    ).called(1);
+  });
+
   test(
     'fanOutSend preserves participant count when retrying a subset',
     () async {

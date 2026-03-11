@@ -261,12 +261,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   ),
                 );
               }
-              void handleBack() {
-                context.read<ChatsCubit>().setOpenChatRoute(
-                  route: ChatRouteIndex.main,
-                );
-              }
-
               return SingleChildScrollView(
                 child: Container(
                   width: double.maxFinite,
@@ -275,14 +269,6 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                     spacing: spacing.l,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: AxiIconButton.ghost(
-                          iconData: LucideIcons.arrowLeft,
-                          tooltip: l10n.commonBack,
-                          onPressed: handleBack,
-                        ),
-                      ),
                       if (resolvedHtmlBody != null &&
                           resolvedHtmlBody.isNotEmpty)
                         DecoratedBox(
@@ -298,11 +284,16 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                           child: EmailHtmlWebView(
                             html: resolvedHtmlBody,
                             allowRemoteImages: shouldLoadImages,
+                            backgroundColor: context.colorScheme.card,
+                            textColor: context.colorScheme.foreground,
+                            linkColor: context.colorScheme.primary,
                             simplifyLayout: true,
                             maxHeight:
                                 MediaQuery.sizeOf(context).height *
                                 context.sizing.dialogMaxHeightFraction,
                             minHeight: context.sizing.attachmentPreviewExtent,
+                            clampHeightToMax: false,
+                            disableInternalScroll: true,
                             onLinkTap: (url) => _handleLinkTap(context, url),
                           ),
                         )

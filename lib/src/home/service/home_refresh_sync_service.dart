@@ -28,6 +28,7 @@ class HomeRefreshSyncService {
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
   ConnectionState? _lastXmppState;
   EmailSyncStatus? _lastEmailStatus;
+  int _lifecycleEpoch = 0;
 
   Stream<HomeRefreshSyncUpdate> get syncUpdates => _syncUpdates.stream;
 
@@ -65,46 +66,68 @@ class HomeRefreshSyncService {
   }
 
   Future<void> close() async {
+    _lifecycleEpoch += 1;
+    final pendingSync = _syncTask;
     final xmppSub = _xmppConnectivitySubscription;
     _xmppConnectivitySubscription = null;
     await xmppSub?.cancel();
     final emailSub = _emailSyncSubscription;
     _emailSyncSubscription = null;
     await emailSub?.cancel();
+    if (pendingSync != null) {
+      await pendingSync;
+    }
     _lastSyncAt = null;
     _lastXmppState = null;
     _lastEmailStatus = null;
   }
 
   Future<void> syncOnLogin() async {
+    final epoch = _lifecycleEpoch;
     if (_lastSyncAt == null) {
-      await refresh();
+      await refresh(epoch: epoch);
       return;
     }
-    await refreshUnreadOnly();
+    await refreshUnreadOnly(epoch: epoch);
   }
 
-  Future<DateTime> refreshUnreadOnly() async {
+  Future<DateTime> refreshUnreadOnly({int? epoch}) async {
+    final currentEpoch = epoch ?? _lifecycleEpoch;
     return _enqueueSync(() async {
-      await _healTransports();
-      await _pullUnreadFromNewContacts();
+      _throwIfLifecycleEpochChanged(currentEpoch);
+      await _healTransports(epoch: currentEpoch);
+      _throwIfLifecycleEpochChanged(currentEpoch);
+      await _pullUnreadFromNewContacts(epoch: currentEpoch);
+      _throwIfLifecycleEpochChanged(currentEpoch);
       _lastSyncAt = DateTime.timestamp();
       return _lastSyncAt!;
     });
   }
 
-  Future<DateTime> refresh() async {
+  Future<DateTime> refresh({int? epoch}) async {
+    final currentEpoch = epoch ?? _lifecycleEpoch;
     return _enqueueSync(() async {
-      await _healTransports();
-      await _refreshXmppUnread();
-      await _syncEmailContacts();
+      _throwIfLifecycleEpochChanged(currentEpoch);
+      await _healTransports(epoch: currentEpoch);
+      _throwIfLifecycleEpochChanged(currentEpoch);
+      await _refreshXmppUnread(epoch: currentEpoch);
+      _throwIfLifecycleEpochChanged(currentEpoch);
+      await _syncEmailContacts(epoch: currentEpoch);
+      _throwIfLifecycleEpochChanged(currentEpoch);
       await _refreshAntiAbuseLists();
+      _throwIfLifecycleEpochChanged(currentEpoch);
       await _refreshConversationIndex();
+      _throwIfLifecycleEpochChanged(currentEpoch);
       await _refreshMucBookmarks();
-      await _refreshEmailHistory();
+      _throwIfLifecycleEpochChanged(currentEpoch);
+      await _refreshEmailHistory(epoch: currentEpoch);
+      _throwIfLifecycleEpochChanged(currentEpoch);
       await _rehydrateCalendar();
+      _throwIfLifecycleEpochChanged(currentEpoch);
       await _refreshAvatars();
+      _throwIfLifecycleEpochChanged(currentEpoch);
       await _refreshDrafts();
+      _throwIfLifecycleEpochChanged(currentEpoch);
 
       _lastSyncAt = DateTime.timestamp();
       return _lastSyncAt!;
@@ -129,6 +152,8 @@ class HomeRefreshSyncService {
           ),
         );
         return syncedAt;
+      } on _HomeRefreshSyncCancelled {
+        return _lastSyncAt ?? DateTime.timestamp();
       } on Exception catch (error, stackTrace) {
         _log.fine('Home refresh failed.', error, stackTrace);
         _syncUpdates.add(
@@ -163,6 +188,10 @@ class HomeRefreshSyncService {
   }
 
   void _runReconnectSync() {
+    if (_xmppConnectivitySubscription == null &&
+        _emailSyncSubscription == null) {
+      return;
+    }
     if (_syncTask != null) {
       return;
     }
@@ -178,18 +207,23 @@ class HomeRefreshSyncService {
     }
   }
 
-  Future<void> _healTransports() async {
+  Future<void> _healTransports({required int epoch}) async {
+    _throwIfLifecycleEpochChanged(epoch);
     await _ensureConnected();
-    await _ensureEmailConnected();
+    _throwIfLifecycleEpochChanged(epoch);
+    await _ensureEmailConnected(epoch: epoch);
   }
 
-  Future<MamGlobalSyncOutcome> _pullUnreadFromNewContacts() async {
-    final mamOutcome = await _refreshXmppUnread();
-    await _refreshEmailUnread();
+  Future<MamGlobalSyncOutcome> _pullUnreadFromNewContacts({
+    required int epoch,
+  }) async {
+    final mamOutcome = await _refreshXmppUnread(epoch: epoch);
+    _throwIfLifecycleEpochChanged(epoch);
+    await _refreshEmailUnread(epoch: epoch);
     return mamOutcome;
   }
 
-  Future<MamGlobalSyncOutcome> _refreshXmppUnread() async {
+  Future<MamGlobalSyncOutcome> _refreshXmppUnread({required int epoch}) async {
     if (_xmppService.connectionState != ConnectionState.connected) {
       return MamGlobalSyncOutcome.failed;
     }
@@ -197,6 +231,7 @@ class HomeRefreshSyncService {
     final streamReady = await _xmppService.waitForStreamReady(
       streamReadyTimeout,
     );
+    _throwIfLifecycleEpochChanged(epoch);
     if (streamReady?.isResumed ?? false) {
       return MamGlobalSyncOutcome.skippedResumed;
     }
@@ -204,7 +239,7 @@ class HomeRefreshSyncService {
     return _xmppService.syncGlobalMamCatchUp(pageSize: mamHistoryPageSize);
   }
 
-  Future<void> _refreshEmailUnread() async {
+  Future<void> _refreshEmailUnread({required int epoch}) async {
     final emailService = _emailService;
     if (emailService == null) return;
     if (!emailService.hasActiveSession) {
@@ -215,6 +250,7 @@ class HomeRefreshSyncService {
       await emailService.performBackgroundFetch(
         timeout: emailUnreadFetchTimeout,
       );
+      _throwIfLifecycleEpochChanged(epoch);
       await emailService.refreshChatlistFromCore();
     } on Exception {
       _log.fine('Email unread sync failed.');
@@ -231,12 +267,14 @@ class HomeRefreshSyncService {
         .timeout(connectionTimeout);
   }
 
-  Future<void> _ensureEmailConnected() async {
+  Future<void> _ensureEmailConnected({required int epoch}) async {
     final emailService = _emailService;
     if (emailService == null) return;
     if (!await emailService.canReconnectConfiguredSession()) return;
     try {
+      _throwIfLifecycleEpochChanged(epoch);
       await emailService.ensureEventChannelActive();
+      _throwIfLifecycleEpochChanged(epoch);
       await emailService.handleNetworkAvailable();
     } on Exception {
       _log.fine('Email transport recovery failed.');
@@ -257,7 +295,7 @@ class HomeRefreshSyncService {
     return _xmppService.syncConversationIndexSnapshot();
   }
 
-  Future<void> _refreshEmailHistory() async {
+  Future<void> _refreshEmailHistory({required int epoch}) async {
     final emailService = _emailService;
     if (emailService == null) return;
     if (!emailService.hasActiveSession) {
@@ -268,19 +306,21 @@ class HomeRefreshSyncService {
       await emailService.performBackgroundFetch(
         timeout: emailHistoryFetchTimeout,
       );
+      _throwIfLifecycleEpochChanged(epoch);
       await emailService.refreshChatlistFromCore();
     } on Exception {
       _log.fine('Email background sync failed.');
     }
   }
 
-  Future<void> _syncEmailContacts() async {
+  Future<void> _syncEmailContacts({required int epoch}) async {
     final emailService = _emailService;
     if (emailService == null) return;
     if (!emailService.hasActiveSession) {
       return;
     }
     try {
+      _throwIfLifecycleEpochChanged(epoch);
       await emailService.syncContactsFromCore();
     } on Exception {
       _log.fine('Email contact sync failed.');
@@ -302,6 +342,12 @@ class HomeRefreshSyncService {
     if (_xmppService.connectionState != ConnectionState.connected) return;
     await _xmppService.syncDraftsSnapshot();
   }
+
+  void _throwIfLifecycleEpochChanged(int epoch) {
+    if (epoch != _lifecycleEpoch) {
+      throw const _HomeRefreshSyncCancelled();
+    }
+  }
 }
 
 enum HomeRefreshSyncPhase { idle, running, success, failure }
@@ -311,4 +357,8 @@ class HomeRefreshSyncUpdate {
 
   final HomeRefreshSyncPhase phase;
   final DateTime? syncedAt;
+}
+
+final class _HomeRefreshSyncCancelled implements Exception {
+  const _HomeRefreshSyncCancelled();
 }

@@ -10,6 +10,7 @@ import 'dart:ui';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/reminders/calendar_reminder_controller.dart';
 import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
@@ -30,6 +31,7 @@ import 'package:crypto/crypto.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ConnectionState;
+import 'package:hive_ce/hive.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:http/http.dart' as http;
 import 'package:logging/logging.dart';
@@ -1178,18 +1180,22 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
         prefixKey = normalizedKey;
       }
     }
+    final validatedPrefix = _validatedDatabasePrefix(
+      storedPrefix,
+      logContext: 'reading stored database secrets',
+    );
 
     RegisteredCredentialKey? passphraseKey;
     String? storedPassphrase;
-    if (storedPrefix != null && storedPrefix.isNotEmpty) {
+    if (validatedPrefix != null) {
       passphraseKey = CredentialStore.registerKey(
-        '$storedPrefix$_databasePassphraseKeySuffix',
+        '$validatedPrefix$_databasePassphraseKeySuffix',
       );
       storedPassphrase = await _credentialStore.read(key: passphraseKey);
     }
     return _DatabaseSecrets(
       prefixKey: prefixKey,
-      prefix: storedPrefix,
+      prefix: validatedPrefix,
       passphraseKey: passphraseKey,
       passphrase: storedPassphrase,
     );
@@ -2804,13 +2810,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
 
     if (severity != LogoutSeverity.burn) {
       await _xmppService.disconnect();
-    }
-
-    if (severity == LogoutSeverity.normal) {
-      await _credentialStore.delete(key: jidStorageKey);
-      await _credentialStore.delete(key: passwordStorageKey);
-      await _credentialStore.delete(key: passwordPreHashedStorageKey);
-      await _clearSkippedPasswordSecrets();
     } else if (severity == LogoutSeverity.burn) {
       await _credentialStore.deleteAll(burn: true);
       _passwordWasSkipped = false;
@@ -2818,10 +2817,20 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       await _burnAdditionalLocalState();
     }
 
-    if (severity == LogoutSeverity.burn) {
-      await _xmppService.disconnect();
+    if (severity == LogoutSeverity.normal) {
+      await _credentialStore.delete(key: jidStorageKey);
+      await _credentialStore.delete(key: passwordStorageKey);
+      await _credentialStore.delete(key: passwordPreHashedStorageKey);
+      await _clearSkippedPasswordSecrets();
     }
 
+    if (severity == LogoutSeverity.burn) {
+      await _xmppService.disconnect();
+      _emailService?.clearSessionCredentials();
+      _emit(const AuthenticationNone());
+      _updateEmailForegroundKeepalive();
+      return;
+    }
     _emailService?.clearSessionCredentials();
     _emit(const AuthenticationNone());
     _updateEmailForegroundKeepalive();
@@ -2851,12 +2860,46 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> _burnAdditionalLocalState() async {
     await _reminderController?.clearAll();
     await _notificationService?.dismissNotifications();
-    await _hydratedStorage?.clear();
+    await _burnHydratedStorage();
     await _calendarStorageManager?.burn();
     await _deleteBurnTemporaryDirectory(emailAttachmentTempDirectoryName);
     await _deleteBurnTemporaryDirectory(attachmentShareTempDirectoryName);
     await _deleteBurnTemporaryDirectory(chatHistoryExportTempDirectoryName);
     await _deleteBurnTemporaryDirectory(contactExportTempDirectoryName);
+  }
+
+  String? _validatedDatabasePrefix(
+    String? databasePrefix, {
+    required String logContext,
+  }) {
+    final trimmed = databasePrefix?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    final normalized = tryNormalizeAppOwnedPathSegment(trimmed);
+    if (normalized == null) {
+      _log.warning('Ignoring invalid database prefix while $logContext.');
+      return null;
+    }
+    return normalized;
+  }
+
+  Future<void> _burnHydratedStorage() async {
+    final storage = _hydratedStorage;
+    if (storage == null) {
+      return;
+    }
+    if (storage is! CalendarStorageRegistry) {
+      await storage.clear();
+      return;
+    }
+    await storage.fallbackStorage.clear();
+    await storage.fallbackStorage.close();
+    const hydratedBoxName = 'hydrated_box';
+    if (await Hive.boxExists(hydratedBoxName)) {
+      await Hive.deleteBoxFromDisk(hydratedBoxName);
+    }
+    storage.replaceFallbackStorage(InMemoryStorage());
   }
 
   Future<void> _deleteBurnTemporaryDirectory(String directoryName) async {

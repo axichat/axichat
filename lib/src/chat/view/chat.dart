@@ -5013,7 +5013,7 @@ class _ChatState extends State<Chat> {
                                   builder: (context, constraints) {
                                     final spacing = context.spacing;
                                     final messageListHorizontalPadding =
-                                        spacing.m;
+                                        spacing.s;
                                     final pinnedPanelMinHeight = 0.0;
                                     final rawContentWidth = math.max(
                                       0.0,
@@ -5734,9 +5734,6 @@ class _ChatState extends State<Chat> {
                                     var overlayQuotedSenderLabel =
                                         quotedSenderLabel;
                                     var overlayQuotedIsSelf = quotedIsSelf;
-                                    var hasComposerOverlay =
-                                        overlayQuotedMessage != null ||
-                                        overlayNotices != null;
                                     final demoTypingAvatars =
                                         _demoTypingParticipants(state);
                                     final typingAvatars =
@@ -5808,13 +5805,11 @@ class _ChatState extends State<Chat> {
                                                   )
                                             : null,
                                       );
-                                      hasComposerOverlay = true;
                                       bottomContent = const SizedBox.shrink();
                                     } else if (widget.readOnly) {
                                       _ensureRecipientBarHeightCleared();
                                       composerOverlayBanner =
                                           const _ReadOnlyComposerBanner();
-                                      hasComposerOverlay = true;
                                       bottomContent = const SizedBox.shrink();
                                     } else {
                                       final visibilityLabel =
@@ -6009,54 +6004,43 @@ class _ChatState extends State<Chat> {
                                                 .statusBannerSuccessDuration,
                                           );
                                     }
-                                    hasComposerOverlay =
-                                        overlayQuotedMessage != null ||
-                                        overlayNotices != null ||
-                                        composerOverlayBanner != null;
                                     final bottomSection = _SizeReportingWidget(
                                       onSizeChange: _updateBottomSectionHeight,
                                       child: bottomContent,
                                     );
-                                    if (hasComposerOverlay) {
-                                      dashMessages.insert(
-                                        0,
-                                        ChatMessage(
-                                          user: spacerUser,
-                                          createdAt: _selectionSpacerTimestamp,
-                                          text: ' ',
-                                          customProperties: const {
-                                            'id':
-                                                _composerOverlaySpacerMessageId,
-                                            'composerOverlaySpacer': true,
-                                          },
-                                        ),
-                                      );
-                                    }
-                                    final composerOverlay = !hasComposerOverlay
-                                        ? null
-                                        : Positioned(
-                                            left: 0,
-                                            right: 0,
-                                            bottom: 0,
-                                            child: _ComposerBottomOverlay(
-                                              quotedMessage:
-                                                  overlayQuotedMessage,
-                                              quotedSenderLabel:
-                                                  overlayQuotedSenderLabel,
-                                              quotedIsSelf: overlayQuotedIsSelf,
-                                              onClearQuote: quoting == null
-                                                  ? () {}
-                                                  : () => context
-                                                        .read<ChatBloc>()
-                                                        .add(
-                                                          const ChatQuoteCleared(),
-                                                        ),
-                                              notices: overlayNotices,
-                                              banner: composerOverlayBanner,
-                                              animationDuration:
-                                                  overlayAnimationDuration,
-                                            ),
-                                          );
+                                    dashMessages.insert(
+                                      0,
+                                      ChatMessage(
+                                        user: spacerUser,
+                                        createdAt: _selectionSpacerTimestamp,
+                                        text: ' ',
+                                        customProperties: const {
+                                          'id': _composerOverlaySpacerMessageId,
+                                          'composerOverlaySpacer': true,
+                                        },
+                                      ),
+                                    );
+                                    final composerOverlay = Positioned(
+                                      left: 0,
+                                      right: 0,
+                                      bottom: 0,
+                                      child: _ComposerBottomOverlay(
+                                        quotedMessage: overlayQuotedMessage,
+                                        quotedSenderLabel:
+                                            overlayQuotedSenderLabel,
+                                        quotedIsSelf: overlayQuotedIsSelf,
+                                        onClearQuote: quoting == null
+                                            ? () {}
+                                            : () =>
+                                                  context.read<ChatBloc>().add(
+                                                    const ChatQuoteCleared(),
+                                                  ),
+                                        notices: overlayNotices,
+                                        banner: composerOverlayBanner,
+                                        animationDuration:
+                                            overlayAnimationDuration,
+                                      ),
+                                    );
                                     return Column(
                                       children: [
                                         _ChatPinnedMessagesPanel(
@@ -8290,8 +8274,31 @@ class _ChatState extends State<Chat> {
                                                                       isSingleSelection
                                                                       ? expandedBubbleWidth
                                                                       : cappedBubbleWidth;
+                                                                  final combinedReactionCornerClearance =
+                                                                      bubbleCornerClearance +
+                                                                      reactionCornerClearance;
+                                                                  final compactReactionMinimumBubbleWidth =
+                                                                      showCompactReactions
+                                                                      ? math.min(
+                                                                          bubbleMaxWidthForLayout,
+                                                                          minimumReactionCutoutBubbleWidth(
+                                                                            context:
+                                                                                context,
+                                                                            reactions:
+                                                                                reactions,
+                                                                            padding:
+                                                                                reactionCutoutPadding,
+                                                                            minThickness:
+                                                                                reactionCutoutMinThickness,
+                                                                            cornerClearance:
+                                                                                combinedReactionCornerClearance,
+                                                                          ),
+                                                                        )
+                                                                      : 0.0;
                                                                   final bubbleTextConstraints =
                                                                       BoxConstraints(
+                                                                        minWidth:
+                                                                            compactReactionMinimumBubbleWidth,
                                                                         maxWidth:
                                                                             bubbleMaxWidthForLayout,
                                                                       );
@@ -8363,7 +8370,9 @@ class _ChatState extends State<Chat> {
                                                                       : const SizedBox.shrink();
                                                                   final nextIsTailSpacer =
                                                                       next?.customProperties?['selectionSpacer'] ==
-                                                                      true;
+                                                                          true ||
+                                                                      next?.customProperties?['composerOverlaySpacer'] ==
+                                                                          true;
                                                                   final isLatestBubble =
                                                                       isRenderableBubble &&
                                                                       (next ==
@@ -8513,7 +8522,7 @@ class _ChatState extends State<Chat> {
                                                                       ? avatarOuterInset
                                                                       : 0;
                                                                   final messageListHorizontalPadding =
-                                                                      spacing.m;
+                                                                      spacing.s;
                                                                   final outerPadding = EdgeInsets.only(
                                                                     top: spacing
                                                                         .xxs,
@@ -8566,8 +8575,7 @@ class _ChatState extends State<Chat> {
                                                                             bubbleWidthFraction:
                                                                                 1.0,
                                                                             cornerClearance:
-                                                                                bubbleCornerClearance +
-                                                                                reactionCornerClearance,
+                                                                                combinedReactionCornerClearance,
                                                                             body:
                                                                                 child!,
                                                                             reactionOverlay:
@@ -9399,7 +9407,7 @@ class _ChatState extends State<Chat> {
                                                                   EdgeInsets.symmetric(
                                                                     horizontal:
                                                                         spacing
-                                                                            .m,
+                                                                            .s,
                                                                   ),
                                                               child: Align(
                                                                 alignment: Alignment
@@ -9441,7 +9449,7 @@ class _ChatState extends State<Chat> {
                                                             ),
                                                           ),
                                                         ),
-                                                      ?composerOverlay,
+                                                      composerOverlay,
                                                     ],
                                                   ),
                                                 ),
@@ -11393,6 +11401,9 @@ class _PinnedMessageTile extends StatelessWidget {
       vertical: spacing.xxs,
     );
     final reactionCornerClearance = spacing.s;
+    final bubbleBaseRadius = _bubbleBaseRadius(context);
+    final combinedReactionCornerClearance =
+        _bubbleCornerClearance(bubbleBaseRadius) + reactionCornerClearance;
     final recipientCutoutDepth = spacing.m;
     final recipientCutoutRadius = spacing.m;
     final recipientCutoutPadding = EdgeInsets.fromLTRB(
@@ -11468,7 +11479,7 @@ class _PinnedMessageTile extends StatelessWidget {
       backgroundColor: bubbleColor,
       borderColor: borderColor,
       borderRadius: _bubbleBorderRadius(
-        baseRadius: _bubbleBaseRadius(context),
+        baseRadius: bubbleBaseRadius,
         isSelf: isSelf,
         chainedPrevious: false,
         chainedNext: false,
@@ -11477,9 +11488,7 @@ class _PinnedMessageTile extends StatelessWidget {
       shadowOpacity: 0,
       shadows: const <BoxShadow>[],
       bubbleWidthFraction: 1.0,
-      cornerClearance:
-          _bubbleCornerClearance(_bubbleBaseRadius(context)) +
-          reactionCornerClearance,
+      cornerClearance: combinedReactionCornerClearance,
       body: Padding(
         padding: _bubblePadding(context),
         child: Column(
@@ -11504,6 +11513,18 @@ class _PinnedMessageTile extends StatelessWidget {
       ),
     );
     final previewMaxWidth = context.sizing.dialogMaxWidth;
+    final compactReactionMinimumBubbleWidth = showCompactReactions
+        ? math.min(
+            previewMaxWidth,
+            minimumReactionCutoutBubbleWidth(
+              context: context,
+              reactions: reactions,
+              padding: reactionCutoutPadding,
+              minThickness: reactionCutoutMinThickness,
+              cornerClearance: combinedReactionCornerClearance,
+            ),
+          )
+        : 0.0;
     final bubbleWithPreview = _ReplyPreviewBubbleColumn(
       forwardedPreview: forwardedPreview,
       quotedPreview: replyPreview,
@@ -11513,7 +11534,13 @@ class _PinnedMessageTile extends StatelessWidget {
         isSelf: isSelf,
         leftInset: 0.0,
       ),
-      bubble: bubblePreview,
+      bubble: ConstrainedBox(
+        constraints: BoxConstraints(
+          minWidth: compactReactionMinimumBubbleWidth,
+          maxWidth: previewMaxWidth,
+        ),
+        child: bubblePreview,
+      ),
       previewMaxWidth: previewMaxWidth,
       spacing: spacing.s,
       previewSpacing: spacing.xxs,
@@ -11638,10 +11665,12 @@ class _ChatDetailsOverlay extends StatelessWidget {
       color: context.colorScheme.background,
       child: SafeArea(
         top: false,
-        child: ChatMessageDetails(
-          onAddRecipient: onAddRecipient,
-          loadedEmailImageMessageIds: loadedEmailImageMessageIds,
-          onEmailImagesApproved: onEmailImagesApproved,
+        child: _ChatSubrouteShell(
+          child: ChatMessageDetails(
+            onAddRecipient: onAddRecipient,
+            loadedEmailImageMessageIds: loadedEmailImageMessageIds,
+            onEmailImagesApproved: onEmailImagesApproved,
+          ),
         ),
       ),
     );
@@ -11949,6 +11978,72 @@ class _CutoutLayoutResult<T> {
   final double totalWidth;
 }
 
+@visibleForTesting
+({List<ReactionPreview> items, bool overflowed, double totalWidth})
+layoutReactionStrip({
+  required BuildContext context,
+  required List<ReactionPreview> reactions,
+  required double maxContentWidth,
+}) {
+  final layout = _layoutReactionStrip(
+    context: context,
+    reactions: reactions,
+    maxContentWidth: maxContentWidth,
+  );
+  return (
+    items: layout.items,
+    overflowed: layout.overflowed,
+    totalWidth: layout.totalWidth,
+  );
+}
+
+@visibleForTesting
+double minimumReactionStripContentWidth({
+  required BuildContext context,
+  required List<ReactionPreview> reactions,
+}) {
+  if (reactions.isEmpty) return 0.0;
+  final textDirection = Directionality.of(context);
+  final textScaler =
+      MediaQuery.maybeOf(context)?.textScaler ?? TextScaler.noScaling;
+  final measurementSlack = context.borderSide.width;
+  final firstWidth = measureReactionChipWidth(
+    context: context,
+    reaction: reactions.first,
+    textDirection: textDirection,
+    textScaler: textScaler,
+  );
+  if (reactions.length == 1) {
+    return firstWidth + measurementSlack;
+  }
+  final glyphWidth = measureReactionOverflowGlyphWidth(
+    context: context,
+    textDirection: textDirection,
+    textScaler: textScaler,
+  );
+  return firstWidth + glyphWidth + measurementSlack;
+}
+
+@visibleForTesting
+double minimumReactionCutoutBubbleWidth({
+  required BuildContext context,
+  required List<ReactionPreview> reactions,
+  required EdgeInsets padding,
+  required double minThickness,
+  required double cornerClearance,
+}) {
+  if (reactions.isEmpty) return 0.0;
+  final requiredContentWidth = minimumReactionStripContentWidth(
+    context: context,
+    reactions: reactions,
+  );
+  final requiredThickness = math.max(
+    minThickness,
+    requiredContentWidth + padding.horizontal,
+  );
+  return requiredThickness + (cornerClearance * 2);
+}
+
 _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
   required BuildContext context,
   required List<ReactionPreview> reactions,
@@ -11970,76 +12065,73 @@ _CutoutLayoutResult<ReactionPreview> _layoutReactionStrip({
   final textScaler = mediaQuery == null
       ? TextScaler.noScaling
       : mediaQuery.textScaler;
+  final measurementSlack = context.borderSide.width;
   final reactionOverflowGlyphWidth = measureReactionOverflowGlyphWidth(
     context: context,
     textDirection: textDirection,
     textScaler: textScaler,
   );
+  final reactionWidths = [
+    for (final reaction in reactions)
+      measureReactionChipWidth(
+        context: context,
+        reaction: reaction,
+        textDirection: textDirection,
+        textScaler: textScaler,
+      ),
+  ];
 
   final visible = <ReactionPreview>[];
-  final additions = <double>[];
   double used = 0;
 
   final limit = maxContentWidth.isFinite
-      ? math.max(0.0, maxContentWidth)
+      ? math.max(0.0, maxContentWidth - measurementSlack)
       : maxContentWidth;
 
-  for (final reaction in reactions) {
+  for (var i = 0; i < reactions.length; i++) {
+    final reaction = reactions[i];
+    final reactionWidth = reactionWidths[i];
     final spacing = visible.isEmpty ? 0 : reactionChipSpacing;
-    final addition =
-        spacing +
-        measureReactionChipWidth(
-          context: context,
-          reaction: reaction,
-          textDirection: textDirection,
-          textScaler: textScaler,
-        );
-    if (limit.isFinite && used + addition > limit) {
+    final addition = spacing + reactionWidth;
+    final hasMoreAfter = i < reactions.length - 1;
+    final overflowReservation = hasMoreAfter
+        ? reactionOverflowGlyphWidth +
+              ((visible.length + 1) > 1 ? reactionOverflowSpacing : 0.0)
+        : 0.0;
+    if (limit.isFinite && used + addition + overflowReservation > limit) {
       break;
     }
     visible.add(reaction);
-    additions.add(addition);
     used += addition;
   }
 
   final truncated = visible.length < reactions.length;
-  double totalWidth = used;
-
-  if (truncated) {
-    if (visible.isEmpty) {
-      final firstReaction = reactions.first;
-      final firstWidth = measureReactionChipWidth(
-        context: context,
-        reaction: firstReaction,
-        textDirection: textDirection,
-        textScaler: textScaler,
-      );
-      visible.add(firstReaction);
-      additions.add(firstWidth);
-      totalWidth = firstWidth;
-    }
-    var spacing = visible.length > 1 ? reactionChipSpacing : 0.0;
-    final glyphWidth = reactionOverflowGlyphWidth;
-    while (visible.length > 1 &&
-        limit.isFinite &&
-        totalWidth + spacing + reactionOverflowSpacing + glyphWidth > limit) {
-      totalWidth -= additions.removeLast();
-      visible.removeLast();
-      spacing = visible.length > 1 ? reactionChipSpacing : 0.0;
-    }
-    final overflowSpacing = visible.length > 1 ? reactionOverflowSpacing : 0.0;
-    totalWidth = math.min(
-      maxContentWidth,
-      totalWidth + spacing + overflowSpacing + glyphWidth,
+  if (visible.isEmpty) {
+    final firstWidth = reactionWidths.first;
+    final canShowOverflow =
+        reactions.length > 1 &&
+        (!limit.isFinite || firstWidth + reactionOverflowGlyphWidth <= limit);
+    final totalWidth = canShowOverflow
+        ? firstWidth + reactionOverflowGlyphWidth
+        : firstWidth;
+    return _CutoutLayoutResult(
+      items: <ReactionPreview>[reactions.first],
+      overflowed: canShowOverflow,
+      totalWidth: math.min(maxContentWidth, totalWidth),
     );
-  } else {
-    totalWidth = math.min(maxContentWidth, totalWidth);
   }
 
   return _CutoutLayoutResult(
     items: visible,
     overflowed: truncated,
-    totalWidth: totalWidth,
+    totalWidth: math.min(
+      maxContentWidth,
+      truncated
+          ? used +
+                (visible.length > 1 ? reactionOverflowSpacing : 0.0) +
+                reactionOverflowGlyphWidth
+          : used,
+    ),
   );
 }
 
@@ -12264,7 +12356,7 @@ class _ReactionStrip extends StatelessWidget {
                 constraints.maxWidth > 0
             ? constraints.maxWidth
             : double.infinity;
-        final layout = _layoutReactionStrip(
+        final layout = layoutReactionStrip(
           context: context,
           reactions: reactions,
           maxContentWidth: maxWidth,
@@ -16152,17 +16244,15 @@ class _ComposerBannerVisibility extends StatefulWidget {
 
 class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility> {
   Widget? displayedChild;
-  bool shown = false;
   DateTime? shownAt;
   Timer? hideTimer;
-  Timer? removeTimer;
+  Object switchKey = Object();
 
   @override
   void initState() {
     super.initState();
     displayedChild = widget.visible ? widget.child : null;
-    shown = widget.visible && widget.child != null;
-    shownAt = shown ? DateTime.timestamp() : null;
+    shownAt = displayedChild == null ? null : DateTime.timestamp();
   }
 
   @override
@@ -16175,19 +16265,23 @@ class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility> {
     final nextChild = widget.child;
     if (widget.visible && nextChild != null) {
       hideTimer?.cancel();
-      removeTimer?.cancel();
-      final shouldRefreshShownAt =
-          !shown || !identical(displayedChild, nextChild);
+      final previousChild = displayedChild;
+      final needsNewKey =
+          previousChild == null ||
+          previousChild.runtimeType != nextChild.runtimeType ||
+          previousChild.key != nextChild.key;
       setState(() {
         displayedChild = nextChild;
-        shown = true;
-        if (shouldRefreshShownAt) {
+        if (previousChild == null || needsNewKey) {
           shownAt = DateTime.timestamp();
+        }
+        if (needsNewKey) {
+          switchKey = Object();
         }
       });
       return;
     }
-    if (displayedChild == null || !shown) {
+    if (displayedChild == null) {
       return;
     }
     final elapsed = shownAt == null
@@ -16205,69 +16299,72 @@ class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility> {
   void _beginHide() {
     hideTimer?.cancel();
     hideTimer = null;
-    if (widget.visible || displayedChild == null || !shown) {
-      return;
-    }
-    removeTimer?.cancel();
-    if (widget.animationDuration == Duration.zero) {
-      setState(() {
-        shown = false;
-        displayedChild = null;
-        shownAt = null;
-      });
+    if (widget.visible || displayedChild == null) {
       return;
     }
     setState(() {
-      shown = false;
-    });
-    removeTimer = Timer(widget.animationDuration, () {
-      if (!mounted || widget.visible) {
-        return;
-      }
-      setState(() {
-        displayedChild = null;
-        shownAt = null;
-      });
+      displayedChild = null;
+      shownAt = null;
+      switchKey = Object();
     });
   }
 
   @override
   void dispose() {
     hideTimer?.cancel();
-    removeTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final child = displayedChild;
-    if (child == null) {
-      return const SizedBox.shrink();
-    }
+    final currentChild = displayedChild == null
+        ? const SizedBox.shrink(key: ValueKey<String>('composer-banner-empty'))
+        : KeyedSubtree(
+            key: ValueKey<Object>(switchKey),
+            child: displayedChild!,
+          );
     return TickerMode(
-      enabled: shown || widget.visible,
-      child: IgnorePointer(
-        ignoring: !shown,
-        child: ExcludeSemantics(
-          excluding: !shown,
-          child: AnimatedSize(
-            duration: widget.animationDuration,
-            curve: shown ? Curves.easeOutCubic : Curves.easeInCubic,
-            alignment: Alignment.bottomCenter,
-            clipBehavior: Clip.hardEdge,
-            child: ClipRect(
-              child: Align(
-                alignment: Alignment.bottomCenter,
-                heightFactor: shown ? 1 : 0,
-                child: AnimatedSlide(
-                  duration: widget.animationDuration,
-                  curve: shown ? Curves.easeOutCubic : Curves.easeInCubic,
-                  offset: shown ? Offset.zero : widget.slideOffset,
+      enabled: displayedChild != null || widget.visible,
+      child: AnimatedSize(
+        duration: widget.animationDuration,
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.bottomCenter,
+        clipBehavior: Clip.hardEdge,
+        child: AnimatedSwitcher(
+          duration: widget.animationDuration,
+          reverseDuration: widget.animationDuration,
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          layoutBuilder: (currentChild, previousChildren) {
+            return Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                ...previousChildren,
+                if (currentChild case final Widget current) current,
+              ],
+            );
+          },
+          transitionBuilder: (child, animation) {
+            final curved = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
+            return ClipRect(
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: widget.slideOffset,
+                  end: Offset.zero,
+                ).animate(curved),
+                child: SizeTransition(
+                  sizeFactor: curved,
+                  axisAlignment: 1.0,
                   child: child,
                 ),
               ),
-            ),
-          ),
+            );
+          },
+          child: currentChild,
         ),
       ),
     );

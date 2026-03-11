@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -138,4 +140,41 @@ void main() {
       verify(() => mockEmailService.refreshChatlistFromCore()).called(1);
     },
   );
+
+  test('close cancels unread refresh progression during shutdown', () async {
+    when(() => mockEmailService.hasActiveSession).thenReturn(true);
+    when(
+      () => mockEmailService.canReconnectConfiguredSession(),
+    ).thenAnswer((_) async => false);
+    final fetchCompleter = Completer<bool>();
+    when(
+      () => mockEmailService.performBackgroundFetch(
+        timeout: any(named: 'timeout'),
+      ),
+    ).thenAnswer((_) => fetchCompleter.future);
+
+    final service = HomeRefreshSyncService(
+      xmppService: mockXmppService,
+      emailService: mockEmailService,
+    );
+
+    final refreshFuture = service.refreshUnreadOnly();
+    await untilCalled(
+      () => mockEmailService.performBackgroundFetch(
+        timeout: any(named: 'timeout'),
+      ),
+    );
+
+    var closeCompleted = false;
+    final closeFuture = service.close().then((_) {
+      closeCompleted = true;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(closeCompleted, isFalse);
+    fetchCompleter.complete(true);
+    await closeFuture;
+    await refreshFuture;
+
+    verifyNever(() => mockEmailService.refreshChatlistFromCore());
+  });
 }

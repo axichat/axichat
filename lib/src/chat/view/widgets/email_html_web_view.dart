@@ -17,6 +17,9 @@ class EmailHtmlWebView extends StatefulWidget {
     required this.allowRemoteImages,
     required this.maxHeight,
     required this.minHeight,
+    required this.backgroundColor,
+    required this.textColor,
+    required this.linkColor,
     required this.onLinkTap,
     this.onBackgroundTap,
     this.clampHeightToMax = true,
@@ -29,6 +32,9 @@ class EmailHtmlWebView extends StatefulWidget {
   final bool allowRemoteImages;
   final double maxHeight;
   final double minHeight;
+  final Color backgroundColor;
+  final Color textColor;
+  final Color linkColor;
   final ValueChanged<String> onLinkTap;
   final VoidCallback? onBackgroundTap;
   final bool clampHeightToMax;
@@ -121,24 +127,52 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   Future<void> _loadHtml() async {
     final controller = _controller;
     if (controller == null) return;
-    final html = HtmlContentCodec.prepareEmailHtmlForWebView(
-      _sourceHtml,
-      allowRemoteImages: widget.allowRemoteImages,
-    );
     if (mounted) {
       setState(() {
         _isLoading = true;
       });
     }
     await controller.loadData(
-      data: html,
+      data: _sourceHtml,
       baseUrl: _emailWebViewUri,
       historyUrl: _emailWebViewUri,
     );
   }
 
   String get _sourceHtml {
-    return widget.html;
+    final preparedHtml = HtmlContentCodec.prepareEmailHtmlForWebView(
+      widget.html,
+      allowRemoteImages: widget.allowRemoteImages,
+    );
+    final brightness = context.brightness;
+    final colorSchemeValue = brightness == Brightness.dark ? 'dark' : 'light';
+    final themeStyle =
+        '''
+<style id="axichat-email-webview-theme">
+:root { color-scheme: $colorSchemeValue !important; }
+html, body {
+  background-color: ${_cssColor(widget.backgroundColor)} !important;
+  color: ${_cssColor(widget.textColor)} !important;
+}
+body, p, div, span, li, td, th, blockquote, pre, code, h1, h2, h3, h4, h5, h6 {
+  color: ${_cssColor(widget.textColor)} !important;
+}
+a, a:visited {
+  color: ${_cssColor(widget.linkColor)} !important;
+}
+</style>
+''';
+    if (preparedHtml.contains('</head>')) {
+      return preparedHtml.replaceFirst('</head>', '$themeStyle</head>');
+    }
+    return '$themeStyle$preparedHtml';
+  }
+
+  String _cssColor(Color color) {
+    final red = (color.r * 255.0).round().clamp(0, 255);
+    final green = (color.g * 255.0).round().clamp(0, 255);
+    final blue = (color.b * 255.0).round().clamp(0, 255);
+    return 'rgba($red, $green, $blue, ${color.a.toStringAsFixed(3)})';
   }
 
   Future<void> _measureContentHeight() async {
@@ -198,10 +232,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         children: [
           InAppWebView(
             initialData: InAppWebViewInitialData(
-              data: HtmlContentCodec.prepareEmailHtmlForWebView(
-                _sourceHtml,
-                allowRemoteImages: widget.allowRemoteImages,
-              ),
+              data: _sourceHtml,
               baseUrl: _emailWebViewUri,
               historyUrl: _emailWebViewUri,
             ),

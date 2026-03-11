@@ -3,6 +3,7 @@
 
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -38,6 +39,128 @@ void main() {
 
     expect(countedWidth, greaterThan(singleWidth));
   });
+
+  testWidgets('truncated reaction layout keeps the first reaction visible', (
+    tester,
+  ) async {
+    const reactions = <ReactionPreview>[
+      ReactionPreview(emoji: '😂', count: 1),
+      ReactionPreview(emoji: '🔥', count: 1),
+      ReactionPreview(emoji: '👍', count: 1),
+    ];
+    late ({List<ReactionPreview> items, bool overflowed, double totalWidth})
+    layout;
+
+    await tester.pumpWidget(
+      _ReactionLayoutTestApp(
+        child: Builder(
+          builder: (context) {
+            final width = minimumReactionStripContentWidth(
+              context: context,
+              reactions: reactions,
+            );
+            layout = layoutReactionStrip(
+              context: context,
+              reactions: reactions,
+              maxContentWidth: width,
+            );
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    expect(
+      layout.items.map((reaction) => reaction.emoji).toList(),
+      equals(const <String>['😂']),
+    );
+    expect(layout.overflowed, isTrue);
+    expect(layout.totalWidth, greaterThan(0));
+  });
+
+  testWidgets('reaction layout shows all reactions when width allows', (
+    tester,
+  ) async {
+    const reactions = <ReactionPreview>[
+      ReactionPreview(emoji: '😂', count: 1),
+      ReactionPreview(emoji: '🔥', count: 1),
+    ];
+    late ({List<ReactionPreview> items, bool overflowed, double totalWidth})
+    layout;
+
+    await tester.pumpWidget(
+      _ReactionLayoutTestApp(
+        child: Builder(
+          builder: (context) {
+            final mediaQuery = MediaQuery.of(context);
+            final firstWidth = measureReactionChipWidth(
+              context: context,
+              reaction: reactions.first,
+              textDirection: TextDirection.ltr,
+              textScaler: mediaQuery.textScaler,
+            );
+            final secondWidth = measureReactionChipWidth(
+              context: context,
+              reaction: reactions.last,
+              textDirection: TextDirection.ltr,
+              textScaler: mediaQuery.textScaler,
+            );
+            layout = layoutReactionStrip(
+              context: context,
+              reactions: reactions,
+              maxContentWidth: firstWidth + secondWidth + axiBorders.width,
+            );
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    expect(
+      layout.items.map((reaction) => reaction.emoji).toList(),
+      equals(const <String>['😂', '🔥']),
+    );
+    expect(layout.overflowed, isFalse);
+  });
+
+  testWidgets('reaction layout drops the ellipsis before the first chip', (
+    tester,
+  ) async {
+    const reactions = <ReactionPreview>[
+      ReactionPreview(emoji: '😂', count: 1),
+      ReactionPreview(emoji: '🔥', count: 1),
+    ];
+    late ({List<ReactionPreview> items, bool overflowed, double totalWidth})
+    layout;
+
+    await tester.pumpWidget(
+      _ReactionLayoutTestApp(
+        child: Builder(
+          builder: (context) {
+            final mediaQuery = MediaQuery.of(context);
+            final firstWidth = measureReactionChipWidth(
+              context: context,
+              reaction: reactions.first,
+              textDirection: TextDirection.ltr,
+              textScaler: mediaQuery.textScaler,
+            );
+            layout = layoutReactionStrip(
+              context: context,
+              reactions: reactions,
+              maxContentWidth: firstWidth,
+            );
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    expect(
+      layout.items.map((reaction) => reaction.emoji).toList(),
+      equals(const <String>['😂']),
+    );
+    expect(layout.overflowed, isFalse);
+  });
 }
 
 class _ReactionLayoutTestApp extends StatelessWidget {
@@ -48,6 +171,8 @@ class _ReactionLayoutTestApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(
         extensions: const <ThemeExtension<dynamic>>[
           axiBorders,

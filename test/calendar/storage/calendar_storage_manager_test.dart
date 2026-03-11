@@ -85,14 +85,17 @@ void main() {
         await guestStorage.write('guest_key', 'guest-value');
         await authStorage.write('auth_key', 'auth-value');
 
+        expect(await Hive.boxExists(guestStorageBoxName), isTrue);
         expect(await Hive.boxExists(authStorageBoxName), isTrue);
 
         await manager.burn();
 
-        expect(guestStorage.read('guest_key'), isNull);
+        expect(await Hive.boxExists(guestStorageBoxName), isFalse);
         expect(manager.authStorage, isNull);
+        expect(manager.guestStorage, isNotNull);
         expect(registry.storageForPrefix(authStoragePrefix), isNull);
         expect(await Hive.boxExists(authStorageBoxName), isFalse);
+        expect(manager.guestStorage?.read('guest_key'), isNull);
       },
     );
   });

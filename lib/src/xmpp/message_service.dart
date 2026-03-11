@@ -4278,6 +4278,11 @@ mixin MessageService
       (db) => db.getMessageByStanzaID(stanzaID),
     );
     if (message == null) return;
+    final resolvedChatType = await _resolvePersistedChatType(
+      jid: message.chatJid,
+      requestedChatType: ChatType.chat,
+    );
+    final isGroupChat = resolvedChatType == ChatType.groupChat;
     final decision = await _featureDecision(
       jid: message.chatJid,
       feature: mox.messageReactionsXmlns,
@@ -4303,6 +4308,9 @@ mixin MessageService
       emojis.add(normalizedEmoji);
     }
     final sanitizedEmojis = emojis.clampReactionEmojis();
+    if (isGroupChat) {
+      await _ensureMucJoinForSend(roomJid: message.chatJid);
+    }
     final reactionEvent = mox.MessageEvent(
       fromJid,
       mox.JID.fromString(message.chatJid),
@@ -4311,6 +4319,7 @@ mixin MessageService
         mox.MessageReactionsData(message.stanzaID, sanitizedEmojis),
       ]),
       id: _connection.generateId(),
+      type: isGroupChat ? _messageTypeGroupchat : 'chat',
     );
     try {
       final sent = await _connection.sendMessage(reactionEvent);
@@ -5956,9 +5965,13 @@ mixin MessageService
         return !event.displayable;
       }
       final bool isGroupChat = event.type == _messageTypeGroupchat;
-      final String senderJid = isGroupChat
-          ? event.from.toString()
-          : event.from.toBare().toString();
+      final String senderJid = _canonicalReactionSenderJid(
+        senderJid: isGroupChat
+            ? event.from.toString()
+            : event.from.toBare().toString(),
+        chatJid: message.chatJid,
+        isGroupChat: isGroupChat,
+      );
       await db.replaceReactions(
         messageId: message.stanzaID,
         senderJid: senderJid,
@@ -7034,8 +7047,19 @@ mixin MessageService
           .toList();
     }
     final grouped = <String, Map<String, _ReactionBucket>>{};
-    final selfJid = myJid;
+    final messagesById = <String, Message>{
+      for (final message in messages) message.stanzaID: message,
+    };
     for (final reaction in reactions) {
+      final message = messagesById[reaction.messageID];
+      if (message == null) {
+        continue;
+      }
+      final canonicalSenderJid = _canonicalReactionSenderJid(
+        senderJid: reaction.senderJid,
+        chatJid: message.chatJid,
+        isGroupChat: _isMucChatJid(message.chatJid),
+      );
       final buckets = grouped.putIfAbsent(
         reaction.messageID,
         () => <String, _ReactionBucket>{},
@@ -7044,7 +7068,7 @@ mixin MessageService
         reaction.emoji,
         () => _ReactionBucket(reaction.emoji),
       );
-      bucket.add(reaction.senderJid, selfJid);
+      bucket.add(canonicalSenderJid, myJid);
     }
     return messages.map((message) {
       final id = message.stanzaID;
@@ -7066,6 +7090,45 @@ mixin MessageService
       }
       return message.copyWith(reactionsPreview: previews);
     }).toList();
+  }
+
+  String _canonicalReactionSenderJid({
+    required String senderJid,
+    required String chatJid,
+    required bool isGroupChat,
+  }) {
+    final accountJid = myJid;
+    if (!isGroupChat) {
+      return bareAddress(senderJid) ?? senderJid;
+    }
+    final normalizedChatJid = bareAddress(chatJid) ?? chatJid;
+    if (accountJid != null &&
+        sameNormalizedAddressValue(senderJid, accountJid)) {
+      return accountJid;
+    }
+    final roomState = roomStateFor(normalizedChatJid);
+    if (roomState != null) {
+      final myOccupantId = roomState.myOccupantId?.trim();
+      if (accountJid != null &&
+          myOccupantId != null &&
+          myOccupantId.isNotEmpty &&
+          senderJid == myOccupantId) {
+        return accountJid;
+      }
+      final occupant = roomState.occupants[senderJid];
+      final realJid = occupant?.realJid?.trim();
+      if (realJid != null && realJid.isNotEmpty) {
+        if (accountJid != null &&
+            sameNormalizedAddressValue(realJid, accountJid)) {
+          return accountJid;
+        }
+        return bareAddress(realJid) ?? realJid;
+      }
+    }
+    if (senderJid.startsWith('$normalizedChatJid/')) {
+      return senderJid;
+    }
+    return bareAddress(senderJid) ?? senderJid;
   }
 
   FileMetadataData? _extractFileMetadata(mox.MessageEvent event) {

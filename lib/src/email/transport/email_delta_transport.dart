@@ -2159,13 +2159,29 @@ class EmailDeltaTransport implements ChatTransport {
   }
 
   Future<void> deleteStorageArtifacts({String? databasePrefix}) async {
-    final prefix = databasePrefix?.trim().isNotEmpty == true
-        ? databasePrefix!.trim()
-        : _databasePrefix;
-    if (prefix == null || prefix.isEmpty) {
+    final explicitPrefix = databasePrefix?.trim();
+    final normalizedExplicitPrefix = tryNormalizeAppOwnedPathSegment(
+      explicitPrefix,
+    );
+    if (explicitPrefix != null &&
+        explicitPrefix.isNotEmpty &&
+        normalizedExplicitPrefix == null) {
+      _log.warning(
+        'Ignoring invalid explicit Delta database prefix during storage cleanup.',
+      );
+    }
+    final rawPrefix = normalizedExplicitPrefix ?? _databasePrefix;
+    final normalizedPrefix = tryNormalizeAppOwnedPathSegment(rawPrefix);
+    if (rawPrefix != null && rawPrefix.isNotEmpty && normalizedPrefix == null) {
+      _log.warning(
+        'Skipping Delta storage cleanup for invalid database prefix.',
+      );
       return;
     }
-    await _resetAccountsStorage(prefix);
+    if (normalizedPrefix == null) {
+      return;
+    }
+    await _resetAccountsStorage(normalizedPrefix);
   }
 
   /// Blocks an email contact in DeltaChat core.

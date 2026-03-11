@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
@@ -107,7 +108,7 @@ class CalendarStorageManager extends ChangeNotifier {
   }
 
   Future<void> burn() async {
-    await _clearGuestStorage();
+    await _clearGuestStorageFromDisk();
     await _clearAuthStorageFromDisk();
   }
 
@@ -117,16 +118,25 @@ class CalendarStorageManager extends ChangeNotifier {
     _authStorageCompleter = null;
   }
 
-  Future<void> _clearGuestStorage() async {
+  Future<void> _clearGuestStorageFromDisk() async {
     final storage = guestStorage;
     if (storage != null) {
       await storage.clear();
-      return;
+      await storage.close();
+    } else if (Hive.isBoxOpen(guestStorageBoxName)) {
+      await Hive.box<dynamic>(guestStorageBoxName).close();
     }
+    _registry.unregisterPrefix(guestStoragePrefix);
+    _guestStorageCompleter = null;
     if (await Hive.boxExists(guestStorageBoxName)) {
       await Hive.deleteBoxFromDisk(guestStorageBoxName);
     }
-    await ensureGuestStorage();
+    final replacement = InMemoryStorage();
+    final completer = ImpatientCompleter<Storage>(Completer<Storage>());
+    completer.complete(replacement);
+    _guestStorageCompleter = completer;
+    _registry.registerPrefix(guestStoragePrefix, replacement);
+    notifyListeners();
   }
 
   Future<void> _clearAuthStorageFromDisk() async {

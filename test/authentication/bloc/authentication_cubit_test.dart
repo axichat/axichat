@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:axichat/main.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_registry.dart';
+import 'package:axichat/src/common/app_owned_storage.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
@@ -18,6 +20,8 @@ import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:http/http.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -2216,8 +2220,56 @@ void main() {
               mockCredentialStore.delete(key: bloc.passwordPreHashedStorageKey),
         ).called(1);
         verify(() => mockXmppService.clearSessionTokens()).called(1);
+        verify(() => mockHomeRefreshSyncService.start()).called(1);
         verify(() => mockHomeRefreshSyncService.close()).called(2);
         verify(() => mockXmppService.disconnect()).called(1);
+      },
+    );
+
+    test(
+      'User initiated logout waits for teardown before emitting AuthenticationNone.',
+      () async {
+        final shutdownCompleter = Completer<void>();
+        final disconnectCompleter = Completer<void>();
+        when(
+          () => mockEmailService.shutdown(
+            jid: any(named: 'jid'),
+            clearCredentials: any(named: 'clearCredentials'),
+          ),
+        ).thenAnswer((_) => shutdownCompleter.future);
+        when(
+          () => mockXmppService.disconnect(),
+        ).thenAnswer((_) => disconnectCompleter.future);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          homeRefreshSyncService: mockHomeRefreshSyncService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        final emittedStates = <AuthenticationState>[];
+        final subscription = bloc.stream.listen(emittedStates.add);
+
+        final logoutFuture = bloc.logout(severity: LogoutSeverity.normal);
+        await Future<void>.delayed(Duration.zero);
+        expect(emittedStates, isEmpty);
+        verify(() => mockHomeRefreshSyncService.close()).called(1);
+
+        shutdownCompleter.complete();
+        await Future<void>.delayed(Duration.zero);
+        expect(emittedStates, isEmpty);
+
+        disconnectCompleter.complete();
+        await logoutFuture;
+        await Future<void>.delayed(Duration.zero);
+        expect(emittedStates, [const AuthenticationNone()]);
+
+        await subscription.cancel();
+        await bloc.close();
       },
     );
 
@@ -2344,6 +2396,83 @@ void main() {
         verify(() => mockNotificationService.dismissNotifications()).called(1);
         verify(() => mockHydratedStorage.clear()).called(1);
         verify(() => mockCalendarStorageManager.burn()).called(1);
+      },
+    );
+
+    blocTest<AuthenticationCubit, AuthenticationState>(
+      'Burn logout ignores an invalid stored email database prefix.',
+      build: () {
+        credentialStorage['jid'] = validJid;
+        credentialStorage['${validJid}_database_prefix'] = '../burn-db';
+        final tempRoot = Directory.systemTemp.createTempSync('auth_burn');
+        addTearDown(() async {
+          if (tempRoot.existsSync()) {
+            await tempRoot.delete(recursive: true);
+          }
+        });
+        return AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          homeRefreshSyncService: mockHomeRefreshSyncService,
+          temporaryDirectoryBuilder: (directoryName) async =>
+              Directory('${tempRoot.path}/$directoryName'),
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(
+            config: EndpointConfig(smtpEnabled: false),
+          ),
+        );
+      },
+      act: (bloc) => bloc.logout(severity: LogoutSeverity.burn),
+      expect: () => [
+        const AuthenticationNone(config: EndpointConfig(smtpEnabled: false)),
+      ],
+      verify: (_) {
+        verify(() => mockEmailService.burn(jid: validJid)).called(1);
+        verifyNever(
+          () => mockEmailService.burn(
+            jid: validJid,
+            databasePrefix: any(named: 'databasePrefix'),
+          ),
+        );
+      },
+    );
+
+    test(
+      'Burn logout deletes the hydrated fallback box and replaces it with ephemeral storage.',
+      () async {
+        final tempRoot = await Directory.systemTemp.createTemp('auth_hydrated');
+        addTearDown(() async {
+          if (tempRoot.existsSync()) {
+            await tempRoot.delete(recursive: true);
+          }
+        });
+        Hive.init(tempRoot.path);
+        final fallbackStorage = await HydratedStorage.build(
+          storageDirectory: HydratedStorageDirectory(tempRoot.path),
+        );
+        final registry = CalendarStorageRegistry(fallback: fallbackStorage);
+        await registry.write('settings_state', 'value');
+        expect(await HydratedStorage.hive.boxExists('hydrated_box'), isTrue);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          xmppService: mockXmppService,
+          hydratedStorage: registry,
+          homeRefreshSyncService: mockHomeRefreshSyncService,
+          temporaryDirectoryBuilder: (directoryName) async =>
+              Directory('${tempRoot.path}/$directoryName'),
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+        addTearDown(() => bloc.close());
+
+        await bloc.logout(severity: LogoutSeverity.burn);
+
+        expect(await HydratedStorage.hive.boxExists('hydrated_box'), isFalse);
+        expect(registry.fallbackStorage, isA<InMemoryStorage>());
       },
     );
   });

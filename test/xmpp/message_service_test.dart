@@ -526,6 +526,81 @@ void main() {
       );
     });
 
+    test('Sends MUC reactions as groupchat stanzas', () async {
+      const roomJid = 'room@conference.axi.im';
+      const roomNick = 'me';
+      const stanzaId = 'muc-reaction-target';
+
+      await connectSuccessfully(xmppService);
+      await xmppService.setMucServiceHost('conference.axi.im');
+      when(
+        () => mockConnection.getManager<MUCManager>(),
+      ).thenReturn(mucManager);
+      final managerRoomState = mox.RoomState(
+        roomJid: mox.JID.fromString(roomJid),
+        joined: true,
+        nick: roomNick,
+      );
+      when(
+        () => mucManager.getRoomState(mox.JID.fromString(roomJid)),
+      ).thenAnswer((_) async => managerRoomState);
+      when(() => mockConnection.generateId()).thenReturn(uuid.v4());
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
+
+      await database.createChat(
+        Chat(
+          jid: roomJid,
+          title: 'Room',
+          type: ChatType.groupChat,
+          myNickname: roomNick,
+          lastChangeTimestamp: DateTime.timestamp(),
+          contactJid: roomJid,
+        ),
+      );
+      await database.saveMessage(
+        Message(
+          stanzaID: stanzaId,
+          senderJid: '$roomJid/$roomNick',
+          chatJid: roomJid,
+          timestamp: DateTime.timestamp(),
+          body: 'hello',
+        ),
+        chatType: ChatType.groupChat,
+        selfJid: xmppService.myJid,
+      );
+      xmppService.updateOccupantFromPresence(
+        roomJid: roomJid,
+        occupantId: '$roomJid/$roomNick',
+        nick: roomNick,
+        realJid: xmppService.myJid,
+        affiliation: OccupantAffiliation.member,
+        role: OccupantRole.participant,
+        isPresent: true,
+        fromPresence: true,
+      );
+
+      await xmppService.reactToMessage(stanzaID: stanzaId, emoji: emoji);
+
+      verify(
+        () => mockConnection.sendMessage(
+          any(
+            that: isA<mox.MessageEvent>()
+                .having((event) => event.type, 'type', 'groupchat')
+                .having(
+                  (event) => event.extensions
+                      .get<mox.MessageReactionsData>()
+                      ?.messageId,
+                  'reaction target',
+                  stanzaId,
+                )
+                .having((event) => event.to.toBare().toString(), 'to', roomJid),
+          ),
+        ),
+      ).called(1);
+    });
+
     test(
       'Applies inbound reactions when the target matches message originID',
       () async {
