@@ -14,7 +14,8 @@ modules:
   - name: axichat-bundle
     buildsystem: simple
     build-commands:
-      - install -Dm755 axichat /app/bin/axichat
+      - install -Dm755 axichat /app/axichat
+      - install -Dm755 run-axichat.sh /app/bin/axichat
       - mkdir -p /app/lib /app/data
       - cp -a lib/. /app/lib/
       - cp -a data/. /app/data/
@@ -28,3 +29,5 @@ modules:
         path: im.axi.axichat.desktop
       - type: file
         path: im.axi.axichat.metainfo.xml
+      - type: file
+        path: run-axichat.sh

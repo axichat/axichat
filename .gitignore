@@ -67,3 +67,4 @@ moxxy-master/
 !/CONTRIBUTING.md
 /lib/**/*.md
 /conversations/
+/.cargo-home/

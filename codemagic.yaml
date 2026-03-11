@@ -74,8 +74,8 @@ definitions:
         echo $GITHUB_TOKEN | gh auth login --with-token
         
         gh release upload $CM_TAG \
-        build/app/outputs/flutter-apk/*.apk \
-        build/app/outputs/flutter-apk/*.sha1
+        dist/*.apk \
+        dist/*.apk.sha256
     - &github_release_create_windows
       name: Create Windows GitHub Release
       script: |
@@ -105,7 +105,9 @@ definitions:
         
         gh release upload $env:CM_TAG `
           dist\axichat-windows.zip `
-          dist\axichat-windows-setup.exe
+          dist\axichat-windows.zip.sha256 `
+          dist\axichat-windows-setup.exe `
+          dist\axichat-windows-setup.exe.sha256
     - &github_release_upload_linux
       name: Upload to Linux GitHub Releases
       script: |
@@ -116,7 +118,9 @@ definitions:
 
         gh release upload $CM_TAG \
           dist/axichat-linux.tar.gz \
-          dist/axichat-linux-amd64.deb
+          dist/axichat-linux.tar.gz.sha256 \
+          dist/axichat-linux-amd64.deb \
+          dist/axichat-linux-amd64.deb.sha256
 
 workflows:
   test-workflow:
@@ -139,7 +143,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: 3.38.0
+      flutter: 3.41.4
       groups:
         - integration_test
         - email_provisioning # Provides EMAIL_PUBLIC_TOKEN for dart-define builds/tests.
@@ -190,7 +194,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: 3.38.0
+      flutter: 3.41.4
       groups:
         - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci`.
         - github # Provide a GitHub PAT as GITHUB_TOKEN for release publishing.
@@ -204,23 +208,28 @@ workflows:
       - *build_runner
       - name: Shorebird Release
         script: |
-          shorebird release android --flavor production --artifact=apk -- \
+          shorebird release android --flavor production --artifact=apk --flutter-version=3.41.4 -- \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
           --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
           --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
           --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$AXI_YAHOO_OAUTH_CLIENT_ID 
+      - name: Export Android Release Assets
+        script: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/*.apk dist/
+          ./tool/write_sha256_files.sh dist/*.apk
       - *github_release_create_android
       - *github_release_upload_android
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
-      - build/app/outputs/flutter-apk/*.sha1
+      - dist/*.apk
+      - dist/*.apk.sha256
   patch-android-workflow:
     name: Android Patch Workflow
     max_build_duration: 60
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: 3.38.0
+      flutter: 3.41.4
       groups:
         - shorebird # Codemagic must expose SHOREBIRD_TOKEN for patching builds.
         - email_provisioning # EMAIL_PUBLIC_TOKEN for provisioning glue service.
@@ -257,7 +266,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: 3.38.0
+      flutter: 3.41.4
       groups:
         - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci`.
         - github # Provide GITHUB_TOKEN via Codemagic's github group before tagging dev releases.
@@ -271,23 +280,28 @@ workflows:
       - *build_runner
       - name: Shorebird Release Development
         script: |
-          shorebird release android --flavor development --artifact=apk -- \
+          shorebird release android --flavor development --artifact=apk --flutter-version=3.41.4 -- \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
           --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
           --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
           --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$AXI_YAHOO_OAUTH_CLIENT_ID 
+      - name: Export Android Development Release Assets
+        script: |
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/*.apk dist/
+          ./tool/write_sha256_files.sh dist/*.apk
       - *github_release_create_android
       - *github_release_upload_android
     artifacts:
-      - build/app/outputs/flutter-apk/*.apk
-      - build/app/outputs/flutter-apk/*.sha1
+      - dist/*.apk
+      - dist/*.apk.sha256
   dev-patch-android-workflow:
     name: Android Development Patch Workflow
     max_build_duration: 60
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: 3.38.0
+      flutter: 3.41.4
       groups:
         - shorebird # Codemagic group must include SHOREBIRD_TOKEN for dev patching.
         - email_provisioning # EMAIL_PUBLIC_TOKEN for provisioning glue service.
@@ -323,7 +337,7 @@ workflows:
     max_build_duration: 60
     instance_type: windows_x2
     environment:
-      flutter: 3.38.0
+      flutter: 3.41.4
       groups:
         - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci` for Windows releases.
         - github # Provide a GitHub PAT via GITHUB_TOKEN for desktop uploads.
@@ -341,7 +355,7 @@ workflows:
           flutter config --enable-windows-desktop
       - name: Shorebird Release
         script: |
-          & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production -- `
+          & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production --flutter-version=3.41.4 -- `
             --dart-define=EMAIL_PUBLIC_TOKEN=$env:EMAIL_PUBLIC_TOKEN `
             --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$env:AXI_GMAIL_OAUTH_CLIENT_ID `
             --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$env:AXI_OUTLOOK_OAUTH_CLIENT_ID `
@@ -357,11 +371,16 @@ workflows:
         script: |
           $version = $env:CM_TAG.TrimStart('v')
           iscc /DAppVersion=$version /DAppSourceDir=build\windows\x64\runner\Release /DAppOutputDir=dist packaging\windows\axichat.iss
+      - name: Generate Windows Checksums
+        script: |
+          & .\tool\write_sha256_files.ps1 dist\axichat-windows.zip dist\axichat-windows-setup.exe
       - *github_release_create_windows
       - *github_release_upload_windows
     artifacts:
       - dist\axichat-windows.zip
+      - dist\axichat-windows.zip.sha256
       - dist\axichat-windows-setup.exe
+      - dist\axichat-windows-setup.exe.sha256
   release-linux-workflow:
     name: Linux Release Workflow
     triggering:
@@ -378,7 +397,7 @@ workflows:
     instance_type: linux_x2
     environment:
       ubuntu: 24.04
-      flutter: 3.38.0
+      flutter: 3.41.4
       groups:
         - shorebird # Requires SHOREBIRD_TOKEN for Linux desktop releases.
         - github # Provide GITHUB_TOKEN with repo scope for Linux artifact uploads.
@@ -393,7 +412,7 @@ workflows:
           flutter config --enable-linux-desktop
       - name: Shorebird Release Linux
         script: |
-          shorebird release linux --flavor production -- \
+          shorebird release linux --flavor production --flutter-version=3.41.4 -- \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
           --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
           --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
@@ -405,8 +424,13 @@ workflows:
       - name: Package Debian Bundle
         script: |
           ./tool/package_deb.sh build/linux/x64/release/bundle "$CM_TAG" dist
+      - name: Generate Linux Checksums
+        script: |
+          ./tool/write_sha256_files.sh dist/axichat-linux.tar.gz dist/axichat-linux-amd64.deb
       - *github_release_create_android
       - *github_release_upload_linux
     artifacts:
       - dist/axichat-linux.tar.gz
+      - dist/axichat-linux.tar.gz.sha256
       - dist/axichat-linux-amd64.deb
+      - dist/axichat-linux-amd64.deb.sha256

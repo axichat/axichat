@@ -1,46 +1,18 @@
 <div align="center">
-  <img src="/metadata/en-US/images/featureGraphic.png" width="800" alt="Axichat banner" />
+  <img src="/metadata/en-US/images/featureGraphic.png" width="800" alt="Axichat" />
 </div>
-
-<hr />
 
 <div align="center">
   <h2>The best of instant messaging, email, and calendar all in one.</h2>
 </div>
 
 <div align="center">
-  <a href="https://github.com/axichat/axichat/blob/master/LICENSE.txt">
-    <img alt="License" src="https://img.shields.io/github/license/axichat/axichat?style=for-the-badge" />
-  </a>
-  <a href="https://github.com/axichat/axichat/releases">
-    <img alt="Release" src="https://img.shields.io/github/v/release/axichat/axichat?style=for-the-badge&logo=github" />
-  </a>
-  <a href="https://github.com/axichat/axichat/releases">
-    <img alt="Release date" src="https://img.shields.io/github/release-date/axichat/axichat?style=for-the-badge" />
-  </a>
+  <p>Axichat is a free open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and cutting-edge UI.</p>
+  <p>Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at <a href="https://github.com/axichat/selfhost">https://github.com/axichat/selfhost</a>.</p>
 </div>
 
 <div align="center">
   <p><strong>Note:</strong> Axichat is under active development, so things may break. It was not vibe-coded.</p>
-</div>
-
-<div align="center">
-  <p><a href="https://axi.chat"><strong>Visit the website: axi.chat</strong></a></p>
-</div>
-
-<div align="center">
-  <p><a href="assets/readme/Axichat_demo_24fps.mp4"><strong>Watch the Axichat demo video (MP4)</strong></a></p>
-</div>
-
-<div align="center">
-  <a href="assets/readme/Axichat_demo_24fps.mp4">
-    <img
-      src="assets/readme/Axichat_demo_24fps.mp4.png"
-      alt="Axichat demo video preview"
-      style="display: block; width: 100%; max-width: 960px; margin: 0 auto; border-radius: 16px;"
-    />
-  </a>
-  <p><em>Click the preview to play/download the MP4.</em></p>
 </div>
 
 <div align="center">
@@ -63,6 +35,32 @@
   <a href="https://github.com/axichat/axichat/releases/latest/download/axichat-linux.tar.gz">
     <img alt="Download the portable Linux tar.gz" src="https://img.shields.io/badge/Portable%20Linux%20.tar.gz-2CA5E0?style=for-the-badge&logo=linux&logoColor=white" />
   </a>
+</div>
+
+<div align="center">
+  <a href="https://github.com/axichat/axichat/blob/master/LICENSE.txt">
+    <img alt="License" src="https://img.shields.io/github/license/axichat/axichat?style=for-the-badge" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases">
+    <img alt="Release" src="https://img.shields.io/github/v/release/axichat/axichat?style=for-the-badge&logo=github" />
+  </a>
+  <a href="https://github.com/axichat/axichat/releases">
+    <img alt="Release date" src="https://img.shields.io/github/release-date/axichat/axichat?style=for-the-badge" />
+  </a>
+  <a href="https://axi.chat">
+    <img alt="Website" src="https://img.shields.io/badge/Website-axi.chat-111827?style=for-the-badge&logo=googlechrome&logoColor=white" />
+  </a>
+</div>
+
+<div align="center">
+  <a href="assets/readme/Axichat_demo_24fps.mp4">
+    <img
+      src="assets/readme/Axichat_demo_24fps.mp4.png"
+      alt="Axichat demo video preview"
+      style="display: block; width: 100%; max-width: 960px; margin: 0 auto; border-radius: 16px;"
+    />
+  </a>
+  <p><em>Click the preview to play/download the MP4, or click <a href="assets/readme/Axichat_demo_24fps.mp4">here</a>.</em></p>
 </div>
 
 ## Screenshots
@@ -127,29 +125,29 @@
 ### Feature highlights:
 
 - 1st-party push notifications and offline sync
-- Unified inbox for chat + email side by side
-- Group chats and per-conversation settings
+- Unified inbox for chat + email
+- Sync across all your devices (mobile and desktop)
+- Group chats
+- Avatars
 - Easy forwarding and replying
 - Emoji reactions
-- Delivery and read receipts with typing indicators
+- Delivery and read receipts
+- Typing indicators
+- Attachments
+- Pinned messages
 - Stream management with automatic reconnect to stop messages dropping
-- Upload your own avatar or use one of our cool defaults
-- Message drafts, starred items, and pinned messages
-- Rich attachments and inline previews
-- Fast search across chats, mail, and calendar
-- Collaborative calendars with per-event permissions and owner/assignee roles
+- Easy drag-and-drop calendar
+- Natural-language scheduling without AI
 - Availability sharing that shows overlaps before you schedule
-- Natural-language scheduling with drag+drop calendar editing
 - One-tap add-to-calendar from simple text messages
 - Tasks, reminders, and calendar in one view
 - Calendar export/import for backups and migrations
 - Critical paths and agenda focus to surface what’s next
+- Fast search across chats, mail, and calendar
 - Accessibility-friendly modals and flows (keyboard/touch/reader aware)
 - Translated UI (English, Spanish, German, French, Chinese)
 - Dark and light modes with brand color schemes
-- Sync across all your devices (Android, Linux, Windows)
 - Desktop + mobile parity with keyboard shortcuts and touch affordances
-- Smart notifications (muting, per-chat overrides, do-not-disturb)
 - Works without Google/Firebase; pure XMPP + SMTP/IMAP core
 
 ## Roadmap
@@ -170,9 +168,8 @@
 - [ ] 2026: Voice and video calling
 - [ ] 2026: End-to-end encryption
 - [ ] 2026: 3rd-party email OAuth
-<br />
-<hr />
-<br />
+
+---
 
 <center>
   <p><strong>If you're proactive and busy, you'll love Axichat both because of what it has and what <em><strong>it doesn't have</strong></em>.</strong></p>
@@ -208,7 +205,7 @@
   </tr>
 </table>
 
-<hr />
+---
 
 ## Why?
 
@@ -224,7 +221,7 @@
 - **Collaboration matters** - Share availability, co-edit events, and resolve scheduling overlaps
   together so everyone stays aligned.
 
-<hr />
+---
 
 ## What?
 
@@ -258,20 +255,20 @@
 
 - Development started in 2024
 
-<hr />
+---
 
 ## Where?
 
 - Built in New Zealand
 
-<hr />
+---
 
 ## Who?
 
 - For people with a lot to get done
 - For people who want to take control of their communications and time
 
-<hr />
+---
 
 ## How?
 
@@ -281,8 +278,8 @@
 ## Downloading & Installing
 
 Use the buttons above for the APK and the portable desktop builds. Some GitHub releases also
-include installer/package assets. Open the matching GitHub release and pick the asset that fits
-your platform:
+include installer/package assets and `.sha256` checksum files. Open the matching GitHub release
+and pick the asset that fits your platform:
 
 - **Android** – `app-production-release.apk`
 - **Windows installer** – `axichat-windows-setup.exe`
@@ -295,8 +292,12 @@ Prefer the installer/package when your release includes one. Use the portable `.
 only when you specifically want a portable build, because portable builds do **not** create Start
 menu or applications-menu entries automatically.
 
+Direct desktop downloads from GitHub Releases are currently unsigned convenience artifacts. Verify
+the matching `.sha256` file from the same release before opening the installer or archive. Once the
+Flathub listing is live, prefer Flathub on Linux for the strongest platform-native trust path.
+
 1. Pick the matching asset for your platform.
-2. Verify the checksum/signature provided in the GitHub Release notes.
+2. Verify the matching `.sha256` file from the same GitHub Release.
 3. Install it using the matching instructions below.
 
 ### Android
@@ -309,7 +310,8 @@ menu or applications-menu entries automatically.
   show up in the desktop applications menu automatically.
 - **Debian/Ubuntu `.deb`** – If your release includes `axichat-linux-amd64.deb`, install it with
   `sudo apt install ./axichat-linux-amd64.deb`. The package should add Axichat to your
-  applications menu automatically.
+  applications menu automatically. This direct-download `.deb` is unsigned, so verify the release
+  checksum first.
 - **Portable `.tar.gz`** – Extract the archive into a stable folder such as
   `~/.local/opt/axichat`, then launch `~/.local/opt/axichat/axichat`.
 
@@ -338,19 +340,21 @@ menu or applications-menu entries automatically.
 ### Windows
 
 - **Installer `.exe`** – If your release includes `axichat-windows-setup.exe`, run it and keep the
-  default options. It should create the Start menu entry automatically.
+  default options. It should create the Start menu entry automatically. The installer is currently
+  unsigned, so Windows may show `Unknown publisher`; verify the release checksum first and make
+  sure the file came from the official Axichat GitHub Release.
 - **Portable `.zip`** – Extract the archive into a stable folder such as
   `%LocalAppData%\Programs\Axichat`, then run `Axichat.exe`.
 
   To promote the portable build into a normal Windows application:
 
-  1. Right-click `Axichat.exe`, choose `Show more options`, then choose `Send to` ->
-     `Desktop (create shortcut)`.
-  2. Press `Win + R`, run `shell:Programs`, and move that shortcut into the folder that opens.
-  3. Open Start, search for `Axichat`, then pin it to Start or the taskbar if you want one-click
-     access.
+    1. Right-click `Axichat.exe`, choose `Show more options`, then choose `Send to` ->
+       `Desktop (create shortcut)`.
+    2. Press `Win + R`, run `shell:Programs`, and move that shortcut into the folder that opens.
+    3. Open Start, search for `Axichat`, then pin it to Start or the taskbar if you want one-click
+       access.
 
-<hr />
+---
 
 ## Support Axichat
 
@@ -374,7 +378,7 @@ menu or applications-menu entries automatically.
   </a>
 </div>
 
-<hr />
+---
 
 ## License
 

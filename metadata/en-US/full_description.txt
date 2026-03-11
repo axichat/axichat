@@ -1,3 +1,28 @@
+Axichat is a free open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and cutting-edge UI.
+
+Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at https://github.com/axichat/selfhost.
+
+Feature highlights:
+- 1st-party push notifications and offline sync
+- Unified inbox for chat + email
+- Sync across all your devices (mobile and desktop)
+- Group chats
+- Avatars
+- Easy forwarding and replying
+- Emoji reactions
+- Delivery and read receipts
+- Typing indicators
+- Attachments
+- Pinned messages
+- Stream management with automatic reconnect to stop messages dropping
+- Easy drag-and-drop calendar
+- Natural-language scheduling without AI
+- Availability sharing that shows overlaps before you schedule
+- One-tap add-to-calendar from simple text messages
+- Guest mode for offline planning
+- First-party push notifications and offline sync
+- Works without Google, Firebase, and FCM
+
 <strong>Note:</strong> Axichat is still under active development, so things may break. It was not vibe-coded.
 
 If you find any bugs please report them at https://github.com/axichat/axichat/issues so I can fix them! GitLab also works for bug reports.
@@ -5,27 +30,6 @@ If you find any bugs please report them at https://github.com/axichat/axichat/is
 Website: https://axi.chat
 Source code: https://gitlab.com/axichat/axichat
 License: AGPL-3.0-or-later
-
-Axichat is a cutting-edge email and XMPP client that is fully open source with 1st party push notifications (no FCM ever) and no 3rd party dependencies.
-
-Get your username@axi.im now.
-
-You can self-host your own email + XMPP server for Axichat by following the steps at https://github.com/axichat/selfhost.
-
-Feature highlights:
-- Unified inbox for chat + email side by side.
-- Group chats and per-conversation settings.
-- Quick quote-reply, reactions, and delivery/read receipts.
-- Rich attachments and inline previews.
-- Fast search across chat, mail, and calendar.
-- Collaborative calendar with reminders and tasks.
-- Natural-language scheduling (no AI required).
-- Availability sharing to schedule meetings faster.
-- Critical path and agenda focus tools.
-- Smart notifications with per-chat controls.
-- Guest mode for offline planning.
-- First-party push notifications and offline sync.
-- Works without Google, Firebase, or FCM.
 
 Why Axichat?
 - Tools matter: communication should feel like a clean desk, not a cluttered inbox.
@@ -41,8 +45,8 @@ Best chat interface:
 
 Best calendar in the world:
 - Type tasks and events in natural language and schedule quickly.
-- Keep unscheduled items in an inbox until you place them.
-- Plan with drag-and-drop, resize, copy/paste, and batch editing.
+- Keep unscheduled items on the side until you place them.
+- Plan with drag-and-drop, drag-to-resize, copy/paste, and batch editing.
 - Track reminders, deadlines, priorities, and recurring plans.
 - Use guest mode for local planning without account setup.
 
@@ -50,7 +54,7 @@ Privacy and independence:
 - No trackers.
 - No ads.
 - No data selling.
-- No centralized lock-in.
+- No vendor lock-in.
 - Open protocols and open-source code.
 
 Android permissions explained:
