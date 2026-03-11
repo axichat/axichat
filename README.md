@@ -6,6 +6,8 @@
   <h2>The best of instant messaging, email, and calendar all in one.</h2>
 </div>
 
+<br />
+
 <p>Axichat is a free open source SMTP (email) and XMPP (chat) client with 1st party push notifications (no FCM ever) and cutting-edge UI.</p>
 <p>Get your username@axi.im now or, for extra privacy and security, you can self-host your own email + XMPP server for Axichat by following the steps at <a href="https://github.com/axichat/selfhost">https://github.com/axichat/selfhost</a>.</p>
 <p><strong>Note:</strong> Axichat is under active development, so things may break. It was not vibe-coded.</p>
@@ -36,17 +38,14 @@
 <br />
 
 <div align="center">
+  <a href="https://axi.chat">
+    <img alt="Website" src="https://img.shields.io/badge/Website-axi.chat-111827?style=for-the-badge&logo=googlechrome&logoColor=white" />
+  </a>
   <a href="https://github.com/axichat/axichat/blob/master/LICENSE.txt">
     <img alt="License" src="https://img.shields.io/github/license/axichat/axichat?style=for-the-badge" />
   </a>
   <a href="https://github.com/axichat/axichat/releases">
     <img alt="Release" src="https://img.shields.io/github/v/release/axichat/axichat?style=for-the-badge&logo=github" />
-  </a>
-  <a href="https://github.com/axichat/axichat/releases">
-    <img alt="Release date" src="https://img.shields.io/github/release-date/axichat/axichat?style=for-the-badge" />
-  </a>
-  <a href="https://axi.chat">
-    <img alt="Website" src="https://img.shields.io/badge/Website-axi.chat-111827?style=for-the-badge&logo=googlechrome&logoColor=white" />
   </a>
 </div>
 

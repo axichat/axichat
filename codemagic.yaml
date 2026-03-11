@@ -147,7 +147,6 @@ workflows:
       groups:
         - integration_test
         - email_provisioning # Provides EMAIL_PUBLIC_TOKEN for dart-define builds/tests.
-        - email_oauth # OAuth client ids for email providers.
       android_signing:
         - AXICHAT_UPLOAD_KEY
     scripts:
@@ -158,9 +157,6 @@ workflows:
           mkdir -p test-results
           flutter test \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
-          --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
-          --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
-          --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$AXI_YAHOO_OAUTH_CLIENT_ID 
           --machine > test-results/flutter.json
         test_report: test-results/flutter.json
       - name: Integration Tests
@@ -170,9 +166,6 @@ workflows:
           adb wait-for-device
           flutter test -d emulator-5554 integration_test \
           --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
-          --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
-          --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
-          --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$AXI_YAHOO_OAUTH_CLIENT_ID 
           --dart-define=USERNAME=$USERNAME \
           --dart-define=PASSWORD=$PASSWORD \
           --dart-define=CONTACT_JID=$CONTACT_JID \
@@ -199,7 +192,6 @@ workflows:
         - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci`.
         - github # Provide a GitHub PAT as GITHUB_TOKEN for release publishing.
         - email_provisioning # EMAIL_PUBLIC_TOKEN for provisioning glue service.
-        - email_oauth # OAuth client ids for email providers.
       android_signing:
         - AXICHAT_UPLOAD_KEY # Upload the release keystore/certs and link it as AXICHAT_UPLOAD_KEY.
     scripts:
@@ -209,10 +201,7 @@ workflows:
       - name: Shorebird Release
         script: |
           shorebird release android --flavor production --artifact=apk --flutter-version=3.41.4 -- \
-          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
-          --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
-          --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
-          --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$AXI_YAHOO_OAUTH_CLIENT_ID 
+          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN
       - name: Export Android Release Assets
         script: |
           mkdir -p dist
@@ -233,7 +222,6 @@ workflows:
       groups:
         - shorebird # Codemagic must expose SHOREBIRD_TOKEN for patching builds.
         - email_provisioning # EMAIL_PUBLIC_TOKEN for provisioning glue service.
-        - email_oauth # OAuth client ids for email providers.
     inputs:
       release_version:
         description: The release version to patch
@@ -246,10 +234,7 @@ workflows:
           shorebird patch android --flavor production \
           --release-version=${{ inputs.release_version }} \
           -- \
-          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
-          --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
-          --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
-          --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$AXI_YAHOO_OAUTH_CLIENT_ID 
+          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN
   dev-release-android-workflow:
     name: Android Development Release Workflow
     triggering:
@@ -271,7 +256,6 @@ workflows:
         - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci`.
         - github # Provide GITHUB_TOKEN via Codemagic's github group before tagging dev releases.
         - email_provisioning # EMAIL_PUBLIC_TOKEN for provisioning glue service.
-        - email_oauth # OAuth client ids for email providers.
       android_signing:
         - AXICHAT_UPLOAD_KEY # Upload a dev keystore or reuse the production key via Codemagic secrets.
     scripts:
@@ -281,10 +265,7 @@ workflows:
       - name: Shorebird Release Development
         script: |
           shorebird release android --flavor development --artifact=apk --flutter-version=3.41.4 -- \
-          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
-          --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
-          --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
-          --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$AXI_YAHOO_OAUTH_CLIENT_ID 
+          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN
       - name: Export Android Development Release Assets
         script: |
           mkdir -p dist
@@ -305,7 +286,6 @@ workflows:
       groups:
         - shorebird # Codemagic group must include SHOREBIRD_TOKEN for dev patching.
         - email_provisioning # EMAIL_PUBLIC_TOKEN for provisioning glue service.
-        - email_oauth # OAuth client ids for email providers.
     inputs:
       release_version:
         description: The release version to patch
@@ -318,10 +298,7 @@ workflows:
           shorebird patch android --flavor development \
           --release-version=${{ inputs.release_version }} \
           -- \
-          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
-          --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
-          --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
-          --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$AXI_YAHOO_OAUTH_CLIENT_ID 
+          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN
   release-windows-workflow:
     name: Windows Release Workflow
     triggering:
@@ -342,7 +319,6 @@ workflows:
         - shorebird # Requires SHOREBIRD_TOKEN from `shorebird login:ci` for Windows releases.
         - github # Provide a GitHub PAT via GITHUB_TOKEN for desktop uploads.
         - email_provisioning # EMAIL_PUBLIC_TOKEN for provisioning glue service.
-        - email_oauth # OAuth client ids for email providers.
     scripts:
       - *shorebird_install_windows
       - *fetch_dependencies
@@ -356,10 +332,7 @@ workflows:
       - name: Shorebird Release
         script: |
           & $HOME\.shorebird\bin\shorebird.ps1 release windows --flavor production --flutter-version=3.41.4 -- `
-            --dart-define=EMAIL_PUBLIC_TOKEN=$env:EMAIL_PUBLIC_TOKEN `
-            --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$env:AXI_GMAIL_OAUTH_CLIENT_ID `
-            --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$env:AXI_OUTLOOK_OAUTH_CLIENT_ID `
-            --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$env:AXI_YAHOO_OAUTH_CLIENT_ID 
+            --dart-define=EMAIL_PUBLIC_TOKEN=$env:EMAIL_PUBLIC_TOKEN
       - name: Export bundle
         script: |
           mkdir dist
@@ -402,7 +375,6 @@ workflows:
         - shorebird # Requires SHOREBIRD_TOKEN for Linux desktop releases.
         - github # Provide GITHUB_TOKEN with repo scope for Linux artifact uploads.
         - email_provisioning # EMAIL_PUBLIC_TOKEN for provisioning glue service.
-        - email_oauth # OAuth client ids for email providers.
     scripts:
       - *shorebird_install
       - *fetch_dependencies
@@ -413,10 +385,7 @@ workflows:
       - name: Shorebird Release Linux
         script: |
           shorebird release linux --flavor production --flutter-version=3.41.4 -- \
-          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN \
-          --dart-define=AXI_GMAIL_OAUTH_CLIENT_ID=$AXI_GMAIL_OAUTH_CLIENT_ID \
-          --dart-define=AXI_OUTLOOK_OAUTH_CLIENT_ID=$AXI_OUTLOOK_OAUTH_CLIENT_ID \
-          --dart-define=AXI_YAHOO_OAUTH_CLIENT_ID=$AXI_YAHOO_OAUTH_CLIENT_ID 
+          --dart-define=EMAIL_PUBLIC_TOKEN=$EMAIL_PUBLIC_TOKEN
       - name: Package Linux Bundle
         script: |
           mkdir -p dist
