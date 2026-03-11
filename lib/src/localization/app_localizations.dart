@@ -1047,6 +1047,18 @@ abstract class AppLocalizations {
   /// **'Pick an emoji to react'**
   String get chatReactionsPick;
 
+  /// No description provided for @chatMucReferencePending.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for room confirmation before replies, pins, and reactions are available.'**
+  String get chatMucReferencePending;
+
+  /// No description provided for @chatMucReferenceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Replies, pins, and reactions become available after the room confirms this message.'**
+  String get chatMucReferenceUnavailable;
+
   /// No description provided for @chatActionReply.
   ///
   /// In en, this message translates to:

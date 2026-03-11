@@ -521,19 +521,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           .toSet()
           .toList(growable: false);
       if (stanzaIds.isEmpty) return;
+      final chatJid = state.chat?.jid;
+      if (chatJid == null || chatJid.isEmpty) return;
       if (db is XmppDrift) {
         await db.batch((batch) {
           batch.update(
             db.messages,
             const MessagesCompanion(displayed: Value(true)),
             where: (tbl) =>
-                tbl.stanzaID.isIn(stanzaIds) | tbl.originID.isIn(stanzaIds),
+                tbl.chatJid.equals(chatJid) &
+                (tbl.stanzaID.isIn(stanzaIds) | tbl.originID.isIn(stanzaIds)),
           );
         });
         return;
       }
       for (final id in stanzaIds) {
-        await db.markMessageDisplayed(id);
+        await db.markMessageDisplayed(id, chatJid: chatJid);
       }
     }
   }
@@ -803,23 +806,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (normalized.isEmpty) {
       return false;
     }
-    if (message.stanzaID.trim() == normalized) {
-      return true;
-    }
-    final originId = message.originID?.trim();
-    return originId != null && originId == normalized;
+    return message.referenceIds.contains(normalized);
   }
 
   void _indexMessageByReference(Map<String, Message> target, Message message) {
-    final stanzaId = message.stanzaID.trim();
-    if (stanzaId.isNotEmpty) {
-      target[stanzaId] = message;
-    }
-    final originId = message.originID?.trim();
-    if (originId != null && originId.isNotEmpty) {
-      target[originId] = message;
+    for (final referenceId in message.referenceIds) {
+      target[referenceId] = message;
     }
   }
+
+  MessageReference? _quotedMessageReference({
+    required Message quotedMessage,
+    required Chat? chat,
+  }) => quotedMessage.outboundReference(
+    isGroupChat: chat?.type == ChatType.groupChat,
+    directPolicy: chat?.type == ChatType.groupChat
+        ? DirectMessageReferencePolicy.currentWire
+        : DirectMessageReferencePolicy.preferOriginId,
+  );
 
   void _emitScrollTargetRequest(Emitter<ChatState> emit, String messageId) {
     emit(
@@ -834,7 +838,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required Chat chat,
     required String messageId,
   }) async {
-    var target = await _messageService.loadMessageByReferenceId(messageId);
+    var target = await _messageService.loadMessageByReferenceId(
+      messageId,
+      chatJid: chat.jid,
+    );
     if (target != null) {
       await _refreshPinnedMessagesFromDatabase(chat);
       return target;
@@ -848,7 +855,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         await _loadEarlierFromEmail(
           desiredWindow: previousCount + messageBatchSize,
         );
-        target = await _messageService.loadMessageByReferenceId(messageId);
+        target = await _messageService.loadMessageByReferenceId(
+          messageId,
+          chatJid: chat.jid,
+        );
         if (target != null) {
           await _refreshPinnedMessagesFromDatabase(chat);
           return target;
@@ -864,7 +874,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (_mamBeforeId == null && state.items.isEmpty) {
       await _hydrateLatestFromMam(chat);
-      target = await _messageService.loadMessageByReferenceId(messageId);
+      target = await _messageService.loadMessageByReferenceId(
+        messageId,
+        chatJid: chat.jid,
+      );
       if (target != null) {
         await _refreshPinnedMessagesFromDatabase(chat);
         return target;
@@ -875,7 +888,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _loadEarlierFromMam(
         desiredWindow: previousCount + messageBatchSize,
       );
-      target = await _messageService.loadMessageByReferenceId(messageId);
+      target = await _messageService.loadMessageByReferenceId(
+        messageId,
+        chatJid: chat.jid,
+      );
       if (target != null) {
         await _refreshPinnedMessagesFromDatabase(chat);
         return target;
@@ -1910,20 +1926,22 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         .where((id) => id?.isNotEmpty == true)
         .cast<String>()
         .toSet();
-    final referencedQuotes = <String, Message>{
-      for (final message in filteredItems)
-        if (quoteIds.contains(message.stanzaID)) message.stanzaID: message,
-    };
-    final knownMessageIds =
-        filteredItems.map((message) => message.stanzaID).toSet()
-          ..addAll(state.quotedMessagesById.keys);
+    final referencedQuotes = <String, Message>{};
+    final knownMessageIds = <String>{...state.quotedMessagesById.keys};
+    for (final message in filteredItems) {
+      _indexMessageByReference(referencedQuotes, message);
+    }
+    knownMessageIds.addAll(referencedQuotes.keys);
     final missingQuoteIds = quoteIds
         .where((id) => !knownMessageIds.contains(id))
         .toList();
     final loadedQuotes = <Message>[];
     if (missingQuoteIds.isNotEmpty) {
       for (final quoteId in missingQuoteIds) {
-        final message = await _messageService.loadMessageByStanzaId(quoteId);
+        final message = await _messageService.loadMessageByReferenceId(
+          quoteId,
+          chatJid: state.chat?.jid,
+        );
         if (message != null) {
           loadedQuotes.add(message);
         }
@@ -1932,8 +1950,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final updatedQuotedMessages = <String, Message>{
       ...state.quotedMessagesById,
       ...referencedQuotes,
-      for (final message in loadedQuotes) message.stanzaID: message,
     };
+    for (final message in loadedQuotes) {
+      _indexMessageByReference(updatedQuotedMessages, message);
+    }
     final emailBoundaryDeltaId = _emailUnreadBoundaryDeltaId;
     final rawUnreadBoundary = _resolveStickyUnreadBoundaryStanzaId(
       chat: state.chat,
@@ -2295,7 +2315,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       if (orderedIds.isNotEmpty) {
         final db = await _messageService.database;
-        final messages = await db.getMessagesByReferenceIds(orderedIds);
+        final messages = await db.getMessagesByReferenceIds(
+          orderedIds,
+          chatJid: state.chat?.jid,
+        );
         final messageByReference = <String, Message>{};
         for (final message in state.items) {
           _indexMessageByReference(messageByReference, message);
@@ -2610,20 +2633,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final db = await _messageService.database;
     final resolvedMessages = await db.getMessagesByReferenceIds(
       missingStanzaIds,
+      chatJid: state.chat?.jid,
     );
     if (resolvedMessages.isEmpty) {
       return missingStanzaIds;
     }
     final resolvedIds = <String>{};
     for (final message in resolvedMessages) {
-      final stanzaId = message.stanzaID.trim();
-      if (stanzaId.isNotEmpty) {
-        resolvedIds.add(stanzaId);
-      }
-      final originId = message.originID?.trim();
-      if (originId != null && originId.isNotEmpty) {
-        resolvedIds.add(originId);
-      }
+      resolvedIds.addAll(message.referenceIds);
     }
     missingStanzaIds.removeAll(resolvedIds);
     return missingStanzaIds;
@@ -4405,6 +4422,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           title: rosterTitle.isNotEmpty ? rosterTitle : null,
         );
       }
+    } on EmailServiceException catch (error, stackTrace) {
+      _log.safeWarning('Failed to add contact', error, stackTrace);
+      emit(
+        _attachToast(
+          state,
+          ChatToast(
+            messageText: event.failureMessage,
+            variant: ChatToastVariant.destructive,
+          ),
+        ),
+      );
+      return;
     } on Exception catch (error, stackTrace) {
       _log.safeWarning('Failed to add contact', error, stackTrace);
       emit(
@@ -4448,6 +4477,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           openChatRequestId: state.openChatRequestId + 1,
         ),
       );
+    } on EmailServiceException catch (error, stackTrace) {
+      _log.safeWarning('Failed to create email chat', error, stackTrace);
+      emit(
+        _attachToast(
+          state,
+          ChatToast(
+            messageText: event.failureMessage,
+            variant: ChatToastVariant.destructive,
+          ),
+        ),
+      );
     } on Exception catch (error, stackTrace) {
       _log.safeWarning('Failed to create email chat', error, stackTrace);
       emit(
@@ -4466,6 +4506,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatQuoteRequested event,
     Emitter<ChatState> emit,
   ) {
+    final currentChat = state.chat;
+    if (currentChat != null &&
+        event.message.awaitsMucReference(
+          isGroupChat: currentChat.type == ChatType.groupChat,
+          isEmailBacked: currentChat.isEmailBacked,
+        )) {
+      return;
+    }
     emit(state.copyWith(quoting: event.message));
   }
 
@@ -4485,6 +4533,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final isEmailBacked = chat.isEmailBacked;
+    if (event.message.awaitsMucReference(
+      isGroupChat: chat.type == ChatType.groupChat,
+      isEmailBacked: isEmailBacked,
+    )) {
+      return;
+    }
     if (chat.type == ChatType.groupChat && !isEmailBacked) {
       final roomState = event.roomState;
       if (roomState == null) {
@@ -4542,6 +4596,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     if (event.isEmailChat) return;
+    final chat = state.chat;
+    if (chat != null &&
+        event.message.awaitsMucReference(
+          isGroupChat: chat.type == ChatType.groupChat,
+          isEmailBacked: chat.isEmailBacked,
+        )) {
+      return;
+    }
     try {
       await _messageService.reactToMessage(
         stanzaID: event.message.stanzaID,
@@ -4877,8 +4939,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (attachments.isNotEmpty) {
         Message? quoted;
         if (message.quoting != null) {
-          quoted = await _messageService.loadMessageByStanzaId(
+          quoted = await _messageService.loadMessageByReferenceId(
             message.quoting!,
+            chatJid: message.chatJid,
           );
         }
         final caption = message.plainText.trim();
@@ -6971,13 +7034,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final attachmentPayload = attachments
         .map((pending) => pending.attachment)
         .toList();
+    final quotedReference = quotedDraft == null
+        ? null
+        : _quotedMessageReference(quotedMessage: quotedDraft, chat: chat);
     try {
       await _messageService.saveDraft(
         id: null,
         jids: resolvedRecipients,
         body: trimmedBody,
         subject: subject,
-        quotingStanzaId: quotedDraft?.stanzaID,
+        quotingStanzaId: quotedReference?.value,
+        quotingReferenceKind: quotedReference?.kind,
         attachments: attachmentPayload,
       );
       emit(

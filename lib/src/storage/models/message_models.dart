@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -209,6 +210,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     DateTime? timestamp,
     String? id,
     String? originID,
+    String? mucStanzaId,
     String? occupantID,
     String? body,
     String? htmlBody,
@@ -230,6 +232,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     @Default(false) bool fileUploading,
     String? fileMetadataID,
     String? quoting,
+    MessageReferenceKind? quotingReferenceKind,
     String? stickerPackID,
     PseudoMessageType? pseudoMessageType,
     Map<String, dynamic>? pseudoMessageData,
@@ -243,6 +246,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     required String id,
     required String stanzaID,
     required String? originID,
+    required String? mucStanzaId,
     required String? occupantID,
     required String senderJid,
     required String chatJid,
@@ -267,6 +271,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     required bool fileUploading,
     required String? fileMetadataID,
     required String? quoting,
+    required MessageReferenceKind? quotingReferenceKind,
     required String? stickerPackID,
     required PseudoMessageType? pseudoMessageType,
     required Map<String, dynamic>? pseudoMessageData,
@@ -333,6 +338,13 @@ abstract class Message with _$Message implements Insertable<Message> {
               : HtmlContentCodec.toPlainText(normalizedHtml));
     final boundedText = clampMessageText(event.text) ?? '';
     final resolvedText = boundedText.isNotEmpty ? boundedText : fallbackText;
+    final stableIdData = get<mox.StableIdData>();
+    final String? mucStanzaId = isGroupChat
+        ? stableIdData?.stanzaIds
+              ?.where((stanzaId) => stanzaId.by.toBare().toString() == chatJid)
+              .map((stanzaId) => stanzaId.id.trim())
+              .firstWhere((id) => id.isNotEmpty, orElse: () => '')
+        : '';
 
     return Message(
       stanzaID: event.id ?? uuid.v4(),
@@ -348,7 +360,13 @@ abstract class Message with _$Message implements Insertable<Message> {
           ) ??
           false,
       quoting: get<mox.ReplyData>()?.id,
-      originID: get<mox.StableIdData>()?.originId,
+      quotingReferenceKind: isGroupChat
+          ? MessageReferenceKind.mucStanzaId
+          : null,
+      originID: stableIdData?.originId,
+      mucStanzaId: mucStanzaId == null || mucStanzaId.isEmpty
+          ? null
+          : mucStanzaId,
       occupantID:
           get<mox.OccupantIdData>()?.id ??
           (isGroupChat ? event.from.toString() : null),
@@ -409,6 +427,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
     mox.JID? toJidOverride,
     String? type,
+    bool includeOriginId = false,
   }) {
     final extensions = <mox.StanzaHandlerExtension>[
       const mox.MarkableData(true),
@@ -452,11 +471,12 @@ abstract class Message with _$Message implements Insertable<Message> {
       );
     }
 
-    // Add OMEMO flag if encryption is requested
-    if (encryptionProtocol == EncryptionProtocol.omemo) {
-      // The OmemoManager will intercept based on _shouldEncryptStanza callback
-      // But we should ensure the message is properly flagged
-      extensions.add(mox.StableIdData(originID ?? stanzaID, null));
+    if (includeOriginId || encryptionProtocol == EncryptionProtocol.omemo) {
+      final trimmedOriginId = originID?.trim();
+      final stableId = trimmedOriginId == null || trimmedOriginId.isEmpty
+          ? stanzaID
+          : trimmedOriginId;
+      extensions.add(mox.StableIdData(stableId, null));
     }
 
     extensions.addAll(extraExtensions);
@@ -500,6 +520,9 @@ abstract class Message with _$Message implements Insertable<Message> {
     if (originID != null) {
       map['origin_i_d'] = Variable<String>(originID);
     }
+    if (mucStanzaId != null) {
+      map['muc_stanza_id'] = Variable<String>(mucStanzaId);
+    }
     if (occupantID != null) {
       map['occupant_i_d'] = Variable<String>(occupantID);
     }
@@ -526,6 +549,11 @@ abstract class Message with _$Message implements Insertable<Message> {
     }
     if (quoting != null) {
       map['quoting'] = Variable<String>(quoting);
+    }
+    if (quotingReferenceKind != null) {
+      map['quoting_reference_kind'] = Variable<int>(
+        quotingReferenceKind!.index,
+      );
     }
     if (stickerPackID != null) {
       map['sticker_pack_i_d'] = Variable<String>(stickerPackID);
@@ -558,6 +586,129 @@ extension MessageContent on Message {
     if (html == null) return '';
     return HtmlContentCodec.toPlainText(html);
   }
+}
+
+enum MessageReferenceKind { stanzaId, originId, mucStanzaId }
+
+enum DirectMessageReferencePolicy { currentWire, preferOriginId }
+
+final class MessageReference {
+  const MessageReference({required this.kind, required this.value});
+
+  final MessageReferenceKind kind;
+  final String value;
+}
+
+extension MessageReferenceIds on Message {
+  String? get trimmedStanzaId {
+    final stanzaId = stanzaID.trim();
+    if (stanzaId.isEmpty) {
+      return null;
+    }
+    return stanzaId;
+  }
+
+  String? get trimmedOriginId {
+    final originId = originID?.trim();
+    if (originId == null || originId.isEmpty) {
+      return null;
+    }
+    return originId;
+  }
+
+  String? get trimmedMucStanzaId {
+    final mucId = mucStanzaId?.trim();
+    if (mucId == null || mucId.isEmpty) {
+      return null;
+    }
+    return mucId;
+  }
+
+  bool get hasMucReference => trimmedMucStanzaId != null;
+
+  bool awaitsMucReference({
+    required bool isGroupChat,
+    required bool isEmailBacked,
+  }) => isGroupChat && !isEmailBacked && !hasMucReference;
+
+  bool waitsForOwnMucReference({
+    required bool isGroupChat,
+    required bool isEmailBacked,
+    required String? selfJid,
+    required String? myOccupantId,
+  }) {
+    if (!awaitsMucReference(
+      isGroupChat: isGroupChat,
+      isEmailBacked: isEmailBacked,
+    )) {
+      return false;
+    }
+    if (error.isNotNone || retracted) {
+      return false;
+    }
+    final normalizedMyOccupantId = myOccupantId?.trim();
+    if (normalizedMyOccupantId != null && normalizedMyOccupantId.isNotEmpty) {
+      final messageOccupantId = occupantID?.trim();
+      if (messageOccupantId != null &&
+          messageOccupantId.isNotEmpty &&
+          messageOccupantId == normalizedMyOccupantId) {
+        return true;
+      }
+      if (senderJid.trim() == normalizedMyOccupantId) {
+        return true;
+      }
+    }
+    return sameNormalizedAddressValue(senderJid, selfJid);
+  }
+
+  Set<String> get referenceIds => <String>{
+    ?trimmedStanzaId,
+    ?trimmedOriginId,
+    ?trimmedMucStanzaId,
+  };
+
+  MessageReference? outboundReference({
+    required bool isGroupChat,
+    DirectMessageReferencePolicy directPolicy =
+        DirectMessageReferencePolicy.currentWire,
+  }) {
+    if (isGroupChat) {
+      final mucId = trimmedMucStanzaId;
+      if (mucId == null) {
+        return null;
+      }
+      return MessageReference(
+        kind: MessageReferenceKind.mucStanzaId,
+        value: mucId,
+      );
+    }
+    if (directPolicy == DirectMessageReferencePolicy.preferOriginId) {
+      final originId = trimmedOriginId;
+      if (originId != null) {
+        return MessageReference(
+          kind: MessageReferenceKind.originId,
+          value: originId,
+        );
+      }
+    }
+    final stanzaId = trimmedStanzaId;
+    if (stanzaId == null) {
+      return null;
+    }
+    return MessageReference(
+      kind: MessageReferenceKind.stanzaId,
+      value: stanzaId,
+    );
+  }
+
+  String? outboundReferenceId({
+    required bool isGroupChat,
+    DirectMessageReferencePolicy directPolicy =
+        DirectMessageReferencePolicy.currentWire,
+  }) => outboundReference(
+    isGroupChat: isGroupChat,
+    directPolicy: directPolicy,
+  )?.value;
 }
 
 extension MessageForwardingX on Message {
@@ -848,6 +999,8 @@ class Messages extends Table {
 
   TextColumn get originID => text().nullable()();
 
+  TextColumn get mucStanzaId => text().nullable()();
+
   TextColumn get occupantID => text().nullable()();
 
   TextColumn get senderJid => text()();
@@ -902,6 +1055,9 @@ class Messages extends Table {
   TextColumn get fileMetadataID => text().nullable()();
 
   TextColumn get quoting => text().nullable()();
+
+  IntColumn get quotingReferenceKind =>
+      intEnum<MessageReferenceKind>().nullable()();
 
   TextColumn get stickerPackID => text().nullable()();
 

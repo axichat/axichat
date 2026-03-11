@@ -228,6 +228,8 @@
   "chatReactionsNone": "No reactions yet",
   "chatReactionsPrompt": "Tap a reaction to add or remove yours",
   "chatReactionsPick": "Pick an emoji to react",
+  "chatMucReferencePending": "Waiting for room confirmation before replies, pins, and reactions are available.",
+  "chatMucReferenceUnavailable": "Replies, pins, and reactions become available after the room confirms this message.",
   "chatActionReply": "Reply",
   "chatActionForward": "Forward",
   "chatActionResend": "Resend",

@@ -120,9 +120,9 @@ abstract interface class XmppDatabase implements Database {
 
   Future<Message?> getMessageByStanzaID(String stanzaID);
 
-  Future<Message?> getMessageByOriginID(String originID);
+  Future<Message?> getMessageByOriginID(String originID, {String? chatJid});
 
-  Future<Message?> getMessageByReferenceId(String messageId);
+  Future<Message?> getMessageByReferenceId(String messageId, {String? chatJid});
 
   Future<Message?> getMessageByDeltaId(
     int deltaMsgId, {
@@ -138,7 +138,10 @@ abstract interface class XmppDatabase implements Database {
 
   Future<List<Message>> getMessagesByStanzaIds(Iterable<String> stanzaIds);
 
-  Future<List<Message>> getMessagesByReferenceIds(Iterable<String> messageIds);
+  Future<List<Message>> getMessagesByReferenceIds(
+    Iterable<String> messageIds, {
+    String? chatJid,
+  });
 
   Stream<List<Reaction>> watchReactionsForChat(String jid);
 
@@ -166,6 +169,11 @@ abstract interface class XmppDatabase implements Database {
   });
 
   Future<void> updateMessage(Message message);
+
+  Future<void> saveMessageMucStanzaId({
+    required String stanzaID,
+    required String mucStanzaId,
+  });
 
   Future<void> saveMessageError({
     required String stanzaID,
@@ -244,11 +252,11 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> markMessageRetracted(String stanzaID);
 
-  Future<void> markMessageAcked(String stanzaID);
+  Future<void> markMessageAcked(String stanzaID, {String? chatJid});
 
-  Future<void> markMessageReceived(String stanzaID);
+  Future<void> markMessageReceived(String stanzaID, {String? chatJid});
 
-  Future<void> markMessageDisplayed(String stanzaID);
+  Future<void> markMessageDisplayed(String stanzaID, {String? chatJid});
 
   Future<void> deleteMessage(String stanzaID);
 
@@ -330,6 +338,7 @@ abstract interface class XmppDatabase implements Database {
     required List<DraftRecipientData> draftRecipients,
     String? subject,
     String? quotingStanzaId,
+    MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
   });
 
@@ -349,6 +358,7 @@ abstract interface class XmppDatabase implements Database {
     String? body,
     String? subject,
     String? quotingStanzaId,
+    MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
   });
 
@@ -729,6 +739,19 @@ class MessagesAccessor extends BaseAccessor<Message, $MessagesTable>
   Future<Message?> selectOneByOriginID(String originID) => (select(
     table,
   )..where((table) => table.originID.equals(originID))).getSingleOrNull();
+
+  Future<Message?> selectOneByMucStanzaId(
+    String mucStanzaId, {
+    String? chatJid,
+  }) {
+    final query = select(table)
+      ..where((tbl) => tbl.mucStanzaId.equals(mucStanzaId));
+    final normalizedChatJid = chatJid?.trim();
+    if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
+      query.where((tbl) => tbl.chatJid.equals(normalizedChatJid));
+    }
+    return query.getSingleOrNull();
+  }
 
   Future<void> updateTrust(int device, BTBVTrustState trust, bool trusted) =>
       (update(table)..where((table) => table.deviceID.equals(device))).write(
@@ -1476,7 +1499,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 31;
+  int get schemaVersion => 34;
 
   @override
   MigrationStrategy get migration {
@@ -1717,6 +1740,30 @@ WHERE transport IS NULL
         }
         if (from < 31) {
           await m.addColumn(pinnedMessages, pinnedMessages.active);
+        }
+        if (from < 32 &&
+            !await _tableHasColumn(messages.actualTableName, 'muc_stanza_id')) {
+          await m.addColumn(messages, messages.mucStanzaId);
+        }
+        if (from < 33 &&
+            !await _tableHasColumn(
+              messages.actualTableName,
+              'quoting_reference_kind',
+            )) {
+          await customStatement(
+            'ALTER TABLE ${messages.actualTableName} '
+            'ADD COLUMN quoting_reference_kind INTEGER NULL',
+          );
+        }
+        if (from < 34 &&
+            !await _tableHasColumn(
+              drafts.actualTableName,
+              'quoting_reference_kind',
+            )) {
+          await customStatement(
+            'ALTER TABLE ${drafts.actualTableName} '
+            'ADD COLUMN quoting_reference_kind INTEGER NULL',
+          );
         }
       },
       beforeOpen: (_) async {
@@ -2156,17 +2203,49 @@ WHERE transport IS NULL
       messagesAccessor.selectOne(stanzaID);
 
   @override
-  Future<Message?> getMessageByOriginID(String originID) =>
-      messagesAccessor.selectOneByOriginID(originID);
+  Future<Message?> getMessageByOriginID(
+    String originID, {
+    String? chatJid,
+  }) async {
+    final normalizedOriginId = originID.trim();
+    if (normalizedOriginId.isEmpty) {
+      return null;
+    }
+    final normalizedChatJid = chatJid?.trim();
+    if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
+      return await (select(messages)..where(
+            (tbl) =>
+                tbl.chatJid.equals(normalizedChatJid) &
+                tbl.originID.equals(normalizedOriginId),
+          ))
+          .getSingleOrNull();
+    }
+    return messagesAccessor.selectOneByOriginID(normalizedOriginId);
+  }
 
   @override
-  Future<Message?> getMessageByReferenceId(String messageId) async {
+  Future<Message?> getMessageByReferenceId(
+    String messageId, {
+    String? chatJid,
+  }) async {
     final normalized = messageId.trim();
     if (normalized.isEmpty) {
       return null;
     }
+    final normalizedChatJid = chatJid?.trim();
+    if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
+      return await (select(messages)..where(
+            (tbl) =>
+                tbl.chatJid.equals(normalizedChatJid) &
+                (tbl.stanzaID.equals(normalized) |
+                    tbl.originID.equals(normalized) |
+                    tbl.mucStanzaId.equals(normalized)),
+          ))
+          .getSingleOrNull();
+    }
     return await getMessageByStanzaID(normalized) ??
-        await getMessageByOriginID(normalized);
+        await getMessageByOriginID(normalized) ??
+        await messagesAccessor.selectOneByMucStanzaId(normalized);
   }
 
   @override
@@ -2228,8 +2307,9 @@ WHERE transport IS NULL
 
   @override
   Future<List<Message>> getMessagesByReferenceIds(
-    Iterable<String> messageIds,
-  ) async {
+    Iterable<String> messageIds, {
+    String? chatJid,
+  }) async {
     final normalized = messageIds
         .map((id) => id.trim())
         .where((id) => id.isNotEmpty)
@@ -2238,11 +2318,18 @@ WHERE transport IS NULL
     if (normalized.isEmpty) {
       return const <Message>[];
     }
-    return (select(messages)..where(
-          (tbl) =>
-              tbl.stanzaID.isIn(normalized) | tbl.originID.isIn(normalized),
-        ))
-        .get();
+    final query = select(messages)
+      ..where(
+        (tbl) =>
+            tbl.stanzaID.isIn(normalized) |
+            tbl.originID.isIn(normalized) |
+            tbl.mucStanzaId.isIn(normalized),
+      );
+    final normalizedChatJid = chatJid?.trim();
+    if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
+      query.where((tbl) => tbl.chatJid.equals(normalizedChatJid));
+    }
+    return query.get();
   }
 
   @override
@@ -2520,12 +2607,21 @@ WHERE transport IS NULL
 
       final persistedMetadataId = persisted.fileMetadataID?.trim();
       final hasPersistedMetadataId = persistedMetadataId?.isNotEmpty == true;
+      final incomingMucStanzaId = messageToSave.mucStanzaId?.trim();
+      final hasIncomingMucStanzaId = incomingMucStanzaId?.isNotEmpty == true;
+      final persistedMucStanzaId = persisted.mucStanzaId?.trim();
+      final hasPersistedMucStanzaId = persistedMucStanzaId?.isNotEmpty == true;
 
       final shouldMergeBody = hasIncomingBody && !hasPersistedBody;
       final shouldMergeHtml = hasIncomingHtml && !hasPersistedHtml;
       final shouldMergeMetadataId =
           hasIncomingMetadataId && !hasPersistedMetadataId;
-      if (!shouldMergeBody && !shouldMergeHtml && !shouldMergeMetadataId) {
+      final shouldMergeMucStanzaId =
+          hasIncomingMucStanzaId && !hasPersistedMucStanzaId;
+      if (!shouldMergeBody &&
+          !shouldMergeHtml &&
+          !shouldMergeMetadataId &&
+          !shouldMergeMucStanzaId) {
         return;
       }
 
@@ -2541,6 +2637,9 @@ WHERE transport IS NULL
               : const Value.absent(),
           fileMetadataID: shouldMergeMetadataId
               ? Value(incomingMetadataId)
+              : const Value.absent(),
+          mucStanzaId: shouldMergeMucStanzaId
+              ? Value(incomingMucStanzaId)
               : const Value.absent(),
         ),
       );
@@ -2790,33 +2889,48 @@ WHERE jid = ?
   }
 
   @override
-  Future<void> markMessageAcked(String stanzaID) async {
+  Future<void> markMessageAcked(String stanzaID, {String? chatJid}) async {
     _log.info('Marking message acked');
-    await (update(messages)..where(
-          (tbl) =>
-              tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
-        ))
-        .write(const MessagesCompanion(acked: Value(true)));
+    final normalizedChatJid = chatJid?.trim();
+    final query = update(messages)
+      ..where(
+        (tbl) =>
+            (normalizedChatJid == null || normalizedChatJid.isEmpty
+                ? const Constant(true)
+                : tbl.chatJid.equals(normalizedChatJid)) &
+            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)),
+      );
+    await query.write(const MessagesCompanion(acked: Value(true)));
   }
 
   @override
-  Future<void> markMessageReceived(String stanzaID) async {
+  Future<void> markMessageReceived(String stanzaID, {String? chatJid}) async {
     _log.info('Marking message received');
-    await (update(messages)..where(
-          (tbl) =>
-              tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
-        ))
-        .write(const MessagesCompanion(received: Value(true)));
+    final normalizedChatJid = chatJid?.trim();
+    final query = update(messages)
+      ..where(
+        (tbl) =>
+            (normalizedChatJid == null || normalizedChatJid.isEmpty
+                ? const Constant(true)
+                : tbl.chatJid.equals(normalizedChatJid)) &
+            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)),
+      );
+    await query.write(const MessagesCompanion(received: Value(true)));
   }
 
   @override
-  Future<void> markMessageDisplayed(String stanzaID) async {
+  Future<void> markMessageDisplayed(String stanzaID, {String? chatJid}) async {
     _log.info('Marking message displayed');
-    await (update(messages)..where(
-          (tbl) =>
-              tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID),
-        ))
-        .write(const MessagesCompanion(displayed: Value(true)));
+    final normalizedChatJid = chatJid?.trim();
+    final query = update(messages)
+      ..where(
+        (tbl) =>
+            (normalizedChatJid == null || normalizedChatJid.isEmpty
+                ? const Constant(true)
+                : tbl.chatJid.equals(normalizedChatJid)) &
+            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)),
+      );
+    await query.write(const MessagesCompanion(displayed: Value(true)));
   }
 
   @override
@@ -3376,6 +3490,21 @@ WHERE email_from_address IN ($placeholderClause)
   }
 
   @override
+  Future<void> saveMessageMucStanzaId({
+    required String stanzaID,
+    required String mucStanzaId,
+  }) async {
+    final normalizedStanzaId = stanzaID.trim();
+    final normalizedMucStanzaId = mucStanzaId.trim();
+    if (normalizedStanzaId.isEmpty || normalizedMucStanzaId.isEmpty) {
+      return;
+    }
+    await (update(messages)
+          ..where((tbl) => tbl.stanzaID.equals(normalizedStanzaId)))
+        .write(MessagesCompanion(mucStanzaId: Value(normalizedMucStanzaId)));
+  }
+
+  @override
   Future<void> insertMessageCopy({
     required String shareId,
     required int dcMsgId,
@@ -3511,6 +3640,7 @@ WHERE email_from_address IN ($placeholderClause)
     required List<DraftRecipientData> draftRecipients,
     String? subject,
     String? quotingStanzaId,
+    MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
   }) async {
     return transaction(() async {
@@ -3525,6 +3655,7 @@ WHERE email_from_address IN ($placeholderClause)
           draftRecipients: Value(draftRecipients),
           subject: Value.absentIfNull(subject),
           quotingStanzaId: Value.absentIfNull(quotingStanzaId),
+          quotingReferenceKind: Value.absentIfNull(quotingReferenceKind),
           attachmentMetadataIds: Value(attachmentMetadataIds),
         ),
       );
@@ -3563,6 +3694,7 @@ WHERE email_from_address IN ($placeholderClause)
     String? body,
     String? subject,
     String? quotingStanzaId,
+    MessageReferenceKind? quotingReferenceKind,
     List<String> attachmentMetadataIds = const [],
   }) async {
     final normalized = draftSyncId.trim();
@@ -3580,6 +3712,7 @@ WHERE email_from_address IN ($placeholderClause)
             body: Value(body),
             subject: Value(subject),
             quotingStanzaId: Value.absentIfNull(quotingStanzaId),
+            quotingReferenceKind: Value.absentIfNull(quotingReferenceKind),
             attachmentMetadataIds: Value(attachmentMetadataIds),
           ),
         );
@@ -3602,6 +3735,7 @@ WHERE email_from_address IN ($placeholderClause)
           body: Value(body),
           subject: Value(subject),
           quotingStanzaId: Value.absentIfNull(quotingStanzaId),
+          quotingReferenceKind: Value.absentIfNull(quotingReferenceKind),
           attachmentMetadataIds: Value(attachmentMetadataIds),
         ),
       );
@@ -5512,6 +5646,17 @@ ON CONFLICT(address) DO UPDATE SET
     } finally {
       await customStatement('PRAGMA foreign_keys = ON');
     }
+  }
+
+  Future<bool> _tableHasColumn(String tableName, String columnName) async {
+    final rows = await customSelect('PRAGMA table_info("$tableName")').get();
+    for (final row in rows) {
+      final name = row.data['name']?.toString().trim();
+      if (name == columnName) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Future<void> _rebuildChatsTable(Migrator m) async {

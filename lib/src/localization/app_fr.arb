@@ -177,6 +177,8 @@
   "chatReactionsNone": "Pas encore de réaction",
   "chatReactionsPrompt": "Appuie sur une réaction pour ajouter ou retirer la tienne",
   "chatReactionsPick": "Choisis un emoji pour réagir",
+  "chatMucReferencePending": "En attente de la confirmation du salon avant que les réponses, les épinglages et les réactions soient disponibles.",
+  "chatMucReferenceUnavailable": "Les réponses, les épinglages et les réactions seront disponibles une fois que le salon aura confirmé ce message.",
   "chatActionReply": "Répondre",
   "chatActionForward": "Transférer",
   "chatActionResend": "Renvoyer",

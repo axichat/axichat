@@ -242,6 +242,7 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
     String? body,
     String? subject,
     String? quotingStanzaId,
+    MessageReferenceKind? quotingReferenceKind,
     @Default(<String>[]) List<String> attachmentMetadataIds,
   }) = _Draft;
 
@@ -259,6 +260,7 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
         body: Value.absentIfNull(body),
         subject: Value.absentIfNull(subject),
         quotingStanzaId: Value.absentIfNull(quotingStanzaId),
+        quotingReferenceKind: Value.absentIfNull(quotingReferenceKind),
         attachmentMetadataIds: Value(attachmentMetadataIds),
       ).toColumns(nullToAbsent);
 }
@@ -286,6 +288,9 @@ class Drafts extends Table {
   TextColumn get subject => text().nullable()();
 
   TextColumn get quotingStanzaId => text().nullable()();
+
+  IntColumn get quotingReferenceKind =>
+      intEnum<MessageReferenceKind>().nullable()();
 
   TextColumn get attachmentMetadataIds =>
       text().map(ListConverter<String>()).withDefault(const Constant('[]'))();

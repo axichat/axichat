@@ -176,6 +176,8 @@
   "chatReactionsNone": "Noch keine Reaktionen",
   "chatReactionsPrompt": "Tippe auf eine Reaktion, um deine hinzuzufügen oder zu entfernen",
   "chatReactionsPick": "Wähle ein Emoji zum Reagieren",
+  "chatMucReferencePending": "Warte auf die Raum-Bestätigung, bevor Antworten, Anheften und Reaktionen verfügbar sind.",
+  "chatMucReferenceUnavailable": "Antworten, Anheften und Reaktionen sind verfügbar, sobald der Raum diese Nachricht bestätigt.",
   "chatActionReply": "Antworten",
   "chatActionForward": "Weiterleiten",
   "chatActionResend": "Erneut senden",

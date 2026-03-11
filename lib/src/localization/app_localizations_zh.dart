@@ -516,6 +516,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatReactionsPick => '选择一个表情来回应';
 
   @override
+  String get chatMucReferencePending => '正在等待房间确认，随后才能使用回复、置顶和回应。';
+
+  @override
+  String get chatMucReferenceUnavailable => '房间确认这条消息后，才能使用回复、置顶和回应。';
+
+  @override
   String get chatActionReply => '回复';
 
   @override
@@ -6480,6 +6486,12 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatReactionsPick => '選擇一個表情來回應';
+
+  @override
+  String get chatMucReferencePending => '正在等待房間確認，之後才能使用回覆、置頂和表情回應。';
+
+  @override
+  String get chatMucReferenceUnavailable => '房間確認這則訊息後，才能使用回覆、置頂和表情回應。';
 
   @override
   String get chatActionReply => '回覆';

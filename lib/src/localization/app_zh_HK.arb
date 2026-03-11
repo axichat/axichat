@@ -176,6 +176,8 @@
   "chatReactionsNone": "暫無表情回應",
   "chatReactionsPrompt": "點一下表情以新增或移除你的回應",
   "chatReactionsPick": "選擇一個表情來回應",
+  "chatMucReferencePending": "正在等待房間確認，之後才能使用回覆、置頂和表情回應。",
+  "chatMucReferenceUnavailable": "房間確認這則訊息後，才能使用回覆、置頂和表情回應。",
   "chatActionReply": "回覆",
   "chatActionForward": "轉寄",
   "chatActionResend": "重新傳送",

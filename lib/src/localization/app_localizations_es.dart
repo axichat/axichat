@@ -552,6 +552,14 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatReactionsPick => 'Elige un emoji para reaccionar';
 
   @override
+  String get chatMucReferencePending =>
+      'Esperando la confirmación de la sala antes de que las respuestas, fijaciones y reacciones estén disponibles.';
+
+  @override
+  String get chatMucReferenceUnavailable =>
+      'Las respuestas, fijaciones y reacciones estarán disponibles cuando la sala confirme este mensaje.';
+
+  @override
   String get chatActionReply => 'Responder';
 
   @override

@@ -250,6 +250,12 @@ void main() {
       () => messageService.loadMessageByStanzaId(any()),
     ).thenAnswer((_) async => null);
     when(
+      () => messageService.loadMessageByReferenceId(
+        any(),
+        chatJid: any(named: 'chatJid'),
+      ),
+    ).thenAnswer((_) async => null);
+    when(
       () => messageService.pinnedMessagesStream(any()),
     ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
     when(
@@ -309,6 +315,7 @@ void main() {
         id: any(named: 'id'),
         jids: any(named: 'jids'),
         body: any(named: 'body'),
+        quotingReferenceKind: any(named: 'quotingReferenceKind'),
         attachments: any(named: 'attachments'),
       ),
     ).thenAnswer(
@@ -330,6 +337,66 @@ void main() {
     title: 'peer',
     type: ChatType.chat,
     lastChangeTimestamp: DateTime.now(),
+  );
+
+  test(
+    'hydrates quoted messages by reference id within the active chat scope',
+    () async {
+      const quotedOriginId = 'quoted-origin-id';
+      final quotedMessage = Message(
+        stanzaID: 'quoted-local-stanza-id',
+        originID: quotedOriginId,
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        body: 'Original body',
+        timestamp: DateTime.now(),
+      );
+      final replyMessage = Message(
+        stanzaID: 'reply-stanza-id',
+        senderJid: 'self@axi.im',
+        chatJid: initialChat.jid,
+        body: 'Reply body',
+        quoting: quotedOriginId,
+        timestamp: DateTime.now(),
+      );
+
+      when(
+        () => messageService.loadMessageByReferenceId(
+          quotedOriginId,
+          chatJid: initialChat.jid,
+        ),
+      ).thenAnswer((_) async => quotedMessage);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      messageStreamController.add(<Message>[replyMessage]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => messageService.loadMessageByReferenceId(
+          quotedOriginId,
+          chatJid: initialChat.jid,
+        ),
+      ).called(1);
+      verifyNever(() => messageService.loadMessageByStanzaId(quotedOriginId));
+      expect(
+        bloc.state.quotedMessagesById[quotedOriginId]?.stanzaID,
+        quotedMessage.stanzaID,
+      );
+
+      await bloc.close();
+    },
   );
 
   test('fan-out send uses EmailService and records report state', () async {
@@ -1239,6 +1306,77 @@ void main() {
     },
   );
 
+  test(
+    'saves XMPP drafts with origin-id quoted references after a send failure',
+    () async {
+      final quotedMessage = Message(
+        stanzaID: 'quoted-local-stanza-id',
+        originID: 'quoted-origin-id',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        body: 'Original body',
+        timestamp: DateTime.now(),
+      );
+      when(
+        () => messageService.sendMessage(
+          jid: initialChat.jid,
+          text: 'Reply body',
+          encryptionProtocol: EncryptionProtocol.none,
+          htmlBody: any(named: 'htmlBody'),
+          quotedMessage: quotedMessage,
+          chatType: ChatType.chat,
+          onLocalMessageStored: any(named: 'onLocalMessageStored'),
+        ),
+      ).thenThrow(xmpp.XmppMessageException());
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+
+      bloc.add(
+        _messageSent(
+          chat: initialChat,
+          text: 'Reply body',
+          recipients: [
+            ComposerRecipient(
+              target: FanOutTarget.chat(
+                chat: initialChat,
+                shareSignatureEnabled: true,
+              ),
+            ),
+          ],
+          settings: _defaultChatSettings(),
+          quotedDraft: quotedMessage,
+        ),
+      );
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => messageService.saveDraft(
+          id: null,
+          jids: [initialChat.jid],
+          body: 'Reply body',
+          subject: null,
+          quotingStanzaId: quotedMessage.originID,
+          quotingReferenceKind: MessageReferenceKind.originId,
+          attachments: const <EmailAttachment>[],
+        ),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
   test('synthetic XMPP forwarding preserves original subject and HTML', () async {
     final syntheticForwardSubject = markSyntheticForwardSubject(
       'FWD: peer@axi.im',
@@ -1381,6 +1519,7 @@ void main() {
         id: null,
         jids: any(named: 'jids'),
         body: any(named: 'body'),
+        quotingReferenceKind: any(named: 'quotingReferenceKind'),
         attachments: any(named: 'attachments'),
       ),
     );
