@@ -48,8 +48,6 @@ enum DraftSendFailureType { noRecipients, noContent, sendFailed }
 sealed class DraftSendValidationException implements Exception {
   const DraftSendValidationException();
 
-  DraftSendFailureType get type;
-
   @override
   String toString() => runtimeType.toString();
 }
@@ -57,23 +55,14 @@ sealed class DraftSendValidationException implements Exception {
 final class DraftSendNoRecipientsException
     extends DraftSendValidationException {
   const DraftSendNoRecipientsException();
-
-  @override
-  DraftSendFailureType get type => DraftSendFailureType.noRecipients;
 }
 
 final class DraftSendNoContentException extends DraftSendValidationException {
   const DraftSendNoContentException();
-
-  @override
-  DraftSendFailureType get type => DraftSendFailureType.noContent;
 }
 
 final class DraftSendFailedException extends DraftSendValidationException {
   const DraftSendFailedException();
-
-  @override
-  DraftSendFailureType get type => DraftSendFailureType.sendFailed;
 }
 
 class DraftXmppTarget extends Equatable {
@@ -194,7 +183,11 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       }
     } on DraftSendValidationException catch (error) {
       emit(
-        DraftFailure(error.type, items: _items, visibleItems: _visibleItems),
+        DraftFailure(
+          _failureTypeFor(error),
+          items: _items,
+          visibleItems: _visibleItems,
+        ),
       );
       return false;
     } on FanOutValidationException {
@@ -537,6 +530,13 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     }
     throw const DraftSendFailedException();
   }
+
+  DraftSendFailureType _failureTypeFor(DraftSendValidationException error) =>
+      switch (error) {
+        DraftSendNoRecipientsException() => DraftSendFailureType.noRecipients,
+        DraftSendNoContentException() => DraftSendFailureType.noContent,
+        DraftSendFailedException() => DraftSendFailureType.sendFailed,
+      };
 
   List<Draft> _computeVisibleItems(List<Draft> items) {
     final snapshot = _searchSnapshot;

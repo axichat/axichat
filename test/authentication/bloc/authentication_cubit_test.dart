@@ -597,12 +597,7 @@ void main() {
             addressOverride: any(named: 'addressOverride'),
             persistCredentials: any(named: 'persistCredentials'),
           ),
-        ).thenThrow(
-          const EmailProvisioningException(
-            EmailProvisioningFailure.networkUnavailable,
-            isRecoverable: true,
-          ),
-        );
+        ).thenThrow(const EmailProvisioningNetworkUnavailableException());
       },
       build: () => AuthenticationCubit(
         credentialStore: mockCredentialStore,
@@ -1647,8 +1642,7 @@ void main() {
             password: any(named: 'password'),
           ),
         ).thenThrow(
-          const provisioning.EmailProvisioningApiException(
-            code: provisioning.EmailProvisioningApiErrorCode.alreadyExists,
+          const provisioning.EmailProvisioningApiAlreadyExistsException(
             statusCode: 409,
           ),
         );
@@ -1737,8 +1731,7 @@ void main() {
             password: any(named: 'password'),
           ),
         ).thenThrow(
-          const provisioning.EmailProvisioningApiException(
-            code: provisioning.EmailProvisioningApiErrorCode.invalidResponse,
+          const provisioning.EmailProvisioningApiInvalidResponseException(
             statusCode: 422,
             debugMessage: 'Mailbox policy rejected this username.',
           ),
@@ -2007,8 +2000,7 @@ void main() {
             password: validPassword,
           ),
         ).thenThrow(
-          const provisioning.EmailProvisioningApiException(
-            code: provisioning.EmailProvisioningApiErrorCode.invalidResponse,
+          const provisioning.EmailProvisioningApiInvalidResponseException(
             statusCode: 422,
             debugMessage:
                 'Email account cannot be deleted while aliases exist.',

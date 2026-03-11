@@ -38,7 +38,8 @@ sealed class EmailAttachmentBundleException implements Exception {
   final String? path;
 
   @override
-  String toString() => runtimeType.toString();
+  String toString() =>
+      path == null ? runtimeType.toString() : '$runtimeType(path: $path)';
 }
 
 final class EmailAttachmentBundleEmptySelectionException

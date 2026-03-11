@@ -28,9 +28,30 @@ class EmailContactImportCubit extends Cubit<EmailContactImportState> {
           .importContacts(file: file, format: format);
       emit(EmailContactImportSuccess(summary));
     } on EmailContactImportException catch (error) {
-      emit(EmailContactImportFailure(error.reason));
+      emit(EmailContactImportFailure(_failureReasonFor(error)));
     }
   }
 
   void reset() => emit(const EmailContactImportInitial());
+
+  EmailContactImportFailureReason _failureReasonFor(
+    EmailContactImportException error,
+  ) => switch (error) {
+    EmailContactImportNoEmailAccountException() =>
+      EmailContactImportFailureReason.noEmailAccount,
+    EmailContactImportEmptyFileException() =>
+      EmailContactImportFailureReason.emptyFile,
+    EmailContactImportReadFailureException() =>
+      EmailContactImportFailureReason.readFailure,
+    EmailContactImportFileTooLargeException() =>
+      EmailContactImportFailureReason.fileTooLarge,
+    EmailContactImportUnsupportedFileTypeException() =>
+      EmailContactImportFailureReason.unsupportedFileType,
+    EmailContactImportNoContactsException() =>
+      EmailContactImportFailureReason.noContacts,
+    EmailContactImportTooManyContactsException() =>
+      EmailContactImportFailureReason.tooManyContacts,
+    EmailContactImportFailedException() =>
+      EmailContactImportFailureReason.importFailed,
+  };
 }

@@ -110,8 +110,6 @@ const Set<String> _nicknameHeaderKeys = <String>{
 sealed class EmailContactImportException implements Exception {
   const EmailContactImportException();
 
-  EmailContactImportFailureReason get reason;
-
   @override
   String toString() => runtimeType.toString();
 }
@@ -119,73 +117,41 @@ sealed class EmailContactImportException implements Exception {
 final class EmailContactImportNoEmailAccountException
     extends EmailContactImportException {
   const EmailContactImportNoEmailAccountException();
-
-  @override
-  EmailContactImportFailureReason get reason =>
-      EmailContactImportFailureReason.noEmailAccount;
 }
 
 final class EmailContactImportEmptyFileException
     extends EmailContactImportException {
   const EmailContactImportEmptyFileException();
-
-  @override
-  EmailContactImportFailureReason get reason =>
-      EmailContactImportFailureReason.emptyFile;
 }
 
 final class EmailContactImportReadFailureException
     extends EmailContactImportException {
   const EmailContactImportReadFailureException();
-
-  @override
-  EmailContactImportFailureReason get reason =>
-      EmailContactImportFailureReason.readFailure;
 }
 
 final class EmailContactImportFileTooLargeException
     extends EmailContactImportException {
   const EmailContactImportFileTooLargeException();
-
-  @override
-  EmailContactImportFailureReason get reason =>
-      EmailContactImportFailureReason.fileTooLarge;
 }
 
 final class EmailContactImportUnsupportedFileTypeException
     extends EmailContactImportException {
   const EmailContactImportUnsupportedFileTypeException();
-
-  @override
-  EmailContactImportFailureReason get reason =>
-      EmailContactImportFailureReason.unsupportedFileType;
 }
 
 final class EmailContactImportNoContactsException
     extends EmailContactImportException {
   const EmailContactImportNoContactsException();
-
-  @override
-  EmailContactImportFailureReason get reason =>
-      EmailContactImportFailureReason.noContacts;
 }
 
 final class EmailContactImportTooManyContactsException
     extends EmailContactImportException {
   const EmailContactImportTooManyContactsException();
-
-  @override
-  EmailContactImportFailureReason get reason =>
-      EmailContactImportFailureReason.tooManyContacts;
 }
 
 final class EmailContactImportFailedException
     extends EmailContactImportException {
   const EmailContactImportFailedException();
-
-  @override
-  EmailContactImportFailureReason get reason =>
-      EmailContactImportFailureReason.importFailed;
 }
 
 class EmailContactImportService {
