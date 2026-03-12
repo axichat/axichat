@@ -11,8 +11,10 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class PendingAttachmentList extends StatelessWidget {
@@ -288,6 +290,7 @@ class _PendingImageAttachment extends StatelessWidget {
     final previewExtent = sizing.attachmentPreviewExtent;
     final pixelRatio = MediaQuery.devicePixelRatioOf(context);
     final cacheExtent = (previewExtent * pixelRatio).round();
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     final isFailed = pending.status == PendingAttachmentStatus.failed;
     return SizedBox(
       width: previewExtent,
@@ -311,7 +314,10 @@ class _PendingImageAttachment extends StatelessWidget {
                           if (wasSynchronouslyLoaded || frame != null) {
                             return child;
                           }
-                          return _PendingImageSkeleton(shape: clipShape);
+                          return _PendingImageSkeleton(
+                            shape: clipShape,
+                            animationDuration: animationDuration,
+                          );
                         },
                     errorBuilder: (_, _, _) => ColoredBox(
                       color: colors.card,
@@ -449,16 +455,18 @@ class _PendingAttachmentSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final animationDuration = context.watch<SettingsCubit>().animationDuration;
     if (pending.attachment.isImage) {
-      return const _PendingImageSkeleton();
+      return _PendingImageSkeleton(animationDuration: animationDuration);
     }
-    return const _PendingFileSkeleton();
+    return _PendingFileSkeleton(animationDuration: animationDuration);
   }
 }
 
 class _PendingImageSkeleton extends StatelessWidget {
-  const _PendingImageSkeleton({this.shape});
+  const _PendingImageSkeleton({required this.animationDuration, this.shape});
 
+  final Duration animationDuration;
   final OutlinedBorder? shape;
 
   @override
@@ -475,14 +483,16 @@ class _PendingImageSkeleton extends StatelessWidget {
       height: extent,
       child: ClipPath(
         clipper: ShapeBorderClipper(shape: resolvedShape),
-        child: const _ShimmerSurface(),
+        child: _ShimmerSurface(animationDuration: animationDuration),
       ),
     );
   }
 }
 
 class _PendingFileSkeleton extends StatelessWidget {
-  const _PendingFileSkeleton();
+  const _PendingFileSkeleton({required this.animationDuration});
+
+  final Duration animationDuration;
 
   @override
   Widget build(BuildContext context) {
@@ -522,7 +532,7 @@ class _PendingFileSkeleton extends StatelessWidget {
                 height: iconExtent,
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(iconRadius),
-                  child: const _ShimmerSurface(),
+                  child: _ShimmerSurface(animationDuration: animationDuration),
                 ),
               ),
               SizedBox(width: spacing.m),
@@ -537,7 +547,9 @@ class _PendingFileSkeleton extends StatelessWidget {
                         borderRadius: BorderRadius.circular(
                           context.radii.container,
                         ),
-                        child: const _ShimmerSurface(),
+                        child: _ShimmerSurface(
+                          animationDuration: animationDuration,
+                        ),
                       ),
                     ),
                     SizedBox(height: spacing.s),
@@ -550,7 +562,9 @@ class _PendingFileSkeleton extends StatelessWidget {
                             borderRadius: BorderRadius.circular(
                               context.radii.container,
                             ),
-                            child: const _ShimmerSurface(),
+                            child: _ShimmerSurface(
+                              animationDuration: animationDuration,
+                            ),
                           ),
                         ),
                         SizedBox(width: spacing.s),
@@ -561,7 +575,9 @@ class _PendingFileSkeleton extends StatelessWidget {
                             borderRadius: BorderRadius.circular(
                               context.radii.container,
                             ),
-                            child: const _ShimmerSurface(),
+                            child: _ShimmerSurface(
+                              animationDuration: animationDuration,
+                            ),
                           ),
                         ),
                       ],
@@ -579,7 +595,7 @@ class _PendingFileSkeleton extends StatelessWidget {
               height: actionWidth,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(context.radii.squircle),
-                child: const _ShimmerSurface(),
+                child: _ShimmerSurface(animationDuration: animationDuration),
               ),
             ),
           ),
@@ -589,15 +605,99 @@ class _PendingFileSkeleton extends StatelessWidget {
   }
 }
 
-class _ShimmerSurface extends StatelessWidget {
-  const _ShimmerSurface();
+class _ShimmerSurface extends StatefulWidget {
+  const _ShimmerSurface({required this.animationDuration});
+
+  final Duration animationDuration;
+
+  @override
+  State<_ShimmerSurface> createState() => _ShimmerSurfaceState();
+}
+
+class _ShimmerSurfaceState extends State<_ShimmerSurface>
+    with SingleTickerProviderStateMixin {
+  static const Duration _minShimmerDuration = Duration(milliseconds: 1200);
+
+  Duration get _effectiveDuration {
+    if (widget.animationDuration == Duration.zero) {
+      return Duration.zero;
+    }
+    if (widget.animationDuration < _minShimmerDuration) {
+      return _minShimmerDuration;
+    }
+    return widget.animationDuration;
+  }
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: _effectiveDuration,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (_effectiveDuration != Duration.zero) {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant _ShimmerSurface oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animationDuration == widget.animationDuration) {
+      return;
+    }
+    _controller.duration = _effectiveDuration;
+    if (_effectiveDuration == Duration.zero) {
+      _controller.stop();
+      _controller.value = 0;
+    } else {
+      _controller.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colorScheme;
+    final motion = context.motion;
+    final baseAlpha =
+        (motion.tapHoverAlpha +
+                motion.tapSplashAlpha +
+                (motion.tapHoverAlpha / 2))
+            .clamp(0.0, 1.0);
+    final highlightAlpha =
+        (motion.tapFocusAlpha + motion.tapSplashAlpha + motion.tapHoverAlpha)
+            .clamp(0.0, 1.0);
+    final base = context.colorScheme.border.withValues(alpha: baseAlpha);
+    final highlight = context.colorScheme.card.withValues(
+      alpha: highlightAlpha,
+    );
     return ExcludeSemantics(
-      child: SizedBox.expand(
-        child: DecoratedBox(decoration: BoxDecoration(color: colors.card)),
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final shimmer = _controller.value;
+          final start = (shimmer - 0.25).clamp(0.0, 1.0);
+          final mid = shimmer.clamp(0.0, 1.0);
+          final end = (shimmer + 0.25).clamp(0.0, 1.0);
+          return SizedBox.expand(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: [base, highlight, base],
+                  stops: [start, mid, end],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

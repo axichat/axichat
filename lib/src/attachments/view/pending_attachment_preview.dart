@@ -365,51 +365,70 @@ class _PendingAttachmentPreviewDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final mediaSize = MediaQuery.sizeOf(context);
     final spacing = context.spacing;
+    final sizing = context.sizing;
     final colors = context.colorScheme;
     final ghostColors = _previewGhostColors(context);
-    final maxWidth = math.max(0.0, mediaSize.width - spacing.xl);
-    final maxHeight = math.max(0.0, mediaSize.height - spacing.xl);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: maxWidth,
-              maxHeight: maxHeight,
-            ),
-            child: _PendingAttachmentPreviewContent(
-              data: data,
-              maxWidth: maxWidth,
-              maxHeight: maxHeight,
-            ),
-          ),
-          SizedBox(height: spacing.s),
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : mediaSize.width;
+        final availableHeight = constraints.maxHeight.isFinite
+            ? constraints.maxHeight
+            : mediaSize.height;
+        final maxWidth = math.max(0.0, availableWidth - spacing.xl);
+        final maxHeight = math.max(0.0, availableHeight - spacing.xl);
+        final actionRowHeight = sizing.iconButtonTapTarget;
+        final previewMaxHeight = math.max(
+          0.0,
+          maxHeight - spacing.s - actionRowHeight,
+        );
+        return Center(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              AxiIconButton.ghost(
-                iconData: LucideIcons.x,
-                tooltip: closeTooltip,
-                color: ghostColors.foreground,
-                backgroundColor: ghostColors.background,
-                onPressed: () => Navigator.of(context).pop(),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: maxWidth,
+                  maxHeight: previewMaxHeight,
+                ),
+                child: _PendingAttachmentPreviewContent(
+                  data: data,
+                  maxWidth: maxWidth,
+                  maxHeight: previewMaxHeight,
+                ),
               ),
-              SizedBox(width: spacing.xs),
-              AxiIconButton.ghost(
-                iconData: LucideIcons.trash2,
-                tooltip: removeTooltip,
-                color: colors.destructive,
-                backgroundColor: ghostColors.background,
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  onRemove();
-                },
+              SizedBox(height: spacing.s),
+              SizedBox(
+                height: actionRowHeight,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AxiIconButton.ghost(
+                      iconData: LucideIcons.x,
+                      tooltip: closeTooltip,
+                      color: ghostColors.foreground,
+                      backgroundColor: ghostColors.background,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                    SizedBox(width: spacing.xs),
+                    AxiIconButton.ghost(
+                      iconData: LucideIcons.trash2,
+                      tooltip: removeTooltip,
+                      color: colors.destructive,
+                      backgroundColor: ghostColors.background,
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        onRemove();
+                      },
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
