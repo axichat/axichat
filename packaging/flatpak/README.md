@@ -21,7 +21,7 @@ Files:
 Local maintainer flows:
 
 1. Build the Linux release bundle with Shorebird by default:
-   `./tool/release_linux.sh -- --dart-define=...`
+   `./tool/release_linux.sh --version v0.6.1 [-- <extra flutter args>]`
 2. Build the current bundle-based Flatpak:
    `flatpak-builder --force-clean build-dir packaging/flatpak/im.axi.axichat.yml`
 3. Optionally run it:
