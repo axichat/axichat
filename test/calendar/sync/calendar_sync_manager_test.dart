@@ -1,4 +1,5 @@
 import 'package:axichat/src/calendar/models/calendar_model.dart';
+import 'package:axichat/src/calendar/models/calendar_critical_path.dart';
 import 'package:axichat/src/calendar/models/calendar_date_time.dart';
 import 'package:axichat/src/calendar/models/calendar_journal.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
@@ -29,9 +30,12 @@ void main() {
     const String dayEventTitle = 'Remote Day Event';
     const String journalId = 'remote-journal';
     const String journalTitle = 'Remote Journal';
+    const String criticalPathId = 'remote-critical-path';
+    const String criticalPathName = 'Remote Critical Path';
     const String addOperation = 'add';
     const String updateOperation = 'update';
     const String dayEventEntity = 'day_event';
+    const String criticalPathEntity = 'critical_path';
     const String journalEntity = 'journal';
     const Duration tombstoneOffset = Duration(hours: 1);
     const Duration newerOffset = Duration(hours: 2);
@@ -121,6 +125,40 @@ void main() {
       expect(currentModel.deletedTaskIds.containsKey(taskId), isFalse);
     });
 
+    test('accepts task add when no tombstone exists', () async {
+      final DateTime remoteModifiedAt = DateTime.utc(2024, 2, 10, 13);
+      final CalendarTask remoteTask = CalendarTask(
+        id: taskId,
+        title: taskTitle,
+        createdAt: remoteModifiedAt,
+        modifiedAt: remoteModifiedAt,
+      );
+
+      CalendarModel currentModel = CalendarModel.empty();
+
+      final CalendarSyncManager manager = buildManager(
+        readModel: () => currentModel,
+        applyModel: (CalendarModel next) async {
+          currentModel = next;
+        },
+      );
+
+      final CalendarSyncMessage message = CalendarSyncMessage(
+        type: CalendarSyncType.update,
+        timestamp: remoteModifiedAt,
+        taskId: taskId,
+        operation: addOperation,
+        data: remoteTask.toJson(),
+      );
+
+      await manager.onCalendarMessage(
+        CalendarSyncInbound(message: message, receivedAt: remoteModifiedAt),
+      );
+
+      expect(currentModel.tasks[taskId]?.title, equals(taskTitle));
+      expect(currentModel.deletedTaskIds, isEmpty);
+    });
+
     test(
       'ignores day event add when day event tombstone is newer than remote update',
       () async {
@@ -166,6 +204,81 @@ void main() {
       },
     );
 
+    test('accepts day event add when no tombstone exists', () async {
+      final DateTime remoteModifiedAt = DateTime.utc(2024, 2, 10, 13);
+      final DayEvent remoteEvent = DayEvent(
+        id: dayEventId,
+        title: dayEventTitle,
+        startDate: remoteModifiedAt,
+        endDate: remoteModifiedAt,
+        createdAt: remoteModifiedAt,
+        modifiedAt: remoteModifiedAt,
+      );
+
+      CalendarModel currentModel = CalendarModel.empty();
+
+      final CalendarSyncManager manager = buildManager(
+        readModel: () => currentModel,
+        applyModel: (CalendarModel next) async {
+          currentModel = next;
+        },
+      );
+
+      final CalendarSyncMessage message = CalendarSyncMessage(
+        type: CalendarSyncType.update,
+        timestamp: remoteModifiedAt,
+        taskId: dayEventId,
+        operation: addOperation,
+        entity: dayEventEntity,
+        data: remoteEvent.toJson(),
+      );
+
+      await manager.onCalendarMessage(
+        CalendarSyncInbound(message: message, receivedAt: remoteModifiedAt),
+      );
+
+      expect(currentModel.dayEvents[dayEventId]?.title, equals(dayEventTitle));
+      expect(currentModel.deletedDayEventIds, isEmpty);
+    });
+
+    test('accepts critical path add when no tombstone exists', () async {
+      final DateTime remoteModifiedAt = DateTime.utc(2024, 2, 10, 13);
+      final CalendarCriticalPath remotePath = CalendarCriticalPath(
+        id: criticalPathId,
+        name: criticalPathName,
+        createdAt: remoteModifiedAt,
+        modifiedAt: remoteModifiedAt,
+      );
+
+      CalendarModel currentModel = CalendarModel.empty();
+
+      final CalendarSyncManager manager = buildManager(
+        readModel: () => currentModel,
+        applyModel: (CalendarModel next) async {
+          currentModel = next;
+        },
+      );
+
+      final CalendarSyncMessage message = CalendarSyncMessage(
+        type: CalendarSyncType.update,
+        timestamp: remoteModifiedAt,
+        taskId: criticalPathId,
+        operation: addOperation,
+        entity: criticalPathEntity,
+        data: remotePath.toJson(),
+      );
+
+      await manager.onCalendarMessage(
+        CalendarSyncInbound(message: message, receivedAt: remoteModifiedAt),
+      );
+
+      expect(
+        currentModel.criticalPaths[criticalPathId]?.name,
+        equals(criticalPathName),
+      );
+      expect(currentModel.deletedCriticalPathIds, isEmpty);
+    });
+
     test(
       'ignores journal add when journal tombstone is newer than remote update',
       () async {
@@ -209,6 +322,42 @@ void main() {
         expect(currentModel.deletedJournalIds, contains(journalId));
       },
     );
+
+    test('accepts journal add when no tombstone exists', () async {
+      final DateTime remoteModifiedAt = DateTime.utc(2024, 2, 10, 13);
+      final CalendarJournal remoteJournal = CalendarJournal(
+        id: journalId,
+        title: journalTitle,
+        entryDate: CalendarDateTime(value: remoteModifiedAt),
+        createdAt: remoteModifiedAt,
+        modifiedAt: remoteModifiedAt,
+      );
+
+      CalendarModel currentModel = CalendarModel.empty();
+
+      final CalendarSyncManager manager = buildManager(
+        readModel: () => currentModel,
+        applyModel: (CalendarModel next) async {
+          currentModel = next;
+        },
+      );
+
+      final CalendarSyncMessage message = CalendarSyncMessage(
+        type: CalendarSyncType.update,
+        timestamp: remoteModifiedAt,
+        taskId: journalId,
+        operation: addOperation,
+        entity: journalEntity,
+        data: remoteJournal.toJson(),
+      );
+
+      await manager.onCalendarMessage(
+        CalendarSyncInbound(message: message, receivedAt: remoteModifiedAt),
+      );
+
+      expect(currentModel.journals[journalId]?.title, equals(journalTitle));
+      expect(currentModel.deletedJournalIds, isEmpty);
+    });
 
     test('ignores sender message timestamp when payload is stale', () async {
       final DateTime localModifiedAt = DateTime.utc(2024, 2, 10, 12);

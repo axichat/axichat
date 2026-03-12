@@ -579,14 +579,15 @@ class CalendarSyncManager {
               !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
             return false;
           }
-          final Map<String, DateTime> updatedDeletedTaskIds =
-              deletedAt == null
-                    ? currentModel.deletedTaskIds
-                    : Map<String, DateTime>.from(currentModel.deletedTaskIds)
-                ..remove(resolvedRemoteTask.id);
-          final CalendarModel baseModel = deletedAt == null
-              ? currentModel
-              : currentModel.copyWith(deletedTaskIds: updatedDeletedTaskIds);
+          CalendarModel baseModel = currentModel;
+          if (deletedAt != null) {
+            final Map<String, DateTime> updatedDeletedTaskIds =
+                Map<String, DateTime>.from(currentModel.deletedTaskIds)
+                  ..remove(resolvedRemoteTask.id);
+            baseModel = currentModel.copyWith(
+              deletedTaskIds: updatedDeletedTaskIds,
+            );
+          }
           updatedModel = baseModel.addTask(resolvedRemoteTask);
           break;
         }
@@ -685,18 +686,15 @@ class CalendarSyncManager {
               !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
             return false;
           }
-          final Map<String, DateTime> updatedDeletedDayEventIds =
-              deletedAt == null
-                    ? currentModel.deletedDayEventIds
-                    : Map<String, DateTime>.from(
-                        currentModel.deletedDayEventIds,
-                      )
-                ..remove(resolvedRemoteEvent.id);
-          final CalendarModel baseModel = deletedAt == null
-              ? currentModel
-              : currentModel.copyWith(
-                  deletedDayEventIds: updatedDeletedDayEventIds,
-                );
+          CalendarModel baseModel = currentModel;
+          if (deletedAt != null) {
+            final Map<String, DateTime> updatedDeletedDayEventIds =
+                Map<String, DateTime>.from(currentModel.deletedDayEventIds)
+                  ..remove(resolvedRemoteEvent.id);
+            baseModel = currentModel.copyWith(
+              deletedDayEventIds: updatedDeletedDayEventIds,
+            );
+          }
           updatedModel = baseModel.addDayEvent(resolvedRemoteEvent);
         } else if (_shouldPreferRemote(
           localModifiedAt: localEvent.modifiedAt,
@@ -796,18 +794,15 @@ class CalendarSyncManager {
               !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
             return false;
           }
-          final Map<String, DateTime> updatedDeletedCriticalPathIds =
-              deletedAt == null
-                    ? currentModel.deletedCriticalPathIds
-                    : Map<String, DateTime>.from(
-                        currentModel.deletedCriticalPathIds,
-                      )
-                ..remove(resolvedRemotePath.id);
-          final CalendarModel baseModel = deletedAt == null
-              ? currentModel
-              : currentModel.copyWith(
-                  deletedCriticalPathIds: updatedDeletedCriticalPathIds,
-                );
+          CalendarModel baseModel = currentModel;
+          if (deletedAt != null) {
+            final Map<String, DateTime> updatedDeletedCriticalPathIds =
+                Map<String, DateTime>.from(currentModel.deletedCriticalPathIds)
+                  ..remove(resolvedRemotePath.id);
+            baseModel = currentModel.copyWith(
+              deletedCriticalPathIds: updatedDeletedCriticalPathIds,
+            );
+          }
           updatedModel = baseModel.addCriticalPath(resolvedRemotePath);
         } else if (_isSyncInstantAfter(
           remoteModifiedAt,
@@ -898,16 +893,15 @@ class CalendarSyncManager {
               !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
             return false;
           }
-          final Map<String, DateTime> updatedDeletedJournalIds =
-              deletedAt == null
-                    ? currentModel.deletedJournalIds
-                    : Map<String, DateTime>.from(currentModel.deletedJournalIds)
-                ..remove(resolvedRemoteJournal.id);
-          final CalendarModel baseModel = deletedAt == null
-              ? currentModel
-              : currentModel.copyWith(
-                  deletedJournalIds: updatedDeletedJournalIds,
-                );
+          CalendarModel baseModel = currentModel;
+          if (deletedAt != null) {
+            final Map<String, DateTime> updatedDeletedJournalIds =
+                Map<String, DateTime>.from(currentModel.deletedJournalIds)
+                  ..remove(resolvedRemoteJournal.id);
+            baseModel = currentModel.copyWith(
+              deletedJournalIds: updatedDeletedJournalIds,
+            );
+          }
           updatedModel = baseModel.addJournal(resolvedRemoteJournal);
         } else if (_shouldPreferRemote(
           localModifiedAt: localJournal.modifiedAt,
