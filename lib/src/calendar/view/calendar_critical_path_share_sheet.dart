@@ -16,6 +16,7 @@ import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -26,6 +27,7 @@ import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 
 Future<void> showCalendarCriticalPathShareSheet({
   required BuildContext context,
@@ -46,9 +48,12 @@ Future<void> showCalendarCriticalPathShareSheet({
     );
     return;
   }
-  final result = await showFadeScaleDialog<bool>(
+  final result = await showAdaptiveBottomSheet<bool>(
     context: modalContext,
-    builder: (_) => CalendarCriticalPathShareSheet(
+    isScrollControlled: true,
+    preferDialogOnMobile: true,
+    surfacePadding: EdgeInsets.zero,
+    builder: (sheetContext) => CalendarCriticalPathShareSheet(
       path: path,
       tasks: tasks,
       availableChats: available,
@@ -127,6 +132,7 @@ class _CalendarCriticalPathShareSheetState
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
     final l10n = context.l10n;
     final rosterItems =
         context.read<RosterCubit>().state.items ??
@@ -143,50 +149,64 @@ class _CalendarCriticalPathShareSheetState
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
     );
-    return AxiInputDialog(
+    final header = AxiSheetHeader(
       title: Text(l10n.calendarCriticalPathShareTitle),
-      callbackText: l10n.calendarCriticalPathShareButtonLabel,
-      loading: _isSending,
-      callback: _handleSharePressed,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            l10n.calendarCriticalPathShareSubtitle,
-            style: context.textTheme.muted.copyWith(
-              color: context.colorScheme.mutedForeground,
-            ),
+      subtitle: Text(l10n.calendarCriticalPathShareSubtitle),
+      onClose: () => Navigator.of(context).maybePop(),
+    );
+    return AxiSheetScaffold.scroll(
+      header: header,
+      bodyPadding: EdgeInsets.zero,
+      children: [
+        Padding(
+          padding: _criticalPathShareContentPadding(context),
+          child: _CriticalPathShareSectionLabel(
+            text: l10n.calendarCriticalPathShareTargetLabel,
           ),
-          SizedBox(height: context.spacing.m),
-          Text(
-            l10n.calendarCriticalPathShareTargetLabel.toUpperCase(),
-            style: context.textTheme.sectionLabelM,
+        ),
+        BlocSelector<ChatsCubit, ChatsState, List<String>>(
+          bloc: widget.locate<ChatsCubit>(),
+          selector: (state) => state.recipientAddressSuggestions,
+          builder: (context, recipientAddressSuggestions) => RecipientChipsBar(
+            recipients: _recipients,
+            availableChats: widget.availableChats,
+            rosterItems: rosterItems,
+            databaseSuggestionAddresses: recipientAddressSuggestions,
+            selfJid: chatsSelfJid,
+            selfIdentity: selfIdentity,
+            latestStatuses: const {},
+            collapsedByDefault: false,
+            allowAddressTargets: false,
+            showSuggestionsWhenEmpty: true,
+            horizontalPadding: 0,
+            onRecipientAdded: _handleRecipientAdded,
+            onRecipientRemoved: _handleRecipientRemoved,
+            onRecipientToggled: _handleRecipientToggled,
           ),
-          SizedBox(height: context.spacing.s),
-          BlocSelector<ChatsCubit, ChatsState, List<String>>(
-            bloc: widget.locate<ChatsCubit>(),
-            selector: (state) => state.recipientAddressSuggestions,
-            builder: (context, recipientAddressSuggestions) =>
-                RecipientChipsBar(
-                  recipients: _recipients,
-                  availableChats: widget.availableChats,
-                  rosterItems: rosterItems,
-                  databaseSuggestionAddresses: recipientAddressSuggestions,
-                  selfJid: chatsSelfJid,
-                  selfIdentity: selfIdentity,
-                  latestStatuses: const {},
-                  collapsedByDefault: false,
-                  allowAddressTargets: false,
-                  showSuggestionsWhenEmpty: true,
-                  horizontalPadding: 0,
-                  onRecipientAdded: _handleRecipientAdded,
-                  onRecipientRemoved: _handleRecipientRemoved,
-                  onRecipientToggled: _handleRecipientToggled,
+        ),
+        SizedBox(height: spacing.m),
+        Padding(
+          padding: _criticalPathShareContentPadding(context),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              AxiButton.outline(
+                onPressed: () => closeSheetWithKeyboardDismiss(
+                  context,
+                  () => Navigator.of(context).maybePop(),
                 ),
+                child: Text(l10n.commonCancel),
+              ),
+              SizedBox(width: spacing.s),
+              _CriticalPathShareActionRow(
+                isBusy: _isSending,
+                onPressed: _handleSharePressed,
+                label: l10n.calendarCriticalPathShareButtonLabel,
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -319,3 +339,43 @@ class _CalendarCriticalPathShareSheetState
     return CalendarFragment.criticalPath(path: path, tasks: widget.tasks);
   }
 }
+
+class _CriticalPathShareSectionLabel extends StatelessWidget {
+  const _CriticalPathShareSectionLabel({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text.toUpperCase(), style: context.textTheme.sectionLabelM);
+  }
+}
+
+class _CriticalPathShareActionRow extends StatelessWidget {
+  const _CriticalPathShareActionRow({
+    required this.isBusy,
+    required this.onPressed,
+    required this.label,
+  });
+
+  final bool isBusy;
+  final VoidCallback onPressed;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return AxiButton.primary(
+      onPressed: isBusy ? null : onPressed,
+      loading: isBusy,
+      widthBehavior: AxiButtonWidth.fit,
+      leading: Icon(
+        LucideIcons.share2,
+        size: context.sizing.iconButtonIconSize,
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+EdgeInsets _criticalPathShareContentPadding(BuildContext context) =>
+    EdgeInsets.symmetric(horizontal: context.spacing.m);

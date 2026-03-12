@@ -11,6 +11,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/calendar/constants.dart';
 import 'package:axichat/src/calendar/bloc/base_calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -447,6 +448,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     setState(update);
   }
 
+  void _dismiss() {
+    closeSheetWithKeyboardDismiss(context, widget.onClose);
+  }
+
   @override
   Widget build(BuildContext context) {
     final bool isSheet = widget.isSheet;
@@ -461,7 +466,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
             ? true
             : TaskTitleValidation.validate(value.text, context.l10n) == null;
         return _EditTaskHeader(
-          onClose: widget.onClose,
+          onClose: _dismiss,
           onSave: allowsAnyEdits && canSave ? _handleSave : null,
         );
       },
@@ -504,7 +509,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               task: widget.task,
               onDelete: () {
                 widget.onTaskDeleted(widget.task.id);
-                widget.onClose();
+                _dismiss();
               },
               onCancel: _handleCancel,
               onSave: _handleSave,
@@ -890,7 +895,7 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       } else {
         widget.onTaskUpdated(updatedTask);
       }
-      widget.onClose();
+      _dismiss();
       return;
     }
     if (!editMode.allowsAnyEdits) {
@@ -1112,11 +1117,11 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     } else {
       widget.onTaskUpdated(updatedTask);
     }
-    widget.onClose();
+    _dismiss();
   }
 
   void _handleCancel() {
-    widget.onClose();
+    _dismiss();
   }
 }
 

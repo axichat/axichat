@@ -41,4 +41,14 @@ Future<void> closeSheetWithKeyboardDismiss(
   FocusManager.instance.primaryFocus?.unfocus();
   if (!context.mounted) return;
   onClose();
+  if (!context.mounted) return;
+  final route = ModalRoute.of(context);
+  if (route is! PopupRoute<dynamic> || !route.isCurrent) {
+    return;
+  }
+  final navigator = Navigator.maybeOf(context);
+  if (navigator == null || !navigator.canPop()) {
+    return;
+  }
+  navigator.pop();
 }
