@@ -443,6 +443,7 @@ mixin AvatarService on XmppBase, MucService {
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
     _selfAvatarBootstrapReplay = null;
+    _selfAvatarBootstrapCompletedAt = null;
     await super._reset();
   }
 
@@ -466,9 +467,14 @@ mixin AvatarService on XmppBase, MucService {
   }
 
   Future<void> _runSelfAvatarBootstrap() async {
-    await _notifyCachedSelfAvatarIfAvailable();
-    await _publishPendingSelfAvatarIfAvailable();
-    await refreshSelfAvatarIfNeeded();
+    try {
+      await _notifyCachedSelfAvatarIfAvailable();
+      await _publishPendingSelfAvatarIfAvailable();
+      await refreshSelfAvatarIfNeeded();
+    } finally {
+      _selfAvatarBootstrapCompletedAt = DateTime.timestamp();
+      _emitSelfAvatarHydrating();
+    }
   }
 
   Future<void> scheduleAvatarRefresh(

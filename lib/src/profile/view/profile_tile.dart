@@ -54,6 +54,7 @@ class ProfileTile extends StatelessWidget {
                     username: state.username,
                     jid: state.jid,
                     avatarPath: state.avatarPath,
+                    avatarLoading: state.avatarHydrating,
                     usernameStyle: usernameStyle,
                     subtitleStyle: subtitleStyle,
                     indicatorMaxWidth: indicatorMaxWidth,
@@ -146,6 +147,7 @@ class _ProfileTileLayout extends StatelessWidget {
     required this.username,
     required this.jid,
     required this.avatarPath,
+    required this.avatarLoading,
     required this.usernameStyle,
     required this.subtitleStyle,
     required this.indicatorMaxWidth,
@@ -157,6 +159,7 @@ class _ProfileTileLayout extends StatelessWidget {
   final String username;
   final String jid;
   final String? avatarPath;
+  final bool avatarLoading;
   final TextStyle usernameStyle;
   final TextStyle subtitleStyle;
   final double indicatorMaxWidth;
@@ -178,6 +181,7 @@ class _ProfileTileLayout extends StatelessWidget {
               jid: jid,
               subscription: Subscription.both,
               avatarPath: avatarPath,
+              loading: avatarLoading,
               // Presence is parsed for backend features but hidden in UI.
               presence: null,
               status: null,

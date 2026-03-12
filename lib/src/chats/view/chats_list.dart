@@ -156,6 +156,7 @@ class _ChatsListBody extends StatelessWidget {
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     return BlocListener<ChatsCubit, ChatsState>(
       listenWhen: (previous, current) =>

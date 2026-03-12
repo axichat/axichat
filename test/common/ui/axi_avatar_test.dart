@@ -204,6 +204,54 @@ void main() {
 
     expect(find.byType(AxiProgressIndicator), findsNothing);
   });
+
+  testWidgets(
+    'external loading overlay retries the avatar when hydration settles',
+    (tester) async {
+      final xmppService = _MockXmppService();
+      var cacheReady = false;
+      when(() => xmppService.cachedSafeAvatarBytes(any())).thenAnswer(
+        (_) => cacheReady ? Uint8List.fromList(_transparentPngBytes) : null,
+      );
+      when(() => xmppService.cachedAvatarBytes(any())).thenReturn(null);
+      when(
+        () => xmppService.loadAvatarBytes(any()),
+      ).thenAnswer((_) async => null);
+      when(
+        () => xmppService.cacheSafeAvatarBytes(any(), any()),
+      ).thenReturn(null);
+
+      await tester.pumpWidget(
+        _AxiAvatarTestApp(
+          xmppService: xmppService,
+          child: const AxiAvatar(
+            jid: 'eliot@axichat.com',
+            avatarPath: '/avatars/self.enc',
+            loading: true,
+          ),
+        ),
+      );
+
+      await tester.pump();
+      expect(find.byType(AxiProgressIndicator), findsOneWidget);
+
+      cacheReady = true;
+      await tester.pumpWidget(
+        _AxiAvatarTestApp(
+          xmppService: xmppService,
+          child: const AxiAvatar(
+            jid: 'eliot@axichat.com',
+            avatarPath: '/avatars/self.enc',
+            loading: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AxiProgressIndicator), findsNothing);
+      expect(find.byType(Image), findsOneWidget);
+    },
+  );
 }
 
 Color _avatarBackgroundColor(WidgetTester tester, Key avatarKey) {

@@ -344,9 +344,19 @@ abstract interface class XmppBase {
 
   Stream<StoredAvatar?> get selfAvatarStream;
 
+  bool get selfAvatarHydrating;
+
+  Stream<bool> get selfAvatarHydratingStream;
+
+  DateTime? get _selfAvatarBootstrapCompletedAt;
+
+  set _selfAvatarBootstrapCompletedAt(DateTime? value);
+
   XmppStreamReady? get lastStreamReady;
 
   void _notifySelfAvatarUpdated(StoredAvatar? avatar);
+
+  void _emitSelfAvatarHydrating();
 
   Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream;
 
@@ -532,7 +542,11 @@ class XmppService extends XmppBase
   Completer<void>? _dbOperationsDrained;
   StreamController<StoredAvatar?> _selfAvatarController =
       StreamController<StoredAvatar?>.broadcast();
+  StreamController<bool> _selfAvatarHydratingController =
+      StreamController<bool>.broadcast(sync: true);
   StoredAvatar? _cachedSelfAvatar;
+  @override
+  DateTime? _selfAvatarBootstrapCompletedAt;
   @override
   String? _databasePrefix;
 
@@ -650,6 +664,31 @@ class XmppService extends XmppBase
   StoredAvatar? get cachedSelfAvatar => _cachedSelfAvatar;
 
   @override
+  bool get selfAvatarHydrating {
+    final bareJid = _myJid?.toBare().toString();
+    if (bareJid == null || bareJid.isEmpty) {
+      return false;
+    }
+    if (connectionState != ConnectionState.connected &&
+        connectionState != ConnectionState.connecting) {
+      return false;
+    }
+    final streamReady = lastStreamReady;
+    if (streamReady == null) {
+      return true;
+    }
+    final completedAt = _selfAvatarBootstrapCompletedAt;
+    if (completedAt == null) {
+      return true;
+    }
+    return completedAt.isBefore(streamReady.timestamp);
+  }
+
+  @override
+  Stream<bool> get selfAvatarHydratingStream =>
+      _selfAvatarHydratingController.stream;
+
+  @override
   Stream<void> get databaseReloadStream => _databaseReloadController.stream;
 
   @override
@@ -664,6 +703,12 @@ class XmppService extends XmppBase
   void _notifyDatabaseReloaded() {
     if (_databaseReloadController.isClosed) return;
     _databaseReloadController.add(null);
+  }
+
+  @override
+  void _emitSelfAvatarHydrating() {
+    if (_selfAvatarHydratingController.isClosed) return;
+    _selfAvatarHydratingController.add(selfAvatarHydrating);
   }
 
   @override
@@ -1124,6 +1169,7 @@ class XmppService extends XmppBase
       _scheduleConnectivityNotificationUpdate(state);
     }
     _pingController.handleConnectionState(state);
+    _emitSelfAvatarHydrating();
   }
 
   void _scheduleConnectivityNotificationUpdate(ConnectionState state) {
@@ -1144,10 +1190,12 @@ class XmppService extends XmppBase
     _lastStreamReady = ready;
     if (_streamReadyController.isClosed) return;
     _streamReadyController.add(ready);
+    _emitSelfAvatarHydrating();
   }
 
   void _clearStreamReady() {
     _lastStreamReady = null;
+    _emitSelfAvatarHydrating();
   }
 
   void _repairConnectionStateFromTraffic({required String reason}) {
@@ -2933,6 +2981,11 @@ class XmppService extends XmppBase
     if (_selfAvatarController.isClosed) {
       _selfAvatarController = StreamController<StoredAvatar?>.broadcast();
     }
+    if (_selfAvatarHydratingController.isClosed) {
+      _selfAvatarHydratingController = StreamController<bool>.broadcast(
+        sync: true,
+      );
+    }
     if (_xmppOperationController.isClosed) {
       _xmppOperationController =
           StreamController<XmppOperationEvent>.broadcast();
@@ -2969,6 +3022,9 @@ class XmppService extends XmppBase
     }
     if (!_selfAvatarController.isClosed) {
       await _selfAvatarController.close();
+    }
+    if (!_selfAvatarHydratingController.isClosed) {
+      await _selfAvatarHydratingController.close();
     }
     if (!_xmppOperationController.isClosed) {
       await _xmppOperationController.close();

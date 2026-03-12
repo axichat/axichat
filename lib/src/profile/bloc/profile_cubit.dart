@@ -24,6 +24,7 @@ class ProfileCubit extends Cubit<ProfileState> {
            jid: xmppService.myJid ?? '',
            resource: xmppService.resource ?? '',
            username: xmppService.username ?? '',
+           avatarHydrating: xmppService.selfAvatarHydrating,
            avatarPath: xmppService.cachedSelfAvatar?.path,
            avatarHash: xmppService.cachedSelfAvatar?.hash,
            presence: presenceService?.presence,
@@ -55,6 +56,10 @@ class ProfileCubit extends Cubit<ProfileState> {
         ),
       );
     });
+    _selfAvatarHydratingSubscription = _xmppService.selfAvatarHydratingStream
+        .listen(
+          (hydrating) => emit(state.copyWith(avatarHydrating: hydrating)),
+        );
     _storedConversationMessageCountSubscription = _xmppService
         .storedConversationMessageCountStream()
         .listen(
@@ -74,6 +79,7 @@ class ProfileCubit extends Cubit<ProfileState> {
   late final StreamSubscription<Presence?>? _presenceSubscription;
   late final StreamSubscription<String?>? _statusSubscription;
   late final StreamSubscription<StoredAvatar?> _selfAvatarSubscription;
+  late final StreamSubscription<bool> _selfAvatarHydratingSubscription;
   late final StreamSubscription<int>
   _storedConversationMessageCountSubscription;
 
@@ -82,6 +88,7 @@ class ProfileCubit extends Cubit<ProfileState> {
     await _presenceSubscription?.cancel();
     await _statusSubscription?.cancel();
     await _selfAvatarSubscription.cancel();
+    await _selfAvatarHydratingSubscription.cancel();
     await _storedConversationMessageCountSubscription.cancel();
     return super.close();
   }
@@ -107,6 +114,7 @@ class ProfileCubit extends Cubit<ProfileState> {
         jid: _xmppService.myJid ?? '',
         resource: _xmppService.resource ?? '',
         username: _xmppService.username ?? '',
+        avatarHydrating: _xmppService.selfAvatarHydrating,
       ),
     );
     unawaited(_loadAvatar());
@@ -123,6 +131,7 @@ class ProfileCubit extends Cubit<ProfileState> {
         username: '',
         avatarPath: null,
         avatarHash: null,
+        avatarHydrating: false,
         fingerprint: null,
         presence: null,
         status: null,

@@ -50,6 +50,7 @@ class _ArchivesView extends StatelessWidget {
             final selfIdentity = SelfIdentitySnapshot(
               selfJid: selfJid,
               avatarPath: profileState.avatarPath,
+              avatarLoading: profileState.avatarHydrating,
             );
             final selectedChats = chatsState.selectedChats;
             final selectionActive = selectedChats.isNotEmpty;

@@ -29,6 +29,7 @@ class AxiAvatar extends StatefulWidget {
     this.size = 50.0,
     this.avatarPath,
     this.avatarBytes,
+    this.loading = false,
     this.colorSeed,
   });
 
@@ -41,6 +42,7 @@ class AxiAvatar extends StatefulWidget {
   final double size;
   final String? avatarPath;
   final Uint8List? avatarBytes;
+  final bool loading;
   final String? colorSeed;
 
   static const double paddingFraction = 0.0;
@@ -107,9 +109,11 @@ class _AxiAvatarState extends State<AxiAvatar> {
   void didUpdateWidget(covariant AxiAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
     final jidChanged = oldWidget.jid != widget.jid;
+    final loadingSettled = oldWidget.loading && !widget.loading;
     if (oldWidget.avatarBytes != widget.avatarBytes ||
         oldWidget.avatarPath != widget.avatarPath ||
-        jidChanged) {
+        jidChanged ||
+        loadingSettled) {
       _refreshAvatarBytes(clearStaleBytes: jidChanged);
     }
   }
@@ -253,11 +257,12 @@ class _AxiAvatarState extends State<AxiAvatar> {
         : SquircleBorder(cornerRadius: squircleCornerRadius);
     final Uint8List? avatarBytes = _resolvedAvatarBytes;
     final path = widget.avatarPath?.trim();
-    final isLoadingAvatar =
+    final isLoadingAvatarBytes =
         avatarBytes == null &&
         path != null &&
         path.isNotEmpty &&
         _loadingPath == path;
+    final showLoadingOverlay = widget.loading || isLoadingAvatarBytes;
     final overlayAlpha = motion.tapFocusAlpha + motion.tapHoverAlpha;
 
     Widget child = SizedBox.square(
@@ -306,7 +311,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
                     : ColoredBox(
                         color: backgroundColor,
                         child: Center(
-                          child: isLoadingAvatar
+                          child: isLoadingAvatarBytes && !widget.loading
                               ? const SizedBox.shrink()
                               : FittedBox(
                                   fit: BoxFit.contain,
@@ -317,7 +322,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
               );
             },
           ),
-          if (isLoadingAvatar)
+          if (showLoadingOverlay)
             IgnorePointer(
               child: ClipPath(
                 clipper: ShapeBorderClipper(shape: avatarShape),

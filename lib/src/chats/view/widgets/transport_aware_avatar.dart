@@ -39,10 +39,15 @@ Future<void> precacheAxichatAppIcon(
 }
 
 class SelfIdentitySnapshot {
-  const SelfIdentitySnapshot({required this.selfJid, required this.avatarPath});
+  const SelfIdentitySnapshot({
+    required this.selfJid,
+    required this.avatarPath,
+    this.avatarLoading = false,
+  });
 
   final String? selfJid;
   final String? avatarPath;
+  final bool avatarLoading;
 }
 
 class TransportAwareAvatar extends StatelessWidget {
@@ -78,6 +83,7 @@ class TransportAwareAvatar extends StatelessWidget {
     final String? selfJid = selfIdentity.selfJid?.trim();
     final bool isSelfChat = chat.remoteJid.sameBare(selfJid);
     final String? selfAvatarPath = selfIdentity.avatarPath?.trim();
+    final bool selfAvatarLoading = selfIdentity.avatarLoading;
     final bool hasSelfAvatarPath = selfAvatarPath?.isNotEmpty == true;
     final isWelcomeChat = chat.isAxichatWelcomeThread;
     final avatarLabel = chat.contactDisplayName?.trim().isNotEmpty == true
@@ -124,6 +130,7 @@ class TransportAwareAvatar extends StatelessWidget {
                     presence: presence,
                     status: status,
                     subscription: effectiveSubscription,
+                    loading: isSelfChat && selfAvatarLoading,
                     avatarPath: avatarPathOverride?.trim().isNotEmpty == true
                         ? avatarPathOverride!.trim()
                         : isSelfChat && hasSelfAvatarPath

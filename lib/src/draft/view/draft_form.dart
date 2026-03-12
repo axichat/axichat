@@ -221,6 +221,7 @@ class _DraftFormState extends State<DraftForm> {
         final selfIdentity = SelfIdentitySnapshot(
           selfJid: selfJid,
           avatarPath: profileState.avatarPath,
+          avatarLoading: profileState.avatarHydrating,
         );
         return BlocBuilder<RosterCubit, RosterState>(
           bloc: locate<RosterCubit>(),

@@ -10,6 +10,7 @@ abstract class ProfileState with _$ProfileState {
     required String resource,
     required String username,
     @Default(0) int storedConversationMessageCount,
+    @Default(false) bool avatarHydrating,
     String? avatarPath,
     String? avatarHash,
     OmemoFingerprint? fingerprint,

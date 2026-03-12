@@ -510,6 +510,7 @@ class _ProfileCardSection extends StatelessWidget {
                   children: [
                     _EditableAvatarButton(
                       avatarPath: profileState.avatarPath,
+                      loading: profileState.avatarHydrating,
                       jid: profileState.jid,
                       status: profileState.status,
                       onTap: () => context.push(
@@ -658,12 +659,14 @@ class _ProfileStatusHeader extends StatelessWidget {
 class _EditableAvatarButton extends StatefulWidget {
   const _EditableAvatarButton({
     required this.avatarPath,
+    required this.loading,
     required this.jid,
     required this.status,
     required this.onTap,
   });
 
   final String? avatarPath;
+  final bool loading;
   final String jid;
   final String? status;
   final VoidCallback onTap;
@@ -702,6 +705,7 @@ class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
                 active: false,
                 size: _size,
                 avatarPath: widget.avatarPath,
+                loading: widget.loading,
               ),
               AnimatedOpacity(
                 opacity: overlayVisible ? 0.9 : 0.0,
