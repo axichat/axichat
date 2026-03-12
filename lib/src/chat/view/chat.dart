@@ -12601,7 +12601,14 @@ class _ReactionStrip extends StatelessWidget {
           if (i != 0) {
             children.add(SizedBox(width: chipSpacing));
           }
-          children.add(_ReactionChip(data: items[i], onTap: null));
+          children.add(
+            _ReactionChip(
+              data: items[i],
+              onTap: onReactionTap == null
+                  ? null
+                  : () => onReactionTap!(items[i].emoji),
+            ),
+          );
         }
         if (layout.overflowed) {
           if (children.isNotEmpty) {
@@ -13137,7 +13144,15 @@ class _MessageExtraItem extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: child,
     );
-    return clippedChild;
+    if (onLongPress == null && onSecondaryTapUp == null) {
+      return clippedChild;
+    }
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onLongPress: onLongPress,
+      onSecondaryTapUp: onSecondaryTapUp,
+      child: clippedChild,
+    );
   }
 }
 
@@ -13383,6 +13398,19 @@ class _ComposerNotice extends StatelessWidget {
                 ),
               ),
             ),
+          if (onDismiss != null)
+            _ComposerBannerTrailing(
+              child: AxiIconButton.ghost(
+                iconData: LucideIcons.x,
+                tooltip: context.l10n.commonClose,
+                onPressed: onDismiss,
+                color: foreground,
+                backgroundColor: Colors.transparent,
+                iconSize: context.sizing.menuItemIconSize,
+                buttonSize: context.sizing.menuItemHeight,
+                tapTargetSize: context.sizing.menuItemHeight,
+              ),
+            ),
         ],
       ),
     );
@@ -13448,7 +13476,7 @@ class _ComposerNotices extends StatelessWidget {
           _ComposerNotice(
             type: _ComposerNoticeType.info,
             message: failureMessage,
-            actionLabel: null,
+            actionLabel: onFanOutRetry == null ? null : l10n.chatFanOutRetry,
             onAction: onFanOutRetry,
           ),
         );
@@ -14550,7 +14578,25 @@ class _MessageActionBar extends StatelessWidget {
         label: l10n.chatActionForward,
         onPressed: onForward,
       ),
-      if (importantDisabled)
+      if (onResend != null)
+        ContextActionButton(
+          icon: Icon(LucideIcons.repeat, size: iconSize),
+          label: l10n.chatActionResend,
+          onPressed: onResend,
+        ),
+      if (onEdit != null)
+        ContextActionButton(
+          icon: Icon(LucideIcons.pencilLine, size: iconSize),
+          label: l10n.chatActionEdit,
+          onPressed: onEdit,
+        ),
+      if (onRevokeInvite != null)
+        ContextActionButton(
+          icon: Icon(LucideIcons.ban, size: iconSize),
+          label: l10n.chatActionRevoke,
+          onPressed: onRevokeInvite,
+        ),
+      if (onImportantToggle != null || importantDisabled)
         ContextActionButton(
           icon: Icon(
             isImportant ? Icons.star_rounded : Icons.star_outline_rounded,
@@ -14561,7 +14607,7 @@ class _MessageActionBar extends StatelessWidget {
               : l10n.chatMarkMessageImportant,
           onPressed: onImportantToggle,
         ),
-      if (pinLoading || pinDisabled)
+      if (onPinToggle != null || pinLoading || pinDisabled)
         ContextActionButton(
           icon: pinLoading
               ? AxiProgressIndicator(color: context.colorScheme.foreground)
@@ -14594,6 +14640,12 @@ class _MessageActionBar extends StatelessWidget {
         label: l10n.chatActionDetails,
         onPressed: onDetails,
       ),
+      if (onSelect != null)
+        ContextActionButton(
+          icon: Icon(LucideIcons.squareCheck, size: iconSize),
+          label: l10n.chatActionSelect,
+          onPressed: onSelect,
+        ),
     ];
     return Wrap(
       spacing: scaled(spacing.s),
@@ -14830,40 +14882,40 @@ class _CalendarTextSelectionDialog extends StatefulWidget {
 
 class _CalendarTextSelectionDialogState
     extends State<_CalendarTextSelectionDialog> {
-  late final TextEditingController controller;
-  late final FocusNode focusNode;
-  String selection0 = '';
+  late final TextEditingController _controller;
+  late final FocusNode _focusNode;
+  String _selection = '';
 
   @override
   void initState() {
     super.initState();
     final seeded = widget.initialText.trim();
-    controller = TextEditingController(text: seeded);
-    focusNode = FocusNode();
-    selection0 = seeded;
-    controller.addListener(handleControllerChanged);
-    controller.selection = TextSelection(
+    _controller = TextEditingController(text: seeded);
+    _focusNode = FocusNode();
+    _selection = seeded;
+    _controller.addListener(_handleControllerChanged);
+    _controller.selection = TextSelection(
       baseOffset: 0,
       extentOffset: seeded.length,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      focusNode.requestFocus();
-      handleControllerChanged();
+      _focusNode.requestFocus();
+      _handleControllerChanged();
     });
   }
 
   @override
   void dispose() {
-    controller.removeListener(handleControllerChanged);
-    controller.dispose();
-    focusNode.dispose();
+    _controller.removeListener(_handleControllerChanged);
+    _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  void handleControllerChanged() {
-    final text = controller.text;
-    final selection = controller.selection;
+  void _handleControllerChanged() {
+    final text = _controller.text;
+    final selection = _controller.selection;
     final fallback = text.trim();
     var next = fallback;
     if (selection.isValid && !selection.isCollapsed) {
@@ -14873,21 +14925,21 @@ class _CalendarTextSelectionDialogState
         next = text.substring(start, end).trim();
       }
     }
-    if (selection0 == next) return;
+    if (_selection == next) return;
     setState(() {
-      selection0 = next;
+      _selection = next;
     });
   }
 
   String get _effectiveText {
-    final trimmedSelection = selection0.trim();
+    final trimmedSelection = _selection.trim();
     if (trimmedSelection.isNotEmpty) return trimmedSelection;
-    return controller.text.trim();
+    return _controller.text.trim();
   }
 
-  bool get canSubmit => _effectiveText.isNotEmpty;
+  bool get _canSubmit => _effectiveText.isNotEmpty;
 
-  void submit() {
+  void _submit() {
     final text = _effectiveText;
     if (text.isEmpty) return;
     Navigator.of(context).pop(text);
@@ -14947,8 +14999,8 @@ class _CalendarTextSelectionDialogState
                       ),
                       SizedBox(height: spacing.s),
                       AxiTextInput(
-                        controller: controller,
-                        focusNode: focusNode,
+                        controller: _controller,
+                        focusNode: _focusNode,
                         minLines: 4,
                         maxLines: 8,
                         keyboardType: TextInputType.multiline,
@@ -14965,7 +15017,7 @@ class _CalendarTextSelectionDialogState
                           SizedBox(width: spacing.s),
                           Expanded(
                             child: AxiButton.primary(
-                              onPressed: canSubmit ? submit : null,
+                              onPressed: _canSubmit ? _submit : null,
                               child: Text(l10n.chatActionAddToCalendar),
                             ),
                           ),
@@ -15538,32 +15590,32 @@ class _ReactionManager extends StatefulWidget {
 }
 
 class _ReactionManagerState extends State<_ReactionManager> {
-  late List<ReactionPreview> sorted0;
-  int signature = 0;
+  late List<ReactionPreview> _sorted;
+  int _signature = 0;
 
   @override
   void initState() {
     super.initState();
-    refreshSorted();
+    _refreshSorted();
   }
 
   @override
-  void didUpdateWidget(_ReactionManager oldWidget) {
+  void didUpdateWidget(covariant _ReactionManager oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final nextSignature = reactionsSignature(widget.reactions);
-    if (signature != nextSignature) {
-      refreshSorted(signature: nextSignature);
+    final nextSignature = _reactionsSignature(widget.reactions);
+    if (_signature != nextSignature) {
+      _refreshSorted(signature: nextSignature);
     }
   }
 
-  void refreshSorted({int? signature}) {
-    final nextSignature = signature ?? reactionsSignature(widget.reactions);
-    signature = nextSignature;
-    sorted0 = widget.reactions.toList()
+  void _refreshSorted({int? signature}) {
+    final nextSignature = signature ?? _reactionsSignature(widget.reactions);
+    _signature = nextSignature;
+    _sorted = widget.reactions.toList()
       ..sort((a, b) => b.count.compareTo(a.count));
   }
 
-  int reactionsSignature(List<ReactionPreview> reactions) {
+  int _reactionsSignature(List<ReactionPreview> reactions) {
     var hash = reactions.length;
     for (final reaction in reactions) {
       hash = Object.hash(
@@ -15581,7 +15633,7 @@ class _ReactionManagerState extends State<_ReactionManager> {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final textTheme = context.textTheme;
-    final sorted = sorted0;
+    final sorted = _sorted;
     final hasReactions = sorted.isNotEmpty;
     return AxiModalSurface(
       padding: EdgeInsets.all(spacing.m),
@@ -16489,12 +16541,12 @@ class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility> {
   }
 
   @override
-  void didUpdateWidget(_ComposerBannerVisibility oldWidget) {
+  void didUpdateWidget(covariant _ComposerBannerVisibility oldWidget) {
     super.didUpdateWidget(oldWidget);
-    syncVisibility();
+    _syncVisibility();
   }
 
-  void syncVisibility() {
+  void _syncVisibility() {
     final nextChild = widget.child;
     if (widget.visible && nextChild != null) {
       hideTimer?.cancel();
@@ -16523,13 +16575,13 @@ class _ComposerBannerVisibilityState extends State<_ComposerBannerVisibility> {
     final remaining = widget.minimumVisibleDuration - elapsed;
     if (remaining > Duration.zero) {
       hideTimer?.cancel();
-      hideTimer = Timer(remaining, beginHide);
+      hideTimer = Timer(remaining, _beginHide);
       return;
     }
-    beginHide();
+    _beginHide();
   }
 
-  void beginHide() {
+  void _beginHide() {
     hideTimer?.cancel();
     hideTimer = null;
     if (widget.visible || displayedChild == null) {
@@ -16622,18 +16674,18 @@ class _DebugComposerBannerCycleState extends State<_DebugComposerBannerCycle> {
   @override
   void initState() {
     super.initState();
-    restartTimer();
+    _restartTimer();
   }
 
   @override
-  void didUpdateWidget(_DebugComposerBannerCycle oldWidget) {
+  void didUpdateWidget(covariant _DebugComposerBannerCycle oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.interval != widget.interval) {
-      restartTimer();
+      _restartTimer();
     }
   }
 
-  void restartTimer() {
+  void _restartTimer() {
     cycleTimer?.cancel();
     if (widget.interval <= Duration.zero) {
       return;
@@ -16850,32 +16902,32 @@ class _ParsedMessageBody extends StatefulWidget {
 }
 
 class _ParsedMessageBodyState extends State<_ParsedMessageBody> {
-  late ParsedMessageText parsed;
-  String? text;
-  TextStyle? baseStyle;
-  TextStyle? linkStyle;
+  late ParsedMessageText _parsed;
+  String? _text;
+  TextStyle? _baseStyle;
+  TextStyle? _linkStyle;
 
   @override
   void initState() {
     super.initState();
-    refreshParsedText();
+    _refreshParsedText();
   }
 
   @override
-  void didUpdateWidget(_ParsedMessageBody oldWidget) {
+  void didUpdateWidget(covariant _ParsedMessageBody oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (text != widget.text ||
-        baseStyle != widget.baseStyle ||
-        linkStyle != widget.linkStyle) {
-      refreshParsedText();
+    if (_text != widget.text ||
+        _baseStyle != widget.baseStyle ||
+        _linkStyle != widget.linkStyle) {
+      _refreshParsedText();
     }
   }
 
-  void refreshParsedText() {
-    text = widget.text;
-    baseStyle = widget.baseStyle;
-    linkStyle = widget.linkStyle;
-    parsed = parseMessageText(
+  void _refreshParsedText() {
+    _text = widget.text;
+    _baseStyle = widget.baseStyle;
+    _linkStyle = widget.linkStyle;
+    _parsed = parseMessageText(
       text: widget.text,
       baseStyle: widget.baseStyle,
       linkStyle: widget.linkStyle,
@@ -16896,10 +16948,10 @@ class _ParsedMessageBodyState extends State<_ParsedMessageBody> {
         : ValueKey(widget.contentKey);
     final inlineText = DynamicInlineText(
       key: textKey,
-      text: parsed.body,
+      text: _parsed.body,
       details: widget.details,
       detailActions: widget.detailActions,
-      links: parsed.links,
+      links: _parsed.links,
       onLinkTap: handleLinkTap,
       onLinkLongPress: handleLinkLongPress,
     );
@@ -17055,57 +17107,57 @@ class _GuestPreviewMessage {
 }
 
 class _GuestChatState extends State<GuestChat> {
-  final emojiPopoverController = ShadPopoverController();
-  late final FocusNode focusNode;
-  late final TextEditingController textController;
-  late final ScrollController scrollController;
-  late ChatUser selfUser;
-  late ChatUser axiUser;
-  late List<_GuestPreviewMessage> messages;
-  Locale? lastLocale;
-  var composerHasText = false;
-  bool get composerHasContent => composerHasText;
+  final _emojiPopoverController = ShadPopoverController();
+  late final FocusNode _focusNode;
+  late final TextEditingController _textController;
+  late final ScrollController _scrollController;
+  late ChatUser _selfUser;
+  late ChatUser _axiUser;
+  late List<_GuestPreviewMessage> _messages;
+  Locale? _lastLocale;
+  var _composerHasText = false;
+  bool get _composerHasContent => _composerHasText;
 
   @override
   void initState() {
     super.initState();
-    focusNode = FocusNode();
-    textController = TextEditingController();
-    scrollController = ScrollController();
-    messages = const <_GuestPreviewMessage>[];
-    textController.addListener(handleComposerChanged);
+    _focusNode = FocusNode();
+    _textController = TextEditingController();
+    _scrollController = ScrollController();
+    _messages = const <_GuestPreviewMessage>[];
+    _textController.addListener(_handleComposerChanged);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    refreshLocalizedScript();
+    _refreshLocalizedScript();
   }
 
   @override
   void dispose() {
-    focusNode.dispose();
-    textController
-      ..removeListener(handleComposerChanged)
+    _focusNode.dispose();
+    _textController
+      ..removeListener(_handleComposerChanged)
       ..dispose();
-    scrollController.dispose();
-    emojiPopoverController.dispose();
+    _scrollController.dispose();
+    _emojiPopoverController.dispose();
     super.dispose();
   }
 
-  void refreshLocalizedScript() {
+  void _refreshLocalizedScript() {
     final locale = Localizations.localeOf(context);
-    if (lastLocale == locale && messages.isNotEmpty) {
+    if (_lastLocale == locale && _messages.isNotEmpty) {
       return;
     }
-    lastLocale = locale;
+    _lastLocale = locale;
     final l10n = context.l10n;
-    selfUser = ChatUser(id: 'me', firstName: l10n.chatSenderYou);
-    axiUser = ChatUser(id: 'axichat', firstName: appDisplayName);
-    messages = scriptMessagesForLocale(l10n);
+    _selfUser = ChatUser(id: 'me', firstName: l10n.chatSenderYou);
+    _axiUser = ChatUser(id: 'axichat', firstName: appDisplayName);
+    _messages = _scriptMessagesForLocale(l10n);
   }
 
-  List<_GuestScriptEntry> previewScript(AppLocalizations l10n) => [
+  List<_GuestScriptEntry> _previewScript(AppLocalizations l10n) => [
     _GuestScriptEntry(
       text: l10n.chatGuestScriptWelcome,
       offset: const Duration(minutes: 15),
@@ -17156,14 +17208,14 @@ class _GuestChatState extends State<GuestChat> {
     ),
   ];
 
-  List<_GuestPreviewMessage> scriptMessagesForLocale(AppLocalizations l10n) {
+  List<_GuestPreviewMessage> _scriptMessagesForLocale(AppLocalizations l10n) {
     final now = DateTime.now();
-    return previewScript(l10n).indexed
+    return _previewScript(l10n).indexed
         .map(
           (indexedEntry) => _GuestPreviewMessage(
             id: 'guest-script-${indexedEntry.$1}',
             message: ChatMessage(
-              user: indexedEntry.$2.isSelf ? selfUser : axiUser,
+              user: indexedEntry.$2.isSelf ? _selfUser : _axiUser,
               createdAt: now.subtract(indexedEntry.$2.offset),
               text: indexedEntry.$2.text,
               status: indexedEntry.$2.status,
@@ -17174,75 +17226,75 @@ class _GuestChatState extends State<GuestChat> {
       ..sort((a, b) => b.message.createdAt.compareTo(a.message.createdAt));
   }
 
-  void handleComposerChanged() {
-    final hasText = textController.text.trim().isNotEmpty;
-    if (hasText == composerHasText) return;
+  void _handleComposerChanged() {
+    final hasText = _textController.text.trim().isNotEmpty;
+    if (hasText == _composerHasText) return;
     setState(() {
-      composerHasText = hasText;
+      _composerHasText = hasText;
     });
   }
 
-  void handleSend() {
-    final text = textController.text.trim();
+  void _handleSend() {
+    final text = _textController.text.trim();
     if (text.isEmpty) return;
     final createdAt = DateTime.now();
     final message = _GuestPreviewMessage(
       id: 'guest-message-${createdAt.microsecondsSinceEpoch}',
       animateEntry: true,
       message: ChatMessage(
-        user: selfUser,
+        user: _selfUser,
         createdAt: createdAt,
         text: text,
         status: MessageStatus.sent,
       ),
     );
     setState(() {
-      messages.insert(0, message);
-      composerHasText = false;
+      _messages.insert(0, message);
+      _composerHasText = false;
     });
-    textController.clear();
-    focusNode.requestFocus();
-    scrollToLatest();
+    _textController.clear();
+    _focusNode.requestFocus();
+    _scrollToLatest();
   }
 
-  Future<void> scrollToLatest() async {
-    if (!scrollController.hasClients) return;
+  Future<void> _scrollToLatest() async {
+    if (!_scrollController.hasClients) return;
     final animationDuration = context.read<SettingsCubit>().animationDuration;
     if (animationDuration == Duration.zero) {
-      scrollController.jumpTo(0);
+      _scrollController.jumpTo(0);
       return;
     }
-    await scrollController.animateTo(
+    await _scrollController.animateTo(
       0,
       duration: animationDuration,
       curve: Curves.easeOutCubic,
     );
   }
 
-  List<ChatComposerAccessory> composerAccessories({
+  List<ChatComposerAccessory> _composerAccessories({
     required bool canSend,
     required bool attachmentsEnabled,
   }) {
     return [
       ChatComposerAccessory.leading(
         child: _EmojiPickerAccessory(
-          controller: emojiPopoverController,
-          textController: textController,
+          controller: _emojiPopoverController,
+          textController: _textController,
         ),
       ),
       ChatComposerAccessory.leading(
         child: _AttachmentAccessoryButton(
           enabled: attachmentsEnabled && false,
-          onPressed: showPreviewAttachmentNotice,
+          onPressed: _showPreviewAttachmentNotice,
         ),
       ),
       ChatComposerAccessory.trailing(
-        child: _SendMessageAccessory(enabled: canSend, onPressed: handleSend),
+        child: _SendMessageAccessory(enabled: canSend, onPressed: _handleSend),
       ),
     ];
   }
 
-  void showPreviewAttachmentNotice() {
+  void _showPreviewAttachmentNotice() {
     if (!mounted) return;
     final l10n = context.l10n;
     final messenger = ScaffoldMessenger.maybeOf(context);
@@ -17269,7 +17321,7 @@ class _GuestChatState extends State<GuestChat> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _GuestChatHeader(contact: axiUser),
+          _GuestChatHeader(contact: _axiUser),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -17278,25 +17330,25 @@ class _GuestChatState extends State<GuestChat> {
                   math.max(0.0, constraints.maxWidth - (spacing.m * 2)),
                 );
                 return ListView.builder(
-                  controller: scrollController,
+                  controller: _scrollController,
                   reverse: true,
                   padding: EdgeInsets.zero,
-                  itemCount: messages.length,
+                  itemCount: _messages.length,
                   itemBuilder: (context, index) {
-                    final entry = messages[index];
+                    final entry = _messages[index];
                     final message = entry.message;
-                    final previous = index + 1 < messages.length
-                        ? messages[index + 1].message
+                    final previous = index + 1 < _messages.length
+                        ? _messages[index + 1].message
                         : null;
                     final next = index == 0
                         ? null
-                        : messages[index - 1].message;
+                        : _messages[index - 1].message;
                     return _GuestMessageBubble(
                       entry: entry,
                       message: message,
                       previous: previous,
                       next: next,
-                      selfUserId: selfUser.id,
+                      selfUserId: _selfUser.id,
                       maxWidth: maxBubbleWidth,
                     );
                   },
@@ -17305,14 +17357,14 @@ class _GuestChatState extends State<GuestChat> {
             ),
           ),
           _GuestComposerSection(
-            controller: textController,
-            focusNode: focusNode,
-            actions: composerAccessories(
-              canSend: composerHasContent,
+            controller: _textController,
+            focusNode: _focusNode,
+            actions: _composerAccessories(
+              canSend: _composerHasContent,
               attachmentsEnabled: false,
             ),
-            sendEnabled: composerHasContent,
-            onSend: handleSend,
+            sendEnabled: _composerHasContent,
+            onSend: _handleSend,
           ),
         ],
       ),
@@ -17704,24 +17756,24 @@ class _ChatMessageList extends StatefulWidget {
 }
 
 class _ChatMessageListState extends State<_ChatMessageList> {
-  bool scrollToBottomVisible = false;
-  bool isLoadingMore = false;
-  int? loadEarlierStartingCount;
-  late final ScrollController scrollController;
+  bool _scrollToBottomVisible = false;
+  bool _isLoadingMore = false;
+  int? _loadEarlierStartingCount;
+  late final ScrollController _scrollController;
 
   @override
   void initState() {
     super.initState();
     final controller =
         widget.messageListOptions.scrollController ?? ScrollController();
-    scrollController = controller..addListener(handleScroll);
+    _scrollController = controller..addListener(_handleScroll);
   }
 
   @override
   void dispose() {
-    scrollController.removeListener(handleScroll);
+    _scrollController.removeListener(_handleScroll);
     if (widget.messageListOptions.scrollController == null) {
-      scrollController.dispose();
+      _scrollController.dispose();
     }
     super.dispose();
   }
@@ -17736,9 +17788,9 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     final typingUsers = widget.typingUsers;
     const double loadEarlierTopInset = 8.0;
     final shouldShowLoadEarlierSpinner =
-        isLoadingMore &&
-        (loadEarlierStartingCount == null ||
-            messages.length <= loadEarlierStartingCount!);
+        _isLoadingMore &&
+        (_loadEarlierStartingCount == null ||
+            messages.length <= _loadEarlierStartingCount!);
     return Stack(
       children: [
         Column(
@@ -17748,7 +17800,7 @@ class _ChatMessageListState extends State<_ChatMessageList> {
               child: ListView.builder(
                 physics: messageListOptions.scrollPhysics,
                 padding: EdgeInsets.zero,
-                controller: scrollController,
+                controller: _scrollController,
                 reverse: true,
                 itemCount: messages.length,
                 itemBuilder: (context, index) {
@@ -17758,14 +17810,14 @@ class _ChatMessageListState extends State<_ChatMessageList> {
                       ? messages[index - 1]
                       : null;
                   final message = messages[index];
-                  final isAfterDateSeparator = shouldShowDateSeparator(
+                  final isAfterDateSeparator = _shouldShowDateSeparator(
                     previousMessage,
                     message,
                     messageListOptions,
                   );
                   var isBeforeDateSeparator = false;
                   if (nextMessage != null) {
-                    isBeforeDateSeparator = shouldShowDateSeparator(
+                    isBeforeDateSeparator = _shouldShowDateSeparator(
                       message,
                       nextMessage,
                       messageListOptions,
@@ -17839,11 +17891,11 @@ class _ChatMessageListState extends State<_ChatMessageList> {
                   child: SizedBox(child: CircularProgressIndicator()),
                 ),
           ),
-        if (!scrollToBottomOptions.disabled && scrollToBottomVisible)
+        if (!scrollToBottomOptions.disabled && _scrollToBottomVisible)
           scrollToBottomOptions.scrollToBottomBuilder != null
-              ? scrollToBottomOptions.scrollToBottomBuilder!(scrollController)
+              ? scrollToBottomOptions.scrollToBottomBuilder!(_scrollController)
               : DefaultScrollToBottom(
-                  scrollController: scrollController,
+                  scrollController: _scrollController,
                   readOnly: widget.readOnly,
                   backgroundColor: context.colorScheme.background,
                   textColor: context.colorScheme.primary,
@@ -17852,7 +17904,7 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     );
   }
 
-  bool shouldShowDateSeparator(
+  bool _shouldShowDateSeparator(
     ChatMessage? previousMessage,
     ChatMessage message,
     MessageListOptions messageListOptions,
@@ -17893,45 +17945,46 @@ class _ChatMessageListState extends State<_ChatMessageList> {
     }
   }
 
-  Future<void> handleScroll() async {
-    if (scrollController.offset >= scrollController.position.maxScrollExtent &&
-        !scrollController.position.outOfRange &&
+  Future<void> _handleScroll() async {
+    if (_scrollController.offset >=
+            _scrollController.position.maxScrollExtent &&
+        !_scrollController.position.outOfRange &&
         widget.messageListOptions.onLoadEarlier != null &&
-        !isLoadingMore) {
+        !_isLoadingMore) {
       setState(() {
-        isLoadingMore = true;
-        loadEarlierStartingCount = widget.messages.length;
+        _isLoadingMore = true;
+        _loadEarlierStartingCount = widget.messages.length;
       });
-      showScrollToBottom();
+      _showScrollToBottom();
       await widget.messageListOptions.onLoadEarlier!();
       if (!mounted) {
         return;
       }
       setState(() {
-        isLoadingMore = false;
-        loadEarlierStartingCount = null;
+        _isLoadingMore = false;
+        _loadEarlierStartingCount = null;
       });
       return;
     }
     const double scrollToBottomThreshold = 200.0;
-    if (scrollController.offset > scrollToBottomThreshold) {
-      showScrollToBottom();
+    if (_scrollController.offset > scrollToBottomThreshold) {
+      _showScrollToBottom();
     } else {
-      hideScrollToBottom();
+      _hideScrollToBottom();
     }
   }
 
-  void showScrollToBottom() {
-    if (scrollToBottomVisible) return;
+  void _showScrollToBottom() {
+    if (_scrollToBottomVisible) return;
     setState(() {
-      scrollToBottomVisible = true;
+      _scrollToBottomVisible = true;
     });
   }
 
-  void hideScrollToBottom() {
-    if (!scrollToBottomVisible) return;
+  void _hideScrollToBottom() {
+    if (!_scrollToBottomVisible) return;
     setState(() {
-      scrollToBottomVisible = false;
+      _scrollToBottomVisible = false;
     });
   }
 }
@@ -17946,10 +17999,10 @@ class _ForwardRecipientSheet extends StatefulWidget {
 }
 
 class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
-  List<ComposerRecipient> recipients = const [];
+  List<ComposerRecipient> _recipients = const [];
 
   FanOutTarget? get _selectedTarget {
-    for (final recipient in recipients) {
+    for (final recipient in _recipients) {
       final target = recipient.target;
       if (recipient.included) {
         return target;
@@ -17958,17 +18011,17 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     return null;
   }
 
-  bool get canSend => _selectedTarget != null;
+  bool get _canSend => _selectedTarget != null;
 
-  void handleRecipientAdded(FanOutTarget target) {
+  void _handleRecipientAdded(FanOutTarget target) {
     final address = target.address?.trim();
     if (target.chat == null &&
         target.transport == null &&
         address != null &&
         address.isNotEmpty) {
-      resolveAddressTransport(address).then((transport) {
+      _resolveAddressTransport(address).then((transport) {
         if (!mounted || transport == null) return;
-        applyRecipient(
+        _applyRecipient(
           FanOutTarget.address(
             address: address,
             displayName: target.displayName,
@@ -17979,28 +18032,28 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
       });
       return;
     }
-    applyRecipient(target);
+    _applyRecipient(target);
   }
 
-  void applyRecipient(FanOutTarget target) {
+  void _applyRecipient(FanOutTarget target) {
     setState(() {
-      recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
+      _recipients = <ComposerRecipient>[ComposerRecipient(target: target)];
     });
   }
 
-  void handleRecipientRemoved(String key) {
+  void _handleRecipientRemoved(String key) {
     if (!mounted) return;
     setState(() {
-      recipients = recipients
+      _recipients = _recipients
           .where((recipient) => recipient.key != key)
           .toList(growable: false);
     });
   }
 
-  void handleRecipientToggled(String key) {
+  void _handleRecipientToggled(String key) {
     if (!mounted) return;
     setState(() {
-      recipients = recipients
+      _recipients = _recipients
           .map(
             (recipient) => recipient.key == key
                 ? recipient.copyWith(included: !recipient.included)
@@ -18010,13 +18063,13 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     });
   }
 
-  void handleSend() {
+  void _handleSend() {
     final FanOutTarget? selected = _selectedTarget;
     if (selected == null) return;
     Navigator.of(context).pop(selected);
   }
 
-  Future<MessageTransport?> resolveAddressTransport(String address) async {
+  Future<MessageTransport?> _resolveAddressTransport(String address) async {
     final endpointConfig = context.read<SettingsCubit>().state.endpointConfig;
     final supportsEmail = endpointConfig.smtpEnabled;
     final supportsXmpp = endpointConfig.xmppEnabled;
@@ -18076,7 +18129,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
                     as List<RosterItem>?) ??
                 const <RosterItem>[];
             return RecipientChipsBar(
-              recipients: recipients,
+              recipients: _recipients,
               availableChats: widget.availableChats,
               rosterItems: rosterItems,
               databaseSuggestionAddresses: recipientAddressSuggestions,
@@ -18087,9 +18140,9 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
               allowAddressTargets: true,
               showSuggestionsWhenEmpty: true,
               horizontalPadding: 0,
-              onRecipientAdded: handleRecipientAdded,
-              onRecipientRemoved: handleRecipientRemoved,
-              onRecipientToggled: handleRecipientToggled,
+              onRecipientAdded: _handleRecipientAdded,
+              onRecipientRemoved: _handleRecipientRemoved,
+              onRecipientToggled: _handleRecipientToggled,
             );
           },
         ),
@@ -18108,7 +18161,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
               ),
               SizedBox(width: spacing.s),
               AxiButton.primary(
-                onPressed: canSend ? handleSend : null,
+                onPressed: _canSend ? _handleSend : null,
                 leading: Icon(LucideIcons.send, size: iconSize),
                 child: Text(l10n.commonSend),
               ),
