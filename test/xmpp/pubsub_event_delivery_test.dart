@@ -1,6 +1,7 @@
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/drafts_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -20,6 +21,11 @@ const _conferenceNameAttr = 'name';
 const _conferenceAutojoinAttr = 'autojoin';
 const _conferenceJidAttr = 'jid';
 const _nickTag = 'nick';
+
+const _messageCollectionsNode = 'urn:axi:message-collections';
+const _collectionId = 'important';
+const _messageReferenceId = 'important-message-id';
+const _messageChatJid = 'chat@example.com';
 
 const _peerBareJid = 'peer@example.com';
 const _convTag = 'conv';
@@ -143,6 +149,44 @@ void main() {
     expect(update.bookmark.autojoin, isTrue);
     expect(update.bookmark.nick, equals(_roomNick));
   });
+
+  test(
+    'MessageCollectionsPubSubManager emits update from pubsub notification',
+    () async {
+      final sentEvents = <mox.XmppEvent>[];
+      final manager = MessageCollectionsPubSubManager()
+        ..register(_testAttributes(sentEvents: sentEvents));
+
+      final updatedAt = DateTime.utc(2026, 3, 12, 9, 30);
+      final payload = MessageCollectionSyncPayload(
+        collectionId: _collectionId,
+        chatJid: _messageChatJid,
+        messageReferenceId: _messageReferenceId,
+        updatedAt: updatedAt,
+        active: true,
+        sourceId: 'device-a',
+      );
+      final item = mox.PubSubItem(
+        id: payload.itemId,
+        node: _messageCollectionsNode,
+        payload: payload.toXml(),
+      );
+      final event = mox.PubSubNotificationEvent(item: item, from: _fromJid);
+
+      await manager.onXmppEvent(event);
+      await pumpEventQueue();
+
+      expect(sentEvents, hasLength(1));
+      expect(sentEvents.single, isA<MessageCollectionSyncUpdatedEvent>());
+
+      final update = sentEvents.single as MessageCollectionSyncUpdatedEvent;
+      expect(update.payload.collectionId, _collectionId);
+      expect(update.payload.chatJid, _messageChatJid);
+      expect(update.payload.messageReferenceId, _messageReferenceId);
+      expect(update.payload.updatedAt.toUtc(), updatedAt);
+      expect(update.payload.active, isTrue);
+    },
+  );
 
   test('MucBookmark parses id-only pubsub items', () {
     final item = mox.PubSubItem(id: _roomJid, node: _bookmarksNode);

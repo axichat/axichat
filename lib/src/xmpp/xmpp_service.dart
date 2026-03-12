@@ -59,6 +59,7 @@ import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/drafts_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/email_blocklist_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/xmpp/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
@@ -112,6 +113,8 @@ part 'message_service.dart';
 part 'demo/demo_script_service.dart';
 
 part 'draft_sync_service.dart';
+
+part 'message_collection_sync_service.dart';
 
 part 'message_sanitizer.dart';
 
@@ -348,9 +351,9 @@ abstract interface class XmppBase {
 
   Stream<bool> get selfAvatarHydratingStream;
 
-  DateTime? get _selfAvatarBootstrapCompletedAt;
+  int? get _selfAvatarBootstrapCompletedGeneration;
 
-  set _selfAvatarBootstrapCompletedAt(DateTime? value);
+  set _selfAvatarBootstrapCompletedGeneration(int? value);
 
   XmppStreamReady? get lastStreamReady;
 
@@ -370,6 +373,10 @@ abstract interface class XmppBase {
   List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
+
+  Future<void> publishMessageCollectionSyncEntry(
+    MessageCollectionMembershipEntry entry,
+  );
 
   Stream<void> get databaseReloadStream;
 
@@ -443,10 +450,15 @@ abstract interface class XmppBase {
 }
 
 class XmppStreamReady {
-  const XmppStreamReady({required this.resumed, required this.timestamp});
+  const XmppStreamReady({
+    required this.resumed,
+    required this.timestamp,
+    required this.generation,
+  });
 
   final bool resumed;
   final DateTime timestamp;
+  final int generation;
 
   bool get isResumed => resumed;
 }
@@ -489,6 +501,7 @@ class XmppService extends XmppBase
         DraftSyncService,
         BlockingService,
         MessageService,
+        MessageCollectionSyncService,
         DemoScriptService,
         AvatarService,
         // OmemoService,
@@ -546,7 +559,7 @@ class XmppService extends XmppBase
       StreamController<bool>.broadcast(sync: true);
   StoredAvatar? _cachedSelfAvatar;
   @override
-  DateTime? _selfAvatarBootstrapCompletedAt;
+  int? _selfAvatarBootstrapCompletedGeneration;
   @override
   String? _databasePrefix;
 
@@ -587,6 +600,7 @@ class XmppService extends XmppBase
   StreamController<XmppStreamReady> _streamReadyController =
       StreamController<XmppStreamReady>.broadcast();
   XmppStreamReady? _lastStreamReady;
+  var _streamReadyGeneration = 0;
 
   bool get mamSupported => _mamSupported;
 
@@ -677,11 +691,11 @@ class XmppService extends XmppBase
     if (streamReady == null) {
       return true;
     }
-    final completedAt = _selfAvatarBootstrapCompletedAt;
-    if (completedAt == null) {
+    final completedGeneration = _selfAvatarBootstrapCompletedGeneration;
+    if (completedGeneration == null) {
       return true;
     }
-    return completedAt.isBefore(streamReady.timestamp);
+    return completedGeneration < streamReady.generation;
   }
 
   @override
@@ -1018,6 +1032,7 @@ class XmppService extends XmppBase
           BookmarksManager.bookmarksNotifyFeature,
           conversationIndexNotifyFeature,
           draftsNotifyFeature,
+          messageCollectionsNotifyFeature,
           spamNotifyFeature,
           emailBlocklistNotifyFeature,
         ])),
@@ -1035,6 +1050,7 @@ class XmppService extends XmppBase
         BookmarksManager(),
         ConversationIndexManager(),
         DraftsPubSubManager(),
+        MessageCollectionsPubSubManager(),
         SpamPubSubManager(),
         EmailBlocklistPubSubManager(),
       ]);
@@ -1186,6 +1202,7 @@ class XmppService extends XmppBase
     final ready = XmppStreamReady(
       resumed: resumed,
       timestamp: DateTime.timestamp(),
+      generation: ++_streamReadyGeneration,
     );
     _lastStreamReady = ready;
     if (_streamReadyController.isClosed) return;
@@ -2960,6 +2977,7 @@ class XmppService extends XmppBase
     await bookmarksManager?.close();
     await conversationIndexManager?.close();
     await _connection.getManager<DraftsPubSubManager>()?.close();
+    await _connection.getManager<MessageCollectionsPubSubManager>()?.close();
     await _connection.getManager<SpamPubSubManager>()?.close();
     await _connection.getManager<EmailBlocklistPubSubManager>()?.close();
   }

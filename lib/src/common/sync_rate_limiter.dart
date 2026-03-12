@@ -21,6 +21,7 @@ const int _draftSyncMaxEventsPerWindow = 120;
 const int _spamSyncMaxEventsPerWindow = 120;
 const int _emailBlocklistSyncMaxEventsPerWindow = 120;
 const int _conversationIndexSyncMaxEventsPerWindow = 240;
+const int _messageCollectionSyncMaxEventsPerWindow = 240;
 const int _pinSyncMaxEventsPerWindow = 240;
 
 const SyncRateLimit draftSyncRateLimit = SyncRateLimit(
@@ -40,6 +41,11 @@ const SyncRateLimit emailBlocklistSyncRateLimit = SyncRateLimit(
 );
 const SyncRateLimit conversationIndexSyncRateLimit = SyncRateLimit(
   maxEvents: _conversationIndexSyncMaxEventsPerWindow,
+  window: _syncRateWindow,
+  refreshCooldown: _syncRefreshCooldown,
+);
+const SyncRateLimit messageCollectionSyncRateLimit = SyncRateLimit(
+  maxEvents: _messageCollectionSyncMaxEventsPerWindow,
   window: _syncRateWindow,
   refreshCooldown: _syncRefreshCooldown,
 );

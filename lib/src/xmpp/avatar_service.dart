@@ -127,13 +127,24 @@ final class _AvatarMetadataLoadFailed extends _AvatarMetadataLoadResult {
   const _AvatarMetadataLoadFailed();
 }
 
+final class _SelfAvatarBootstrapReplay {
+  const _SelfAvatarBootstrapReplay({
+    required this.generation,
+    required this.future,
+  });
+
+  final int generation;
+  final Future<void> future;
+}
+
 mixin AvatarService on XmppBase, MucService {
   final _avatarLog = Logger('AvatarService');
   final Set<String> _avatarRefreshInProgress = {};
   final Set<String> _configuredAvatarNodes = {};
   final Set<String> _pubSubAvatarJids = {};
   final Map<String, DateTime> _conversationAvatarRefreshAttempts = {};
-  Future<void>? _selfAvatarBootstrapReplay;
+  _SelfAvatarBootstrapReplay? _selfAvatarBootstrapReplay;
+  int? _pendingSelfAvatarBootstrapGeneration;
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
   static const int _maxAvatarBytes = 512 * 1024;
@@ -443,36 +454,66 @@ mixin AvatarService on XmppBase, MucService {
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
     _selfAvatarBootstrapReplay = null;
-    _selfAvatarBootstrapCompletedAt = null;
+    _pendingSelfAvatarBootstrapGeneration = null;
+    _selfAvatarBootstrapCompletedGeneration = null;
     await super._reset();
   }
 
   Future<void> _bootstrapSelfAvatarIfReady() async {
-    if (lastStreamReady == null) return;
+    final initialStreamReady = lastStreamReady;
+    if (initialStreamReady == null) return;
     if (avatarEncryptionKey == null) return;
-    final replay = _selfAvatarBootstrapReplay;
-    if (replay != null) {
-      await replay;
-      return;
-    }
-    final nextReplay = _runSelfAvatarBootstrap();
-    _selfAvatarBootstrapReplay = nextReplay;
-    try {
-      await nextReplay;
-    } finally {
-      if (identical(_selfAvatarBootstrapReplay, nextReplay)) {
-        _selfAvatarBootstrapReplay = null;
+    var requestedGeneration = initialStreamReady.generation;
+    while (true) {
+      final pendingGeneration = _pendingSelfAvatarBootstrapGeneration;
+      if (pendingGeneration == null ||
+          pendingGeneration < requestedGeneration) {
+        _pendingSelfAvatarBootstrapGeneration = requestedGeneration;
       }
+
+      final replay = _selfAvatarBootstrapReplay;
+      if (replay == null) {
+        final nextGeneration = _pendingSelfAvatarBootstrapGeneration;
+        if (nextGeneration == null) return;
+        final nextReplay = _SelfAvatarBootstrapReplay(
+          generation: nextGeneration,
+          future: _runSelfAvatarBootstrap(nextGeneration),
+        );
+        _selfAvatarBootstrapReplay = nextReplay;
+        try {
+          await nextReplay.future;
+        } finally {
+          if (identical(_selfAvatarBootstrapReplay, nextReplay)) {
+            _selfAvatarBootstrapReplay = null;
+          }
+        }
+      } else {
+        await replay.future;
+      }
+
+      final latestStreamReady = lastStreamReady;
+      if (latestStreamReady == null) return;
+      final completedGeneration = _selfAvatarBootstrapCompletedGeneration;
+      if (completedGeneration != null &&
+          completedGeneration >= latestStreamReady.generation) {
+        final pendingGeneration = _pendingSelfAvatarBootstrapGeneration;
+        if (pendingGeneration != null &&
+            pendingGeneration <= completedGeneration) {
+          _pendingSelfAvatarBootstrapGeneration = null;
+        }
+        return;
+      }
+      requestedGeneration = latestStreamReady.generation;
     }
   }
 
-  Future<void> _runSelfAvatarBootstrap() async {
+  Future<void> _runSelfAvatarBootstrap(int generation) async {
     try {
       await _notifyCachedSelfAvatarIfAvailable();
       await _publishPendingSelfAvatarIfAvailable();
       await refreshSelfAvatarIfNeeded();
     } finally {
-      _selfAvatarBootstrapCompletedAt = DateTime.timestamp();
+      _selfAvatarBootstrapCompletedGeneration = generation;
       _emitSelfAvatarHydrating();
     }
   }

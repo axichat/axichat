@@ -21,6 +21,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get homeTabDrafts => 'Brouillons';
 
   @override
+  String get homeTabImportant => 'Important';
+
+  @override
   String get homeTabSpam => 'Indésirables';
 
   @override
@@ -110,6 +113,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatSearchExcludeSubject => 'Exclure l\'objet';
+
+  @override
+  String get chatSearchImportantOnly => 'Important only';
 
   @override
   String get chatSearchFailed => 'Recherche échouée';
@@ -891,10 +897,19 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatAttachmentTooltip => 'Pièces jointes';
 
   @override
+  String get chatImportantMessagesTooltip => 'Important messages';
+
+  @override
   String get chatPinnedMessagesTooltip => 'Messages épinglés';
 
   @override
   String get chatPinnedMessagesTitle => 'Messages épinglés';
+
+  @override
+  String get chatMarkMessageImportant => 'Mark important';
+
+  @override
+  String get chatRemoveMessageImportant => 'Remove important';
 
   @override
   String get chatPinMessage => 'Épingler le message';
@@ -907,6 +922,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get chatPinnedMissingMessage => 'Le message épinglé est indisponible.';
+
+  @override
+  String get importantMessagesEmpty => 'No important messages yet.';
 
   @override
   String get chatSendMessageTooltip => 'Envoyer le message';
@@ -1918,6 +1936,9 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get profileLinkedEmailAccounts => 'Comptes e-mail';
+
+  @override
+  String get profileBlocklistTitle => 'Blocklist';
 
   @override
   String get profileChangePassword => 'Changer le mot de passe';

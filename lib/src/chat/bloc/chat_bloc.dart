@@ -302,6 +302,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_FileMetadataBatchUpdated>(_onFileMetadataBatchUpdated);
     on<ChatPinnedMessagesOpened>(_onChatPinnedMessagesOpened);
     on<ChatPinnedMessageSelected>(_onChatPinnedMessageSelected);
+    on<ChatImportantMessageSelected>(_onChatImportantMessageSelected);
     on<_RoomStateUpdated>(_onRoomStateUpdated);
     on<_RoomRosterUpdated>(_onRoomRosterUpdated);
     on<_RoomChatsUpdated>(_onRoomChatsUpdated);
@@ -345,6 +346,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatQuoteRequested>(_onChatQuoteRequested);
     on<ChatQuoteCleared>(_onChatQuoteCleared);
     on<ChatMessagePinRequested>(_onChatMessagePinRequested);
+    on<ChatMessageImportantToggled>(_onChatMessageImportantToggled);
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
     on<ChatMessageForwardRequested>(_onChatMessageForwardRequested);
     on<ChatMessageResendRequested>(_onChatMessageResendRequested);
@@ -999,6 +1001,72 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       if (target != null) {
         await _refreshPinnedMessagesFromDatabase(chat);
+        return target;
+      }
+      final nextCount = await _archivedMessageCount(chat);
+      if (nextCount <= previousCount) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  Future<Message?> _ensureImportantMessageAvailableLocally({
+    required Chat chat,
+    required String messageId,
+  }) async {
+    var target = await _messageService.loadMessageByReferenceId(
+      messageId,
+      chatJid: chat.jid,
+    );
+    if (target != null) {
+      return target;
+    }
+    if (chat.isEmailBacked) {
+      if (!_canPageEmailHistory(chat)) {
+        return null;
+      }
+      while (true) {
+        final previousCount = await _archivedMessageCount(chat);
+        await _loadEarlierFromEmail(
+          desiredWindow: previousCount + messageBatchSize,
+        );
+        target = await _messageService.loadMessageByReferenceId(
+          messageId,
+          chatJid: chat.jid,
+        );
+        if (target != null) {
+          return target;
+        }
+        final nextCount = await _archivedMessageCount(chat);
+        if (nextCount <= previousCount) {
+          return null;
+        }
+      }
+    }
+    if (!await _canPageMam(chat)) {
+      return null;
+    }
+    if (_mamBeforeId == null && state.items.isEmpty) {
+      await _hydrateLatestFromMam(chat);
+      target = await _messageService.loadMessageByReferenceId(
+        messageId,
+        chatJid: chat.jid,
+      );
+      if (target != null) {
+        return target;
+      }
+    }
+    while (!_mamComplete) {
+      final previousCount = await _archivedMessageCount(chat);
+      await _loadEarlierFromMam(
+        desiredWindow: previousCount + messageBatchSize,
+      );
+      target = await _messageService.loadMessageByReferenceId(
+        messageId,
+        chatJid: chat.jid,
+      );
+      if (target != null) {
         return target;
       }
       final nextCount = await _archivedMessageCount(chat);
@@ -1973,6 +2041,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required OccupantRole myRole,
     required Occupant occupant,
   }) {
+    if (!occupant.isPresent) {
+      return false;
+    }
     if (!myRole.isModerator &&
         !myAffiliation.isAdmin &&
         !myAffiliation.isOwner) {
@@ -2021,6 +2092,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required OccupantAffiliation myAffiliation,
     required Occupant occupant,
   }) {
+    if (!occupant.isPresent) {
+      return false;
+    }
     if (!myAffiliation.isOwner && !myAffiliation.isAdmin) {
       return false;
     }
@@ -2034,6 +2108,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required OccupantAffiliation myAffiliation,
     required Occupant occupant,
   }) {
+    if (!occupant.isPresent) {
+      return false;
+    }
     if (!myAffiliation.isOwner && !myAffiliation.isAdmin) {
       return false;
     }
@@ -2844,6 +2921,44 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(state.copyWith(viewFilter: MessageTimelineFilter.allWithContact));
     }
     final target = await _ensurePinnedMessageAvailableLocally(
+      chat: chat,
+      messageId: messageId,
+    );
+    if (target == null || target.timestamp == null) {
+      _pendingScrollTargetMessageId = null;
+      return;
+    }
+    _pendingScrollTargetMessageId = target.stanzaID;
+    await _subscribeThroughMessage(chat: chat, target: target);
+    if (_containsMessageId(state.items, target.stanzaID)) {
+      _pendingScrollTargetMessageId = null;
+      _emitScrollTargetRequest(emit, target.stanzaID);
+    }
+  }
+
+  Future<void> _onChatImportantMessageSelected(
+    ChatImportantMessageSelected event,
+    Emitter<ChatState> emit,
+  ) async {
+    final messageId = event.messageReferenceId.trim();
+    if (messageId.isEmpty) {
+      return;
+    }
+    final chat = state.chat;
+    if (chat == null) {
+      return;
+    }
+    final currentMessage = _messageForId(state.items, messageId);
+    if (currentMessage != null) {
+      _pendingScrollTargetMessageId = null;
+      _emitScrollTargetRequest(emit, currentMessage.stanzaID);
+      return;
+    }
+    if (!_forceAllWithContactViewFilter &&
+        state.viewFilter == MessageTimelineFilter.directOnly) {
+      emit(state.copyWith(viewFilter: MessageTimelineFilter.allWithContact));
+    }
+    final target = await _ensureImportantMessageAvailableLocally(
       chat: chat,
       messageId: messageId,
     );
@@ -4973,6 +5088,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         message: event.message,
       );
     }
+  }
+
+  Future<void> _onChatMessageImportantToggled(
+    ChatMessageImportantToggled event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = event.chat;
+    if (event.message.awaitsMucReference(
+      isGroupChat: chat.type == ChatType.groupChat,
+      isEmailBacked: chat.isEmailBacked,
+    )) {
+      return;
+    }
+    await _messageService.setImportantMessage(
+      chat: chat,
+      message: event.message,
+      important: event.important,
+    );
   }
 
   Future<void> _onChatMessageReactionToggled(

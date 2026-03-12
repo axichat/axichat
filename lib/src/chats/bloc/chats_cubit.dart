@@ -28,6 +28,7 @@ enum ChatRouteIndex {
   search,
   details,
   settings,
+  important,
   gallery,
   calendar;
 
@@ -38,6 +39,8 @@ enum ChatRouteIndex {
   bool get isDetails => this == ChatRouteIndex.details;
 
   bool get isSettings => this == ChatRouteIndex.settings;
+
+  bool get isImportant => this == ChatRouteIndex.important;
 
   bool get isGallery => this == ChatRouteIndex.gallery;
 
@@ -54,7 +57,11 @@ ChatRouteIndex resolveStoredChatRoute({
   if (route.isDetails && !hasFocusedMessage) {
     return ChatRouteIndex.main;
   }
-  if ((route.isSettings || route.isGallery || route.isCalendar) && !hasChat) {
+  if ((route.isSettings ||
+          route.isImportant ||
+          route.isGallery ||
+          route.isCalendar) &&
+      !hasChat) {
     return ChatRouteIndex.main;
   }
   return route;
@@ -505,9 +512,42 @@ class ChatsCubit extends Cubit<ChatsState> {
         openJid: jid,
         openChatCalendar: false,
         openChatRoute: ChatRouteIndex.main,
+        pendingOpenMessageChatJid: null,
+        pendingOpenMessageReferenceId: null,
       ),
     );
     await _chatsService.openChat(jid);
+  }
+
+  Future<void> openImportantMessage({
+    required String jid,
+    required String messageReferenceId,
+  }) async {
+    final normalizedMessageReferenceId = messageReferenceId.trim();
+    if (normalizedMessageReferenceId.isEmpty) {
+      await openChat(jid: jid);
+      return;
+    }
+    await openChat(jid: jid);
+    emit(
+      state.copyWith(
+        pendingOpenMessageChatJid: jid,
+        pendingOpenMessageReferenceId: normalizedMessageReferenceId,
+        pendingOpenMessageRequestId: state.pendingOpenMessageRequestId + 1,
+      ),
+    );
+  }
+
+  void clearPendingOpenMessageSelection({required int requestId}) {
+    if (requestId != state.pendingOpenMessageRequestId) {
+      return;
+    }
+    emit(
+      state.copyWith(
+        pendingOpenMessageChatJid: null,
+        pendingOpenMessageReferenceId: null,
+      ),
+    );
   }
 
   Future<void> toggleChat({required String jid}) async {

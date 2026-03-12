@@ -18,6 +18,7 @@ class ChatSearchState extends Equatable {
     this.query = '',
     this.sort = SearchSortOrder.newestFirst,
     this.filter = MessageTimelineFilter.directOnly,
+    this.importantOnly = false,
     this.status = RequestStatus.none,
     this.results = const [],
     this.error,
@@ -30,6 +31,7 @@ class ChatSearchState extends Equatable {
   final String query;
   final SearchSortOrder sort;
   final MessageTimelineFilter filter;
+  final bool importantOnly;
   final RequestStatus status;
   final List<Message> results;
   final String? error;
@@ -44,6 +46,7 @@ class ChatSearchState extends Equatable {
     String? query,
     SearchSortOrder? sort,
     MessageTimelineFilter? filter,
+    bool? importantOnly,
     RequestStatus? status,
     List<Message>? results,
     String? error,
@@ -56,6 +59,7 @@ class ChatSearchState extends Equatable {
       query: query ?? this.query,
       sort: sort ?? this.sort,
       filter: filter ?? this.filter,
+      importantOnly: importantOnly ?? this.importantOnly,
       status: status ?? this.status,
       results: results ?? this.results,
       error: error,
@@ -71,6 +75,7 @@ class ChatSearchState extends Equatable {
     query,
     sort,
     filter,
+    importantOnly,
     status,
     results,
     error,
@@ -120,7 +125,9 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     }
     emit(state.copyWith(active: true));
     await _maybeLoadSubjects();
-    if (state.query.trim().isNotEmpty) {
+    if (state.query.trim().isNotEmpty ||
+        state.subjectFilter?.trim().isNotEmpty == true ||
+        state.importantOnly) {
       await _scheduleSearch(immediate: true);
     }
   }
@@ -151,6 +158,14 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
   void updateFilter(MessageTimelineFilter filter) {
     if (state.filter == filter) return;
     emit(state.copyWith(filter: filter));
+    _scheduleSearch(immediate: true);
+  }
+
+  void updateImportantOnly(bool importantOnly) {
+    if (state.importantOnly == importantOnly) {
+      return;
+    }
+    emit(state.copyWith(importantOnly: importantOnly));
     _scheduleSearch(immediate: true);
   }
 
@@ -207,7 +222,7 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
     _debounce?.cancel();
     final hasQuery = state.query.trim().isNotEmpty;
     final hasSubject = state.subjectFilter?.isNotEmpty == true;
-    if (!hasQuery && !hasSubject) {
+    if (!hasQuery && !hasSubject && !state.importantOnly) {
       emit(
         state.copyWith(
           status: RequestStatus.none,
@@ -229,7 +244,11 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
   Future<void> _performSearch() async {
     final query = state.query.trim();
     final subject = state.subjectFilter?.trim();
-    if (query.isEmpty && (subject == null || subject.isEmpty)) return;
+    if (query.isEmpty &&
+        (subject == null || subject.isEmpty) &&
+        !state.importantOnly) {
+      return;
+    }
     emit(state.copyWith(status: RequestStatus.loading, error: null));
     try {
       final chat = await _chatForSearch();
@@ -238,7 +257,8 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
           emailService != null &&
           chat?.defaultTransport.isEmail == true &&
           (subject == null || subject.isEmpty) &&
-          !state.excludeSubject;
+          !state.excludeSubject &&
+          !state.importantOnly;
       List<Message> results;
       if (shouldUseEmailSearch) {
         results = await emailService.searchMessages(chat: chat, query: query);
@@ -253,6 +273,9 @@ class ChatSearchCubit extends Cubit<ChatSearchState> {
           subject: subject,
           excludeSubject: state.excludeSubject,
           filter: state.filter,
+          collectionId: state.importantOnly
+              ? SystemMessageCollection.important.id
+              : null,
           sortOrder: state.sort,
           limit: resultLimit,
         );

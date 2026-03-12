@@ -26,6 +26,10 @@ class MockPresenceManager extends Mock implements XmppPresenceManager {}
 
 class MockUserAvatarManager extends Mock implements mox.UserAvatarManager {}
 
+class MockPubSubManager extends Mock implements mox.PubSubManager {}
+
+class FakeJid extends Fake implements mox.JID {}
+
 class _FakePathProviderPlatform extends PathProviderPlatform {
   _FakePathProviderPlatform(this.supportPath);
 
@@ -184,6 +188,7 @@ void main() {
     registerFallbackValue(FakeStateKey());
     registerFallbackValue(FakeUserAgent());
     registerFallbackValue(FakeStanzaDetails());
+    registerFallbackValue(FakeJid());
     registerFallbackValue(MessageNotificationChannel.chat);
     registerOmemoFallbacks();
   });
@@ -482,6 +487,118 @@ void main() {
           PathProviderPlatform.instance = originalPathProvider;
           await tempDir.delete(recursive: true);
         }
+      },
+    );
+
+    test(
+      'Keeps self avatar hydrating until the latest stream-ready bootstrap completes.',
+      () async {
+        final pubsubManager = MockPubSubManager();
+        final userAvatarManager = MockUserAvatarManager();
+        final metadataGates = <Completer<void>>[
+          Completer<void>(),
+          Completer<void>(),
+        ];
+        final metadataPayload =
+            (mox.XmlBuilder.withNamespace(
+                  'metadata',
+                  mox.userAvatarMetadataXmlns,
+                )..child(
+                  (mox.XmlBuilder('info')
+                        ..attr('id', 'avatar-hash')
+                        ..attr('bytes', '3')
+                        ..attr('type', 'image/png')
+                        ..attr('width', '1')
+                        ..attr('height', '1'))
+                      .build(),
+                ))
+                .build();
+        final metadataItem = mox.PubSubItem(
+          id: 'avatar-hash',
+          node: mox.userAvatarMetadataXmlns,
+          payload: metadataPayload,
+        );
+        var metadataCalls = 0;
+
+        when(
+          () => mockStateStore.read(key: any(named: 'key')),
+        ).thenReturn(null);
+        await xmppService.close();
+        database = XmppDrift(
+          file: File(''),
+          passphrase: '',
+          executor: NativeDatabase.memory(),
+        );
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => database,
+          notificationService: mockNotificationService,
+        );
+        xmppService.deferSelfAvatarBootstrapForNextConnect();
+        await connectSuccessfully(xmppService);
+        when(() => mockConnection.hasConnectionSettings).thenReturn(true);
+        when(
+          () => mockConnection.getManager<mox.PubSubManager>(),
+        ).thenReturn(pubsubManager);
+        when(
+          () => mockConnection.getManager<mox.UserAvatarManager>(),
+        ).thenReturn(userAvatarManager);
+        when(
+          () => mockConnection.getManager<mox.VCardManager>(),
+        ).thenReturn(null);
+
+        when(
+          () => pubsubManager.getItems(
+            any(),
+            mox.userAvatarMetadataXmlns,
+            maxItems: any(named: 'maxItems'),
+          ),
+        ).thenAnswer((_) async {
+          final callIndex = metadataCalls;
+          metadataCalls += 1;
+          if (callIndex < metadataGates.length) {
+            await metadataGates[callIndex].future;
+          }
+          return moxlib.Result<mox.PubSubError, List<mox.PubSubItem>>(
+            <mox.PubSubItem>[metadataItem],
+          );
+        });
+        when(
+          () => userAvatarManager.getUserAvatarData(any(), any()),
+        ).thenAnswer(
+          (_) async => const moxlib.Result<mox.AvatarError, mox.UserAvatarData>(
+            mox.UserAvatarData('AQID', 'avatar-hash'),
+          ),
+        );
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
+        await pumpEventQueue();
+        xmppService.scheduleSelfAvatarBootstrap();
+        await pumpEventQueue();
+
+        expect(metadataCalls, equals(1));
+        expect(xmppService.selfAvatarHydrating, isTrue);
+
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
+        await pumpEventQueue();
+        xmppService.scheduleSelfAvatarBootstrap();
+        await pumpEventQueue();
+
+        expect(metadataCalls, equals(1));
+        expect(xmppService.selfAvatarHydrating, isTrue);
+
+        metadataGates.first.complete();
+        await pumpEventQueue();
+
+        expect(metadataCalls, equals(2));
+        expect(xmppService.selfAvatarHydrating, isTrue);
+
+        metadataGates.last.complete();
+        await pumpEventQueue();
+
+        expect(metadataCalls, equals(2));
+        expect(xmppService.selfAvatarHydrating, isFalse);
       },
     );
 

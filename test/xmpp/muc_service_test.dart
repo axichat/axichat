@@ -2387,6 +2387,66 @@ void main() {
       },
     );
 
+    test(
+      'PRES-001A [HP] updateOccupantFromPresence upgrades room nick placeholders to occupant ids',
+      () async {
+        const opaqueOccupantId = 'occupant-id-123';
+        xmppService.trackOccupantsFromMessages(_roomJid, [
+          Message(
+            stanzaID: 'history-message',
+            senderJid: _roomJidWithNick,
+            chatJid: _roomJid,
+            timestamp: DateTime.timestamp(),
+            body: 'hello',
+          ),
+        ]);
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: opaqueOccupantId,
+          nick: _roomNick,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: _presenceAvailable,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room, isNotNull);
+        expect(room?.occupants, hasLength(1));
+        expect(room?.occupants.containsKey(_roomJidWithNick), isFalse);
+        expect(
+          room?.occupants[opaqueOccupantId]?.nick,
+          equals(_roomNickTrimmed),
+        );
+      },
+    );
+
+    test(
+      'PRES-001B [HP] trackOccupantsFromMessages preserves opaque occupant ids from history',
+      () async {
+        const opaqueOccupantId = 'occupant-id-123';
+        xmppService.trackOccupantsFromMessages(_roomJid, [
+          Message(
+            stanzaID: 'history-message',
+            senderJid: _roomJidWithNick,
+            occupantID: opaqueOccupantId,
+            chatJid: _roomJid,
+            timestamp: DateTime.timestamp(),
+            body: 'hello',
+          ),
+        ]);
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room, isNotNull);
+        expect(room?.occupants.containsKey(opaqueOccupantId), isTrue);
+        expect(room?.occupants.containsKey(_roomJidWithNick), isFalse);
+        expect(
+          room?.occupants[opaqueOccupantId]?.nick,
+          equals(_roomNickTrimmed),
+        );
+      },
+    );
+
     test('PRES-002 [HP] removeOccupant deletes a roster entry', () async {
       xmppService.updateOccupantFromPresence(
         roomJid: _roomJid,
@@ -2540,6 +2600,60 @@ void main() {
 
         expect(offlineMember, isNotNull);
         expect(offlineMember?.nick, equals(_inviteeJid));
+        expect(offlineMember?.affiliation, OccupantAffiliation.member);
+        expect(offlineMember?.isPresent, isFalse);
+      },
+    );
+
+    test(
+      'REG-010 [HP] fetchRoomAffiliations does not merge jid entries into same-nick live occupants',
+      () async {
+        const opaqueOccupantId = 'occupant-id-123';
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: opaqueOccupantId,
+          nick: _roomNick,
+          affiliation: OccupantAffiliation.none,
+          role: OccupantRole.participant,
+          isPresent: _presenceAvailable,
+        );
+
+        final query = mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: [
+            mox.XMLNode(
+              tag: _itemTag,
+              attributes: {
+                _jidAttr: _inviteeJid,
+                _nickAttr: _roomNickTrimmed,
+                _affiliationAttr: OccupantAffiliation.member.xmlValue,
+              },
+            ),
+          ],
+        );
+        final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
+
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
+
+        await xmppService.fetchRoomAffiliations(
+          roomJid: _roomJid,
+          affiliation: OccupantAffiliation.member,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        final liveOccupant = room?.occupants[opaqueOccupantId];
+        final offlineMember = room?.occupants.values.singleWhere(
+          (occupant) => occupant.realJid == _inviteeJid,
+        );
+
+        expect(liveOccupant, isNotNull);
+        expect(liveOccupant?.affiliation, OccupantAffiliation.none);
+        expect(liveOccupant?.realJid, isNull);
+        expect(offlineMember, isNotNull);
+        expect(offlineMember?.occupantId, isNot(opaqueOccupantId));
         expect(offlineMember?.affiliation, OccupantAffiliation.member);
         expect(offlineMember?.isPresent, isFalse);
       },
@@ -2811,6 +2925,57 @@ void main() {
         expect(xmppService.roomStateFor(_roomJid)?.roomShutdown, isTrue);
       },
     );
+
+    test('PRES-013 [HP] leaveRoom fails via the hard action timeout', () {
+      when(() => mucManager.leaveRoom(any())).thenAnswer(
+        (_) => Completer<moxlib.Result<bool, mox.MUCError>>().future,
+      );
+
+      fakeAsync((async) {
+        Object? capturedError;
+        xmppService
+            .leaveRoom(_roomJid)
+            .then<void>(
+              (_) {},
+              onError: (Object error, StackTrace _) {
+                capturedError = error;
+              },
+            );
+
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 10));
+        async.flushMicrotasks();
+
+        expect(capturedError, isA<TimeoutException>());
+      });
+    });
+
+    test('PRES-014 [HP] destroyRoom fails via the hard action timeout', () {
+      when(
+        () => mucManager.sendOwnerIq(
+          roomJid: any(named: 'roomJid'),
+          children: any(named: 'children'),
+        ),
+      ).thenAnswer((_) => Completer<void>().future);
+
+      fakeAsync((async) {
+        Object? capturedError;
+        xmppService
+            .destroyRoom(roomJid: _roomJid)
+            .then<void>(
+              (_) {},
+              onError: (Object error, StackTrace _) {
+                capturedError = error;
+              },
+            );
+
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 10));
+        async.flushMicrotasks();
+
+        expect(capturedError, isA<TimeoutException>());
+      });
+    });
   });
 
   group('Room status codes', () {
@@ -2857,6 +3022,28 @@ void main() {
         selfPresenceStatusCodes: {MucStatusCode.roomShutdown.code},
       );
       expect(state.roomShutdown, isTrue);
+    });
+
+    test('STAT-014 [HP] terminal room states are not bootstrap pending', () {
+      final shutdownState = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {MucStatusCode.roomShutdown.code},
+      );
+      final kickedState = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {MucStatusCode.kicked.code},
+      );
+      final bannedState = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {MucStatusCode.banned.code},
+      );
+
+      expect(shutdownState.isBootstrapPending, isFalse);
+      expect(kickedState.isBootstrapPending, isFalse);
+      expect(bannedState.isBootstrapPending, isFalse);
     });
   });
 }

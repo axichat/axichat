@@ -1705,6 +1705,42 @@ void main() {
   );
 
   test(
+    'important message selection requests scroll when target is already loaded',
+    () async {
+      final message = Message(
+        stanzaID: 'loaded-important',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        timestamp: DateTime(2026, 1, 2, 12),
+        body: 'Loaded important message',
+      );
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      messageStreamController.add([message]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(const ChatImportantMessageSelected('loaded-important'));
+      await _pumpBloc();
+
+      expect(bloc.state.scrollTargetMessageId, 'loaded-important');
+      expect(bloc.state.scrollTargetRequestId, 1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
     'pinned message selection expands the filter window before scrolling',
     () async {
       final target = Message(
@@ -1759,6 +1795,61 @@ void main() {
           filter: MessageTimelineFilter.allWithContact,
         ),
       ).called(1);
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'important message selection expands the filter window before scrolling',
+    () async {
+      final target = Message(
+        stanzaID: 'filtered-important',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        timestamp: DateTime(2026, 1, 1, 8),
+        body: 'Important message outside the direct-only view',
+      );
+      when(
+        () => messageService.loadMessageByReferenceId(
+          'filtered-important',
+          chatJid: initialChat.jid,
+        ),
+      ).thenAnswer((_) async => target);
+      when(
+        () => mockDatabase.countChatMessagesThrough(
+          any(),
+          throughTimestamp: any(named: 'throughTimestamp'),
+          throughStanzaId: any(named: 'throughStanzaId'),
+          throughDeltaMsgId: any(named: 'throughDeltaMsgId'),
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).thenAnswer((_) async => 1);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(initialChat);
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(const ChatImportantMessageSelected('filtered-important'));
+      await _pumpBloc();
+      expect(bloc.state.viewFilter, MessageTimelineFilter.allWithContact);
+
+      messageStreamController.add([target]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.scrollTargetMessageId, 'filtered-important');
+      expect(bloc.state.scrollTargetRequestId, 1);
 
       await bloc.close();
     },
@@ -1888,6 +1979,115 @@ void main() {
       await _pumpBloc();
 
       expect(bloc.state.scrollTargetMessageId, 'email-target');
+      expect(bloc.state.scrollTargetRequestId, 1);
+
+      await bloc.close();
+      await emailMessageStreamController.close();
+    },
+  );
+
+  test(
+    'important message selection backfills email history and requests scroll',
+    () async {
+      final emailService = MockEmailService();
+      final emailMessageStreamController =
+          StreamController<List<Message>>.broadcast();
+      _mockEmailSync(emailService);
+
+      final emailChat = initialChat.copyWith(
+        deltaChatId: 4,
+        emailAddress: 'peer@example.com',
+        transport: MessageTransport.email,
+      );
+      final newest = Message(
+        stanzaID: 'email-newest',
+        senderJid: emailChat.jid,
+        chatJid: emailChat.jid,
+        timestamp: DateTime(2026, 1, 3, 10),
+        body: 'Newest email message',
+      );
+      final target = Message(
+        stanzaID: 'email-important-target',
+        senderJid: emailChat.jid,
+        chatJid: emailChat.jid,
+        deltaMsgId: 25,
+        timestamp: DateTime(2026, 1, 1, 9),
+        body: 'Older important email message',
+      );
+
+      when(
+        () => emailService.messageStreamForChat(
+          any(),
+          start: any(named: 'start'),
+          end: any(named: 'end'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) => emailMessageStreamController.stream);
+      when(
+        () => emailService.backfillChatHistory(
+          chat: any(named: 'chat'),
+          desiredWindow: any(named: 'desiredWindow'),
+          beforeMessageId: any(named: 'beforeMessageId'),
+          beforeTimestamp: any(named: 'beforeTimestamp'),
+          filter: any(named: 'filter'),
+        ),
+      ).thenAnswer((_) async {});
+
+      var targetLookupCount = 0;
+      when(
+        () => messageService.loadMessageByReferenceId(
+          'email-important-ref',
+          chatJid: emailChat.jid,
+        ),
+      ).thenAnswer((_) async {
+        targetLookupCount += 1;
+        return targetLookupCount >= 2 ? target : null;
+      });
+
+      var countCalls = 0;
+      when(
+        () => messageService.countLocalMessages(
+          jid: any(named: 'jid'),
+          filter: any(named: 'filter'),
+          includePseudoMessages: any(named: 'includePseudoMessages'),
+        ),
+      ).thenAnswer((_) async {
+        countCalls += 1;
+        return countCalls >= 2 ? 2 : 1;
+      });
+      when(
+        () => mockDatabase.countChatMessagesThrough(
+          emailChat.jid,
+          throughTimestamp: target.timestamp!,
+          throughStanzaId: target.stanzaID,
+          throughDeltaMsgId: target.deltaMsgId,
+          filter: MessageTimelineFilter.allWithContact,
+        ),
+      ).thenAnswer((_) async => 75);
+
+      final bloc = ChatBloc(
+        jid: emailChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: emailService,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(emailChat);
+      await _pumpBloc();
+      emailMessageStreamController.add([newest]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      bloc.add(const ChatImportantMessageSelected('email-important-ref'));
+      await _pumpBloc();
+
+      emailMessageStreamController.add([newest, target]);
+      await _pumpBloc();
+
+      expect(bloc.state.scrollTargetMessageId, 'email-important-target');
       expect(bloc.state.scrollTargetRequestId, 1);
 
       await bloc.close();
@@ -2191,6 +2391,49 @@ void main() {
     },
   );
 
+  test(
+    'open XMPP chats send a live read marker once for the latest unread message',
+    () async {
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+      final incoming = Message(
+        stanzaID: 'live-open-chat-unread',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        timestamp: DateTime(2026, 1, 4, 12, 1),
+        body: 'Fresh direct message',
+      );
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      messageStreamController.add([incoming]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      messageStreamController.add([incoming]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => messageService.sendReadMarker(initialChat.jid, incoming.stanzaID),
+      ).called(1);
+
+      await bloc.close();
+    },
+  );
+
   test('catch-up paginates MAM when reconnecting after gap', () async {
     final xmppService = MockXmppService();
     final connectivityController =
@@ -2388,6 +2631,7 @@ void main() {
       const roomJid = 'room@conference.axi.im';
       const selfOccupantId = '$roomJid/self';
       const memberOccupantId = '$roomJid/alice';
+      const offlineMemberOccupantId = '$roomJid/~dave@axi.im';
       const participantOccupantId = '$roomJid/bob';
       const ownerOccupantId = '$roomJid/carol';
 
@@ -2424,6 +2668,14 @@ void main() {
               affiliation: OccupantAffiliation.member,
               role: OccupantRole.participant,
             ),
+            offlineMemberOccupantId: _occupant(
+              occupantId: offlineMemberOccupantId,
+              nick: 'dave@axi.im',
+              realJid: 'dave@axi.im',
+              affiliation: OccupantAffiliation.member,
+              role: OccupantRole.none,
+              isPresent: false,
+            ),
             participantOccupantId: _occupant(
               occupantId: participantOccupantId,
               nick: 'bob',
@@ -2458,6 +2710,11 @@ void main() {
         ]),
       );
       expect(memberEntry('alice').directChatJid, equals('alice@axi.im'));
+      expect(
+        memberEntry('dave@axi.im').actions,
+        equals(const <MucModerationAction>[MucModerationAction.ban]),
+      );
+      expect(memberEntry('dave@axi.im').directChatJid, equals('dave@axi.im'));
       expect(
         memberEntry('bob').actions,
         equals(const <MucModerationAction>[

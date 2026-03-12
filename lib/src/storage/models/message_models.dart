@@ -346,6 +346,11 @@ abstract class Message with _$Message implements Insertable<Message> {
               .firstWhere((id) => id.isNotEmpty, orElse: () => '')
         : '';
 
+    final rawOccupantId = get<mox.OccupantIdData>()?.id.trim();
+    final occupantId = rawOccupantId == null || rawOccupantId.isEmpty
+        ? null
+        : rawOccupantId;
+
     return Message(
       stanzaID: event.id ?? uuid.v4(),
       senderJid: senderJid,
@@ -367,9 +372,7 @@ abstract class Message with _$Message implements Insertable<Message> {
       mucStanzaId: mucStanzaId == null || mucStanzaId.isEmpty
           ? null
           : mucStanzaId,
-      occupantID:
-          get<mox.OccupantIdData>()?.id ??
-          (isGroupChat ? event.from.toString() : null),
+      occupantID: occupantId,
       encryptionProtocol: event.encrypted
           ? EncryptionProtocol.omemo
           : EncryptionProtocol.none,
@@ -382,8 +385,17 @@ abstract class Message with _$Message implements Insertable<Message> {
 
   const Message._();
 
-  bool authorized(mox.JID jid) =>
-      mox.JID.fromString(senderJid).toBare() == jid.toBare();
+  bool authorized(mox.JID jid) {
+    final sender = senderJid.trim();
+    if (sender.isEmpty) {
+      return false;
+    }
+    try {
+      return mox.JID.fromString(sender).toBare() == jid.toBare();
+    } on Exception {
+      return sender == jid.toString();
+    }
+  }
 
   bool authorizedForMutation({required mox.JID from, String? occupantId}) {
     final messageOccupantId = occupantID?.trim();
@@ -601,6 +613,13 @@ final class MessageReference {
   final String value;
 }
 
+final class MucActorIdentity {
+  const MucActorIdentity({required this.senderJid, this.occupantId});
+
+  final String senderJid;
+  final String? occupantId;
+}
+
 extension MessageReferenceIds on Message {
   String? get trimmedStanzaId {
     final stanzaId = stanzaID.trim();
@@ -625,6 +644,19 @@ extension MessageReferenceIds on Message {
     }
     return mucId;
   }
+
+  String? get trimmedOccupantId {
+    final occupantId = occupantID?.trim();
+    if (occupantId == null || occupantId.isEmpty) {
+      return null;
+    }
+    return occupantId;
+  }
+
+  MucActorIdentity get mucActorIdentity => MucActorIdentity(
+    senderJid: senderJid.trim(),
+    occupantId: trimmedOccupantId,
+  );
 
   bool get hasMucReference => trimmedMucStanzaId != null;
 

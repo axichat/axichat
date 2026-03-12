@@ -4,6 +4,7 @@
 import 'package:axichat/src/chat/view/chat.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
+import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -161,6 +162,70 @@ void main() {
     );
     expect(layout.overflowed, isFalse);
   });
+
+  test(
+    'group message avatar lookup uses sender occupant data before opaque occupant ids',
+    () {
+      const roomJid = 'room@conference.axi.im';
+      const senderOccupantId = '$roomJid/friend';
+      final path = resolveMessageAvatarPath(
+        message: const Message(
+          stanzaID: 'm1',
+          senderJid: senderOccupantId,
+          chatJid: roomJid,
+          occupantID: 'opaque-occupant-id',
+        ),
+        roomState: RoomState(
+          roomJid: roomJid,
+          occupants: <String, Occupant>{
+            senderOccupantId: Occupant(
+              occupantId: senderOccupantId,
+              nick: 'friend',
+              realJid: 'friend@axi.im',
+            ),
+          },
+        ),
+        rosterAvatarPathsByJid: const <String, String>{
+          'friend@axi.im': '/avatars/friend.png',
+        },
+        chatAvatarPathsByJid: const <String, String>{},
+      );
+
+      expect(path, '/avatars/friend.png');
+    },
+  );
+
+  test(
+    'group message avatar lookup keeps sender bare jid fallback while room hydration catches up',
+    () {
+      const roomJid = 'room@conference.axi.im';
+      const senderBareJid = 'friend@axi.im';
+      final path = resolveMessageAvatarPath(
+        message: const Message(
+          stanzaID: 'm2',
+          senderJid: senderBareJid,
+          chatJid: roomJid,
+          occupantID: 'opaque-occupant-id',
+        ),
+        roomState: RoomState(
+          roomJid: roomJid,
+          occupants: <String, Occupant>{
+            '$roomJid/friend': Occupant(
+              occupantId: '$roomJid/friend',
+              nick: 'friend',
+              isPresent: true,
+            ),
+          },
+        ),
+        rosterAvatarPathsByJid: const <String, String>{
+          senderBareJid: '/avatars/friend.png',
+        },
+        chatAvatarPathsByJid: const <String, String>{},
+      );
+
+      expect(path, '/avatars/friend.png');
+    },
+  );
 }
 
 class _ReactionLayoutTestApp extends StatelessWidget {

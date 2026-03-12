@@ -4,6 +4,7 @@
 import 'dart:collection';
 
 import 'package:axichat/src/attachments/view/attachment_gallery_screen.dart';
+import 'package:axichat/src/blocklist/view/blocklist_screen.dart';
 import 'package:axichat/src/calendar/guest/guest_calendar_widget.dart';
 import 'package:axichat/src/chats/view/archived_chat_screen.dart';
 import 'package:axichat/src/chats/view/archives_screen.dart';
@@ -41,6 +42,7 @@ final routeLocations = UnmodifiableMapView(<String, AuthenticationRouteData>{
   const AvatarEditorRoute().location: const AvatarEditorRoute(),
   const ArchivesRoute().location: const ArchivesRoute(),
   const AttachmentGalleryRoute().location: const AttachmentGalleryRoute(),
+  const BlocklistRoute().location: const BlocklistRoute(),
   const GuestCalendarRoute().location: const GuestCalendarRoute(),
   const LoginRoute().location: const LoginRoute(),
   const EmailDemoRoute().location: const EmailDemoRoute(),
@@ -136,6 +138,7 @@ class TransitionGoRouteData extends GoRouteData {
       routes: <TypedRoute<RouteData>>[
         TypedGoRoute<ProfileRoute>(path: ProfileRoute.path),
         TypedGoRoute<ArchivesRoute>(path: ArchivesRoute.path),
+        TypedGoRoute<BlocklistRoute>(path: BlocklistRoute.path),
         TypedGoRoute<ArchivedChatRoute>(path: ArchivedChatRoute.path),
       ],
     ),
@@ -312,6 +315,36 @@ class AttachmentGalleryRoute extends TransitionGoRouteData
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       AttachmentGalleryScreen(locate: _resolveLocate(context, state));
+}
+
+class BlocklistRoute extends TransitionGoRouteData
+    with $BlocklistRoute, AuthenticationRouteData {
+  const BlocklistRoute();
+
+  static const path = '/profile/blocklist';
+
+  @override
+  bool get authenticationRequired => true;
+
+  @override
+  String get location => GoRouteData.$location(path);
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) =>
+      const BlocklistScreen();
 }
 
 class ArchivedChatRoute extends TransitionGoRouteData

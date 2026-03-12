@@ -225,6 +225,7 @@ mixin MucService on XmppBase, BaseStreamService {
   static const Duration _mucJoinTimeout = Duration(seconds: 10);
   static const Duration _mucJoinManagerTimeout = Duration(seconds: 3);
   static const Duration _roomConfigSubmitTimeout = Duration(seconds: 5);
+  static const Duration _roomActionTimeout = Duration(seconds: 10);
   static const Duration _roomQueryTimeout = Duration(seconds: 5);
   static const Duration _mucCreateRoomBookmarkTimeout = Duration(seconds: 5);
   static const int _mucJoinSelfPresencePollIntervalMs = 200;
@@ -1846,7 +1847,9 @@ mixin MucService on XmppBase, BaseStreamService {
 
   Future<void> leaveRoom(String roomJid) async {
     if (_connection.getManager<MUCManager>() case final manager?) {
-      await manager.leaveRoom(mox.JID.fromString(roomJid));
+      await manager
+          .leaveRoom(mox.JID.fromString(roomJid))
+          .timeout(_roomActionTimeout);
       _forgetRoomNickname(roomJid: roomJid);
       _forgetRoomPassword(roomJid: roomJid);
       _explicitlyLeftRooms.add(_roomKey(roomJid));
@@ -1862,18 +1865,20 @@ mixin MucService on XmppBase, BaseStreamService {
     final normalizedRoom = _roomKey(roomJid);
     final normalizedReason = _normalizeSubject(reason);
     if (_connection.getManager<MUCManager>() case final manager?) {
-      await manager.sendOwnerIq(
-        roomJid: normalizedRoom,
-        children: [
-          mox.XMLNode(
-            tag: _destroyTag,
+      await manager
+          .sendOwnerIq(
+            roomJid: normalizedRoom,
             children: [
-              if (normalizedReason != null)
-                mox.XMLNode(tag: _reasonTag, text: normalizedReason),
+              mox.XMLNode(
+                tag: _destroyTag,
+                children: [
+                  if (normalizedReason != null)
+                    mox.XMLNode(tag: _reasonTag, text: normalizedReason),
+                ],
+              ),
             ],
-          ),
-        ],
-      );
+          )
+          .timeout(_roomActionTimeout);
       _forgetRoomNickname(roomJid: normalizedRoom);
       _forgetRoomPassword(roomJid: normalizedRoom);
       _explicitlyLeftRooms.add(normalizedRoom);
@@ -3256,7 +3261,9 @@ mixin MucService on XmppBase, BaseStreamService {
     final oldId = '$key/$oldNick';
     final newId = '$key/$newNick';
     final existing = _roomStates[key];
-    final occupant = existing?.occupants[oldId];
+    final occupant =
+        existing?.occupants[oldId] ??
+        _occupantForNick(occupants: existing?.occupants, nick: oldNick);
     if (occupant == null) {
       _upsertOccupant(
         roomJid: key,
@@ -3267,10 +3274,14 @@ mixin MucService on XmppBase, BaseStreamService {
       return;
     }
 
-    removeOccupant(roomJid: key, occupantId: oldId);
+    removeOccupant(roomJid: key, occupantId: occupant.occupantId);
+    final nextOccupantId =
+        _isRoomNickOccupantId(roomKey: key, occupantId: occupant.occupantId)
+        ? newId
+        : occupant.occupantId;
     _upsertOccupant(
       roomJid: key,
-      occupantId: newId,
+      occupantId: nextOccupantId,
       nick: newNick,
       realJid: occupant.realJid,
       affiliation: occupant.affiliation,
@@ -3287,11 +3298,13 @@ mixin MucService on XmppBase, BaseStreamService {
     for (final message in messages) {
       final nick = _nickFromSender(message.senderJid);
       if (nick == null) continue;
-      final occupantId = '$key/$nick';
-      final resolvedNick =
+      final occupantId = message.trimmedOccupantId ?? '$key/$nick';
+      final isSelfMessage =
           selfOccupantId != null &&
-              occupantId == selfOccupantId &&
-              preferredSelfNick?.isNotEmpty == true
+          (occupantId == selfOccupantId ||
+              message.senderJid.trim() == selfOccupantId);
+      final resolvedNick =
+          isSelfMessage && preferredSelfNick?.isNotEmpty == true
           ? preferredSelfNick!
           : nick;
       _upsertOccupant(
@@ -3309,7 +3322,8 @@ mixin MucService on XmppBase, BaseStreamService {
     if (_leftRooms.contains(_roomKey(message.chatJid))) return;
     final nick = event.from.resource;
     if (nick.isEmpty) return;
-    final occupantId = '${_roomKey(message.chatJid)}/$nick';
+    final occupantId =
+        message.trimmedOccupantId ?? '${_roomKey(message.chatJid)}/$nick';
     _upsertOccupant(
       roomJid: message.chatJid,
       occupantId: occupantId,
@@ -3355,12 +3369,19 @@ mixin MucService on XmppBase, BaseStreamService {
     final key = _roomKey(roomJid);
     final existing = _roomStates[key];
     if (existing == null) return;
-    if (!existing.occupants.containsKey(occupantId)) return;
+    final resolvedOccupantId = existing.occupants.containsKey(occupantId)
+        ? occupantId
+        : _occupantIdForRoomNick(
+            roomKey: key,
+            occupants: existing.occupants,
+            occupantId: occupantId,
+          );
+    if (resolvedOccupantId == null) return;
     final updated = Map<String, Occupant>.of(existing.occupants)
-      ..remove(occupantId);
+      ..remove(resolvedOccupantId);
     final room = existing.copyWith(
       occupants: updated,
-      myOccupantId: existing.myOccupantId == occupantId
+      myOccupantId: existing.myOccupantId == resolvedOccupantId
           ? null
           : existing.myOccupantId,
     );
@@ -3373,7 +3394,9 @@ mixin MucService on XmppBase, BaseStreamService {
     required List<mox.XMLNode> items,
   }) async {
     if (_connection.getManager<MUCManager>() case final manager?) {
-      await manager.sendAdminIq(roomJid: roomJid, items: items);
+      await manager
+          .sendAdminIq(roomJid: roomJid, items: items)
+          .timeout(_roomActionTimeout);
       return;
     }
     throw XmppMessageException();
@@ -3542,29 +3565,81 @@ mixin MucService on XmppBase, BaseStreamService {
   String _fallbackNickForAffiliationJid(String jid) =>
       _normalizeBareJid(jid) ?? jid.trim();
 
+  bool _isRoomNickOccupantId({
+    required String roomKey,
+    required String occupantId,
+  }) {
+    final parsed = parseJid(occupantId);
+    if (parsed == null) {
+      return false;
+    }
+    final resource = parsed.resource.trim();
+    if (resource.isEmpty) {
+      return false;
+    }
+    return parsed.toBare().toString() == roomKey;
+  }
+
+  Occupant? _occupantForNick({
+    required Map<String, Occupant>? occupants,
+    required String nick,
+  }) {
+    final trimmedNick = nick.trim();
+    if (occupants == null || trimmedNick.isEmpty) {
+      return null;
+    }
+    final normalizedNick = trimmedNick.toLowerCase();
+    Occupant? fallback;
+    for (final occupant in occupants.values) {
+      if (occupant.nick.toLowerCase() != normalizedNick) {
+        continue;
+      }
+      if (occupant.isPresent) {
+        return occupant;
+      }
+      fallback ??= occupant;
+    }
+    return fallback;
+  }
+
+  String? _occupantIdForRoomNick({
+    required String roomKey,
+    required Map<String, Occupant> occupants,
+    required String occupantId,
+  }) {
+    if (!_isRoomNickOccupantId(roomKey: roomKey, occupantId: occupantId)) {
+      return null;
+    }
+    final nick = addressResourcePart(occupantId)?.trim();
+    if (nick == null || nick.isEmpty) {
+      return null;
+    }
+    return _occupantForNick(occupants: occupants, nick: nick)?.occupantId;
+  }
+
   String? _occupantIdForAffiliationEntry({
     required String roomKey,
     required Map<String, Occupant> occupants,
     required MucAffiliationEntry entry,
   }) {
-    final nick = entry.nick?.trim();
-    if (nick?.isNotEmpty == true) {
-      final occupantId = '$roomKey/$nick';
-      if (occupants.containsKey(occupantId)) {
-        return occupantId;
+    final jid = entry.jid;
+    if (jid != null && jid.isNotEmpty) {
+      for (final occupant in occupants.values) {
+        final realJid = occupant.realJid;
+        if (realJid == null) continue;
+        if (_sameBareJid(realJid, jid)) {
+          return occupant.occupantId;
+        }
       }
+      return null;
     }
 
-    final jid = entry.jid;
-    if (jid == null || jid.isEmpty) return null;
-    for (final occupant in occupants.values) {
-      final realJid = occupant.realJid;
-      if (realJid == null) continue;
-      if (_sameBareJid(realJid, jid)) {
-        return occupant.occupantId;
-      }
+    final nick = entry.nick?.trim();
+    if (nick?.isNotEmpty != true) {
+      return null;
     }
-    return null;
+    final occupantId = '$roomKey/$nick';
+    return occupants.containsKey(occupantId) ? occupantId : null;
   }
 
   RoomState _upsertOccupant({
@@ -3580,10 +3655,11 @@ mixin MucService on XmppBase, BaseStreamService {
     final existing =
         _roomStates[key] ?? RoomState(roomJid: key, occupants: const {});
     final updated = Map<String, Occupant>.of(existing.occupants);
-    var current = updated[occupantId];
+    var resolvedOccupantId = occupantId;
+    var current = updated[resolvedOccupantId];
     final normalizedRealJid = _normalizeBareJid(realJid);
+    String? matchedOccupantId;
     if (current == null && normalizedRealJid != null) {
-      String? matchedOccupantId;
       for (final entry in updated.entries) {
         final existingRealJid = entry.value.realJid;
         if (existingRealJid == null) {
@@ -3595,9 +3671,24 @@ mixin MucService on XmppBase, BaseStreamService {
           break;
         }
       }
-      if (matchedOccupantId != null) {
-        updated.remove(matchedOccupantId);
+    }
+    matchedOccupantId ??= _occupantIdForRoomNick(
+      roomKey: key,
+      occupants: updated,
+      occupantId: occupantId,
+    );
+    if (matchedOccupantId != null && matchedOccupantId != resolvedOccupantId) {
+      current ??= updated[matchedOccupantId];
+      final shouldPromoteIncomingId =
+          !_isRoomNickOccupantId(
+            roomKey: key,
+            occupantId: resolvedOccupantId,
+          ) &&
+          _isRoomNickOccupantId(roomKey: key, occupantId: matchedOccupantId);
+      if (!shouldPromoteIncomingId) {
+        resolvedOccupantId = matchedOccupantId;
       }
+      updated.remove(matchedOccupantId);
     }
     final resolvedRealJid = realJid ?? current?.realJid;
     final resolvedAffiliation =
@@ -3605,12 +3696,12 @@ mixin MucService on XmppBase, BaseStreamService {
     final next =
         (current ??
                 Occupant(
-                  occupantId: occupantId,
+                  occupantId: resolvedOccupantId,
                   nick: nick,
                   isPresent: isPresent ?? false,
                 ))
             .copyWith(
-              occupantId: occupantId,
+              occupantId: resolvedOccupantId,
               nick: nick,
               realJid: resolvedRealJid,
               affiliation: resolvedAffiliation,
@@ -3620,23 +3711,25 @@ mixin MucService on XmppBase, BaseStreamService {
     final isNickMatch =
         nick.toLowerCase() == (_roomNicknames[key]?.toLowerCase() ?? '');
     final isKnownSelf =
-        _isSelfOccupant(next) || existing.myOccupantId == occupantId;
+        _isSelfOccupant(next) || existing.myOccupantId == resolvedOccupantId;
     final allowNickMatch = _mucJoinInFlight(key);
-    updated[occupantId] = next;
+    updated[resolvedOccupantId] = next;
     var myOccupantId = existing.myOccupantId;
     final shouldMarkSelf = isKnownSelf || (allowNickMatch && isNickMatch);
     if (shouldMarkSelf) {
       _roomNicknames[key] = nick;
       if (resolvedRealJid != null) {
-        updated.removeWhere(
-          (key, occupant) =>
-              key != occupantId && occupant.realJid == resolvedRealJid,
-        );
+        updated.removeWhere((key, occupant) {
+          final occupantRealJid = occupant.realJid;
+          return key != resolvedOccupantId &&
+              occupantRealJid != null &&
+              _sameBareJid(occupantRealJid, resolvedRealJid);
+        });
       }
-      if (myOccupantId != null && myOccupantId != occupantId) {
+      if (myOccupantId != null && myOccupantId != resolvedOccupantId) {
         updated.remove(myOccupantId);
       }
-      myOccupantId = occupantId;
+      myOccupantId = resolvedOccupantId;
     }
     final room = existing.copyWith(
       occupants: updated,

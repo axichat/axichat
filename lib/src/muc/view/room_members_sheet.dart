@@ -680,7 +680,6 @@ class _MemberTileState extends State<_MemberTile> {
     final radii = context.radii;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final textScaleFactor = MediaQuery.of(context).textScaler.scale(1);
     final avatarKey = _avatarKey(widget.occupant);
     final overlayAlpha = brightness == Brightness.dark ? 0.12 : 0.06;
     final tileBackgroundColor = widget.isSelf
@@ -742,6 +741,12 @@ class _MemberTileState extends State<_MemberTile> {
       selected: widget.isSelf,
       paintSurface: false,
       tapBounce: false,
+      contentPadding: EdgeInsetsDirectional.fromSTEB(
+        spacing.m,
+        spacing.xs,
+        spacing.m,
+        spacing.xs,
+      ),
     );
 
     final Widget expandedActionsPanel = Padding(
@@ -792,7 +797,6 @@ class _MemberTileState extends State<_MemberTile> {
             ),
           ];
 
-    final bodyInset = _hasActionPanel ? iconCutoutDepth * textScaleFactor : 0.0;
     final tileSurface = CutoutSurface(
       backgroundColor: tileBackgroundColor,
       borderColor: surfaceBorderColor,
@@ -801,9 +805,8 @@ class _MemberTileState extends State<_MemberTile> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final maxWidth = constraints.maxWidth;
-          final bodyWidth = (maxWidth - bodyInset).clamp(0.0, maxWidth);
           return SizedBox(
-            width: bodyWidth,
+            width: maxWidth,
             child: Column(children: [tile, actionsPanel]),
           );
         },

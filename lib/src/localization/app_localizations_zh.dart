@@ -21,6 +21,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get homeTabDrafts => '草稿';
 
   @override
+  String get homeTabImportant => 'Important';
+
+  @override
   String get homeTabSpam => '垃圾邮件';
 
   @override
@@ -110,6 +113,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatSearchExcludeSubject => '排除主题';
+
+  @override
+  String get chatSearchImportantOnly => 'Important only';
 
   @override
   String get chatSearchFailed => '搜索失败';
@@ -835,10 +841,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatAttachmentTooltip => '附件';
 
   @override
+  String get chatImportantMessagesTooltip => 'Important messages';
+
+  @override
   String get chatPinnedMessagesTooltip => '置顶消息';
 
   @override
   String get chatPinnedMessagesTitle => '置顶消息';
+
+  @override
+  String get chatMarkMessageImportant => 'Mark important';
+
+  @override
+  String get chatRemoveMessageImportant => 'Remove important';
 
   @override
   String get chatPinMessage => '置顶消息';
@@ -851,6 +866,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chatPinnedMissingMessage => '置顶消息不可用。';
+
+  @override
+  String get importantMessagesEmpty => 'No important messages yet.';
 
   @override
   String get chatSendMessageTooltip => '发送消息';
@@ -1813,6 +1831,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get profileLinkedEmailAccounts => '邮箱账户';
+
+  @override
+  String get profileBlocklistTitle => 'Blocklist';
 
   @override
   String get profileChangePassword => '更改密码';

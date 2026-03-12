@@ -66,6 +66,15 @@ final class ChatPinnedMessageSelected extends ChatEvent {
   List<Object?> get props => [messageStanzaId];
 }
 
+final class ChatImportantMessageSelected extends ChatEvent {
+  const ChatImportantMessageSelected(this.messageReferenceId);
+
+  final String messageReferenceId;
+
+  @override
+  List<Object?> get props => [messageReferenceId];
+}
+
 final class ChatRoomMembersOpened extends ChatEvent {
   const ChatRoomMembersOpened();
 
@@ -496,6 +505,21 @@ final class ChatMessagePinRequested extends ChatEvent {
 
   @override
   List<Object?> get props => [message, pin, chat, roomState];
+}
+
+final class ChatMessageImportantToggled extends ChatEvent {
+  const ChatMessageImportantToggled({
+    required this.message,
+    required this.important,
+    required this.chat,
+  });
+
+  final Message message;
+  final bool important;
+  final Chat chat;
+
+  @override
+  List<Object?> get props => [message, important, chat];
 }
 
 final class ChatMessageReactionToggled extends ChatEvent {

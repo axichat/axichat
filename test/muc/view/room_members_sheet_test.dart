@@ -164,7 +164,7 @@ void main() {
       await tester.tap(find.text('alice'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Open chat'), findsOneWidget);
+      expect(find.text('Open DM'), findsOneWidget);
       expect(find.text('Kick'), findsOneWidget);
 
       final expandedHeight = tester.getSize(bubbleFinder.first).height;
@@ -176,7 +176,7 @@ void main() {
       expect(moderationCalls, 1);
       expect(find.byType(AxiProgressIndicator), findsOneWidget);
 
-      await tester.tap(find.text('Open chat'));
+      await tester.tap(find.text('Open DM'));
       await tester.pump();
       expect(directChatCalls, 0);
 
@@ -185,11 +185,82 @@ void main() {
 
       expect(find.byType(AxiProgressIndicator), findsNothing);
 
-      await tester.tap(find.text('Open chat'));
+      await tester.tap(find.text('Open DM'));
       await tester.pumpAndSettle();
       expect(directChatCalls, 1);
     },
   );
+
+  testWidgets('member tile bubble fills the available sheet width', (
+    tester,
+  ) async {
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+    const memberOccupantId = '$roomJid/alice';
+
+    await tester.pumpWidget(
+      _RoomMembersSheetTestApp(
+        child: RoomMembersSheet(
+          roomState: RoomState(
+            roomJid: roomJid,
+            myOccupantId: selfOccupantId,
+            occupants: <String, Occupant>{
+              selfOccupantId: Occupant(
+                occupantId: selfOccupantId,
+                nick: 'self',
+                realJid: 'self@axi.im',
+                affiliation: OccupantAffiliation.member,
+                role: OccupantRole.participant,
+              ),
+              memberOccupantId: Occupant(
+                occupantId: memberOccupantId,
+                nick: 'alice',
+                realJid: 'alice@axi.im',
+                affiliation: OccupantAffiliation.member,
+                role: OccupantRole.participant,
+              ),
+            },
+          ),
+          memberSections: <RoomMemberSection>[
+            RoomMemberSection(
+              kind: RoomMemberSectionKind.members,
+              members: <RoomMemberEntry>[
+                RoomMemberEntry(
+                  occupant: Occupant(
+                    occupantId: memberOccupantId,
+                    nick: 'alice',
+                    realJid: 'alice@axi.im',
+                    affiliation: OccupantAffiliation.member,
+                    role: OccupantRole.participant,
+                  ),
+                  actions: <MucModerationAction>[MucModerationAction.kick],
+                  directChatJid: 'alice@axi.im',
+                ),
+              ],
+            ),
+          ],
+          canInvite: false,
+          avatarUpdateInFlight: false,
+          onInvite: (_) {},
+          onAction: (_, _, _) async {},
+          onOpenDirectChat: (_) async {},
+        ),
+      ),
+    );
+
+    final tileFinder = find.byWidgetPredicate(
+      (widget) => widget is AxiListTile && widget.title == 'alice',
+    );
+    final bubbleFinder = find.ancestor(
+      of: tileFinder,
+      matching: find.byType(CutoutSurface),
+    );
+    final bubbleRect = tester.getRect(bubbleFinder.first);
+    final sheetRect = tester.getRect(find.byType(RoomMembersSheet));
+
+    expect(bubbleRect.left, closeTo(sheetRect.left + axiSpacing.m, 0.001));
+    expect(bubbleRect.right, closeTo(sheetRect.right - axiSpacing.m, 0.001));
+  });
 
   testWidgets('member action timeout clears loading after 10 seconds', (
     tester,

@@ -39,6 +39,7 @@ class AppBarActionItem {
     return AxiMenuAction(
       label: label,
       icon: iconData,
+      leading: icon,
       destructive: destructive,
       enabled: isEnabled,
       onPressed: isEnabled ? onPressed : null,

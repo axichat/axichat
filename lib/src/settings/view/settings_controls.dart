@@ -172,6 +172,11 @@ class SettingsControls extends StatelessWidget {
               ),
             ),
             _SettingsActionButton(
+              iconData: LucideIcons.userX,
+              label: context.l10n.profileBlocklistTitle,
+              onPressed: () => context.push(const BlocklistRoute().location),
+            ),
+            _SettingsActionButton(
               iconData: LucideIcons.keyRound,
               label: context.l10n.profileChangePassword,
               onPressed: onChangePassword,

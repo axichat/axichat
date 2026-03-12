@@ -112,6 +112,7 @@ abstract interface class XmppDatabase implements Database {
     String? subject,
     bool excludeSubject = false,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    String? collectionId,
     int limit,
     bool ascending,
   });
@@ -232,6 +233,51 @@ abstract interface class XmppDatabase implements Database {
   );
 
   Future<List<String>> deleteMessageAttachments(String messageId);
+
+  Future<void> seedSystemMessageCollections();
+
+  Stream<List<MessageCollectionMembershipEntry>>
+  watchMessageCollectionMemberships(String collectionId, {String? chatJid});
+
+  Future<List<MessageCollectionMembershipEntry>>
+  getMessageCollectionMemberships(
+    String collectionId, {
+    String? chatJid,
+    bool includeInactive = false,
+  });
+  Future<List<MessageCollectionMembershipEntry>>
+  getAllMessageCollectionMemberships({bool includeInactive = false});
+
+  Future<MessageCollectionMembershipEntry?> getMessageCollectionMembership({
+    required String collectionId,
+    required String chatJid,
+    required String messageReferenceId,
+  });
+
+  Future<void> applyMessageCollectionMembershipMutation({
+    required String collectionId,
+    required String chatJid,
+    required String messageReferenceId,
+    required String? messageStanzaId,
+    required String? messageOriginId,
+    required String? messageMucStanzaId,
+    required int? deltaAccountId,
+    required int? deltaMsgId,
+    required DateTime addedAt,
+    required bool active,
+  });
+
+  Future<void> normalizeMessageCollectionMembershipAliases({
+    required String collectionId,
+    required String chatJid,
+    required String canonicalMessageReferenceId,
+    required Iterable<String> aliases,
+    required String? messageStanzaId,
+    required String? messageOriginId,
+    required String? messageMucStanzaId,
+    required int? deltaAccountId,
+    required int? deltaMsgId,
+  });
 
   Stream<List<PinnedMessageEntry>> watchPinnedMessages(String chatJid);
 
@@ -1454,6 +1500,8 @@ class EmailSpamlistAccessor
 @DriftDatabase(
   tables: [
     Messages,
+    MessageCollections,
+    MessageCollectionMemberships,
     PinnedMessages,
     MessageAttachments,
     MessageShares,
@@ -1560,7 +1608,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 35;
+  int get schemaVersion => 36;
 
   @override
   MigrationStrategy get migration {
@@ -1569,6 +1617,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
         await m.createAll();
         await _createMessageSearchInfrastructure();
         await _createRecipientAddressTriggers();
+        await seedSystemMessageCollections();
       },
       onUpgrade: (m, from, to) async {
         if (from < 2) {
@@ -1829,11 +1878,35 @@ WHERE transport IS NULL
         if (from < 35) {
           await m.createTable(reactionStates);
         }
+        if (from < 36) {
+          await m.createTable(messageCollections);
+          await m.createTable(messageCollectionMemberships);
+          await seedSystemMessageCollections();
+        }
       },
       beforeOpen: (_) async {
         await customStatement('PRAGMA foreign_keys = ON');
       },
     );
+  }
+
+  @override
+  Future<void> seedSystemMessageCollections() async {
+    final now = DateTime.timestamp().toUtc();
+    final collections = <MessageCollectionEntry>[
+      MessageCollectionEntry(
+        id: SystemMessageCollection.important.id,
+        title: null,
+        isSystem: true,
+        sortOrder: 0,
+        createdAt: now,
+        updatedAt: now,
+        active: true,
+      ),
+    ];
+    for (final entry in collections) {
+      await into(messageCollections).insertOnConflictUpdate(entry);
+    }
   }
 
   @override
@@ -2143,14 +2216,17 @@ WHERE transport IS NULL
     String? subject,
     bool excludeSubject = false,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    String? collectionId,
     int limit = 200,
     bool ascending = false,
   }) async {
     final normalizedQuery = query?.trim().toLowerCase() ?? '';
     final normalizedSubject = subject?.trim().toLowerCase() ?? '';
+    final normalizedCollectionId = collectionId?.trim() ?? '';
     final hasQuery = normalizedQuery.isNotEmpty;
     final hasSubject = normalizedSubject.isNotEmpty;
-    if (!hasQuery && !hasSubject) return const [];
+    final hasCollectionFilter = normalizedCollectionId.isNotEmpty;
+    if (!hasQuery && !hasSubject && !hasCollectionFilter) return const [];
     final ftsQuery = hasQuery ? _escapeFtsQuery(normalizedQuery) : '';
     final filterValue = filter.index;
     final orderClause = ascending ? 'ASC' : 'DESC';
@@ -2161,6 +2237,40 @@ WHERE transport IS NULL
         ? 'JOIN messages_fts fts ON fts.rowid = m.rowid'
         : '';
     final ftsClause = hasQuery ? 'AND fts.body MATCH ?' : '';
+    final collectionClause = hasCollectionFilter
+        ? '''
+        AND EXISTS (
+          SELECT 1
+          FROM message_collection_memberships mcm
+          WHERE mcm.collection_id = ?
+            AND mcm.chat_jid = m.chat_jid
+            AND mcm.active = 1
+            AND (
+              mcm.message_reference_id = m.stanza_i_d OR
+              mcm.message_reference_id = m.origin_i_d OR
+              mcm.message_reference_id = m.muc_stanza_id OR
+              (
+                mcm.message_stanza_id IS NOT NULL AND
+                mcm.message_stanza_id = m.stanza_i_d
+              ) OR
+              (
+                mcm.message_origin_id IS NOT NULL AND
+                mcm.message_origin_id = m.origin_i_d
+              ) OR
+              (
+                mcm.message_muc_stanza_id IS NOT NULL AND
+                mcm.message_muc_stanza_id = m.muc_stanza_id
+              ) OR
+              (
+                mcm.delta_msg_id IS NOT NULL AND
+                mcm.delta_account_id IS NOT NULL AND
+                m.delta_msg_id = mcm.delta_msg_id AND
+                m.delta_account_id = mcm.delta_account_id
+              )
+            )
+        )
+        '''
+        : '';
     final selectable = customSelect(
       '''
       SELECT m.*
@@ -2174,6 +2284,7 @@ WHERE transport IS NULL
         ON mp.share_id = mc.share_id AND mp.contact_jid = ?
       WHERE m.chat_jid = ?
         $ftsClause
+        $collectionClause
         AND (
           CASE WHEN ? = 0 THEN
             (mc.share_id IS NULL OR COALESCE(ms.participant_count, 0) <= 2)
@@ -2196,6 +2307,7 @@ WHERE transport IS NULL
         Variable<String>(jid),
         Variable<String>(jid),
         if (hasQuery) Variable<String>(ftsQuery),
+        if (hasCollectionFilter) Variable<String>(normalizedCollectionId),
         Variable<int>(filterValue),
         Variable<int>(hasSubject ? 1 : 0),
         Variable<int>(excludeSubject ? 1 : 0),
@@ -2203,7 +2315,13 @@ WHERE transport IS NULL
         Variable<String>(subjectPattern),
         Variable<int>(limit),
       ],
-      readsFrom: {messages, messageCopies, messageShares, messageParticipants},
+      readsFrom: {
+        messages,
+        messageCopies,
+        messageShares,
+        messageParticipants,
+        messageCollectionMemberships,
+      },
     );
     return selectable.map((row) => messages.map(row.data)).get();
   }
@@ -4324,6 +4442,293 @@ WHERE email_from_address IN ($placeholderClause)
     if (attachments.isEmpty) return const [];
     await messageAttachmentsAccessor.deleteForMessage(messageId);
     return attachments.map((attachment) => attachment.fileMetadataId).toList();
+  }
+
+  @override
+  Stream<List<MessageCollectionMembershipEntry>>
+  watchMessageCollectionMemberships(String collectionId, {String? chatJid}) {
+    final query = select(messageCollectionMemberships)
+      ..where(
+        (tbl) =>
+            tbl.collectionId.equals(collectionId) & tbl.active.equals(true),
+      )
+      ..orderBy([
+        (tbl) => OrderingTerm(expression: tbl.addedAt, mode: OrderingMode.desc),
+        (tbl) => OrderingTerm(
+          expression: tbl.messageReferenceId,
+          mode: OrderingMode.desc,
+        ),
+      ]);
+    final normalizedChatJid = chatJid?.trim();
+    if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
+      query.where((tbl) => tbl.chatJid.equals(normalizedChatJid));
+    }
+    return query.watch();
+  }
+
+  @override
+  Future<List<MessageCollectionMembershipEntry>>
+  getMessageCollectionMemberships(
+    String collectionId, {
+    String? chatJid,
+    bool includeInactive = false,
+  }) {
+    final query = select(messageCollectionMemberships)
+      ..where((tbl) => tbl.collectionId.equals(collectionId))
+      ..orderBy([
+        (tbl) => OrderingTerm(expression: tbl.addedAt, mode: OrderingMode.desc),
+        (tbl) => OrderingTerm(
+          expression: tbl.messageReferenceId,
+          mode: OrderingMode.desc,
+        ),
+      ]);
+    if (!includeInactive) {
+      query.where((tbl) => tbl.active.equals(true));
+    }
+    final normalizedChatJid = chatJid?.trim();
+    if (normalizedChatJid != null && normalizedChatJid.isNotEmpty) {
+      query.where((tbl) => tbl.chatJid.equals(normalizedChatJid));
+    }
+    return query.get();
+  }
+
+  @override
+  Future<List<MessageCollectionMembershipEntry>>
+  getAllMessageCollectionMemberships({bool includeInactive = false}) {
+    final query = select(messageCollectionMemberships)
+      ..orderBy([
+        (tbl) => OrderingTerm(expression: tbl.addedAt, mode: OrderingMode.desc),
+        (tbl) => OrderingTerm(
+          expression: tbl.messageReferenceId,
+          mode: OrderingMode.desc,
+        ),
+      ]);
+    if (!includeInactive) {
+      query.where((tbl) => tbl.active.equals(true));
+    }
+    return query.get();
+  }
+
+  @override
+  Future<MessageCollectionMembershipEntry?> getMessageCollectionMembership({
+    required String collectionId,
+    required String chatJid,
+    required String messageReferenceId,
+  }) {
+    final query = select(messageCollectionMemberships)
+      ..where((tbl) => tbl.collectionId.equals(collectionId))
+      ..where((tbl) => tbl.chatJid.equals(chatJid))
+      ..where((tbl) => tbl.messageReferenceId.equals(messageReferenceId));
+    return query.getSingleOrNull();
+  }
+
+  @override
+  Future<void> applyMessageCollectionMembershipMutation({
+    required String collectionId,
+    required String chatJid,
+    required String messageReferenceId,
+    required String? messageStanzaId,
+    required String? messageOriginId,
+    required String? messageMucStanzaId,
+    required int? deltaAccountId,
+    required int? deltaMsgId,
+    required DateTime addedAt,
+    required bool active,
+  }) async {
+    final normalizedCollectionId = collectionId.trim();
+    final normalizedChatJid = chatJid.trim();
+    final normalizedReferenceId = messageReferenceId.trim();
+    if (normalizedCollectionId.isEmpty ||
+        normalizedChatJid.isEmpty ||
+        normalizedReferenceId.isEmpty) {
+      return;
+    }
+    String? normalizeValue(String? value) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) {
+        return null;
+      }
+      return trimmed;
+    }
+
+    final normalizedAddedAt = addedAt.toUtc();
+    final normalizedDeltaAccountId = deltaMsgId == null ? null : deltaAccountId;
+    await transaction(() async {
+      final existing = await getMessageCollectionMembership(
+        collectionId: normalizedCollectionId,
+        chatJid: normalizedChatJid,
+        messageReferenceId: normalizedReferenceId,
+      );
+      if (existing != null) {
+        final existingAddedAt = existing.addedAt.toUtc();
+        if (existingAddedAt.isAfter(normalizedAddedAt)) {
+          return;
+        }
+        final sameTimestamp = existingAddedAt.isAtSameMomentAs(
+          normalizedAddedAt,
+        );
+        final aliasChanged =
+            normalizeValue(existing.messageStanzaId) !=
+                normalizeValue(messageStanzaId) ||
+            normalizeValue(existing.messageOriginId) !=
+                normalizeValue(messageOriginId) ||
+            normalizeValue(existing.messageMucStanzaId) !=
+                normalizeValue(messageMucStanzaId) ||
+            existing.deltaAccountId != normalizedDeltaAccountId ||
+            existing.deltaMsgId != deltaMsgId;
+        if (sameTimestamp &&
+            (!existing.active || existing.active == active) &&
+            !aliasChanged) {
+          return;
+        }
+      }
+      await into(messageCollectionMemberships).insertOnConflictUpdate(
+        MessageCollectionMembershipEntry(
+          collectionId: normalizedCollectionId,
+          chatJid: normalizedChatJid,
+          messageReferenceId: normalizedReferenceId,
+          messageStanzaId: normalizeValue(messageStanzaId),
+          messageOriginId: normalizeValue(messageOriginId),
+          messageMucStanzaId: normalizeValue(messageMucStanzaId),
+          deltaAccountId: normalizedDeltaAccountId,
+          deltaMsgId: deltaMsgId,
+          addedAt: normalizedAddedAt,
+          active: active,
+        ),
+      );
+    });
+  }
+
+  @override
+  Future<void> normalizeMessageCollectionMembershipAliases({
+    required String collectionId,
+    required String chatJid,
+    required String canonicalMessageReferenceId,
+    required Iterable<String> aliases,
+    required String? messageStanzaId,
+    required String? messageOriginId,
+    required String? messageMucStanzaId,
+    required int? deltaAccountId,
+    required int? deltaMsgId,
+  }) async {
+    final normalizedCollectionId = collectionId.trim();
+    final normalizedChatJid = chatJid.trim();
+    final canonical = canonicalMessageReferenceId.trim();
+    if (normalizedCollectionId.isEmpty ||
+        normalizedChatJid.isEmpty ||
+        canonical.isEmpty) {
+      return;
+    }
+    String? normalizeValue(String? value) {
+      final trimmed = value?.trim();
+      if (trimmed == null || trimmed.isEmpty) {
+        return null;
+      }
+      return trimmed;
+    }
+
+    String? firstNonEmpty(Iterable<String?> values) {
+      for (final value in values) {
+        final normalized = normalizeValue(value);
+        if (normalized != null) {
+          return normalized;
+        }
+      }
+      return null;
+    }
+
+    final normalizedAliases = <String>{
+      canonical,
+      for (final alias in aliases)
+        if (alias.trim().isNotEmpty) alias.trim(),
+    }.toList(growable: false);
+    await transaction(() async {
+      final existing =
+          await (select(messageCollectionMemberships)
+                ..where(
+                  (tbl) => tbl.collectionId.equals(normalizedCollectionId),
+                )
+                ..where((tbl) => tbl.chatJid.equals(normalizedChatJid))
+                ..where(
+                  (tbl) => tbl.messageReferenceId.isIn(normalizedAliases),
+                ))
+              .get();
+      if (existing.isEmpty) {
+        return;
+      }
+
+      MessageCollectionMembershipEntry latest = existing.first;
+      for (final entry in existing.skip(1)) {
+        final latestAddedAt = latest.addedAt.toUtc();
+        final entryAddedAt = entry.addedAt.toUtc();
+        if (entryAddedAt.isAfter(latestAddedAt)) {
+          latest = entry;
+          continue;
+        }
+        if (!entryAddedAt.isAtSameMomentAs(latestAddedAt)) {
+          continue;
+        }
+        if (!entry.active && latest.active) {
+          latest = entry;
+          continue;
+        }
+        if (entry.messageReferenceId == canonical &&
+            latest.messageReferenceId != canonical) {
+          latest = entry;
+        }
+      }
+
+      final resolvedStanzaId = firstNonEmpty([
+        messageStanzaId,
+        latest.messageStanzaId,
+        for (final entry in existing) entry.messageStanzaId,
+      ]);
+      final resolvedOriginId = firstNonEmpty([
+        messageOriginId,
+        latest.messageOriginId,
+        for (final entry in existing) entry.messageOriginId,
+      ]);
+      final resolvedMucStanzaId = firstNonEmpty([
+        messageMucStanzaId,
+        latest.messageMucStanzaId,
+        for (final entry in existing) entry.messageMucStanzaId,
+      ]);
+      final resolvedDeltaMsgId = deltaMsgId ?? latest.deltaMsgId;
+      int? resolvedDeltaAccountId;
+      if (resolvedDeltaMsgId != null) {
+        resolvedDeltaAccountId = deltaAccountId ?? latest.deltaAccountId;
+        if (resolvedDeltaAccountId == null) {
+          for (final entry in existing) {
+            final candidate = entry.deltaAccountId;
+            if (candidate == null) {
+              continue;
+            }
+            resolvedDeltaAccountId = candidate;
+            break;
+          }
+        }
+      }
+
+      await (delete(messageCollectionMemberships)
+            ..where((tbl) => tbl.collectionId.equals(normalizedCollectionId))
+            ..where((tbl) => tbl.chatJid.equals(normalizedChatJid))
+            ..where((tbl) => tbl.messageReferenceId.isIn(normalizedAliases)))
+          .go();
+      await into(messageCollectionMemberships).insertOnConflictUpdate(
+        MessageCollectionMembershipEntry(
+          collectionId: normalizedCollectionId,
+          chatJid: normalizedChatJid,
+          messageReferenceId: canonical,
+          messageStanzaId: resolvedStanzaId,
+          messageOriginId: resolvedOriginId,
+          messageMucStanzaId: resolvedMucStanzaId,
+          deltaAccountId: resolvedDeltaAccountId,
+          deltaMsgId: resolvedDeltaMsgId,
+          addedAt: latest.addedAt.toUtc(),
+          active: latest.active,
+        ),
+      );
+    });
   }
 
   @override

@@ -870,12 +870,6 @@ class _PeerCapabilities {
     supportsReceipts: false,
     features: <String>[],
   );
-
-  static const supportsAll = _PeerCapabilities(
-    supportsMarkers: true,
-    supportsReceipts: true,
-    features: <String>[],
-  );
 }
 
 List<String> _demoXmppFeatures() {
@@ -1675,12 +1669,18 @@ mixin MessageService
     String? subject,
     bool excludeSubject = false,
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+    String? collectionId,
     SearchSortOrder sortOrder = SearchSortOrder.newestFirst,
     int limit = 200,
   }) async {
     final trimmed = query?.trim() ?? '';
     final trimmedSubject = subject?.trim() ?? '';
-    if (trimmed.isEmpty && trimmedSubject.isEmpty) return const [];
+    final normalizedCollectionId = collectionId?.trim();
+    if (trimmed.isEmpty &&
+        trimmedSubject.isEmpty &&
+        (normalizedCollectionId == null || normalizedCollectionId.isEmpty)) {
+      return const [];
+    }
     return await _dbOpReturning<XmppDatabase, List<Message>>(
       (db) => db.searchChatMessages(
         jid: jid,
@@ -1688,6 +1688,7 @@ mixin MessageService
         subject: trimmedSubject,
         excludeSubject: excludeSubject,
         filter: filter,
+        collectionId: normalizedCollectionId,
         limit: limit,
         ascending: sortOrder == SearchSortOrder.oldestFirst,
       ),
@@ -1706,6 +1707,131 @@ mixin MessageService
     watchFunction: (db) async => db.watchDrafts(start: start, end: end),
     getFunction: (db) => db.getDrafts(start: start, end: end),
   );
+
+  Stream<List<MessageCollectionMembershipEntry>>
+  messageCollectionMembershipsStream(String collectionId, {String? chatJid}) =>
+      createPaginatedStream<MessageCollectionMembershipEntry, XmppDatabase>(
+        watchFunction: (db) async => db.watchMessageCollectionMemberships(
+          collectionId,
+          chatJid: chatJid,
+        ),
+        getFunction: (db) =>
+            db.getMessageCollectionMemberships(collectionId, chatJid: chatJid),
+      );
+
+  Stream<List<MessageCollectionMembershipEntry>> importantMessagesStream({
+    String? chatJid,
+  }) => messageCollectionMembershipsStream(
+    SystemMessageCollection.important.id,
+    chatJid: chatJid,
+  );
+
+  Future<void> setImportantMessage({
+    required Chat chat,
+    required Message message,
+    required bool important,
+  }) async {
+    await setMessageCollectionMembership(
+      collectionId: SystemMessageCollection.important.id,
+      chat: chat,
+      message: message,
+      active: important,
+    );
+  }
+
+  Future<void> setMessageCollectionMembership({
+    required String collectionId,
+    required Chat chat,
+    required Message message,
+    required bool active,
+  }) async {
+    final normalizedCollectionId = collectionId.trim();
+    final normalizedChatJid = chat.jid.trim();
+    if (normalizedCollectionId.isEmpty || normalizedChatJid.isEmpty) {
+      return;
+    }
+    final isGroupChat = chat.type == ChatType.groupChat;
+    final messageReferenceId = message.outboundReferenceId(
+      isGroupChat: isGroupChat,
+      directPolicy: DirectMessageReferencePolicy.preferOriginId,
+    );
+    if (messageReferenceId == null) {
+      return;
+    }
+    await _normalizeMessageCollectionAliasState(
+      collectionId: normalizedCollectionId,
+      chatJid: normalizedChatJid,
+      canonicalMessageReferenceId: messageReferenceId,
+      aliases: message.referenceIds,
+      message: message,
+    );
+    final addedAt = DateTime.timestamp().toUtc();
+    await _dbOp<XmppDatabase>(
+      (db) => db.applyMessageCollectionMembershipMutation(
+        collectionId: normalizedCollectionId,
+        chatJid: normalizedChatJid,
+        messageReferenceId: messageReferenceId,
+        messageStanzaId: message.trimmedStanzaId,
+        messageOriginId: message.trimmedOriginId,
+        messageMucStanzaId: message.trimmedMucStanzaId,
+        deltaAccountId: message.deltaMsgId == null
+            ? null
+            : message.deltaAccountId,
+        deltaMsgId: message.deltaMsgId,
+        addedAt: addedAt,
+        active: active,
+      ),
+    );
+    final entry =
+        await _dbOpReturning<XmppDatabase, MessageCollectionMembershipEntry?>(
+          (db) => db.getMessageCollectionMembership(
+            collectionId: normalizedCollectionId,
+            chatJid: normalizedChatJid,
+            messageReferenceId: messageReferenceId,
+          ),
+        );
+    if (entry == null) {
+      return;
+    }
+    await publishMessageCollectionSyncEntry(entry);
+  }
+
+  Future<void> _normalizeMessageCollectionAliasState({
+    required String collectionId,
+    required String chatJid,
+    required String canonicalMessageReferenceId,
+    required Set<String> aliases,
+    required Message message,
+  }) async {
+    final normalizedCollectionId = collectionId.trim();
+    final normalizedChatJid = chatJid.trim();
+    final canonicalId = canonicalMessageReferenceId.trim();
+    if (normalizedCollectionId.isEmpty ||
+        normalizedChatJid.isEmpty ||
+        canonicalId.isEmpty) {
+      return;
+    }
+    final normalizedAliases = <String>{
+      canonicalId,
+      for (final alias in aliases)
+        if (alias.trim().isNotEmpty) alias.trim(),
+    };
+    await _dbOp<XmppDatabase>(
+      (db) => db.normalizeMessageCollectionMembershipAliases(
+        collectionId: normalizedCollectionId,
+        chatJid: normalizedChatJid,
+        canonicalMessageReferenceId: canonicalId,
+        aliases: normalizedAliases,
+        messageStanzaId: message.trimmedStanzaId,
+        messageOriginId: message.trimmedOriginId,
+        messageMucStanzaId: message.trimmedMucStanzaId,
+        deltaAccountId: message.deltaMsgId == null
+            ? null
+            : message.deltaAccountId,
+        deltaMsgId: message.deltaMsgId,
+      ),
+    );
+  }
 
   Stream<List<PinnedMessageEntry>> pinnedMessagesStream(String chatJid) =>
       createPaginatedStream<PinnedMessageEntry, XmppDatabase>(
@@ -2286,6 +2412,7 @@ mixin MessageService
             metadata: metadata,
             body: message.body,
           );
+          await _acknowledgeMessage(event, allowArchivedAcknowledgement: true);
           return;
         }
 
@@ -2319,7 +2446,16 @@ mixin MessageService
           return;
         }
 
-        await _acknowledgeMessage(event);
+        final acknowledgement = await _acknowledgeMessage(
+          event,
+          allowArchivedAcknowledgement: true,
+        );
+        if (acknowledgement.acked || acknowledgement.received) {
+          message = message.copyWith(
+            acked: message.acked || acknowledgement.acked,
+            received: message.received || acknowledgement.received,
+          );
+        }
 
         if (shouldPersistAttachment) {
           await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
@@ -2870,17 +3006,55 @@ mixin MessageService
         mox.SFSManager(),
       ]);
 
+  MucActorIdentity _outboundMucActorIdentity({
+    required String roomJid,
+    required String accountJid,
+  }) {
+    final normalizedRoomJid = _roomKey(roomJid);
+    final roomState = roomStateFor(normalizedRoomJid);
+    final rawOccupantId = roomState?.myOccupantId?.trim();
+    final occupantId = rawOccupantId == null || rawOccupantId.isEmpty
+        ? null
+        : rawOccupantId;
+    final occupant = occupantId == null
+        ? null
+        : roomState?.occupants[occupantId];
+    final occupantNick = occupant?.nick.trim();
+    final rememberedNick = _roomNicknames[normalizedRoomJid]?.trim();
+    final resolvedNick = occupantNick?.isNotEmpty == true
+        ? occupantNick
+        : rememberedNick;
+    final isRoomNickOccupantId =
+        occupantId != null &&
+        _isRoomNickOccupantId(
+          roomKey: normalizedRoomJid,
+          occupantId: occupantId,
+        );
+    final senderJid = isRoomNickOccupantId
+        ? occupantId
+        : resolvedNick == null || resolvedNick.isEmpty
+        ? accountJid
+        : '$normalizedRoomJid/$resolvedNick';
+    return MucActorIdentity(
+      senderJid: senderJid,
+      occupantId: isRoomNickOccupantId ? null : occupantId,
+    );
+  }
+
   mox.MessageEvent _buildOutgoingMessageEvent({
     required Message message,
     Message? quotedMessage,
     List<mox.StanzaHandlerExtension> extraExtensions = const [],
     ChatType chatType = ChatType.chat,
   }) {
-    final quotedJid = quotedMessage == null
-        ? null
-        : mox.JID.fromString(quotedMessage.senderJid);
     final targetJid = mox.JID.fromString(message.chatJid);
     final isGroupChat = chatType == ChatType.groupChat;
+    final quotedJid = quotedMessage == null
+        ? null
+        : _parseReplyQuotedJid(
+            senderJid: quotedMessage.senderJid,
+            occupantId: isGroupChat ? quotedMessage.occupantID : null,
+          );
     final isPrivateMucMessage = isGroupChat && targetJid.resource.isNotEmpty;
     final toJid = isGroupChat && !isPrivateMucMessage
         ? targetJid.toBare()
@@ -2896,6 +3070,27 @@ mixin MessageService
       includeOriginId:
           chatType == ChatType.chat && !_isMucChatJid(message.chatJid),
     );
+  }
+
+  mox.JID? _parseReplyQuotedJid({
+    required String senderJid,
+    required String? occupantId,
+  }) {
+    final occupant = occupantId?.trim();
+    if (occupant != null && occupant.isNotEmpty && senderJid == occupant) {
+      return null;
+    }
+    try {
+      final parsed = mox.JID.fromString(senderJid);
+      if (occupant != null &&
+          occupant.isNotEmpty &&
+          parsed.resource.trim().isEmpty) {
+        return null;
+      }
+      return parsed;
+    } on Exception {
+      return null;
+    }
   }
 
   MessageReference _outboundReplyReference({
@@ -3337,9 +3532,9 @@ mixin MessageService
         );
       }
     }
-    final senderJid = isGroupChat
-        ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
-        : accountJid;
+    final senderIdentity = isGroupChat
+        ? _outboundMucActorIdentity(roomJid: jid, accountJid: accountJid)
+        : MucActorIdentity(senderJid: accountJid);
     final storePreference = storeLocally ?? true;
     final shouldStore = storePreference && !noStore;
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -3413,7 +3608,7 @@ mixin MessageService
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
-      senderJid: senderJid,
+      senderJid: senderIdentity.senderJid,
       chatJid: jid,
       body: messageText,
       htmlBody: normalizedHtml,
@@ -3421,6 +3616,7 @@ mixin MessageService
       noStore: noStore,
       quoting: quotedReference?.value,
       quotingReferenceKind: quotedReference?.kind,
+      occupantID: isGroupChat ? senderIdentity.occupantId : null,
       timestamp: timestamp,
       acked: false,
       received: false,
@@ -3646,9 +3842,9 @@ mixin MessageService
       requestedChatType: chatType,
     );
     final isGroupChat = resolvedChatType == ChatType.groupChat;
-    final senderJid = isGroupChat
-        ? (roomStateFor(jid)?.myOccupantId ?? accountJid)
-        : accountJid;
+    final senderIdentity = isGroupChat
+        ? _outboundMucActorIdentity(roomJid: jid, accountJid: accountJid)
+        : MucActorIdentity(senderJid: accountJid);
     final metadataId =
         upload?.metadata.id ?? attachment.metadataId ?? uuid.v4();
     final attachmentWithMetadataId = attachment.metadataId == metadataId
@@ -3685,7 +3881,7 @@ mixin MessageService
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
-      senderJid: senderJid,
+      senderJid: senderIdentity.senderJid,
       chatJid: jid,
       body: body,
       htmlBody: normalizedHtmlCaption,
@@ -3694,6 +3890,7 @@ mixin MessageService
       fileMetadataID: metadata.id,
       quoting: quotedReference?.value,
       quotingReferenceKind: quotedReference?.kind,
+      occupantID: isGroupChat ? senderIdentity.occupantId : null,
       pseudoMessageData: forwarded
           ? <String, dynamic>{
               'forwarded': true,
@@ -5056,11 +5253,11 @@ mixin MessageService
 
   Set<String> _assumedCapabilityFeatures(String jid) {
     final features = <String>{};
-    if (_isBareMucRoomJidForCapabilities(jid) ||
-        _isSameDomainPeerJidForCapabilities(jid)) {
+    if (_isBareMucRoomJidForCapabilities(jid)) {
       features.add(mox.messageReactionsXmlns);
     }
-    if (_isAxiPeerJidForCapabilities(jid)) {
+    if (_isSameDomainPeerJidForCapabilities(jid) ||
+        _isAxiPeerJidForCapabilities(jid)) {
       features.addAll(<String>{
         mox.chatMarkersXmlns,
         mox.deliveryXmlns,
@@ -5081,6 +5278,7 @@ mixin MessageService
       return capabilities;
     }
     final isBareMucRoom = _isBareMucRoomJidForCapabilities(jid);
+    final isSameDomainPeer = _isSameDomainPeerJidForCapabilities(jid);
     final isAxiPeer = _isAxiPeerJidForCapabilities(jid);
     final supportsMarkers =
         capabilities.supportsMarkers ||
@@ -5094,7 +5292,9 @@ mixin MessageService
     }.toList()..sort();
     final capabilitiesResolvedAt =
         capabilities.capabilitiesResolvedAt ??
-        ((isBareMucRoom || isAxiPeer) ? DateTime.now() : null);
+        ((isBareMucRoom || isSameDomainPeer || isAxiPeer)
+            ? DateTime.now()
+            : null);
     if (supportsMarkers == capabilities.supportsMarkers &&
         supportsReceipts == capabilities.supportsReceipts &&
         listEquals(features, capabilities.features) &&
@@ -5424,18 +5624,22 @@ mixin MessageService
     await _updateMamSupport(_mamSupported);
   }
 
-  Future<void> _acknowledgeMessage(mox.MessageEvent event) async {
-    if (event.isCarbon) return;
+  Future<({bool acked, bool received})> _acknowledgeMessage(
+    mox.MessageEvent event, {
+    bool allowArchivedAcknowledgement = false,
+  }) async {
+    if (event.isCarbon) return (acked: false, received: false);
     final bool isDelayed =
         event.extensions.get<mox.DelayedDeliveryData>() != null;
-    if (event.isFromMAM || isDelayed) {
-      return;
+    final isArchived = event.isFromMAM || isDelayed;
+    if (isArchived && !allowArchivedAcknowledgement) {
+      return (acked: false, received: false);
     }
     final body = event.get<mox.MessageBodyData>()?.body?.trim();
     if (body != null &&
         body.isNotEmpty &&
         _MessageStatusSyncEnvelope.isEnvelope(body)) {
-      return;
+      return (acked: false, received: false);
     }
 
     final markable =
@@ -5446,26 +5650,38 @@ mixin MessageService
             ?.receiptRequested ??
         false;
 
-    if (!markable && !deliveryReceiptRequested) return;
+    if (!markable && !deliveryReceiptRequested) {
+      return (acked: false, received: false);
+    }
 
     final id = event.extensions.get<mox.StableIdData>()?.originId ?? event.id;
-    if (id == null) return;
+    if (id == null) return (acked: false, received: false);
 
     final peer = event.from.toBare().toString();
+    if (sameNormalizedAddressValue(peer, myJid)) {
+      return (acked: false, received: false);
+    }
     final chatJid = _messageChatJidForEvent(event);
     final isMuc = event.type == 'groupchat';
+    if (isArchived) {
+      final existing = await _dbOpReturning<XmppDatabase, Message?>(
+        (db) => db.getMessageByReferenceId(id, chatJid: chatJid),
+      );
+      if (existing?.received == true) {
+        return (acked: false, received: false);
+      }
+    }
     if (isMuc) {
       await _dbOp<XmppDatabase>((db) async {
         await db.markMessageReceived(id, chatJid: chatJid);
         await db.markMessageAcked(id, chatJid: chatJid);
       });
-      return;
+      return (acked: true, received: true);
     }
     final target = isMuc ? event.from.toString() : peer;
     final messageType = _chatStateMessageType(target);
-    final capabilities = isMuc
-        ? _PeerCapabilities.supportsAll
-        : await _capabilitiesFor(peer);
+    final capabilities = await _capabilitiesFor(peer);
+    var acknowledged = false;
 
     if (markable) {
       final decision = _decisionFromCapabilityFlag(
@@ -5487,14 +5703,9 @@ mixin MessageService
           marker: mox.ChatMarker.received,
           messageType: messageType,
         );
-
-        await _dbOp<XmppDatabase>((db) async {
-          await db.markMessageReceived(id, chatJid: chatJid);
-          await db.markMessageAcked(id, chatJid: chatJid);
-        });
+        acknowledged = true;
       }
     }
-
     if (deliveryReceiptRequested) {
       final decision = _decisionFromCapabilityFlag(
         supported: capabilities.supportsReceipts,
@@ -5520,13 +5731,18 @@ mixin MessageService
             type: messageType,
           ),
         );
-
-        await _dbOp<XmppDatabase>((db) async {
-          await db.markMessageReceived(id, chatJid: chatJid);
-          await db.markMessageAcked(id, chatJid: chatJid);
-        });
+        acknowledged = true;
       }
     }
+
+    if (!acknowledged) {
+      return (acked: false, received: false);
+    }
+    await _dbOp<XmppDatabase>((db) async {
+      await db.markMessageReceived(id, chatJid: chatJid);
+      await db.markMessageAcked(id, chatJid: chatJid);
+    });
+    return (acked: true, received: true);
   }
 
   Future<bool> _handleMessageStatusSync(mox.MessageEvent event) async {
@@ -6167,6 +6383,7 @@ mixin MessageService
     final rawSenderJid = isGroupChat
         ? event.from.toString()
         : event.from.toBare().toString();
+    final rawOccupantId = event.extensions.get<mox.OccupantIdData>()?.id.trim();
     final delayedAt = event.extensions
         .get<mox.DelayedDeliveryData>()
         ?.timestamp
@@ -6181,6 +6398,7 @@ mixin MessageService
         chatJid: reactionChatJid,
         referenceId: referenceId,
         rawSenderJid: rawSenderJid,
+        rawOccupantId: rawOccupantId,
         isGroupChat: isGroupChat,
         emojis: sanitizedEmojis,
         updatedAt: updatedAt,
@@ -6191,6 +6409,7 @@ mixin MessageService
     await _applyInboundReactionMutation(
       message: message,
       rawSenderJid: rawSenderJid,
+      rawOccupantId: rawOccupantId,
       isGroupChat: isGroupChat,
       emojis: sanitizedEmojis,
       updatedAt: updatedAt,
@@ -6203,6 +6422,7 @@ mixin MessageService
     required String chatJid,
     required String referenceId,
     required String rawSenderJid,
+    required String? rawOccupantId,
     required bool isGroupChat,
     required List<String> emojis,
     required DateTime updatedAt,
@@ -6216,6 +6436,10 @@ mixin MessageService
         normalizedSenderJid.isEmpty) {
       return;
     }
+    final normalizedOccupantId = rawOccupantId?.trim();
+    final senderKey = normalizedOccupantId?.isNotEmpty == true
+        ? normalizedOccupantId!
+        : normalizedSenderJid;
     final pendingByReference = _pendingInboundReactionsByChatAndReference
         .putIfAbsent(
           normalizedChatJid,
@@ -6227,14 +6451,15 @@ mixin MessageService
     );
     final next = _PendingInboundReaction(
       rawSenderJid: normalizedSenderJid,
+      rawOccupantId: normalizedOccupantId,
       isGroupChat: isGroupChat,
       emojis: List<String>.unmodifiable(emojis),
       updatedAt: updatedAt.toUtc(),
       delayedAt: delayedAt,
     );
-    final existing = pendingBySender[normalizedSenderJid];
+    final existing = pendingBySender[senderKey];
     if (existing == null || !existing.updatedAt.isAfter(next.updatedAt)) {
-      pendingBySender[normalizedSenderJid] = next;
+      pendingBySender[senderKey] = next;
     }
   }
 
@@ -6262,6 +6487,7 @@ mixin MessageService
       await _applyInboundReactionMutation(
         message: message,
         rawSenderJid: pending.rawSenderJid,
+        rawOccupantId: pending.rawOccupantId,
         isGroupChat: pending.isGroupChat,
         emojis: pending.emojis,
         updatedAt: pending.updatedAt,
@@ -6281,6 +6507,7 @@ mixin MessageService
   Future<void> _applyInboundReactionMutation({
     required Message message,
     required String rawSenderJid,
+    required String? rawOccupantId,
     required bool isGroupChat,
     required List<String> emojis,
     required DateTime updatedAt,
@@ -6288,6 +6515,7 @@ mixin MessageService
   }) async {
     final senderIdentity = _resolveReactionSenderIdentity(
       senderJid: rawSenderJid,
+      occupantId: rawOccupantId,
       chatJid: message.chatJid,
       isGroupChat: isGroupChat,
     );
@@ -6299,15 +6527,16 @@ mixin MessageService
       _log.warning('Rejected direct reaction from unauthorized sender');
       return;
     }
-    final senderAlias = _reactionSenderAliasJid(
+    final senderAliases = _reactionSenderAliases(
       rawSenderJid: rawSenderJid,
+      rawOccupantId: rawOccupantId,
       senderJid: senderIdentity.senderJid,
       isGroupChat: isGroupChat,
     );
     final existingState = await _existingReactionStateForSender(
       messageId: message.stanzaID,
       senderJid: senderIdentity.senderJid,
-      aliasSenderJid: senderAlias,
+      aliasSenderJids: senderAliases,
     );
     if (_isStaleDelayedReactionUpdate(
       delayedAt: delayedAt,
@@ -6317,7 +6546,7 @@ mixin MessageService
       return;
     }
     await _dbOp<XmppDatabase>((db) async {
-      if (senderAlias != null) {
+      for (final senderAlias in senderAliases) {
         await db.clearReactionsForMessageSender(
           messageId: message.stanzaID,
           senderJid: senderAlias,
@@ -6333,48 +6562,64 @@ mixin MessageService
     });
   }
 
-  String? _reactionSenderAliasJid({
+  Set<String> _reactionSenderAliases({
     required String rawSenderJid,
+    required String? rawOccupantId,
     required String senderJid,
     required bool isGroupChat,
   }) {
     if (!isGroupChat) {
-      return null;
+      return const <String>{};
     }
+    final normalizedRawOccupantId = rawOccupantId?.trim();
     final normalizedRawSenderJid = rawSenderJid.trim();
     final normalizedSenderJid = senderJid.trim();
-    if (normalizedRawSenderJid.isEmpty ||
-        normalizedSenderJid.isEmpty ||
-        normalizedRawSenderJid == normalizedSenderJid) {
-      return null;
+    if (normalizedSenderJid.isEmpty) {
+      return const <String>{};
     }
-    return normalizedRawSenderJid;
+    final aliases = <String>{};
+    for (final candidate in <String?>[
+      normalizedRawOccupantId,
+      normalizedRawSenderJid,
+    ]) {
+      if (candidate == null || candidate.isEmpty) {
+        continue;
+      }
+      if (candidate != normalizedSenderJid) {
+        aliases.add(candidate);
+      }
+    }
+    return aliases;
   }
 
   Future<ReactionState?> _existingReactionStateForSender({
     required String messageId,
     required String senderJid,
-    required String? aliasSenderJid,
+    required Set<String> aliasSenderJids,
   }) async {
     final canonicalState = await _dbOpReturning<XmppDatabase, ReactionState?>(
       (db) => db.getReactionState(messageId: messageId, senderJid: senderJid),
     );
-    if (aliasSenderJid == null) {
+    if (aliasSenderJids.isEmpty) {
       return canonicalState;
     }
-    final aliasState = await _dbOpReturning<XmppDatabase, ReactionState?>(
-      (db) =>
-          db.getReactionState(messageId: messageId, senderJid: aliasSenderJid),
-    );
-    if (canonicalState == null) {
-      return aliasState;
+    var newestState = canonicalState;
+    for (final aliasSenderJid in aliasSenderJids) {
+      final aliasState = await _dbOpReturning<XmppDatabase, ReactionState?>(
+        (db) => db.getReactionState(
+          messageId: messageId,
+          senderJid: aliasSenderJid,
+        ),
+      );
+      if (aliasState == null) {
+        continue;
+      }
+      if (newestState == null ||
+          aliasState.updatedAt.isAfter(newestState.updatedAt)) {
+        newestState = aliasState;
+      }
     }
-    if (aliasState == null) {
-      return canonicalState;
-    }
-    return canonicalState.updatedAt.isAfter(aliasState.updatedAt)
-        ? canonicalState
-        : aliasState;
+    return newestState;
   }
 
   Future<bool> _handleCalendarSync(
@@ -6574,6 +6819,13 @@ mixin MessageService
     mox.MessageEvent event, {
     required RoomState roomState,
   }) {
+    final occupantId = event.extensions.get<mox.OccupantIdData>()?.id.trim();
+    if (occupantId != null && occupantId.isNotEmpty) {
+      final occupant = roomState.occupants[occupantId];
+      if (occupant != null) {
+        return occupant;
+      }
+    }
     final sender = event.from.toString();
     final Occupant? direct = roomState.occupants[sender];
     if (direct != null) {
@@ -7490,6 +7742,7 @@ mixin MessageService
 
   ({String senderJid, bool identityVerified}) _resolveReactionSenderIdentity({
     required String senderJid,
+    required String? occupantId,
     required String chatJid,
     required bool isGroupChat,
   }) {
@@ -7501,6 +7754,7 @@ mixin MessageService
       );
     }
     final normalizedChatJid = bareAddress(chatJid) ?? chatJid;
+    final normalizedOccupantId = occupantId?.trim();
     if (accountJid != null &&
         sameNormalizedAddressValue(senderJid, accountJid)) {
       return (senderJid: accountJid, identityVerified: true);
@@ -7511,10 +7765,27 @@ mixin MessageService
       if (accountJid != null &&
           myOccupantId != null &&
           myOccupantId.isNotEmpty &&
-          senderJid == myOccupantId) {
+          (senderJid == myOccupantId ||
+              (normalizedOccupantId != null &&
+                  normalizedOccupantId == myOccupantId))) {
         return (senderJid: accountJid, identityVerified: true);
       }
-      final occupant = roomState.occupants[senderJid];
+      Occupant? occupant =
+          normalizedOccupantId == null || normalizedOccupantId.isEmpty
+          ? null
+          : roomState.occupants[normalizedOccupantId];
+      occupant ??= roomState.occupants[senderJid];
+      if (occupant == null) {
+        final senderNick = parseJid(senderJid)?.resource.trim();
+        if (senderNick?.isNotEmpty == true) {
+          for (final candidate in roomState.occupants.values) {
+            if (candidate.nick == senderNick) {
+              occupant = candidate;
+              break;
+            }
+          }
+        }
+      }
       final realJid = occupant?.realJid?.trim();
       if (realJid != null && realJid.isNotEmpty) {
         if (accountJid != null &&
@@ -7526,6 +7797,12 @@ mixin MessageService
           identityVerified: true,
         );
       }
+      if (occupant != null) {
+        return (senderJid: occupant.occupantId, identityVerified: false);
+      }
+    }
+    if (normalizedOccupantId != null && normalizedOccupantId.isNotEmpty) {
+      return (senderJid: normalizedOccupantId, identityVerified: false);
     }
     if (senderJid.startsWith('$normalizedChatJid/')) {
       return (senderJid: senderJid, identityVerified: false);
@@ -7542,6 +7819,7 @@ mixin MessageService
     required bool isGroupChat,
   }) => _resolveReactionSenderIdentity(
     senderJid: senderJid,
+    occupantId: null,
     chatJid: chatJid,
     isGroupChat: isGroupChat,
   ).senderJid;
@@ -9263,9 +9541,9 @@ mixin MessageService
       return false;
     }
     final stanzaId = _connection.generateId();
-    final senderJid = isGroupChat
-        ? (roomStateFor(chatJid)?.myOccupantId ?? accountJid)
-        : accountJid;
+    final senderIdentity = isGroupChat
+        ? _outboundMucActorIdentity(roomJid: chatJid, accountJid: accountJid)
+        : MucActorIdentity(senderJid: accountJid);
     final targetJid = mox.JID.fromString(chatJid);
     final extensions = <mox.StanzaHandlerExtension>[
       mox.MessageIdData(stanzaId),
@@ -9292,7 +9570,7 @@ mixin MessageService
     }
     try {
       final stanza = mox.MessageEvent(
-        mox.JID.fromString(senderJid),
+        mox.JID.fromString(senderIdentity.senderJid),
         isGroupChat ? targetJid.toBare() : targetJid,
         false,
         mox.TypedMap<mox.StanzaHandlerExtension>.fromList(extensions),
@@ -9752,6 +10030,7 @@ class _UploadSlotHeader {
 class _PendingInboundReaction {
   const _PendingInboundReaction({
     required this.rawSenderJid,
+    required this.rawOccupantId,
     required this.isGroupChat,
     required this.emojis,
     required this.updatedAt,
@@ -9759,6 +10038,7 @@ class _PendingInboundReaction {
   });
 
   final String rawSenderJid;
+  final String? rawOccupantId;
   final bool isGroupChat;
   final List<String> emojis;
   final DateTime updatedAt;

@@ -184,6 +184,29 @@ void main() {
     );
   });
 
+  test(
+    'opening an important message keeps the target reference in state',
+    () async {
+      when(() => xmppService.openChat(any())).thenAnswer((_) async {});
+
+      final cubit = ChatsCubit(
+        xmppService: xmppService,
+        homeRefreshSyncService: homeRefreshSyncService,
+      );
+      addTearDown(cubit.close);
+
+      await cubit.openImportantMessage(
+        jid: 'friend@axi.im',
+        messageReferenceId: 'important-reference',
+      );
+
+      expect(cubit.state.openJid, 'friend@axi.im');
+      expect(cubit.state.pendingOpenMessageChatJid, 'friend@axi.im');
+      expect(cubit.state.pendingOpenMessageReferenceId, 'important-reference');
+      expect(cubit.state.pendingOpenMessageRequestId, 1);
+    },
+  );
+
   test('create room conflict surfaces alreadyExists failure state', () async {
     final xmppMucService = MockXmppMucService();
     when(

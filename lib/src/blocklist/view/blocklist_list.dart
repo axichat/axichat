@@ -15,7 +15,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class BlocklistList extends StatefulWidget {
-  const BlocklistList({super.key});
+  const BlocklistList({super.key, this.bindHomeSearch = true});
+
+  final bool bindHomeSearch;
 
   @override
   State<BlocklistList> createState() => _BlocklistListState();
@@ -23,12 +25,12 @@ class BlocklistList extends StatefulWidget {
 
 class _BlocklistListState extends State<BlocklistList> {
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      _syncSearchState(context, context.read<HomeSearchCubit>().state);
-    });
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!widget.bindHomeSearch) {
+      return;
+    }
+    _syncSearchState(context, context.read<HomeSearchCubit>().state);
   }
 
   void _syncSearchState(BuildContext context, HomeSearchState searchState) {
@@ -42,51 +44,52 @@ class _BlocklistListState extends State<BlocklistList> {
 
   @override
   Widget build(BuildContext context) {
+    final body = BlocBuilder<BlocklistCubit, BlocklistState>(
+      builder: (context, state) {
+        final cachedItems =
+            context.watch<BlocklistCubit>()[BlocklistCubit
+                    .blocklistItemsCacheKey]
+                as List<BlocklistEntry>?;
+        final cachedVisibleItems =
+            context.watch<BlocklistCubit>()[BlocklistCubit
+                    .blocklistVisibleItemsCacheKey]
+                as List<BlocklistEntry>?;
+        final items = state.items ?? cachedItems;
+        if (items == null) {
+          return Center(
+            child: AxiProgressIndicator(color: context.colorScheme.foreground),
+          );
+        }
+        final visibleItems = state.visibleItems ?? cachedVisibleItems ?? items;
+        return BlocBuilder<RosterCubit, RosterState>(
+          buildWhen: (previous, current) => previous.items != current.items,
+          builder: (context, rosterState) {
+            final cachedRosterItems =
+                rosterState.items ??
+                (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
+                    as List<RosterItem>?);
+            final avatarPathsByJid = <String, String>{};
+            if (cachedRosterItems != null) {
+              for (final item in cachedRosterItems) {
+                final path = item.avatarPath?.trim();
+                if (path == null || path.isEmpty) continue;
+                avatarPathsByJid[item.jid.toLowerCase()] = path;
+              }
+            }
+            return _BlocklistListBody(
+              items: visibleItems,
+              avatarPathsByJid: avatarPathsByJid,
+            );
+          },
+        );
+      },
+    );
+    if (!widget.bindHomeSearch) {
+      return body;
+    }
     return BlocListener<HomeSearchCubit, HomeSearchState>(
       listener: _syncSearchState,
-      child: BlocBuilder<BlocklistCubit, BlocklistState>(
-        builder: (context, state) {
-          final cachedItems =
-              context.watch<BlocklistCubit>()[BlocklistCubit
-                      .blocklistItemsCacheKey]
-                  as List<BlocklistEntry>?;
-          final cachedVisibleItems =
-              context.watch<BlocklistCubit>()[BlocklistCubit
-                      .blocklistVisibleItemsCacheKey]
-                  as List<BlocklistEntry>?;
-          final items = state.items ?? cachedItems;
-          if (items == null) {
-            return Center(
-              child: AxiProgressIndicator(
-                color: context.colorScheme.foreground,
-              ),
-            );
-          }
-          final visibleItems =
-              state.visibleItems ?? cachedVisibleItems ?? items;
-          return BlocBuilder<RosterCubit, RosterState>(
-            buildWhen: (previous, current) => previous.items != current.items,
-            builder: (context, rosterState) {
-              final cachedRosterItems =
-                  rosterState.items ??
-                  (context.watch<RosterCubit>()[RosterCubit.itemsCacheKey]
-                      as List<RosterItem>?);
-              final avatarPathsByJid = <String, String>{};
-              if (cachedRosterItems != null) {
-                for (final item in cachedRosterItems) {
-                  final path = item.avatarPath?.trim();
-                  if (path == null || path.isEmpty) continue;
-                  avatarPathsByJid[item.jid.toLowerCase()] = path;
-                }
-              }
-              return _BlocklistListBody(
-                items: visibleItems,
-                avatarPathsByJid: avatarPathsByJid,
-              );
-            },
-          );
-        },
-      ),
+      child: body,
     );
   }
 }

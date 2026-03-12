@@ -542,6 +542,10 @@ class XmppPresenceManager extends mox.PresenceManager {
     required String? realJid,
     required mox.JID occupantJid,
   }) {
+    final trimmedOccupantId = rawOccupantId?.trim();
+    if (trimmedOccupantId != null && trimmedOccupantId.isNotEmpty) {
+      return trimmedOccupantId;
+    }
     if (occupantJid.resource.isNotEmpty) {
       return occupantJid.toString();
     }

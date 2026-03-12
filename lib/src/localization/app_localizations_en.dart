@@ -21,6 +21,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get homeTabDrafts => 'Drafts';
 
   @override
+  String get homeTabImportant => 'Important';
+
+  @override
   String get homeTabSpam => 'Spam';
 
   @override
@@ -110,6 +113,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatSearchExcludeSubject => 'Exclude subject';
+
+  @override
+  String get chatSearchImportantOnly => 'Important only';
 
   @override
   String get chatSearchFailed => 'Search failed';
@@ -870,10 +876,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatAttachmentTooltip => 'Attachments';
 
   @override
+  String get chatImportantMessagesTooltip => 'Important messages';
+
+  @override
   String get chatPinnedMessagesTooltip => 'Pinned messages';
 
   @override
   String get chatPinnedMessagesTitle => 'Pinned messages';
+
+  @override
+  String get chatMarkMessageImportant => 'Mark important';
+
+  @override
+  String get chatRemoveMessageImportant => 'Remove important';
 
   @override
   String get chatPinMessage => 'Pin message';
@@ -886,6 +901,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chatPinnedMissingMessage => 'Pinned message is unavailable.';
+
+  @override
+  String get importantMessagesEmpty => 'No important messages yet.';
 
   @override
   String get chatSendMessageTooltip => 'Send message';
@@ -1886,6 +1904,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileLinkedEmailAccounts => 'Email accounts';
 
   @override
+  String get profileBlocklistTitle => 'Blocklist';
+
+  @override
   String get profileChangePassword => 'Change password';
 
   @override
@@ -2813,7 +2834,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mucRoleModerator => 'Moderator';
 
   @override
-  String get mucActionOpenChat => 'Open chat';
+  String get mucActionOpenChat => 'Open DM';
 
   @override
   String get mucActionKick => 'Kick';

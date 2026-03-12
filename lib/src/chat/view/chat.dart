@@ -87,6 +87,8 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
+import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
+import 'package:axichat/src/important/view/important_messages_list.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
@@ -441,26 +443,45 @@ class _ChatSearchPanelState extends State<_ChatSearchPanel> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: spacing.s),
                   ShadSwitch(
                     value: state.excludeSubject,
                     onChanged: (value) => context
                         .read<ChatSearchCubit>()
                         .toggleExcludeSubject(value),
                   ),
-                  const SizedBox(width: 8),
+                  SizedBox(width: spacing.s),
                   Text(
                     l10n.chatSearchExcludeSubject,
                     style: context.textTheme.muted,
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: spacing.s),
+              Row(
+                children: [
+                  ShadSwitch(
+                    value: state.importantOnly,
+                    onChanged: (value) => context
+                        .read<ChatSearchCubit>()
+                        .updateImportantOnly(value),
+                  ),
+                  SizedBox(width: spacing.s),
+                  Text(
+                    l10n.chatSearchImportantOnly,
+                    style: context.textTheme.muted,
+                  ),
+                ],
+              ),
+              SizedBox(height: spacing.s),
               Builder(
                 builder: (context) {
                   final trimmedQuery = state.query.trim();
                   final hasSubject = state.subjectFilter?.isNotEmpty == true;
-                  final queryEmpty = trimmedQuery.isEmpty && !hasSubject;
+                  final queryEmpty =
+                      trimmedQuery.isEmpty &&
+                      !hasSubject &&
+                      !state.importantOnly;
                   Widget? statusChild;
                   if (state.error != null) {
                     statusChild = Text(
@@ -1004,6 +1025,7 @@ class _ChatState extends State<Chat> {
       CalendarFragmentPolicy();
   CalendarTask? _pendingCalendarTaskIcs;
   String? _pendingCalendarSeedText;
+  var _handledPendingOpenMessageRequestId = 0;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
 
@@ -2003,10 +2025,13 @@ class _ChatState extends State<Chat> {
 
   RoomState? _roomJoinFailureState(ChatState state) {
     final roomState = state.roomState;
-    if (roomState == null || !roomState.hasJoinError) {
+    if (roomState == null) {
       return null;
     }
-    return roomState;
+    if (roomState.hasJoinError || roomState.hasTerminalExit) {
+      return roomState;
+    }
+    return null;
   }
 
   CalendarAvailabilityMessage? _validatedAvailabilityMessage({
@@ -2360,9 +2385,7 @@ class _ChatState extends State<Chat> {
                               completer: completer,
                             ),
                           );
-                          await completer.future.timeout(
-                            const Duration(seconds: 10),
-                          );
+                          await completer.future;
                           if (!context.mounted) {
                             return;
                           }
@@ -2385,9 +2408,7 @@ class _ChatState extends State<Chat> {
                               completer: completer,
                             ),
                           );
-                          await completer.future.timeout(
-                            const Duration(seconds: 10),
-                          );
+                          await completer.future;
                           if (!context.mounted) {
                             return;
                           }
@@ -4095,6 +4116,7 @@ class _ChatState extends State<Chat> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _consumePendingOpenMessageSelection(context.read<ChatsCubit>().state);
     final currentKey = _scrollStorageKey;
     if (_lastScrollStorageKey == null) {
       _lastScrollStorageKey = currentKey;
@@ -4292,6 +4314,27 @@ class _ChatState extends State<Chat> {
                   return;
                 }
                 context.read<ChatsCubit>().openChat(jid: targetJid);
+              },
+            ),
+            BlocListener<ChatsCubit, ChatsState>(
+              listenWhen: (previous, current) =>
+                  previous.pendingOpenMessageRequestId !=
+                      current.pendingOpenMessageRequestId ||
+                  previous.pendingOpenMessageReferenceId !=
+                      current.pendingOpenMessageReferenceId ||
+                  previous.pendingOpenMessageChatJid !=
+                      current.pendingOpenMessageChatJid,
+              listener: (context, state) {
+                _consumePendingOpenMessageSelection(state);
+              },
+            ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  previous.chat?.jid != current.chat?.jid,
+              listener: (context, _) {
+                _consumePendingOpenMessageSelection(
+                  context.read<ChatsCubit>().state,
+                );
               },
             ),
             BlocListener<ChatBloc, ChatState>(
@@ -5001,6 +5044,14 @@ class _ChatState extends State<Chat> {
                               final colors = context.colorScheme;
                               final bool isPinnedPanelVisible =
                                   _pinnedPanelVisible;
+                              final int importantCount = context
+                                  .select<ImportantMessagesCubit, int>(
+                                    (cubit) => cubit.state.items?.length ?? 0,
+                                  );
+                              final Color importantIconColor =
+                                  _chatRoute.isImportant
+                                  ? colors.primary
+                                  : colors.foreground;
                               final Color pinnedIconColor = isPinnedPanelVisible
                                   ? colors.primary
                                   : colors.foreground;
@@ -5039,6 +5090,19 @@ class _ChatState extends State<Chat> {
                                       iconData: LucideIcons.image,
                                       selected: _chatRoute.isGallery,
                                       onPressed: _openChatAttachments,
+                                    ),
+                                    AppBarActionItem(
+                                      label: _chatRoute.isImportant
+                                          ? l10n.commonClose
+                                          : l10n.chatImportantMessagesTooltip,
+                                      iconData: Icons.star_rounded,
+                                      icon: _ActionCountBadgeIcon(
+                                        iconData: Icons.star_rounded,
+                                        count: importantCount,
+                                        iconColor: importantIconColor,
+                                      ),
+                                      selected: _chatRoute.isImportant,
+                                      onPressed: _toggleImportantMessagesRoute,
                                     ),
                                     AppBarActionItem(
                                       label: _pinnedPanelVisible
@@ -5158,6 +5222,26 @@ class _ChatState extends State<Chat> {
                                     );
                                     final messageById = _cachedMessageById;
                                     const emptyAttachments = <String>[];
+                                    final importantMessageIds = context
+                                        .select<
+                                          ImportantMessagesCubit,
+                                          Set<String>
+                                        >((cubit) {
+                                          final items = cubit.state.items;
+                                          if (items == null) {
+                                            return const <String>{};
+                                          }
+                                          return items
+                                              .map(
+                                                (item) => item
+                                                    .messageReferenceId
+                                                    .trim(),
+                                              )
+                                              .where(
+                                                (value) => value.isNotEmpty,
+                                              )
+                                              .toSet();
+                                        });
                                     String messageKey(Message message) =>
                                         message.id ?? message.stanzaID;
 
@@ -5172,6 +5256,12 @@ class _ChatState extends State<Chat> {
                                     bool isPinnedMessage(Message message) {
                                       return message.referenceIds.any(
                                         pinnedMessageIds.contains,
+                                      );
+                                    }
+
+                                    bool isImportantMessage(Message message) {
+                                      return message.referenceIds.any(
+                                        importantMessageIds.contains,
                                       );
                                     }
 
@@ -6081,8 +6171,11 @@ class _ChatState extends State<Chat> {
                                             null) {
                                           composerOverlayBanner =
                                               _RoomJoinFailureComposerBanner(
-                                                detail: roomJoinFailureState
-                                                    .joinErrorText,
+                                                detail:
+                                                    roomJoinFailureState
+                                                        .joinErrorText ??
+                                                    roomJoinFailureState
+                                                        .selfPresenceReason,
                                               );
                                         }
                                       }
@@ -6638,6 +6731,12 @@ class _ChatState extends State<Chat> {
                                                                               ),
                                                                             );
                                                                           }
+                                                                          final isPinned = isPinnedMessage(
+                                                                            messageModel,
+                                                                          );
+                                                                          final isImportant = isImportantMessage(
+                                                                            messageModel,
+                                                                          );
                                                                           final CalendarFragment?
                                                                           rawFragment =
                                                                               message.customProperties?[_calendarFragmentPropertyKey]
@@ -6680,6 +6779,66 @@ class _ChatState extends State<Chat> {
                                                                                       : colors.destructive,
                                                                                   baseStyle: surfaceDetailStyle,
                                                                                 );
+                                                                          final pinnedDetail =
+                                                                              isPinned
+                                                                              ? iconDetailSpan(
+                                                                                  LucideIcons.pin,
+                                                                                  detailColor,
+                                                                                  baseStyle: detailStyle,
+                                                                                )
+                                                                              : null;
+                                                                          final importantDetail =
+                                                                              isImportant
+                                                                              ? iconDetailSpan(
+                                                                                  Icons.star_rounded,
+                                                                                  detailColor,
+                                                                                  baseStyle: detailStyle,
+                                                                                )
+                                                                              : null;
+                                                                          final surfacePinnedDetail =
+                                                                              isPinned
+                                                                              ? iconDetailSpan(
+                                                                                  LucideIcons.pin,
+                                                                                  surfaceDetailColor,
+                                                                                  baseStyle: surfaceDetailStyle,
+                                                                                )
+                                                                              : null;
+                                                                          final surfaceImportantDetail =
+                                                                              isImportant
+                                                                              ? iconDetailSpan(
+                                                                                  Icons.star_rounded,
+                                                                                  surfaceDetailColor,
+                                                                                  baseStyle: surfaceDetailStyle,
+                                                                                )
+                                                                              : null;
+                                                                          final messageDetails =
+                                                                              <
+                                                                                InlineSpan
+                                                                              >[
+                                                                                time,
+                                                                                transportDetail,
+                                                                                ?pinnedDetail,
+                                                                                ?importantDetail,
+                                                                                ?verification,
+                                                                                if (self &&
+                                                                                    status !=
+                                                                                        null)
+                                                                                  status,
+                                                                              ];
+                                                                          final surfaceDetails =
+                                                                              <
+                                                                                InlineSpan
+                                                                              >[
+                                                                                surfaceTime,
+                                                                                surfaceTransportDetail,
+                                                                                ?surfacePinnedDetail,
+                                                                                ?surfaceImportantDetail,
+                                                                                ?surfaceVerification,
+                                                                                if (self &&
+                                                                                    surfaceStatus !=
+                                                                                        null)
+                                                                                  surfaceStatus,
+                                                                              ];
                                                                           final quotedModel =
                                                                               (message.customProperties?['quoted']
                                                                                   as Message?) ??
@@ -7039,9 +7198,7 @@ class _ChatState extends State<Chat> {
                                                                                 text: messageText,
                                                                                 baseStyle: baseTextStyle,
                                                                                 linkStyle: linkStyle,
-                                                                                details: [
-                                                                                  time,
-                                                                                ],
+                                                                                details: messageDetails,
                                                                                 onLinkTap: _handleLinkTap,
                                                                                 onLinkLongPress: _handleLinkTap,
                                                                               ),
@@ -7105,9 +7262,7 @@ class _ChatState extends State<Chat> {
                                                                                   text: inviteLabel,
                                                                                   style: baseTextStyle,
                                                                                 ),
-                                                                                details: [
-                                                                                  time,
-                                                                                ],
+                                                                                details: messageDetails,
                                                                                 onLinkTap: _handleLinkTap,
                                                                                 onLinkLongPress: _handleLinkTap,
                                                                               ),
@@ -7264,21 +7419,6 @@ class _ChatState extends State<Chat> {
                                                                                     null &&
                                                                                 taskShareText ==
                                                                                     trimmedRenderedText;
-                                                                            final List<
-                                                                              InlineSpan
-                                                                            >
-                                                                            surfaceDetails =
-                                                                                <
-                                                                                  InlineSpan
-                                                                                >[
-                                                                                  surfaceTime,
-                                                                                  surfaceTransportDetail,
-                                                                                  if (self &&
-                                                                                      surfaceStatus !=
-                                                                                          null)
-                                                                                    surfaceStatus,
-                                                                                  ?surfaceVerification,
-                                                                                ];
                                                                             final List<
                                                                               InlineSpan
                                                                             >
@@ -7590,21 +7730,6 @@ class _ChatState extends State<Chat> {
                                                                                 (defaultShowsInlineEmailHtmlBody
                                                                                     ? !usesAlternateInlineEmailBody
                                                                                     : usesAlternateInlineEmailBody);
-                                                                            final List<
-                                                                              InlineSpan
-                                                                            >
-                                                                            messageDetails =
-                                                                                <
-                                                                                  InlineSpan
-                                                                                >[
-                                                                                  time,
-                                                                                  transportDetail,
-                                                                                  if (self &&
-                                                                                      status !=
-                                                                                          null)
-                                                                                    status,
-                                                                                  ?verification,
-                                                                                ];
                                                                             if (hasAttachmentCaption) {
                                                                               final metadataId = metadataIdForCaption;
                                                                               final metadata = _metadataFor(
@@ -8207,66 +8332,12 @@ class _ChatState extends State<Chat> {
                                                                           extraOuterRight =
                                                                               0;
                                                                           if (hasAvatarSlot) {
-                                                                            final occupantIdCandidate =
-                                                                                messageModel.occupantID?.trim();
-                                                                            final occupantId =
-                                                                                occupantIdCandidate !=
-                                                                                        null &&
-                                                                                    occupantIdCandidate.isNotEmpty
-                                                                                ? occupantIdCandidate
-                                                                                : messageModel.senderJid;
-                                                                            final occupant =
-                                                                                state.roomState?.occupants[occupantId];
-                                                                            final realJid =
-                                                                                occupant?.realJid?.trim();
-                                                                            final bareRealJid =
-                                                                                realJid ==
-                                                                                        null ||
-                                                                                    realJid.isEmpty
-                                                                                ? null
-                                                                                : realJid.contains(
-                                                                                    '/',
-                                                                                  )
-                                                                                ? realJid
-                                                                                      .split(
-                                                                                        '/',
-                                                                                      )
-                                                                                      .first
-                                                                                : realJid;
-                                                                            final normalizedBareRealJid =
-                                                                                bareRealJid?.toLowerCase();
-                                                                            final senderJid =
-                                                                                messageModel.senderJid.trim();
-                                                                            final senderBareJid =
-                                                                                senderJid.contains(
-                                                                                  '/',
-                                                                                )
-                                                                                ? senderJid
-                                                                                      .split(
-                                                                                        '/',
-                                                                                      )
-                                                                                      .first
-                                                                                : senderJid;
-                                                                            final normalizedSenderBareJid =
-                                                                                senderBareJid.toLowerCase();
-                                                                            final isRoomChat =
-                                                                                state.roomState !=
-                                                                                null;
-                                                                            final avatarLookupJid =
-                                                                                (normalizedBareRealJid !=
-                                                                                        null &&
-                                                                                    normalizedBareRealJid.isNotEmpty)
-                                                                                ? normalizedBareRealJid
-                                                                                : !isRoomChat &&
-                                                                                      normalizedSenderBareJid.isNotEmpty
-                                                                                ? normalizedSenderBareJid
-                                                                                : null;
-                                                                            final messageAvatarPath =
-                                                                                avatarLookupJid ==
-                                                                                    null
-                                                                                ? null
-                                                                                : rosterAvatarPathsByJid[avatarLookupJid] ??
-                                                                                      chatAvatarPathsByJid[avatarLookupJid];
+                                                                            final messageAvatarPath = resolveMessageAvatarPath(
+                                                                              message: messageModel,
+                                                                              roomState: state.roomState,
+                                                                              rosterAvatarPathsByJid: rosterAvatarPathsByJid,
+                                                                              chatAvatarPathsByJid: chatAvatarPathsByJid,
+                                                                            );
                                                                             avatarOverlay = _MessageAvatar(
                                                                               jid: messageModel.senderJid,
                                                                               size: messageAvatarSize,
@@ -8414,9 +8485,6 @@ class _ChatState extends State<Chat> {
                                                                               MessageStatus.failed;
                                                                           final includeSelectAction =
                                                                               !_multiSelectActive;
-                                                                          final isPinned = isPinnedMessage(
-                                                                            messageModel,
-                                                                          );
                                                                           void
                                                                           onReply() {
                                                                             context
@@ -8535,6 +8603,28 @@ class _ChatState extends State<Chat> {
                                                                             };
                                                                           }
                                                                           VoidCallback?
+                                                                          onImportantToggle;
+                                                                          if (!requiresMucReference) {
+                                                                            onImportantToggle = () {
+                                                                              final chat = chatEntity;
+                                                                              if (chat ==
+                                                                                  null) {
+                                                                                return;
+                                                                              }
+                                                                              context
+                                                                                  .read<
+                                                                                    ChatBloc
+                                                                                  >()
+                                                                                  .add(
+                                                                                    ChatMessageImportantToggled(
+                                                                                      message: messageModel,
+                                                                                      important: !isImportant,
+                                                                                      chat: chat,
+                                                                                    ),
+                                                                                  );
+                                                                            };
+                                                                          }
+                                                                          VoidCallback?
                                                                           onRevokeInvite;
                                                                           if (isInviteMessage &&
                                                                               self) {
@@ -8575,6 +8665,12 @@ class _ChatState extends State<Chat> {
                                                                                 onResend,
                                                                             onEdit:
                                                                                 onEdit,
+                                                                            importantDisabled:
+                                                                                requiresMucReference,
+                                                                            onImportantToggle:
+                                                                                onImportantToggle,
+                                                                            isImportant:
+                                                                                isImportant,
                                                                             pinDisabled:
                                                                                 requiresMucReference &&
                                                                                 canTogglePins,
@@ -9164,6 +9260,9 @@ class _ChatState extends State<Chat> {
                             isChatBlocked: isChatBlocked,
                             blocklistEntry: chatBlocklistEntry,
                             blockAddress: blockAddress,
+                          ),
+                          ChatRouteIndex.important => _ChatImportantOverlay(
+                            onMessageSelected: _handleImportantMessageSelected,
                           ),
                           ChatRouteIndex.gallery => _ChatGalleryOverlay(
                             chat: chatEntity,
@@ -9931,6 +10030,50 @@ class _ChatState extends State<Chat> {
     _setChatRoute(ChatRouteIndex.gallery);
   }
 
+  void _toggleImportantMessagesRoute() {
+    if (!mounted) {
+      return;
+    }
+    if (_chatRoute.isImportant) {
+      _setChatRoute(ChatRouteIndex.main);
+      return;
+    }
+    _setChatRoute(ChatRouteIndex.important);
+  }
+
+  void _handleImportantMessageSelected(String messageReferenceId) {
+    _setChatRoute(ChatRouteIndex.main);
+    context.read<ChatBloc>().add(
+      ChatImportantMessageSelected(messageReferenceId),
+    );
+  }
+
+  void _consumePendingOpenMessageSelection(ChatsState chatsState) {
+    final requestId = chatsState.pendingOpenMessageRequestId;
+    if (requestId == 0 || requestId == _handledPendingOpenMessageRequestId) {
+      return;
+    }
+    final pendingChatJid = chatsState.pendingOpenMessageChatJid?.trim();
+    final pendingReferenceId = chatsState.pendingOpenMessageReferenceId?.trim();
+    final chatJid = context.read<ChatBloc>().state.chat?.jid.trim();
+    if (pendingChatJid == null ||
+        pendingChatJid.isEmpty ||
+        pendingReferenceId == null ||
+        pendingReferenceId.isEmpty ||
+        chatJid == null ||
+        chatJid.isEmpty ||
+        pendingChatJid != chatJid) {
+      return;
+    }
+    _handledPendingOpenMessageRequestId = requestId;
+    context.read<ChatsCubit>().clearPendingOpenMessageSelection(
+      requestId: requestId,
+    );
+    context.read<ChatBloc>().add(
+      ChatImportantMessageSelected(pendingReferenceId),
+    );
+  }
+
   void _togglePinnedMessages() {
     if (!mounted) return;
     final bool isChatCalendarOpen = context
@@ -10059,8 +10202,8 @@ class _ChatState extends State<Chat> {
   }
 }
 
-class _PinnedBadgeIcon extends StatelessWidget {
-  const _PinnedBadgeIcon({
+class _ActionCountBadgeIcon extends StatelessWidget {
+  const _ActionCountBadgeIcon({
     required this.iconData,
     required this.count,
     required this.iconColor,
@@ -10097,6 +10240,27 @@ class _PinnedBadgeIcon extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PinnedBadgeIcon extends StatelessWidget {
+  const _PinnedBadgeIcon({
+    required this.iconData,
+    required this.count,
+    required this.iconColor,
+  });
+
+  final IconData iconData;
+  final int count;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ActionCountBadgeIcon(
+      iconData: iconData,
+      count: count,
+      iconColor: iconColor,
     );
   }
 }
@@ -10476,27 +10640,7 @@ class _PinnedMessageTile extends StatelessWidget {
     if (room == null) {
       return null;
     }
-    final occupantId = message.occupantID?.trim();
-    if (occupantId != null && occupantId.isNotEmpty) {
-      final occupant = room.occupants[occupantId];
-      if (occupant != null) {
-        return occupant;
-      }
-    }
-    final direct = room.occupants[message.senderJid];
-    if (direct != null) {
-      return direct;
-    }
-    final nick = nickFromSender(message.senderJid);
-    if (nick == null) {
-      return null;
-    }
-    for (final occupant in room.occupants.values) {
-      if (occupant.nick == nick) {
-        return occupant;
-      }
-    }
-    return null;
+    return _resolveRoomMessageOccupant(message: message, roomState: room);
   }
 
   String resolveSenderLabel({
@@ -10627,6 +10771,17 @@ class _PinnedMessageTile extends StatelessWidget {
     final settings = context.watch<SettingsCubit>().state;
     final sourceMessage = item.message;
     final previewMessage = previewMessageForItem(item);
+    final importantMessageIds = context
+        .select<ImportantMessagesCubit, Set<String>>((cubit) {
+          final items = cubit.state.items;
+          if (items == null) {
+            return const <String>{};
+          }
+          return items
+              .map((entry) => entry.messageReferenceId.trim())
+              .where((value) => value.isNotEmpty)
+              .toSet();
+        });
     final previewProperties =
         previewMessage?.customProperties ?? const <String, Object?>{};
     final projectedMessage =
@@ -10747,6 +10902,9 @@ class _PinnedMessageTile extends StatelessWidget {
     final transportIconData = isEmailMessage
         ? LucideIcons.mail
         : LucideIcons.messageCircle;
+    final isImportant =
+        effectiveMessage?.referenceIds.any(importantMessageIds.contains) ??
+        false;
     TextSpan iconDetailSpan(IconData icon, Color color) => TextSpan(
       text: String.fromCharCode(icon.codePoint),
       style: detailStyle.copyWith(
@@ -10763,12 +10921,14 @@ class _PinnedMessageTile extends StatelessWidget {
     final detailSpans = <InlineSpan>[
       TextSpan(text: timeLabel, style: detailStyle),
       iconDetailSpan(transportIconData, detailColor),
-      if (isSelf && statusIcon != null) iconDetailSpan(statusIcon, detailColor),
+      iconDetailSpan(LucideIcons.pin, detailColor),
+      if (isImportant) iconDetailSpan(Icons.star_rounded, detailColor),
       if (trusted != null)
         iconDetailSpan(
           trusted.toShieldIcon,
           trusted ? axiGreen : colors.destructive,
         ),
+      if (isSelf && statusIcon != null) iconDetailSpan(statusIcon, detailColor),
     ];
     final shareMetadataDetails = hideTaskText && calendarTask != null
         ? calendarTaskShareMetadata(calendarTask, context.l10n, detailStyle)
@@ -10921,7 +11081,7 @@ class _PinnedMessageTile extends StatelessWidget {
             text: inviteLabel,
             baseStyle: baseTextStyle,
             linkStyle: linkStyle,
-            details: [TextSpan(text: timeLabel, style: detailStyle)],
+            details: detailSpans,
             onLinkTap: onMessageLinkTap,
             onLinkLongPress: onMessageLinkTap,
           ),
@@ -11478,6 +11638,7 @@ class _ChatSearchOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _ChatSubrouteShell(
+      showBackButton: false,
       child: Column(
         children: [
           panel,
@@ -11489,9 +11650,10 @@ class _ChatSearchOverlay extends StatelessWidget {
 }
 
 class _ChatSubrouteShell extends StatelessWidget {
-  const _ChatSubrouteShell({required this.child});
+  const _ChatSubrouteShell({required this.child, this.showBackButton = true});
 
   final Widget child;
+  final bool showBackButton;
 
   @override
   Widget build(BuildContext context) {
@@ -11499,21 +11661,22 @@ class _ChatSubrouteShell extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: EdgeInsets.all(spacing.m),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: AxiIconButton.ghost(
-              iconData: LucideIcons.arrowLeft,
-              tooltip: context.l10n.commonBack,
-              onPressed: () {
-                context.read<ChatsCubit>().setOpenChatRoute(
-                  route: ChatRouteIndex.main,
-                );
-              },
+        if (showBackButton)
+          Padding(
+            padding: EdgeInsets.all(spacing.m),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: AxiIconButton.ghost(
+                iconData: LucideIcons.arrowLeft,
+                tooltip: context.l10n.commonBack,
+                onPressed: () {
+                  context.read<ChatsCubit>().setOpenChatRoute(
+                    route: ChatRouteIndex.main,
+                  );
+                },
+              ),
             ),
           ),
-        ),
         Expanded(child: child),
       ],
     );
@@ -11598,6 +11761,27 @@ class _ChatGalleryOverlay extends StatelessWidget {
               chatOverride: currentChat,
               showChatLabel: false,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatImportantOverlay extends StatelessWidget {
+  const _ChatImportantOverlay({required this.onMessageSelected});
+
+  final ValueChanged<String> onMessageSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: context.colorScheme.background,
+      child: SafeArea(
+        top: false,
+        child: _ChatSubrouteShell(
+          child: ImportantMessagesList(
+            onPressed: (item) => onMessageSelected(item.messageReferenceId),
           ),
         ),
       ),
@@ -11785,6 +11969,99 @@ layoutReactionStrip({
     overflowed: layout.overflowed,
     totalWidth: layout.totalWidth,
   );
+}
+
+Occupant? _resolveRoomMessageOccupant({
+  required Message message,
+  required RoomState roomState,
+}) {
+  final occupantId = message.occupantID?.trim();
+  Occupant? fallback;
+  if (occupantId != null && occupantId.isNotEmpty) {
+    final directOccupant = roomState.occupants[occupantId];
+    if (directOccupant != null &&
+        directOccupant.realJid?.trim().isNotEmpty == true) {
+      return directOccupant;
+    }
+    fallback = directOccupant;
+  }
+  final senderJid = message.senderJid.trim();
+  final direct = roomState.occupants[senderJid];
+  if (direct != null && direct.realJid?.trim().isNotEmpty == true) {
+    return direct;
+  }
+  final nick = addressResourcePart(senderJid)?.trim();
+  fallback ??= direct;
+  if (nick == null || nick.isEmpty) {
+    return fallback;
+  }
+  for (final occupant in roomState.occupants.values) {
+    if (occupant.nick.trim() != nick) {
+      continue;
+    }
+    if (occupant.realJid?.trim().isNotEmpty == true) {
+      return occupant;
+    }
+    fallback ??= occupant;
+  }
+  return fallback;
+}
+
+@visibleForTesting
+String? resolveMessageAvatarPath({
+  required Message message,
+  required RoomState? roomState,
+  required Map<String, String> rosterAvatarPathsByJid,
+  required Map<String, String> chatAvatarPathsByJid,
+}) {
+  String? avatarPathForBareJid(String jid) {
+    final normalized = normalizedAddressValue(jid);
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return rosterAvatarPathsByJid[normalized] ??
+        chatAvatarPathsByJid[normalized];
+  }
+
+  final normalizedRoomJid = normalizedAddressValue(roomState?.roomJid);
+  if (roomState != null) {
+    final occupant = _resolveRoomMessageOccupant(
+      message: message,
+      roomState: roomState,
+    );
+    final realJid = occupant?.realJid?.trim();
+    if (realJid == null || realJid.isEmpty) {
+      // Some stored MUC messages already carry a real sender JID. Keep using it
+      // until live room-state hydration resolves the occupant's real JID.
+    } else {
+      final bareRealJid = bareAddress(realJid) ?? realJid;
+      final avatarPath = avatarPathForBareJid(bareRealJid);
+      if (avatarPath != null) {
+        return avatarPath;
+      }
+    }
+  }
+
+  for (final candidate in <String?>[message.senderJid, message.occupantID]) {
+    final parsed = parseJid(candidate?.trim());
+    if (parsed == null) {
+      continue;
+    }
+    final bareCandidate = parsed.toBare().toString();
+    final normalizedBareCandidate = normalizedAddressValue(bareCandidate);
+    if (normalizedBareCandidate == null || normalizedBareCandidate.isEmpty) {
+      continue;
+    }
+    if (normalizedRoomJid != null &&
+        normalizedBareCandidate == normalizedRoomJid) {
+      continue;
+    }
+    final avatarPath = avatarPathForBareJid(bareCandidate);
+    if (avatarPath != null) {
+      return avatarPath;
+    }
+  }
+  return null;
 }
 
 @visibleForTesting
@@ -14080,6 +14357,9 @@ class _MessageActionBar extends StatelessWidget {
     this.onSelect,
     this.onResend,
     this.onEdit,
+    this.importantDisabled = false,
+    this.onImportantToggle,
+    required this.isImportant,
     this.pinDisabled = false,
     this.pinLoading = false,
     this.onPinToggle,
@@ -14098,6 +14378,9 @@ class _MessageActionBar extends StatelessWidget {
   final VoidCallback? onSelect;
   final VoidCallback? onResend;
   final VoidCallback? onEdit;
+  final bool importantDisabled;
+  final VoidCallback? onImportantToggle;
+  final bool isImportant;
   final bool pinDisabled;
   final bool pinLoading;
   final VoidCallback? onPinToggle;
@@ -14145,6 +14428,17 @@ class _MessageActionBar extends StatelessWidget {
           icon: Icon(LucideIcons.ban, size: iconSize),
           label: l10n.chatActionRevoke,
           onPressed: onRevokeInvite,
+        ),
+      if (onImportantToggle != null || importantDisabled)
+        ContextActionButton(
+          icon: Icon(
+            isImportant ? Icons.star_rounded : Icons.star_outline_rounded,
+            size: iconSize,
+          ),
+          label: isImportant
+              ? l10n.chatRemoveMessageImportant
+              : l10n.chatMarkMessageImportant,
+          onPressed: onImportantToggle,
         ),
       if (onPinToggle != null || pinLoading || pinDisabled)
         ContextActionButton(

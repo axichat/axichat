@@ -13,6 +13,7 @@ class AxiMenuAction {
   const AxiMenuAction({
     required this.label,
     this.icon,
+    this.leading,
     this.trailing,
     this.onPressed,
     this.destructive = false,
@@ -21,6 +22,7 @@ class AxiMenuAction {
 
   final String label;
   final IconData? icon;
+  final Widget? leading;
   final Widget? trailing;
   final VoidCallback? onPressed;
   final bool destructive;
@@ -273,7 +275,21 @@ class _AxiMenuItemState extends State<_AxiMenuItem> {
             ? context.colorScheme.accent
             : context.colorScheme.background.withValues(alpha: 0);
         final textStyle = context.textTheme.small.copyWith(color: foreground);
-        final Widget leadingIcon = widget.action.icon == null
+        final Widget leadingIcon = widget.action.leading != null
+            ? Padding(
+                padding: EdgeInsets.only(right: context.spacing.s),
+                child: IconTheme(
+                  data: IconThemeData(
+                    size: context.sizing.menuItemIconSize,
+                    color: foreground,
+                  ),
+                  child: DefaultTextStyle(
+                    style: context.textTheme.muted.copyWith(color: foreground),
+                    child: widget.action.leading!,
+                  ),
+                ),
+              )
+            : widget.action.icon == null
             ? const SizedBox.shrink()
             : Padding(
                 padding: EdgeInsets.only(right: context.spacing.s),
@@ -299,7 +315,8 @@ class _AxiMenuItemState extends State<_AxiMenuItem> {
             padding: EdgeInsets.symmetric(horizontal: context.spacing.s),
             child: Row(
               children: [
-                if (widget.action.icon != null) leadingIcon,
+                if (widget.action.leading != null || widget.action.icon != null)
+                  leadingIcon,
                 Expanded(
                   child: DefaultTextStyle(
                     style: textStyle,

@@ -367,5 +367,20 @@ void main() {
         expect(message.occupantID, equals(_occupantId));
       },
     );
+
+    test(
+      'OID-041 [HP] groupchat messages do not synthesize occupant-id fallback values',
+      () {
+        final event = _createMessageEvent(
+          from: mox.JID.fromString(_roomOccupantJid),
+          to: mox.JID.fromString(_accountBareJid),
+          extensions: const <mox.StanzaHandlerExtension>[],
+          type: _messageTypeGroupchat,
+        );
+
+        final message = Message.fromMox(event);
+        expect(message.occupantID, isNull);
+      },
+    );
   });
 }

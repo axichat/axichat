@@ -129,6 +129,12 @@ abstract class AppLocalizations {
   /// **'Drafts'**
   String get homeTabDrafts;
 
+  /// No description provided for @homeTabImportant.
+  ///
+  /// In en, this message translates to:
+  /// **'Important'**
+  String get homeTabImportant;
+
   /// No description provided for @homeTabSpam.
   ///
   /// In en, this message translates to:
@@ -302,6 +308,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Exclude subject'**
   String get chatSearchExcludeSubject;
+
+  /// No description provided for @chatSearchImportantOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Important only'**
+  String get chatSearchImportantOnly;
 
   /// No description provided for @chatSearchFailed.
   ///
@@ -1639,6 +1651,12 @@ abstract class AppLocalizations {
   /// **'Attachments'**
   String get chatAttachmentTooltip;
 
+  /// No description provided for @chatImportantMessagesTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Important messages'**
+  String get chatImportantMessagesTooltip;
+
   /// No description provided for @chatPinnedMessagesTooltip.
   ///
   /// In en, this message translates to:
@@ -1650,6 +1668,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pinned messages'**
   String get chatPinnedMessagesTitle;
+
+  /// No description provided for @chatMarkMessageImportant.
+  ///
+  /// In en, this message translates to:
+  /// **'Mark important'**
+  String get chatMarkMessageImportant;
+
+  /// No description provided for @chatRemoveMessageImportant.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove important'**
+  String get chatRemoveMessageImportant;
 
   /// No description provided for @chatPinMessage.
   ///
@@ -1674,6 +1704,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pinned message is unavailable.'**
   String get chatPinnedMissingMessage;
+
+  /// No description provided for @importantMessagesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No important messages yet.'**
+  String get importantMessagesEmpty;
 
   /// No description provided for @chatSendMessageTooltip.
   ///
@@ -3408,6 +3444,12 @@ abstract class AppLocalizations {
   /// **'Email accounts'**
   String get profileLinkedEmailAccounts;
 
+  /// No description provided for @profileBlocklistTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Blocklist'**
+  String get profileBlocklistTitle;
+
   /// No description provided for @profileChangePassword.
   ///
   /// In en, this message translates to:
@@ -5097,7 +5139,7 @@ abstract class AppLocalizations {
   /// No description provided for @mucActionOpenChat.
   ///
   /// In en, this message translates to:
-  /// **'Open chat'**
+  /// **'Open DM'**
   String get mucActionOpenChat;
 
   /// No description provided for @mucActionKick.

@@ -305,6 +305,8 @@ extension RoomStatePresence on RoomState {
 
   bool get hasJoinError => joinErrorCondition != null || joinErrorText != null;
 
+  bool get hasTerminalExit => wasKicked || wasBanned || roomShutdown;
+
   bool get blocksAutoRejoin => joinErrorCondition?.blocksAutoRejoin == true;
 
   bool get hasPresentSelfOccupant {
@@ -319,6 +321,7 @@ extension RoomStatePresence on RoomState {
 
   bool get isBootstrapPending =>
       !hasJoinError &&
+      !hasTerminalExit &&
       (!isReadyForMessaging || roomCreated || postJoinRefreshPending);
 }
 

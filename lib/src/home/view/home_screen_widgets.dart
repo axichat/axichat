@@ -1459,13 +1459,9 @@ class _HomeShellNavigationRail extends StatelessWidget {
 }
 
 class _TabActionGroup extends StatelessWidget {
-  const _TabActionGroup({
-    this.includePrimaryActions = false,
-    this.extraActions = const <Widget>[],
-  });
+  const _TabActionGroup({this.includePrimaryActions = false});
 
   final bool includePrimaryActions;
-  final List<Widget> extraActions;
 
   @override
   Widget build(BuildContext context) {
@@ -1479,7 +1475,6 @@ class _TabActionGroup extends StatelessWidget {
         const ChatsAddButton(),
       ]);
     }
-    actions.addAll(extraActions);
     if (actions.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -1894,6 +1889,8 @@ IconData _tabIcon(HomeTab tab) {
       return LucideIcons.users;
     case HomeTab.invites:
       return LucideIcons.userPlus;
+    case HomeTab.important:
+      return Icons.star_rounded;
     case HomeTab.blocked:
       return LucideIcons.userX;
     case HomeTab.spam:

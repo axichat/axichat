@@ -10,8 +10,6 @@ import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
-import 'package:axichat/src/blocklist/view/blocklist_button.dart';
-import 'package:axichat/src/blocklist/view/blocklist_list.dart';
 import 'package:axichat/src/blocklist/view/blocklist_notice_l10n.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
@@ -55,6 +53,9 @@ import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
 import 'package:axichat/src/home/home_search_definitions.dart';
 import 'package:axichat/src/home/home_search_models.dart';
+import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
+import 'package:axichat/src/important/models/important_message_item.dart';
+import 'package:axichat/src/important/view/important_messages_list.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
@@ -81,10 +82,6 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 part 'home/view/home_screen_widgets.dart';
 
-List<HomeSearchFilter> _blocklistSearchFilters(AppLocalizations l10n) => [
-  HomeSearchFilter(id: SearchFilterId.all, label: l10n.blocklistFilterAll),
-];
-
 List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
   HomeSearchFilter(id: SearchFilterId.all, label: l10n.draftsFilterAll),
   HomeSearchFilter(
@@ -92,6 +89,52 @@ List<HomeSearchFilter> _draftsSearchFilters(AppLocalizations l10n) => [
     label: l10n.draftsFilterAttachments,
   ),
 ];
+
+class _GlobalImportantMessagesTab extends StatefulWidget {
+  const _GlobalImportantMessagesTab();
+
+  @override
+  State<_GlobalImportantMessagesTab> createState() =>
+      _GlobalImportantMessagesTabState();
+}
+
+class _GlobalImportantMessagesTabState
+    extends State<_GlobalImportantMessagesTab> {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _syncSearchState(context, context.read<HomeSearchCubit>().state);
+  }
+
+  void _syncSearchState(BuildContext context, HomeSearchState searchState) {
+    final tabState = searchState.stateFor(HomeTab.important);
+    final query = searchState.active ? tabState.query : '';
+    context.read<ImportantMessagesCubit>().updateFilter(
+      query: query,
+      sortOrder: tabState.sort,
+    );
+  }
+
+  Future<void> _openItem(ImportantMessageItem item) async {
+    await context.read<ChatsCubit>().openImportantMessage(
+      jid: item.chatJid,
+      messageReferenceId: item.messageReferenceId,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocListener<HomeSearchCubit, HomeSearchState>(
+      listener: _syncSearchState,
+      child: ImportantMessagesList(
+        showChatLabel: true,
+        onPressed: (item) {
+          unawaited(_openItem(item));
+        },
+      ),
+    );
+  }
+}
 
 class HomeShellScope extends InheritedWidget {
   const HomeShellScope({
@@ -313,6 +356,18 @@ class _HomeShellState extends State<HomeShell> {
         searchFilters: _draftsSearchFilters(l10n),
       ),
       HomeTabEntry(
+        id: HomeTab.important,
+        label: l10n.homeTabImportant,
+        body: BlocProvider(
+          create: (context) =>
+              ImportantMessagesCubit(xmppService: context.read<XmppService>()),
+          child: const _GlobalImportantMessagesTab(),
+        ),
+        fab: showDesktopPrimaryActions
+            ? const _TabActionGroup(includePrimaryActions: true)
+            : null,
+      ),
+      HomeTabEntry(
         id: HomeTab.spam,
         label: l10n.homeTabSpam,
         body: const SpamList(key: PageStorageKey('Spam')),
@@ -320,13 +375,6 @@ class _HomeShellState extends State<HomeShell> {
             ? const _TabActionGroup(includePrimaryActions: true)
             : null,
         searchFilters: spamSearchFilters(l10n),
-      ),
-      HomeTabEntry(
-        id: HomeTab.blocked,
-        label: l10n.homeTabBlocked,
-        body: const BlocklistList(key: PageStorageKey('Blocked')),
-        fab: const _TabActionGroup(extraActions: [BlocklistAddButton()]),
-        searchFilters: _blocklistSearchFilters(l10n),
       ),
     ];
 
@@ -1099,6 +1147,7 @@ class _HomeContent extends StatelessWidget {
                             body = AxiFadeIndexedStack(
                               index: openCalendar ? 1 : 0,
                               duration: Duration.zero,
+                              overlapChildren: false,
                               children: [
                                 chatLayout(showChatCalendar: showChatCalendar),
                                 calendarLayout(
@@ -1229,6 +1278,12 @@ class _HomeContent extends StatelessWidget {
               emailService: emailEnabled ? locate<EmailService>() : null,
             );
           },
+        ),
+        BlocProvider(
+          create: (context) => ImportantMessagesCubit(
+            xmppService: context.read<XmppService>(),
+            chatJid: resolvedJid,
+          ),
         ),
       ],
       child: Builder(

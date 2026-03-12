@@ -65,14 +65,16 @@ class _AxiMoreState extends State<AxiMore> {
             for (final action in actions) ...[
               ListTile(
                 enabled: action.enabled,
-                leading: action.icon == null
-                    ? null
-                    : Icon(
-                        action.icon,
-                        color: action.destructive
-                            ? colors.destructive
-                            : colors.primary,
-                      ),
+                leading:
+                    action.leading ??
+                    (action.icon == null
+                        ? null
+                        : Icon(
+                            action.icon,
+                            color: action.destructive
+                                ? colors.destructive
+                                : colors.primary,
+                          )),
                 title: Text(
                   action.label,
                   style: action.destructive
@@ -108,6 +110,7 @@ class _AxiMoreState extends State<AxiMore> {
           (action) => AxiMenuAction(
             label: action.label,
             icon: action.icon,
+            leading: action.leading,
             destructive: action.destructive,
             enabled: action.enabled,
             onPressed: action.onPressed == null
