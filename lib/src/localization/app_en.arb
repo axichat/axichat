@@ -1149,6 +1149,7 @@
   "commonUnarchive": "Unarchive",
   "commonShow": "Show",
   "chatMessageViewHtmlAction": "Show HTML",
+  "chatMessageViewFullAction": "View full",
   "chatMessageShowTextAction": "Show text",
   "commonHide": "Hide",
   "blocklistBlockUser": "Block user",

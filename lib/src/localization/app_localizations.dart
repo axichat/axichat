@@ -4848,6 +4848,12 @@ abstract class AppLocalizations {
   /// **'Show HTML'**
   String get chatMessageViewHtmlAction;
 
+  /// No description provided for @chatMessageViewFullAction.
+  ///
+  /// In en, this message translates to:
+  /// **'View full'**
+  String get chatMessageViewFullAction;
+
   /// No description provided for @chatMessageShowTextAction.
   ///
   /// In en, this message translates to:

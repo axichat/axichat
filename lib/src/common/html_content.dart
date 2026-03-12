@@ -9,12 +9,13 @@ import 'package:axichat/src/common/url_safety.dart';
 class HtmlContentCodec {
   static const String _htmlNamespaceUri = 'http://www.w3.org/1999/xhtml';
   static const String _webViewViewportContent =
-      'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no';
+      'width=device-width, initial-scale=1.0, viewport-fit=cover';
   static const String _webViewBaseStyle = '''
 html, body {
   margin: 0 !important;
   padding: 0 !important;
-  width: auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
   max-width: 100% !important;
   overflow-x: hidden !important;
   -webkit-text-size-adjust: 100% !important;
@@ -29,6 +30,8 @@ body * {
   box-sizing: border-box !important;
   font-size: inherit !important;
   line-height: inherit !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
 }
 img {
   max-width: 100% !important;
@@ -36,14 +39,20 @@ img {
 }
 table {
   max-width: 100% !important;
-  width: auto !important;
-  table-layout: auto !important;
-  display: block !important;
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
 }
-tbody, thead, tfoot, tr, td, th {
-  display: block !important;
+tbody, thead, tfoot, tr {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+td, th {
   width: auto !important;
   max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  white-space: normal !important;
 }
 div, p, span, a, li, td, th {
   max-width: 100% !important;

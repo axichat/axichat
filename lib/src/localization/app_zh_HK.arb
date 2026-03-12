@@ -1013,6 +1013,7 @@
   "commonUnarchive": "取消封存",
   "commonShow": "顯示",
   "chatMessageViewHtmlAction": "顯示 HTML",
+  "chatMessageViewFullAction": "檢視完整內容",
   "chatMessageShowTextAction": "顯示文字",
   "commonHide": "隱藏",
   "blocklistBlockUser": "封鎖用戶",

@@ -1016,6 +1016,7 @@
   "commonUnarchive": "Désarchiver",
   "commonShow": "Afficher",
   "chatMessageViewHtmlAction": "Afficher le HTML",
+  "chatMessageViewFullAction": "Voir tout",
   "chatMessageShowTextAction": "Afficher le texte",
   "commonHide": "Masquer",
   "blocklistBlockUser": "Bloquer l’utilisateur",

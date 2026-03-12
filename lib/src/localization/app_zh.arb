@@ -1020,6 +1020,7 @@
   "commonUnarchive": "取消存档",
   "commonShow": "显示",
   "chatMessageViewHtmlAction": "显示 HTML",
+  "chatMessageViewFullAction": "查看完整内容",
   "chatMessageShowTextAction": "显示文本",
   "commonHide": "隐藏",
   "blocklistBlockUser": "屏蔽用户",

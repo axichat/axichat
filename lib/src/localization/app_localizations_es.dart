@@ -2715,6 +2715,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get chatMessageViewHtmlAction => 'Mostrar HTML';
 
   @override
+  String get chatMessageViewFullAction => 'Ver completo';
+
+  @override
   String get chatMessageShowTextAction => 'Mostrar texto';
 
   @override

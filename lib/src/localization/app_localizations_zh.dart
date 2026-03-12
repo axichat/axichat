@@ -2588,6 +2588,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatMessageViewHtmlAction => '显示 HTML';
 
   @override
+  String get chatMessageViewFullAction => '查看完整内容';
+
+  @override
   String get chatMessageShowTextAction => '显示文本';
 
   @override
@@ -8478,6 +8481,9 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
 
   @override
   String get chatMessageViewHtmlAction => '顯示 HTML';
+
+  @override
+  String get chatMessageViewFullAction => '檢視完整內容';
 
   @override
   String get chatMessageShowTextAction => '顯示文字';

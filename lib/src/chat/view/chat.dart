@@ -7732,6 +7732,12 @@ class _ChatState extends State<Chat> {
                                                                                 (defaultShowsInlineEmailHtmlBody
                                                                                     ? !usesAlternateInlineEmailBody
                                                                                     : usesAlternateInlineEmailBody);
+                                                                            final bool
+                                                                            shouldShowViewFullEmailAction =
+                                                                                hasEmailHtmlBody &&
+                                                                                shouldRenderTextContent &&
+                                                                                !hasAttachmentCaption &&
+                                                                                !isSingleSelection;
                                                                             if (hasAttachmentCaption) {
                                                                               final metadataId = metadataIdForCaption;
                                                                               final metadata = _metadataFor(
@@ -7775,6 +7781,23 @@ class _ChatState extends State<Chat> {
                                                                               );
                                                                             } else if (shouldCollapseEmailPreview) {
                                                                               final (
+                                                                                details: focusPreviewDetails,
+                                                                                detailActions: focusPreviewDetailActions,
+                                                                              ) = _emailInlineDetailActionData(
+                                                                                context: context,
+                                                                                details:
+                                                                                    const <
+                                                                                      InlineSpan
+                                                                                    >[],
+                                                                                enabled: shouldShowViewFullEmailAction,
+                                                                                label: l10n.chatMessageViewFullAction,
+                                                                                onTap: () => unawaited(
+                                                                                  _selectMessage(
+                                                                                    messageModel.stanzaID,
+                                                                                  ),
+                                                                                ),
+                                                                              );
+                                                                              final (
                                                                                 details: collapsedPreviewDetails,
                                                                                 detailActions: collapsedPreviewDetailActions,
                                                                               ) = _emailInlineDetailActionData(
@@ -7786,6 +7809,19 @@ class _ChatState extends State<Chat> {
                                                                                   messageModel.stanzaID,
                                                                                 ),
                                                                               );
+                                                                              if (focusPreviewDetails.isNotEmpty) {
+                                                                                bubbleTextChildren.add(
+                                                                                  Padding(
+                                                                                    padding: EdgeInsets.only(
+                                                                                      bottom: context.spacing.xs,
+                                                                                    ),
+                                                                                    child: ChatInlineDetails(
+                                                                                      details: focusPreviewDetails,
+                                                                                      detailActions: focusPreviewDetailActions,
+                                                                                    ),
+                                                                                  ),
+                                                                                );
+                                                                              }
                                                                               bubbleTextChildren.add(
                                                                                 Text(
                                                                                   collapsedEmailPreviewText,
@@ -7848,6 +7884,26 @@ class _ChatState extends State<Chat> {
                                                                                   hasRemoteHtmlImages &&
                                                                                   shouldRenderHtmlBody;
                                                                               final (
+                                                                                details: focusHtmlDetails,
+                                                                                detailActions: focusHtmlDetailActions,
+                                                                              ) = _emailInlineDetailActionData(
+                                                                                context: context,
+                                                                                details:
+                                                                                    const <
+                                                                                      InlineSpan
+                                                                                    >[],
+                                                                                enabled:
+                                                                                    shouldShowViewFullEmailAction &&
+                                                                                    !shouldUseSelectedInlineEmailWebView &&
+                                                                                    shouldRenderHtmlBody,
+                                                                                label: l10n.chatMessageViewFullAction,
+                                                                                onTap: () => unawaited(
+                                                                                  _selectMessage(
+                                                                                    messageModel.stanzaID,
+                                                                                  ),
+                                                                                ),
+                                                                              );
+                                                                              final (
                                                                                 details: htmlBodyDetails,
                                                                                 detailActions: htmlBodyDetailActions,
                                                                               ) = _emailInlineDetailActionData(
@@ -7878,6 +7934,19 @@ class _ChatState extends State<Chat> {
                                                                                 );
                                                                               }
                                                                               if (shouldRenderHtmlBody) {
+                                                                                if (focusHtmlDetails.isNotEmpty) {
+                                                                                  bubbleTextChildren.add(
+                                                                                    Padding(
+                                                                                      padding: EdgeInsets.only(
+                                                                                        bottom: context.spacing.xs,
+                                                                                      ),
+                                                                                      child: ChatInlineDetails(
+                                                                                        details: focusHtmlDetails,
+                                                                                        detailActions: focusHtmlDetailActions,
+                                                                                      ),
+                                                                                    ),
+                                                                                  );
+                                                                                }
                                                                                 bubbleTextChildren.add(
                                                                                   shouldUseSelectedInlineEmailWebView
                                                                                       ? _MessageHtmlWebViewBody(
@@ -7940,6 +8009,23 @@ class _ChatState extends State<Chat> {
                                                                               );
                                                                             } else if (shouldRenderTextContent) {
                                                                               final (
+                                                                                details: focusTextDetails,
+                                                                                detailActions: focusTextDetailActions,
+                                                                              ) = _emailInlineDetailActionData(
+                                                                                context: context,
+                                                                                details:
+                                                                                    const <
+                                                                                      InlineSpan
+                                                                                    >[],
+                                                                                enabled: shouldShowViewFullEmailAction,
+                                                                                label: l10n.chatMessageViewFullAction,
+                                                                                onTap: () => unawaited(
+                                                                                  _selectMessage(
+                                                                                    messageModel.stanzaID,
+                                                                                  ),
+                                                                                ),
+                                                                              );
+                                                                              final (
                                                                                 details: textBodyDetails,
                                                                                 detailActions: textBodyDetailActions,
                                                                               ) = _emailInlineDetailActionData(
@@ -7952,6 +8038,19 @@ class _ChatState extends State<Chat> {
                                                                                 ),
                                                                               );
                                                                               if (trimmedDisplayMessageText.isNotEmpty) {
+                                                                                if (focusTextDetails.isNotEmpty) {
+                                                                                  bubbleTextChildren.add(
+                                                                                    Padding(
+                                                                                      padding: EdgeInsets.only(
+                                                                                        bottom: context.spacing.xs,
+                                                                                      ),
+                                                                                      child: ChatInlineDetails(
+                                                                                        details: focusTextDetails,
+                                                                                        detailActions: focusTextDetailActions,
+                                                                                      ),
+                                                                                    ),
+                                                                                  );
+                                                                                }
                                                                                 bubbleTextChildren.add(
                                                                                   _ParsedMessageBody(
                                                                                     contentKey: bubbleContentKey,
@@ -8365,6 +8464,7 @@ class _ChatState extends State<Chat> {
                                                                             final messageAvatarPath = resolveMessageAvatarPath(
                                                                               message: messageModel,
                                                                               roomState: state.roomState,
+                                                                              memberSections: state.roomMemberSections,
                                                                               rosterAvatarPathsByJid: rosterAvatarPathsByJid,
                                                                               chatAvatarPathsByJid: chatAvatarPathsByJid,
                                                                             );
@@ -12181,6 +12281,7 @@ String? resolveMessageAvatarJid({
 String? resolveMessageAvatarPath({
   required Message message,
   required RoomState? roomState,
+  required List<RoomMemberSection> memberSections,
   required Map<String, String> rosterAvatarPathsByJid,
   required Map<String, String> chatAvatarPathsByJid,
 }) {
@@ -12226,6 +12327,76 @@ String? resolveMessageAvatarPath({
         );
         if (avatarPath != null) {
           return avatarPath;
+        }
+      }
+    }
+  }
+
+  if (memberSections.isNotEmpty) {
+    final normalizedMessageOccupantId = normalizedOccupantId(
+      message.occupantID,
+    );
+    if (normalizedMessageOccupantId != null) {
+      for (final section in memberSections) {
+        for (final member in section.members) {
+          final normalizedMemberOccupantId = normalizedOccupantId(
+            member.occupant.occupantId,
+          );
+          if (normalizedMemberOccupantId != normalizedMessageOccupantId) {
+            continue;
+          }
+          final memberAvatarPath = member.avatarPath?.trim();
+          if (memberAvatarPath != null && memberAvatarPath.isNotEmpty) {
+            return memberAvatarPath;
+          }
+        }
+      }
+    }
+
+    final avatarJid = resolveMessageAvatarJid(
+      message: message,
+      roomState: roomState,
+    );
+    final normalizedAvatarJid = normalizedAddressValue(
+      avatarJid == null ? null : bareAddress(avatarJid) ?? avatarJid,
+    );
+    if (normalizedAvatarJid != null) {
+      for (final section in memberSections) {
+        for (final member in section.members) {
+          final memberRealJid = member.occupant.realJid?.trim();
+          if (memberRealJid == null || memberRealJid.isEmpty) {
+            continue;
+          }
+          if (normalizedAddressValue(
+                bareAddress(memberRealJid) ?? memberRealJid,
+              ) !=
+              normalizedAvatarJid) {
+            continue;
+          }
+          final memberAvatarPath = member.avatarPath?.trim();
+          if (memberAvatarPath != null && memberAvatarPath.isNotEmpty) {
+            return memberAvatarPath;
+          }
+        }
+      }
+    }
+
+    final avatarLabel = resolveMessageAvatarLabel(
+      message: message,
+      roomState: roomState,
+    )?.trim();
+    if (avatarLabel != null && avatarLabel.isNotEmpty) {
+      final normalizedAvatarLabel = avatarLabel.toLowerCase();
+      for (final section in memberSections) {
+        for (final member in section.members) {
+          if (member.occupant.nick.trim().toLowerCase() !=
+              normalizedAvatarLabel) {
+            continue;
+          }
+          final memberAvatarPath = member.avatarPath?.trim();
+          if (memberAvatarPath != null && memberAvatarPath.isNotEmpty) {
+            return memberAvatarPath;
+          }
         }
       }
     }
@@ -17066,7 +17237,7 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
       allowRemoteImages: shouldLoadImages,
       maxHeight: math.min(
         screenHeight * sizing.dialogMaxHeightFraction,
-        sizing.composeWindowMinHeight,
+        sizing.composeWindowHeight,
       ),
       minHeight: sizing.attachmentPreviewExtent,
       backgroundColor: backgroundColor,

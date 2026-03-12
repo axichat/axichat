@@ -185,6 +185,7 @@ void main() {
             ),
           },
         ),
+        memberSections: const <RoomMemberSection>[],
         rosterAvatarPathsByJid: const <String, String>{
           'friend@axi.im': '/avatars/friend.png',
         },
@@ -217,6 +218,7 @@ void main() {
             ),
           },
         ),
+        memberSections: const <RoomMemberSection>[],
         rosterAvatarPathsByJid: const <String, String>{
           senderBareJid: '/avatars/friend.png',
         },
@@ -305,6 +307,48 @@ void main() {
 
     expect(avatarLabel, isNull);
   });
+
+  test(
+    'group message avatar path reuses the resolved member-section avatar path',
+    () {
+      const roomJid = 'group@conference.axi.im';
+      const occupantId = 'opaque-burner';
+      final path = resolveMessageAvatarPath(
+        message: const Message(
+          stanzaID: 'm7',
+          senderJid: roomJid,
+          chatJid: roomJid,
+          occupantID: occupantId,
+        ),
+        roomState: RoomState(
+          roomJid: roomJid,
+          occupants: <String, Occupant>{
+            occupantId: Occupant(occupantId: occupantId, nick: 'burner'),
+          },
+        ),
+        memberSections: <RoomMemberSection>[
+          RoomMemberSection(
+            kind: RoomMemberSectionKind.members,
+            members: <RoomMemberEntry>[
+              RoomMemberEntry(
+                occupant: Occupant(
+                  occupantId: occupantId,
+                  nick: 'burner',
+                  realJid: 'burner@axi.im',
+                ),
+                actions: const <MucModerationAction>[],
+                avatarPath: '/avatars/burner.png',
+              ),
+            ],
+          ),
+        ],
+        rosterAvatarPathsByJid: const <String, String>{},
+        chatAvatarPathsByJid: const <String, String>{},
+      );
+
+      expect(path, '/avatars/burner.png');
+    },
+  );
 }
 
 class _ReactionLayoutTestApp extends StatelessWidget {
