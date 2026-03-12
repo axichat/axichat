@@ -498,6 +498,24 @@ void main() {
         expect(merged.tasks[taskId]?.title, equals(localTitle));
       });
 
+      test('keeps local task when remote model omits it without tombstone', () {
+        final CalendarTask localTask = CalendarTask(
+          id: taskId,
+          title: localTitle,
+          createdAt: testTime,
+          modifiedAt: testTime,
+        );
+        final CalendarModel localModel = CalendarModel.empty().addTask(
+          localTask,
+        );
+        final CalendarModel remoteModel = CalendarModel.empty();
+
+        final CalendarModel merged = localModel.mergeWith(remoteModel);
+
+        expect(merged.tasks[taskId]?.title, equals(localTitle));
+        expect(merged.deletedTaskIds.containsKey(taskId), isFalse);
+      });
+
       test('prefers newer task over tombstone', () {
         final DateTime deletedAt = testTime;
         final DateTime remoteModifiedAt = testTime.add(tombstoneDelta);

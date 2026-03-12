@@ -258,6 +258,79 @@ void main() {
     const String taskId = 'sync-task';
     const String updateOperation = 'update';
 
+    test(
+      'full sync does not delete local task when remote model omits it',
+      () async {
+        final DateTime localModifiedAt = DateTime.utc(2024, 3, 1, 12);
+        final CalendarTask localTask = CalendarTask(
+          id: taskId,
+          title: 'Local title',
+          createdAt: localModifiedAt,
+          modifiedAt: localModifiedAt,
+        );
+
+        CalendarModel currentModel = CalendarModel.empty().addTask(localTask);
+
+        final CalendarSyncManager manager = buildManager(
+          readModel: () => currentModel,
+          applyModel: (CalendarModel next) async {
+            currentModel = next;
+          },
+        );
+
+        final CalendarModel remoteModel = CalendarModel.empty();
+        final CalendarSyncMessage message = CalendarSyncMessage(
+          type: CalendarSyncType.full,
+          timestamp: localModifiedAt.add(const Duration(minutes: 1)),
+          data: remoteModel.toJson(),
+          checksum: remoteModel.calculateChecksum(),
+        );
+
+        await manager.onCalendarMessage(CalendarSyncInbound(message: message));
+
+        expect(currentModel.tasks[taskId]?.title, equals('Local title'));
+        expect(currentModel.deletedTaskIds.containsKey(taskId), isFalse);
+      },
+    );
+
+    test(
+      'snapshot sync does not delete local task when remote model omits it',
+      () async {
+        final DateTime localModifiedAt = DateTime.utc(2024, 3, 1, 12);
+        final CalendarTask localTask = CalendarTask(
+          id: taskId,
+          title: 'Local title',
+          createdAt: localModifiedAt,
+          modifiedAt: localModifiedAt,
+        );
+
+        CalendarModel currentModel = CalendarModel.empty().addTask(localTask);
+
+        final CalendarSyncManager manager = buildManager(
+          readModel: () => currentModel,
+          applyModel: (CalendarModel next) async {
+            currentModel = next;
+          },
+        );
+
+        final CalendarModel remoteModel = CalendarModel.empty();
+        final String checksum = remoteModel.calculateChecksum();
+        final CalendarSyncMessage message = CalendarSyncMessage(
+          type: CalendarSyncType.snapshot,
+          timestamp: localModifiedAt.add(const Duration(minutes: 1)),
+          data: remoteModel.toJson(),
+          checksum: checksum,
+          isSnapshot: true,
+          snapshotChecksum: checksum,
+        );
+
+        await manager.onCalendarMessage(CalendarSyncInbound(message: message));
+
+        expect(currentModel.tasks[taskId]?.title, equals('Local title'));
+        expect(currentModel.deletedTaskIds.containsKey(taskId), isFalse);
+      },
+    );
+
     test('does not advance sync cursor when update was not applied', () async {
       final DateTime localModifiedAt = DateTime.utc(2024, 3, 1, 12);
       final DateTime remoteModifiedAt = localModifiedAt.subtract(
