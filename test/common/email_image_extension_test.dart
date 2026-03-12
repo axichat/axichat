@@ -1,4 +1,5 @@
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart' as html_widget;
 import 'package:flutter_test/flutter_test.dart';
@@ -7,8 +8,6 @@ const String _httpsImageHtml = '<img src="https://example.com/p.png" />';
 const String _httpImageHtml = '<img src="http://example.com/p.png" />';
 const bool _shouldLoadDisabled = false;
 const bool _shouldLoadEnabled = true;
-const bool _expectError = true;
-const bool _expectNoError = false;
 
 class _EmailImageHarness extends StatelessWidget {
   const _EmailImageHarness({required this.html, required this.shouldLoad});
@@ -42,11 +41,9 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(EmailImageLoader), findsNothing);
-      final placeholder = tester.widget<EmailImagePlaceholder>(
-        find.byType(EmailImagePlaceholder),
-      );
-      expect(placeholder.isError, _expectNoError);
+      expect(find.byType(AxiProgressIndicator), findsNothing);
+      expect(find.byType(EmailImagePlaceholder), findsNothing);
+      expect(find.byType(Image), findsNothing);
     });
 
     testWidgets('rejects non-https sources when loading is enabled', (
@@ -60,11 +57,9 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(EmailImageLoader), findsNothing);
-      final placeholder = tester.widget<EmailImagePlaceholder>(
-        find.byType(EmailImagePlaceholder),
-      );
-      expect(placeholder.isError, _expectError);
+      expect(find.byType(AxiProgressIndicator), findsNothing);
+      expect(find.byType(EmailImagePlaceholder), findsNothing);
+      expect(find.byType(Image), findsNothing);
     });
   });
 }
