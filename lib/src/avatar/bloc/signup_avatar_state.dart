@@ -15,6 +15,8 @@ class SignupAvatarState extends Equatable {
     this.lockedBackgroundColor,
   });
 
+  static const Object _unset = Object();
+
   final Avatar? avatar;
   final Avatar? carouselAvatar;
   final bool processing;
@@ -55,28 +57,31 @@ class SignupAvatarState extends Equatable {
   }
 
   SignupAvatarState copyWith({
-    Avatar? avatar,
-    Avatar? carouselAvatar,
+    Object? avatar = _unset,
+    Object? carouselAvatar = _unset,
     bool? processing,
     SignupAvatarErrorType? errorType,
     int? errorMaxKilobytes,
     Color? backgroundColor,
     bool? backgroundLocked,
-    Color? lockedBackgroundColor,
+    Object? lockedBackgroundColor = _unset,
     bool clearError = false,
   }) {
     return SignupAvatarState(
       backgroundColor: backgroundColor ?? this.backgroundColor,
-      avatar: avatar ?? this.avatar,
-      carouselAvatar: carouselAvatar ?? this.carouselAvatar,
+      avatar: identical(avatar, _unset) ? this.avatar : avatar as Avatar?,
+      carouselAvatar: identical(carouselAvatar, _unset)
+          ? this.carouselAvatar
+          : carouselAvatar as Avatar?,
       processing: processing ?? this.processing,
       errorType: clearError ? null : errorType ?? this.errorType,
       errorMaxKilobytes: clearError
           ? null
           : errorMaxKilobytes ?? this.errorMaxKilobytes,
       backgroundLocked: backgroundLocked ?? this.backgroundLocked,
-      lockedBackgroundColor:
-          lockedBackgroundColor ?? this.lockedBackgroundColor,
+      lockedBackgroundColor: identical(lockedBackgroundColor, _unset)
+          ? this.lockedBackgroundColor
+          : lockedBackgroundColor as Color?,
     );
   }
 

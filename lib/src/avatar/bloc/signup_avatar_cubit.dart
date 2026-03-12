@@ -143,21 +143,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     _colors = colors;
     if (state.processing) return;
 
-    final currentPreview = state.carouselAvatar ?? _currentCarouselAvatar;
-    if (currentPreview != null && !state.hasUserSelectedAvatar) {
-      pauseCarousel();
-      emit(
-        state.copyWith(
-          carouselAvatar: currentPreview,
-          backgroundColor: currentPreview.template?.hasAlphaBackground == true
-              ? (currentPreview.backgroundColor ?? state.backgroundColor)
-              : state.backgroundColor,
-          clearError: true,
-        ),
-      );
-      return;
-    }
-
     _carouselVisibility = _CarouselVisibility.visible;
     if (state.hasUserSelectedAvatar) {
       _carouselBuffer.clear();

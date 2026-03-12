@@ -126,14 +126,11 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     );
   }
 
-  AvatarUploadPayload? selectedAvatarPayload() =>
-      state.draftAvatar?.payload ?? state.carouselAvatar?.payload;
+  AvatarUploadPayload? selectedAvatarPayload() => state.draftAvatar?.payload;
 
   Future<AvatarUploadPayload?> buildSelectedAvatarPayload() async {
     final draftAvatar = state.draftAvatar;
-    if (draftAvatar == null) {
-      return state.carouselAvatar?.payload;
-    }
+    if (draftAvatar == null) return null;
     final updated = await _refreshDraftPayload(
       draftAvatar,
       backgroundColor: state.backgroundColor,
@@ -144,20 +141,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
   Future<void> pauseOnPreviewAvatar(ShadColorScheme colors) async {
     _carouselColors = colors;
     if (state.processing || state.shuffling || state.publishing) {
-      return;
-    }
-
-    final currentPreview = state.carouselAvatar;
-    if (currentPreview != null && state.draftAvatar == null) {
-      pauseCarousel();
-      emit(
-        state.copyWith(
-          carouselAvatar: currentPreview,
-          backgroundColor:
-              currentPreview.backgroundColor ?? state.backgroundColor,
-          errorType: null,
-        ),
-      );
       return;
     }
 

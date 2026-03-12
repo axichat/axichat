@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:axichat/src/avatar/avatar_templates.dart';
+import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/bloc/avatar_editor_cubit.dart';
 import 'package:axichat/src/avatar/models/avatar_models.dart';
 import 'package:axichat/src/avatar/util/avatar_pipeline.dart';
@@ -74,7 +75,10 @@ void main() {
         );
         final cubit = AvatarEditorCubit(
           xmppService: xmppService,
-          templates: <AvatarTemplate>[_fakeTemplate(id: 'preview-template')],
+          templates: <AvatarTemplate>[
+            _fakeTemplate(id: 'preview-template-1'),
+            _fakeTemplate(id: 'preview-template-2'),
+          ],
           pipeline: _ImmediateAvatarPipeline(),
         );
 
@@ -91,13 +95,48 @@ void main() {
         final pausedPreview = cubit.state.carouselAvatar;
         expect(pausedPreview, isNotNull);
         expect(cubit.state.draftAvatar, isNull);
+        expect(
+          pausedPreview?.payload.hash,
+          isNot(equals(initialPreview?.payload.hash)),
+        );
 
         async.elapse(const Duration(seconds: 2));
         async.flushMicrotasks();
 
         expect(identical(cubit.state.carouselAvatar, pausedPreview), isTrue);
-        expect(identical(cubit.state.carouselAvatar, initialPreview), isTrue);
+        expect(
+          cubit.state.carouselAvatar?.payload.hash,
+          isNot(equals(initialPreview?.payload.hash)),
+        );
       });
+    },
+  );
+
+  test(
+    'buildSelectedAvatarPayload ignores an uncommitted carousel preview',
+    () async {
+      final colors = ShadColorScheme.fromName(
+        'zinc',
+        brightness: Brightness.light,
+      );
+      final cubit = AvatarEditorCubit(
+        xmppService: xmppService,
+        templates: <AvatarTemplate>[
+          _fakeTemplate(id: 'preview-template-1'),
+          _fakeTemplate(id: 'preview-template-2'),
+        ],
+        pipeline: _ImmediateAvatarPipeline(),
+      );
+
+      await cubit.setCarouselEnabled(true, colors);
+      await cubit.pauseOnPreviewAvatar(colors);
+
+      expect(cubit.state.canUseCarouselAvatar, isTrue);
+      expect(await cubit.buildSelectedAvatarPayload(), isNull);
+
+      cubit.selectCarouselAvatar();
+
+      expect((await cubit.buildSelectedAvatarPayload())?.hash, isNotNull);
     },
   );
 }
@@ -175,14 +214,15 @@ Avatar _avatarFromTemplate({
   required AvatarTemplate template,
   required Color background,
 }) {
+  final payloadBytes = Uint8List.fromList(template.id.codeUnits);
   return Avatar(
     source: AvatarSource.template,
     payload: AvatarUploadPayload(
-      bytes: Uint8List.fromList(const [1, 2, 3, 4]),
+      bytes: payloadBytes,
       mimeType: 'image/png',
       width: 1,
       height: 1,
-      hash: 'hash',
+      hash: template.id,
     ),
     template: template,
     backgroundColor: background,

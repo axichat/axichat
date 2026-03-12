@@ -151,6 +151,9 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
             final canSubmit =
                 _title.trim().isNotEmpty && !avatarState.isBusy && !loading;
             final useActionEnabled = avatarState.canUseCarouselAvatar;
+            final selectorBytes = _showAvatarEditor
+                ? avatarState.displayedBytes
+                : avatarState.draftAvatar?.bytes;
             final previewWidth = math.min(
               MediaQuery.sizeOf(context).width,
               sizing.dialogMaxWidth,
@@ -177,7 +180,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                             AbsorbPointer(
                               absorbing: loading,
                               child: SignupAvatarSelector(
-                                bytes: avatarState.displayedBytes,
+                                bytes: selectorBytes,
                                 username: _title,
                                 processing: avatarState.isBusy,
                                 animationDuration: animationDuration,

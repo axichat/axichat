@@ -23,7 +23,10 @@ void main() {
           brightness: Brightness.light,
         );
         final cubit = SignupAvatarCubit(
-          templates: <AvatarTemplate>[_fakeTemplate(id: 'preview-template')],
+          templates: <AvatarTemplate>[
+            _fakeTemplate(id: 'preview-template-1'),
+            _fakeTemplate(id: 'preview-template-2'),
+          ],
           pipeline: _ImmediateSignupAvatarPipeline(),
         );
 
@@ -40,14 +43,53 @@ void main() {
         final pausedPreview = cubit.state.carouselAvatar;
         expect(pausedPreview, isNotNull);
         expect(cubit.state.avatar, isNull);
+        expect(
+          pausedPreview?.payload.hash,
+          isNot(equals(initialPreview?.payload.hash)),
+        );
 
         async.elapse(const Duration(seconds: 2));
         async.flushMicrotasks();
 
         expect(identical(cubit.state.carouselAvatar, pausedPreview), isTrue);
-        expect(identical(cubit.state.carouselAvatar, initialPreview), isTrue);
+        expect(
+          cubit.state.carouselAvatar?.payload.hash,
+          isNot(equals(initialPreview?.payload.hash)),
+        );
         expect(cubit.state.canUseCarouselAvatar, isTrue);
         expect(cubit.state.hasUserSelectedAvatar, isFalse);
+        expect(cubit.selectedAvatarPayload(), isNull);
+      });
+    },
+  );
+
+  test(
+    'pauseOnPreviewAvatar clears a selected signup avatar before previewing',
+    () {
+      fakeAsync((async) {
+        final colors = ShadColorScheme.fromName(
+          'zinc',
+          brightness: Brightness.light,
+        );
+        final cubit = SignupAvatarCubit(
+          templates: <AvatarTemplate>[
+            _fakeTemplate(id: 'preview-template-1'),
+            _fakeTemplate(id: 'preview-template-2'),
+          ],
+          pipeline: _ImmediateSignupAvatarPipeline(),
+        );
+
+        unawaited(cubit.initialize(colors));
+        async.flushMicrotasks();
+
+        cubit.selectCarouselAvatar();
+        expect(cubit.state.hasUserSelectedAvatar, isTrue);
+
+        unawaited(cubit.pauseOnPreviewAvatar(colors));
+        async.flushMicrotasks();
+
+        expect(cubit.state.hasUserSelectedAvatar, isFalse);
+        expect(cubit.state.canUseCarouselAvatar, isTrue);
         expect(cubit.selectedAvatarPayload(), isNull);
       });
     },
@@ -76,14 +118,15 @@ class _ImmediateSignupAvatarPipeline extends AvatarPipeline {
     required double insetFraction,
     double cropSide = 100000.0,
   }) async {
+    final payloadBytes = Uint8List.fromList(template.id.codeUnits);
     return Avatar(
       source: AvatarSource.template,
       payload: AvatarUploadPayload(
-        bytes: Uint8List.fromList(const <int>[1, 2, 3, 4]),
+        bytes: payloadBytes,
         mimeType: 'image/png',
         width: 1,
         height: 1,
-        hash: 'hash',
+        hash: template.id,
       ),
       template: template,
       backgroundColor: background,
