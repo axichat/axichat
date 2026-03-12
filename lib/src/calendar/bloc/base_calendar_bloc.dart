@@ -3108,7 +3108,7 @@ abstract class BaseCalendarBloc
     CalendarSyncTimestampRecorded event,
     Emitter<CalendarState> emit,
   ) {
-    emit(state.copyWith(lastSyncTime: DateTime.now(), syncError: null));
+    emit(state.copyWith(lastSyncTime: nextSyncTimestamp(), syncError: null));
   }
 
   Future<void> _handleError(
@@ -3127,6 +3127,16 @@ abstract class BaseCalendarBloc
     final dueReminders = _getDueReminders(state.model);
     final nextTask = _getNextTask(state.model);
     return state.copyWith(dueReminders: dueReminders, nextTask: nextTask);
+  }
+
+  @protected
+  DateTime nextSyncTimestamp() {
+    final DateTime now = _now();
+    final DateTime? previous = state.lastSyncTime;
+    if (previous == null || now.isAfter(previous)) {
+      return now;
+    }
+    return previous.add(const Duration(microseconds: 1));
   }
 
   @protected

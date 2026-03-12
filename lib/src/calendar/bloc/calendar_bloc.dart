@@ -522,7 +522,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       emit(state.copyWith(isSyncing: true, syncError: null));
       await _syncManager.requestFullSync();
-      emit(state.copyWith(isSyncing: false, lastSyncTime: DateTime.now()));
+      emit(state.copyWith(isSyncing: false, lastSyncTime: nextSyncTimestamp()));
     } catch (error) {
       SafeLogging.debugLog(
         'Error requesting sync: $error',
@@ -544,7 +544,7 @@ class CalendarBloc extends BaseCalendarBloc {
     try {
       emit(state.copyWith(isSyncing: true, syncError: null));
       await _syncManager.pushFullSync();
-      emit(state.copyWith(isSyncing: false, lastSyncTime: DateTime.now()));
+      emit(state.copyWith(isSyncing: false, lastSyncTime: nextSyncTimestamp()));
     } catch (error) {
       SafeLogging.debugLog('Error pushing sync: $error', name: 'CalendarBloc');
       emit(
@@ -557,7 +557,7 @@ class CalendarBloc extends BaseCalendarBloc {
     CalendarRemoteModelApplied event,
     Emitter<CalendarState> emit,
   ) async {
-    emitModel(event.model, emit, lastSyncTime: DateTime.now());
+    emitModel(event.model, emit, lastSyncTime: nextSyncTimestamp());
   }
 
   Future<void> _onRemoteTaskApplied(
@@ -570,14 +570,14 @@ class CalendarBloc extends BaseCalendarBloc {
         emitModel(
           state.model.updateTask(event.task),
           emit,
-          lastSyncTime: DateTime.now(),
+          lastSyncTime: nextSyncTimestamp(),
         );
         await propagateLinkedTaskUpdate(event.task);
       case 'delete':
         emitModel(
           state.model.deleteTask(event.task.id),
           emit,
-          lastSyncTime: DateTime.now(),
+          lastSyncTime: nextSyncTimestamp(),
         );
         await propagateLinkedTaskDelete(event.task);
       default:

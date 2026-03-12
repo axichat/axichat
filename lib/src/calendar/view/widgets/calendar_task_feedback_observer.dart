@@ -33,8 +33,10 @@ class CalendarTaskFeedbackObserver<B extends BaseCalendarBloc>
 class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
     extends State<CalendarTaskFeedbackObserver<B>> {
   Map<String, CalendarTask> _lastTasks = const <String, CalendarTask>{};
+  DateTime? _lastSyncTime;
   bool _awaitingUndoRemoval = false;
   Set<String> _expectedRemovalIds = const <String>{};
+  B? _bloc;
 
   @override
   void initState() {
@@ -43,10 +45,25 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final B bloc = context.read<B>();
+    if (identical(_bloc, bloc)) {
+      return;
+    }
+    _bloc = bloc;
+    _lastTasks = Map<String, CalendarTask>.from(widget.initialTasks);
+    _lastSyncTime = bloc.state.lastSyncTime;
+    _awaitingUndoRemoval = false;
+    _expectedRemovalIds = const <String>{};
+  }
+
+  @override
   void didUpdateWidget(covariant CalendarTaskFeedbackObserver<B> oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.onEvent != widget.onEvent) {
       _lastTasks = Map<String, CalendarTask>.from(widget.initialTasks);
+      _lastSyncTime = _bloc?.state.lastSyncTime;
       _awaitingUndoRemoval = false;
       _expectedRemovalIds = const <String>{};
     }
@@ -56,6 +73,7 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
   Widget build(BuildContext context) {
     return BlocListener<B, CalendarState>(
       listenWhen: (previous, current) =>
+          previous.lastSyncTime != current.lastSyncTime ||
           !mapEquals(previous.model.tasks, current.model.tasks),
       listener: (context, state) {
         _handleModelChanges(context, state);
@@ -66,6 +84,12 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
 
   void _handleModelChanges(BuildContext context, CalendarState state) {
     final currentTasks = state.model.tasks;
+    final bool syncDrivenChange = state.lastSyncTime != _lastSyncTime;
+    final bool tasksChanged = !mapEquals(_lastTasks, currentTasks);
+    if (!tasksChanged) {
+      _lastSyncTime = state.lastSyncTime;
+      return;
+    }
     final added = <CalendarTask>[];
     final removed = <CalendarTask>[];
 
@@ -80,15 +104,16 @@ class _CalendarTaskFeedbackObserverState<B extends BaseCalendarBloc>
       }
     });
 
-    if (added.isNotEmpty) {
+    if (!syncDrivenChange && added.isNotEmpty) {
       _showAddedFeedback(context, added);
     }
 
-    if (removed.isNotEmpty) {
+    if (!syncDrivenChange && removed.isNotEmpty) {
       _showRemovedFeedback(context, removed);
     }
 
     _lastTasks = Map<String, CalendarTask>.from(currentTasks);
+    _lastSyncTime = state.lastSyncTime;
   }
 
   void _showAddedFeedback(BuildContext context, List<CalendarTask> tasks) {
