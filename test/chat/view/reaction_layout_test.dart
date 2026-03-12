@@ -267,6 +267,44 @@ void main() {
 
     expect(avatarJid, senderOccupantJid);
   });
+
+  test('group message avatar label prefers the resolved occupant nick', () {
+    const roomJid = 'group@conference.axi.im';
+    final avatarLabel = resolveMessageAvatarLabel(
+      message: const Message(
+        stanzaID: 'm5',
+        senderJid: roomJid,
+        chatJid: roomJid,
+        occupantID: 'opaque-burner',
+      ),
+      roomState: RoomState(
+        roomJid: roomJid,
+        occupants: <String, Occupant>{
+          'opaque-burner': Occupant(
+            occupantId: 'opaque-burner',
+            nick: 'burner',
+            realJid: 'burner@axi.im',
+          ),
+        },
+      ),
+    );
+
+    expect(avatarLabel, 'burner');
+  });
+
+  test('group message avatar label never falls back to the room bare jid', () {
+    const roomJid = 'group@conference.axi.im';
+    final avatarLabel = resolveMessageAvatarLabel(
+      message: const Message(
+        stanzaID: 'm6',
+        senderJid: roomJid,
+        chatJid: roomJid,
+      ),
+      roomState: null,
+    );
+
+    expect(avatarLabel, isNull);
+  });
 }
 
 class _ReactionLayoutTestApp extends StatelessWidget {

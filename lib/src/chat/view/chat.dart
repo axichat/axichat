@@ -8358,6 +8358,10 @@ class _ChatState extends State<Chat> {
                                                                               message: messageModel,
                                                                               roomState: state.roomState,
                                                                             );
+                                                                            final messageAvatarLabel = resolveMessageAvatarLabel(
+                                                                              message: messageModel,
+                                                                              roomState: state.roomState,
+                                                                            );
                                                                             final messageAvatarPath = resolveMessageAvatarPath(
                                                                               message: messageModel,
                                                                               roomState: state.roomState,
@@ -8366,6 +8370,7 @@ class _ChatState extends State<Chat> {
                                                                             );
                                                                             avatarOverlay = _MessageAvatar(
                                                                               jid:
+                                                                                  messageAvatarLabel ??
                                                                                   messageAvatarJid ??
                                                                                   messageModel.senderJid,
                                                                               size: messageAvatarSize,
@@ -12012,11 +12017,42 @@ Occupant? _resolveRoomMessageOccupant({
       return directOccupant;
     }
     fallback = directOccupant;
+    final normalizedMessageOccupantId = normalizedOccupantId(occupantId);
+    if (normalizedMessageOccupantId != null) {
+      for (final occupant in roomState.occupants.values) {
+        final normalizedRoomOccupantId = normalizedOccupantId(
+          occupant.occupantId,
+        );
+        if (normalizedRoomOccupantId != normalizedMessageOccupantId) {
+          continue;
+        }
+        if (occupant.realJid?.trim().isNotEmpty == true) {
+          return occupant;
+        }
+        fallback ??= occupant;
+      }
+    }
   }
   final senderJid = message.senderJid.trim();
   final direct = roomState.occupants[senderJid];
   if (direct != null && direct.realJid?.trim().isNotEmpty == true) {
     return direct;
+  }
+  fallback ??= direct;
+  final normalizedSenderOccupantId = normalizedOccupantId(senderJid);
+  if (normalizedSenderOccupantId != null) {
+    for (final occupant in roomState.occupants.values) {
+      final normalizedRoomOccupantId = normalizedOccupantId(
+        occupant.occupantId,
+      );
+      if (normalizedRoomOccupantId != normalizedSenderOccupantId) {
+        continue;
+      }
+      if (occupant.realJid?.trim().isNotEmpty == true) {
+        return occupant;
+      }
+      fallback ??= occupant;
+    }
   }
   final senderBareJid = bareAddress(senderJid);
   if (senderBareJid != null && senderBareJid.isNotEmpty) {
@@ -12056,6 +12092,41 @@ Occupant? _resolveRoomMessageOccupant({
 }
 
 @visibleForTesting
+String? resolveMessageAvatarLabel({
+  required Message message,
+  required RoomState? roomState,
+}) {
+  if (roomState != null) {
+    final occupant = _resolveRoomMessageOccupant(
+      message: message,
+      roomState: roomState,
+    );
+    final nick = occupant?.nick.trim();
+    if (nick != null && nick.isNotEmpty) {
+      return nick;
+    }
+  }
+
+  final senderNick = addressResourcePart(message.senderJid)?.trim();
+  if (senderNick != null && senderNick.isNotEmpty) {
+    return senderNick;
+  }
+
+  final senderJid = message.senderJid.trim();
+  if (senderJid.isEmpty) {
+    return null;
+  }
+  final normalizedRoomJid = normalizedAddressValue(message.chatJid);
+  final senderBareJid = bareAddress(senderJid) ?? senderJid;
+  final normalizedSenderBareJid = normalizedAddressValue(senderBareJid);
+  if (normalizedRoomJid != null &&
+      normalizedSenderBareJid == normalizedRoomJid) {
+    return null;
+  }
+  return senderJid;
+}
+
+@visibleForTesting
 String? resolveMessageAvatarJid({
   required Message message,
   required RoomState? roomState,
@@ -12089,7 +12160,21 @@ String? resolveMessageAvatarJid({
     return bareCandidate;
   }
 
-  return message.senderJid;
+  final fallback = message.senderJid.trim();
+  if (fallback.isEmpty) {
+    return null;
+  }
+  final parsedFallback = parseJid(fallback);
+  if (parsedFallback != null && parsedFallback.resource.trim().isNotEmpty) {
+    return fallback;
+  }
+  final normalizedFallback = normalizedAddressValue(
+    parsedFallback?.toBare().toString() ?? bareAddress(fallback) ?? fallback,
+  );
+  if (normalizedRoomJid != null && normalizedFallback == normalizedRoomJid) {
+    return null;
+  }
+  return fallback;
 }
 
 @visibleForTesting
@@ -12123,6 +12208,25 @@ String? resolveMessageAvatarPath({
       final avatarPath = avatarPathForBareJid(bareRealJid);
       if (avatarPath != null) {
         return avatarPath;
+      }
+    }
+    final occupantNick = occupant?.nick.trim();
+    if (occupantNick != null && occupantNick.isNotEmpty) {
+      final normalizedOccupantNick = occupantNick.toLowerCase();
+      for (final candidate in roomState.occupants.values) {
+        if (candidate.nick.trim().toLowerCase() != normalizedOccupantNick) {
+          continue;
+        }
+        final realJid = candidate.realJid?.trim();
+        if (realJid == null || realJid.isEmpty) {
+          continue;
+        }
+        final avatarPath = avatarPathForBareJid(
+          bareAddress(realJid) ?? realJid,
+        );
+        if (avatarPath != null) {
+          return avatarPath;
+        }
       }
     }
   }
