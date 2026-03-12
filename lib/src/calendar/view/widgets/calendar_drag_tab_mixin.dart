@@ -213,6 +213,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final Color selectedBackground = scheme.primary.withValues(
       alpha: context.motion.tapSplashAlpha,
     );
+    final Color dragItemTint = scheme.primary.withValues(alpha: 0.16);
     final ShadDecoration baseDecoration = ShadDecoration(
       border: ShadBorder.none,
       secondaryBorder: ShadBorder.none,
@@ -265,9 +266,15 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                     height: baseHeight,
                     decoration: baseDecoration,
                     selectedDecoration: selectedDecoration,
-                    backgroundColor: Colors.transparent,
+                    backgroundColor: _isAnyDragActive
+                        ? (scheduleHighlightActive
+                              ? scheme.primary
+                              : dragItemTint)
+                        : Colors.transparent,
                     selectedBackgroundColor: _isAnyDragActive
-                        ? Colors.transparent
+                        ? (scheduleHighlightActive
+                              ? scheme.primary
+                              : dragItemTint)
                         : selectedBackground,
                     hoverBackgroundColor: hoverBackground,
                     selectedHoverBackgroundColor: hoverBackground,
@@ -280,6 +287,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       scheme: scheme,
                       selected: scheduleSelected,
                       showCue: scheduleCueActive,
+                      anyDragActive: _isAnyDragActive,
                       dragActive: scheduleHighlightActive,
                       shake:
                           !lowMotion &&
@@ -292,9 +300,11 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                     height: baseHeight,
                     decoration: baseDecoration,
                     selectedDecoration: selectedDecoration,
-                    backgroundColor: Colors.transparent,
+                    backgroundColor: _isAnyDragActive
+                        ? (tasksHighlightActive ? scheme.primary : dragItemTint)
+                        : Colors.transparent,
                     selectedBackgroundColor: _isAnyDragActive
-                        ? Colors.transparent
+                        ? (tasksHighlightActive ? scheme.primary : dragItemTint)
                         : selectedBackground,
                     hoverBackgroundColor: hoverBackground,
                     selectedHoverBackgroundColor: hoverBackground,
@@ -307,6 +317,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       scheme: scheme,
                       selected: tasksSelected,
                       showCue: tasksCueActive,
+                      anyDragActive: _isAnyDragActive,
                       dragActive: tasksHighlightActive,
                       shake:
                           !lowMotion &&
@@ -954,6 +965,7 @@ class _DragTabLabel extends StatelessWidget {
     required this.scheme,
     required this.selected,
     required this.showCue,
+    required this.anyDragActive,
     required this.dragActive,
     required this.shake,
   });
@@ -962,6 +974,7 @@ class _DragTabLabel extends StatelessWidget {
   final ShadColorScheme scheme;
   final bool selected;
   final bool showCue;
+  final bool anyDragActive;
   final bool dragActive;
   final bool shake;
 
@@ -978,13 +991,11 @@ class _DragTabLabel extends StatelessWidget {
     final Color baseColor = selected
         ? scheme.foreground
         : scheme.mutedForeground;
-    final Color targetColor = dragActive ? scheme.primaryForeground : baseColor;
-    final Color pillBackgroundColor = dragActive
+    final Color targetColor = dragActive
+        ? scheme.primaryForeground
+        : anyDragActive
         ? scheme.primary
-        : Colors.transparent;
-    final Color pillBorderColor = dragActive
-        ? scheme.primaryForeground.withValues(alpha: 0.28)
-        : Colors.transparent;
+        : baseColor;
     final labelContent = AnimatedContainer(
       duration: duration,
       padding: EdgeInsets.symmetric(
@@ -998,49 +1009,25 @@ class _DragTabLabel extends StatelessWidget {
       ),
       child: DefaultTextStyle.merge(
         style: context.textTheme.label.strongIf(emphasize),
-        child: AnimatedContainer(
+        child: TweenAnimationBuilder<Color?>(
           duration: duration,
-          curve: Curves.easeOutCubic,
-          margin: EdgeInsets.symmetric(vertical: context.spacing.xxs),
-          constraints: BoxConstraints(
-            minWidth: context.sizing.listButtonHeight + context.spacing.l,
-            minHeight: context.sizing.listButtonHeight - context.spacing.s,
-          ),
-          padding: EdgeInsets.symmetric(
-            horizontal: context.spacing.m,
-            vertical: context.spacing.xxs,
-          ),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: pillBackgroundColor,
-            border: Border.all(
-              color: pillBorderColor,
-              width: dragActive
-                  ? context.borderSide.width * 2
-                  : context.borderSide.width,
-            ),
-            borderRadius: BorderRadius.circular(context.radii.pill),
-          ),
-          child: TweenAnimationBuilder<Color?>(
-            duration: duration,
-            tween: ColorTween(end: targetColor),
-            builder: (context, color, child) {
-              if (color == null) {
-                return child!;
-              }
-              return IconTheme.merge(
-                data: IconThemeData(color: color),
-                child: DefaultTextStyle.merge(
-                  style: TextStyle(color: color),
-                  child: ColorFiltered(
-                    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-                    child: child!,
-                  ),
+          tween: ColorTween(end: targetColor),
+          builder: (context, color, child) {
+            if (color == null) {
+              return child!;
+            }
+            return IconTheme.merge(
+              data: IconThemeData(color: color),
+              child: DefaultTextStyle.merge(
+                style: TextStyle(color: color),
+                child: ColorFiltered(
+                  colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                  child: child!,
                 ),
-              );
-            },
-            child: Align(alignment: Alignment.center, child: label),
-          ),
+              ),
+            );
+          },
+          child: Align(alignment: Alignment.center, child: label),
         ),
       ),
     );

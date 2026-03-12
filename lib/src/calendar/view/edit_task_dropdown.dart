@@ -497,7 +497,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
     }) {
       final bool keyboardOpen = keyboardInset > safeBottom;
       final bool footerPinned = !keyboardOpen && allowsAnyEdits;
-      final double scrollTopPadding = isSheet ? 0 : context.spacing.m;
+      final double scrollTopPadding = isSheet
+          ? context.spacing.s
+          : context.spacing.m;
       final bool showInlineActions = isSheet && inlineActions.isNotEmpty;
       final bool showOccurrenceScope =
           widget.task.isOccurrence && widget.onOccurrenceUpdated != null;
