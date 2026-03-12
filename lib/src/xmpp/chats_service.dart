@@ -1026,4 +1026,28 @@ class MUCManager extends mox.MUCManager {
       throw XmppMessageException();
     }
   }
+
+  Future<void> sendOwnerIq({
+    required String roomJid,
+    required List<mox.XMLNode> children,
+  }) async {
+    final result = await getAttributes().sendStanza(
+      mox.StanzaDetails(
+        mox.Stanza.iq(
+          type: 'set',
+          to: roomJid,
+          children: [
+            mox.XMLNode.xmlns(
+              tag: 'query',
+              xmlns: _mucOwnerXmlns,
+              children: children,
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null || result.attributes['type'] != 'result') {
+      throw XmppMessageException();
+    }
+  }
 }

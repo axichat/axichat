@@ -58,6 +58,7 @@ const String _dataFormTag = 'x';
 const String _queryTag = 'query';
 const String _fieldTag = 'field';
 const String _itemTag = 'item';
+const String _destroyTag = 'destroy';
 const String _jidAttr = 'jid';
 const String _nickAttr = 'nick';
 const String _roleAttr = 'role';
@@ -243,6 +244,8 @@ void main() {
     ).thenReturn(joinBootstrapManager);
     when(() => mockConnection.sendStanza(any())).thenAnswer((_) async => null);
     when(() => mockDatabase.getChat(any())).thenAnswer((_) async => null);
+    when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
+    when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
     when(() => mockDatabase.getRosterItem(any())).thenAnswer((_) async => null);
     when(
       () => mockDatabase.countChatMessages(
@@ -264,6 +267,14 @@ void main() {
       ),
     ).thenAnswer((_) async => <BlocklistData>[]);
     when(() => mucManager.getRoomState(any())).thenAnswer((_) async => null);
+    final defaultRoomInfo = MockRoomInformation();
+    when(
+      () => defaultRoomInfo.features,
+    ).thenReturn(const <String>[_mucDiscoFeature]);
+    when(() => mucManager.queryRoomInformation(any())).thenAnswer(
+      (_) async =>
+          moxlib.Result<mox.RoomInformation, mox.MUCError>(defaultRoomInfo),
+    );
 
     xmppService = XmppService(
       buildConnection: () => mockConnection,
@@ -2485,6 +2496,54 @@ void main() {
         expect(stanza.firstTag(_queryTag, xmlns: _mucOwnerXmlns), isNull);
       },
     );
+
+    test(
+      'REG-009 [HP] fetchRoomAffiliations keeps jid-only offline members',
+      () async {
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: 'me',
+          realJid: _accountBareJid,
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+        );
+
+        final query = mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: [
+            mox.XMLNode(
+              tag: _itemTag,
+              attributes: {
+                _jidAttr: _inviteeJid,
+                _affiliationAttr: OccupantAffiliation.member.xmlValue,
+              },
+            ),
+          ],
+        );
+        final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
+
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
+
+        await xmppService.fetchRoomAffiliations(
+          roomJid: _roomJid,
+          affiliation: OccupantAffiliation.member,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        final offlineMember = room?.occupants.values.singleWhere(
+          (occupant) => occupant.realJid == _inviteeJid,
+        );
+
+        expect(offlineMember, isNotNull);
+        expect(offlineMember?.nick, equals(_inviteeJid));
+        expect(offlineMember?.affiliation, OccupantAffiliation.member);
+        expect(offlineMember?.isPresent, isFalse);
+      },
+    );
   });
 
   group('Moderation actions', () {
@@ -2646,6 +2705,110 @@ void main() {
         final room = xmppService.roomStateFor(_roomJid);
         expect(room?.occupants, isEmpty);
         expect(room?.myOccupantId, isNull);
+      },
+    );
+
+    test(
+      'PRES-011 [HP] acceptRoomInvite rejects stale invites that create a new room',
+      () async {
+        when(
+          () => mucManager.sendOwnerIq(
+            roomJid: any(named: 'roomJid'),
+            children: any(named: 'children'),
+          ),
+        ).thenAnswer((_) async {});
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: _roomJid,
+              occupantJid: _roomJidWithSelfNick,
+              nick: 'me',
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {
+                MucStatusCode.selfPresence.code,
+                MucStatusCode.roomCreated.code,
+              },
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+
+        await expectLater(
+          () => xmppService.acceptRoomInvite(
+            roomJid: _roomJid,
+            roomName: _roomName,
+            nickname: 'me',
+          ),
+          throwsA(isA<XmppMessageException>()),
+        );
+
+        verify(
+          () => mucManager.sendOwnerIq(
+            roomJid: _roomJid,
+            children: any(named: 'children'),
+          ),
+        ).called(1);
+        verifyNever(() => mockDatabase.createChat(any()));
+      },
+    );
+
+    test(
+      'PRES-012 [HP] destroyRoom sends an owner destroy IQ and archives the room locally',
+      () async {
+        final existingChat = Chat(
+          jid: _roomJid,
+          title: _roomName,
+          type: ChatType.groupChat,
+          myNickname: 'me',
+          lastChangeTimestamp: _fixedTimestamp,
+          contactJid: _roomJid,
+          open: true,
+        );
+        when(
+          () => mockDatabase.getChat(_roomJid),
+        ).thenAnswer((_) async => existingChat);
+        when(
+          () => mucManager.sendOwnerIq(
+            roomJid: any(named: 'roomJid'),
+            children: any(named: 'children'),
+          ),
+        ).thenAnswer((_) async {});
+
+        await xmppService.destroyRoom(
+          roomJid: _roomJid,
+          reason: _inviteReasonRaw,
+        );
+
+        final captured =
+            verify(
+                  () => mucManager.sendOwnerIq(
+                    roomJid: _roomJid,
+                    children: captureAny(named: 'children'),
+                  ),
+                ).captured.single
+                as List<mox.XMLNode>;
+        final updatedChat =
+            verify(() => mockDatabase.updateChat(captureAny())).captured.single
+                as Chat;
+
+        expect(captured.single.tag, _destroyTag);
+        expect(
+          captured.single.firstTag(_reasonTag)?.innerText(),
+          equals(_inviteReasonTrimmed),
+        );
+        expect(updatedChat.archived, isTrue);
+        expect(updatedChat.open, isFalse);
+        expect(xmppService.roomStateFor(_roomJid)?.roomShutdown, isTrue);
       },
     );
   });

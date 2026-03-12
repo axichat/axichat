@@ -98,6 +98,8 @@ extension ChatMessageKeyL10n on ChatMessageKey {
     ChatMessageKey.chatInviteJoinFailed => l10n.chatInviteJoinFailed,
     ChatMessageKey.chatNicknameUpdated => l10n.chatNicknameUpdated,
     ChatMessageKey.chatNicknameUpdateFailed => l10n.chatNicknameUpdateFailed,
+    ChatMessageKey.chatLeaveRoomFailed => l10n.chatLeaveRoomFailed,
+    ChatMessageKey.chatDestroyRoomFailed => l10n.chatDestroyRoomFailed,
     ChatMessageKey.chatRoomAvatarPermissionDenied =>
       l10n.chatRoomAvatarPermissionDenied,
     ChatMessageKey.chatRoomAvatarUpdated => l10n.chatRoomAvatarUpdated,

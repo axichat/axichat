@@ -57,6 +57,8 @@ enum ChatMessageKey {
   chatInviteJoinFailed,
   chatNicknameUpdated,
   chatNicknameUpdateFailed,
+  chatLeaveRoomFailed,
+  chatDestroyRoomFailed,
   chatRoomAvatarPermissionDenied,
   chatRoomAvatarUpdated,
   chatRoomAvatarUpdateFailed,

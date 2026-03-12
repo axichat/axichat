@@ -1012,15 +1012,6 @@ class EmailService {
       'needsProvisioning=$needsProvisioning '
       'advertisedConfigKeys=${supportedConfigKeys ?? '<unavailable>'}',
     );
-    // ignore: avoid_print
-    print(
-      'AXI-EMAIL Email provisioning decision: '
-      'accountId=$deltaAccountId '
-      'transportConfigured=$transportConfigured '
-      'requiresReconfigure=$requiresReconfigure '
-      'needsProvisioning=$needsProvisioning '
-      'advertisedConfigKeys=${supportedConfigKeys ?? '<unavailable>'}',
-    );
     final pausedForProvisioning = needsProvisioning && _acceptsRuntimeWork;
     if (pausedForProvisioning) {
       await stop();

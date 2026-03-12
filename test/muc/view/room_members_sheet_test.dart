@@ -68,14 +68,10 @@ void main() {
     );
     final bubbleFinder = find.ancestor(
       of: tileFinder,
-      matching: find.byWidgetPredicate(
-        (widget) =>
-            widget is DecoratedBox && widget.decoration is ShapeDecoration,
-      ),
+      matching: find.byType(CutoutSurface),
     );
-    final bubble = tester.widget<DecoratedBox>(bubbleFinder.first);
-    final decoration = bubble.decoration as ShapeDecoration;
-    final shape = decoration.shape as SquircleBorder;
+    final bubble = tester.widget<CutoutSurface>(bubbleFinder.first);
+    final shape = bubble.shape as SquircleBorder;
     final context = tester.element(tileFinder);
     final colors = ShadTheme.of(context).colorScheme;
     final expectedBackground = Color.alphaBlend(
@@ -83,7 +79,8 @@ void main() {
       colors.card,
     );
 
-    expect(decoration.color, expectedBackground);
+    expect(bubble.backgroundColor, expectedBackground);
+    expect(bubble.borderColor, colors.border);
     expect(shape.side.color, colors.border);
   });
 
@@ -160,7 +157,7 @@ void main() {
       );
       final bubbleFinder = find.ancestor(
         of: tileFinder,
-        matching: find.byType(DecoratedBox),
+        matching: find.byType(CutoutSurface),
       );
       final collapsedHeight = tester.getSize(bubbleFinder.first).height;
 
@@ -261,12 +258,97 @@ void main() {
     await tester.tap(find.text('Kick'));
     await tester.pump();
 
-    expect(find.byType(AxiProgressIndicator), findsOneWidget);
+    expect(find.byType(AxiProgressIndicator), findsWidgets);
 
     await tester.pump(const Duration(seconds: 10));
     await tester.pumpAndSettle();
 
     expect(find.byType(AxiProgressIndicator), findsNothing);
+  });
+
+  testWidgets('leave and destroy room actions confirm before running', (
+    tester,
+  ) async {
+    var leaveCalls = 0;
+    var destroyCalls = 0;
+    final leaveCompleter = Completer<void>();
+    final destroyCompleter = Completer<void>();
+    const roomJid = 'room@conference.axi.im';
+    const selfOccupantId = '$roomJid/self';
+
+    await tester.pumpWidget(
+      _RoomMembersSheetTestApp(
+        child: RoomMembersSheet(
+          roomState: RoomState(
+            roomJid: roomJid,
+            myOccupantId: selfOccupantId,
+            occupants: <String, Occupant>{
+              selfOccupantId: Occupant(
+                occupantId: selfOccupantId,
+                nick: 'self',
+                realJid: 'self@axi.im',
+                affiliation: OccupantAffiliation.owner,
+                role: OccupantRole.moderator,
+              ),
+            },
+          ),
+          memberSections: const <RoomMemberSection>[],
+          canInvite: false,
+          avatarUpdateInFlight: false,
+          onInvite: (_) {},
+          onAction: (_, _, _) async {},
+          onOpenDirectChat: (_) async {},
+          onLeaveRoom: () {
+            leaveCalls += 1;
+            return leaveCompleter.future;
+          },
+          onDestroyRoom: () {
+            destroyCalls += 1;
+            return destroyCompleter.future;
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Leave room'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('Leave room?'), findsOneWidget);
+    expect(find.text('Leave room'), findsNWidgets(2));
+
+    await tester.tap(find.text('Cancel'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(leaveCalls, 0);
+
+    await tester.tap(find.text('Leave room'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.tap(find.text('Leave room').last);
+    await tester.pump();
+
+    expect(leaveCalls, 1);
+    expect(find.byType(AxiProgressIndicator), findsWidgets);
+
+    leaveCompleter.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    await tester.tap(find.text('Destroy room'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('Destroy room?'), findsOneWidget);
+
+    await tester.tap(find.text('Destroy room').last);
+    await tester.pump();
+
+    expect(destroyCalls, 1);
+
+    destroyCompleter.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
   });
 }
 

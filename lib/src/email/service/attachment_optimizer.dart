@@ -18,6 +18,8 @@ class EmailAttachmentOptimizer {
   static const _jpegQuality = 82;
   static const _pngCompressionLevel = 6;
   static const int _maxWebBytes = 5 * 1024 * 1024;
+  static const int _maxInputBytes = 20 * 1024 * 1024;
+  static const int _maxDecodedPixels = 40 * 1024 * 1024;
   static const Duration _optimizedCleanupDelay = Duration(hours: 1);
   static const _optimizedDirectoryName = emailAttachmentTempDirectoryName;
   static const _optimizedFilePrefix = 'attachment_';
@@ -47,11 +49,13 @@ class EmailAttachmentOptimizer {
     if (!await file.exists()) {
       return attachment;
     }
+    final length = await file.length();
     if (kIsWeb) {
-      final length = await file.length();
       if (length > _maxWebBytes) {
         return attachment;
       }
+    } else if (length > _maxInputBytes) {
+      return attachment;
     }
     try {
       final Directory tempDir = await getTemporaryDirectory();
@@ -125,6 +129,24 @@ Map<String, Object?> _optimizeAttachmentInIsolate(
     };
   }
   final Uint8List bytes = file.readAsBytesSync();
+  if (bytes.length > EmailAttachmentOptimizer._maxInputBytes) {
+    return const <String, Object?>{
+      EmailAttachmentOptimizer._resultShouldReplaceKey: false,
+    };
+  }
+  final img.Decoder? decoder = img.findDecoderForData(bytes);
+  final img.DecodeInfo? info = decoder?.startDecode(bytes);
+  final int? width = info?.width;
+  final int? height = info?.height;
+  final int? pixelCount = width == null || height == null
+      ? null
+      : width * height;
+  if (pixelCount != null &&
+      pixelCount > EmailAttachmentOptimizer._maxDecodedPixels) {
+    return const <String, Object?>{
+      EmailAttachmentOptimizer._resultShouldReplaceKey: false,
+    };
+  }
   final img.Image? decoded = img.decodeImage(bytes);
   if (decoded == null) {
     return const <String, Object?>{

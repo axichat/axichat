@@ -336,6 +336,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatNicknameUpdateFailed => '无法更改昵称。';
 
   @override
+  String get chatLeaveRoomFailed => 'Could not leave room.';
+
+  @override
+  String get chatDestroyRoomFailed => 'Could not destroy room.';
+
+  @override
   String get chatRoomAvatarPermissionDenied => '你没有权限更新群组头像。';
 
   @override
@@ -2197,6 +2203,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chatEmailImageFailedLabel => '图片加载失败';
 
   @override
+  String get chatEmailInteractiveContentBlockedLabel =>
+      'Interactive content blocked for safety';
+
+  @override
   String get chatAttachmentBlockedDescription => '仅在信任未知联系人时加载附件。你确认后我们才会获取。';
 
   @override
@@ -2625,6 +2635,23 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get mucLeaveRoom => '离开房间';
+
+  @override
+  String get mucLeaveRoomConfirmTitle => 'Leave room?';
+
+  @override
+  String get mucLeaveRoomConfirmBody =>
+      'You will leave this room and it will close locally until you join again.';
+
+  @override
+  String get mucDestroyRoom => 'Destroy room';
+
+  @override
+  String get mucDestroyRoomConfirmTitle => 'Destroy room?';
+
+  @override
+  String get mucDestroyRoomConfirmBody =>
+      'This removes the room for everyone currently inside it.';
 
   @override
   String get mucNoMembers => '暂无成员';

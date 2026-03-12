@@ -365,6 +365,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatInviteRevocationRequested>(_onInviteRevocationRequested);
     on<ChatInviteJoinRequested>(_onInviteJoinRequested);
     on<ChatLeaveRoomRequested>(_onLeaveRoomRequested);
+    on<ChatDestroyRoomRequested>(_onDestroyRoomRequested);
     on<ChatNicknameChangeRequested>(_onNicknameChangeRequested);
     on<ChatRoomMembersOpened>(_onChatRoomMembersOpened);
     on<ChatRoomAvatarChangeRequested>(_onRoomAvatarChangeRequested);
@@ -3145,12 +3146,78 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final chatJid = event.chatJid.trim();
-    if (chatJid.isEmpty || event.chatType != ChatType.groupChat) return;
+    final completer = event.completer;
+    if (chatJid.isEmpty || event.chatType != ChatType.groupChat) {
+      if (completer != null && !completer.isCompleted) {
+        completer.completeError(XmppMessageException());
+      }
+      return;
+    }
     try {
       await _mucService.leaveRoom(chatJid);
-      emit(state.copyWith(roomState: null));
+      emit(
+        state.copyWith(
+          roomState: _mucService.roomStateFor(chatJid) ?? state.roomState,
+          roomMemberSections: const [],
+        ),
+      );
+      if (completer != null && !completer.isCompleted) {
+        completer.complete();
+      }
     } on Exception catch (error, stackTrace) {
       _log.warning('Failed to leave room $chatJid', error, stackTrace);
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: ChatMessageKey.chatLeaveRoomFailed,
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+      if (completer != null && !completer.isCompleted) {
+        completer.completeError(XmppMessageException());
+      }
+    }
+  }
+
+  Future<void> _onDestroyRoomRequested(
+    ChatDestroyRoomRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chatJid = event.chatJid.trim();
+    final completer = event.completer;
+    if (chatJid.isEmpty || event.chatType != ChatType.groupChat) {
+      if (completer != null && !completer.isCompleted) {
+        completer.completeError(XmppMessageException());
+      }
+      return;
+    }
+    try {
+      await _mucService.destroyRoom(roomJid: chatJid);
+      emit(
+        state.copyWith(
+          roomState: _mucService.roomStateFor(chatJid) ?? state.roomState,
+          roomMemberSections: const [],
+        ),
+      );
+      if (completer != null && !completer.isCompleted) {
+        completer.complete();
+      }
+    } on Exception catch (error, stackTrace) {
+      _log.warning('Failed to destroy room $chatJid', error, stackTrace);
+      emit(
+        state.copyWith(
+          toast: const ChatToast(
+            message: ChatMessageKey.chatDestroyRoomFailed,
+            variant: ChatToastVariant.destructive,
+          ),
+          toastId: state.toastId + 1,
+        ),
+      );
+      if (completer != null && !completer.isCompleted) {
+        completer.completeError(XmppMessageException());
+      }
     }
   }
 

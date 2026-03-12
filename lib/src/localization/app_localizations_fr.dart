@@ -353,6 +353,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatNicknameUpdateFailed => 'Impossible de modifier le pseudo.';
 
   @override
+  String get chatLeaveRoomFailed => 'Could not leave room.';
+
+  @override
+  String get chatDestroyRoomFailed => 'Could not destroy room.';
+
+  @override
   String get chatRoomAvatarPermissionDenied =>
       'Vous n’avez pas la permission de mettre à jour l’avatar du salon.';
 
@@ -2321,6 +2327,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get chatEmailImageFailedLabel => 'Image échouée';
 
   @override
+  String get chatEmailInteractiveContentBlockedLabel =>
+      'Interactive content blocked for safety';
+
+  @override
   String get chatAttachmentBlockedDescription =>
       'Chargez les pièces jointes d’inconnus uniquement si vous leur faites confiance. Nous les récupérerons une fois que vous aurez confirmé.';
 
@@ -2764,6 +2774,23 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get mucLeaveRoom => 'Quitter la salle';
+
+  @override
+  String get mucLeaveRoomConfirmTitle => 'Leave room?';
+
+  @override
+  String get mucLeaveRoomConfirmBody =>
+      'You will leave this room and it will close locally until you join again.';
+
+  @override
+  String get mucDestroyRoom => 'Destroy room';
+
+  @override
+  String get mucDestroyRoomConfirmTitle => 'Destroy room?';
+
+  @override
+  String get mucDestroyRoomConfirmBody =>
+      'This removes the room for everyone currently inside it.';
 
   @override
   String get mucNoMembers => 'Aucun membre pour l’instant';

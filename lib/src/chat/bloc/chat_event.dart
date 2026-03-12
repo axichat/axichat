@@ -726,13 +726,33 @@ final class ChatInviteJoinRequested extends ChatEvent {
 }
 
 final class ChatLeaveRoomRequested extends ChatEvent {
-  const ChatLeaveRoomRequested({required this.chatJid, required this.chatType});
+  const ChatLeaveRoomRequested({
+    required this.chatJid,
+    required this.chatType,
+    this.completer,
+  });
 
   final String chatJid;
   final ChatType chatType;
+  final Completer<void>? completer;
 
   @override
-  List<Object?> get props => [chatJid, chatType];
+  List<Object?> get props => [chatJid, chatType, completer];
+}
+
+final class ChatDestroyRoomRequested extends ChatEvent {
+  const ChatDestroyRoomRequested({
+    required this.chatJid,
+    required this.chatType,
+    this.completer,
+  });
+
+  final String chatJid;
+  final ChatType chatType;
+  final Completer<void>? completer;
+
+  @override
+  List<Object?> get props => [chatJid, chatType, completer];
 }
 
 final class ChatNicknameChangeRequested extends ChatEvent {

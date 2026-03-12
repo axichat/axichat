@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_editor_state_extensions.dart';
 import 'package:axichat/src/avatar/avatar_templates.dart';
@@ -13,6 +15,7 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
+import 'package:axichat/src/calendar/view/widgets/calendar_sheet_header.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -40,6 +43,7 @@ class RoomMembersSheet extends StatelessWidget {
     this.roomAvatarPath,
     this.onChangeNickname,
     this.onLeaveRoom,
+    this.onDestroyRoom,
     this.currentNickname,
     this.onClose,
     this.useSurface = true,
@@ -60,7 +64,8 @@ class RoomMembersSheet extends StatelessWidget {
   final Future<void> Function(String jid) onOpenDirectChat;
   final String? roomAvatarPath;
   final ValueChanged<String>? onChangeNickname;
-  final VoidCallback? onLeaveRoom;
+  final Future<void> Function()? onLeaveRoom;
+  final Future<void> Function()? onDestroyRoom;
   final String? currentNickname;
   final VoidCallback? onClose;
   final bool useSurface;
@@ -118,33 +123,25 @@ class RoomMembersSheet extends StatelessWidget {
                   : null,
             ),
           ),
-        if (onChangeNickname != null || onLeaveRoom != null)
+        if (onChangeNickname != null ||
+            onLeaveRoom != null ||
+            onDestroyRoom != null)
           Padding(
             padding: EdgeInsets.fromLTRB(spacing.m, 0, spacing.m, spacing.s),
-            child: Wrap(
-              spacing: spacing.s,
-              runSpacing: spacing.s,
-              children: [
-                if (onChangeNickname != null)
-                  AxiButton.outline(
-                    onPressed: () async {
+            child: _RoomManagementActions(
+              onPromptNickname: onChangeNickname == null
+                  ? null
+                  : () async {
                       final next = await _promptNickname(context);
                       if (next?.isNotEmpty == true) {
                         onChangeNickname!(next!);
                       }
                     },
-                    child: Text(
-                      currentNickname == null
-                          ? l10n.mucChangeNickname
-                          : l10n.mucChangeNicknameWithCurrent(currentNickname!),
-                    ),
-                  ),
-                if (onLeaveRoom != null)
-                  AxiButton.destructive(
-                    onPressed: onLeaveRoom,
-                    child: Text(l10n.mucLeaveRoom),
-                  ),
-              ],
+              onLeaveRoom: onLeaveRoom,
+              onDestroyRoom: roomState.myAffiliation.isOwner
+                  ? onDestroyRoom
+                  : null,
+              currentNickname: currentNickname,
             ),
           ),
         SizedBox(height: spacing.s),
@@ -393,6 +390,124 @@ class _RoomAvatarSection extends StatelessWidget {
   }
 }
 
+class _RoomManagementActions extends StatefulWidget {
+  const _RoomManagementActions({
+    required this.currentNickname,
+    this.onPromptNickname,
+    this.onLeaveRoom,
+    this.onDestroyRoom,
+  });
+
+  final String? currentNickname;
+  final Future<void> Function()? onPromptNickname;
+  final Future<void> Function()? onLeaveRoom;
+  final Future<void> Function()? onDestroyRoom;
+
+  @override
+  State<_RoomManagementActions> createState() => _RoomManagementActionsState();
+}
+
+class _RoomManagementActionsState extends State<_RoomManagementActions> {
+  _RoomManagementAction? _loadingAction;
+
+  bool get _busy => _loadingAction != null;
+
+  Future<void> _handleConfirmedAction({
+    required _RoomManagementAction action,
+    required Future<void> Function() onConfirmed,
+    required String title,
+    required String message,
+    required String confirmLabel,
+    required String timeoutMessage,
+  }) async {
+    final confirmed = await confirm(
+      context,
+      title: title,
+      message: message,
+      confirmLabel: confirmLabel,
+      destructiveConfirm: true,
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() => _loadingAction = action);
+    try {
+      await onConfirmed();
+    } on XmppMessageException {
+      // The bloc surfaces failure feedback; keep the UI from crashing.
+    } on TimeoutException {
+      if (mounted) {
+        FeedbackSystem.showError(context, timeoutMessage);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _loadingAction = null);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final sizing = context.sizing;
+    final spacing = context.spacing;
+    return Wrap(
+      spacing: spacing.s,
+      runSpacing: spacing.s,
+      children: [
+        if (widget.onPromptNickname != null)
+          AxiButton.outline(
+            onPressed: _busy
+                ? null
+                : () async {
+                    await widget.onPromptNickname!();
+                  },
+            leading: Icon(LucideIcons.pencil, size: sizing.menuItemIconSize),
+            child: Text(
+              widget.currentNickname == null
+                  ? l10n.mucChangeNickname
+                  : l10n.mucChangeNicknameWithCurrent(widget.currentNickname!),
+            ),
+          ),
+        if (widget.onLeaveRoom != null)
+          AxiButton.destructive(
+            onPressed: _busy
+                ? null
+                : () => _handleConfirmedAction(
+                    action: _RoomManagementAction.leave,
+                    onConfirmed: widget.onLeaveRoom!,
+                    title: l10n.mucLeaveRoomConfirmTitle,
+                    message: l10n.mucLeaveRoomConfirmBody,
+                    confirmLabel: l10n.mucLeaveRoom,
+                    timeoutMessage: l10n.chatLeaveRoomFailed,
+                  ),
+            loading: _loadingAction == _RoomManagementAction.leave,
+            leading: Icon(LucideIcons.logOut, size: sizing.menuItemIconSize),
+            child: Text(l10n.mucLeaveRoom),
+          ),
+        if (widget.onDestroyRoom != null)
+          AxiButton.destructive(
+            onPressed: _busy
+                ? null
+                : () => _handleConfirmedAction(
+                    action: _RoomManagementAction.destroy,
+                    onConfirmed: widget.onDestroyRoom!,
+                    title: l10n.mucDestroyRoomConfirmTitle,
+                    message: l10n.mucDestroyRoomConfirmBody,
+                    confirmLabel: l10n.mucDestroyRoom,
+                    timeoutMessage: l10n.chatDestroyRoomFailed,
+                  ),
+            loading: _loadingAction == _RoomManagementAction.destroy,
+            leading: Icon(LucideIcons.trash2, size: sizing.menuItemIconSize),
+            child: Text(l10n.mucDestroyRoom),
+          ),
+      ],
+    );
+  }
+}
+
+enum _RoomManagementAction { leave, destroy }
+
 class _MemberSection extends StatelessWidget {
   const _MemberSection({
     required this.kind,
@@ -565,18 +680,20 @@ class _MemberTileState extends State<_MemberTile> {
     final radii = context.radii;
     final spacing = context.spacing;
     final sizing = context.sizing;
+    final textScaleFactor = MediaQuery.of(context).textScaler.scale(1);
     final avatarKey = _avatarKey(widget.occupant);
     final overlayAlpha = brightness == Brightness.dark ? 0.12 : 0.06;
-    final backgroundColor = widget.isSelf
+    final tileBackgroundColor = widget.isSelf
         ? Color.alphaBlend(
             colors.primary.withValues(alpha: overlayAlpha),
             colors.card,
           )
         : colors.card;
+    final surfaceBorderColor = context.borderSide.color;
     final shape = SquircleBorder(
       cornerRadius: radii.squircle,
       side: BorderSide(
-        color: context.borderSide.color,
+        color: surfaceBorderColor,
         width: context.borderSide.width,
       ),
     );
@@ -612,6 +729,10 @@ class _MemberTileState extends State<_MemberTile> {
         );
       }),
     ];
+    final cutoutGap = spacing.xxs;
+    final iconButtonSize = sizing.iconButtonSize;
+    final iconCutoutThickness = iconButtonSize + (cutoutGap * 2);
+    final iconCutoutDepth = (iconButtonSize / 2) + cutoutGap;
 
     final tile = AxiListTile(
       onTap: _hasActionPanel && !_actionBusy ? _toggleActions : null,
@@ -620,32 +741,26 @@ class _MemberTileState extends State<_MemberTile> {
       subtitle: widget.subtitle,
       selected: widget.isSelf,
       paintSurface: false,
-      tapBounce: _hasActionPanel && !_actionBusy,
-      actions: !_hasActionPanel
-          ? null
-          : [
-              _MemberActionsToggle(
-                expanded: _showActions,
-                onPressed: _actionBusy ? null : _toggleActions,
-                l10n: widget.l10n,
-              ),
-            ],
+      tapBounce: false,
     );
 
-    final expandedActionsPanel = Padding(
+    final Widget expandedActionsPanel = Padding(
       padding: EdgeInsetsDirectional.fromSTEB(
-        spacing.s,
-        spacing.xs,
-        spacing.s,
-        spacing.xs,
+        spacing.m,
+        0,
+        spacing.m,
+        spacing.m,
       ),
-      child: _MemberActionPanel(
-        actions: actionSpecs,
-        activeActionId: _loadingActionId,
-        onActionPressed: _handleMemberAction,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: spacing.m),
+        child: _MemberActionPanel(
+          actions: actionSpecs,
+          activeActionId: _loadingActionId,
+          onActionPressed: _handleMemberAction,
+        ),
       ),
     );
-    final actionsPanel = !_hasActionPanel
+    final Widget actionsPanel = !_hasActionPanel
         ? const SizedBox.shrink()
         : widget.animationDuration == Duration.zero
         ? (_showActions ? expandedActionsPanel : const SizedBox.shrink())
@@ -659,13 +774,42 @@ class _MemberTileState extends State<_MemberTile> {
             secondChild: expandedActionsPanel,
           );
 
-    return DecoratedBox(
-      decoration: ShapeDecoration(color: backgroundColor, shape: shape),
-      child: ClipPath(
-        clipper: ShapeBorderClipper(shape: shape),
-        child: Column(children: [tile, actionsPanel]),
+    final cutouts = !_hasActionPanel
+        ? const <CutoutSpec>[]
+        : <CutoutSpec>[
+            CutoutSpec(
+              edge: CutoutEdge.right,
+              alignment: const Alignment(1, 0),
+              depth: iconCutoutDepth,
+              thickness: iconCutoutThickness,
+              cornerRadius: context.radii.squircle,
+              child: _MemberActionsToggle(
+                backgroundColor: tileBackgroundColor,
+                expanded: _showActions,
+                onPressed: _actionBusy ? null : _toggleActions,
+                l10n: widget.l10n,
+              ),
+            ),
+          ];
+
+    final bodyInset = _hasActionPanel ? iconCutoutDepth * textScaleFactor : 0.0;
+    final tileSurface = CutoutSurface(
+      backgroundColor: tileBackgroundColor,
+      borderColor: surfaceBorderColor,
+      cutouts: cutouts,
+      shape: shape,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth;
+          final bodyWidth = (maxWidth - bodyInset).clamp(0.0, maxWidth);
+          return SizedBox(
+            width: bodyWidth,
+            child: Column(children: [tile, actionsPanel]),
+          );
+        },
       ),
     );
+    return tileSurface.withTapBounce(enabled: _hasActionPanel && !_actionBusy);
   }
 }
 
@@ -726,28 +870,42 @@ class _MemberActionSpec {
 
 class _MemberActionsToggle extends StatelessWidget {
   const _MemberActionsToggle({
+    required this.backgroundColor,
     required this.expanded,
     required this.onPressed,
     required this.l10n,
   });
 
+  final Color backgroundColor;
   final bool expanded;
   final VoidCallback? onPressed;
   final AppLocalizations l10n;
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final sizing = context.sizing;
     final tooltip = expanded ? l10n.commonClose : l10n.commonMoreOptions;
-    return AxiIconButton.ghost(
-      iconData: expanded ? LucideIcons.x : LucideIcons.ellipsisVertical,
-      tooltip: tooltip,
-      semanticLabel: tooltip,
-      onPressed: onPressed,
-      iconSize: context.sizing.menuItemIconSize,
-      buttonSize: context.sizing.iconButtonSize,
-      tapTargetSize: context.sizing.iconButtonSize,
-      cornerRadius: context.radii.squircle,
-      color: context.colorScheme.mutedForeground,
+    return Semantics(
+      container: true,
+      button: true,
+      toggled: expanded,
+      label: tooltip,
+      onTap: onPressed,
+      child: AxiIconButton(
+        iconData: expanded ? LucideIcons.x : LucideIcons.ellipsisVertical,
+        tooltip: tooltip,
+        semanticLabel: tooltip,
+        onPressed: onPressed,
+        iconSize: sizing.iconButtonIconSize,
+        buttonSize: sizing.iconButtonSize,
+        tapTargetSize: sizing.iconButtonSize,
+        color: colors.mutedForeground,
+        backgroundColor: backgroundColor,
+        borderColor: colors.border,
+        borderWidth: context.borderSide.width,
+        cornerRadius: context.radii.squircle,
+      ),
     );
   }
 }
@@ -899,10 +1057,8 @@ class _RoomAvatarEditorSheetState extends State<RoomAvatarEditorSheet> {
     return BlocBuilder<AvatarEditorCubit, AvatarEditorState>(
       builder: (context, avatarState) {
         final errorText = avatarState.errorType?.resolve(l10n);
-        final hasAvatar =
-            avatarState.draftAvatar != null ||
-            avatarState.carouselAvatar != null;
-        final saveEnabled = !avatarState.isBusy && hasAvatar;
+        final saveEnabled =
+            !avatarState.isBusy && avatarState.draftAvatar != null;
         final useActionEnabled = avatarState.canUseCarouselAvatar;
         final Widget actions = Row(
           mainAxisAlignment: MainAxisAlignment.end,
@@ -1130,6 +1286,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfIdentityJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     final includedRecipients = _recipients
         .where((recipient) => recipient.included)
@@ -1178,7 +1335,11 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
                   }
                   Navigator.of(context).pop(invitees);
                 },
-          child: Text(l10n.mucSendInvites),
+          leading: Icon(
+            LucideIcons.send,
+            size: context.sizing.iconButtonIconSize,
+          ),
+          child: Text(l10n.commonSend),
         ),
       ],
     );
@@ -1283,12 +1444,6 @@ class _NicknameSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final spacing = context.spacing;
-    final contentPadding = EdgeInsets.fromLTRB(
-      spacing.m,
-      0,
-      spacing.m,
-      spacing.s,
-    );
     final Widget actions = Row(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
@@ -1303,25 +1458,28 @@ class _NicknameSheet extends StatelessWidget {
         ),
       ],
     );
-    return AxiSheetScaffold.scroll(
-      header: AxiSheetHeader(
-        title: Text(l10n.mucChangeNicknameTitle),
-        onClose: onCancel,
-      ),
-      bodyPadding: EdgeInsets.zero,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: contentPadding,
-          child: AxiTextFormField(
-            controller: controller,
-            autofocus: true,
-            placeholder: Text(l10n.mucEnterNicknamePlaceholder),
-            onSubmitted: onSubmit,
-          ),
+        CalendarSheetHeader(
+          title: l10n.mucChangeNicknameTitle,
+          onClose: onCancel,
         ),
         SizedBox(height: spacing.s),
-        Padding(padding: contentPadding, child: actions),
-        SizedBox(height: spacing.s),
+        Flexible(
+          fit: FlexFit.loose,
+          child: SingleChildScrollView(
+            child: AxiTextFormField(
+              controller: controller,
+              autofocus: true,
+              placeholder: Text(l10n.mucEnterNicknamePlaceholder),
+              onSubmitted: onSubmit,
+            ),
+          ),
+        ),
+        SizedBox(height: spacing.m),
+        actions,
       ],
     );
   }

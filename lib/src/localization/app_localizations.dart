@@ -699,6 +699,18 @@ abstract class AppLocalizations {
   /// **'Could not change nickname.'**
   String get chatNicknameUpdateFailed;
 
+  /// No description provided for @chatLeaveRoomFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not leave room.'**
+  String get chatLeaveRoomFailed;
+
+  /// No description provided for @chatDestroyRoomFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not destroy room.'**
+  String get chatDestroyRoomFailed;
+
   /// No description provided for @chatRoomAvatarPermissionDenied.
   ///
   /// In en, this message translates to:
@@ -4116,6 +4128,12 @@ abstract class AppLocalizations {
   /// **'Image failed'**
   String get chatEmailImageFailedLabel;
 
+  /// No description provided for @chatEmailInteractiveContentBlockedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Interactive content blocked for safety'**
+  String get chatEmailInteractiveContentBlockedLabel;
+
   /// No description provided for @chatAttachmentBlockedDescription.
   ///
   /// In en, this message translates to:
@@ -4907,6 +4925,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Leave room'**
   String get mucLeaveRoom;
+
+  /// No description provided for @mucLeaveRoomConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Leave room?'**
+  String get mucLeaveRoomConfirmTitle;
+
+  /// No description provided for @mucLeaveRoomConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You will leave this room and it will close locally until you join again.'**
+  String get mucLeaveRoomConfirmBody;
+
+  /// No description provided for @mucDestroyRoom.
+  ///
+  /// In en, this message translates to:
+  /// **'Destroy room'**
+  String get mucDestroyRoom;
+
+  /// No description provided for @mucDestroyRoomConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Destroy room?'**
+  String get mucDestroyRoomConfirmTitle;
+
+  /// No description provided for @mucDestroyRoomConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the room for everyone currently inside it.'**
+  String get mucDestroyRoomConfirmBody;
 
   /// No description provided for @mucNoMembers.
   ///

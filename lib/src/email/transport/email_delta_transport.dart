@@ -357,11 +357,6 @@ class EmailDeltaTransport implements ChatTransport {
       'Delta configure start. accountId=$resolvedAccountId '
       'config=$configureLogConfig',
     );
-    // ignore: avoid_print
-    print(
-      'AXI-EMAIL Delta configure start. accountId=$resolvedAccountId '
-      'config=$configureLogConfig',
-    );
     final completer = Completer<void>();
     StreamSubscription<DeltaCoreEvent>? subscription;
     try {

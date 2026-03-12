@@ -71,19 +71,49 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   if (!body || !html) {
     return 0;
   }
-  const boxHeight = Math.max(
-    body.getBoundingClientRect ? body.getBoundingClientRect().height : 0,
-    html.getBoundingClientRect ? html.getBoundingClientRect().height : 0
+  const bodyRect = body.getBoundingClientRect ? body.getBoundingClientRect() : null;
+  const top = bodyRect ? bodyRect.top : 0;
+  let contentBottom = top;
+  const updateBottom = (rect) => {
+    if (!rect) {
+      return;
+    }
+    if (rect.width <= 0 && rect.height <= 0) {
+      return;
+    }
+    contentBottom = Math.max(contentBottom, rect.bottom);
+  };
+  try {
+    if (document.createRange && body.childNodes && body.childNodes.length > 0) {
+      const range = document.createRange();
+      range.selectNodeContents(body);
+      updateBottom(range.getBoundingClientRect());
+    }
+  } catch (_) {}
+  const elements = body.querySelectorAll ? body.querySelectorAll('*') : [];
+  for (const element of elements) {
+    const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
+    if (style && (style.display === 'none' || style.visibility === 'hidden' || style.position === 'fixed')) {
+      continue;
+    }
+    updateBottom(element.getBoundingClientRect ? element.getBoundingClientRect() : null);
+  }
+  const contentHeight = Math.ceil(Math.max(0, contentBottom - top));
+  const fallbackHeight = Math.max(
+    body.scrollHeight || 0,
+    body.offsetHeight || 0,
+    body.clientHeight || 0,
+    html.scrollHeight || 0,
+    html.offsetHeight || 0,
+    html.clientHeight || 0
   );
-  const scrollHeight = Math.max(
-    body.scrollHeight,
-    body.offsetHeight,
-    body.clientHeight,
-    html.scrollHeight,
-    html.offsetHeight,
-    html.clientHeight
-  );
-  return Math.ceil(Math.max(scrollHeight, boxHeight));
+  if (contentHeight <= 0) {
+    return Math.ceil(fallbackHeight);
+  }
+  if (fallbackHeight <= 0) {
+    return contentHeight;
+  }
+  return Math.ceil(Math.min(fallbackHeight, contentHeight + 24));
 })()
 ''';
   static const _backgroundTapBridgeScript = '''
@@ -192,7 +222,11 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         'themeStyle': themeStyle,
       });
     } on Exception {
-      preparedHtmlData = '$themeStyle${widget.html}';
+      final fallbackHtml = HtmlContentCodec.prepareEmailHtmlForWebView(
+        widget.html,
+        allowRemoteImages: widget.allowRemoteImages,
+      );
+      preparedHtmlData = '$themeStyle$fallbackHtml';
     }
     if (!mounted || _preparedHtmlInputKey != inputKey) {
       return;
@@ -305,6 +339,14 @@ html, body {
               ),
               initialSettings: InAppWebViewSettings(
                 javaScriptEnabled: true,
+                javaScriptCanOpenWindowsAutomatically: false,
+                supportMultipleWindows: false,
+                allowContentAccess: false,
+                allowFileAccess: false,
+                allowFileAccessFromFileURLs: false,
+                allowUniversalAccessFromFileURLs: false,
+                mediaPlaybackRequiresUserGesture: true,
+                safeBrowsingEnabled: true,
                 transparentBackground: true,
                 useShouldOverrideUrlLoading: true,
                 useHybridComposition: widget.useHybridComposition,
@@ -358,13 +400,10 @@ html, body {
               },
               onContentSizeChanged:
                   (controller, oldContentSize, newContentSize) {
-                    final nextHeight = newContentSize.height;
-                    if (!mounted || nextHeight <= 0) {
+                    if (!mounted || newContentSize.height <= 0) {
                       return;
                     }
-                    setState(() {
-                      _contentHeight = math.max(widget.minHeight, nextHeight);
-                    });
+                    unawaited(_measureContentHeight());
                   },
               onReceivedError: (controller, request, error) {
                 if (!mounted) return;

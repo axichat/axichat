@@ -665,7 +665,11 @@ class _HomeScreenState extends State<HomeScreen> {
         continue;
       }
       final File file = File(normalizedPath);
-      if (!await file.exists()) {
+      final entityType = await FileSystemEntity.type(
+        normalizedPath,
+        followLinks: false,
+      );
+      if (entityType != FileSystemEntityType.file || !await file.exists()) {
         continue;
       }
       final String fileName = _resolveSharedAttachmentFileName(normalizedPath);

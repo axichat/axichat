@@ -7,6 +7,7 @@ import 'package:xml/xml.dart' as xml;
 import 'package:axichat/src/common/url_safety.dart';
 
 class HtmlContentCodec {
+  static const String _htmlNamespaceUri = 'http://www.w3.org/1999/xhtml';
   static const String _webViewViewportContent =
       'width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no';
   static const String _webViewBaseStyle = '''
@@ -221,11 +222,41 @@ pre, code {
     'mailto',
     'xmpp',
   };
+  static const Set<String> _remoteImageSchemes = <String>{'http', 'https'};
   static const Set<String> _sanitizedHostOptionalSchemes = <String>{
     'mailto',
     'xmpp',
   };
   static const Set<String> _sanitizedImageSchemes = <String>{'https', 'data'};
+  static const Set<String> _webViewRemovedTags = <String>{
+    'audio',
+    'base',
+    'button',
+    'embed',
+    'form',
+    'frame',
+    'frameset',
+    'iframe',
+    'input',
+    'link',
+    'meta',
+    'object',
+    'option',
+    'select',
+    'source',
+    'svg',
+    'textarea',
+    'track',
+    'video',
+  };
+  static const Set<String> _webViewRemovedAttributes = <String>{
+    'action',
+    'formaction',
+    'poster',
+    'ping',
+    'srcdoc',
+    'srcset',
+  };
   static const String _hrefAttribute = 'href';
   static const String _srcAttribute = 'src';
   static const String _titleAttribute = 'title';
@@ -238,6 +269,30 @@ pre, code {
   static const int _maxHtmlNodeCount = 5000;
   static const int _maxHtmlDepth = 40;
   static const Duration _maxHtmlParseDuration = Duration(milliseconds: 100);
+  static final RegExp _cssImportPattern = RegExp(
+    r'@import\b[^;]*;?',
+    caseSensitive: false,
+  );
+  static final RegExp _cssUrlPattern = RegExp(
+    r'url\s*\([^)]*\)',
+    caseSensitive: false,
+  );
+  static final RegExp _cssExpressionPattern = RegExp(
+    r'expression\s*\([^)]*\)',
+    caseSensitive: false,
+  );
+  static final RegExp _cssBehaviorPattern = RegExp(
+    r'(?:-moz-binding|behavior)\s*:[^;]+;?',
+    caseSensitive: false,
+  );
+  static final RegExp _blockedWebViewContentPattern = RegExp(
+    r'<\s*(?:script|audio|base|button|embed|form|frame|frameset|iframe|input|link|meta|object|option|select|source|svg|textarea|track|video)\b|'
+    r'\bon[a-z0-9_-]+\s*=|'
+    r'\bxlink:href\s*=|'
+    r'\b(?:action|formaction|poster|ping|srcdoc|srcset)\s*=|'
+    r'javascript\s*:|vbscript\s*:|expression\s*\(|@import\b|url\s*\(|-moz-binding|behavior\s*:',
+    caseSensitive: false,
+  );
   static const Map<String, Set<String>> _sanitizedAllowedAttributes =
       <String, Set<String>>{
         'a': <String>{_hrefAttribute, _titleAttribute},
@@ -425,9 +480,27 @@ pre, code {
     for (final source in imageSources(html)) {
       final uri = Uri.tryParse(source);
       final scheme = uri?.scheme.trim().toLowerCase();
-      if (scheme == 'https') return true;
+      if (_remoteImageSchemes.contains(scheme)) return true;
     }
     return false;
+  }
+
+  static bool containsBlockedWebViewContent(String html) {
+    final trimmed = html.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    try {
+      final fragment = html_parser.parseFragment(_truncateHtmlInput(trimmed));
+      final budget = _HtmlNodeBudget(
+        maxNodes: _maxHtmlNodeCount,
+        maxDepth: _maxHtmlDepth,
+        maxDuration: _maxHtmlParseDuration,
+      );
+      return _containsBlockedWebViewNodes(fragment.nodes, budget, 0);
+    } on Exception {
+      return _blockedWebViewContentPattern.hasMatch(trimmed);
+    }
   }
 
   static String prepareEmailHtmlForFlutterHtml(
@@ -450,7 +523,7 @@ pre, code {
       }
       return sourceHtml;
     } on Exception {
-      return html;
+      return sanitizeHtml(html);
     }
   }
 
@@ -466,7 +539,7 @@ pre, code {
       );
       return document.outerHtml;
     } on Exception {
-      return html;
+      return sanitizeHtml(html);
     }
   }
 
@@ -509,27 +582,85 @@ pre, code {
         ..text = _webViewBaseStyle;
       head.append(styleElement);
     }
-    _normalizeWebViewNodes(document.nodes);
-    for (final script in document.querySelectorAll('script')) {
-      script.remove();
-    }
-    if (!allowRemoteImages) {
-      for (final image in document.querySelectorAll('img')) {
-        final source = image.attributes[_srcAttribute];
-        final uri = Uri.tryParse(source?.trim() ?? '');
-        final scheme = uri?.scheme.trim().toLowerCase();
-        if (scheme == 'https') {
-          image.remove();
-        }
-      }
-    }
+    _normalizeWebViewNodes(
+      document.nodes,
+      allowRemoteImages: allowRemoteImages,
+    );
     _trimLeadingWebViewWhitespace(document.body);
     return document;
   }
 
-  static void _normalizeWebViewNodes(List<dom.Node> nodes) {
-    for (final node in nodes) {
+  static void _normalizeWebViewNodes(
+    List<dom.Node> nodes, {
+    required bool allowRemoteImages,
+  }) {
+    for (final node in List<dom.Node>.from(nodes)) {
       if (node is dom.Element) {
+        if (_isBlockedWebViewElement(node)) {
+          node.remove();
+          continue;
+        }
+        final tag = (node.localName ?? '').toLowerCase();
+        if (tag == 'style') {
+          final sanitizedStyleText = _sanitizeWebViewStyleElementText(
+            node.text,
+          );
+          if (sanitizedStyleText == null) {
+            node.remove();
+            continue;
+          }
+          node.text = sanitizedStyleText;
+          continue;
+        }
+        var removeNode = false;
+        final attributeNames = node.attributes.keys
+            .map((key) => key.toString())
+            .toList();
+        for (final attributeName in attributeNames) {
+          final normalizedName = attributeName.trim().toLowerCase();
+          if (normalizedName.isEmpty) {
+            node.attributes.remove(attributeName);
+            continue;
+          }
+          if (normalizedName.startsWith('on') ||
+              _webViewRemovedAttributes.contains(normalizedName)) {
+            node.attributes.remove(attributeName);
+            continue;
+          }
+          final rawValue = node.attributes[attributeName] ?? '';
+          if (normalizedName == _hrefAttribute) {
+            final safeValue = _sanitizeUriValue(
+              rawValue,
+              _sanitizedLinkSchemes,
+            );
+            if (safeValue == null) {
+              node.attributes.remove(attributeName);
+            } else {
+              node.attributes[attributeName] = safeValue;
+            }
+            continue;
+          }
+          if (normalizedName == _srcAttribute) {
+            if (tag != 'img') {
+              node.attributes.remove(attributeName);
+              continue;
+            }
+            final safeValue = _sanitizeWebViewImageSource(
+              rawValue,
+              allowRemoteImages: allowRemoteImages,
+            );
+            if (safeValue == null) {
+              removeNode = true;
+              break;
+            }
+            node.attributes[attributeName] = safeValue;
+            continue;
+          }
+        }
+        if (removeNode) {
+          node.remove();
+          continue;
+        }
         node.attributes.remove('nowrap');
         final width = node.attributes['width']?.trim();
         if (width != null && width.isNotEmpty) {
@@ -537,33 +668,226 @@ pre, code {
         }
         final style = node.attributes['style']?.trim();
         if (style != null && style.isNotEmpty) {
-          final declarations = style
-              .split(';')
-              .map((part) => part.trim())
-              .where((part) => part.isNotEmpty)
-              .where((declaration) {
-                final separatorIndex = declaration.indexOf(':');
-                if (separatorIndex <= 0) {
-                  return true;
-                }
-                final property = declaration
-                    .substring(0, separatorIndex)
-                    .trim()
-                    .toLowerCase();
-                return !_webViewStylePropertiesToStrip.contains(property);
-              })
-              .toList();
-          if (declarations.isEmpty) {
+          final sanitizedStyle = _sanitizeWebViewInlineStyle(style);
+          if (sanitizedStyle == null) {
             node.attributes.remove('style');
           } else {
-            node.attributes['style'] = declarations.join('; ');
+            node.attributes['style'] = sanitizedStyle;
           }
         }
       }
       if (node.nodes.isNotEmpty) {
-        _normalizeWebViewNodes(node.nodes);
+        _normalizeWebViewNodes(
+          node.nodes,
+          allowRemoteImages: allowRemoteImages,
+        );
       }
     }
+  }
+
+  static bool _containsBlockedWebViewNodes(
+    List<dom.Node> nodes,
+    _HtmlNodeBudget budget,
+    int depth,
+  ) {
+    for (final node in nodes) {
+      if (!budget.allow(depth)) {
+        return false;
+      }
+      if (node is dom.Element) {
+        if (_isBlockedWebViewElement(node)) {
+          return true;
+        }
+        final tag = (node.localName ?? '').toLowerCase();
+        if (tag == 'style' && _containsBlockedWebViewStyleElement(node.text)) {
+          return true;
+        }
+        for (final entry in node.attributes.entries) {
+          final attributeName = entry.key.toString().trim().toLowerCase();
+          if (attributeName.isEmpty) {
+            continue;
+          }
+          if (attributeName.startsWith('on') ||
+              _webViewRemovedAttributes.contains(attributeName)) {
+            return true;
+          }
+          final rawValue = entry.value;
+          if (attributeName == _hrefAttribute &&
+              _sanitizeUriValue(rawValue, _sanitizedLinkSchemes) == null) {
+            return true;
+          }
+          if (attributeName == _srcAttribute) {
+            if (tag != 'img') {
+              return true;
+            }
+            if (_imgSourceNeedsBlockedNotice(rawValue)) {
+              return true;
+            }
+          }
+          if (attributeName == 'style' &&
+              _containsBlockedWebViewInlineStyle(rawValue)) {
+            return true;
+          }
+        }
+      }
+      if (node.nodes.isNotEmpty &&
+          _containsBlockedWebViewNodes(node.nodes, budget, depth + 1)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _isBlockedWebViewElement(dom.Element element) {
+    final namespace = element.namespaceUri?.trim();
+    if (namespace != null &&
+        namespace.isNotEmpty &&
+        namespace != _htmlNamespaceUri) {
+      return true;
+    }
+    final tag = (element.localName ?? '').toLowerCase();
+    return tag == 'script' || _webViewRemovedTags.contains(tag);
+  }
+
+  static bool _imgSourceNeedsBlockedNotice(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    final uri = Uri.tryParse(trimmed);
+    final scheme = uri?.scheme.trim().toLowerCase();
+    if (_remoteImageSchemes.contains(scheme) || scheme == 'data') {
+      return false;
+    }
+    return _sanitizeUriValue(trimmed, _sanitizedImageSchemes) == null;
+  }
+
+  static bool _containsBlockedWebViewInlineStyle(String style) {
+    for (final declaration in style.split(';')) {
+      final trimmed = declaration.trim();
+      if (trimmed.isEmpty) {
+        continue;
+      }
+      final separatorIndex = trimmed.indexOf(':');
+      if (separatorIndex <= 0) {
+        continue;
+      }
+      final property = trimmed
+          .substring(0, separatorIndex)
+          .trim()
+          .toLowerCase();
+      final value = trimmed.substring(separatorIndex + 1).trim();
+      if (value.isEmpty) {
+        continue;
+      }
+      if (property == 'behavior' || property == '-moz-binding') {
+        return true;
+      }
+      if (_containsUnsafeCssValue(value)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  static bool _containsBlockedWebViewStyleElement(String cssText) {
+    final trimmed = cssText.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    return containsUnsafeUriText(trimmed) ||
+        containsSuspiciousUriText(trimmed) ||
+        _cssImportPattern.hasMatch(trimmed) ||
+        _cssUrlPattern.hasMatch(trimmed) ||
+        _cssExpressionPattern.hasMatch(trimmed) ||
+        _cssBehaviorPattern.hasMatch(trimmed);
+  }
+
+  static String? _sanitizeWebViewImageSource(
+    String value, {
+    required bool allowRemoteImages,
+  }) {
+    final safeValue = _sanitizeUriValue(value, _sanitizedImageSchemes);
+    if (safeValue == null) {
+      return null;
+    }
+    final uri = Uri.tryParse(safeValue);
+    final scheme = uri?.scheme.trim().toLowerCase();
+    if (!allowRemoteImages && _remoteImageSchemes.contains(scheme)) {
+      return null;
+    }
+    return safeValue;
+  }
+
+  static String? _sanitizeWebViewInlineStyle(String style) {
+    final declarations = style
+        .split(';')
+        .map(_sanitizeWebViewStyleDeclaration)
+        .whereType<String>()
+        .toList();
+    if (declarations.isEmpty) {
+      return null;
+    }
+    return declarations.join('; ');
+  }
+
+  static String? _sanitizeWebViewStyleDeclaration(String declaration) {
+    final trimmed = declaration.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final separatorIndex = trimmed.indexOf(':');
+    if (separatorIndex <= 0) {
+      return null;
+    }
+    final property = trimmed.substring(0, separatorIndex).trim().toLowerCase();
+    if (_webViewStylePropertiesToStrip.contains(property)) {
+      return null;
+    }
+    final value = trimmed.substring(separatorIndex + 1).trim();
+    if (value.isEmpty) {
+      return null;
+    }
+    if (_containsUnsafeCssValue(value)) {
+      return null;
+    }
+    return '$property: $value';
+  }
+
+  static String? _sanitizeWebViewStyleElementText(String cssText) {
+    final trimmed = cssText.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    if (containsUnsafeUriText(trimmed) || containsSuspiciousUriText(trimmed)) {
+      return null;
+    }
+    final sanitized = trimmed
+        .replaceAll(_cssImportPattern, '')
+        .replaceAll(_cssUrlPattern, '')
+        .replaceAll(_cssExpressionPattern, '')
+        .replaceAll(_cssBehaviorPattern, '')
+        .trim();
+    if (sanitized.isEmpty) {
+      return null;
+    }
+    return sanitized;
+  }
+
+  static bool _containsUnsafeCssValue(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return true;
+    }
+    return normalized.contains('url(') ||
+        normalized.contains('expression(') ||
+        normalized.contains('@import') ||
+        normalized.contains('javascript:') ||
+        normalized.contains('vbscript:') ||
+        normalized.contains('-moz-binding') ||
+        normalized.contains('behavior:') ||
+        containsUnsafeUriText(normalized) ||
+        containsSuspiciousUriText(normalized);
   }
 
   static void _removeHiddenEmailNodes(List<dom.Node> nodes) {

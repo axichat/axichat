@@ -186,6 +186,11 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   hasHtmlBody &&
                   !shouldLoadImages &&
                   HtmlContentCodec.containsRemoteImages(normalizedHtmlBody);
+              final bool hasBlockedHtmlContent =
+                  hasHtmlBody &&
+                  HtmlContentCodec.containsBlockedWebViewContent(
+                    normalizedHtmlBody,
+                  );
               final String? fallbackBodyText = switch (message.body?.trim()) {
                 final String text when text.isNotEmpty => text,
                 _ => null,
@@ -286,6 +291,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                     spacing: spacing.l,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      if (hasBlockedHtmlContent) const _EmailHtmlSafetyNotice(),
                       if (hasHtmlBody)
                         DecoratedBox(
                           decoration: ShapeDecoration(
@@ -1012,6 +1018,37 @@ class _ReactionChip extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _EmailHtmlSafetyNotice extends StatelessWidget {
+  const _EmailHtmlSafetyNotice();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    return Wrap(
+      spacing: spacing.xs,
+      runSpacing: spacing.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      alignment: WrapAlignment.center,
+      children: [
+        Icon(
+          LucideIcons.shieldAlert,
+          size: sizing.menuItemIconSize,
+          color: colors.mutedForeground,
+        ),
+        Text(
+          context.l10n.chatEmailInteractiveContentBlockedLabel,
+          style: context.textTheme.muted.copyWith(
+            color: colors.mutedForeground,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 }

@@ -862,6 +862,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
     required this.onOpenDirectChat,
     required this.onChangeNickname,
     required this.onLeaveRoom,
+    required this.onDestroyRoom,
     required this.onClose,
   });
 
@@ -874,7 +875,8 @@ class _RoomMembersDrawerContent extends StatelessWidget {
   onAction;
   final Future<void> Function(String jid) onOpenDirectChat;
   final ValueChanged<String> onChangeNickname;
-  final VoidCallback onLeaveRoom;
+  final Future<void> Function() onLeaveRoom;
+  final Future<void> Function() onDestroyRoom;
   final VoidCallback onClose;
 
   @override
@@ -922,6 +924,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
           roomAvatarPath: state.chat?.avatarPath,
           onChangeNickname: onChangeNickname,
           onLeaveRoom: onLeaveRoom,
+          onDestroyRoom: onDestroyRoom,
           currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
           onClose: onClose,
           useSurface: true,
@@ -2341,19 +2344,55 @@ class _ChatState extends State<Chat> {
                             ),
                           );
                         },
-                        onLeaveRoom: () {
+                        onLeaveRoom: () async {
                           final locate = context.read;
+                          final chatsCubit = locate<ChatsCubit>();
                           final chatState = locate<ChatBloc>().state;
                           final chat = chatState.chat;
                           if (chat == null) {
                             return;
                           }
+                          final completer = Completer<void>();
                           locate<ChatBloc>().add(
                             ChatLeaveRoomRequested(
                               chatJid: chat.jid,
                               chatType: chat.type,
+                              completer: completer,
                             ),
                           );
+                          await completer.future.timeout(
+                            const Duration(seconds: 10),
+                          );
+                          if (!context.mounted) {
+                            return;
+                          }
+                          navigator.pop();
+                          await chatsCubit.popChat();
+                        },
+                        onDestroyRoom: () async {
+                          final locate = context.read;
+                          final chatsCubit = locate<ChatsCubit>();
+                          final chatState = locate<ChatBloc>().state;
+                          final chat = chatState.chat;
+                          if (chat == null) {
+                            return;
+                          }
+                          final completer = Completer<void>();
+                          locate<ChatBloc>().add(
+                            ChatDestroyRoomRequested(
+                              chatJid: chat.jid,
+                              chatType: chat.type,
+                              completer: completer,
+                            ),
+                          );
+                          await completer.future.timeout(
+                            const Duration(seconds: 10),
+                          );
+                          if (!context.mounted) {
+                            return;
+                          }
+                          navigator.pop();
+                          await chatsCubit.popChat();
                         },
                         onClose: navigator.pop,
                       ),
@@ -4109,6 +4148,7 @@ class _ChatState extends State<Chat> {
         final selfIdentity = SelfIdentitySnapshot(
           selfJid: selfJid,
           avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+          avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
         );
         final showToast = ShadToaster.maybeOf(context)?.show;
         return MultiBlocListener(
@@ -17552,6 +17592,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     final header = AxiSheetHeader(
       title: Text(l10n.chatForwardDialogTitle),
