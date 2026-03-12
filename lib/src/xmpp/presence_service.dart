@@ -86,6 +86,11 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
+  Future<void> sendUnavailablePresenceForDisconnect() async {
+    final manager = _connection.getManager<XmppPresenceManager>();
+    await manager?.sendUnavailablePresenceForDisconnect();
+  }
+
   Future<bool> _isBlockedPresenceSender(mox.JID from) async {
     final fromBare = normalizedBareAddressValue(from.toBare().toString());
     if (fromBare == null) {
@@ -115,6 +120,9 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
       _cachedPresence = presence;
       _cachedStatus = resolvedStatus;
       _presenceLoaded = true;
+      if (presence == Presence.unavailable) {
+        return;
+      }
       await _dbOp<XmppStateStore>(
         (ss) => ss.writeAll(
           data: {
@@ -369,6 +377,28 @@ class XmppPresenceManager extends mox.PresenceManager {
     String? status,
     mox.JID? to,
     bool trackDirected = false,
+  }) async => _sendPresenceInternal(
+    priority: priority,
+    show: show,
+    status: status,
+    to: to,
+    trackDirected: trackDirected,
+    persistCurrentPresence: true,
+  );
+
+  Future<void> sendUnavailablePresenceForDisconnect() async =>
+      _sendPresenceInternal(
+        show: Presence.unavailable.name,
+        persistCurrentPresence: false,
+      );
+
+  Future<void> _sendPresenceInternal({
+    int? priority,
+    String? show,
+    String? status,
+    mox.JID? to,
+    required bool persistCurrentPresence,
+    bool trackDirected = false,
   }) async {
     // Convert show string to Presence enum for backward compatibility
     final presence = show != null ? Presence.fromString(show) : null;
@@ -420,7 +450,7 @@ class XmppPresenceManager extends mox.PresenceManager {
       await sendToTarget(to);
     }
 
-    if (to == null) {
+    if (to == null && persistCurrentPresence) {
       _log.info('Persisting current presence: ${presence?.name}');
       await owner._dbOp<XmppStateStore>((ss) async {
         await ss.writeAll(
@@ -444,6 +474,16 @@ class XmppPresenceManager extends mox.PresenceManager {
       presence = ss.read(key: owner.presenceStorageKey) as Presence?;
       status = ss.read(key: owner.statusStorageKey) as String?;
     });
+    if (presence == Presence.unavailable) {
+      _log.warning(
+        'Stored self presence was unavailable; restoring chat presence for login.',
+      );
+      presence = Presence.chat;
+      await owner._dbOp<XmppStateStore>(
+        (ss) => ss.write(key: owner.presenceStorageKey, value: Presence.chat),
+        awaitDatabase: true,
+      );
+    }
     await sendPresence(show: presence?.name, status: status);
   }
 

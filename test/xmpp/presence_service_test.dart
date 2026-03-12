@@ -143,4 +143,24 @@ void main() {
       expect(xmppService.status, equals('Busy'));
     },
   );
+
+  test(
+    'receivePresence does not persist self unavailable presence as the next login preference.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      final selfJid = xmppService.myJid!;
+      await xmppService.receivePresence(selfJid, Presence.chat, status: 'Free');
+      await xmppService.receivePresence(selfJid, Presence.unavailable);
+
+      final storedPresence =
+          stateStore.read(key: xmppService.presenceStorageKey) as Presence?;
+      final storedStatus =
+          stateStore.read(key: xmppService.statusStorageKey) as String?;
+
+      expect(storedPresence, equals(Presence.chat));
+      expect(storedStatus, equals('Free'));
+      expect(xmppService.presence, equals(Presence.unavailable));
+    },
+  );
 }

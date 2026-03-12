@@ -937,47 +937,29 @@ class XmppService extends XmppBase
         final shouldHandleFailedResumption =
             !resumed && _streamResumptionAttempted;
         _streamResumptionAttempted = false;
-        fireAndForget(() async {
-          if (_connection.carbonsEnabled != true) {
-            _xmppLogger.info('Enabling carbons...');
-            if (!await _connection.enableCarbons()) {
-              _xmppLogger.warning('Failed to enable carbons.');
-            }
-          }
-          // Device publishing is now handled internally by OmemoManager.
-          if (shouldHandleFailedResumption) {
-            final sm = _connection.getManager<XmppStreamManagementManager>();
-            await sm?.handleFailedResumption();
-          }
-          if (!resumed) {
-            try {
-              final presenceManager = _connection
-                  .getManager<XmppPresenceManager>();
-              await presenceManager?.sendInitialPresence();
-            } catch (error, stackTrace) {
-              _xmppLogger.warning(
-                'Failed to send initial presence.',
-                error,
-                stackTrace,
-              );
-            }
-            await _refreshHttpUploadSupport();
-            await _refreshPubSubSupport();
-            try {
-              await syncGlobalMamCatchUp();
-            } on Exception catch (error, stackTrace) {
-              _xmppLogger.fine(
-                'Initial-login MAM catch-up failed.',
-                error,
-                stackTrace,
-              );
-            }
-          }
-        }, operationName: _postNegotiationsSetupOperationName);
+        fireAndForget(
+          () => _runPostNegotiationsSetup(
+            resumed: resumed,
+            shouldHandleFailedResumption: shouldHandleFailedResumption,
+          ),
+          operationName: _postNegotiationsSetupOperationName,
+        );
         // Connection handling is automatic in moxxmpp v0.5.0.
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
         _xmppLogger.info('Bound resource: ${event.resource}...');
+        final currentJid = _myJid;
+        if (currentJid != null) {
+          final boundJid = currentJid.toBare().withResource(event.resource);
+          _myJid = boundJid;
+          if (_connection.hasConnectionSettings) {
+            final settings = _connection.connectionSettings;
+            _connection.connectionSettings = XmppConnectionSettings(
+              jid: boundJid,
+              password: settings.password,
+            );
+          }
+        }
 
         await _dbOp<XmppStateStore>(
           (ss) => ss.write(key: resourceStorageKey, value: event.resource),
@@ -1653,6 +1635,10 @@ class XmppService extends XmppBase
       return safeAddress!;
     }
     return address.trim();
+  }
+
+  String? _nickFromSender(String senderJid) {
+    return addressResourcePart(senderJid);
   }
 
   bool _isAuthenticationError(mox.XmppError error) {
@@ -2845,6 +2831,20 @@ class XmppService extends XmppBase
   Future<void> _reset([Exception? e]) async {
     if (!needsReset) return;
 
+    final shouldSendUnavailablePresence =
+        connected && _myJid != null && _synchronousConnection.isCompleted;
+    if (shouldSendUnavailablePresence) {
+      try {
+        await sendUnavailablePresenceForDisconnect();
+      } catch (error, stackTrace) {
+        _xmppLogger.fine(
+          'Failed to send unavailable presence before reset.',
+          error,
+          stackTrace,
+        );
+      }
+    }
+
     _lifecycleEpoch += 1;
     _myJid = null;
     _synchronousConnection = Completer<void>();
@@ -3209,6 +3209,87 @@ class XmppService extends XmppBase
       }
     }
     return null;
+  }
+
+  Future<void> _runPostNegotiationsSetup({
+    required bool resumed,
+    required bool shouldHandleFailedResumption,
+  }) async {
+    // Presence is the gating signal for live inbound delivery. Reassert it on
+    // every negotiated stream so resumed sessions cannot remain logically
+    // offline if the server lost visible presence state.
+    try {
+      final presenceManager = _connection.getManager<XmppPresenceManager>();
+      if (presenceManager == null) {
+        _xmppLogger.warning(
+          'Presence manager unavailable after stream negotiations.',
+        );
+      } else {
+        _xmppLogger.info('Sending initial presence after stream negotiations.');
+      }
+      await presenceManager?.sendInitialPresence();
+    } catch (error, stackTrace) {
+      _xmppLogger.warning(
+        'Failed to send initial presence.',
+        error,
+        stackTrace,
+      );
+    }
+
+    try {
+      if (_connection.carbonsEnabled != true) {
+        _xmppLogger.info('Enabling carbons...');
+        if (!await _connection.enableCarbons()) {
+          _xmppLogger.warning('Failed to enable carbons.');
+        }
+      }
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.warning('Failed to enable carbons.', error, stackTrace);
+    }
+
+    // Device publishing is now handled internally by OmemoManager.
+    if (shouldHandleFailedResumption) {
+      try {
+        final sm = _connection.getManager<XmppStreamManagementManager>();
+        await sm?.handleFailedResumption();
+      } on Exception catch (error, stackTrace) {
+        _xmppLogger.warning(
+          'Failed to handle failed stream resumption.',
+          error,
+          stackTrace,
+        );
+      }
+    }
+
+    try {
+      await _refreshHttpUploadSupport();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to refresh HTTP upload support after login.',
+        error,
+        stackTrace,
+      );
+    }
+
+    try {
+      await _refreshPubSubSupport();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Failed to refresh PubSub support after login.',
+        error,
+        stackTrace,
+      );
+    }
+
+    try {
+      await syncGlobalMamCatchUp();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine(
+        'Post-negotiations MAM catch-up failed.',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   void _updateHttpUploadSupport(HttpUploadSupport support) {

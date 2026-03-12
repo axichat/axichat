@@ -566,24 +566,6 @@ class _ProfileCardSection extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                if (profileState.resource.isNotEmpty)
-                                  AxiTooltip(
-                                    builder: (_) => ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: 300.0,
-                                      ),
-                                      child: Text(
-                                        l10n.profileResourceDescription,
-                                        textAlign: TextAlign.left,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      '/${profileState.resource}',
-                                      style: subtitleStyle,
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1,
-                                    ),
-                                  ),
                               ],
                             ),
                           ),
