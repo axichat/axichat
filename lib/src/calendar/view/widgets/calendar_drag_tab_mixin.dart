@@ -213,7 +213,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     final Color selectedBackground = scheme.primary.withValues(
       alpha: context.motion.tapSplashAlpha,
     );
-    final Color dragItemTint = scheme.primary.withValues(alpha: 0.16);
     final ShadDecoration baseDecoration = ShadDecoration(
       border: ShadBorder.none,
       secondaryBorder: ShadBorder.none,
@@ -266,15 +265,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                     height: baseHeight,
                     decoration: baseDecoration,
                     selectedDecoration: selectedDecoration,
-                    backgroundColor: _isAnyDragActive
-                        ? (scheduleHighlightActive
-                              ? scheme.primary
-                              : dragItemTint)
-                        : Colors.transparent,
+                    backgroundColor: Colors.transparent,
                     selectedBackgroundColor: _isAnyDragActive
-                        ? (scheduleHighlightActive
-                              ? scheme.primary
-                              : dragItemTint)
+                        ? Colors.transparent
                         : selectedBackground,
                     hoverBackgroundColor: hoverBackground,
                     selectedHoverBackgroundColor: hoverBackground,
@@ -287,7 +280,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       scheme: scheme,
                       selected: scheduleSelected,
                       showCue: scheduleCueActive,
-                      anyDragActive: _isAnyDragActive,
                       dragActive: scheduleHighlightActive,
                       shake:
                           !lowMotion &&
@@ -300,11 +292,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                     height: baseHeight,
                     decoration: baseDecoration,
                     selectedDecoration: selectedDecoration,
-                    backgroundColor: _isAnyDragActive
-                        ? (tasksHighlightActive ? scheme.primary : dragItemTint)
-                        : Colors.transparent,
+                    backgroundColor: Colors.transparent,
                     selectedBackgroundColor: _isAnyDragActive
-                        ? (tasksHighlightActive ? scheme.primary : dragItemTint)
+                        ? Colors.transparent
                         : selectedBackground,
                     hoverBackgroundColor: hoverBackground,
                     selectedHoverBackgroundColor: hoverBackground,
@@ -317,7 +307,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       scheme: scheme,
                       selected: tasksSelected,
                       showCue: tasksCueActive,
-                      anyDragActive: _isAnyDragActive,
                       dragActive: tasksHighlightActive,
                       shake:
                           !lowMotion &&
@@ -965,7 +954,6 @@ class _DragTabLabel extends StatelessWidget {
     required this.scheme,
     required this.selected,
     required this.showCue,
-    required this.anyDragActive,
     required this.dragActive,
     required this.shake,
   });
@@ -974,7 +962,6 @@ class _DragTabLabel extends StatelessWidget {
   final ShadColorScheme scheme;
   final bool selected;
   final bool showCue;
-  final bool anyDragActive;
   final bool dragActive;
   final bool shake;
 
@@ -991,11 +978,7 @@ class _DragTabLabel extends StatelessWidget {
     final Color baseColor = selected
         ? scheme.foreground
         : scheme.mutedForeground;
-    final Color targetColor = dragActive
-        ? scheme.primaryForeground
-        : anyDragActive
-        ? scheme.primary
-        : baseColor;
+    final Color targetColor = dragActive ? scheme.primary : baseColor;
     final labelContent = AnimatedContainer(
       duration: duration,
       padding: EdgeInsets.symmetric(

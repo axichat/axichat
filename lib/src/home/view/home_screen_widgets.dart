@@ -1890,7 +1890,7 @@ IconData _tabIcon(HomeTab tab) {
     case HomeTab.invites:
       return LucideIcons.userPlus;
     case HomeTab.important:
-      return Icons.star_rounded;
+      return Icons.star_outline_rounded;
     case HomeTab.blocked:
       return LucideIcons.userX;
     case HomeTab.spam:
