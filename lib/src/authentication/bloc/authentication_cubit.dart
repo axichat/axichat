@@ -1330,7 +1330,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       foregroundServiceActive.removeListener(_foregroundListener!);
       _foregroundListener = null;
     }
-    await _homeRefreshSyncService.close();
+    await _homeRefreshSyncService.close(abortPendingSync: true);
     await _emailService?.setForegroundKeepalive(false);
     await _credentialStore.close();
     await _emailService?.shutdown();
@@ -2752,7 +2752,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _log.warning('Normal logout blocked for device-only password account.');
       return;
     }
-    await _homeRefreshSyncService.close();
+    await _homeRefreshSyncService.close(abortPendingSync: true);
     if (severity == LogoutSeverity.normal) {
       await _xmppService.clearSessionTokens();
     }

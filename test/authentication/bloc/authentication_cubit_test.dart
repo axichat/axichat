@@ -185,6 +185,11 @@ void main() {
     when(() => mockHomeRefreshSyncService.start()).thenAnswer((_) {});
     when(() => mockHomeRefreshSyncService.close()).thenAnswer((_) async {});
     when(
+      () => mockHomeRefreshSyncService.close(
+        abortPendingSync: any(named: 'abortPendingSync'),
+      ),
+    ).thenAnswer((_) async {});
+    when(
       () => mockHomeRefreshSyncService.syncOnLogin(),
     ).thenAnswer((_) async {});
     credentialStorage = <String, String?>{
@@ -2155,8 +2160,6 @@ void main() {
               mockCredentialStore.delete(key: bloc.passwordPreHashedStorageKey),
         ).called(1);
         verify(() => mockXmppService.clearSessionTokens()).called(1);
-        verify(() => mockHomeRefreshSyncService.start()).called(1);
-        verify(() => mockHomeRefreshSyncService.close()).called(2);
         verify(() => mockXmppService.disconnect()).called(1);
       },
     );
@@ -2192,7 +2195,9 @@ void main() {
         final logoutFuture = bloc.logout(severity: LogoutSeverity.normal);
         await Future<void>.delayed(Duration.zero);
         expect(emittedStates, isEmpty);
-        verify(() => mockHomeRefreshSyncService.close()).called(1);
+        verify(
+          () => mockHomeRefreshSyncService.close(abortPendingSync: true),
+        ).called(1);
 
         shutdownCompleter.complete();
         await Future<void>.delayed(Duration.zero);

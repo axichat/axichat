@@ -185,4 +185,48 @@ void main() {
       HomeRefreshSyncPhase.success,
     ]);
   });
+
+  test('close can abort unread refresh progression during logout', () async {
+    when(() => mockEmailService.hasActiveSession).thenReturn(true);
+    when(
+      () => mockEmailService.canReconnectConfiguredSession(),
+    ).thenAnswer((_) async => false);
+    final fetchCompleter = Completer<bool>();
+    when(
+      () => mockEmailService.performBackgroundFetch(
+        timeout: any(named: 'timeout'),
+      ),
+    ).thenAnswer((_) => fetchCompleter.future);
+
+    final service = HomeRefreshSyncService(
+      xmppService: mockXmppService,
+      emailService: mockEmailService,
+    );
+    final updates = <HomeRefreshSyncUpdate>[];
+    final updatesSubscription = service.syncUpdates.listen(updates.add);
+    addTearDown(updatesSubscription.cancel);
+
+    final refreshFuture = service.refreshUnreadOnly();
+    await untilCalled(
+      () => mockEmailService.performBackgroundFetch(
+        timeout: any(named: 'timeout'),
+      ),
+    );
+
+    var closeCompleted = false;
+    final closeFuture = service.close(abortPendingSync: true).then((_) {
+      closeCompleted = true;
+    });
+    await Future<void>.delayed(Duration.zero);
+    expect(closeCompleted, isTrue);
+
+    fetchCompleter.complete(true);
+    await refreshFuture;
+    await closeFuture;
+
+    verifyNever(() => mockEmailService.refreshChatlistFromCore());
+    expect(updates.map((update) => update.phase), [
+      HomeRefreshSyncPhase.running,
+    ]);
+  });
 }
