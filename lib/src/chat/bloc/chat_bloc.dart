@@ -39,7 +39,6 @@ import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/service/email_sync_state.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
-import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';

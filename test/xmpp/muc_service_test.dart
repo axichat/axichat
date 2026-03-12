@@ -2743,6 +2743,92 @@ void main() {
         expect(owner.isPresent, isFalse);
       },
     );
+
+    test(
+      'REG-012 [HP] warmRoomFromHistory restores opaque occupant ids for bare-room history senders',
+      () async {
+        final stateEntries = <String, Object?>{};
+        when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
+          invocation,
+        ) {
+          final key = invocation.namedArguments[#key] as RegisteredStateKey;
+          return stateEntries[key.value];
+        });
+        when(
+          () => mockStateStore.write(
+            key: any(named: 'key'),
+            value: any(named: 'value'),
+          ),
+        ).thenAnswer((invocation) async {
+          final key = invocation.namedArguments[#key] as RegisteredStateKey;
+          stateEntries[key.value] = invocation.namedArguments[#value];
+          return true;
+        });
+        when(() => mockStateStore.delete(key: any(named: 'key'))).thenAnswer((
+          invocation,
+        ) async {
+          final key = invocation.namedArguments[#key] as RegisteredStateKey;
+          stateEntries.remove(key.value);
+          return true;
+        });
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: 'opaque-owner-id',
+          nick: 'OwnerNick',
+          realJid: 'owner@axi.im',
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+          isPresent: _presenceAvailable,
+          fromPresence: true,
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        await xmppService.close();
+
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => mockDatabase,
+          notificationService: mockNotificationService,
+        );
+        await connectSuccessfully(xmppService);
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(_connectedState, _disconnectedState),
+        );
+        await pumpEventQueue();
+
+        when(
+          () => mockDatabase.getChatMessages(
+            _roomJid,
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+            filter: any(named: 'filter'),
+          ),
+        ).thenAnswer(
+          (_) async => <Message>[
+            Message(
+              stanzaID: 'owner-history-message',
+              senderJid: _roomJid,
+              occupantID: 'opaque-owner-id',
+              chatJid: _roomJid,
+              timestamp: DateTime.timestamp(),
+              body: 'hello from the owner',
+            ),
+          ],
+        );
+
+        final room = await xmppService.warmRoomFromHistory(roomJid: _roomJid);
+        final owner = room.occupants['opaque-owner-id'];
+
+        expect(owner, isNotNull);
+        expect(owner?.nick, 'OwnerNick');
+        expect(owner?.realJid, 'owner@axi.im');
+        expect(owner?.affiliation, OccupantAffiliation.owner);
+        expect(room.occupants.containsKey('$_roomJid/OwnerNick'), isFalse);
+      },
+    );
   });
 
   group('Moderation actions', () {

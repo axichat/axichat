@@ -613,6 +613,15 @@ final class MessageReference {
   final String value;
 }
 
+enum MucActorReferenceKind { occupantJid, occupantId }
+
+final class MucActorReference {
+  const MucActorReference({required this.kind, required this.value});
+
+  final MucActorReferenceKind kind;
+  final String value;
+}
+
 final class MucActorIdentity {
   const MucActorIdentity._({
     required this.senderJid,
@@ -633,6 +642,26 @@ final class MucActorIdentity {
   final String senderJid;
   final String? occupantJid;
   final String? occupantId;
+
+  bool get hasOccupantId => occupantId?.trim().isNotEmpty == true;
+
+  MucActorReference? get primaryReference {
+    final resolvedOccupantId = occupantId?.trim();
+    if (resolvedOccupantId != null && resolvedOccupantId.isNotEmpty) {
+      return MucActorReference(
+        kind: MucActorReferenceKind.occupantId,
+        value: resolvedOccupantId,
+      );
+    }
+    final resolvedOccupantJid = occupantJid?.trim();
+    if (resolvedOccupantJid != null && resolvedOccupantJid.isNotEmpty) {
+      return MucActorReference(
+        kind: MucActorReferenceKind.occupantJid,
+        value: resolvedOccupantJid,
+      );
+    }
+    return null;
+  }
 }
 
 extension MessageReferenceIds on Message {

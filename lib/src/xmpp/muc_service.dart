@@ -128,6 +128,7 @@ const _mucPrejoinRoomsStorageKeyName = 'muc_prejoin_rooms';
 const _mucRoomMemberSnapshotStorageKeyPrefix = 'muc_room_member_snapshot:';
 const _mucPrejoinRoomJidKey = 'room_jid';
 const _mucPrejoinRoomNickKey = 'nickname';
+const _mucRoomMemberOccupantIdKey = 'occupant_id';
 const _mucRoomMemberNickKey = 'nick';
 const _mucRoomMemberRealJidKey = 'real_jid';
 const _mucRoomMemberAffiliationKey = 'affiliation';
@@ -223,10 +224,12 @@ final class _PersistedRoomMember {
     required this.nick,
     required this.affiliation,
     required this.role,
+    this.occupantId,
     this.realJid,
   });
 
   final String nick;
+  final String? occupantId;
   final String? realJid;
   final OccupantAffiliation affiliation;
   final OccupantRole role;
@@ -237,6 +240,10 @@ final class _PersistedRoomMember {
       _mucRoomMemberAffiliationKey: affiliation.xmlValue,
       _mucRoomMemberRoleKey: role.xmlValue,
     };
+    final resolvedOccupantId = occupantId?.trim();
+    if (resolvedOccupantId != null && resolvedOccupantId.isNotEmpty) {
+      json[_mucRoomMemberOccupantIdKey] = resolvedOccupantId;
+    }
     final jid = realJid;
     if (jid != null) {
       json[_mucRoomMemberRealJidKey] = jid;
@@ -246,6 +253,7 @@ final class _PersistedRoomMember {
 
   static _PersistedRoomMember? fromJson(Object? value) {
     if (value is! Map) return null;
+    final rawOccupantId = value[_mucRoomMemberOccupantIdKey];
     final rawNick = value[_mucRoomMemberNickKey];
     final rawRealJid = value[_mucRoomMemberRealJidKey];
     final rawAffiliation = value[_mucRoomMemberAffiliationKey];
@@ -253,13 +261,17 @@ final class _PersistedRoomMember {
     if (rawNick is! String || rawAffiliation is! String || rawRole is! String) {
       return null;
     }
+    final occupantId = rawOccupantId is String ? rawOccupantId.trim() : null;
     final nick = rawNick.trim();
     final realJid = rawRealJid is String ? rawRealJid.trim() : null;
-    if (nick.isEmpty && (realJid == null || realJid.isEmpty)) {
+    if ((occupantId == null || occupantId.isEmpty) &&
+        nick.isEmpty &&
+        (realJid == null || realJid.isEmpty)) {
       return null;
     }
     return _PersistedRoomMember(
       nick: nick,
+      occupantId: occupantId?.isEmpty == true ? null : occupantId,
       realJid: realJid?.isEmpty == true ? null : realJid,
       affiliation: OccupantAffiliation.fromString(rawAffiliation),
       role: OccupantRole.fromString(rawRole),
@@ -510,6 +522,7 @@ mixin MucService on XmppBase, BaseStreamService {
     for (final occupant in room.occupants.values) {
       if (occupant.affiliation.isOutcast) continue;
       final trimmedNick = occupant.nick.trim();
+      final trimmedOccupantId = occupant.occupantId.trim();
       final trimmedRealJid = occupant.realJid?.trim();
       if (!occupant.hasResolvedMembershipState &&
           !(trimmedRealJid?.isNotEmpty == true)) {
@@ -517,10 +530,13 @@ mixin MucService on XmppBase, BaseStreamService {
       }
       final dedupeKey = trimmedRealJid?.isNotEmpty == true
           ? 'jid:${_normalizeBareJid(trimmedRealJid!)}'
+          : trimmedOccupantId.isNotEmpty
+          ? 'occupant:$trimmedOccupantId'
           : 'nick:${trimmedNick.toLowerCase()}';
       if (!seen.add(dedupeKey)) continue;
       yield _PersistedRoomMember(
         nick: trimmedNick,
+        occupantId: trimmedOccupantId.isEmpty ? null : trimmedOccupantId,
         realJid: trimmedRealJid?.isNotEmpty == true ? trimmedRealJid : null,
         affiliation: occupant.affiliation,
         role: occupant.role,
@@ -576,8 +592,11 @@ mixin MucService on XmppBase, BaseStreamService {
   Future<void> _restorePersistedRoomMembers(String roomJid) async {
     for (final member in await _loadPersistedRoomMemberSnapshot(roomJid)) {
       final nick = member.nick.trim();
+      final persistedOccupantId = member.occupantId?.trim();
       final realJid = member.realJid?.trim();
-      final occupantId = nick.isNotEmpty
+      final occupantId = persistedOccupantId?.isNotEmpty == true
+          ? persistedOccupantId
+          : nick.isNotEmpty
           ? '${_roomKey(roomJid)}/$nick'
           : realJid == null || realJid.isEmpty
           ? null
@@ -1360,8 +1379,8 @@ mixin MucService on XmppBase, BaseStreamService {
         filter: MessageTimelineFilter.allWithContact,
       ),
     );
-    trackOccupantsFromMessages(roomJid, messages);
     await _restorePersistedRoomMembers(roomJid);
+    trackOccupantsFromMessages(roomJid, messages);
     return roomStateFor(roomJid) ??
         RoomState(roomJid: _roomKey(roomJid), occupants: const {});
   }
@@ -3473,9 +3492,14 @@ mixin MucService on XmppBase, BaseStreamService {
     final selfOccupantId = _roomStates[key]?.myOccupantId;
     final preferredSelfNick = _roomNicknames[key];
     for (final message in messages) {
-      final nick = _nickFromSender(message.senderJid);
-      if (nick == null) continue;
-      final occupantId = message.trimmedOccupantId ?? '$key/$nick';
+      final messageOccupantId = message.trimmedOccupantId;
+      final nick =
+          _nickFromSender(message.senderJid) ??
+          (messageOccupantId == null
+              ? null
+              : _roomStates[key]?.occupants[messageOccupantId]?.nick.trim());
+      if (nick == null || nick.isEmpty) continue;
+      final occupantId = messageOccupantId ?? '$key/$nick';
       final isSelfMessage =
           selfOccupantId != null &&
           (occupantId == selfOccupantId ||
