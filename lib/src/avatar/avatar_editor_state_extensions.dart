@@ -28,7 +28,7 @@ extension AvatarEditorStateView on AvatarEditorState {
   }
 
   bool get canShuffleBackground {
-    final templateValue = draftAvatar?.template;
+    final templateValue = draftAvatar?.template ?? carouselAvatar?.template;
     if (templateValue == null) return false;
     if (templateValue.category == AvatarTemplateCategory.abstract) return false;
     return templateValue.hasAlphaBackground;

@@ -63,6 +63,43 @@ void main() {
       expect(cubit.state.carouselAvatar, isNull);
     });
   });
+
+  test(
+    'pauseOnPreviewAvatar halts the carousel without selecting the avatar',
+    () {
+      fakeAsync((async) {
+        final colors = ShadColorScheme.fromName(
+          'zinc',
+          brightness: Brightness.light,
+        );
+        final cubit = AvatarEditorCubit(
+          xmppService: xmppService,
+          templates: <AvatarTemplate>[_fakeTemplate(id: 'preview-template')],
+          pipeline: _ImmediateAvatarPipeline(),
+        );
+
+        unawaited(cubit.setCarouselEnabled(true, colors));
+        async.flushMicrotasks();
+
+        final initialPreview = cubit.state.carouselAvatar;
+        expect(initialPreview, isNotNull);
+        expect(cubit.state.draftAvatar, isNull);
+
+        unawaited(cubit.pauseOnPreviewAvatar(colors));
+        async.flushMicrotasks();
+
+        final pausedPreview = cubit.state.carouselAvatar;
+        expect(pausedPreview, isNotNull);
+        expect(cubit.state.draftAvatar, isNull);
+
+        async.elapse(const Duration(seconds: 2));
+        async.flushMicrotasks();
+
+        expect(identical(cubit.state.carouselAvatar, pausedPreview), isTrue);
+        expect(identical(cubit.state.carouselAvatar, initialPreview), isTrue);
+      });
+    },
+  );
 }
 
 class _TestAvatarPipeline extends AvatarPipeline {
@@ -90,6 +127,32 @@ class _TestAvatarPipeline extends AvatarPipeline {
     double cropSide = 100000.0,
   }) {
     return buildCompleter.future;
+  }
+}
+
+class _ImmediateAvatarPipeline extends AvatarPipeline {
+  _ImmediateAvatarPipeline()
+    : super(
+        config: const AvatarPipelineConfig(
+          targetSize: 16,
+          maxBytes: 1024,
+          minJpegQuality: 60,
+          qualityStep: 5,
+          uploadMaxDimension: 16,
+          uploadJpegQuality: 90,
+          minCropSide: 8,
+        ),
+      );
+
+  @override
+  Future<Avatar> buildFromTemplate({
+    required AvatarTemplate template,
+    required Color background,
+    required ShadColorScheme colors,
+    required double insetFraction,
+    double cropSide = 100000.0,
+  }) async {
+    return _avatarFromTemplate(template: template, background: background);
   }
 }
 

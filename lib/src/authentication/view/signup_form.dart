@@ -700,8 +700,9 @@ class _SignupFormState extends State<SignupForm>
                                       children: [
                                         usernameDescriptionHeight == null
                                             ? SignupAvatarSelector(
-                                                bytes:
-                                                    avatarState.displayedBytes,
+                                                bytes: _showAvatarEditor
+                                                    ? avatarState.displayedBytes
+                                                    : avatarState.avatar?.bytes,
                                                 username:
                                                     _jidTextController.text,
                                                 processing:
@@ -716,8 +717,12 @@ class _SignupFormState extends State<SignupForm>
                                                   -usernameDescriptionHeight,
                                                 ),
                                                 child: SignupAvatarSelector(
-                                                  bytes: avatarState
-                                                      .displayedBytes,
+                                                  bytes: _showAvatarEditor
+                                                      ? avatarState
+                                                            .displayedBytes
+                                                      : avatarState
+                                                            .avatar
+                                                            ?.bytes,
                                                   username:
                                                       _jidTextController.text,
                                                   processing:
@@ -833,7 +838,7 @@ class _SignupFormState extends State<SignupForm>
                                                           .commitCrop(rect),
                                                   onShuffle: () => context
                                                       .read<SignupAvatarCubit>()
-                                                      .shuffleCarousel(
+                                                      .pauseOnPreviewAvatar(
                                                         context.colorScheme,
                                                       ),
                                                   onUpload: context

@@ -34,7 +34,7 @@ class SignupAvatarState extends Equatable {
       !processing && avatar == null && carouselAvatar != null;
 
   bool get canShuffleBackground {
-    final template = avatar?.template;
+    final template = avatar?.template ?? carouselAvatar?.template;
     if (template == null) return false;
     if (template.category == AvatarTemplateCategory.abstract) return false;
     return template.hasAlphaBackground;

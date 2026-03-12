@@ -231,15 +231,9 @@ class _SignupAvatarEditorPanelState extends State<SignupAvatarEditorPanel> {
     final allowBackgroundShuffle =
         widget.canShuffleBackground && widget.onShuffleBackground != null;
     final showBackgroundShuffle = allowBackgroundShuffle;
-    final hasUserSelectedAvatar = widget.hasUserSelectedAvatar;
     final allowUseAction =
-        widget.useActionEnabled &&
-        !busy &&
-        widget.onUseCurrent != null &&
-        !hasUserSelectedAvatar;
-    final useLabel = hasUserSelectedAvatar
-        ? l10n.commonDone
-        : l10n.avatarUseThis;
+        widget.useActionEnabled && !busy && widget.onUseCurrent != null;
+    final useLabel = l10n.avatarUseThis;
     const IconData useIcon = LucideIcons.check;
 
     final previewKey = ValueKey(_previewVersion);

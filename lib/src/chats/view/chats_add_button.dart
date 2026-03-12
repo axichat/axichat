@@ -262,7 +262,9 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                           .commitCrop(rect),
                                       onShuffle: () => context
                                           .read<AvatarEditorCubit>()
-                                          .shuffleTemplate(context.colorScheme),
+                                          .pauseOnPreviewAvatar(
+                                            context.colorScheme,
+                                          ),
                                       onUpload: () => context
                                           .read<AvatarEditorCubit>()
                                           .pickImage(),

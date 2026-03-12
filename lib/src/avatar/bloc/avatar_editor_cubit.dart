@@ -141,12 +141,27 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     return updated?.payload;
   }
 
-  Future<void> shuffleCarousel(ShadColorScheme colors) async {
+  Future<void> pauseOnPreviewAvatar(ShadColorScheme colors) async {
     _carouselColors = colors;
-    _carouselEnabled = true;
     if (state.processing || state.shuffling || state.publishing) {
       return;
     }
+
+    final currentPreview = state.carouselAvatar;
+    if (currentPreview != null && state.draftAvatar == null) {
+      pauseCarousel();
+      emit(
+        state.copyWith(
+          carouselAvatar: currentPreview,
+          backgroundColor:
+              currentPreview.backgroundColor ?? state.backgroundColor,
+          errorType: null,
+        ),
+      );
+      return;
+    }
+
+    _carouselEnabled = true;
     if (state.draftAvatar != null) {
       _stopAvatarCarousel();
       _pendingCropRect = null;
@@ -163,31 +178,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     }
     if (_isCarouselBlocked()) return;
     await _advanceCarousel();
-  }
-
-  Future<void> shuffleCarouselBackground(ShadColorScheme colors) async {
-    _carouselColors = colors;
-    if (_isCarouselBlocked()) return;
-    final current = state.carouselAvatar;
-    if (current == null) return;
-    final template = current.template;
-    if (template == null) return;
-    if (template.category == AvatarTemplateCategory.abstract) return;
-    if (!template.hasAlphaBackground) return;
-    final background = _randomAvatarBackgroundColor();
-    final updated = await _buildAvatarFromTemplate(
-      template: template,
-      background: background,
-      colors: colors,
-    );
-    if (_isCarouselBlocked()) return;
-    emit(
-      state.copyWith(
-        carouselAvatar: updated,
-        backgroundColor: background,
-        errorType: null,
-      ),
-    );
+    pauseCarousel();
   }
 
   Future<void> seedFromBytes(Uint8List bytes) async {
@@ -374,11 +365,32 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     if (state.processing || state.publishing || state.shuffling) {
       return;
     }
-    final template = state.draftAvatar?.template;
+    final activeAvatar = state.draftAvatar ?? state.carouselAvatar;
+    final template = activeAvatar?.template;
     if (template == null) return;
     if (template.category == AvatarTemplateCategory.abstract) return;
     if (!template.hasAlphaBackground) return;
     final background = _randomAvatarBackgroundColor();
+    if (state.draftAvatar == null) {
+      pauseCarousel();
+      try {
+        final updated = await _buildAvatarFromTemplate(
+          template: template,
+          background: background,
+          colors: colors,
+        );
+        emit(
+          state.copyWith(
+            carouselAvatar: updated,
+            backgroundColor: background,
+            errorType: null,
+          ),
+        );
+      } on FormatException {
+        emit(state.copyWith(errorType: AvatarEditorErrorType.processingFailed));
+      }
+      return;
+    }
     await setBackgroundColor(background, colors);
   }
 
