@@ -21,6 +21,10 @@ class SafeLogging {
     'Handling error message...',
     'Updating message error',
   };
+  static const Set<String> _suppressedDebugMessagePrefixes = <String>{
+    'Sending to main:',
+    'Received main:',
+  };
 
   static const int _minSecretLength = 32;
   static const int _minSecretPreviewLength = 8;
@@ -188,6 +192,12 @@ class SafeLogging {
 
     if (_suppressedDebugMessages.contains(record.message)) {
       return false;
+    }
+
+    for (final prefix in _suppressedDebugMessagePrefixes) {
+      if (record.message.startsWith(prefix)) {
+        return false;
+      }
     }
 
     return !record.message.contains('completer for ');

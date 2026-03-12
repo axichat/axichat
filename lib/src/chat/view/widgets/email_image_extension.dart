@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:axichat/src/app.dart';
@@ -32,6 +33,8 @@ const ImageDecodeLimits _emailImageDecodeLimits = ImageDecodeLimits(
   minDimension: _emailImageMinDimension,
   decodeTimeout: _emailImageDecodeTimeout,
 );
+final _cachedEmailImageBytes = <String, Uint8List>{};
+final _pendingEmailImageDownloads = <String, Future<Uint8List?>>{};
 
 /// Creates a flutter_html extension for inline email images.
 TagExtension createEmailImageExtension({required bool shouldLoad}) {
@@ -42,7 +45,11 @@ TagExtension createEmailImageExtension({required bool shouldLoad}) {
       if (src == null || src.trim().isEmpty) {
         return const SizedBox.shrink();
       }
-      return EmailHtmlImage(src: src, shouldLoad: shouldLoad);
+      return _EmailHtmlImage(
+        src: src,
+        shouldLoad: shouldLoad,
+        layout: _emailImageLayoutFromAttributes(extensionContext.attributes),
+      );
     },
   );
 }
@@ -154,21 +161,22 @@ Map<String, Style> createEmailHtmlStyles({
   };
 }
 
-class EmailHtmlImage extends StatelessWidget {
-  const EmailHtmlImage({
-    super.key,
+class _EmailHtmlImage extends StatelessWidget {
+  const _EmailHtmlImage({
     required this.src,
     required this.shouldLoad,
+    required this.layout,
   });
 
   final String src;
   final bool shouldLoad;
+  final _EmailImageLayoutSpec layout;
 
   @override
   Widget build(BuildContext context) {
     final embeddedBytes = _embeddedEmailImageBytes(src);
     if (embeddedBytes != null) {
-      return EmailEmbeddedImage(bytes: embeddedBytes);
+      return _EmailEmbeddedImage(bytes: embeddedBytes, layout: layout);
     }
     final uri = _safeEmailImageUri(src);
     if (uri == null) {
@@ -177,27 +185,28 @@ class EmailHtmlImage extends StatelessWidget {
     if (!shouldLoad) {
       return const SizedBox.shrink();
     }
-    return EmailImageLoader(uri: uri);
+    return _EmailImageLoader(uri: uri, layout: layout);
   }
 }
 
-class EmailImageLoader extends StatefulWidget {
-  const EmailImageLoader({super.key, required this.uri});
+class _EmailImageLoader extends StatefulWidget {
+  const _EmailImageLoader({required this.uri, required this.layout});
 
   final Uri uri;
+  final _EmailImageLayoutSpec layout;
 
   @override
-  State<EmailImageLoader> createState() => _EmailImageLoaderState();
+  State<_EmailImageLoader> createState() => _EmailImageLoaderState();
 }
 
-class _EmailImageLoaderState extends State<EmailImageLoader> {
-  late Future<Uint8List?> _future = _downloadEmailImageBytes(widget.uri);
+class _EmailImageLoaderState extends State<_EmailImageLoader> {
+  late Future<Uint8List?> _future = _loadEmailImageBytes(widget.uri);
 
   @override
-  void didUpdateWidget(covariant EmailImageLoader oldWidget) {
+  void didUpdateWidget(covariant _EmailImageLoader oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.uri != widget.uri) {
-      _future = _downloadEmailImageBytes(widget.uri);
+      _future = _loadEmailImageBytes(widget.uri);
     }
   }
 
@@ -213,33 +222,41 @@ class _EmailImageLoaderState extends State<EmailImageLoader> {
         if (bytes == null || bytes.isEmpty) {
           return const EmailImagePlaceholder(isError: true);
         }
-        return Image.memory(
-          bytes,
-          errorBuilder: (context, error, stackTrace) {
-            return const EmailImagePlaceholder(isError: true);
-          },
+        return _EmailHtmlImageFrame(
+          layout: widget.layout,
+          builder: (width, height) => Image.memory(
+            bytes,
+            width: width,
+            height: height,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) {
+              return const EmailImagePlaceholder(isError: true);
+            },
+          ),
         );
       },
     );
   }
 }
 
-class EmailEmbeddedImage extends StatefulWidget {
-  const EmailEmbeddedImage({super.key, required this.bytes});
+class _EmailEmbeddedImage extends StatefulWidget {
+  const _EmailEmbeddedImage({required this.bytes, required this.layout});
 
   final Uint8List bytes;
+  final _EmailImageLayoutSpec layout;
 
   @override
-  State<EmailEmbeddedImage> createState() => _EmailEmbeddedImageState();
+  State<_EmailEmbeddedImage> createState() => _EmailEmbeddedImageState();
 }
 
-class _EmailEmbeddedImageState extends State<EmailEmbeddedImage> {
+class _EmailEmbeddedImageState extends State<_EmailEmbeddedImage> {
   late Future<Uint8List?> _future = _validateEmbeddedEmailImageBytes(
     widget.bytes,
   );
 
   @override
-  void didUpdateWidget(covariant EmailEmbeddedImage oldWidget) {
+  void didUpdateWidget(covariant _EmailEmbeddedImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.bytes != widget.bytes) {
       _future = _validateEmbeddedEmailImageBytes(widget.bytes);
@@ -258,11 +275,80 @@ class _EmailEmbeddedImageState extends State<EmailEmbeddedImage> {
         if (bytes == null || bytes.isEmpty) {
           return const EmailImagePlaceholder(isError: true);
         }
-        return Image.memory(
-          bytes,
-          errorBuilder: (context, error, stackTrace) {
-            return const EmailImagePlaceholder(isError: true);
-          },
+        return _EmailHtmlImageFrame(
+          layout: widget.layout,
+          builder: (width, height) => Image.memory(
+            bytes,
+            width: width,
+            height: height,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            errorBuilder: (context, error, stackTrace) {
+              return const EmailImagePlaceholder(isError: true);
+            },
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _EmailImageLayoutSpec {
+  const _EmailImageLayoutSpec({
+    this.widthPx,
+    this.widthPercent,
+    this.heightPx,
+    this.heightPercent,
+    this.maxWidthPx,
+    this.maxWidthPercent,
+  });
+
+  final double? widthPx;
+  final double? widthPercent;
+  final double? heightPx;
+  final double? heightPercent;
+  final double? maxWidthPx;
+  final double? maxWidthPercent;
+}
+
+class _EmailHtmlImageFrame extends StatelessWidget {
+  const _EmailHtmlImageFrame({required this.layout, required this.builder});
+
+  final _EmailImageLayoutSpec layout;
+  final Widget Function(double? width, double? height) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fallbackWidth = MediaQuery.sizeOf(context).width;
+        final availableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : fallbackWidth;
+        final maxWidth =
+            _resolveImageLength(
+              pixels: layout.maxWidthPx,
+              percent: layout.maxWidthPercent,
+              availableWidth: availableWidth,
+            ) ??
+            availableWidth;
+        final resolvedMaxWidth = math.min(availableWidth, maxWidth);
+        final width = _resolveImageLength(
+          pixels: layout.widthPx,
+          percent: layout.widthPercent,
+          availableWidth: availableWidth,
+        );
+        final height = _resolveImageLength(
+          pixels: layout.heightPx,
+          percent: layout.heightPercent,
+          availableWidth: availableWidth,
+        );
+        final resolvedWidth = width == null
+            ? null
+            : math.min(width, resolvedMaxWidth);
+        return ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: resolvedMaxWidth),
+          child: builder(resolvedWidth, height),
         );
       },
     );
@@ -321,6 +407,27 @@ Future<Uint8List?> _validateEmbeddedEmailImageBytes(Uint8List bytes) async {
     return null;
   }
   return bytes;
+}
+
+Future<Uint8List?> _loadEmailImageBytes(Uri uri) async {
+  final cacheKey = uri.toString();
+  final cached = _cachedEmailImageBytes[cacheKey];
+  if (cached != null) {
+    return cached;
+  }
+  final pending = _pendingEmailImageDownloads.putIfAbsent(
+    cacheKey,
+    () => _downloadEmailImageBytes(uri),
+  );
+  try {
+    final bytes = await pending;
+    if (bytes != null && bytes.isNotEmpty) {
+      _cachedEmailImageBytes[cacheKey] = bytes;
+    }
+    return bytes;
+  } finally {
+    _pendingEmailImageDownloads.remove(cacheKey);
+  }
 }
 
 Future<Uint8List?> _downloadEmailImageBytes(Uri uri) async {
@@ -410,6 +517,80 @@ Future<Uint8List?> _readResponseBytes(HttpClientResponse response) async {
     sink.add(chunk);
   }
   return sink.takeBytes();
+}
+
+_EmailImageLayoutSpec _emailImageLayoutFromAttributes(
+  Map<String, String> attributes,
+) {
+  final styles = _parseInlineStyleMap(attributes['style']);
+  final widthValue = styles['width'] ?? attributes['width'];
+  final heightValue = styles['height'] ?? attributes['height'];
+  final maxWidthValue = styles['max-width'];
+  return _EmailImageLayoutSpec(
+    widthPx: _parsePixelLength(widthValue),
+    widthPercent: _parsePercentLength(widthValue),
+    heightPx: _parsePixelLength(heightValue),
+    heightPercent: _parsePercentLength(heightValue),
+    maxWidthPx: _parsePixelLength(maxWidthValue),
+    maxWidthPercent: _parsePercentLength(maxWidthValue),
+  );
+}
+
+Map<String, String> _parseInlineStyleMap(String? style) {
+  final trimmed = style?.trim();
+  if (trimmed == null || trimmed.isEmpty) {
+    return const <String, String>{};
+  }
+  final map = <String, String>{};
+  for (final declaration in trimmed.split(';')) {
+    final separatorIndex = declaration.indexOf(':');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+    final property = declaration
+        .substring(0, separatorIndex)
+        .trim()
+        .toLowerCase();
+    final value = declaration.substring(separatorIndex + 1).trim();
+    if (property.isEmpty || value.isEmpty) {
+      continue;
+    }
+    map[property] = value;
+  }
+  return map;
+}
+
+double? _parsePixelLength(String? value) {
+  final trimmed = value?.trim().toLowerCase();
+  if (trimmed == null || trimmed.isEmpty) {
+    return null;
+  }
+  final normalized = trimmed.endsWith('px')
+      ? trimmed.substring(0, trimmed.length - 2).trim()
+      : trimmed;
+  return double.tryParse(normalized);
+}
+
+double? _parsePercentLength(String? value) {
+  final trimmed = value?.trim().toLowerCase();
+  if (trimmed == null || trimmed.isEmpty || !trimmed.endsWith('%')) {
+    return null;
+  }
+  return double.tryParse(trimmed.substring(0, trimmed.length - 1).trim());
+}
+
+double? _resolveImageLength({
+  required double? pixels,
+  required double? percent,
+  required double availableWidth,
+}) {
+  if (pixels != null && pixels > 0) {
+    return pixels;
+  }
+  if (percent != null && percent > 0) {
+    return availableWidth * (percent / 100);
+  }
+  return null;
 }
 
 bool _isRedirectStatusCode(int statusCode) => switch (statusCode) {

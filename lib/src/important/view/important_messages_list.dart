@@ -6,13 +6,14 @@ import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chat/view/chat_bubble_surface.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
 import 'package:axichat/src/common/bool_tool.dart';
+import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
 import 'package:axichat/src/important/models/important_message_item.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:lucide_flutter/lucide_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ImportantMessagesList extends StatelessWidget {
@@ -135,7 +136,7 @@ class _ImportantMessageTileState extends State<_ImportantMessageTile> {
     final isEmailMessage =
         message?.deltaChatId != null ||
         message?.deltaMsgId != null ||
-        widget.item.chat?.defaultTransport.isEmail == true;
+        widget.item.chat?.defaultTransport == MessageTransport.email;
     final previewStyle = context.textTheme.small.copyWith(
       color: message == null ? colors.mutedForeground : colors.foreground,
       height: 1.3,

@@ -159,6 +159,22 @@ void main() {
       expect(SafeLogging.shouldEmitDebugRecord(record), isFalse);
     });
 
+    test('Suppresses foreground bridge main-thread transport logs', () {
+      final sendingRecord = LogRecord(
+        Level.INFO,
+        'Sending to main: type=Data parts=2 payloadLen=26',
+        'ForegroundSocket',
+      );
+      final receivedRecord = LogRecord(
+        Level.INFO,
+        'Received main: type=Data payloadLen=26',
+        'ForegroundSocketWrapper',
+      );
+
+      expect(SafeLogging.shouldEmitDebugRecord(sendingRecord), isFalse);
+      expect(SafeLogging.shouldEmitDebugRecord(receivedRecord), isFalse);
+    });
+
     test('Keeps message marker logs', () {
       final record = LogRecord(
         Level.INFO,

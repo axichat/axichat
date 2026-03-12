@@ -53,6 +53,22 @@ void main() {
     });
   });
 
+  group('HtmlContentCodec.prepareEmailHtmlForFlutterHtml', () {
+    test('returns a stripped fragment with image sizing metadata', () {
+      final prepared = HtmlContentCodec.prepareEmailHtmlForFlutterHtml(
+        '<style>.lead { font-size: 22px; color: #123456; }</style>'
+        '<p class="lead" style="font-size:18px; line-height:1.6;">ok</p>'
+        '<img src="https://example.com/x.png" width="320" height="160" />',
+        allowRemoteImages: true,
+      );
+      expect(prepared.contains('<style'), isFalse);
+      expect(prepared.contains('style='), isFalse);
+      expect(prepared.contains('<p>ok</p>'), isTrue);
+      expect(prepared.contains('width="320"'), isTrue);
+      expect(prepared.contains('height="160"'), isTrue);
+    });
+  });
+
   group('HtmlContentCodec.containsRemoteImages', () {
     test('treats cleartext and https images as remote', () {
       expect(

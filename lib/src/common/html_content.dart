@@ -18,8 +18,8 @@ html, body {
   max-width: 100% !important;
   overflow-x: hidden !important;
   -webkit-text-size-adjust: 100% !important;
-  font-size: 15px !important;
-  line-height: 1.45 !important;
+  font-size: 16px !important;
+  line-height: 1.5 !important;
 }
 body {
   overflow-wrap: anywhere !important;
@@ -508,11 +508,13 @@ pre, code {
     required bool allowRemoteImages,
   }) {
     try {
-      final document = _prepareEmailHtmlDocument(
+      final document = _prepareFlutterHtmlDocument(
         html,
         allowRemoteImages: allowRemoteImages,
-        includeWebViewChrome: false,
       );
+      for (final styleElement in document.querySelectorAll('style')) {
+        styleElement.remove();
+      }
       final bodyHtml = document.body?.innerHtml.trim();
       final sourceHtml = bodyHtml != null && bodyHtml.isNotEmpty
           ? bodyHtml
@@ -521,10 +523,13 @@ pre, code {
       if (simplifiedHtml.isNotEmpty) {
         return simplifiedHtml;
       }
-      return sourceHtml;
+      if (sourceHtml.isNotEmpty) {
+        return sourceHtml;
+      }
     } on Exception {
       return sanitizeHtml(html);
     }
+    return sanitizeHtml(html);
   }
 
   static String prepareEmailHtmlForWebView(
@@ -587,6 +592,19 @@ pre, code {
       allowRemoteImages: allowRemoteImages,
     );
     _trimLeadingWebViewWhitespace(document.body);
+    return document;
+  }
+
+  static dom.Document _prepareFlutterHtmlDocument(
+    String html, {
+    required bool allowRemoteImages,
+  }) {
+    final document = html_parser.parse(_truncateHtmlInput(html));
+    _removeHiddenEmailNodes(document.nodes);
+    _normalizeFlutterHtmlNodes(
+      document.nodes,
+      allowRemoteImages: allowRemoteImages,
+    );
     return document;
   }
 
@@ -678,6 +696,95 @@ pre, code {
       }
       if (node.nodes.isNotEmpty) {
         _normalizeWebViewNodes(
+          node.nodes,
+          allowRemoteImages: allowRemoteImages,
+        );
+      }
+    }
+  }
+
+  static void _normalizeFlutterHtmlNodes(
+    List<dom.Node> nodes, {
+    required bool allowRemoteImages,
+  }) {
+    for (final node in List<dom.Node>.from(nodes)) {
+      if (node is dom.Element) {
+        if (_isBlockedWebViewElement(node)) {
+          node.remove();
+          continue;
+        }
+        final tag = (node.localName ?? '').toLowerCase();
+        if (tag == 'style') {
+          final sanitizedStyleText = _sanitizeWebViewStyleElementText(
+            node.text,
+          );
+          if (sanitizedStyleText == null) {
+            node.remove();
+            continue;
+          }
+          node.text = sanitizedStyleText;
+          continue;
+        }
+        var removeNode = false;
+        final attributeNames = node.attributes.keys
+            .map((key) => key.toString())
+            .toList();
+        for (final attributeName in attributeNames) {
+          final normalizedName = attributeName.trim().toLowerCase();
+          if (normalizedName.isEmpty) {
+            node.attributes.remove(attributeName);
+            continue;
+          }
+          if (normalizedName.startsWith('on') ||
+              _webViewRemovedAttributes.contains(normalizedName)) {
+            node.attributes.remove(attributeName);
+            continue;
+          }
+          final rawValue = node.attributes[attributeName] ?? '';
+          if (normalizedName == _hrefAttribute) {
+            final safeValue = _sanitizeUriValue(
+              rawValue,
+              _sanitizedLinkSchemes,
+            );
+            if (safeValue == null) {
+              node.attributes.remove(attributeName);
+            } else {
+              node.attributes[attributeName] = safeValue;
+            }
+            continue;
+          }
+          if (normalizedName == _srcAttribute) {
+            if (tag != 'img') {
+              node.attributes.remove(attributeName);
+              continue;
+            }
+            final safeValue = _sanitizeWebViewImageSource(
+              rawValue,
+              allowRemoteImages: allowRemoteImages,
+            );
+            if (safeValue == null) {
+              removeNode = true;
+              break;
+            }
+            node.attributes[attributeName] = safeValue;
+            continue;
+          }
+          if (normalizedName == 'style') {
+            final sanitizedStyle = _sanitizeFlutterHtmlInlineStyle(rawValue);
+            if (sanitizedStyle == null) {
+              node.attributes.remove(attributeName);
+            } else {
+              node.attributes[attributeName] = sanitizedStyle;
+            }
+          }
+        }
+        if (removeNode) {
+          node.remove();
+          continue;
+        }
+      }
+      if (node.nodes.isNotEmpty) {
+        _normalizeFlutterHtmlNodes(
           node.nodes,
           allowRemoteImages: allowRemoteImages,
         );
@@ -817,6 +924,41 @@ pre, code {
       return null;
     }
     return safeValue;
+  }
+
+  static String? _sanitizeFlutterHtmlInlineStyle(String style) {
+    final declarations = style
+        .split(';')
+        .map(_sanitizeFlutterHtmlStyleDeclaration)
+        .whereType<String>()
+        .toList();
+    if (declarations.isEmpty) {
+      return null;
+    }
+    return declarations.join('; ');
+  }
+
+  static String? _sanitizeFlutterHtmlStyleDeclaration(String declaration) {
+    final trimmed = declaration.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+    final separatorIndex = trimmed.indexOf(':');
+    if (separatorIndex <= 0) {
+      return null;
+    }
+    final property = trimmed.substring(0, separatorIndex).trim().toLowerCase();
+    final value = trimmed.substring(separatorIndex + 1).trim();
+    if (value.isEmpty) {
+      return null;
+    }
+    if (property == 'behavior' || property == '-moz-binding') {
+      return null;
+    }
+    if (_containsUnsafeCssValue(value)) {
+      return null;
+    }
+    return '$property: $value';
   }
 
   static String? _sanitizeWebViewInlineStyle(String style) {

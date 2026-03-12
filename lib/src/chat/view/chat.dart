@@ -55,6 +55,7 @@ import 'package:axichat/src/chat/view/widgets/calendar_availability_viewer.dart'
 import 'package:axichat/src/chat/view/widgets/calendar_fragment_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_critical_path_card.dart';
 import 'package:axichat/src/chat/view/widgets/chat_calendar_task_card.dart';
+import 'package:axichat/src/chat/view/widgets/email_html_web_view.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
 import 'package:axichat/src/chat/view/widgets/email_image_extension.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -5095,9 +5096,9 @@ class _ChatState extends State<Chat> {
                                       label: _chatRoute.isImportant
                                           ? l10n.commonClose
                                           : l10n.chatImportantMessagesTooltip,
-                                      iconData: Icons.star_rounded,
+                                      iconData: Icons.star_outline_rounded,
                                       icon: _ActionCountBadgeIcon(
-                                        iconData: Icons.star_rounded,
+                                        iconData: Icons.star_outline_rounded,
                                         count: importantCount,
                                         iconColor: importantIconColor,
                                       ),
@@ -7685,6 +7686,7 @@ class _ChatState extends State<Chat> {
                                                                                 isEmailMessage &&
                                                                                 shouldRenderTextContent &&
                                                                                 !hasAttachmentCaption &&
+                                                                                !isSingleSelection &&
                                                                                 collapsedEmailPreviewText.isNotEmpty &&
                                                                                 collapsedEmailPreviewText !=
                                                                                     fullEmailPreviewText;
@@ -7838,6 +7840,10 @@ class _ChatState extends State<Chat> {
                                                                               final bool
                                                                               shouldRenderHtmlBody = preparedHtmlBody.trim().isNotEmpty;
                                                                               final bool
+                                                                              shouldUseSelectedInlineEmailWebView =
+                                                                                  isSingleSelection &&
+                                                                                  shouldRenderHtmlBody;
+                                                                              final bool
                                                                               shouldShowImageGallery =
                                                                                   hasRemoteHtmlImages &&
                                                                                   shouldRenderHtmlBody;
@@ -7873,21 +7879,37 @@ class _ChatState extends State<Chat> {
                                                                               }
                                                                               if (shouldRenderHtmlBody) {
                                                                                 bubbleTextChildren.add(
-                                                                                  _MessageHtmlBody(
-                                                                                    key: ValueKey(
-                                                                                      bubbleContentKey,
-                                                                                    ),
-                                                                                    html: preparedHtmlBody,
-                                                                                    textStyle: baseTextStyle,
-                                                                                    textColor: textColor,
-                                                                                    linkColor:
-                                                                                        linkStyle.color ??
-                                                                                        (self
-                                                                                            ? colors.primaryForeground
-                                                                                            : colors.primary),
-                                                                                    shouldLoadImages: shouldLoadImages,
-                                                                                    onLinkTap: _handleLinkTap,
-                                                                                  ),
+                                                                                  shouldUseSelectedInlineEmailWebView
+                                                                                      ? _MessageHtmlWebViewBody(
+                                                                                          key: ValueKey(
+                                                                                            '${bubbleContentKey}_webview',
+                                                                                          ),
+                                                                                          html: normalizedHtmlBody,
+                                                                                          backgroundColor: bubbleColor,
+                                                                                          textColor: textColor,
+                                                                                          linkColor:
+                                                                                              linkStyle.color ??
+                                                                                              (self
+                                                                                                  ? colors.primaryForeground
+                                                                                                  : colors.primary),
+                                                                                          shouldLoadImages: shouldLoadImages,
+                                                                                          onLinkTap: _handleLinkTap,
+                                                                                        )
+                                                                                      : _MessageHtmlBody(
+                                                                                          key: ValueKey(
+                                                                                            bubbleContentKey,
+                                                                                          ),
+                                                                                          html: preparedHtmlBody,
+                                                                                          textStyle: baseTextStyle,
+                                                                                          textColor: textColor,
+                                                                                          linkColor:
+                                                                                              linkStyle.color ??
+                                                                                              (self
+                                                                                                  ? colors.primaryForeground
+                                                                                                  : colors.primary),
+                                                                                          shouldLoadImages: shouldLoadImages,
+                                                                                          onLinkTap: _handleLinkTap,
+                                                                                        ),
                                                                                 );
                                                                               }
                                                                               if (shouldShowImageGallery &&
@@ -8332,6 +8354,10 @@ class _ChatState extends State<Chat> {
                                                                           extraOuterRight =
                                                                               0;
                                                                           if (hasAvatarSlot) {
+                                                                            final messageAvatarJid = resolveMessageAvatarJid(
+                                                                              message: messageModel,
+                                                                              roomState: state.roomState,
+                                                                            );
                                                                             final messageAvatarPath = resolveMessageAvatarPath(
                                                                               message: messageModel,
                                                                               roomState: state.roomState,
@@ -8339,7 +8365,9 @@ class _ChatState extends State<Chat> {
                                                                               chatAvatarPathsByJid: chatAvatarPathsByJid,
                                                                             );
                                                                             avatarOverlay = _MessageAvatar(
-                                                                              jid: messageModel.senderJid,
+                                                                              jid:
+                                                                                  messageAvatarJid ??
+                                                                                  messageModel.senderJid,
                                                                               size: messageAvatarSize,
                                                                               avatarPath: messageAvatarPath,
                                                                             );
@@ -11990,6 +12018,26 @@ Occupant? _resolveRoomMessageOccupant({
   if (direct != null && direct.realJid?.trim().isNotEmpty == true) {
     return direct;
   }
+  final senderBareJid = bareAddress(senderJid);
+  if (senderBareJid != null && senderBareJid.isNotEmpty) {
+    final normalizedSenderBareJid = normalizedAddressValue(senderBareJid);
+    for (final occupant in roomState.occupants.values) {
+      final realJid = occupant.realJid?.trim();
+      if (realJid == null || realJid.isEmpty) {
+        continue;
+      }
+      final normalizedRealJid = normalizedAddressValue(
+        bareAddress(realJid) ?? realJid,
+      );
+      if (normalizedRealJid == null || normalizedRealJid.isEmpty) {
+        continue;
+      }
+      if (normalizedRealJid != normalizedSenderBareJid) {
+        continue;
+      }
+      return occupant;
+    }
+  }
   final nick = addressResourcePart(senderJid)?.trim();
   fallback ??= direct;
   if (nick == null || nick.isEmpty) {
@@ -12008,6 +12056,43 @@ Occupant? _resolveRoomMessageOccupant({
 }
 
 @visibleForTesting
+String? resolveMessageAvatarJid({
+  required Message message,
+  required RoomState? roomState,
+}) {
+  final normalizedRoomJid = normalizedAddressValue(message.chatJid);
+  if (roomState != null) {
+    final occupant = _resolveRoomMessageOccupant(
+      message: message,
+      roomState: roomState,
+    );
+    final realJid = occupant?.realJid?.trim();
+    if (realJid != null && realJid.isNotEmpty) {
+      return bareAddress(realJid) ?? realJid;
+    }
+  }
+
+  for (final candidate in <String?>[message.senderJid, message.occupantID]) {
+    final parsed = parseJid(candidate?.trim());
+    if (parsed == null) {
+      continue;
+    }
+    final bareCandidate = parsed.toBare().toString();
+    final normalizedBareCandidate = normalizedAddressValue(bareCandidate);
+    if (normalizedBareCandidate == null || normalizedBareCandidate.isEmpty) {
+      continue;
+    }
+    if (normalizedRoomJid != null &&
+        normalizedBareCandidate == normalizedRoomJid) {
+      continue;
+    }
+    return bareCandidate;
+  }
+
+  return message.senderJid;
+}
+
+@visibleForTesting
 String? resolveMessageAvatarPath({
   required Message message,
   required RoomState? roomState,
@@ -12023,7 +12108,7 @@ String? resolveMessageAvatarPath({
         chatAvatarPathsByJid[normalized];
   }
 
-  final normalizedRoomJid = normalizedAddressValue(roomState?.roomJid);
+  final normalizedRoomJid = normalizedAddressValue(message.chatJid);
   if (roomState != null) {
     final occupant = _resolveRoomMessageOccupant(
       message: message,
@@ -16846,6 +16931,46 @@ class _MessageHtmlBodyState extends State<_MessageHtmlBody> {
         }
         widget.onLinkTap(url);
       },
+    );
+  }
+}
+
+class _MessageHtmlWebViewBody extends StatelessWidget {
+  const _MessageHtmlWebViewBody({
+    super.key,
+    required this.html,
+    required this.backgroundColor,
+    required this.textColor,
+    required this.linkColor,
+    required this.shouldLoadImages,
+    required this.onLinkTap,
+  });
+
+  final String html;
+  final Color backgroundColor;
+  final Color textColor;
+  final Color linkColor;
+  final bool shouldLoadImages;
+  final ValueChanged<String> onLinkTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final sizing = context.sizing;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    return EmailHtmlWebView(
+      html: html,
+      allowRemoteImages: shouldLoadImages,
+      maxHeight: math.min(
+        screenHeight * sizing.dialogMaxHeightFraction,
+        sizing.composeWindowMinHeight,
+      ),
+      minHeight: sizing.attachmentPreviewExtent,
+      backgroundColor: backgroundColor,
+      textColor: textColor,
+      linkColor: linkColor,
+      clampHeightToMax: true,
+      simplifyLayout: true,
+      onLinkTap: onLinkTap,
     );
   }
 }

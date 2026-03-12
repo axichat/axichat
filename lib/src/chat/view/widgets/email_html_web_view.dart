@@ -2,12 +2,12 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -36,7 +36,6 @@ class EmailHtmlWebView extends StatefulWidget {
     required this.textColor,
     required this.linkColor,
     required this.onLinkTap,
-    this.onBackgroundTap,
     this.clampHeightToMax = true,
     this.disableInternalScroll = false,
     this.simplifyLayout = false,
@@ -51,7 +50,6 @@ class EmailHtmlWebView extends StatefulWidget {
   final Color textColor;
   final Color linkColor;
   final ValueChanged<String> onLinkTap;
-  final VoidCallback? onBackgroundTap;
   final bool clampHeightToMax;
   final bool disableInternalScroll;
   final bool simplifyLayout;
@@ -63,100 +61,22 @@ class EmailHtmlWebView extends StatefulWidget {
 
 class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   static const _emailWebViewBaseUrl = 'https://axichat.invalid/';
-  static const _backgroundTapHandlerName = 'axichatBackgroundTap';
-  static const _heightMeasurementScript = '''
-(() => {
-  const body = document.body;
-  const html = document.documentElement;
-  if (!body || !html) {
-    return 0;
-  }
-  const bodyRect = body.getBoundingClientRect ? body.getBoundingClientRect() : null;
-  const top = bodyRect ? bodyRect.top : 0;
-  let contentBottom = top;
-  const updateBottom = (rect) => {
-    if (!rect) {
-      return;
-    }
-    if (rect.width <= 0 && rect.height <= 0) {
-      return;
-    }
-    contentBottom = Math.max(contentBottom, rect.bottom);
+  static final Set<Factory<OneSequenceGestureRecognizer>>
+  _webViewGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
+    Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
   };
-  try {
-    if (document.createRange && body.childNodes && body.childNodes.length > 0) {
-      const range = document.createRange();
-      range.selectNodeContents(body);
-      updateBottom(range.getBoundingClientRect());
-    }
-  } catch (_) {}
-  const elements = body.querySelectorAll ? body.querySelectorAll('*') : [];
-  for (const element of elements) {
-    const style = window.getComputedStyle ? window.getComputedStyle(element) : null;
-    if (style && (style.display === 'none' || style.visibility === 'hidden' || style.position === 'fixed')) {
-      continue;
-    }
-    updateBottom(element.getBoundingClientRect ? element.getBoundingClientRect() : null);
-  }
-  const contentHeight = Math.ceil(Math.max(0, contentBottom - top));
-  const fallbackHeight = Math.max(
-    body.scrollHeight || 0,
-    body.offsetHeight || 0,
-    body.clientHeight || 0,
-    html.scrollHeight || 0,
-    html.offsetHeight || 0,
-    html.clientHeight || 0
-  );
-  if (contentHeight <= 0) {
-    return Math.ceil(fallbackHeight);
-  }
-  if (fallbackHeight <= 0) {
-    return contentHeight;
-  }
-  return Math.ceil(Math.min(fallbackHeight, contentHeight + 24));
-})()
-''';
-  static const _backgroundTapBridgeScript = '''
-(() => {
-  if (window.__axichatBackgroundTapInstalled) {
-    return;
-  }
-  const handler = () => {
-    document.addEventListener('click', function(event) {
-      const target = event.target;
-      if (target && target.closest && target.closest('a[href]')) {
-        return;
-      }
-      const selection = window.getSelection ? String(window.getSelection()) : '';
-      if (selection.trim().length > 0) {
-        return;
-      }
-      window.flutter_inappwebview.callHandler('axichatBackgroundTap');
-    }, true);
-  };
-  window.__axichatBackgroundTapInstalled = true;
-  if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-    handler();
-  } else {
-    window.addEventListener('flutterInAppWebViewPlatformReady', handler, { once: true });
-  }
-})()
-''';
-
   static final WebUri _emailWebViewUri = WebUri(_emailWebViewBaseUrl);
 
   InAppWebViewController? _controller;
   bool _isLoading = true;
-  double? _contentHeight;
   String? _preparedHtmlData;
   String? _preparedHtmlInputKey;
 
   double get _resolvedHeight {
-    final measuredHeight = _contentHeight ?? widget.minHeight;
-    if (!widget.clampHeightToMax) {
-      return math.max(widget.minHeight, measuredHeight);
+    if (widget.maxHeight < widget.minHeight) {
+      return widget.minHeight;
     }
-    return measuredHeight.clamp(widget.minHeight, widget.maxHeight);
+    return widget.maxHeight;
   }
 
   @override
@@ -173,7 +93,6 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         oldWidget.backgroundColor != widget.backgroundColor ||
         oldWidget.textColor != widget.textColor ||
         oldWidget.linkColor != widget.linkColor) {
-      _contentHeight = null;
       _preparedHtmlInputKey = null;
       _refreshPreparedHtml(reload: _controller != null);
     }
@@ -275,53 +194,6 @@ html, body {
     return 'rgba($red, $green, $blue, ${color.a.toStringAsFixed(3)})';
   }
 
-  Future<void> _measureContentHeight() async {
-    final controller = _controller;
-    if (controller == null) return;
-    try {
-      final result = await controller.evaluateJavascript(
-        source: _heightMeasurementScript,
-      );
-      final measuredHeight = switch (result) {
-        num value => value.toDouble(),
-        String value => double.tryParse(value.trim()),
-        _ => null,
-      };
-      if (!mounted || measuredHeight == null || measuredHeight <= 0) return;
-      setState(() {
-        _contentHeight = math.max(widget.minHeight, measuredHeight);
-      });
-    } on Exception {
-      // Keep the fallback height if the page refuses measurement.
-    }
-  }
-
-  Future<void> _scheduleRemeasurements() async {
-    for (final delay in const <Duration>[
-      Duration(milliseconds: 50),
-      Duration(milliseconds: 150),
-      Duration(milliseconds: 350),
-      Duration(milliseconds: 800),
-    ]) {
-      await Future.delayed(delay);
-      if (!mounted) {
-        return;
-      }
-      await _measureContentHeight();
-    }
-  }
-
-  Future<void> _installBackgroundTapBridge() async {
-    if (widget.onBackgroundTap == null) {
-      return;
-    }
-    final controller = _controller;
-    if (controller == null) {
-      return;
-    }
-    await controller.evaluateJavascript(source: _backgroundTapBridgeScript);
-  }
-
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
@@ -332,13 +204,14 @@ html, body {
         children: [
           if (_preparedHtmlData != null)
             InAppWebView(
+              gestureRecognizers: _webViewGestureRecognizers,
               initialData: InAppWebViewInitialData(
                 data: _preparedHtmlData!,
                 baseUrl: _emailWebViewUri,
                 historyUrl: _emailWebViewUri,
               ),
               initialSettings: InAppWebViewSettings(
-                javaScriptEnabled: true,
+                javaScriptEnabled: false,
                 javaScriptCanOpenWindowsAutomatically: false,
                 supportMultipleWindows: false,
                 allowContentAccess: false,
@@ -350,16 +223,16 @@ html, body {
                 transparentBackground: true,
                 useShouldOverrideUrlLoading: true,
                 useHybridComposition: widget.useHybridComposition,
-                supportZoom: widget.simplifyLayout,
-                useWideViewPort: widget.simplifyLayout,
-                loadWithOverviewMode: widget.simplifyLayout,
+                supportZoom: true,
+                useWideViewPort: false,
+                loadWithOverviewMode: false,
                 layoutAlgorithm: widget.simplifyLayout
                     ? LayoutAlgorithm.TEXT_AUTOSIZING
                     : null,
-                initialScale: widget.simplifyLayout ? 0 : 100,
-                textZoom: widget.simplifyLayout ? 110 : 100,
-                minimumFontSize: widget.simplifyLayout ? 14 : 14,
-                minimumLogicalFontSize: widget.simplifyLayout ? 14 : 14,
+                initialScale: 100,
+                textZoom: widget.simplifyLayout ? 130 : 100,
+                minimumFontSize: widget.simplifyLayout ? 16 : 14,
+                minimumLogicalFontSize: widget.simplifyLayout ? 16 : 14,
                 preferredContentMode: UserPreferredContentMode.MOBILE,
                 disableVerticalScroll: widget.disableInternalScroll,
                 disableHorizontalScroll: widget.disableInternalScroll,
@@ -368,15 +241,6 @@ html, body {
               ),
               onWebViewCreated: (controller) {
                 _controller = controller;
-                if (widget.onBackgroundTap != null) {
-                  controller.addJavaScriptHandler(
-                    handlerName: _backgroundTapHandlerName,
-                    callback: (_) {
-                      widget.onBackgroundTap?.call();
-                      return null;
-                    },
-                  );
-                }
               },
               shouldOverrideUrlLoading: (controller, navigationAction) async {
                 final url =
@@ -390,21 +254,11 @@ html, body {
                 return NavigationActionPolicy.CANCEL;
               },
               onLoadStop: (controller, url) async {
-                await _measureContentHeight();
-                await _installBackgroundTapBridge();
-                unawaited(_scheduleRemeasurements());
                 if (!mounted) return;
                 setState(() {
                   _isLoading = false;
                 });
               },
-              onContentSizeChanged:
-                  (controller, oldContentSize, newContentSize) {
-                    if (!mounted || newContentSize.height <= 0) {
-                      return;
-                    }
-                    unawaited(_measureContentHeight());
-                  },
               onReceivedError: (controller, request, error) {
                 if (!mounted) return;
                 setState(() {

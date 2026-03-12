@@ -226,6 +226,47 @@ void main() {
       expect(path, '/avatars/friend.png');
     },
   );
+
+  test('group message avatar jid prefers the resolved occupant real jid', () {
+    const roomJid = 'room@conference.axi.im';
+    const senderOccupantJid = '$roomJid/friend';
+    final avatarJid = resolveMessageAvatarJid(
+      message: const Message(
+        stanzaID: 'm3',
+        senderJid: senderOccupantJid,
+        chatJid: roomJid,
+        occupantID: 'opaque-occupant-id',
+      ),
+      roomState: RoomState(
+        roomJid: roomJid,
+        occupants: <String, Occupant>{
+          'opaque-occupant-id': Occupant(
+            occupantId: 'opaque-occupant-id',
+            nick: 'friend',
+            realJid: 'friend@axi.im',
+          ),
+        },
+      ),
+    );
+
+    expect(avatarJid, 'friend@axi.im');
+  });
+
+  test('group message avatar jid does not fall back to the room bare jid', () {
+    const roomJid = 'group@conference.axi.im';
+    const senderOccupantJid = '$roomJid/burner';
+
+    final avatarJid = resolveMessageAvatarJid(
+      message: const Message(
+        stanzaID: 'm4',
+        senderJid: senderOccupantJid,
+        chatJid: roomJid,
+      ),
+      roomState: null,
+    );
+
+    expect(avatarJid, senderOccupantJid);
+  });
 }
 
 class _ReactionLayoutTestApp extends StatelessWidget {
