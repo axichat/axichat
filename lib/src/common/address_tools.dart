@@ -145,7 +145,7 @@ String? normalizedOccupantId(String? raw) {
   if (normalized == null) return null;
   final parsed = parseJid(normalized);
   if (parsed == null) {
-    return normalized.toLowerCase();
+    return normalized;
   }
   final bare = parsed.toBare().toString().toLowerCase();
   final resource = parsed.resource.trim();

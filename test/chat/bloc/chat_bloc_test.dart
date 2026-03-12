@@ -208,9 +208,6 @@ void main() {
     );
     when(() => mucService.seedDummyRoomData(any())).thenAnswer((_) async {});
     when(
-      () => mucService.trackOccupantsFromMessages(any(), any()),
-    ).thenAnswer((_) {});
-    when(
       () => mucService.inviteUserToRoom(
         roomJid: any(named: 'roomJid'),
         inviteeJid: any(named: 'inviteeJid'),
@@ -2662,19 +2659,59 @@ void main() {
     },
   );
 
+  test('group chats subscribe to room state replay before warm-up', () async {
+    const roomJid = 'room@conference.axi.im';
+
+    when(
+      () => mucService.roomStateFor(roomJid),
+    ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+    when(
+      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+    ).thenAnswer((_) async => RoomState(roomJid: roomJid, occupants: const {}));
+
+    final roomStreamController = StreamController<RoomState>.broadcast();
+    when(
+      () => mucService.roomStateStream(roomJid),
+    ).thenAnswer((_) => roomStreamController.stream);
+
+    final bloc = ChatBloc(
+      jid: roomJid,
+      messageService: messageService,
+      chatsService: chatsService,
+      mucService: mucService,
+      notificationService: notificationService,
+      emailService: null,
+      settings: _defaultChatSettings(),
+    );
+
+    chatStreamController.add(_groupChat(roomJid));
+    messageStreamController.add(const <Message>[]);
+    await _pumpBloc();
+    await _pumpBloc();
+
+    verifyInOrder([
+      () => mucService.roomStateFor(roomJid),
+      () => mucService.roomStateStream(roomJid),
+      () => mucService.warmRoomFromHistory(roomJid: roomJid),
+    ]);
+
+    await bloc.close();
+    await roomStreamController.close();
+  });
+
   test(
-    'group chats warm room state before subscribing to room state replay',
+    'closing during room warm-up does not create a late room subscription',
     () async {
       const roomJid = 'room@conference.axi.im';
+      final warmCompleter = Completer<RoomState>();
+      final roomStreamController = StreamController<RoomState>.broadcast();
 
       when(
         () => mucService.roomStateFor(roomJid),
       ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
-      when(() => mucService.warmRoomFromHistory(roomJid: roomJid)).thenAnswer(
-        (_) async => RoomState(roomJid: roomJid, occupants: const {}),
-      );
-
-      final roomStreamController = StreamController<RoomState>.broadcast();
+      when(
+        () => mucService.warmRoomFromHistory(roomJid: roomJid),
+      ).thenAnswer((_) => warmCompleter.future);
       when(
         () => mucService.roomStateStream(roomJid),
       ).thenAnswer((_) => roomStreamController.stream);
@@ -2692,15 +2729,15 @@ void main() {
       chatStreamController.add(_groupChat(roomJid));
       messageStreamController.add(const <Message>[]);
       await _pumpBloc();
-      await _pumpBloc();
-
-      verifyInOrder([
-        () => mucService.roomStateFor(roomJid),
-        () => mucService.warmRoomFromHistory(roomJid: roomJid),
-        () => mucService.roomStateStream(roomJid),
-      ]);
 
       await bloc.close();
+
+      warmCompleter.complete(RoomState(roomJid: roomJid, occupants: const {}));
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(roomStreamController.hasListener, isFalse);
+
       await roomStreamController.close();
     },
   );

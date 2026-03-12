@@ -693,7 +693,7 @@ void main() {
     );
 
     test(
-      'JOIN-015B [HP] ensureJoined repairs stale manager joined state from ready room presence',
+      'JOIN-015B [HP] ensureJoined rejoins when manager state is stale',
       () async {
         final managerRoomState = mox.RoomState(
           roomJid: mox.JID.fromString(_roomJidBare),
@@ -709,10 +709,22 @@ void main() {
             any(),
             maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
-        ).thenAnswer(
-          (_) async =>
-              const moxlib.Result<bool, mox.MUCError>(_presenceAvailable),
-        );
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: _roomJid,
+              occupantJid: _roomJidWithSelfNick,
+              nick: _roomNick,
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {MucStatusCode.selfPresence.code},
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
 
         xmppService.updateOccupantFromPresence(
           roomJid: _roomJid,
@@ -727,14 +739,14 @@ void main() {
 
         await xmppService.ensureJoined(roomJid: _roomJid);
 
-        expect(managerRoomState.joined, isTrue);
-        verifyNever(
+        verify(
           () => mucManager.joinRoom(
-            any(),
-            any(),
+            mox.JID.fromString(_roomJidBare),
+            _roomNick,
             maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
-        );
+        ).called(1);
+        expect(managerRoomState.joined, isTrue);
       },
     );
 
@@ -861,27 +873,6 @@ void main() {
             maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
           ),
         );
-      },
-    );
-
-    test(
-      'JOIN-016B [HP] trackOccupantsFromMessages does not treat message senders as present occupants',
-      () {
-        xmppService.trackOccupantsFromMessages(_roomJid, [
-          Message(
-            stanzaID: 'msg-1',
-            chatJid: _roomJid,
-            senderJid: _roomJidWithSelfNick,
-            body: 'hello',
-            timestamp: DateTime.timestamp(),
-          ),
-        ]);
-
-        final room = xmppService.roomStateFor(_roomJid);
-        final occupant = room?.occupants[_roomJidWithSelfNick];
-        expect(occupant, isNotNull);
-        expect(occupant?.isPresent, isFalse);
-        expect(room?.hasPresentSelfOccupant, isFalse);
       },
     );
 
@@ -2384,66 +2375,6 @@ void main() {
         expect(
           room?.occupants[_roomJidWithNick]?.role,
           equals(OccupantRole.participant),
-        );
-      },
-    );
-
-    test(
-      'PRES-001A [HP] updateOccupantFromPresence upgrades room nick placeholders to occupant ids',
-      () async {
-        const opaqueOccupantId = 'occupant-id-123';
-        xmppService.trackOccupantsFromMessages(_roomJid, [
-          Message(
-            stanzaID: 'history-message',
-            senderJid: _roomJidWithNick,
-            chatJid: _roomJid,
-            timestamp: DateTime.timestamp(),
-            body: 'hello',
-          ),
-        ]);
-
-        xmppService.updateOccupantFromPresence(
-          roomJid: _roomJid,
-          occupantId: opaqueOccupantId,
-          nick: _roomNick,
-          affiliation: OccupantAffiliation.member,
-          role: OccupantRole.participant,
-          isPresent: _presenceAvailable,
-        );
-
-        final room = xmppService.roomStateFor(_roomJid);
-        expect(room, isNotNull);
-        expect(room?.occupants, hasLength(1));
-        expect(room?.occupants.containsKey(_roomJidWithNick), isFalse);
-        expect(
-          room?.occupants[opaqueOccupantId]?.nick,
-          equals(_roomNickTrimmed),
-        );
-      },
-    );
-
-    test(
-      'PRES-001B [HP] trackOccupantsFromMessages preserves opaque occupant ids from history',
-      () async {
-        const opaqueOccupantId = 'occupant-id-123';
-        xmppService.trackOccupantsFromMessages(_roomJid, [
-          Message(
-            stanzaID: 'history-message',
-            senderJid: _roomJidWithNick,
-            occupantID: opaqueOccupantId,
-            chatJid: _roomJid,
-            timestamp: DateTime.timestamp(),
-            body: 'hello',
-          ),
-        ]);
-
-        final room = xmppService.roomStateFor(_roomJid);
-        expect(room, isNotNull);
-        expect(room?.occupants.containsKey(opaqueOccupantId), isTrue);
-        expect(room?.occupants.containsKey(_roomJidWithNick), isFalse);
-        expect(
-          room?.occupants[opaqueOccupantId]?.nick,
-          equals(_roomNickTrimmed),
         );
       },
     );

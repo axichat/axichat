@@ -852,11 +852,11 @@ mixin MucService on XmppBase, BaseStreamService {
       return false;
     }
     if (managerState.joined != true) {
-      managerState.joined = true;
-      final selfNick = occupant?.nick.trim();
-      if (selfNick?.isNotEmpty == true) {
-        managerState.nick = selfNick;
-      }
+      return false;
+    }
+    final selfNick = occupant?.nick.trim();
+    if (selfNick?.isNotEmpty == true && managerState.nick?.trim() != selfNick) {
+      return false;
     }
     return true;
   }
@@ -1371,16 +1371,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (_leftRooms.contains(key)) {
       return _roomStates[key] ?? RoomState(roomJid: key, occupants: const {});
     }
-    final messages = await _dbOpReturning<XmppDatabase, List<Message>>(
-      (db) => db.getChatMessages(
-        roomJid,
-        start: 0,
-        end: limit,
-        filter: MessageTimelineFilter.allWithContact,
-      ),
-    );
     await _restorePersistedRoomMembers(roomJid);
-    trackOccupantsFromMessages(roomJid, messages);
     return roomStateFor(roomJid) ??
         RoomState(roomJid: _roomKey(roomJid), occupants: const {});
   }
@@ -3486,36 +3477,6 @@ mixin MucService on XmppBase, BaseStreamService {
     );
   }
 
-  void trackOccupantsFromMessages(String roomJid, Iterable<Message> messages) {
-    final key = _roomKey(roomJid);
-    if (_leftRooms.contains(key)) return;
-    final selfOccupantId = _roomStates[key]?.myOccupantId;
-    final preferredSelfNick = _roomNicknames[key];
-    for (final message in messages) {
-      final messageOccupantId = message.trimmedOccupantId;
-      final nick =
-          _nickFromSender(message.senderJid) ??
-          (messageOccupantId == null
-              ? null
-              : _roomStates[key]?.occupants[messageOccupantId]?.nick.trim());
-      if (nick == null || nick.isEmpty) continue;
-      final occupantId = messageOccupantId ?? '$key/$nick';
-      final isSelfMessage =
-          selfOccupantId != null &&
-          (occupantId == selfOccupantId ||
-              message.senderJid.trim() == selfOccupantId);
-      final resolvedNick =
-          isSelfMessage && preferredSelfNick?.isNotEmpty == true
-          ? preferredSelfNick!
-          : nick;
-      _upsertOccupant(
-        roomJid: roomJid,
-        occupantId: occupantId,
-        nick: resolvedNick,
-      );
-    }
-  }
-
   void handleMucIdentifiersFromMessage(
     mox.MessageEvent event,
     Message message,
@@ -3623,19 +3584,6 @@ mixin MucService on XmppBase, BaseStreamService {
         .replaceAll(RegExp(r'^-+|-+$'), '');
     if (collapsed.isNotEmpty) return collapsed;
     return 'room-${generateRandomString(length: 6)}';
-  }
-
-  String? _nickFromSender(String sender) {
-    if (sender.isEmpty) return null;
-    try {
-      final jid = mox.JID.fromString(sender);
-      final resource = jid.resource;
-      if (resource.isEmpty) return null;
-      if (jid.toBare().toString() == jid.toString()) return null;
-      return resource;
-    } on Exception {
-      return null;
-    }
   }
 
   String? _readItemAttr(mox.XMLNode item, String key) {

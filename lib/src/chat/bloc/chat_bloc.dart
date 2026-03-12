@@ -486,7 +486,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _lastSeenEmailSyncKey;
   int? _emailUnreadBoundaryDeltaId;
   int? _emailUnreadBoundaryUnreadCount;
-  String? _lastOccupantTrackedStanzaId;
   bool _needsUnreadBootstrap = false;
   int? _pendingUnreadBoundaryCount;
   Future<void> _loadEarlierQueue = Future<void>.value();
@@ -1357,7 +1356,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _mucService.roomStateFor(chat.jid) ??
         RoomState(roomJid: chat.jid);
     if (state.roomState == null) {
-      emit(state.copyWith(roomState: roomState));
+      emit(
+        state.copyWith(
+          roomState: roomState,
+          roomMemberSections: _buildRoomMemberSections(roomState),
+        ),
+      );
     }
     await _refreshRoomAffiliationsIfNeeded(chat: chat, roomState: roomState);
   }
@@ -1367,7 +1371,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required RoomState roomState,
   }) async {
     if (!roomState.hasSelfPresence) return;
-    if (!roomState.myAffiliation.isNone) return;
     if (state.xmppConnectionState != ConnectionState.connected) return;
     final roomJid = _bareJid(chat.jid);
     if (roomJid == null || roomJid.isEmpty) return;
@@ -1658,7 +1661,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _pendingScrollTargetMessageId = null;
       _awaitingInitialEmailPresentation = false;
       _initialEmailPresentationPendingDeltaIds.clear();
-      _lastOccupantTrackedStanzaId = null;
       _shareContextAttemptedStanzaIds.clear();
       _autoDownloadAttemptedMetadataIds.clear();
       _autoDownloadAttemptedEmailMessages.clear();
@@ -1727,17 +1729,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _roomSelfAvatarPath = null;
     if (event.chat.type == ChatType.groupChat) {
       _subscribeRoomMemberSources();
-      final shouldPrimeRoomState = resetContext || state.roomState == null;
-      if (shouldPrimeRoomState) {
-        await _primeRoomState(event.chat, emit);
-      }
       _roomSubscription = _mucService.roomStateStream(event.chat.jid).listen((
         room,
       ) {
         add(_RoomStateUpdated(room));
       });
-      if (!resetContext && state.items.isNotEmpty) {
-        _mucService.trackOccupantsFromMessages(event.chat.jid, state.items);
+      final shouldPrimeRoomState = resetContext || state.roomState == null;
+      if (shouldPrimeRoomState) {
+        await _primeRoomState(event.chat, emit);
       }
       await _ensureMucMembership(event.chat);
     } else {
@@ -2332,28 +2331,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
     _maybeRequestVisibleEmailQuotedText(filteredItems);
-    if (state.chat?.type == ChatType.groupChat) {
-      final chatJid = state.chat!.jid;
-      final lastTracked = _lastOccupantTrackedStanzaId;
-      var startIndex = -1;
-      if (lastTracked != null) {
-        for (var i = filteredItems.length - 1; i >= 0; i--) {
-          if (filteredItems[i].stanzaID == lastTracked) {
-            startIndex = i;
-            break;
-          }
-        }
-      }
-      final newItems = startIndex == -1
-          ? filteredItems
-          : filteredItems.sublist(startIndex + 1);
-      if (newItems.isNotEmpty) {
-        _mucService.trackOccupantsFromMessages(chatJid, newItems);
-      }
-      if (filteredItems.isNotEmpty) {
-        _lastOccupantTrackedStanzaId = filteredItems.last.stanzaID;
-      }
-    }
     if (state.chat?.supportsEmail == true) {
       await _hydrateShareContexts(filteredItems, emit);
       await _hydrateShareReplies(filteredItems, emit);
