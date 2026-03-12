@@ -329,6 +329,31 @@ void main() {
       },
     );
 
+    test('Requests delivery receipts on normal direct messages.', () async {
+      await connectSuccessfully(xmppService);
+
+      when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+      when(
+        () => mockConnection.sendMessage(any()),
+      ).thenAnswer((_) async => true);
+
+      await xmppService.sendMessage(jid: jid, text: text);
+
+      verify(
+        () => mockConnection.sendMessage(
+          any(
+            that: isA<mox.MessageEvent>().having(
+              (event) => event.extensions
+                  .get<mox.MessageDeliveryReceiptData>()
+                  ?.receiptRequested,
+              'delivery receipt request',
+              true,
+            ),
+          ),
+        ),
+      ).called(1);
+    });
+
     test('Emits origin-id on normal direct messages.', () async {
       const directStanzaId = 'direct-stanza-id';
       const directOriginId = 'direct-origin-id';

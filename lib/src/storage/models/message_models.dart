@@ -429,8 +429,10 @@ abstract class Message with _$Message implements Insertable<Message> {
     String? type,
     bool includeOriginId = false,
   }) {
+    final isGroupChat = type == 'groupchat';
     final extensions = <mox.StanzaHandlerExtension>[
       const mox.MarkableData(true),
+      if (!isGroupChat) const mox.MessageDeliveryReceiptData(true),
       mox.MessageIdData(stanzaID),
       mox.ChatState.active,
     ];
