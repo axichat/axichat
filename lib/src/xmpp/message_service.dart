@@ -1124,6 +1124,7 @@ mixin MessageService
     await _dbOp<XmppDatabase>((db) async {
       await db.saveMessage(message, chatType: resolvedChatType, selfJid: myJid);
     });
+    await _applyPendingInboundReactionsForMessage(message);
   }
 
   Future<ChatType> _resolvePersistedChatType({
@@ -2179,6 +2180,8 @@ mixin MessageService
   final Map<String, Set<String>> _pinAuthorizedPublishersByChat = {};
   final Map<String, Set<String>> _pendingPinPublishesByChat = {};
   final Map<String, Set<String>> _pendingPinRetractionsByChat = {};
+  final Map<String, Map<String, Map<String, _PendingInboundReaction>>>
+  _pendingInboundReactionsByChatAndReference = {};
   final SyncRateLimiter _pinSyncRateLimiter = SyncRateLimiter(pinSyncRateLimit);
   final Set<String> _pinSyncInFlight = {};
   final Set<String> _pinArchiveBootstrapInFlight = <String>{};
@@ -4433,24 +4436,24 @@ mixin MessageService
     }
   }
 
-  Future<void> reactToMessage({
+  Future<bool> reactToMessage({
     required String stanzaID,
     required String emoji,
   }) async {
     final normalizedEmoji = emoji.trim();
-    if (normalizedEmoji.isEmpty) return;
+    if (normalizedEmoji.isEmpty) return false;
     if (!isWithinUtf8ByteLimit(
       normalizedEmoji,
       maxBytes: maxReactionEmojiBytes,
     )) {
-      return;
+      return false;
     }
     final sender = myJid;
-    if (sender == null) return;
+    if (sender == null) return false;
     final message = await _dbOpReturning<XmppDatabase, Message?>(
       (db) => db.getMessageByStanzaID(stanzaID),
     );
-    if (message == null) return;
+    if (message == null) return false;
     final resolvedChatType = await _resolvePersistedChatType(
       jid: message.chatJid,
       requestedChatType: ChatType.chat,
@@ -4466,7 +4469,7 @@ mixin MessageService
         jid: message.chatJid,
         decision: decision,
       );
-      return;
+      return false;
     }
     final existing = await _dbOpReturning<XmppDatabase, List<Reaction>>(
       (db) => db.getReactionsForMessageSender(
@@ -4482,7 +4485,7 @@ mixin MessageService
     }
     final sanitizedEmojis = emojis.clampReactionEmojis();
     if (isGroupChat && !message.hasMucReference) {
-      return;
+      return false;
     }
     try {
       await _sendReactionUpdate(
@@ -4490,6 +4493,7 @@ mixin MessageService
         emojis: sanitizedEmojis,
         isGroupChat: isGroupChat,
       );
+      return true;
     } on Exception {
       rethrow;
     }
@@ -6147,22 +6151,130 @@ mixin MessageService
       return !event.displayable;
     }
     final reactionChatJid = _messageChatJidForEvent(event);
-    final message = await _dbOpReturning<XmppDatabase, Message?>(
-      (db) => db.getMessageByReferenceId(
-        reactions.messageId,
-        chatJid: reactionChatJid,
-      ),
-    );
+    final referenceId = reactions.messageId.trim();
     final bool isGroupChat = event.type == _messageTypeGroupchat;
     final rawSenderJid = isGroupChat
         ? event.from.toString()
         : event.from.toBare().toString();
+    final delayedAt = event.extensions
+        .get<mox.DelayedDeliveryData>()
+        ?.timestamp
+        .toUtc();
+    final updatedAt = _reactionUpdateTimestamp(event);
+    final message = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByReferenceId(referenceId, chatJid: reactionChatJid),
+    );
     if (message == null) {
-      _log.fine(
-        'Dropping reactions for unresolved message ${reactions.messageId}',
+      _log.fine('Queueing reactions for unresolved message $referenceId');
+      _queuePendingInboundReaction(
+        chatJid: reactionChatJid,
+        referenceId: referenceId,
+        rawSenderJid: rawSenderJid,
+        isGroupChat: isGroupChat,
+        emojis: sanitizedEmojis,
+        updatedAt: updatedAt,
+        delayedAt: delayedAt,
       );
       return !event.displayable;
     }
+    await _applyInboundReactionMutation(
+      message: message,
+      rawSenderJid: rawSenderJid,
+      isGroupChat: isGroupChat,
+      emojis: sanitizedEmojis,
+      updatedAt: updatedAt,
+      delayedAt: delayedAt,
+    );
+    return !event.displayable;
+  }
+
+  void _queuePendingInboundReaction({
+    required String chatJid,
+    required String referenceId,
+    required String rawSenderJid,
+    required bool isGroupChat,
+    required List<String> emojis,
+    required DateTime updatedAt,
+    required DateTime? delayedAt,
+  }) {
+    final normalizedChatJid = chatJid.trim();
+    final normalizedReferenceId = referenceId.trim();
+    final normalizedSenderJid = rawSenderJid.trim();
+    if (normalizedChatJid.isEmpty ||
+        normalizedReferenceId.isEmpty ||
+        normalizedSenderJid.isEmpty) {
+      return;
+    }
+    final pendingByReference = _pendingInboundReactionsByChatAndReference
+        .putIfAbsent(
+          normalizedChatJid,
+          () => <String, Map<String, _PendingInboundReaction>>{},
+        );
+    final pendingBySender = pendingByReference.putIfAbsent(
+      normalizedReferenceId,
+      () => <String, _PendingInboundReaction>{},
+    );
+    final next = _PendingInboundReaction(
+      rawSenderJid: normalizedSenderJid,
+      isGroupChat: isGroupChat,
+      emojis: List<String>.unmodifiable(emojis),
+      updatedAt: updatedAt.toUtc(),
+      delayedAt: delayedAt,
+    );
+    final existing = pendingBySender[normalizedSenderJid];
+    if (existing == null || !existing.updatedAt.isAfter(next.updatedAt)) {
+      pendingBySender[normalizedSenderJid] = next;
+    }
+  }
+
+  Future<void> _applyPendingInboundReactionsForMessage(Message message) async {
+    final chatJid = message.chatJid.trim();
+    if (chatJid.isEmpty) {
+      return;
+    }
+    final pendingByReference =
+        _pendingInboundReactionsByChatAndReference[chatJid];
+    if (pendingByReference == null || pendingByReference.isEmpty) {
+      return;
+    }
+    final drained = <_PendingInboundReaction>[];
+    for (final referenceId in _reactionReferenceIdsForMessage(message)) {
+      final pendingBySender = pendingByReference.remove(referenceId);
+      if (pendingBySender != null) {
+        drained.addAll(pendingBySender.values);
+      }
+    }
+    if (pendingByReference.isEmpty) {
+      _pendingInboundReactionsByChatAndReference.remove(chatJid);
+    }
+    for (final pending in drained) {
+      await _applyInboundReactionMutation(
+        message: message,
+        rawSenderJid: pending.rawSenderJid,
+        isGroupChat: pending.isGroupChat,
+        emojis: pending.emojis,
+        updatedAt: pending.updatedAt,
+        delayedAt: pending.delayedAt,
+      );
+    }
+  }
+
+  Set<String> _reactionReferenceIdsForMessage(Message message) {
+    return {
+      message.stanzaID.trim(),
+      message.originID?.trim() ?? '',
+      message.mucStanzaId?.trim() ?? '',
+    }.where((id) => id.isNotEmpty).toSet();
+  }
+
+  Future<void> _applyInboundReactionMutation({
+    required Message message,
+    required String rawSenderJid,
+    required bool isGroupChat,
+    required List<String> emojis,
+    required DateTime updatedAt,
+    required DateTime? delayedAt,
+  }) async {
     final senderIdentity = _resolveReactionSenderIdentity(
       senderJid: rawSenderJid,
       chatJid: message.chatJid,
@@ -6174,38 +6286,84 @@ mixin MessageService
           senderJid: senderIdentity.senderJid,
         )) {
       _log.warning('Rejected direct reaction from unauthorized sender');
-      return !event.displayable;
+      return;
     }
-    final existingState = await _dbOpReturning<XmppDatabase, ReactionState?>(
-      (db) => db.getReactionState(
-        messageId: message.stanzaID,
-        senderJid: senderIdentity.senderJid,
-      ),
+    final senderAlias = _reactionSenderAliasJid(
+      rawSenderJid: rawSenderJid,
+      senderJid: senderIdentity.senderJid,
+      isGroupChat: isGroupChat,
     );
-    if (isGroupChat &&
-        !senderIdentity.identityVerified &&
-        existingState == null) {
-      _log.warning('Rejected room reaction without verified sender identity');
-      return !event.displayable;
-    }
-    final updatedAt = _reactionUpdateTimestamp(event);
+    final existingState = await _existingReactionStateForSender(
+      messageId: message.stanzaID,
+      senderJid: senderIdentity.senderJid,
+      aliasSenderJid: senderAlias,
+    );
     if (_isStaleDelayedReactionUpdate(
-      event: event,
+      delayedAt: delayedAt,
       existingState: existingState,
     )) {
       _log.fine('Dropped stale delayed reaction update');
-      return !event.displayable;
+      return;
     }
     await _dbOp<XmppDatabase>((db) async {
+      if (senderAlias != null) {
+        await db.clearReactionsForMessageSender(
+          messageId: message.stanzaID,
+          senderJid: senderAlias,
+        );
+      }
       await db.replaceReactions(
         messageId: message.stanzaID,
         senderJid: senderIdentity.senderJid,
-        emojis: sanitizedEmojis,
+        emojis: emojis,
         updatedAt: updatedAt,
         identityVerified: senderIdentity.identityVerified,
       );
     });
-    return !event.displayable;
+  }
+
+  String? _reactionSenderAliasJid({
+    required String rawSenderJid,
+    required String senderJid,
+    required bool isGroupChat,
+  }) {
+    if (!isGroupChat) {
+      return null;
+    }
+    final normalizedRawSenderJid = rawSenderJid.trim();
+    final normalizedSenderJid = senderJid.trim();
+    if (normalizedRawSenderJid.isEmpty ||
+        normalizedSenderJid.isEmpty ||
+        normalizedRawSenderJid == normalizedSenderJid) {
+      return null;
+    }
+    return normalizedRawSenderJid;
+  }
+
+  Future<ReactionState?> _existingReactionStateForSender({
+    required String messageId,
+    required String senderJid,
+    required String? aliasSenderJid,
+  }) async {
+    final canonicalState = await _dbOpReturning<XmppDatabase, ReactionState?>(
+      (db) => db.getReactionState(messageId: messageId, senderJid: senderJid),
+    );
+    if (aliasSenderJid == null) {
+      return canonicalState;
+    }
+    final aliasState = await _dbOpReturning<XmppDatabase, ReactionState?>(
+      (db) =>
+          db.getReactionState(messageId: messageId, senderJid: aliasSenderJid),
+    );
+    if (canonicalState == null) {
+      return aliasState;
+    }
+    if (aliasState == null) {
+      return canonicalState;
+    }
+    return canonicalState.updatedAt.isAfter(aliasState.updatedAt)
+        ? canonicalState
+        : aliasState;
   }
 
   Future<bool> _handleCalendarSync(
@@ -7395,13 +7553,9 @@ mixin MessageService
           .toUtc();
 
   bool _isStaleDelayedReactionUpdate({
-    required mox.MessageEvent event,
+    required DateTime? delayedAt,
     required ReactionState? existingState,
   }) {
-    final delayedAt = event.extensions
-        .get<mox.DelayedDeliveryData>()
-        ?.timestamp
-        .toUtc();
     if (delayedAt == null) {
       return false;
     }
@@ -9582,6 +9736,22 @@ class _UploadSlotHeader {
 
   final String name;
   final String value;
+}
+
+class _PendingInboundReaction {
+  const _PendingInboundReaction({
+    required this.rawSenderJid,
+    required this.isGroupChat,
+    required this.emojis,
+    required this.updatedAt,
+    required this.delayedAt,
+  });
+
+  final String rawSenderJid;
+  final bool isGroupChat;
+  final List<String> emojis;
+  final DateTime updatedAt;
+  final DateTime? delayedAt;
 }
 
 class _ReactionBucket {

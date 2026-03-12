@@ -503,14 +503,16 @@ final class ChatMessageReactionToggled extends ChatEvent {
     required this.message,
     required this.emoji,
     required this.isEmailChat,
+    this.completer,
   });
 
   final Message message;
   final String emoji;
   final bool isEmailChat;
+  final Completer<bool>? completer;
 
   @override
-  List<Object?> get props => [message, emoji, isEmailChat];
+  List<Object?> get props => [message, emoji, isEmailChat, completer];
 }
 
 final class ChatMessageForwardRequested extends ChatEvent {

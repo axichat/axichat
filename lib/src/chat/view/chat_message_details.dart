@@ -4,7 +4,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/bool_tool.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_error_l10n.dart';
 import 'package:axichat/src/common/transport.dart';
@@ -202,11 +201,27 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   fallbackBodyText ?? fallbackQuotedText;
               final bool shouldShowImageGallery = hasRemoteHtmlImages;
               final xmppCapabilities = state.xmppCapabilities;
-              final supportsMarkers =
-                  isEmailTransport || xmppCapabilities?.supportsMarkers == true;
-              final supportsReceipts =
-                  isEmailTransport ||
+              final supportsXmppMarkers =
+                  xmppCapabilities?.supportsMarkers == true;
+              final supportsXmppReceipts =
                   xmppCapabilities?.supportsReceipts == true;
+              final showsReceivedStatus =
+                  isEmailTransport ||
+                  supportsXmppMarkers ||
+                  supportsXmppReceipts;
+              final showsDisplayedStatus = isEmailTransport
+                  ? settings.emailReadReceipts || message.displayed
+                  : supportsXmppMarkers;
+              final hasDeliveryFailure = message.error.isNotNone;
+              final bool? sentStatus = message.acked
+                  ? true
+                  : (hasDeliveryFailure ? false : null);
+              final bool? receivedStatus = message.received
+                  ? true
+                  : (hasDeliveryFailure ? false : null);
+              final bool? displayedStatus = message.displayed
+                  ? true
+                  : (hasDeliveryFailure ? false : null);
               final metadataItems = <Widget>[];
               final stanzaId = message.stanzaID.trim();
               if (stanzaId.isNotEmpty) {
@@ -399,49 +414,19 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                           runSpacing: spacing.m,
                           alignment: WrapAlignment.center,
                           children: [
-                            ShadBadge.secondary(
-                              padding: EdgeInsets.all(spacing.s),
-                              child: Row(
-                                spacing: spacing.xs,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(l10n.chatMessageStatusSent),
-                                  Icon(
-                                    message.acked.toIcon,
-                                    color: message.acked.toColor,
-                                  ),
-                                ],
-                              ),
+                            _MessageStatusBadge(
+                              label: l10n.chatMessageStatusSent,
+                              status: sentStatus,
                             ),
-                            if (supportsMarkers || supportsReceipts)
-                              ShadBadge.secondary(
-                                padding: EdgeInsets.all(spacing.s),
-                                child: Row(
-                                  spacing: spacing.xs,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(l10n.chatMessageStatusReceived),
-                                    Icon(
-                                      message.received.toIcon,
-                                      color: message.received.toColor,
-                                    ),
-                                  ],
-                                ),
+                            if (showsReceivedStatus)
+                              _MessageStatusBadge(
+                                label: l10n.chatMessageStatusReceived,
+                                status: receivedStatus,
                               ),
-                            if (supportsMarkers)
-                              ShadBadge.secondary(
-                                padding: EdgeInsets.all(spacing.s),
-                                child: Row(
-                                  spacing: spacing.xs,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(l10n.chatMessageStatusDisplayed),
-                                    Icon(
-                                      message.displayed.toIcon,
-                                      color: message.displayed.toColor,
-                                    ),
-                                  ],
-                                ),
+                            if (showsDisplayedStatus)
+                              _MessageStatusBadge(
+                                label: l10n.chatMessageStatusDisplayed,
+                                status: displayedStatus,
                               ),
                           ],
                         ),
@@ -859,6 +844,53 @@ class _TextDumpDialog extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _MessageStatusBadge extends StatelessWidget {
+  const _MessageStatusBadge({required this.label, required this.status});
+
+  final String label;
+  final bool? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return ShadBadge.secondary(
+      padding: EdgeInsets.all(spacing.s),
+      child: Row(
+        spacing: spacing.xs,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          _MessageStatusIndicator(status: status),
+        ],
+      ),
+    );
+  }
+}
+
+class _MessageStatusIndicator extends StatelessWidget {
+  const _MessageStatusIndicator({required this.status});
+
+  final bool? status;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final sizing = context.sizing;
+    if (status == null) {
+      return Icon(
+        Icons.question_mark,
+        size: sizing.menuItemIconSize,
+        color: colors.mutedForeground,
+      );
+    }
+    return Icon(
+      status == true ? LucideIcons.check600 : LucideIcons.x600,
+      size: sizing.menuItemIconSize,
+      color: status == true ? colors.green : colors.destructive,
     );
   }
 }

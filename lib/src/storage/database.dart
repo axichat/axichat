@@ -161,6 +161,11 @@ abstract interface class XmppDatabase implements Database {
     required String senderJid,
   });
 
+  Future<void> clearReactionsForMessageSender({
+    required String messageId,
+    required String senderJid,
+  });
+
   Future<void> replaceReactions({
     required String messageId,
     required String senderJid,
@@ -1014,6 +1019,17 @@ class ReactionsAccessor extends DatabaseAccessor<XmppDrift>
                 table.senderJid.equals(senderJid),
           ))
           .getSingleOrNull();
+
+  Future<void> deleteStateByMessageAndSender({
+    required String messageId,
+    required String senderJid,
+  }) =>
+      (delete(reactionStates)..where(
+            (table) =>
+                table.messageID.equals(messageId) &
+                table.senderJid.equals(senderJid),
+          ))
+          .go();
 
   Future<void> upsertState({
     required String messageId,
@@ -2439,6 +2455,23 @@ WHERE transport IS NULL
     messageId: messageId,
     senderJid: senderJid,
   );
+
+  @override
+  Future<void> clearReactionsForMessageSender({
+    required String messageId,
+    required String senderJid,
+  }) async {
+    await transaction(() async {
+      await reactionsAccessor.deleteByMessageAndSender(
+        messageId: messageId,
+        senderJid: senderJid,
+      );
+      await reactionsAccessor.deleteStateByMessageAndSender(
+        messageId: messageId,
+        senderJid: senderJid,
+      );
+    });
+  }
 
   @override
   Future<void> replaceReactions({
