@@ -25,6 +25,72 @@ void main() {
     expect(smFontSize, lessThan(regularFontSize));
     expect(lgFontSize, greaterThanOrEqualTo(regularFontSize));
   });
+
+  testWidgets('loading axi button disables presses', (tester) async {
+    var tapCount = 0;
+    await tester.pumpWidget(
+      _AxiButtonTestApp(
+        child: AxiButton.primary(
+          loading: true,
+          onPressed: () {
+            tapCount += 1;
+          },
+          child: const Text('Loading'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Loading'));
+    await tester.pump();
+
+    expect(tapCount, 0);
+  });
+
+  testWidgets('loading expanded axi list button disables presses', (
+    tester,
+  ) async {
+    var tapCount = 0;
+    await tester.pumpWidget(
+      _AxiButtonTestApp(
+        child: AxiListButton(
+          loading: true,
+          onPressed: () {
+            tapCount += 1;
+          },
+          child: const Text('List'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('List'));
+    await tester.pump();
+
+    expect(tapCount, 0);
+  });
+
+  testWidgets('loading collapsed axi list button disables presses', (
+    tester,
+  ) async {
+    var tapCount = 0;
+    await tester.pumpWidget(
+      _AxiButtonTestApp(
+        child: AxiListButton(
+          collapsed: true,
+          collapsedIconData: Icons.add,
+          loading: true,
+          onPressed: () {
+            tapCount += 1;
+          },
+          child: const Text('Collapsed'),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byType(AxiIconButton));
+    await tester.pump();
+
+    expect(tapCount, 0);
+  });
 }
 
 double _buttonLabelFontSize(WidgetTester tester, Key buttonKey) {
@@ -37,7 +103,9 @@ double _buttonLabelFontSize(WidgetTester tester, Key buttonKey) {
 }
 
 class _AxiButtonTestApp extends StatelessWidget {
-  const _AxiButtonTestApp();
+  const _AxiButtonTestApp({this.child});
+
+  final Widget? child;
 
   @override
   Widget build(BuildContext context) {
@@ -68,22 +136,24 @@ class _AxiButtonTestApp extends StatelessWidget {
             body: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                children: const [
-                  AxiButton.primary(
-                    key: Key('button-sm'),
-                    size: AxiButtonSize.sm,
-                    child: Text('Small'),
-                  ),
-                  AxiButton.primary(
-                    key: Key('button-regular'),
-                    child: Text('Regular'),
-                  ),
-                  AxiButton.primary(
-                    key: Key('button-lg'),
-                    size: AxiButtonSize.lg,
-                    child: Text('Large'),
-                  ),
-                ],
+                children: child == null
+                    ? const [
+                        AxiButton.primary(
+                          key: Key('button-sm'),
+                          size: AxiButtonSize.sm,
+                          child: Text('Small'),
+                        ),
+                        AxiButton.primary(
+                          key: Key('button-regular'),
+                          child: Text('Regular'),
+                        ),
+                        AxiButton.primary(
+                          key: Key('button-lg'),
+                          size: AxiButtonSize.lg,
+                          child: Text('Large'),
+                        ),
+                      ]
+                    : [child!],
               ),
             ),
           ),

@@ -43,6 +43,12 @@ class BlocklistAddButton extends StatelessWidget {
               final spacing = context.spacing;
               return AxiInputDialog(
                 title: Text(l10n.blocklistBlockUser),
+                loading: context.select<BlocklistCubit, bool>(
+                  (cubit) => switch (cubit.state) {
+                    BlocklistLoading(:final jid) => jid != null,
+                    _ => false,
+                  },
+                ),
                 content: BlocConsumer<BlocklistCubit, BlocklistState>(
                   listener: (context, state) {
                     if (state is BlocklistSuccess) {

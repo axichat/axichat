@@ -167,6 +167,7 @@ class _AxiListButtonState extends State<AxiListButton> {
             tooltip: widget.collapsedTooltip ?? widget.semanticLabel,
             semanticLabel:
                 widget.collapsedSemanticLabel ?? widget.semanticLabel,
+            loading: widget.loading,
             onPressed: widget.onPressed,
             onLongPress: widget.onLongPress,
             color: widget.collapsedForegroundColor,
@@ -180,7 +181,8 @@ class _AxiListButtonState extends State<AxiListButton> {
       valueListenable: _states,
       builder: (context, states, _) {
         final bool enabled =
-            widget.onPressed != null || widget.onLongPress != null;
+            (widget.onPressed != null || widget.onLongPress != null) &&
+            !widget.loading;
         final VoidCallback? onTap = enabled
             ? withSelectionHaptic(widget.onPressed)
             : null;

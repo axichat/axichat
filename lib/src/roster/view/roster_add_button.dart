@@ -81,6 +81,13 @@ class RosterAddButton extends StatelessWidget {
                     ),
                   ],
                 ),
+                loading: context.select<RosterCubit, bool>(
+                  (cubit) => switch (cubit.state.actionState) {
+                    RosterActionLoading(:final action) =>
+                      action == RosterActionType.add,
+                    _ => false,
+                  },
+                ),
                 callback: jid.isEmpty
                     ? null
                     : () => context.read<RosterCubit>().addContact(

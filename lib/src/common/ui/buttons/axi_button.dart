@@ -308,7 +308,8 @@ class _AxiButtonState extends State<AxiButton> {
       valueListenable: _states,
       builder: (context, states, _) {
         final bool enabled =
-            widget.onPressed != null || widget.onLongPress != null;
+            (widget.onPressed != null || widget.onLongPress != null) &&
+            !widget.loading;
         final VoidCallback? onTap = enabled
             ? withSelectionHaptic(widget.onPressed)
             : null;
