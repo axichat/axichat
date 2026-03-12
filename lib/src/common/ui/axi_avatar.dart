@@ -235,6 +235,8 @@ class _AxiAvatarState extends State<AxiAvatar> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final motion = context.motion;
     final radii = context.radii;
     final sizing = context.sizing;
     final sizeSpan = sizing.iconButtonSize - sizing.iconButtonIconSize;
@@ -250,6 +252,13 @@ class _AxiAvatarState extends State<AxiAvatar> {
         ? const CircleBorder()
         : SquircleBorder(cornerRadius: squircleCornerRadius);
     final Uint8List? avatarBytes = _resolvedAvatarBytes;
+    final path = widget.avatarPath?.trim();
+    final isLoadingAvatar =
+        avatarBytes == null &&
+        path != null &&
+        path.isNotEmpty &&
+        _loadingPath == path;
+    final overlayAlpha = motion.tapFocusAlpha + motion.tapHoverAlpha;
 
     Widget child = SizedBox.square(
       dimension: widget.size,
@@ -258,12 +267,6 @@ class _AxiAvatarState extends State<AxiAvatar> {
         children: [
           BlocBuilder<SettingsCubit, SettingsState>(
             builder: (context, state) {
-              final path = widget.avatarPath?.trim();
-              final isLoadingAvatar =
-                  avatarBytes == null &&
-                  path != null &&
-                  path.isNotEmpty &&
-                  _loadingPath == path;
               final displayLabel = _displayLabelForJid(widget.jid);
               final initial = displayLabel.isNotEmpty
                   ? displayLabel.substring(0, 1).toUpperCase()
@@ -314,6 +317,18 @@ class _AxiAvatarState extends State<AxiAvatar> {
               );
             },
           ),
+          if (isLoadingAvatar)
+            IgnorePointer(
+              child: ClipPath(
+                clipper: ShapeBorderClipper(shape: avatarShape),
+                child: ColoredBox(
+                  color: colors.foreground.withValues(alpha: overlayAlpha),
+                  child: Center(
+                    child: AxiProgressIndicator(color: colors.background),
+                  ),
+                ),
+              ),
+            ),
           widget.presence == null ||
                   widget.subscription.isNone ||
                   widget.subscription.isFrom

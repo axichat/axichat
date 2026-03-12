@@ -394,7 +394,10 @@ mixin AvatarService on XmppBase, MucService {
       });
   }
 
-  Future<void> cacheSelfAvatarDraft(AvatarUploadPayload payload) async {
+  Future<void> cacheSelfAvatarDraft(
+    AvatarUploadPayload payload, {
+    bool waitForPublish = true,
+  }) async {
     final myBareJid = _myJid?.toBare().toString();
     if (myBareJid == null || myBareJid.isEmpty) return;
     final targetJid = _avatarSafeBareJid(payload.jid ?? myJid);
@@ -412,7 +415,14 @@ mixin AvatarService on XmppBase, MucService {
       owner._notifySelfAvatarUpdated(
         StoredAvatar(path: path, hash: payload.hash),
       );
-      await _bootstrapSelfAvatarIfReady();
+      if (waitForPublish) {
+        await _bootstrapSelfAvatarIfReady();
+      } else {
+        fireAndForget(
+          _bootstrapSelfAvatarIfReady,
+          operationName: 'AvatarService.bootstrapSelfAvatarDraft',
+        );
+      }
     } on Exception catch (error, stackTrace) {
       _avatarLog.fine(
         'Failed to cache pending self avatar for immediate display.',

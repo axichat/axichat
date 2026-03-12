@@ -1004,6 +1004,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     required bool reuseExistingSession,
     required EndpointOverride? endpoint,
   }) async {
+    _xmppService.deferSelfAvatarBootstrapForNextConnect();
     return _xmppService
         .connect(
           jid: jid,
@@ -2210,7 +2211,10 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       databasePassphrase: databasePassphrase,
     );
     if (_activeSignupCredentialKey != null && pendingAvatar != null) {
-      await _xmppService.cacheSelfAvatarDraft(pendingAvatar);
+      await _xmppService.cacheSelfAvatarDraft(
+        pendingAvatar,
+        waitForPublish: false,
+      );
     }
     final bool fromSignup = _activeSignupCredentialKey != null;
     final resolvedWelcomeTitle =
@@ -2233,6 +2237,9 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     await _recordAccountAuthenticated(jid);
     await _completeAuthTransaction();
     _updateEmailForegroundKeepalive();
+    if (pendingAvatar == null) {
+      _xmppService.scheduleSelfAvatarBootstrap();
+    }
     unawaited(_triggerEmailReconnect());
     if (_xmppService.connectionState == ConnectionState.connected) {
       unawaited(_homeRefreshSyncService.syncOnLogin());

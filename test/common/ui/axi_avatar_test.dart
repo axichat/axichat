@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +17,10 @@ import 'package:mocktail/mocktail.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(Uint8List(0));
+  });
+
   testWidgets(
     'fallback avatar colors use the full address, not just the local part',
     (tester) async {
@@ -99,6 +107,103 @@ void main() {
       expect(find.text('E'), findsNWidgets(2));
     },
   );
+
+  testWidgets(
+    'avatars show a spinner while avatar bytes are loading from a path',
+    (tester) async {
+      final xmppService = _MockXmppService();
+      final avatarLoad = Completer<Uint8List?>();
+      when(() => xmppService.cachedSafeAvatarBytes(any())).thenReturn(null);
+      when(() => xmppService.cachedAvatarBytes(any())).thenReturn(null);
+      when(
+        () => xmppService.loadAvatarBytes(any()),
+      ).thenAnswer((_) => avatarLoad.future);
+      when(
+        () => xmppService.cacheSafeAvatarBytes(any(), any()),
+      ).thenReturn(null);
+
+      await tester.pumpWidget(
+        _AxiAvatarTestApp(
+          xmppService: xmppService,
+          child: const AxiAvatar(
+            jid: 'eliot@axichat.com',
+            avatarPath: '/avatars/self.enc',
+          ),
+        ),
+      );
+
+      await tester.pump();
+
+      expect(find.byType(AxiProgressIndicator), findsOneWidget);
+
+      avatarLoad.complete(Uint8List.fromList(<int>[1, 2, 3, 4]));
+    },
+  );
+
+  testWidgets(
+    'avatar spinner clears after avatar bytes finish loading successfully',
+    (tester) async {
+      final xmppService = _MockXmppService();
+      final avatarLoad = Completer<Uint8List?>();
+      when(() => xmppService.cachedSafeAvatarBytes(any())).thenReturn(null);
+      when(() => xmppService.cachedAvatarBytes(any())).thenReturn(null);
+      when(
+        () => xmppService.loadAvatarBytes(any()),
+      ).thenAnswer((_) => avatarLoad.future);
+      when(
+        () => xmppService.cacheSafeAvatarBytes(any(), any()),
+      ).thenReturn(null);
+
+      await tester.pumpWidget(
+        _AxiAvatarTestApp(
+          xmppService: xmppService,
+          child: const AxiAvatar(
+            jid: 'eliot@axichat.com',
+            avatarPath: '/avatars/self.enc',
+          ),
+        ),
+      );
+
+      await tester.pump();
+      expect(find.byType(AxiProgressIndicator), findsOneWidget);
+
+      avatarLoad.complete(Uint8List.fromList(_transparentPngBytes));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AxiProgressIndicator), findsNothing);
+    },
+  );
+
+  testWidgets('avatar spinner clears after avatar bytes fail to load', (
+    tester,
+  ) async {
+    final xmppService = _MockXmppService();
+    final avatarLoad = Completer<Uint8List?>();
+    when(() => xmppService.cachedSafeAvatarBytes(any())).thenReturn(null);
+    when(() => xmppService.cachedAvatarBytes(any())).thenReturn(null);
+    when(
+      () => xmppService.loadAvatarBytes(any()),
+    ).thenAnswer((_) => avatarLoad.future);
+    when(() => xmppService.cacheSafeAvatarBytes(any(), any())).thenReturn(null);
+
+    await tester.pumpWidget(
+      _AxiAvatarTestApp(
+        xmppService: xmppService,
+        child: const AxiAvatar(
+          jid: 'eliot@axichat.com',
+          avatarPath: '/avatars/self.enc',
+        ),
+      ),
+    );
+
+    await tester.pump();
+    expect(find.byType(AxiProgressIndicator), findsOneWidget);
+
+    avatarLoad.completeError(Exception('avatar load failed'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AxiProgressIndicator), findsNothing);
+  });
 }
 
 Color _avatarBackgroundColor(WidgetTester tester, Key avatarKey) {
@@ -123,9 +228,10 @@ Chat _emailChat({required String address, required String displayName}) {
 }
 
 class _AxiAvatarTestApp extends StatelessWidget {
-  const _AxiAvatarTestApp({required this.child});
+  const _AxiAvatarTestApp({required this.child, this.xmppService});
 
   final Widget child;
+  final XmppService? xmppService;
 
   @override
   Widget build(BuildContext context) {
@@ -135,7 +241,7 @@ class _AxiAvatarTestApp extends StatelessWidget {
       () => settingsCubit.stream,
     ).thenAnswer((_) => const Stream<SettingsState>.empty());
     when(() => settingsCubit.animationDuration).thenReturn(Duration.zero);
-    return BlocProvider<SettingsCubit>.value(
+    Widget child = BlocProvider<SettingsCubit>.value(
       value: settingsCubit,
       child: MaterialApp(
         theme: ThemeData(
@@ -152,11 +258,90 @@ class _AxiAvatarTestApp extends StatelessWidget {
             colorScheme: const ShadSlateColorScheme.light(),
             brightness: Brightness.light,
           ),
-          child: Scaffold(body: Center(child: child)),
+          child: Scaffold(body: Center(child: this.child)),
         ),
       ),
     );
+    if (xmppService != null) {
+      child = RepositoryProvider<XmppService>.value(
+        value: xmppService!,
+        child: child,
+      );
+    }
+    return child;
   }
 }
 
 class _MockSettingsCubit extends Mock implements SettingsCubit {}
+
+class _MockXmppService extends Mock implements XmppService {}
+
+const List<int> _transparentPngBytes = <int>[
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0D,
+  0x0A,
+  0x2D,
+  0xB4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
+];

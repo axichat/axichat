@@ -1190,8 +1190,22 @@ class XmppService extends XmppBase
   Timer? _foregroundSocketMigrationTimer;
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
+  var _deferSelfAvatarBootstrapOnNextConnect = false;
   SecretKey? _avatarEncryptionKey;
   List<int>? _avatarEncryptionSalt;
+
+  void deferSelfAvatarBootstrapForNextConnect() {
+    _deferSelfAvatarBootstrapOnNextConnect = true;
+  }
+
+  void scheduleSelfAvatarBootstrap() {
+    fireAndForget(() async {
+      await _bootstrapSelfAvatarIfReady();
+      if (lastStreamReady == null) {
+        await refreshSelfAvatarIfNeeded();
+      }
+    }, operationName: 'XmppService.scheduleSelfAvatarBootstrap');
+  }
 
   @override
   Future<String?> connect({
@@ -1213,6 +1227,8 @@ class XmppService extends XmppBase
     if (!_synchronousConnection.isCompleted) {
       _synchronousConnection.complete();
     }
+    final deferSelfAvatarBootstrap = _deferSelfAvatarBootstrapOnNextConnect;
+    _deferSelfAvatarBootstrapOnNextConnect = false;
 
     return await deferToError(
       defer: _reset,
@@ -1226,6 +1242,7 @@ class XmppService extends XmppBase
             databasePrefix: databasePrefix,
             databasePassphrase: databasePassphrase,
             preHashed: preHashed,
+            deferSelfAvatarBootstrap: deferSelfAvatarBootstrap,
             endpoint: endpoint,
           );
         } on ForegroundServiceUnavailableException catch (error, stackTrace) {
@@ -1260,6 +1277,7 @@ class XmppService extends XmppBase
             databasePrefix: databasePrefix,
             databasePassphrase: databasePassphrase,
             preHashed: preHashed,
+            deferSelfAvatarBootstrap: deferSelfAvatarBootstrap,
             endpoint: endpoint,
           );
           _scheduleForegroundSocketMigration();
@@ -1402,6 +1420,7 @@ class XmppService extends XmppBase
     required String databasePrefix,
     required String databasePassphrase,
     required bool preHashed,
+    required bool deferSelfAvatarBootstrap,
     EndpointOverride? endpoint,
   }) async {
     _xmppLogger.info(
@@ -1515,9 +1534,11 @@ class XmppService extends XmppBase
     );
     _xmppLogger.info('Login successful. Initializing databases...');
     await _initDatabases(databasePrefix, databasePassphrase);
-    await _bootstrapSelfAvatarIfReady();
-    if (lastStreamReady == null) {
-      await refreshSelfAvatarIfNeeded();
+    if (!deferSelfAvatarBootstrap) {
+      await _bootstrapSelfAvatarIfReady();
+      if (lastStreamReady == null) {
+        await refreshSelfAvatarIfNeeded();
+      }
     }
     fireAndForget(
       _verifyMamSupportOnLogin,
