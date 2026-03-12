@@ -140,6 +140,55 @@ void main() {
 
       expect(stopCalls, equals(1));
     });
+
+    test(
+      'release skips stop when the foreground service is already not running',
+      () async {
+        var stopCalls = 0;
+        var runningChecks = 0;
+        final bridge = FlutterForegroundTaskBridge(
+          isRunningService: () async {
+            runningChecks++;
+            return runningChecks == 1;
+          },
+          startForegroundService: (_) async {},
+          stopForegroundService: () async {
+            stopCalls++;
+          },
+          initCommunicationPort: () {},
+          addTaskDataCallback: (_) {},
+          removeTaskDataCallback: (_) {},
+          sendDataToTask: (_) {},
+        );
+
+        await bridge.acquire(clientId: foregroundClientXmpp);
+        await bridge.release(foregroundClientXmpp);
+
+        expect(stopCalls, isZero);
+      },
+    );
+
+    test('release does not hang when foreground service stop stalls', () async {
+      var stopCalls = 0;
+      final bridge = FlutterForegroundTaskBridge(
+        isRunningService: () async => true,
+        startForegroundService: (_) async {},
+        stopForegroundService: () async {
+          stopCalls++;
+          await Completer<void>().future;
+        },
+        stopServiceTimeout: const Duration(milliseconds: 1),
+        initCommunicationPort: () {},
+        addTaskDataCallback: (_) {},
+        removeTaskDataCallback: (_) {},
+        sendDataToTask: (_) {},
+      );
+
+      await bridge.acquire(clientId: foregroundClientXmpp);
+      await bridge.release(foregroundClientXmpp);
+
+      expect(stopCalls, equals(1));
+    });
   });
 
   group('resetForegroundServiceIfRunning', () {

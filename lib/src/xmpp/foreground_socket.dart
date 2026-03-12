@@ -82,6 +82,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     Future<void> Function(ForegroundServiceConfig config)?
     startForegroundService,
     Future<void> Function()? stopForegroundService,
+    Duration? stopServiceTimeout,
     void Function()? initCommunicationPort,
     void Function(Future<void> Function(dynamic))? addTaskDataCallback,
     void Function(Future<void> Function(dynamic))? removeTaskDataCallback,
@@ -91,6 +92,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
            startForegroundService ?? _defaultStartForegroundService,
        _stopForegroundService =
            stopForegroundService ?? _defaultStopForegroundService,
+       _stopServiceTimeout = stopServiceTimeout ?? _defaultStopServiceTimeout,
        _initCommunicationPort =
            initCommunicationPort ?? _defaultInitCommunicationPort,
        _addTaskDataCallback =
@@ -105,6 +107,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   final Future<void> Function(ForegroundServiceConfig config)
   _startForegroundService;
   final Future<void> Function() _stopForegroundService;
+  final Duration _stopServiceTimeout;
   final void Function() _initCommunicationPort;
   final void Function(Future<void> Function(dynamic)) _addTaskDataCallback;
   final void Function(Future<void> Function(dynamic)) _removeTaskDataCallback;
@@ -115,6 +118,8 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   Completer<void>? _taskReadyCompleter;
 
   static const Duration _taskReadyTimeout = Duration(seconds: 5);
+  static const Duration _defaultStopServiceTimeout = Duration(seconds: 5);
+  static final Logger _log = Logger('ForegroundTaskBridge');
 
   int get _totalUsage =>
       _usageCounts.values.fold(0, (previous, element) => previous + element);
@@ -246,9 +251,37 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
   }
 
   Future<void> _stopService() async {
-    await _stopForegroundService();
-    _resetTaskReady();
-    _detachCallbackIfUnused();
+    try {
+      final serviceRunning = await _isRunningService();
+      if (!serviceRunning) {
+        _log.fine(
+          'Skipping foreground service stop because the service is not running.',
+        );
+        return;
+      }
+      await _stopForegroundService().timeout(_stopServiceTimeout);
+    } on TimeoutException catch (error, stackTrace) {
+      _log.warning(
+        'Timed out while stopping the foreground service.',
+        error,
+        stackTrace,
+      );
+    } on MissingPluginException catch (error, stackTrace) {
+      _log.warning(
+        'Foreground task plugin unavailable while stopping the service.',
+        error,
+        stackTrace,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.warning(
+        'Failed to stop the foreground service cleanly.',
+        error,
+        stackTrace,
+      );
+    } finally {
+      _resetTaskReady();
+      _detachCallbackIfUnused();
+    }
   }
 
   ForegroundServiceConfig _defaultConfig() => buildForegroundServiceConfig(
