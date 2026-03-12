@@ -1373,6 +1373,7 @@ mixin MessageService
     String? body,
   }) async {
     final hasText = body?.trim().isNotEmpty == true;
+    String? updatedMessageId;
     await _dbOp<XmppDatabase>((db) async {
       Message? existing;
       if (incoming.originID?.isNotEmpty == true) {
@@ -1416,6 +1417,7 @@ mixin MessageService
         body: needsBody ? body : null,
       );
       if (shouldUpdateMucStanzaId) {
+        updatedMessageId = existing.stanzaID;
         await db.saveMessageMucStanzaId(
           stanzaID: existing.stanzaID,
           mucStanzaId: incomingMucStanzaId,
@@ -1441,6 +1443,15 @@ mixin MessageService
         );
       }
     });
+    if (updatedMessageId == null) {
+      return;
+    }
+    final updatedMessage = await _dbOpReturning<XmppDatabase, Message?>(
+      (db) => db.getMessageByStanzaID(updatedMessageId!),
+    );
+    if (updatedMessage != null) {
+      await _applyPendingInboundReactionsForMessage(updatedMessage);
+    }
   }
 
   RegisteredStateKey _lastSeenKeyFor(String jid) => _lastSeenKeys.putIfAbsent(
