@@ -221,8 +221,6 @@
 - **Collaboration matters** - Share availability, co-edit events, and resolve scheduling overlaps
   together so everyone stays aligned.
 
----
-
 ## What?
 
 **Built on XMPP and SMTP**
@@ -253,27 +251,14 @@
 
 ## When?
 
-- Development started in 2024
-
----
-
-## Where?
-
-- Built in New Zealand
-
----
-
-## Who?
-
-- For people with a lot to get done
-- For people who want to take control of their communications and time
-
----
+- Development started in 2024. No AI was used at all during the first year of development.
 
 ## How?
 
-- Written in Dart + Flutter
+- Built using Flutter
 - With Moxxmpp, DeltaChat Core Rust, Drift
+
+---
 
 ## Downloading & Installing
 
