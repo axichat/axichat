@@ -2434,6 +2434,63 @@ void main() {
     },
   );
 
+  test(
+    'open XMPP chats do not send duplicate read markers while one is in flight',
+    () async {
+      final completer = Completer<void>();
+      when(
+        () => messageService.sendReadMarker(initialChat.jid, any()),
+      ).thenAnswer((_) => completer.future);
+
+      final bloc = ChatBloc(
+        jid: initialChat.jid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+      final incoming = Message(
+        stanzaID: 'live-open-chat-unread-in-flight',
+        senderJid: initialChat.jid,
+        chatJid: initialChat.jid,
+        timestamp: DateTime(2026, 1, 4, 12, 2),
+        body: 'Fresh direct message',
+      );
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      chatStreamController.add(initialChat);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      messageStreamController.add([incoming]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.inactive,
+      );
+      TestWidgetsFlutterBinding.instance.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      );
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verify(
+        () => messageService.sendReadMarker(initialChat.jid, incoming.stanzaID),
+      ).called(1);
+
+      completer.complete();
+      await _pumpBloc();
+      await _pumpBloc();
+
+      await bloc.close();
+    },
+  );
+
   test('catch-up paginates MAM when reconnecting after gap', () async {
     final xmppService = MockXmppService();
     final connectivityController =

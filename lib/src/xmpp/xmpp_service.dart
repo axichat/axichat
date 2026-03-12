@@ -1699,6 +1699,11 @@ class XmppService extends XmppBase
     await _connection.registerFeatureNegotiators(featureNegotiators);
 
     await _connection.registerManagers(featureManagers);
+    _connection
+        .getManager<mox.MessageManager>()
+        ?.registerMessageSendingCallback(
+          messageDeliveryReceiptRequestSendingCallback,
+        );
     await _prepareMucRoomsFromStateStore();
 
     _streamResumptionAttempted = false;

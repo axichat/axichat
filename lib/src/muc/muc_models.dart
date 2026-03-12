@@ -11,6 +11,8 @@ enum MucStatusCode {
   configurationChanged('104'),
   banned('301'),
   kicked('307'),
+  removedByAffiliationChange('321'),
+  removedByMembersOnlyChange('322'),
   roomShutdown('332');
 
   const MucStatusCode(this.code);
@@ -173,6 +175,8 @@ class RoomState {
     this.selfPresenceReason,
     this.joinErrorCondition,
     this.joinErrorText,
+    this.isDestroyed = false,
+    this.destroyedAlternateRoomJid,
     this.postJoinRefreshPending = false,
   }) : occupants = Map.unmodifiable(
          Map<String, Occupant>.of(occupants ?? <String, Occupant>{}),
@@ -188,6 +192,8 @@ class RoomState {
   final String? selfPresenceReason;
   final MucJoinErrorCondition? joinErrorCondition;
   final String? joinErrorText;
+  final bool isDestroyed;
+  final String? destroyedAlternateRoomJid;
   final bool postJoinRefreshPending;
   late final _RoomOccupantGroups _occupantGroups = _buildOccupantGroups();
 
@@ -222,6 +228,16 @@ class RoomState {
 
   bool get wasBanned =>
       selfPresenceStatusCodes.contains(MucStatusCode.banned.code);
+
+  bool get removedByAffiliationChange => selfPresenceStatusCodes.contains(
+    MucStatusCode.removedByAffiliationChange.code,
+  );
+
+  bool get removedByMembersOnlyChange => selfPresenceStatusCodes.contains(
+    MucStatusCode.removedByMembersOnlyChange.code,
+  );
+
+  bool get roomDestroyed => isDestroyed;
 
   bool get roomShutdown =>
       selfPresenceStatusCodes.contains(MucStatusCode.roomShutdown.code);
@@ -280,6 +296,8 @@ class RoomState {
     String? selfPresenceReason,
     MucJoinErrorCondition? joinErrorCondition,
     String? joinErrorText,
+    bool? isDestroyed,
+    String? destroyedAlternateRoomJid,
     bool? postJoinRefreshPending,
   }) => RoomState(
     roomJid: roomJid,
@@ -290,6 +308,9 @@ class RoomState {
     selfPresenceReason: selfPresenceReason ?? this.selfPresenceReason,
     joinErrorCondition: joinErrorCondition ?? this.joinErrorCondition,
     joinErrorText: joinErrorText ?? this.joinErrorText,
+    isDestroyed: isDestroyed ?? this.isDestroyed,
+    destroyedAlternateRoomJid:
+        destroyedAlternateRoomJid ?? this.destroyedAlternateRoomJid,
     postJoinRefreshPending:
         postJoinRefreshPending ?? this.postJoinRefreshPending,
   );
@@ -305,7 +326,13 @@ extension RoomStatePresence on RoomState {
 
   bool get hasJoinError => joinErrorCondition != null || joinErrorText != null;
 
-  bool get hasTerminalExit => wasKicked || wasBanned || roomShutdown;
+  bool get hasTerminalExit =>
+      wasKicked ||
+      wasBanned ||
+      roomShutdown ||
+      roomDestroyed ||
+      removedByAffiliationChange ||
+      removedByMembersOnlyChange;
 
   bool get blocksAutoRejoin => joinErrorCondition?.blocksAutoRejoin == true;
 

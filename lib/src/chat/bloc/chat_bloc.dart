@@ -485,6 +485,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   List<Chat> _roomChats = const <Chat>[];
   String? _roomSelfAvatarPath;
   String? _lastReadMarkerStanzaId;
+  String? _pendingReadMarkerStanzaId;
   String? _lastNoticedEmailMessageId;
   int? _lastNoticedEmailCandidateCount;
   String? _lastSeenEmailSyncKey;
@@ -685,9 +686,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         break;
       }
       final latestId = latestUnread?.stanzaID;
-      if (latestId != null && latestId != _lastReadMarkerStanzaId) {
-        await _messageService.sendReadMarker(chat.jid, latestId);
-        _lastReadMarkerStanzaId = latestId;
+      final pendingReadMarkerId = _pendingReadMarkerStanzaId;
+      if (latestId != null &&
+          latestId != _lastReadMarkerStanzaId &&
+          latestId != pendingReadMarkerId) {
+        _pendingReadMarkerStanzaId = latestId;
+        try {
+          await _messageService.sendReadMarker(chat.jid, latestId);
+          _lastReadMarkerStanzaId = latestId;
+        } finally {
+          if (_pendingReadMarkerStanzaId == latestId) {
+            _pendingReadMarkerStanzaId = null;
+          }
+        }
       }
     }
     final emailService = _emailService;
@@ -1692,6 +1703,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (resetContext) {
       _lastReadMarkerStanzaId = null;
+      _pendingReadMarkerStanzaId = null;
       _lastNoticedEmailMessageId = null;
       _lastNoticedEmailCandidateCount = null;
       _lastSeenEmailSyncKey = null;

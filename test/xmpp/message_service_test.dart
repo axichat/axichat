@@ -354,6 +354,18 @@ void main() {
       ).called(1);
     });
 
+    test('Serializes delivery receipt request XML for outbound messages.', () {
+      final nodes = messageDeliveryReceiptRequestSendingCallback(
+        mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+          const mox.MessageDeliveryReceiptData(true),
+        ]),
+      );
+
+      expect(nodes, hasLength(1));
+      expect(nodes.single.tag, 'request');
+      expect(nodes.single.attributes['xmlns'], mox.deliveryXmlns);
+    });
+
     test('Emits origin-id on normal direct messages.', () async {
       const directStanzaId = 'direct-stanza-id';
       const directOriginId = 'direct-origin-id';
@@ -1079,22 +1091,16 @@ void main() {
 
       await xmppService.reactToMessage(stanzaID: stanzaId, emoji: emoji);
 
-      verify(
-        () => mockConnection.sendMessage(
-          any(
-            that: isA<mox.MessageEvent>()
-                .having((event) => event.type, 'type', 'groupchat')
-                .having(
-                  (event) => event.extensions
-                      .get<mox.MessageReactionsData>()
-                      ?.messageId,
-                  'reaction target',
-                  mucStanzaId,
-                )
-                .having((event) => event.to.toBare().toString(), 'to', roomJid),
-          ),
-        ),
-      ).called(1);
+      final sentEvent =
+          verify(() => mockConnection.sendMessage(captureAny())).captured.single
+              as mox.MessageEvent;
+      expect(sentEvent.type, 'groupchat');
+      expect(
+        sentEvent.extensions.get<mox.MessageReactionsData>()?.messageId,
+        mucStanzaId,
+      );
+      expect(sentEvent.to.toBare().toString(), roomJid);
+      expect(sentEvent.extensions.get<mox.MessageIdData>()?.id, isNotEmpty);
     });
 
     test('Does not send MUC reactions without a room stanza-id', () async {

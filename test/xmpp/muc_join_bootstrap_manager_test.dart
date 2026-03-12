@@ -20,6 +20,7 @@ const String _reasonTag = 'reason';
 const String _affiliationAttr = 'affiliation';
 const String _roleAttr = 'role';
 const String _nickAttr = 'nick';
+const String _jidAttr = 'jid';
 const String _codeAttr = 'code';
 const String _iqTypeResult = 'result';
 const String _presenceUnavailable = 'unavailable';
@@ -27,6 +28,7 @@ const String _passwordRaw = '  secret  ';
 const String _passwordTrimmed = 'secret';
 const String _reasonRaw = '  Updated by server  ';
 const String _reasonTrimmed = 'Updated by server';
+const String _destroyRoomJid = 'replacement@conference.example.com';
 const String _affiliationValue = 'member';
 const String _roleValue = 'participant';
 const int _singleEventCount = 1;
@@ -57,6 +59,8 @@ mox.XMLNode _createMucUserNode({
   required Set<String> statusCodes,
   String? reason,
   String? newNick,
+  String? destroyReason,
+  String? destroyAlternateRoomJid,
 }) {
   final resolvedNick = newNick ?? nick;
   return mox.XMLNode.xmlns(
@@ -74,6 +78,15 @@ mox.XMLNode _createMucUserNode({
           if (reason != null) mox.XMLNode(tag: _reasonTag, text: reason),
         ],
       ),
+      if (destroyReason != null || destroyAlternateRoomJid != null)
+        mox.XMLNode(
+          tag: 'destroy',
+          attributes: {_jidAttr: ?destroyAlternateRoomJid},
+          children: [
+            if (destroyReason != null)
+              mox.XMLNode(tag: _reasonTag, text: destroyReason),
+          ],
+        ),
       for (final code in statusCodes)
         mox.XMLNode(tag: _statusTag, attributes: {_codeAttr: code}),
     ],
@@ -298,6 +311,45 @@ void main() {
         expect(event.isAvailable, isFalse);
         expect(event.isError, isTrue);
         expect(event.isNickChange, isFalse);
+      },
+    );
+
+    test(
+      'JOIN-012 [HP] destroyed self-presence carries alternate room metadata',
+      () async {
+        final events = <mox.XmppEvent>[];
+        final manager = MucJoinBootstrapManager()
+          ..register(_buildAttributes(events: events));
+
+        final mucUser = _createMucUserNode(
+          nick: _roomNick,
+          statusCodes: {MucStatusCode.selfPresence.code},
+          destroyReason: _reasonRaw,
+          destroyAlternateRoomJid: _destroyRoomJid,
+        );
+        final presence = _createPresence(
+          from: _roomJidWithNick,
+          mucUser: mucUser,
+          type: _presenceUnavailable,
+        );
+        final handler = manager.getIncomingStanzaHandlers().single;
+
+        await handler.callback(
+          presence,
+          mox.StanzaHandlerData(
+            _handlerDone,
+            _handlerCancel,
+            presence,
+            mox.TypedMap<mox.StanzaHandlerExtension>(),
+          ),
+        );
+
+        expect(events, hasLength(_singleEventCount));
+        final event = events.single as MucSelfPresenceEvent;
+        expect(event.isAvailable, isFalse);
+        expect(event.isRoomDestroyed, isTrue);
+        expect(event.reason, equals(_reasonTrimmed));
+        expect(event.destroyAlternateRoomJid, equals(_destroyRoomJid));
       },
     );
   });

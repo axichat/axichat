@@ -7,6 +7,7 @@ import 'package:axichat/main.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -2658,6 +2659,90 @@ void main() {
         expect(offlineMember?.isPresent, isFalse);
       },
     );
+
+    test(
+      'REG-011 [HP] warmRoomFromHistory restores persisted offline owners for later member list use',
+      () async {
+        final stateEntries = <String, Object?>{};
+        when(() => mockStateStore.read(key: any(named: 'key'))).thenAnswer((
+          invocation,
+        ) {
+          final key = invocation.namedArguments[#key] as RegisteredStateKey;
+          return stateEntries[key.value];
+        });
+        when(
+          () => mockStateStore.write(
+            key: any(named: 'key'),
+            value: any(named: 'value'),
+          ),
+        ).thenAnswer((invocation) async {
+          final key = invocation.namedArguments[#key] as RegisteredStateKey;
+          stateEntries[key.value] = invocation.namedArguments[#value];
+          return true;
+        });
+        when(() => mockStateStore.delete(key: any(named: 'key'))).thenAnswer((
+          invocation,
+        ) async {
+          final key = invocation.namedArguments[#key] as RegisteredStateKey;
+          stateEntries.remove(key.value);
+          return true;
+        });
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: 'opaque-owner-id',
+          nick: 'OwnerNick',
+          realJid: 'owner@axi.im',
+          affiliation: OccupantAffiliation.owner,
+          role: OccupantRole.moderator,
+          isPresent: _presenceAvailable,
+          fromPresence: true,
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        await xmppService.close();
+
+        xmppService = XmppService(
+          buildConnection: () => mockConnection,
+          buildStateStore: (_, _) => mockStateStore,
+          buildDatabase: (_, _) => mockDatabase,
+          notificationService: mockNotificationService,
+        );
+        await connectSuccessfully(xmppService);
+        eventStreamController.add(
+          mox.ConnectionStateChangedEvent(_connectedState, _disconnectedState),
+        );
+        await pumpEventQueue();
+
+        when(
+          () => mockDatabase.getChatMessages(
+            _roomJid,
+            start: any(named: 'start'),
+            end: any(named: 'end'),
+            filter: any(named: 'filter'),
+          ),
+        ).thenAnswer(
+          (_) async => <Message>[
+            Message(
+              stanzaID: 'owner-history-message',
+              senderJid: '$_roomJid/OwnerNick',
+              chatJid: _roomJid,
+              timestamp: DateTime.timestamp(),
+              body: 'hello from the owner',
+            ),
+          ],
+        );
+
+        final room = await xmppService.warmRoomFromHistory(roomJid: _roomJid);
+        final owner = room.owners.single;
+
+        expect(owner.nick, 'OwnerNick');
+        expect(owner.realJid, 'owner@axi.im');
+        expect(owner.affiliation, OccupantAffiliation.owner);
+        expect(owner.isPresent, isFalse);
+      },
+    );
   });
 
   group('Moderation actions', () {
@@ -2922,7 +3007,57 @@ void main() {
         );
         expect(updatedChat.archived, isTrue);
         expect(updatedChat.open, isFalse);
-        expect(xmppService.roomStateFor(_roomJid)?.roomShutdown, isTrue);
+        expect(xmppService.roomStateFor(_roomJid)?.roomDestroyed, isTrue);
+      },
+    );
+
+    test(
+      'PRES-012B [HP] destroyed self presence marks the room destroyed and archives it',
+      () async {
+        final existingChat = Chat(
+          jid: _roomJid,
+          title: _roomName,
+          type: ChatType.groupChat,
+          myNickname: 'me',
+          lastChangeTimestamp: _fixedTimestamp,
+          contactJid: _roomJid,
+          open: true,
+        );
+        when(
+          () => mockDatabase.getChat(_roomJid),
+        ).thenAnswer((_) async => existingChat);
+
+        eventStreamController.add(
+          MucSelfPresenceEvent(
+            roomJid: _roomJid,
+            occupantJid: _roomJidWithSelfNick,
+            nick: 'me',
+            affiliation: OccupantAffiliation.owner.xmlValue,
+            role: OccupantRole.moderator.xmlValue,
+            isAvailable: false,
+            isError: false,
+            isNickChange: false,
+            statusCodes: const <String>{},
+            reason: _inviteReasonRaw,
+            isRoomDestroyed: true,
+            destroyAlternateRoomJid: 'other@conference.example',
+          ),
+        );
+        await pumpEventQueue();
+
+        final updatedChat =
+            verify(() => mockDatabase.updateChat(captureAny())).captured.single
+                as Chat;
+        final room = xmppService.roomStateFor(_roomJid);
+
+        expect(updatedChat.archived, isTrue);
+        expect(updatedChat.open, isFalse);
+        expect(room?.roomDestroyed, isTrue);
+        expect(
+          room?.destroyedAlternateRoomJid,
+          equals('other@conference.example'),
+        );
+        expect(room?.selfPresenceReason, equals(_inviteReasonTrimmed));
       },
     );
 
@@ -3024,11 +3159,66 @@ void main() {
       expect(state.roomShutdown, isTrue);
     });
 
+    test('STAT-014 [HP] removedByAffiliationChange reflects status 321', () {
+      final state = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {
+          MucStatusCode.removedByAffiliationChange.code,
+        },
+      );
+      expect(state.removedByAffiliationChange, isTrue);
+    });
+
+    test('STAT-015 [HP] removedByMembersOnlyChange reflects status 322', () {
+      final state = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {
+          MucStatusCode.removedByMembersOnlyChange.code,
+        },
+      );
+      expect(state.removedByMembersOnlyChange, isTrue);
+    });
+
+    test('STAT-016 [HP] roomDestroyed reflects explicit destroy state', () {
+      final state = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        isDestroyed: true,
+        destroyedAlternateRoomJid: 'other@conference.example',
+      );
+      expect(state.roomDestroyed, isTrue);
+      expect(
+        state.destroyedAlternateRoomJid,
+        equals('other@conference.example'),
+      );
+    });
+
     test('STAT-014 [HP] terminal room states are not bootstrap pending', () {
       final shutdownState = RoomState(
         roomJid: _roomJid,
         occupants: const {},
         selfPresenceStatusCodes: {MucStatusCode.roomShutdown.code},
+      );
+      final destroyedState = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        isDestroyed: true,
+      );
+      final affiliationRemovedState = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {
+          MucStatusCode.removedByAffiliationChange.code,
+        },
+      );
+      final membersOnlyRemovedState = RoomState(
+        roomJid: _roomJid,
+        occupants: const {},
+        selfPresenceStatusCodes: {
+          MucStatusCode.removedByMembersOnlyChange.code,
+        },
       );
       final kickedState = RoomState(
         roomJid: _roomJid,
@@ -3042,6 +3232,9 @@ void main() {
       );
 
       expect(shutdownState.isBootstrapPending, isFalse);
+      expect(destroyedState.isBootstrapPending, isFalse);
+      expect(affiliationRemovedState.isBootstrapPending, isFalse);
+      expect(membersOnlyRemovedState.isBootstrapPending, isFalse);
       expect(kickedState.isBootstrapPending, isFalse);
       expect(bannedState.isBootstrapPending, isFalse);
     });

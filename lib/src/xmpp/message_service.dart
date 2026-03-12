@@ -60,6 +60,17 @@ const String _mamGlobalNoProgressLog =
     'Global MAM sync stalled; stopping to avoid churn.';
 const String _mamQueryHardTimeoutLog =
     'MAM query exceeded the hard timeout fallback.';
+
+List<mox.XMLNode> messageDeliveryReceiptRequestSendingCallback(
+  mox.TypedMap<mox.StanzaHandlerExtension> extensions,
+) {
+  final request = extensions.get<mox.MessageDeliveryReceiptData>();
+  if (request?.receiptRequested != true) {
+    return const <mox.XMLNode>[];
+  }
+  return <mox.XMLNode>[request!.toXML()];
+}
+
 final XmppOperationEvent _mamLoginStartEvent = XmppOperationEvent(
   kind: XmppOperationKind.mamLoginSync,
   stage: XmppOperationStage.start,
@@ -382,6 +393,20 @@ final class _OutboundPinMutation {
   final String chatJid;
   final String messageStanzaId;
   final bool pinned;
+}
+
+final class _OutboundReactionMutation {
+  const _OutboundReactionMutation({
+    required this.chatJid,
+    required this.messageStanzaId,
+    required this.senderJid,
+    required this.previousEmojis,
+  });
+
+  final String chatJid;
+  final String messageStanzaId;
+  final String senderJid;
+  final List<String> previousEmojis;
 }
 
 extension MessageEvent on mox.MessageEvent {
@@ -2265,6 +2290,8 @@ mixin MessageService
   final Map<String, String> _outboundGroupchatStanzaRooms = <String, String>{};
   final Map<String, _OutboundPinMutation> _outboundPinMutationsByStanzaId =
       <String, _OutboundPinMutation>{};
+  final Map<String, _OutboundReactionMutation>
+  _outboundReactionMutationsByStanzaId = <String, _OutboundReactionMutation>{};
 
   static const _stableKeyLimit = 500;
   static const _mamDiscoChatLimit = 500;
@@ -3133,6 +3160,7 @@ mixin MessageService
   Future<void> _sendReactionUpdate({
     required Message message,
     required List<String> emojis,
+    required List<String> previousEmojis,
     required bool isGroupChat,
   }) async {
     final sender = myJid;
@@ -3152,7 +3180,9 @@ mixin MessageService
     if (reactionTarget == null || reactionTarget.value.isEmpty) {
       return;
     }
+    final stanzaId = _connection.generateId();
     final reactionExtensions = <mox.StanzaHandlerExtension>[
+      mox.MessageIdData(stanzaId),
       if (!message.noStore)
         const mox.MessageProcessingHintData([mox.MessageProcessingHint.store]),
       mox.MessageReactionsData(reactionTarget.value, emojis),
@@ -3162,15 +3192,30 @@ mixin MessageService
       mox.JID.fromString(message.chatJid),
       false,
       mox.TypedMap<mox.StanzaHandlerExtension>.fromList(reactionExtensions),
-      id: _connection.generateId(),
+      id: stanzaId,
       type: isGroupChat ? _messageTypeGroupchat : 'chat',
     );
+    _trackOutboundReactionMutation(
+      stanzaId: stanzaId,
+      chatJid: message.chatJid,
+      messageStanzaId: message.stanzaID,
+      senderJid: sender,
+      previousEmojis: previousEmojis,
+    );
+    if (isGroupChat) {
+      _trackOutboundGroupchatStanza(
+        stanzaId: stanzaId,
+        roomJid: message.chatJid,
+      );
+    }
     try {
       final sent = await _connection.sendMessage(reactionEvent);
       if (!sent) {
         throw XmppMessageException();
       }
     } catch (error, stackTrace) {
+      _takeOutboundReactionMutation(stanzaId);
+      _outboundGroupchatStanzaRooms.remove(stanzaId);
       _log.warning(
         'Failed to send reaction for ${message.stanzaID}',
         error,
@@ -3426,6 +3471,45 @@ mixin MessageService
       return null;
     }
     return _outboundPinMutationsByStanzaId.remove(trimmedStanzaId);
+  }
+
+  void _trackOutboundReactionMutation({
+    required String stanzaId,
+    required String chatJid,
+    required String messageStanzaId,
+    required String senderJid,
+    required List<String> previousEmojis,
+  }) {
+    final trimmedStanzaId = stanzaId.trim();
+    final normalizedChat = _normalizePinChatJid(chatJid);
+    final trimmedMessageId = messageStanzaId.trim();
+    final normalizedSender = senderJid.trim();
+    if (trimmedStanzaId.isEmpty ||
+        normalizedChat == null ||
+        trimmedMessageId.isEmpty ||
+        normalizedSender.isEmpty) {
+      return;
+    }
+    _outboundReactionMutationsByStanzaId[trimmedStanzaId] =
+        _OutboundReactionMutation(
+          chatJid: normalizedChat,
+          messageStanzaId: trimmedMessageId,
+          senderJid: normalizedSender,
+          previousEmojis: List<String>.unmodifiable(previousEmojis),
+        );
+    if (_outboundReactionMutationsByStanzaId.length > _outboundSummaryLimit) {
+      _outboundReactionMutationsByStanzaId.remove(
+        _outboundReactionMutationsByStanzaId.keys.first,
+      );
+    }
+  }
+
+  _OutboundReactionMutation? _takeOutboundReactionMutation(String? stanzaId) {
+    final trimmedStanzaId = stanzaId?.trim();
+    if (trimmedStanzaId == null || trimmedStanzaId.isEmpty) {
+      return null;
+    }
+    return _outboundReactionMutationsByStanzaId.remove(trimmedStanzaId);
   }
 
   void _dropOutboundPinMutationByAction({
@@ -4699,6 +4783,7 @@ mixin MessageService
       await _sendReactionUpdate(
         message: message,
         emojis: sanitizedEmojis,
+        previousEmojis: emojis,
         isGroupChat: isGroupChat,
       );
       return true;
@@ -6133,6 +6218,8 @@ mixin MessageService
     final StanzaErrorConditionData? errorCondition = event.extensions
         .get<StanzaErrorConditionData>();
     _takeOutboundPinMutation(stanzaId);
+    final _OutboundReactionMutation? outboundReaction =
+        _takeOutboundReactionMutation(stanzaId);
     final _OutboundMessageSummary? summary = _outboundMessageSummaries.remove(
       stanzaId,
     );
@@ -6157,6 +6244,18 @@ mixin MessageService
     }
     final bool shouldPersistError =
         persistedMessage != null && !isChatStateOnlyError;
+
+    if (outboundReaction != null) {
+      await _dbOp<XmppDatabase>(
+        (db) => db.replaceReactions(
+          messageId: outboundReaction.messageStanzaId,
+          senderJid: outboundReaction.senderJid,
+          emojis: outboundReaction.previousEmojis,
+          updatedAt: DateTime.timestamp().toUtc(),
+          identityVerified: true,
+        ),
+      );
+    }
 
     if (shouldPersistError) {
       await _dbOp<XmppDatabase>(

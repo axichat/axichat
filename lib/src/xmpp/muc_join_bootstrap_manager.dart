@@ -18,6 +18,8 @@ final class MucSelfPresenceEvent extends mox.XmppEvent {
     this.errorCondition,
     this.errorText,
     this.newNick,
+    this.isRoomDestroyed = false,
+    this.destroyAlternateRoomJid,
   });
 
   final String roomJid;
@@ -33,6 +35,8 @@ final class MucSelfPresenceEvent extends mox.XmppEvent {
   final String? errorCondition;
   final String? errorText;
   final String? newNick;
+  final bool isRoomDestroyed;
+  final String? destroyAlternateRoomJid;
 }
 
 final class MucJoinBootstrapManager extends mox.XmppManagerBase {
@@ -224,6 +228,8 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
               : null,
           errorText: errorTextRaw?.isNotEmpty == true ? errorTextRaw : null,
           newNick: null,
+          isRoomDestroyed: false,
+          destroyAlternateRoomJid: null,
         ),
       );
       return state;
@@ -262,6 +268,18 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
     final affiliation = affiliationAttr is String ? affiliationAttr : 'none';
     final role = roleAttr is String ? roleAttr : 'none';
     final reason = item.firstTag('reason')?.innerText().trim();
+    final destroyNode = mucUser.firstTag(_destroyTag);
+    final destroyReason = destroyNode?.firstTag(_reasonTag)?.innerText().trim();
+    final destroyJidAttr = destroyNode?.attributes[_jidAttr];
+    final destroyAlternateRoomJid =
+        destroyJidAttr is String && destroyJidAttr.trim().isNotEmpty
+        ? destroyJidAttr.trim()
+        : null;
+    final resolvedReason = reason?.isNotEmpty == true
+        ? reason
+        : destroyReason?.isNotEmpty == true
+        ? destroyReason
+        : null;
 
     if (isAvailable) {
       final mucManager = getAttributes().getManagerById<MUCManager>(
@@ -284,10 +302,12 @@ final class MucJoinBootstrapManager extends mox.XmppManagerBase {
         isError: isError,
         isNickChange: isNickChange,
         statusCodes: resolvedStatuses,
-        reason: reason?.isNotEmpty == true ? reason : null,
+        reason: resolvedReason,
         errorCondition: null,
         errorText: null,
         newNick: isNickChange ? newNick : null,
+        isRoomDestroyed: destroyNode != null,
+        destroyAlternateRoomJid: destroyAlternateRoomJid,
       ),
     );
 
