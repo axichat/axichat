@@ -163,225 +163,42 @@ void main() {
     expect(layout.overflowed, isFalse);
   });
 
-  test(
-    'group message avatar lookup uses sender occupant data before opaque occupant ids',
-    () {
-      const roomJid = 'room@conference.axi.im';
-      const senderOccupantId = '$roomJid/friend';
-      final path = resolveMessageAvatarPath(
-        message: const Message(
-          stanzaID: 'm1',
-          senderJid: senderOccupantId,
-          chatJid: roomJid,
-          occupantID: 'opaque-occupant-id',
-        ),
-        roomState: RoomState(
-          roomJid: roomJid,
-          occupants: <String, Occupant>{
-            senderOccupantId: Occupant(
-              occupantId: senderOccupantId,
-              nick: 'friend',
-              realJid: 'friend@axi.im',
-            ),
-          },
-        ),
-        memberSections: const <RoomMemberSection>[],
-        rosterAvatarPathsByJid: const <String, String>{
-          'friend@axi.im': '/avatars/friend.png',
-        },
-        chatAvatarPathsByJid: const <String, String>{},
-      );
-
-      expect(path, '/avatars/friend.png');
-    },
-  );
-
-  test(
-    'group message avatar lookup keeps sender bare jid fallback while room hydration catches up',
-    () {
-      const roomJid = 'room@conference.axi.im';
-      const senderBareJid = 'friend@axi.im';
-      final path = resolveMessageAvatarPath(
-        message: const Message(
-          stanzaID: 'm2',
-          senderJid: senderBareJid,
-          chatJid: roomJid,
-          occupantID: 'opaque-occupant-id',
-        ),
-        roomState: RoomState(
-          roomJid: roomJid,
-          occupants: <String, Occupant>{
-            '$roomJid/friend': Occupant(
-              occupantId: '$roomJid/friend',
-              nick: 'friend',
-              isPresent: true,
-            ),
-          },
-        ),
-        memberSections: const <RoomMemberSection>[],
-        rosterAvatarPathsByJid: const <String, String>{
-          senderBareJid: '/avatars/friend.png',
-        },
-        chatAvatarPathsByJid: const <String, String>{},
-      );
-
-      expect(path, '/avatars/friend.png');
-    },
-  );
-
-  test('group message avatar jid prefers the resolved occupant real jid', () {
-    const roomJid = 'room@conference.axi.im';
-    const senderOccupantJid = '$roomJid/friend';
-    final avatarJid = resolveMessageAvatarJid(
-      message: const Message(
-        stanzaID: 'm3',
-        senderJid: senderOccupantJid,
-        chatJid: roomJid,
-        occupantID: 'opaque-occupant-id',
-      ),
-      roomState: RoomState(
-        roomJid: roomJid,
-        occupants: <String, Occupant>{
-          'opaque-occupant-id': Occupant(
-            occupantId: 'opaque-occupant-id',
-            nick: 'friend',
-            realJid: 'friend@axi.im',
-          ),
-        },
-      ),
-    );
-
-    expect(avatarJid, 'friend@axi.im');
-  });
-
-  test('group message avatar jid does not fall back to the room bare jid', () {
+  test('group message avatar seed never falls back to the room bare jid', () {
     const roomJid = 'group@conference.axi.im';
-    const senderOccupantJid = '$roomJid/burner';
-
-    final avatarJid = resolveMessageAvatarJid(
+    final seed = resolveMessageAvatarSeed(
       message: const Message(
-        stanzaID: 'm4',
-        senderJid: senderOccupantJid,
-        chatJid: roomJid,
-      ),
-      roomState: null,
-    );
-
-    expect(avatarJid, senderOccupantJid);
-  });
-
-  test('group message avatar member reuses the resolved occupant entry', () {
-    const roomJid = 'group@conference.axi.im';
-    final memberEntry = resolveRoomMemberEntryForMessage(
-      message: const Message(
-        stanzaID: 'm5',
-        senderJid: roomJid,
-        chatJid: roomJid,
-        occupantID: 'opaque-burner',
-      ),
-      roomState: RoomState(
-        roomJid: roomJid,
-        occupants: <String, Occupant>{
-          'opaque-burner': Occupant(
-            occupantId: 'opaque-burner',
-            nick: 'burner',
-            realJid: 'burner@axi.im',
-          ),
-        },
-      ),
-      memberSections: <RoomMemberSection>[
-        RoomMemberSection(
-          kind: RoomMemberSectionKind.members,
-          members: <RoomMemberEntry>[
-            RoomMemberEntry(
-              occupant: Occupant(
-                occupantId: 'opaque-burner',
-                nick: 'burner',
-                realJid: 'burner@axi.im',
-              ),
-              actions: const <MucModerationAction>[],
-              avatarPath: '/avatars/burner.png',
-            ),
-          ],
-        ),
-      ],
-    );
-
-    expect(memberEntry?.occupant.nick, 'burner');
-    expect(memberEntry?.avatarPath, '/avatars/burner.png');
-  });
-
-  test('group message avatar member does not match the room bare jid', () {
-    const roomJid = 'group@conference.axi.im';
-    final memberEntry = resolveRoomMemberEntryForMessage(
-      message: const Message(
-        stanzaID: 'm6',
+        stanzaID: 'm7',
         senderJid: roomJid,
         chatJid: roomJid,
       ),
       roomState: null,
-      memberSections: <RoomMemberSection>[
-        RoomMemberSection(
-          kind: RoomMemberSectionKind.members,
-          members: <RoomMemberEntry>[
-            RoomMemberEntry(
-              occupant: Occupant(
-                occupantId: 'opaque-burner',
-                nick: 'burner',
-                realJid: 'burner@axi.im',
-              ),
-              actions: const <MucModerationAction>[],
-              avatarPath: '/avatars/burner.png',
-            ),
-          ],
-        ),
-      ],
+      occupant: null,
+      fallbackLabel: roomJid,
+      unknownLabel: 'Unknown',
     );
 
-    expect(memberEntry, isNull);
+    expect(seed, 'Unknown');
   });
 
-  test(
-    'group message avatar path reuses the resolved member-section avatar path',
-    () {
-      const roomJid = 'group@conference.axi.im';
-      const occupantId = 'opaque-burner';
-      final path = resolveMessageAvatarPath(
-        message: const Message(
-          stanzaID: 'm7',
-          senderJid: roomJid,
-          chatJid: roomJid,
-          occupantID: occupantId,
-        ),
-        roomState: RoomState(
-          roomJid: roomJid,
-          occupants: <String, Occupant>{
-            occupantId: Occupant(occupantId: occupantId, nick: 'burner'),
-          },
-        ),
-        memberSections: <RoomMemberSection>[
-          RoomMemberSection(
-            kind: RoomMemberSectionKind.members,
-            members: <RoomMemberEntry>[
-              RoomMemberEntry(
-                occupant: Occupant(
-                  occupantId: occupantId,
-                  nick: 'burner',
-                  realJid: 'burner@axi.im',
-                ),
-                actions: const <MucModerationAction>[],
-                avatarPath: '/avatars/burner.png',
-              ),
-            ],
-          ),
-        ],
-        rosterAvatarPathsByJid: const <String, String>{},
-        chatAvatarPathsByJid: const <String, String>{},
-      );
+  test('group message avatar seed prefers resolved occupant nick', () {
+    final seed = resolveMessageAvatarSeed(
+      message: const Message(
+        stanzaID: 'm8',
+        senderJid: 'group@conference.axi.im/burner',
+        chatJid: 'group@conference.axi.im',
+      ),
+      roomState: null,
+      occupant: Occupant(
+        occupantId: 'opaque-burner',
+        nick: 'burner',
+        realJid: 'burner@axi.im',
+      ),
+      fallbackLabel: '',
+      unknownLabel: 'Unknown',
+    );
 
-      expect(path, '/avatars/burner.png');
-    },
-  );
+    expect(seed, 'burner');
+  });
 }
 
 class _ReactionLayoutTestApp extends StatelessWidget {

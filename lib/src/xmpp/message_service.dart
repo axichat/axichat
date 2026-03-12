@@ -2558,13 +2558,6 @@ mixin MessageService
             !isGroupChat &&
             message.chatJid.isNotEmpty &&
             !_isMucChatJid(message.chatJid);
-        final isPeerChat = isDirectChat && message.chatJid != myJid;
-        if (isPeerChat && this is AvatarService) {
-          fireAndForget(
-            () => (this as AvatarService).prefetchAvatarForJid(message.chatJid),
-            operationName: 'MessageService.prefetchPeerAvatar',
-          );
-        }
         if (isDirectChat) {
           try {
             await _upsertConversationIndexForPeer(
@@ -3607,16 +3600,6 @@ mixin MessageService
       requestedChatType: chatType,
     );
     final isGroupChat = resolvedChatType == ChatType.groupChat;
-    if (resolvedChatType == ChatType.chat &&
-        !_isMucChatJid(jid) &&
-        jid != accountJid) {
-      if (this is AvatarService) {
-        fireAndForget(
-          () => (this as AvatarService).prefetchAvatarForJid(jid),
-          operationName: 'MessageService.prefetchOutboundPeerAvatar',
-        );
-      }
-    }
     final senderIdentity = isGroupChat
         ? _outboundMucActorIdentity(roomJid: jid, accountJid: accountJid)
         : MucActorIdentity.direct(senderJid: accountJid);
