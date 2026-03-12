@@ -3057,14 +3057,15 @@ mixin MessageService
           roomKey: normalizedRoomJid,
           occupantId: occupantId,
         );
-    final senderJid = isRoomNickOccupantId
-        ? occupantId
-        : resolvedNick == null || resolvedNick.isEmpty
-        ? accountJid
-        : '$normalizedRoomJid/$resolvedNick';
-    return MucActorIdentity(
-      senderJid: senderJid,
-      occupantId: isRoomNickOccupantId ? null : occupantId,
+    if (isRoomNickOccupantId) {
+      return MucActorIdentity.room(occupantJid: occupantId);
+    }
+    if (resolvedNick == null || resolvedNick.isEmpty) {
+      return MucActorIdentity.direct(senderJid: accountJid);
+    }
+    return MucActorIdentity.room(
+      occupantJid: '$normalizedRoomJid/$resolvedNick',
+      occupantId: occupantId,
     );
   }
 
@@ -3618,7 +3619,7 @@ mixin MessageService
     }
     final senderIdentity = isGroupChat
         ? _outboundMucActorIdentity(roomJid: jid, accountJid: accountJid)
-        : MucActorIdentity(senderJid: accountJid);
+        : MucActorIdentity.direct(senderJid: accountJid);
     final storePreference = storeLocally ?? true;
     final shouldStore = storePreference && !noStore;
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -3928,7 +3929,7 @@ mixin MessageService
     final isGroupChat = resolvedChatType == ChatType.groupChat;
     final senderIdentity = isGroupChat
         ? _outboundMucActorIdentity(roomJid: jid, accountJid: accountJid)
-        : MucActorIdentity(senderJid: accountJid);
+        : MucActorIdentity.direct(senderJid: accountJid);
     final metadataId =
         upload?.metadata.id ?? attachment.metadataId ?? uuid.v4();
     final attachmentWithMetadataId = attachment.metadataId == metadataId
@@ -9642,7 +9643,7 @@ mixin MessageService
     final stanzaId = _connection.generateId();
     final senderIdentity = isGroupChat
         ? _outboundMucActorIdentity(roomJid: chatJid, accountJid: accountJid)
-        : MucActorIdentity(senderJid: accountJid);
+        : MucActorIdentity.direct(senderJid: accountJid);
     final targetJid = mox.JID.fromString(chatJid);
     final extensions = <mox.StanzaHandlerExtension>[
       mox.MessageIdData(stanzaId),

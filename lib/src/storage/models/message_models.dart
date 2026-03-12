@@ -614,9 +614,24 @@ final class MessageReference {
 }
 
 final class MucActorIdentity {
-  const MucActorIdentity({required this.senderJid, this.occupantId});
+  const MucActorIdentity._({
+    required this.senderJid,
+    this.occupantJid,
+    this.occupantId,
+  });
+
+  const MucActorIdentity.direct({required String senderJid})
+    : this._(senderJid: senderJid);
+
+  const MucActorIdentity.room({required String occupantJid, String? occupantId})
+    : this._(
+        senderJid: occupantJid,
+        occupantJid: occupantJid,
+        occupantId: occupantId,
+      );
 
   final String senderJid;
+  final String? occupantJid;
   final String? occupantId;
 }
 
@@ -653,10 +668,26 @@ extension MessageReferenceIds on Message {
     return occupantId;
   }
 
-  MucActorIdentity get mucActorIdentity => MucActorIdentity(
-    senderJid: senderJid.trim(),
-    occupantId: trimmedOccupantId,
-  );
+  MucActorIdentity get mucActorIdentity {
+    final trimmedSender = senderJid.trim();
+    final parsedSender = parseJid(trimmedSender);
+    final normalizedChatJid = normalizedAddressValue(chatJid);
+    final occupantJid =
+        parsedSender != null &&
+            parsedSender.resource.trim().isNotEmpty &&
+            normalizedChatJid != null &&
+            normalizedAddressValue(parsedSender.toBare().toString()) ==
+                normalizedChatJid
+        ? trimmedSender
+        : null;
+    if (occupantJid != null) {
+      return MucActorIdentity.room(
+        occupantJid: occupantJid,
+        occupantId: trimmedOccupantId,
+      );
+    }
+    return MucActorIdentity.direct(senderJid: trimmedSender);
+  }
 
   bool get hasMucReference => trimmedMucStanzaId != null;
 

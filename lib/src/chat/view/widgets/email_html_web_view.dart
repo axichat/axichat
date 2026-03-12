@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/html_content.dart';
@@ -25,8 +26,24 @@ String _prepareEmailHtmlData(Map<String, Object> arguments) {
   return '$themeStyle$preparedHtml';
 }
 
+enum _EmailHtmlWebViewMode { embedded, scrollable }
+
 class EmailHtmlWebView extends StatefulWidget {
-  const EmailHtmlWebView({
+  const EmailHtmlWebView.embedded({
+    super.key,
+    required this.html,
+    required this.allowRemoteImages,
+    required this.minHeight,
+    required this.backgroundColor,
+    required this.textColor,
+    required this.linkColor,
+    required this.onLinkTap,
+    this.simplifyLayout = false,
+    this.useHybridComposition = true,
+  }) : _mode = _EmailHtmlWebViewMode.embedded,
+       maxHeight = null;
+
+  const EmailHtmlWebView.scrollable({
     super.key,
     required this.html,
     required this.allowRemoteImages,
@@ -36,24 +53,23 @@ class EmailHtmlWebView extends StatefulWidget {
     required this.textColor,
     required this.linkColor,
     required this.onLinkTap,
-    this.clampHeightToMax = true,
-    this.disableInternalScroll = false,
     this.simplifyLayout = false,
     this.useHybridComposition = true,
-  });
+  }) : _mode = _EmailHtmlWebViewMode.scrollable;
 
   final String html;
   final bool allowRemoteImages;
-  final double maxHeight;
+  final double? maxHeight;
   final double minHeight;
   final Color backgroundColor;
   final Color textColor;
   final Color linkColor;
   final ValueChanged<String> onLinkTap;
-  final bool clampHeightToMax;
-  final bool disableInternalScroll;
   final bool simplifyLayout;
   final bool useHybridComposition;
+  final _EmailHtmlWebViewMode _mode;
+
+  bool get _usesInternalScroll => _mode == _EmailHtmlWebViewMode.scrollable;
 
   @override
   State<EmailHtmlWebView> createState() => _EmailHtmlWebViewState();
@@ -62,8 +78,8 @@ class EmailHtmlWebView extends StatefulWidget {
 class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   static const _emailWebViewBaseUrl = 'https://axichat.invalid/';
   static final Set<Factory<OneSequenceGestureRecognizer>>
-  _webViewGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
-    Factory<OneSequenceGestureRecognizer>(EagerGestureRecognizer.new),
+  _tapOnlyGestureRecognizers = <Factory<OneSequenceGestureRecognizer>>{
+    Factory<OneSequenceGestureRecognizer>(TapGestureRecognizer.new),
   };
   static final WebUri _emailWebViewUri = WebUri(_emailWebViewBaseUrl);
 
@@ -71,12 +87,21 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
   bool _isLoading = true;
   String? _preparedHtmlData;
   String? _preparedHtmlInputKey;
+  double? _contentHeight;
 
   double get _resolvedHeight {
-    if (widget.maxHeight < widget.minHeight) {
+    final measuredHeight = _contentHeight;
+    if (measuredHeight == null || measuredHeight <= 0) {
       return widget.minHeight;
     }
-    return widget.maxHeight;
+    if (!widget._usesInternalScroll) {
+      return math.max(widget.minHeight, measuredHeight);
+    }
+    final maxHeight = widget.maxHeight;
+    if (maxHeight == null || maxHeight < widget.minHeight) {
+      return widget.minHeight;
+    }
+    return measuredHeight.clamp(widget.minHeight, maxHeight).toDouble();
   }
 
   @override
@@ -94,6 +119,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         oldWidget.textColor != widget.textColor ||
         oldWidget.linkColor != widget.linkColor) {
       _preparedHtmlInputKey = null;
+      _contentHeight = null;
       _refreshPreparedHtml(reload: _controller != null);
     }
   }
@@ -130,6 +156,7 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
         if (!reload) {
           _preparedHtmlData = null;
         }
+        _contentHeight = null;
       });
     }
     final themeStyle = _buildThemeStyle(brightness: brightness);
@@ -174,6 +201,44 @@ class _EmailHtmlWebViewState extends State<EmailHtmlWebView> {
     );
   }
 
+  Future<void> _measureContentHeight() async {
+    final controller = _controller;
+    if (controller == null) {
+      return;
+    }
+    final rawHeight = await controller.getContentHeight();
+    if (!mounted || rawHeight == null || rawHeight <= 0) {
+      return;
+    }
+    var measuredHeight = rawHeight.toDouble();
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      measuredHeight *= await controller.getZoomScale() ?? 1.0;
+    }
+    if (!mounted || measuredHeight <= 0) {
+      return;
+    }
+    final normalizedHeight = measuredHeight.ceilToDouble();
+    if (_contentHeight == normalizedHeight) {
+      return;
+    }
+    setState(() {
+      _contentHeight = normalizedHeight;
+    });
+  }
+
+  void _updateContentHeight(double height) {
+    if (!mounted || height <= 0) {
+      return;
+    }
+    final normalizedHeight = height.ceilToDouble();
+    if (_contentHeight == normalizedHeight) {
+      return;
+    }
+    setState(() {
+      _contentHeight = normalizedHeight;
+    });
+  }
+
   String _buildThemeStyle({required Brightness brightness}) {
     final fallbackBackgroundColor = brightness == Brightness.dark
         ? const Color(0xFFFFFFFF)
@@ -204,7 +269,9 @@ html, body {
         children: [
           if (_preparedHtmlData != null)
             InAppWebView(
-              gestureRecognizers: _webViewGestureRecognizers,
+              gestureRecognizers: !widget._usesInternalScroll
+                  ? _tapOnlyGestureRecognizers
+                  : null,
               initialData: InAppWebViewInitialData(
                 data: _preparedHtmlData!,
                 baseUrl: _emailWebViewUri,
@@ -224,22 +291,28 @@ html, body {
                 useShouldOverrideUrlLoading: true,
                 useHybridComposition: widget.useHybridComposition,
                 supportZoom: true,
-                useWideViewPort: true,
+                useWideViewPort: false,
                 loadWithOverviewMode: false,
-                layoutAlgorithm: null,
+                layoutAlgorithm: widget.simplifyLayout
+                    ? LayoutAlgorithm.TEXT_AUTOSIZING
+                    : LayoutAlgorithm.NORMAL,
                 initialScale: 100,
-                textZoom: widget.simplifyLayout ? 140 : 100,
+                textZoom: widget.simplifyLayout ? 125 : 100,
                 minimumFontSize: widget.simplifyLayout ? 17 : 14,
                 minimumLogicalFontSize: widget.simplifyLayout ? 17 : 14,
                 preferredContentMode: UserPreferredContentMode.MOBILE,
-                disableVerticalScroll: widget.disableInternalScroll,
-                disableHorizontalScroll: widget.disableInternalScroll,
-                verticalScrollBarEnabled: !widget.disableInternalScroll,
-                horizontalScrollBarEnabled: !widget.disableInternalScroll,
+                disableVerticalScroll: !widget._usesInternalScroll,
+                disableHorizontalScroll: !widget._usesInternalScroll,
+                verticalScrollBarEnabled: widget._usesInternalScroll,
+                horizontalScrollBarEnabled: widget._usesInternalScroll,
               ),
               onWebViewCreated: (controller) {
                 _controller = controller;
               },
+              onContentSizeChanged:
+                  (controller, oldContentSize, newContentSize) {
+                    _updateContentHeight(newContentSize.height);
+                  },
               shouldOverrideUrlLoading: (controller, navigationAction) async {
                 final url =
                     navigationAction.request.url?.toString().trim() ?? '';
@@ -252,6 +325,7 @@ html, body {
                 return NavigationActionPolicy.CANCEL;
               },
               onLoadStop: (controller, url) async {
+                await _measureContentHeight();
                 if (!mounted) return;
                 setState(() {
                   _isLoading = false;

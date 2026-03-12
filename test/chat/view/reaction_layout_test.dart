@@ -270,9 +270,9 @@ void main() {
     expect(avatarJid, senderOccupantJid);
   });
 
-  test('group message avatar label prefers the resolved occupant nick', () {
+  test('group message avatar member reuses the resolved occupant entry', () {
     const roomJid = 'group@conference.axi.im';
-    final avatarLabel = resolveMessageAvatarLabel(
+    final memberEntry = resolveRoomMemberEntryForMessage(
       message: const Message(
         stanzaID: 'm5',
         senderJid: roomJid,
@@ -289,23 +289,56 @@ void main() {
           ),
         },
       ),
+      memberSections: <RoomMemberSection>[
+        RoomMemberSection(
+          kind: RoomMemberSectionKind.members,
+          members: <RoomMemberEntry>[
+            RoomMemberEntry(
+              occupant: Occupant(
+                occupantId: 'opaque-burner',
+                nick: 'burner',
+                realJid: 'burner@axi.im',
+              ),
+              actions: const <MucModerationAction>[],
+              avatarPath: '/avatars/burner.png',
+            ),
+          ],
+        ),
+      ],
     );
 
-    expect(avatarLabel, 'burner');
+    expect(memberEntry?.occupant.nick, 'burner');
+    expect(memberEntry?.avatarPath, '/avatars/burner.png');
   });
 
-  test('group message avatar label never falls back to the room bare jid', () {
+  test('group message avatar member does not match the room bare jid', () {
     const roomJid = 'group@conference.axi.im';
-    final avatarLabel = resolveMessageAvatarLabel(
+    final memberEntry = resolveRoomMemberEntryForMessage(
       message: const Message(
         stanzaID: 'm6',
         senderJid: roomJid,
         chatJid: roomJid,
       ),
       roomState: null,
+      memberSections: <RoomMemberSection>[
+        RoomMemberSection(
+          kind: RoomMemberSectionKind.members,
+          members: <RoomMemberEntry>[
+            RoomMemberEntry(
+              occupant: Occupant(
+                occupantId: 'opaque-burner',
+                nick: 'burner',
+                realJid: 'burner@axi.im',
+              ),
+              actions: const <MucModerationAction>[],
+              avatarPath: '/avatars/burner.png',
+            ),
+          ],
+        ),
+      ],
     );
 
-    expect(avatarLabel, isNull);
+    expect(memberEntry, isNull);
   });
 
   test(

@@ -71,10 +71,6 @@ void _mockEmailSync(MockEmailService service) {
   when(
     () => service.syncStateStream,
   ).thenAnswer((_) => const Stream<EmailSyncState>.empty());
-  when(() => service.isKnownEmailContact(any())).thenAnswer((_) async => false);
-  when(
-    () => service.knownEmailContactStream(any()),
-  ).thenAnswer((_) => const Stream<bool>.empty());
   when(
     () => service.messageStreamForChat(
       any(),
@@ -2095,69 +2091,6 @@ void main() {
     },
   );
 
-  test('tracks known email contact membership for email chats', () async {
-    final emailService = MockEmailService();
-    final knownContactController = StreamController<bool>.broadcast();
-    _mockEmailSync(emailService);
-
-    final emailChat = initialChat.copyWith(
-      deltaChatId: 4,
-      emailAddress: 'peer@example.com',
-      transport: MessageTransport.email,
-    );
-
-    when(
-      () => emailService.isKnownEmailContact('peer@example.com'),
-    ).thenAnswer((_) async => false);
-    when(
-      () => emailService.knownEmailContactStream('peer@example.com'),
-    ).thenAnswer((_) => knownContactController.stream);
-    when(
-      () => emailService.messageStreamForChat(
-        any(),
-        start: any(named: 'start'),
-        end: any(named: 'end'),
-        filter: any(named: 'filter'),
-      ),
-    ).thenAnswer((_) => const Stream<List<Message>>.empty());
-    when(
-      () => emailService.pinnedMessagesStream(any()),
-    ).thenAnswer((_) => const Stream<List<PinnedMessageEntry>>.empty());
-    when(
-      () => emailService.backfillChatHistory(
-        chat: any(named: 'chat'),
-        desiredWindow: any(named: 'desiredWindow'),
-        beforeMessageId: any(named: 'beforeMessageId'),
-        beforeTimestamp: any(named: 'beforeTimestamp'),
-        filter: any(named: 'filter'),
-      ),
-    ).thenAnswer((_) async {});
-
-    final bloc = ChatBloc(
-      jid: emailChat.jid,
-      messageService: messageService,
-      chatsService: chatsService,
-      mucService: mucService,
-      notificationService: notificationService,
-      emailService: emailService,
-      settings: _defaultChatSettings(),
-    );
-
-    chatStreamController.add(emailChat);
-    await _pumpBloc();
-    await _pumpBloc();
-
-    expect(bloc.state.emailContactKnown, false);
-
-    knownContactController.add(true);
-    await _pumpBloc();
-
-    expect(bloc.state.emailContactKnown, true);
-
-    await bloc.close();
-    await knownContactController.close();
-  });
-
   test('self email messages do not create an unread boundary', () async {
     final emailService = MockEmailService();
     final emailMessageStreamController =
@@ -2674,6 +2607,101 @@ void main() {
 
       await bloc.close();
       await roomStateController.close();
+    },
+  );
+
+  test(
+    'warm room state replaces cached empty placeholders so member sections hydrate',
+    () async {
+      const roomJid = 'room@conference.axi.im';
+      const selfOccupantId = '$roomJid/self';
+
+      when(
+        () => mucService.roomStateFor(roomJid),
+      ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+      when(() => mucService.warmRoomFromHistory(roomJid: roomJid)).thenAnswer(
+        (_) async => RoomState(
+          roomJid: roomJid,
+          myOccupantId: selfOccupantId,
+          occupants: <String, Occupant>{
+            selfOccupantId: _occupant(
+              occupantId: selfOccupantId,
+              nick: 'self',
+              realJid: 'self@axi.im',
+              affiliation: OccupantAffiliation.member,
+              role: OccupantRole.participant,
+            ),
+          },
+        ),
+      );
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      expect(bloc.state.roomState?.myOccupantId, selfOccupantId);
+      expect(
+        bloc.state.roomMemberSections
+            .expand((section) => section.members)
+            .map((member) => member.occupant.nick),
+        contains('self'),
+      );
+
+      await bloc.close();
+    },
+  );
+
+  test(
+    'group chats warm room state before subscribing to room state replay',
+    () async {
+      const roomJid = 'room@conference.axi.im';
+
+      when(
+        () => mucService.roomStateFor(roomJid),
+      ).thenReturn(RoomState(roomJid: roomJid, occupants: const {}));
+      when(() => mucService.warmRoomFromHistory(roomJid: roomJid)).thenAnswer(
+        (_) async => RoomState(roomJid: roomJid, occupants: const {}),
+      );
+
+      final roomStreamController = StreamController<RoomState>.broadcast();
+      when(
+        () => mucService.roomStateStream(roomJid),
+      ).thenAnswer((_) => roomStreamController.stream);
+
+      final bloc = ChatBloc(
+        jid: roomJid,
+        messageService: messageService,
+        chatsService: chatsService,
+        mucService: mucService,
+        notificationService: notificationService,
+        emailService: null,
+        settings: _defaultChatSettings(),
+      );
+
+      chatStreamController.add(_groupChat(roomJid));
+      messageStreamController.add(const <Message>[]);
+      await _pumpBloc();
+      await _pumpBloc();
+
+      verifyInOrder([
+        () => mucService.roomStateFor(roomJid),
+        () => mucService.warmRoomFromHistory(roomJid: roomJid),
+        () => mucService.roomStateStream(roomJid),
+      ]);
+
+      await bloc.close();
+      await roomStreamController.close();
     },
   );
 

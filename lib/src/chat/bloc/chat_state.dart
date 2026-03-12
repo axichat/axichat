@@ -60,7 +60,6 @@ abstract class ChatState with _$ChatState {
     XmppPeerCapabilities? xmppCapabilities,
     @Default(false) bool supportsHttpFileUpload,
     @Default(false) bool emailServiceAvailable,
-    @Default(false) bool emailContactKnown,
     String? emailSelfJid,
     String? openChatJid,
     @Default(0) int openChatRequestId,

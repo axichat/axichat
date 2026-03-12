@@ -604,7 +604,8 @@ class _UnknownSenderBanner extends StatelessWidget {
         if (chat == null ||
             chat.type != ChatType.chat ||
             chat.spam ||
-            chat.isAxichatWelcomeThread) {
+            chat.isAxichatWelcomeThread ||
+            chat.isEmailBacked) {
           return const SizedBox.shrink();
         }
         return BlocBuilder<RosterCubit, RosterState>(
@@ -626,19 +627,15 @@ class _UnknownSenderBanner extends StatelessWidget {
                       )
                       .firstOrNull;
             final inRoster = rosterEntry != null;
-            final isEmailChat = chat.isEmailBacked;
-            final showBanner = isEmailChat
-                ? !state.emailContactKnown
-                : !inRoster;
+            final showBanner = !inRoster;
             if (!showBanner) {
               return const SizedBox.shrink();
             }
-            final canAddContact = !isEmailChat || state.emailServiceAvailable;
             final l10n = context.l10n;
             final spacing = context.spacing;
             final iconSize = spacing.m;
             final actions = <Widget>[
-              if (onAddContact != null && canAddContact)
+              if (onAddContact != null)
                 ContextActionButton(
                   icon: Icon(LucideIcons.userPlus, size: iconSize),
                   label: l10n.rosterAddTitle,
@@ -7781,23 +7778,6 @@ class _ChatState extends State<Chat> {
                                                                               );
                                                                             } else if (shouldCollapseEmailPreview) {
                                                                               final (
-                                                                                details: focusPreviewDetails,
-                                                                                detailActions: focusPreviewDetailActions,
-                                                                              ) = _emailInlineDetailActionData(
-                                                                                context: context,
-                                                                                details:
-                                                                                    const <
-                                                                                      InlineSpan
-                                                                                    >[],
-                                                                                enabled: shouldShowViewFullEmailAction,
-                                                                                label: l10n.chatMessageViewFullAction,
-                                                                                onTap: () => unawaited(
-                                                                                  _selectMessage(
-                                                                                    messageModel.stanzaID,
-                                                                                  ),
-                                                                                ),
-                                                                              );
-                                                                              final (
                                                                                 details: collapsedPreviewDetails,
                                                                                 detailActions: collapsedPreviewDetailActions,
                                                                               ) = _emailInlineDetailActionData(
@@ -7809,15 +7789,15 @@ class _ChatState extends State<Chat> {
                                                                                   messageModel.stanzaID,
                                                                                 ),
                                                                               );
-                                                                              if (focusPreviewDetails.isNotEmpty) {
+                                                                              if (shouldShowViewFullEmailAction) {
                                                                                 bubbleTextChildren.add(
-                                                                                  Padding(
-                                                                                    padding: EdgeInsets.only(
-                                                                                      bottom: context.spacing.xs,
-                                                                                    ),
-                                                                                    child: ChatInlineDetails(
-                                                                                      details: focusPreviewDetails,
-                                                                                      detailActions: focusPreviewDetailActions,
+                                                                                  _MessageViewFullAction(
+                                                                                    self: self,
+                                                                                    label: l10n.chatMessageViewFullAction,
+                                                                                    onPressed: () => unawaited(
+                                                                                      _selectMessage(
+                                                                                        messageModel.stanzaID,
+                                                                                      ),
                                                                                     ),
                                                                                   ),
                                                                                 );
@@ -7884,26 +7864,6 @@ class _ChatState extends State<Chat> {
                                                                                   hasRemoteHtmlImages &&
                                                                                   shouldRenderHtmlBody;
                                                                               final (
-                                                                                details: focusHtmlDetails,
-                                                                                detailActions: focusHtmlDetailActions,
-                                                                              ) = _emailInlineDetailActionData(
-                                                                                context: context,
-                                                                                details:
-                                                                                    const <
-                                                                                      InlineSpan
-                                                                                    >[],
-                                                                                enabled:
-                                                                                    shouldShowViewFullEmailAction &&
-                                                                                    !shouldUseSelectedInlineEmailWebView &&
-                                                                                    shouldRenderHtmlBody,
-                                                                                label: l10n.chatMessageViewFullAction,
-                                                                                onTap: () => unawaited(
-                                                                                  _selectMessage(
-                                                                                    messageModel.stanzaID,
-                                                                                  ),
-                                                                                ),
-                                                                              );
-                                                                              final (
                                                                                 details: htmlBodyDetails,
                                                                                 detailActions: htmlBodyDetailActions,
                                                                               ) = _emailInlineDetailActionData(
@@ -7934,15 +7894,16 @@ class _ChatState extends State<Chat> {
                                                                                 );
                                                                               }
                                                                               if (shouldRenderHtmlBody) {
-                                                                                if (focusHtmlDetails.isNotEmpty) {
+                                                                                if (shouldShowViewFullEmailAction &&
+                                                                                    !shouldUseSelectedInlineEmailWebView) {
                                                                                   bubbleTextChildren.add(
-                                                                                    Padding(
-                                                                                      padding: EdgeInsets.only(
-                                                                                        bottom: context.spacing.xs,
-                                                                                      ),
-                                                                                      child: ChatInlineDetails(
-                                                                                        details: focusHtmlDetails,
-                                                                                        detailActions: focusHtmlDetailActions,
+                                                                                    _MessageViewFullAction(
+                                                                                      self: self,
+                                                                                      label: l10n.chatMessageViewFullAction,
+                                                                                      onPressed: () => unawaited(
+                                                                                        _selectMessage(
+                                                                                          messageModel.stanzaID,
+                                                                                        ),
                                                                                       ),
                                                                                     ),
                                                                                   );
@@ -8009,23 +7970,6 @@ class _ChatState extends State<Chat> {
                                                                               );
                                                                             } else if (shouldRenderTextContent) {
                                                                               final (
-                                                                                details: focusTextDetails,
-                                                                                detailActions: focusTextDetailActions,
-                                                                              ) = _emailInlineDetailActionData(
-                                                                                context: context,
-                                                                                details:
-                                                                                    const <
-                                                                                      InlineSpan
-                                                                                    >[],
-                                                                                enabled: shouldShowViewFullEmailAction,
-                                                                                label: l10n.chatMessageViewFullAction,
-                                                                                onTap: () => unawaited(
-                                                                                  _selectMessage(
-                                                                                    messageModel.stanzaID,
-                                                                                  ),
-                                                                                ),
-                                                                              );
-                                                                              final (
                                                                                 details: textBodyDetails,
                                                                                 detailActions: textBodyDetailActions,
                                                                               ) = _emailInlineDetailActionData(
@@ -8037,20 +7981,20 @@ class _ChatState extends State<Chat> {
                                                                                   messageModel.stanzaID,
                                                                                 ),
                                                                               );
-                                                                              if (trimmedDisplayMessageText.isNotEmpty) {
-                                                                                if (focusTextDetails.isNotEmpty) {
-                                                                                  bubbleTextChildren.add(
-                                                                                    Padding(
-                                                                                      padding: EdgeInsets.only(
-                                                                                        bottom: context.spacing.xs,
-                                                                                      ),
-                                                                                      child: ChatInlineDetails(
-                                                                                        details: focusTextDetails,
-                                                                                        detailActions: focusTextDetailActions,
+                                                                              if (shouldShowViewFullEmailAction) {
+                                                                                bubbleTextChildren.add(
+                                                                                  _MessageViewFullAction(
+                                                                                    self: self,
+                                                                                    label: l10n.chatMessageViewFullAction,
+                                                                                    onPressed: () => unawaited(
+                                                                                      _selectMessage(
+                                                                                        messageModel.stanzaID,
                                                                                       ),
                                                                                     ),
-                                                                                  );
-                                                                                }
+                                                                                  ),
+                                                                                );
+                                                                              }
+                                                                              if (trimmedDisplayMessageText.isNotEmpty) {
                                                                                 bubbleTextChildren.add(
                                                                                   _ParsedMessageBody(
                                                                                     contentKey: bubbleContentKey,
@@ -8453,25 +8397,41 @@ class _ChatState extends State<Chat> {
                                                                           extraOuterRight =
                                                                               0;
                                                                           if (hasAvatarSlot) {
+                                                                            final messageAvatarMember = resolveRoomMemberEntryForMessage(
+                                                                              message: messageModel,
+                                                                              roomState: state.roomState,
+                                                                              memberSections: state.roomMemberSections,
+                                                                            );
                                                                             final messageAvatarJid = resolveMessageAvatarJid(
                                                                               message: messageModel,
                                                                               roomState: state.roomState,
-                                                                            );
-                                                                            final messageAvatarLabel = resolveMessageAvatarLabel(
-                                                                              message: messageModel,
-                                                                              roomState: state.roomState,
+                                                                              memberSections: state.roomMemberSections,
+                                                                              memberEntry: messageAvatarMember,
                                                                             );
                                                                             final messageAvatarPath = resolveMessageAvatarPath(
                                                                               message: messageModel,
                                                                               roomState: state.roomState,
                                                                               memberSections: state.roomMemberSections,
+                                                                              memberEntry: messageAvatarMember,
                                                                               rosterAvatarPathsByJid: rosterAvatarPathsByJid,
                                                                               chatAvatarPathsByJid: chatAvatarPathsByJid,
                                                                             );
+                                                                            final messageAvatarOccupant =
+                                                                                state.roomState ==
+                                                                                    null
+                                                                                ? null
+                                                                                : _resolveRoomMessageOccupant(
+                                                                                    message: messageModel,
+                                                                                    roomState: state.roomState!,
+                                                                                  );
                                                                             avatarOverlay = _MessageAvatar(
                                                                               jid:
-                                                                                  messageAvatarLabel ??
                                                                                   messageAvatarJid ??
+                                                                                  messageAvatarMember?.occupant.nick.trim() ??
+                                                                                  messageAvatarOccupant?.nick.trim() ??
+                                                                                  _nickFromSender(
+                                                                                    messageModel.senderJid,
+                                                                                  ) ??
                                                                                   messageModel.senderJid,
                                                                               size: messageAvatarSize,
                                                                               avatarPath: messageAvatarPath,
@@ -12191,46 +12151,100 @@ Occupant? _resolveRoomMessageOccupant({
   return fallback;
 }
 
+String _roomMemberAvatarKey(Occupant occupant) {
+  final realJid = occupant.realJid?.trim();
+  if (realJid == null || realJid.isEmpty) {
+    return occupant.nick;
+  }
+  return bareAddress(realJid) ?? realJid;
+}
+
 @visibleForTesting
-String? resolveMessageAvatarLabel({
+RoomMemberEntry? resolveRoomMemberEntryForMessage({
   required Message message,
   required RoomState? roomState,
+  required List<RoomMemberSection> memberSections,
 }) {
-  if (roomState != null) {
-    final occupant = _resolveRoomMessageOccupant(
-      message: message,
-      roomState: roomState,
-    );
-    final nick = occupant?.nick.trim();
-    if (nick != null && nick.isNotEmpty) {
-      return nick;
+  if (memberSections.isEmpty) {
+    return null;
+  }
+
+  final roomOccupant = roomState == null
+      ? null
+      : _resolveRoomMessageOccupant(message: message, roomState: roomState);
+  final actorIdentity = message.mucActorIdentity;
+  final normalizedMessageOccupantId = normalizedOccupantId(
+    actorIdentity.occupantId,
+  );
+  final normalizedResolvedOccupantId = normalizedOccupantId(
+    roomOccupant?.occupantId,
+  );
+  final normalizedResolvedRealJid = normalizedAddressValue(
+    bareAddress(roomOccupant?.realJid) ?? roomOccupant?.realJid,
+  );
+  final normalizedSenderBareJid = normalizedAddressValue(
+    bareAddress(actorIdentity.senderJid),
+  );
+  final normalizedNick =
+      (roomOccupant?.nick.trim().isNotEmpty == true
+              ? roomOccupant!.nick.trim()
+              : addressResourcePart(
+                  actorIdentity.occupantJid ?? actorIdentity.senderJid,
+                )?.trim())
+          ?.toLowerCase();
+  RoomMemberEntry? fallback;
+
+  for (final section in memberSections) {
+    for (final member in section.members) {
+      final memberAvatarPath = member.avatarPath?.trim();
+      final memberOccupant = member.occupant;
+      final normalizedMemberOccupantId = normalizedOccupantId(
+        memberOccupant.occupantId,
+      );
+      final normalizedMemberRealJid = normalizedAddressValue(
+        bareAddress(memberOccupant.realJid) ?? memberOccupant.realJid,
+      );
+      final normalizedMemberNick = memberOccupant.nick.trim().toLowerCase();
+      final matches =
+          (normalizedMessageOccupantId != null &&
+              normalizedMemberOccupantId == normalizedMessageOccupantId) ||
+          (normalizedResolvedOccupantId != null &&
+              normalizedMemberOccupantId == normalizedResolvedOccupantId) ||
+          (normalizedResolvedRealJid != null &&
+              normalizedMemberRealJid == normalizedResolvedRealJid) ||
+          (normalizedSenderBareJid != null &&
+              normalizedMemberRealJid == normalizedSenderBareJid) ||
+          (normalizedNick != null && normalizedMemberNick == normalizedNick);
+      if (!matches) {
+        continue;
+      }
+      if (memberAvatarPath != null && memberAvatarPath.isNotEmpty) {
+        return member;
+      }
+      fallback ??= member;
     }
   }
-
-  final senderNick = addressResourcePart(message.senderJid)?.trim();
-  if (senderNick != null && senderNick.isNotEmpty) {
-    return senderNick;
-  }
-
-  final senderJid = message.senderJid.trim();
-  if (senderJid.isEmpty) {
-    return null;
-  }
-  final normalizedRoomJid = normalizedAddressValue(message.chatJid);
-  final senderBareJid = bareAddress(senderJid) ?? senderJid;
-  final normalizedSenderBareJid = normalizedAddressValue(senderBareJid);
-  if (normalizedRoomJid != null &&
-      normalizedSenderBareJid == normalizedRoomJid) {
-    return null;
-  }
-  return senderJid;
+  return fallback;
 }
 
 @visibleForTesting
 String? resolveMessageAvatarJid({
   required Message message,
   required RoomState? roomState,
+  List<RoomMemberSection> memberSections = const <RoomMemberSection>[],
+  RoomMemberEntry? memberEntry,
 }) {
+  final resolvedMember =
+      memberEntry ??
+      resolveRoomMemberEntryForMessage(
+        message: message,
+        roomState: roomState,
+        memberSections: memberSections,
+      );
+  if (resolvedMember != null) {
+    return _roomMemberAvatarKey(resolvedMember.occupant);
+  }
+
   final normalizedRoomJid = normalizedAddressValue(message.chatJid);
   if (roomState != null) {
     final occupant = _resolveRoomMessageOccupant(
@@ -12282,6 +12296,7 @@ String? resolveMessageAvatarPath({
   required Message message,
   required RoomState? roomState,
   required List<RoomMemberSection> memberSections,
+  RoomMemberEntry? memberEntry,
   required Map<String, String> rosterAvatarPathsByJid,
   required Map<String, String> chatAvatarPathsByJid,
 }) {
@@ -12292,6 +12307,18 @@ String? resolveMessageAvatarPath({
     }
     return rosterAvatarPathsByJid[normalized] ??
         chatAvatarPathsByJid[normalized];
+  }
+
+  final resolvedMember =
+      memberEntry ??
+      resolveRoomMemberEntryForMessage(
+        message: message,
+        roomState: roomState,
+        memberSections: memberSections,
+      );
+  final memberAvatarPath = resolvedMember?.avatarPath?.trim();
+  if (memberAvatarPath != null && memberAvatarPath.isNotEmpty) {
+    return memberAvatarPath;
   }
 
   final normalizedRoomJid = normalizedAddressValue(message.chatJid);
@@ -12309,95 +12336,6 @@ String? resolveMessageAvatarPath({
       final avatarPath = avatarPathForBareJid(bareRealJid);
       if (avatarPath != null) {
         return avatarPath;
-      }
-    }
-    final occupantNick = occupant?.nick.trim();
-    if (occupantNick != null && occupantNick.isNotEmpty) {
-      final normalizedOccupantNick = occupantNick.toLowerCase();
-      for (final candidate in roomState.occupants.values) {
-        if (candidate.nick.trim().toLowerCase() != normalizedOccupantNick) {
-          continue;
-        }
-        final realJid = candidate.realJid?.trim();
-        if (realJid == null || realJid.isEmpty) {
-          continue;
-        }
-        final avatarPath = avatarPathForBareJid(
-          bareAddress(realJid) ?? realJid,
-        );
-        if (avatarPath != null) {
-          return avatarPath;
-        }
-      }
-    }
-  }
-
-  if (memberSections.isNotEmpty) {
-    final normalizedMessageOccupantId = normalizedOccupantId(
-      message.occupantID,
-    );
-    if (normalizedMessageOccupantId != null) {
-      for (final section in memberSections) {
-        for (final member in section.members) {
-          final normalizedMemberOccupantId = normalizedOccupantId(
-            member.occupant.occupantId,
-          );
-          if (normalizedMemberOccupantId != normalizedMessageOccupantId) {
-            continue;
-          }
-          final memberAvatarPath = member.avatarPath?.trim();
-          if (memberAvatarPath != null && memberAvatarPath.isNotEmpty) {
-            return memberAvatarPath;
-          }
-        }
-      }
-    }
-
-    final avatarJid = resolveMessageAvatarJid(
-      message: message,
-      roomState: roomState,
-    );
-    final normalizedAvatarJid = normalizedAddressValue(
-      avatarJid == null ? null : bareAddress(avatarJid) ?? avatarJid,
-    );
-    if (normalizedAvatarJid != null) {
-      for (final section in memberSections) {
-        for (final member in section.members) {
-          final memberRealJid = member.occupant.realJid?.trim();
-          if (memberRealJid == null || memberRealJid.isEmpty) {
-            continue;
-          }
-          if (normalizedAddressValue(
-                bareAddress(memberRealJid) ?? memberRealJid,
-              ) !=
-              normalizedAvatarJid) {
-            continue;
-          }
-          final memberAvatarPath = member.avatarPath?.trim();
-          if (memberAvatarPath != null && memberAvatarPath.isNotEmpty) {
-            return memberAvatarPath;
-          }
-        }
-      }
-    }
-
-    final avatarLabel = resolveMessageAvatarLabel(
-      message: message,
-      roomState: roomState,
-    )?.trim();
-    if (avatarLabel != null && avatarLabel.isNotEmpty) {
-      final normalizedAvatarLabel = avatarLabel.toLowerCase();
-      for (final section in memberSections) {
-        for (final member in section.members) {
-          if (member.occupant.nick.trim().toLowerCase() !=
-              normalizedAvatarLabel) {
-            continue;
-          }
-          final memberAvatarPath = member.avatarPath?.trim();
-          if (memberAvatarPath != null && memberAvatarPath.isNotEmpty) {
-            return memberAvatarPath;
-          }
-        }
       }
     }
   }
@@ -17231,21 +17169,43 @@ class _MessageHtmlWebViewBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sizing = context.sizing;
-    final screenHeight = MediaQuery.sizeOf(context).height;
-    return EmailHtmlWebView(
+    return EmailHtmlWebView.embedded(
       html: html,
       allowRemoteImages: shouldLoadImages,
-      maxHeight: math.min(
-        screenHeight * sizing.dialogMaxHeightFraction,
-        sizing.composeWindowHeight,
-      ),
       minHeight: sizing.attachmentPreviewExtent,
       backgroundColor: backgroundColor,
       textColor: textColor,
       linkColor: linkColor,
-      clampHeightToMax: true,
       simplifyLayout: true,
       onLinkTap: onLinkTap,
+    );
+  }
+}
+
+class _MessageViewFullAction extends StatelessWidget {
+  const _MessageViewFullAction({
+    required this.self,
+    required this.label,
+    required this.onPressed,
+  });
+
+  final bool self;
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return Padding(
+      padding: EdgeInsets.only(bottom: spacing.xs),
+      child: Align(
+        alignment: self ? Alignment.centerRight : Alignment.centerLeft,
+        child: AxiButton.secondary(
+          size: AxiButtonSize.sm,
+          onPressed: onPressed,
+          child: Text(label),
+        ),
+      ),
     );
   }
 }

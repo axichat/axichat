@@ -691,10 +691,6 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> replaceContacts(Map<String, String> contactsByNativeId);
 
-  Future<bool> isEmailAddressInContacts(String address);
-
-  Stream<bool> watchIsEmailAddressInContacts(String address);
-
   Stream<List<EmailBlocklistEntry>> watchEmailBlocklist();
 
   Future<List<EmailBlocklistEntry>> getEmailBlocklist();
@@ -5938,33 +5934,6 @@ WHERE jid = ?
         });
       }
     });
-  }
-
-  @override
-  Future<bool> isEmailAddressInContacts(String address) async {
-    final normalized = normalizeEmailAddress(address);
-    if (normalized.isEmpty) {
-      return false;
-    }
-    final matches = await (select(
-      contacts,
-    )..where((tbl) => tbl.jid.equals(normalized))).get();
-    return matches.isNotEmpty;
-  }
-
-  @override
-  Stream<bool> watchIsEmailAddressInContacts(String address) {
-    final normalized = normalizeEmailAddress(address);
-    if (normalized.isEmpty) {
-      return Stream<bool>.value(false);
-    }
-    final countExpression = contacts.nativeID.count();
-    final query = selectOnly(contacts)
-      ..addColumns([countExpression])
-      ..where(contacts.jid.equals(normalized));
-    return query.watchSingle().map(
-      (row) => (row.read(countExpression) ?? 0) > 0,
-    );
   }
 
   @override

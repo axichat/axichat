@@ -127,15 +127,6 @@ final class _EmailSyncStateChanged extends ChatEvent {
   List<Object?> get props => [state];
 }
 
-final class _EmailContactKnownChanged extends ChatEvent {
-  const _EmailContactKnownChanged(this.known);
-
-  final bool known;
-
-  @override
-  List<Object?> get props => [known];
-}
-
 final class _XmppConnectionStateChanged extends ChatEvent {
   const _XmppConnectionStateChanged(this.state);
 

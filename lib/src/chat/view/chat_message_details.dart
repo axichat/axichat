@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'dart:math' as math;
-
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -305,20 +303,14 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                               side: context.borderSide,
                             ),
                           ),
-                          child: EmailHtmlWebView(
+                          child: EmailHtmlWebView.embedded(
                             html: normalizedHtmlBody,
                             allowRemoteImages: shouldLoadImages,
                             backgroundColor: context.colorScheme.card,
                             textColor: context.colorScheme.foreground,
                             linkColor: context.colorScheme.primary,
                             simplifyLayout: true,
-                            maxHeight: math.min(
-                              MediaQuery.sizeOf(context).height *
-                                  context.sizing.dialogMaxHeightFraction,
-                              context.sizing.composeWindowHeight,
-                            ),
                             minHeight: context.sizing.attachmentPreviewExtent,
-                            clampHeightToMax: true,
                             onLinkTap: (url) => _handleLinkTap(context, url),
                           ),
                         )

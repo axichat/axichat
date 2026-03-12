@@ -1377,25 +1377,6 @@ class EmailService {
     return await db.getChat(context.chat.jid) ?? context.chat;
   }
 
-  Future<bool> isKnownEmailContact(String address) async {
-    final normalized = normalizeEmailAddress(address);
-    if (normalized.isEmpty) {
-      return false;
-    }
-    final db = await _databaseBuilder();
-    return db.isEmailAddressInContacts(normalized);
-  }
-
-  Stream<bool> knownEmailContactStream(String address) async* {
-    final normalized = normalizeEmailAddress(address);
-    if (normalized.isEmpty) {
-      yield false;
-      return;
-    }
-    final db = await _databaseBuilder();
-    yield* db.watchIsEmailAddressInContacts(normalized).distinct();
-  }
-
   Future<int> sendMessage({
     required Chat chat,
     required String body,

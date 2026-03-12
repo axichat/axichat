@@ -742,21 +742,18 @@ mixin MucService on XmppBase, BaseStreamService {
 
   Stream<RoomState> roomStateStream(String roomJid) {
     final key = _roomKey(roomJid);
-    final controller = _roomStreams.putIfAbsent(
+    late final StreamController<RoomState> controller;
+    controller = _roomStreams.putIfAbsent(
       key,
       () => StreamController<RoomState>.broadcast(
         onListen: () {
           final current = _roomStates[key];
           if (current != null) {
-            _roomStreams[key]?.add(current);
+            controller.add(current);
           }
         },
       ),
     );
-    final current = _roomStates[key];
-    if (current != null && controller.hasListener) {
-      controller.add(current);
-    }
     return controller.stream;
   }
 
