@@ -266,7 +266,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                     decoration: baseDecoration,
                     selectedDecoration: selectedDecoration,
                     backgroundColor: Colors.transparent,
-                    selectedBackgroundColor: selectedBackground,
+                    selectedBackgroundColor: _isAnyDragActive
+                        ? Colors.transparent
+                        : selectedBackground,
                     hoverBackgroundColor: hoverBackground,
                     selectedHoverBackgroundColor: hoverBackground,
                     pressedBackgroundColor: pressedBackground,
@@ -291,7 +293,9 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                     decoration: baseDecoration,
                     selectedDecoration: selectedDecoration,
                     backgroundColor: Colors.transparent,
-                    selectedBackgroundColor: selectedBackground,
+                    selectedBackgroundColor: _isAnyDragActive
+                        ? Colors.transparent
+                        : selectedBackground,
                     hoverBackgroundColor: hoverBackground,
                     selectedHoverBackgroundColor: hoverBackground,
                     pressedBackgroundColor: pressedBackground,
@@ -979,7 +983,7 @@ class _DragTabLabel extends StatelessWidget {
         ? scheme.primary
         : Colors.transparent;
     final Color pillBorderColor = dragActive
-        ? scheme.primaryForeground.withValues(alpha: 0.16)
+        ? scheme.primaryForeground.withValues(alpha: 0.28)
         : Colors.transparent;
     final labelContent = AnimatedContainer(
       duration: duration,
@@ -992,21 +996,26 @@ class _DragTabLabel extends StatelessWidget {
           bottom: BorderSide(color: cueColor, width: width),
         ),
       ),
-      child: DefaultTextStyle.merge(
-        style: context.textTheme.label.strongIf(emphasize),
-        child: AnimatedContainer(
-          duration: duration,
-          curve: Curves.easeOutCubic,
-          constraints: BoxConstraints(
-            minWidth: context.sizing.listButtonHeight,
-            minHeight: context.sizing.listButtonHeight - context.spacing.s,
-          ),
-          padding: EdgeInsets.symmetric(horizontal: context.spacing.m),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: pillBackgroundColor,
-            border: Border.all(
-              color: pillBorderColor,
+        child: DefaultTextStyle.merge(
+          style: context.textTheme.label.strongIf(emphasize),
+          child: AnimatedContainer(
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            margin: EdgeInsets.symmetric(vertical: context.spacing.xxs),
+            constraints: BoxConstraints(
+              minWidth:
+                  context.sizing.listButtonHeight + context.spacing.l,
+              minHeight: context.sizing.listButtonHeight,
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: context.spacing.m,
+              vertical: context.spacing.xs,
+            ),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: pillBackgroundColor,
+              border: Border.all(
+                color: pillBorderColor,
               width: context.borderSide.width,
             ),
             borderRadius: BorderRadius.circular(context.radii.pill),

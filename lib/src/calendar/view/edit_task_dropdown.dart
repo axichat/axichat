@@ -498,6 +498,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       final bool keyboardOpen = keyboardInset > safeBottom;
       final bool footerPinned = !keyboardOpen && allowsAnyEdits;
       final double scrollTopPadding = isSheet ? 0 : context.spacing.m;
+      final bool showInlineActions = isSheet && inlineActions.isNotEmpty;
+      final bool showOccurrenceScope =
+          widget.task.isOccurrence && widget.onOccurrenceUpdated != null;
       Widget? actionRow({required bool includeTopBorder}) {
         if (!allowsAnyEdits) {
           return null;
@@ -555,20 +558,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (isSheet)
-                      _EditTaskInlineActionsSection(
-                        inlineActions: inlineActions,
-                      ),
-                    if (widget.task.isOccurrence &&
-                        widget.onOccurrenceUpdated != null) ...[
-                      _EditTaskOccurrenceScopeSection(
-                        scope: _occurrenceScope,
-                        enabled: allowsAnyEdits,
-                        onChanged: (scope) =>
-                            setState(() => _occurrenceScope = scope),
-                      ),
-                      TaskSectionDivider(verticalPadding: context.spacing.m),
-                    ],
                     _EditTaskTitleField(
                       controller: _titleController,
                       validator: (value) => TaskTitleValidation.validate(
@@ -580,7 +569,23 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       autovalidateMode: AutovalidateMode.disabled,
                       enabled: allowsFullEdits,
                     ),
-                    SizedBox(height: context.spacing.s),
+                    if (showInlineActions || showOccurrenceScope) ...[
+                      SizedBox(height: context.spacing.m),
+                      if (showInlineActions)
+                        _EditTaskInlineActionsSection(
+                          inlineActions: inlineActions,
+                        ),
+                      if (showOccurrenceScope) ...[
+                        _EditTaskOccurrenceScopeSection(
+                          scope: _occurrenceScope,
+                          enabled: allowsAnyEdits,
+                          onChanged: (scope) =>
+                              setState(() => _occurrenceScope = scope),
+                        ),
+                        TaskSectionDivider(verticalPadding: context.spacing.m),
+                      ],
+                    ] else
+                      SizedBox(height: context.spacing.s),
                     _EditTaskPriorityRow(
                       isImportant: _isImportant,
                       isUrgent: _isUrgent,

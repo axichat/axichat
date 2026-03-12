@@ -230,6 +230,9 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     return FocusManager.instance.isTextInputFocused;
   }
 
+  bool get _hasFocusedSidebarNode =>
+      _isFocusWithinSidebar(FocusManager.instance.primaryFocus);
+
   bool get _isSidebarTextInputActive {
     final FocusNode? primaryFocus = FocusManager.instance.primaryFocus;
     if (!_isFocusWithinSidebar(primaryFocus)) {
@@ -1168,7 +1171,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
     final bool keyboardVisible = _currentSidebarKeyboardVisible;
     final bool keyboardJustClosed = _sidebarKeyboardVisible && !keyboardVisible;
     _sidebarKeyboardVisible = keyboardVisible;
-    if (!keyboardJustClosed || !_hasFocusedSidebarTextInput) {
+    if (!keyboardJustClosed || !_hasFocusedSidebarNode) {
       return;
     }
     FocusScope.of(context).unfocus();
