@@ -272,6 +272,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       scheme: scheme,
                       selected: scheduleSelected,
                       showCue: scheduleCueActive,
+                      dragActive: _isAnyDragActive,
                       shake:
                           !lowMotion &&
                           scheduleSwitchHintActive &&
@@ -296,6 +297,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       scheme: scheme,
                       selected: tasksSelected,
                       showCue: tasksCueActive,
+                      dragActive: _isAnyDragActive,
                       shake:
                           !lowMotion &&
                           tasksSwitchHintActive &&
@@ -942,6 +944,7 @@ class _DragTabLabel extends StatelessWidget {
     required this.scheme,
     required this.selected,
     required this.showCue,
+    required this.dragActive,
     required this.shake,
   });
 
@@ -949,6 +952,7 @@ class _DragTabLabel extends StatelessWidget {
   final ShadColorScheme scheme;
   final bool selected;
   final bool showCue;
+  final bool dragActive;
   final bool shake;
 
   @override
@@ -961,10 +965,17 @@ class _DragTabLabel extends StatelessWidget {
         ? context.borderSide.width * 2
         : context.borderSide.width;
     final bool emphasize = showCue || selected;
+    final Color baseColor = selected
+        ? scheme.foreground
+        : scheme.mutedForeground;
+    final Color targetColor = dragActive ? scheme.primaryForeground : baseColor;
+    final Color pillBackgroundColor = dragActive
+        ? scheme.primary
+        : Colors.transparent;
     final labelContent = AnimatedContainer(
       duration: duration,
       padding: EdgeInsets.symmetric(
-        horizontal: context.spacing.s,
+        horizontal: context.spacing.xs,
         vertical: context.spacing.xxs,
       ),
       decoration: BoxDecoration(
@@ -974,7 +985,38 @@ class _DragTabLabel extends StatelessWidget {
       ),
       child: DefaultTextStyle.merge(
         style: context.textTheme.label.strongIf(emphasize),
-        child: Align(alignment: Alignment.center, child: label),
+        child: AnimatedContainer(
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            horizontal: context.spacing.s,
+            vertical: context.spacing.xxs,
+          ),
+          decoration: BoxDecoration(
+            color: pillBackgroundColor,
+            borderRadius: BorderRadius.circular(context.radii.pill),
+          ),
+          child: TweenAnimationBuilder<Color?>(
+            duration: duration,
+            tween: ColorTween(end: targetColor),
+            builder: (context, color, child) {
+              if (color == null) {
+                return child!;
+              }
+              return IconTheme.merge(
+                data: IconThemeData(color: color),
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(color: color),
+                  child: ColorFiltered(
+                    colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+                    child: child!,
+                  ),
+                ),
+              );
+            },
+            child: Align(alignment: Alignment.center, child: label),
+          ),
+        ),
       ),
     );
     return _RotatingDragTabLabel(
@@ -1004,7 +1046,7 @@ class _RotatingDragTabLabelState extends State<_RotatingDragTabLabel>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: calendarSlotHoverAnimationDuration,
+    duration: calendarTaskSplitPreviewAnimationDuration,
   );
 
   @override
@@ -1039,8 +1081,8 @@ class _RotatingDragTabLabelState extends State<_RotatingDragTabLabel>
 
   @override
   Widget build(BuildContext context) {
-    const activeScale = 1.15;
-    const maxAngle = math.pi / 6;
+    const activeScale = 1.3;
+    const maxAngle = math.pi / 5;
     return AnimatedScale(
       alignment: Alignment.center,
       curve: Curves.easeOutBack,

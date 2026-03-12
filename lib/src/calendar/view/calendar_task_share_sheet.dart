@@ -108,6 +108,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     final bool isReadOnly = _isReadOnly;
     final String readOnlyHint = isReadOnly

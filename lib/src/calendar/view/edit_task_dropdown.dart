@@ -496,6 +496,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       required double safeBottom,
     }) {
       final bool keyboardOpen = keyboardInset > safeBottom;
+      final double verticalScrollPadding = isSheet
+          ? context.spacing.s
+          : context.spacing.m;
       Widget? actionRow({required bool includeTopBorder}) {
         if (!allowsAnyEdits) {
           return null;
@@ -541,9 +544,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
                   context.spacing.m,
+                  verticalScrollPadding,
                   context.spacing.m,
-                  context.spacing.m,
-                  context.spacing.m +
+                  verticalScrollPadding +
                       (isSheet && keyboardOpen ? keyboardInset : 0),
                 ),
                 keyboardDismissBehavior:
@@ -722,9 +725,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       )
                     else
                       _TaskCriticalPathMembership<B>(task: widget.task),
-                    SizedBox(height: context.spacing.s),
-                    if (keyboardOpen && keyboardActionRow != null)
+                    if (keyboardOpen && keyboardActionRow != null) ...[
+                      SizedBox(height: context.spacing.s),
                       keyboardActionRow,
+                    ],
                   ],
                 ),
               ),
@@ -1817,7 +1821,7 @@ class _EditTaskActionsRow extends StatelessWidget {
       includeTopBorder: includeTopBorder,
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.m,
-        vertical: context.spacing.s,
+        vertical: context.spacing.m,
       ),
       gap: context.spacing.s,
       children: [

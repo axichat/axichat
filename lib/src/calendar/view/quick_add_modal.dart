@@ -4,6 +4,7 @@
 import 'dart:async';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -189,8 +190,8 @@ class _QuickAddModalState extends State<QuickAddModal>
             onTaskSubmit: () {
               _submitTask();
             },
-            onClose: _dismissModal,
-            onCancel: _handleCancelPressed,
+            onClose: _requestDismiss,
+            onCancel: _requestDismiss,
             onLocationChanged: _handleLocationEdited,
             onStartChanged: _onUserStartChanged,
             onEndChanged: _onUserEndChanged,
@@ -244,8 +245,8 @@ class _QuickAddModalState extends State<QuickAddModal>
               onTaskSubmit: () {
                 _submitTask();
               },
-              onClose: _dismissModal,
-              onCancel: _handleCancelPressed,
+              onClose: _requestDismiss,
+              onCancel: _requestDismiss,
               onLocationChanged: _handleLocationEdited,
               onStartChanged: _onUserStartChanged,
               onEndChanged: _onUserEndChanged,
@@ -573,10 +574,6 @@ class _QuickAddModalState extends State<QuickAddModal>
     return resolveBloc?.call();
   }
 
-  Future<void> _handleCancelPressed() async {
-    await _dismissModal();
-  }
-
   List<CalendarCriticalPath> _queuedPaths() {
     final Map<String, CalendarCriticalPath>? byId =
         _locateCalendarBloc()?.state.model.criticalPaths;
@@ -671,117 +668,121 @@ class _QuickAddModalState extends State<QuickAddModal>
     }
 
     _formController.setSubmitting(true);
-    final List<String> queuedPathIds = List<String>.from(
-      _queuedCriticalPathIds,
-    );
-    final bool hasQueuedPaths = queuedPathIds.isNotEmpty;
-    final Set<String>? previousIds = hasQueuedPaths
-        ? _locateCalendarBloc()?.state.model.tasks.keys.toSet()
-        : null;
-    if (hasQueuedPaths && _locateCalendarBloc() == null) {
-      _formController.setSubmitting(false);
-      _setFormError(context.l10n.calendarCriticalPathUnavailable);
-      return;
-    }
-
-    final taskName = _taskNameController.text.trim();
-    final taskTitle = _effectiveParserTitle(taskName);
-    final description = _descriptionController.text.trim();
-    final scheduledTime = _formController.startTime;
-
-    final recurrence = scheduledTime != null
-        ? _formController.buildRecurrence()
-        : null;
-
-    final duration =
-        _formController.effectiveDuration ??
-        (scheduledTime != null ? const Duration(hours: 1) : null);
-    final List<String>? categories = resolveCategoryOverride(
-      base: null,
-      categories: _formController.categories,
-    );
-    final CalendarOrganizer? organizer = resolveOrganizerOverride(
-      base: null,
-      organizer: _formController.organizer,
-    );
-    final List<CalendarAttendee>? attendees = resolveAttendeeOverride(
-      base: null,
-      attendees: _formController.attendees,
-    );
-    final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
-      advancedAlarms: _formController.advancedAlarms,
-      reminders: _formController.reminders,
-    );
-    final List<CalendarAlarm>? alarms = resolveAlarmOverride(
-      base: null,
-      alarms: mergedAlarms,
-    );
-    final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
-      base: null,
-      status: _formController.status,
-      transparency: _formController.transparency,
-      categories: categories,
-      url: _formController.url,
-      geo: _formController.geo,
-      organizer: organizer,
-      attendees: attendees,
-      alarms: alarms,
-    );
-
-    // Create the task
-    final task = CalendarTask(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      title: taskTitle,
-      description: description.isNotEmpty ? description : null,
-      scheduledTime: scheduledTime,
-      duration: duration,
-      priority: _formController.selectedPriority,
-      isCompleted: false,
-      createdAt: DateTime.now(),
-      modifiedAt: DateTime.now(),
-      location: _locationController.text.trim().isEmpty
-          ? null
-          : _locationController.text.trim(),
-      deadline: _formController.deadline,
-      recurrence: recurrence,
-      startHour: null,
-      checklist: _checklistController.items.toList(),
-      reminders: _formController.reminders.normalized(),
-      icsMeta: icsMeta,
-    );
-
-    widget.onTaskAdded(task);
-
-    if (hasQueuedPaths && previousIds != null) {
-      final CalendarTask? createdTask = await _waitForNewTask(
-        _locateCalendarBloc()!,
-        previousIds,
+    try {
+      final List<String> queuedPathIds = List<String>.from(
+        _queuedCriticalPathIds,
       );
-      if (!mounted) {
+      final bool hasQueuedPaths = queuedPathIds.isNotEmpty;
+      final Set<String>? previousIds = hasQueuedPaths
+          ? _locateCalendarBloc()?.state.model.tasks.keys.toSet()
+          : null;
+      if (hasQueuedPaths && _locateCalendarBloc() == null) {
+        _setFormError(context.l10n.calendarCriticalPathUnavailable);
         return;
       }
-      if (createdTask != null) {
-        for (final String pathId in queuedPathIds) {
-          _locateCalendarBloc()?.add(
-            CalendarEvent.criticalPathTaskAdded(
-              pathId: pathId,
-              taskId: createdTask.id,
-            ),
-          );
+
+      final taskName = _taskNameController.text.trim();
+      final taskTitle = _effectiveParserTitle(taskName);
+      final description = _descriptionController.text.trim();
+      final scheduledTime = _formController.startTime;
+
+      final recurrence = scheduledTime != null
+          ? _formController.buildRecurrence()
+          : null;
+
+      final duration =
+          _formController.effectiveDuration ??
+          (scheduledTime != null ? const Duration(hours: 1) : null);
+      final List<String>? categories = resolveCategoryOverride(
+        base: null,
+        categories: _formController.categories,
+      );
+      final CalendarOrganizer? organizer = resolveOrganizerOverride(
+        base: null,
+        organizer: _formController.organizer,
+      );
+      final List<CalendarAttendee>? attendees = resolveAttendeeOverride(
+        base: null,
+        attendees: _formController.attendees,
+      );
+      final List<CalendarAlarm> mergedAlarms = mergeAdvancedAlarms(
+        advancedAlarms: _formController.advancedAlarms,
+        reminders: _formController.reminders,
+      );
+      final List<CalendarAlarm>? alarms = resolveAlarmOverride(
+        base: null,
+        alarms: mergedAlarms,
+      );
+      final CalendarIcsMeta? icsMeta = applyIcsMetaOverrides(
+        base: null,
+        status: _formController.status,
+        transparency: _formController.transparency,
+        categories: categories,
+        url: _formController.url,
+        geo: _formController.geo,
+        organizer: organizer,
+        attendees: attendees,
+        alarms: alarms,
+      );
+
+      final task = CalendarTask(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: taskTitle,
+        description: description.isNotEmpty ? description : null,
+        scheduledTime: scheduledTime,
+        duration: duration,
+        priority: _formController.selectedPriority,
+        isCompleted: false,
+        createdAt: DateTime.now(),
+        modifiedAt: DateTime.now(),
+        location: _locationController.text.trim().isEmpty
+            ? null
+            : _locationController.text.trim(),
+        deadline: _formController.deadline,
+        recurrence: recurrence,
+        startHour: null,
+        checklist: _checklistController.items.toList(),
+        reminders: _formController.reminders.normalized(),
+        icsMeta: icsMeta,
+      );
+
+      widget.onTaskAdded(task);
+
+      if (hasQueuedPaths && previousIds != null) {
+        final CalendarTask? createdTask = await _waitForNewTask(
+          _locateCalendarBloc()!,
+          previousIds,
+        );
+        if (!mounted) {
+          return;
         }
-      } else {
-        _setFormError(context.l10n.calendarCriticalPathAddAfterSaveFailed);
+        if (createdTask != null) {
+          for (final String pathId in queuedPathIds) {
+            _locateCalendarBloc()?.add(
+              CalendarEvent.criticalPathTaskAdded(
+                pathId: pathId,
+                taskId: createdTask.id,
+              ),
+            );
+          }
+        } else {
+          _setFormError(context.l10n.calendarCriticalPathAddAfterSaveFailed);
+        }
+      }
+
+      if (hasQueuedPaths) {
+        setState(() {
+          _queuedCriticalPathIds.clear();
+        });
+      }
+
+      if (!mounted) return;
+      await _dismissModal();
+    } finally {
+      if (mounted) {
+        _formController.setSubmitting(false);
       }
     }
-
-    if (hasQueuedPaths) {
-      setState(() {
-        _queuedCriticalPathIds.clear();
-      });
-    }
-
-    if (!mounted) return;
-    await _dismissModal();
   }
 
   Future<CalendarTask?> _waitForNewTask(
@@ -814,17 +815,6 @@ class _QuickAddModalState extends State<QuickAddModal>
   }
 
   Future<void> _dismissModal() async {
-    Future<void> popSelfIfPossible() async {
-      if (!mounted) {
-        return;
-      }
-      final navigator = Navigator.maybeOf(context);
-      if (navigator == null) {
-        return;
-      }
-      await navigator.maybePop();
-    }
-
     if (widget.surface == QuickAddModalSurface.dialog) {
       await _animationController.reverse();
     }
@@ -838,8 +828,23 @@ class _QuickAddModalState extends State<QuickAddModal>
     if (!mounted) {
       return;
     }
+    final navigator = Navigator.maybeOf(context);
+    final route = ModalRoute.of(context);
+    if (navigator == null || !navigator.canPop()) {
+      return;
+    }
+    if (route is! PopupRoute<dynamic> || !route.isCurrent) {
+      return;
+    }
+    navigator.pop();
+  }
 
-    await popSelfIfPossible();
+  void _requestDismiss() {
+    if (widget.surface == QuickAddModalSurface.bottomSheet) {
+      closeSheetWithKeyboardDismiss(context, widget.onDismiss ?? () {});
+      return;
+    }
+    unawaited(_dismissModal());
   }
 
   void _setFormError(String? message) {

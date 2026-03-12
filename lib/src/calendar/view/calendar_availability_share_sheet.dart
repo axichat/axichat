@@ -1017,6 +1017,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -148,6 +148,7 @@ class _CalendarCriticalPathShareSheetState
     final selfIdentity = SelfIdentitySnapshot(
       selfJid: selfJid,
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
+      avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
     );
     final header = AxiSheetHeader(
       title: Text(l10n.calendarCriticalPathShareTitle),
@@ -201,7 +202,7 @@ class _CalendarCriticalPathShareSheetState
               _CriticalPathShareActionRow(
                 isBusy: _isSending,
                 onPressed: _handleSharePressed,
-                label: l10n.calendarCriticalPathShareButtonLabel,
+                label: l10n.commonSend,
               ),
             ],
           ),
@@ -368,10 +369,7 @@ class _CriticalPathShareActionRow extends StatelessWidget {
       onPressed: isBusy ? null : onPressed,
       loading: isBusy,
       widthBehavior: AxiButtonWidth.fit,
-      leading: Icon(
-        LucideIcons.share2,
-        size: context.sizing.iconButtonIconSize,
-      ),
+      leading: Icon(LucideIcons.send, size: context.sizing.iconButtonIconSize),
       child: Text(label),
     );
   }
