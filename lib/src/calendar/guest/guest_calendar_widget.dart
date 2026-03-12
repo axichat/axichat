@@ -46,6 +46,9 @@ class _GuestCalendarWidgetState
       CalendarHoverTitleController();
 
   @override
+  BuildContext get calendarModalContext => context;
+
+  @override
   void dispose() {
     _hoverTitleController.dispose();
     super.dispose();

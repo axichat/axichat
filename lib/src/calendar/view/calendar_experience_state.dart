@@ -64,6 +64,9 @@ abstract class CalendarExperienceState<
   ValueNotifier<bool> get cancelBucketHoverNotifier =>
       _cancelBucketHoverNotifier;
 
+  @protected
+  BuildContext get calendarModalContext;
+
   @override
   void initState() {
     super.initState();
@@ -268,7 +271,7 @@ abstract class CalendarExperienceState<
     final LocationAutocompleteHelper helper =
         LocationAutocompleteHelper.fromState(calendarBloc.state);
     showQuickAddModal(
-      context: context,
+      context: calendarModalContext,
       prefilledDateTime: prefilledTime,
       locationHelper: helper,
       locateCalendarBloc: () => calendarBloc,

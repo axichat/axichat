@@ -53,6 +53,9 @@ class _ChatCalendarWidgetState
   bool _desktopInitialViewSynced = false;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
+  late final GlobalKey _calendarModalAnchorKey = GlobalKey(
+    debugLabel: 'chat-calendar-modal-anchor',
+  );
   late final GlobalKey<NavigatorState> _calendarNavigatorKey =
       GlobalKey<NavigatorState>();
 
@@ -67,6 +70,14 @@ class _ChatCalendarWidgetState
   void dispose() {
     _hoverTitleController.dispose();
     super.dispose();
+  }
+
+  @override
+  BuildContext get calendarModalContext {
+    return _calendarModalAnchorKey.currentContext ??
+        _calendarNavigatorKey.currentState?.overlay?.context ??
+        _calendarNavigatorKey.currentContext ??
+        context;
   }
 
   @override
@@ -199,6 +210,7 @@ class _ChatCalendarWidgetState
     );
     return CalendarSurfaceNavigator(
       navigatorKey: _calendarNavigatorKey,
+      modalAnchorKey: _calendarModalAnchorKey,
       enablePop: _resolveChatCalendarSurfacePopEnabled(context),
       child: calendarBody,
     );

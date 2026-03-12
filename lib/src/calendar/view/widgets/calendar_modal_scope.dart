@@ -7,22 +7,26 @@ class CalendarModalScope extends InheritedWidget {
   const CalendarModalScope({
     super.key,
     required this.navigatorKey,
+    required this.modalAnchorKey,
     required super.child,
   });
 
   final GlobalKey<NavigatorState> navigatorKey;
+  final GlobalKey modalAnchorKey;
 
   static CalendarModalScope? maybeOf(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<CalendarModalScope>();
   }
 
   BuildContext? get navigatorContext =>
+      modalAnchorKey.currentContext ??
       navigatorKey.currentState?.overlay?.context ??
       navigatorKey.currentContext;
 
   @override
   bool updateShouldNotify(CalendarModalScope oldWidget) {
-    return navigatorKey != oldWidget.navigatorKey;
+    return navigatorKey != oldWidget.navigatorKey ||
+        modalAnchorKey != oldWidget.modalAnchorKey;
   }
 }
 

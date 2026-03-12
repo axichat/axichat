@@ -83,6 +83,9 @@ class _CalendarWidgetState
   bool _mobileInitialScrollSynced = false;
   late final CalendarHoverTitleController _hoverTitleController =
       CalendarHoverTitleController();
+  late final GlobalKey _calendarModalAnchorKey = GlobalKey(
+    debugLabel: 'calendar-modal-anchor',
+  );
   late final GlobalKey<NavigatorState> _calendarNavigatorKey =
       GlobalKey<NavigatorState>();
 
@@ -184,6 +187,14 @@ class _CalendarWidgetState
 
   int _resolvedBottomDragSourceTab() {
     return mobileTabController.index.clamp(0, 1);
+  }
+
+  @override
+  BuildContext get calendarModalContext {
+    return _calendarModalAnchorKey.currentContext ??
+        _calendarNavigatorKey.currentState?.overlay?.context ??
+        _calendarNavigatorKey.currentContext ??
+        context;
   }
 
   @override
@@ -305,6 +316,7 @@ class _CalendarWidgetState
     );
     return CalendarSurfaceNavigator(
       navigatorKey: _calendarNavigatorKey,
+      modalAnchorKey: _calendarModalAnchorKey,
       enablePop: widget.surfacePopEnabled,
       child: calendarBody,
     );
@@ -353,7 +365,7 @@ class _CalendarWidgetState
     final TaskSidebarState<CalendarBloc>? sidebarState =
         sidebarKey.currentState;
     await showCalendarTaskSearch(
-      context: context,
+      context: calendarModalContext,
       bloc: bloc,
       locate: locate,
       requiresLongPressForDrag: sidebarState?.requiresLongPressForDrag ?? false,
@@ -397,11 +409,13 @@ class CalendarSurfaceNavigator extends StatelessWidget {
   const CalendarSurfaceNavigator({
     super.key,
     required this.navigatorKey,
+    required this.modalAnchorKey,
     required this.child,
     this.enablePop = _calendarSurfacePopEnabledDefault,
   });
 
   final GlobalKey<NavigatorState> navigatorKey;
+  final GlobalKey modalAnchorKey;
   final Widget child;
   final bool enablePop;
 
@@ -409,6 +423,7 @@ class CalendarSurfaceNavigator extends StatelessWidget {
   Widget build(BuildContext context) {
     return CalendarModalScope(
       navigatorKey: navigatorKey,
+      modalAnchorKey: modalAnchorKey,
       child: NavigatorPopHandler<void>(
         enabled: enablePop,
         onPopWithResult: (_) {
@@ -422,7 +437,10 @@ class CalendarSurfaceNavigator extends StatelessWidget {
           key: navigatorKey,
           onDidRemovePage: (page) {},
           pages: [
-            MaterialPage<void>(key: _calendarSurfacePageKey, child: child),
+            MaterialPage<void>(
+              key: _calendarSurfacePageKey,
+              child: KeyedSubtree(key: modalAnchorKey, child: child),
+            ),
           ],
         ),
       ),
