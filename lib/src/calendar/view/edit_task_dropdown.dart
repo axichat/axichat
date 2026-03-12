@@ -540,10 +540,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
           mainAxisSize: MainAxisSize.min,
           children: [
             popoverHeader,
-            ShadSeparator.horizontal(
-              color: context.borderSide.color,
-              thickness: context.borderSide.width,
-            ),
             Flexible(
               fit: FlexFit.loose,
               child: SingleChildScrollView(
@@ -1324,10 +1320,18 @@ class _EditTaskHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return Container(
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.m,
         vertical: context.spacing.m,
+      ),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: context.borderSide.color,
+            width: context.borderSide.width,
+          ),
+        ),
       ),
       child: Row(
         children: [

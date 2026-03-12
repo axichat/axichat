@@ -989,34 +989,35 @@ class _DragTabLabel extends StatelessWidget {
       duration: duration,
       padding: EdgeInsets.symmetric(
         horizontal: context.spacing.xs,
-        vertical: context.spacing.xxs,
+        vertical: 0,
       ),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: cueColor, width: width),
         ),
       ),
-        child: DefaultTextStyle.merge(
-          style: context.textTheme.label.strongIf(emphasize),
-          child: AnimatedContainer(
-            duration: duration,
-            curve: Curves.easeOutCubic,
-            margin: EdgeInsets.symmetric(vertical: context.spacing.xxs),
-            constraints: BoxConstraints(
-              minWidth:
-                  context.sizing.listButtonHeight + context.spacing.l,
-              minHeight: context.sizing.listButtonHeight,
-            ),
-            padding: EdgeInsets.symmetric(
-              horizontal: context.spacing.m,
-              vertical: context.spacing.xs,
-            ),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: pillBackgroundColor,
-              border: Border.all(
-                color: pillBorderColor,
-              width: context.borderSide.width,
+      child: DefaultTextStyle.merge(
+        style: context.textTheme.label.strongIf(emphasize),
+        child: AnimatedContainer(
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          margin: EdgeInsets.symmetric(vertical: context.spacing.xxs),
+          constraints: BoxConstraints(
+            minWidth: context.sizing.listButtonHeight + context.spacing.l,
+            minHeight: context.sizing.listButtonHeight - context.spacing.s,
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: context.spacing.m,
+            vertical: context.spacing.xxs,
+          ),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: pillBackgroundColor,
+            border: Border.all(
+              color: pillBorderColor,
+              width: dragActive
+                  ? context.borderSide.width * 2
+                  : context.borderSide.width,
             ),
             borderRadius: BorderRadius.circular(context.radii.pill),
           ),
