@@ -196,6 +196,12 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
         _isAnyDragActive && mobileTabController.index == 1;
     final bool tasksSwitchHintActive =
         _isAnyDragActive && mobileTabController.index == 0;
+    final bool scheduleHighlightActive =
+        _isAnyDragActive &&
+        (scheduleCueActive || (!tasksCueActive && scheduleSelected));
+    final bool tasksHighlightActive =
+        _isAnyDragActive &&
+        (tasksCueActive || (!scheduleCueActive && tasksSelected));
     final double safeInset = _isAnyDragActive ? 0 : bottomInset;
     final double baseHeight = context.sizing.listButtonHeight;
     final double height = baseHeight + safeInset;
@@ -272,7 +278,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       scheme: scheme,
                       selected: scheduleSelected,
                       showCue: scheduleCueActive,
-                      dragActive: _isAnyDragActive,
+                      dragActive: scheduleHighlightActive,
                       shake:
                           !lowMotion &&
                           scheduleSwitchHintActive &&
@@ -297,7 +303,7 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
                       scheme: scheme,
                       selected: tasksSelected,
                       showCue: tasksCueActive,
-                      dragActive: _isAnyDragActive,
+                      dragActive: tasksHighlightActive,
                       shake:
                           !lowMotion &&
                           tasksSwitchHintActive &&
@@ -972,6 +978,9 @@ class _DragTabLabel extends StatelessWidget {
     final Color pillBackgroundColor = dragActive
         ? scheme.primary
         : Colors.transparent;
+    final Color pillBorderColor = dragActive
+        ? scheme.primaryForeground.withValues(alpha: 0.16)
+        : Colors.transparent;
     final labelContent = AnimatedContainer(
       duration: duration,
       padding: EdgeInsets.symmetric(
@@ -988,12 +997,18 @@ class _DragTabLabel extends StatelessWidget {
         child: AnimatedContainer(
           duration: duration,
           curve: Curves.easeOutCubic,
-          padding: EdgeInsets.symmetric(
-            horizontal: context.spacing.s,
-            vertical: context.spacing.xxs,
+          constraints: BoxConstraints(
+            minWidth: context.sizing.listButtonHeight,
+            minHeight: context.sizing.listButtonHeight - context.spacing.s,
           ),
+          padding: EdgeInsets.symmetric(horizontal: context.spacing.m),
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: pillBackgroundColor,
+            border: Border.all(
+              color: pillBorderColor,
+              width: context.borderSide.width,
+            ),
             borderRadius: BorderRadius.circular(context.radii.pill),
           ),
           child: TweenAnimationBuilder<Color?>(

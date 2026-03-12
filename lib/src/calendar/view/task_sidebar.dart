@@ -96,7 +96,10 @@ class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
 }
 
 class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
-    with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
+    with
+        TickerProviderStateMixin,
+        AutomaticKeepAliveClientMixin,
+        WidgetsBindingObserver {
   CalendarLayoutTheme get _layoutTheme =>
       CalendarLayoutTheme.fromContext(context);
   late final CalendarSidebarController _sidebarController;
@@ -195,15 +198,15 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       _selectionChecklistDirty;
 
   bool _externalGridDragActive = false;
+  bool _sidebarKeyboardVisible = false;
 
   bool get _hasPrecisePointerInput =>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
 
   bool get _isTouchOnlyInput => !_hasPrecisePointerInput;
 
-  bool get _isSidebarTextInputActive {
-    final FocusNode? primaryFocus = FocusManager.instance.primaryFocus;
-    final BuildContext? focusContext = primaryFocus?.context;
+  bool _isFocusWithinSidebar(FocusNode? focusNode) {
+    final BuildContext? focusContext = focusNode?.context;
     if (focusContext == null || !focusContext.mounted) {
       return false;
     }
@@ -216,19 +219,38 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       }
       return true;
     });
-    if (!withinSidebar) {
+    return withinSidebar;
+  }
+
+  bool get _hasFocusedSidebarTextInput {
+    final FocusNode? primaryFocus = FocusManager.instance.primaryFocus;
+    if (!_isFocusWithinSidebar(primaryFocus)) {
       return false;
     }
-    if (FocusManager.instance.isTextInputFocused) {
-      return true;
+    return FocusManager.instance.isTextInputFocused;
+  }
+
+  bool get _isSidebarTextInputActive {
+    final FocusNode? primaryFocus = FocusManager.instance.primaryFocus;
+    if (!_isFocusWithinSidebar(primaryFocus)) {
+      return false;
     }
-    return MediaQuery.viewInsetsOf(context).bottom > 0;
+    return _hasFocusedSidebarTextInput || _sidebarKeyboardVisible;
+  }
+
+  bool get _currentSidebarKeyboardVisible {
+    final view = View.maybeOf(context);
+    if (view == null) {
+      return MediaQuery.viewInsetsOf(context).bottom > 0;
+    }
+    return view.viewInsets.bottom > 0;
   }
 
   Future<bool> _handleSidebarBackButtonPressed() async {
     if (!_isSidebarTextInputActive) {
       return false;
     }
+    FocusScope.of(context).unfocus();
     FocusManager.instance.primaryFocus?.unfocus();
     return true;
   }
@@ -591,6 +613,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _draftController = TaskDraftController();
     _checklistController = TaskChecklistController();
     _selectionChecklistController = TaskChecklistController();
@@ -619,6 +642,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     TaskEditSessionTracker.instance.endForOwner(this);
     _titleController.dispose();
     _titleFocusNode.dispose();
@@ -1121,6 +1145,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    _sidebarKeyboardVisible = _currentSidebarKeyboardVisible;
     final CalendarLayoutTheme layoutTheme = CalendarLayoutTheme.fromContext(
       context,
     );
@@ -1132,6 +1157,22 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       );
       _sidebarControllerInitialized = true;
     }
+  }
+
+  @override
+  void didChangeMetrics() {
+    super.didChangeMetrics();
+    if (!mounted) {
+      return;
+    }
+    final bool keyboardVisible = _currentSidebarKeyboardVisible;
+    final bool keyboardJustClosed = _sidebarKeyboardVisible && !keyboardVisible;
+    _sidebarKeyboardVisible = keyboardVisible;
+    if (!keyboardJustClosed || !_hasFocusedSidebarTextInput) {
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
   }
 
   @override

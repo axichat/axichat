@@ -496,9 +496,8 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       required double safeBottom,
     }) {
       final bool keyboardOpen = keyboardInset > safeBottom;
-      final double verticalScrollPadding = isSheet
-          ? context.spacing.s
-          : context.spacing.m;
+      final bool footerPinned = !keyboardOpen && allowsAnyEdits;
+      final double scrollTopPadding = isSheet ? 0 : context.spacing.m;
       Widget? actionRow({required bool includeTopBorder}) {
         if (!allowsAnyEdits) {
           return null;
@@ -525,7 +524,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
       }
 
       final Widget? keyboardActionRow = actionRow(includeTopBorder: true);
-      final Widget? footerActionRow = actionRow(includeTopBorder: false);
+      final Widget? footerActionRow = actionRow(includeTopBorder: true);
+      final double scrollBottomPadding = footerPinned
+          ? 0
+          : (isSheet && keyboardOpen ? keyboardInset : context.spacing.m);
 
       final Widget form = ShadForm(
         key: _formKey,
@@ -544,10 +546,9 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
               child: SingleChildScrollView(
                 padding: EdgeInsets.fromLTRB(
                   context.spacing.m,
-                  verticalScrollPadding,
+                  scrollTopPadding,
                   context.spacing.m,
-                  verticalScrollPadding +
-                      (isSheet && keyboardOpen ? keyboardInset : 0),
+                  scrollBottomPadding,
                 ),
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.manual,
@@ -560,7 +561,6 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                       ),
                     if (widget.task.isOccurrence &&
                         widget.onOccurrenceUpdated != null) ...[
-                      SizedBox(height: context.spacing.s),
                       _EditTaskOccurrenceScopeSection(
                         scope: _occurrenceScope,
                         enabled: allowsAnyEdits,
@@ -733,17 +733,10 @@ class _EditTaskDropdownState<B extends BaseCalendarBloc>
                 ),
               ),
             ),
-            if (!keyboardOpen && allowsAnyEdits && footerActionRow != null)
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ShadSeparator.horizontal(
-                    color: context.borderSide.color,
-                    thickness: context.borderSide.width,
-                  ),
-                  footerActionRow,
-                ],
-              ),
+            if (footerPinned && footerActionRow != null)
+              isSheet
+                  ? SafeArea(top: false, bottom: true, child: footerActionRow)
+                  : footerActionRow,
           ],
         ),
       );
@@ -1370,8 +1363,6 @@ class _EditTaskInlineActionsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        TaskSectionHeader(title: context.l10n.chatTaskViewActionsLabel),
-        SizedBox(height: context.spacing.s),
         Wrap(
           spacing: context.spacing.s,
           runSpacing: context.spacing.s,
@@ -1819,10 +1810,7 @@ class _EditTaskActionsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return TaskFormActionsRow(
       includeTopBorder: includeTopBorder,
-      padding: EdgeInsets.symmetric(
-        horizontal: context.spacing.m,
-        vertical: context.spacing.m,
-      ),
+      padding: EdgeInsets.all(context.spacing.m),
       gap: context.spacing.s,
       children: [
         if (showDelete)
