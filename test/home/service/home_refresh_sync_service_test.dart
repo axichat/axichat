@@ -90,31 +90,28 @@ void main() {
     verify(() => mockEmailService.handleNetworkAvailable()).called(1);
   });
 
-  test(
-    'syncOnLogin runs a full restore once and unread-only afterward',
-    () async {
-      when(() => mockEmailService.hasActiveSession).thenReturn(true);
-      when(
-        () => mockEmailService.canReconnectConfiguredSession(),
-      ).thenAnswer((_) async => false);
+  test('refresh does a full restore and unread-only stays scoped', () async {
+    when(() => mockEmailService.hasActiveSession).thenReturn(true);
+    when(
+      () => mockEmailService.canReconnectConfiguredSession(),
+    ).thenAnswer((_) async => false);
 
-      final service = HomeRefreshSyncService(
-        xmppService: mockXmppService,
-        emailService: mockEmailService,
-      );
+    final service = HomeRefreshSyncService(
+      xmppService: mockXmppService,
+      emailService: mockEmailService,
+    );
 
-      await service.syncOnLogin();
-      await service.syncOnLogin();
+    await service.refresh();
+    await service.refreshUnreadOnly();
 
-      verify(() => mockEmailService.syncContactsFromCore()).called(1);
-      verify(
-        () => mockEmailService.performBackgroundFetch(
-          timeout: any(named: 'timeout'),
-        ),
-      ).called(2);
-      verify(() => mockEmailService.refreshChatlistFromCore()).called(2);
-    },
-  );
+    verify(() => mockEmailService.syncContactsFromCore()).called(1);
+    verify(
+      () => mockEmailService.performBackgroundFetch(
+        timeout: any(named: 'timeout'),
+      ),
+    ).called(3);
+    verify(() => mockEmailService.refreshChatlistFromCore()).called(3);
+  });
 
   test(
     'refresh fetches email history even while email sync is offline',

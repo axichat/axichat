@@ -24,22 +24,18 @@ class HomeRefreshSyncService {
       StreamController<HomeRefreshSyncUpdate>.broadcast();
   Future<DateTime>? _syncTask;
   DateTime? _lastSyncAt;
-  StreamSubscription<ConnectionState>? _xmppConnectivitySubscription;
   StreamSubscription<EmailSyncState>? _emailSyncSubscription;
-  ConnectionState? _lastXmppState;
   EmailSyncStatus? _lastEmailStatus;
   bool _acceptsNewSyncRequests = true;
+  bool _started = false;
   int _syncEpoch = 0;
 
   Stream<HomeRefreshSyncUpdate> get syncUpdates => _syncUpdates.stream;
 
   void start() {
     _acceptsNewSyncRequests = true;
-    if (_xmppConnectivitySubscription != null) return;
-    _lastXmppState = _xmppService.connectionState;
-    _xmppConnectivitySubscription = _xmppService.connectivityStream.listen(
-      _handleXmppConnectivity,
-    );
+    _started = true;
+    if (_emailSyncSubscription != null) return;
     final emailService = _emailService;
     if (emailService != null) {
       _lastEmailStatus = emailService.syncState.status;
@@ -57,7 +53,7 @@ class HomeRefreshSyncService {
     _emailSyncSubscription = null;
     await emailSub?.cancel();
     _emailService = emailService;
-    if (_xmppConnectivitySubscription != null && emailService != null) {
+    if (_started && emailService != null) {
       _lastEmailStatus = emailService.syncState.status;
       _emailSyncSubscription = emailService.syncStateStream.listen(
         _handleEmailSyncState,
@@ -69,34 +65,20 @@ class HomeRefreshSyncService {
 
   Future<void> close({bool abortPendingSync = false}) async {
     _acceptsNewSyncRequests = false;
+    _started = false;
     final pending = _syncTask;
     if (abortPendingSync) {
       _syncEpoch += 1;
       _syncTask = null;
     }
-    final xmppSub = _xmppConnectivitySubscription;
-    _xmppConnectivitySubscription = null;
     final emailSub = _emailSyncSubscription;
     _emailSyncSubscription = null;
-    await xmppSub?.cancel();
     await emailSub?.cancel();
     if (!abortPendingSync) {
       await pending;
     }
     _lastSyncAt = null;
-    _lastXmppState = null;
     _lastEmailStatus = null;
-  }
-
-  Future<void> syncOnLogin() async {
-    if (!_acceptsNewSyncRequests) {
-      return;
-    }
-    if (_lastSyncAt == null) {
-      await refresh();
-      return;
-    }
-    await refreshUnreadOnly();
   }
 
   Future<DateTime> refreshUnreadOnly() {
@@ -180,18 +162,6 @@ class HomeRefreshSyncService {
     });
   }
 
-  Future<void> _handleXmppConnectivity(ConnectionState state) async {
-    if (!_acceptsNewSyncRequests) {
-      return;
-    }
-    final wasConnected = _lastXmppState == ConnectionState.connected;
-    _lastXmppState = state;
-    if (!wasConnected && state == ConnectionState.connected) {
-      await _runReconnectSync();
-      return;
-    }
-  }
-
   Future<void> _handleEmailSyncState(EmailSyncState state) async {
     if (!_acceptsNewSyncRequests) {
       return;
@@ -199,22 +169,27 @@ class HomeRefreshSyncService {
     final wasReady = _lastEmailStatus == EmailSyncStatus.ready;
     _lastEmailStatus = state.status;
     if (!wasReady && state.status == EmailSyncStatus.ready) {
-      await _runReconnectSync();
+      await _runEmailReconnectSync();
     }
   }
 
-  Future<void> _runReconnectSync() async {
+  Future<void> _runEmailReconnectSync() async {
     if (!_acceptsNewSyncRequests) {
       return;
     }
-    if (_xmppConnectivitySubscription == null &&
-        _emailSyncSubscription == null) {
+    if (_emailSyncSubscription == null) {
       return;
     }
     if (_syncTask != null) {
       return;
     }
-    await refreshUnreadOnly();
+    await _enqueueSync((epoch) async {
+      _throwIfSyncAborted(epoch);
+      await _refreshEmailUnread(epoch);
+      _throwIfSyncAborted(epoch);
+      _lastSyncAt = DateTime.timestamp();
+      return _lastSyncAt!;
+    });
   }
 
   Future<void> _rehydrateCalendar(int epoch) async {
@@ -250,12 +225,11 @@ class HomeRefreshSyncService {
     if (_xmppService.connectionState != ConnectionState.connected) {
       return MamGlobalSyncOutcome.failed;
     }
-    const streamReadyTimeout = Duration(seconds: 5);
-    final streamReady = await _xmppService.waitForStreamReady(
-      streamReadyTimeout,
-    );
-    _throwIfSyncAborted(epoch);
-    if (streamReady?.isResumed ?? false) {
+    final streamReady = _xmppService.lastStreamReady;
+    if (streamReady == null) {
+      return MamGlobalSyncOutcome.failed;
+    }
+    if (streamReady.isResumed) {
       return MamGlobalSyncOutcome.skippedResumed;
     }
     const mamHistoryPageSize = 50;

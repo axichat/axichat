@@ -8,6 +8,8 @@ String _base64EncodeAvatarPublishPayload(Uint8List bytes) =>
 
 const String _avatarRosterRefreshOperationName =
     'AvatarService.refreshRosterAvatarsOnNegotiations';
+const String _avatarConversationRefreshOperationName =
+    'AvatarService.refreshConversationAvatarsOnNegotiations';
 final XmppOperationEvent _selfAvatarPublishStartEvent = XmppOperationEvent(
   kind: XmppOperationKind.selfAvatarPublish,
   stage: XmppOperationStage.start,
@@ -401,6 +403,10 @@ mixin AvatarService on XmppBase, MucService {
         fireAndForget(
           _refreshRosterAvatarsFromCache,
           operationName: _avatarRosterRefreshOperationName,
+        );
+        fireAndForget(
+          refreshAvatarsForConversationIndex,
+          operationName: _avatarConversationRefreshOperationName,
         );
       });
   }
@@ -2141,7 +2147,9 @@ mixin AvatarService on XmppBase, MucService {
           if (await tempFile.exists()) {
             await tempFile.delete();
           }
-        } on Exception {}
+        } on Exception {
+          // Ignore cleanup failures before surfacing the original error.
+        }
         rethrow;
       }
 

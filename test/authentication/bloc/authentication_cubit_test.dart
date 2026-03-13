@@ -150,9 +150,6 @@ void main() {
     when(() => mockXmppService.connected).thenReturn(false);
     when(() => mockXmppService.databasesInitialized).thenReturn(false);
     when(() => mockXmppService.myJid).thenReturn(null);
-    when(
-      () => mockXmppService.waitForStreamReady(any()),
-    ).thenAnswer((_) async => null);
     when(() => mockXmppService.localizations).thenReturn(localizations);
     when(() => mockXmppService.database).thenAnswer((_) async => mockDatabase);
     when(() => mockXmppService.setClientState(any())).thenAnswer((_) async {});
@@ -191,9 +188,6 @@ void main() {
       () => mockHomeRefreshSyncService.close(
         abortPendingSync: any(named: 'abortPendingSync'),
       ),
-    ).thenAnswer((_) async {});
-    when(
-      () => mockHomeRefreshSyncService.syncOnLogin(),
     ).thenAnswer((_) async {});
     credentialStorage = <String, String?>{
       'password_prehashed_v1': true.toString(),
@@ -636,7 +630,6 @@ void main() {
           ),
         ).called(2);
         verifyNever(() => mockEmailService.handleNetworkAvailable());
-        verify(() => mockHomeRefreshSyncService.syncOnLogin()).called(1);
       },
     );
 
@@ -678,7 +671,6 @@ void main() {
       ],
       verify: (_) {
         verify(() => mockEmailService.handleNetworkAvailable()).called(2);
-        verify(() => mockHomeRefreshSyncService.syncOnLogin()).called(1);
       },
     );
 
@@ -720,7 +712,6 @@ void main() {
       ],
       verify: (_) {
         verify(() => mockEmailService.handleNetworkAvailable()).called(2);
-        verify(() => mockHomeRefreshSyncService.syncOnLogin()).called(1);
       },
     );
 
@@ -2254,7 +2245,7 @@ void main() {
     );
 
     test(
-      'Authenticated stream-ready events trigger login sync even when auth completed before connection.',
+      'Authenticated stream-ready events trigger email reconnect even when auth completed before connection.',
       () async {
         final streamReadyController =
             StreamController<XmppStreamReady>.broadcast();
@@ -2283,7 +2274,7 @@ void main() {
         );
         await Future<void>.delayed(Duration.zero);
 
-        verify(() => mockHomeRefreshSyncService.syncOnLogin()).called(1);
+        verify(() => mockEmailService.handleNetworkAvailable()).called(1);
 
         await streamReadyController.close();
         await bloc.close();

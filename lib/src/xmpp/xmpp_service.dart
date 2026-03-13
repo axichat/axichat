@@ -911,22 +911,12 @@ class XmppService extends XmppBase
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
-    super.configureEventHandlers(manager);
     manager
-      ..registerHandler<XmppOperationEvent>((event) async {
-        emitXmppOperation(event);
-      })
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
         _setConnectionState(event.state);
         if (event.state != ConnectionState.connected) {
           _pubSubSupportResolved = false;
         }
-      })
-      ..registerHandler<mox.StanzaAckedEvent>((event) async {
-        if (event.stanza.id == null) return;
-        await _dbOp<XmppDatabase>(
-          (db) => db.markMessageAcked(event.stanza.id!),
-        );
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         _recordStreamReady(event.resumed);
@@ -937,14 +927,21 @@ class XmppService extends XmppBase
         final shouldHandleFailedResumption =
             !resumed && _streamResumptionAttempted;
         _streamResumptionAttempted = false;
-        fireAndForget(
-          () => _runPostNegotiationsSetup(
-            resumed: resumed,
-            shouldHandleFailedResumption: shouldHandleFailedResumption,
-          ),
-          operationName: _postNegotiationsSetupOperationName,
+        await _runPostNegotiationsSetup(
+          shouldHandleFailedResumption: shouldHandleFailedResumption,
         );
         // Connection handling is automatic in moxxmpp v0.5.0.
+      });
+    super.configureEventHandlers(manager);
+    manager
+      ..registerHandler<XmppOperationEvent>((event) async {
+        emitXmppOperation(event);
+      })
+      ..registerHandler<mox.StanzaAckedEvent>((event) async {
+        if (event.stanza.id == null) return;
+        await _dbOp<XmppDatabase>(
+          (db) => db.markMessageAcked(event.stanza.id!),
+        );
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
         _xmppLogger.info('Bound resource: ${event.resource}...');
@@ -1137,29 +1134,12 @@ class XmppService extends XmppBase
 
   static const _connectivityRepairReasonStreamNegotiationsDone =
       'stream negotiations done';
-  static const _postNegotiationsSetupOperationName =
-      'XmppService.postNegotiationsSetup';
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
   static const _nonRecoverableReconnectDisableLog =
       'Failed to disable reconnection after non-recoverable error.';
   static const _reconnectEnableFailedLog =
       'Failed to enable reconnection before requesting reconnect.';
-
-  Future<XmppStreamReady?> waitForStreamReady(Duration timeout) async {
-    if (connectionState != ConnectionState.connected) {
-      return null;
-    }
-    final lastReady = _lastStreamReady;
-    if (lastReady != null) {
-      return lastReady;
-    }
-    try {
-      return await streamReadyStream.first.timeout(timeout);
-    } on TimeoutException {
-      return null;
-    }
-  }
 
   void _setConnectionState(ConnectionState state) {
     if (_connectionState == state) {
@@ -3225,7 +3205,6 @@ class XmppService extends XmppBase
   }
 
   Future<void> _runPostNegotiationsSetup({
-    required bool resumed,
     required bool shouldHandleFailedResumption,
   }) async {
     // Presence is the gating signal for live inbound delivery. Reassert it on
@@ -3292,76 +3271,6 @@ class XmppService extends XmppBase
         error,
         stackTrace,
       );
-    }
-
-    if (!resumed) {
-      await _runPostNegotiationsSnapshotBootstrap();
-    }
-
-    try {
-      await syncGlobalMamCatchUp();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine(
-        'Post-negotiations MAM catch-up failed.',
-        error,
-        stackTrace,
-      );
-    }
-  }
-
-  Future<void> _runPostNegotiationsSnapshotBootstrap() async {
-    await _runPostNegotiationsBootstrapStep(
-      label: 'MUC service discovery',
-      action: discoverMucServiceHost,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'MUC bookmark sync',
-      action: () async {
-        await syncMucBookmarksSnapshot();
-      },
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'conversation index sync',
-      action: () async {
-        await syncConversationIndexSnapshot();
-      },
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'draft sync',
-      action: syncDraftsSnapshot,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'message collection sync',
-      action: syncMessageCollectionsSnapshot,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'spam sync',
-      action: syncSpamSnapshot,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'email blocklist sync',
-      action: syncEmailBlocklistSnapshot,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'conversation avatar refresh',
-      action: refreshAvatarsForConversationIndex,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'calendar MAM rehydration',
-      action: () async {
-        await rehydrateCalendarFromMam();
-      },
-    );
-  }
-
-  Future<void> _runPostNegotiationsBootstrapStep({
-    required String label,
-    required Future<void> Function() action,
-  }) async {
-    try {
-      await action();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine('Post-negotiations $label failed.', error, stackTrace);
     }
   }
 

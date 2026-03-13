@@ -34,6 +34,8 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const _recipientAddressSuggestionLimit = 50000;
   static const Duration _mutedForeverDuration = Duration(days: 3650);
   static const String _signupWelcomeChatJid = 'axichat@welcome.axichat.invalid';
+  static const String _conversationIndexBootstrapOperationName =
+      'ChatsService.bootstrapConversationIndexOnNegotiations';
   static const String _mucChatStatePlaceholderBody = '';
   static const List<mox.MessageProcessingHint> _mucChatStateProcessingHints = [
     mox.MessageProcessingHint.noStore,
@@ -78,16 +80,20 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     manager
+      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
+        if (event.resumed) return;
+        if (connectionState != ConnectionState.connected) return;
+        fireAndForget(
+          syncConversationIndexSnapshot,
+          operationName: _conversationIndexBootstrapOperationName,
+        );
+      })
       ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
         await applyConversationIndexItems([event.item]);
       })
       ..registerHandler<ConversationIndexItemRetractedEvent>((event) async {
         await _applyConversationIndexRetraction(event.peerBare);
       });
-  }
-
-  Future<void> syncConversationIndexOnLogin() async {
-    await syncConversationIndexSnapshot();
   }
 
   Future<List<ConvItem>> syncConversationIndexSnapshot() async {
