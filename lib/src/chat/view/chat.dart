@@ -1013,7 +1013,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
           onChangeNickname: onChangeNickname,
           onLeaveRoom: onLeaveRoom,
           onDestroyRoom: onDestroyRoom,
-          currentNickname: roomState.occupants[roomState.myOccupantId]?.nick,
+          currentNickname: roomState.occupants[roomState.myOccupantJid]?.nick,
           onClose: onClose,
           useSurface: true,
         );
@@ -1025,6 +1025,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
 class _ChatState extends State<Chat> {
   static bool get _debugShowAllComposerBanners => kDebugMode && false;
   static bool get _debugCycleComposerBanners => kDebugMode && false;
+  static const bool _debugForceUnreadIndicators = true;
 
   late final ShadPopoverController _emojiPopoverController;
   late final FocusNode _focusNode;
@@ -1081,6 +1082,9 @@ class _ChatState extends State<Chat> {
   final _bubbleWidthByMessageId = <String, double>{};
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
+  Set<String> _reportedReadThresholdMessageIds = const <String>{};
+  final Set<String> _debugConsumedUnreadIndicatorKeys = <String>{};
+  var _readThresholdSyncScheduled = false;
   final Object _composerTapRegionGroup = Object();
   final Object _selectionTapRegionGroup = Object();
   double _bottomSectionHeight = 0.0;
@@ -1944,7 +1948,118 @@ class _ChatState extends State<Chat> {
     }
   }
 
-  void _handleScrollChanged() => _persistScrollOffset();
+  void _handleScrollChanged() {
+    _persistScrollOffset();
+    _scheduleReadThresholdSync();
+  }
+
+  Rect? _messageListViewportRect() {
+    final messageListContext = _messageListKey.currentContext;
+    if (messageListContext == null) {
+      return null;
+    }
+    final renderObject = messageListContext.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.attached) {
+      return null;
+    }
+    final origin = renderObject.localToGlobal(Offset.zero);
+    return origin & renderObject.size;
+  }
+
+  bool _usesBubbleReadThreshold(ChatState state) {
+    if ((state.chat?.isEmailBacked ?? false) ||
+        (state.chat?.defaultTransport.isEmail ?? false)) {
+      return true;
+    }
+    return state.items.any(_isEmailBackedMessage);
+  }
+
+  Set<String> _readThresholdMessageIds(ChatState state) {
+    if (!state.messagesLoaded ||
+        !_chatRoute.allowsChatInteraction ||
+        !_usesBubbleReadThreshold(state)) {
+      return const <String>{};
+    }
+    final viewportRect = _messageListViewportRect();
+    if (viewportRect == null) {
+      return const <String>{};
+    }
+    final messageIds = <String>{};
+    for (final message in state.items) {
+      if (!_isEmailBackedMessage(message)) {
+        continue;
+      }
+      final messageId = message.stanzaID.trim();
+      if (messageId.isEmpty) {
+        continue;
+      }
+      final bubbleRect = _bubbleRegionRegistry.rectFor(messageId);
+      if (bubbleRect == null || bubbleRect.height <= 0) {
+        continue;
+      }
+      // The side indicator sits halfway down the bubble edge, so wait until it
+      // has entered the viewport before clearing read state.
+      final thresholdY = bubbleRect.top + (bubbleRect.height * 0.6);
+      if (thresholdY < viewportRect.top || thresholdY > viewportRect.bottom) {
+        continue;
+      }
+      messageIds.add(messageId);
+    }
+    return messageIds;
+  }
+
+  void _syncReadThresholdIds() {
+    if (!mounted) {
+      return;
+    }
+    final chatState = context.read<ChatBloc>().state;
+    final nextIds = _readThresholdMessageIds(chatState);
+    var debugIndicatorDidChange = false;
+    if (_debugForceUnreadIndicators) {
+      for (final message in chatState.items) {
+        if (!_isEmailBackedMessage(message)) {
+          continue;
+        }
+        if (!nextIds.contains(message.stanzaID)) {
+          continue;
+        }
+        final didAdd = _debugConsumedUnreadIndicatorKeys.add(
+          _debugUnreadIndicatorKeyForMessage(message),
+        );
+        debugIndicatorDidChange = debugIndicatorDidChange || didAdd;
+      }
+    }
+    if (debugIndicatorDidChange) {
+      setState(() {});
+    }
+    if (nextIds.length == _reportedReadThresholdMessageIds.length &&
+        nextIds.containsAll(_reportedReadThresholdMessageIds)) {
+      return;
+    }
+    _reportedReadThresholdMessageIds = nextIds;
+    final messageIds = nextIds.toList(growable: false)..sort();
+    context.read<ChatBloc>().add(ChatReadThresholdChanged(messageIds));
+  }
+
+  String _debugUnreadIndicatorKeyForMessage(Message message) {
+    final chatJid = message.chatJid.trim();
+    final stanzaId = message.stanzaID.trim();
+    return '$chatJid|$stanzaId';
+  }
+
+  void _scheduleReadThresholdSync() {
+    if (!mounted || _readThresholdSyncScheduled) {
+      return;
+    }
+    _readThresholdSyncScheduled = true;
+    WidgetsBinding.instance.endOfFrame.then((_) {
+      _readThresholdSyncScheduled = false;
+      if (!mounted) {
+        return;
+      }
+      _syncReadThresholdIds();
+    });
+  }
 
   void _restoreScrollOffsetForCurrentChat() {
     final target = _restoreScrollOffset();
@@ -2067,9 +2182,9 @@ class _ChatState extends State<Chat> {
     if (trimmedCurrent != null && trimmedCurrent.isNotEmpty) {
       return trimmedCurrent;
     }
-    final occupantId = roomState?.myOccupantId?.trim();
-    if (occupantId != null && occupantId.isNotEmpty) {
-      final realJid = roomState?.occupants[occupantId]?.realJid?.trim();
+    final occupantJid = roomState?.myOccupantJid?.trim();
+    if (occupantJid != null && occupantJid.isNotEmpty) {
+      final realJid = roomState?.occupants[occupantJid]?.realJid?.trim();
       if (realJid != null && realJid.isNotEmpty) {
         return bareAddress(realJid) ?? realJid;
       }
@@ -2168,10 +2283,10 @@ class _ChatState extends State<Chat> {
 
   bool _isMucSelfMessage({
     required String senderJid,
-    required String? myOccupantId,
+    required String? myOccupantJid,
     required String? selfNick,
   }) {
-    final normalizedSelf = myOccupantId?.trim();
+    final normalizedSelf = myOccupantJid?.trim();
     if (normalizedSelf != null &&
         normalizedSelf.isNotEmpty &&
         senderJid.trim() == normalizedSelf) {
@@ -2191,14 +2306,14 @@ class _ChatState extends State<Chat> {
   bool _isQuotedMessageFromSelf({
     required Message quotedMessage,
     required bool isGroupChat,
-    required String? myOccupantId,
+    required String? myOccupantJid,
     required String? selfNick,
     required String? currentUserId,
   }) {
     if (isGroupChat) {
       return _isMucSelfMessage(
         senderJid: quotedMessage.senderJid,
-        myOccupantId: myOccupantId,
+        myOccupantJid: myOccupantJid,
         selfNick: selfNick,
       );
     }
@@ -4149,6 +4264,7 @@ class _ChatState extends State<Chat> {
     _focusNode.onKeyEvent = _handleComposerKeyEvent;
     _textController.addListener(_typingListener);
     _subjectController.addListener(_handleSubjectChanged);
+    _scheduleReadThresholdSync();
     final chat = context.read<ChatBloc>().state.chat;
     _recipientsChatJid = chat?.jid;
     final settings = context.read<SettingsCubit>().state;
@@ -4493,6 +4609,13 @@ class _ChatState extends State<Chat> {
                 );
               },
             ),
+            BlocListener<ChatBloc, ChatState>(
+              listenWhen: (previous, current) =>
+                  previous.chat?.jid != current.chat?.jid ||
+                  previous.items != current.items ||
+                  previous.messagesLoaded != current.messagesLoaded,
+              listener: (_, _) => _scheduleReadThresholdSync(),
+            ),
           ],
           child: BlocConsumer<ChatBloc, ChatState>(
             listenWhen: (previous, current) {
@@ -4583,10 +4706,10 @@ class _ChatState extends State<Chat> {
                       (normalizedEmailSelfJid != null &&
                           normalizedChatJid == normalizedEmailSelfJid));
               final String? selfAvatarPath = profileState()?.avatarPath?.trim();
-              final myOccupantId = state.roomState?.myOccupantId;
-              final myOccupant = myOccupantId == null
+              final myOccupantJid = state.roomState?.myOccupantJid;
+              final myOccupant = myOccupantJid == null
                   ? null
-                  : state.roomState?.occupants[myOccupantId];
+                  : state.roomState?.occupants[myOccupantJid];
               final selfNick = (myOccupant?.nick ?? chatEntity?.myNickname)
                   ?.trim();
               final String? availabilityActorId = _availabilityActorId(
@@ -4794,8 +4917,8 @@ class _ChatState extends State<Chat> {
                 return true;
               }
 
-              final selfUserId = isGroupChat && myOccupantId != null
-                  ? myOccupantId
+              final selfUserId = isGroupChat && myOccupantJid != null
+                  ? myOccupantJid
                   : currentUserId;
               final user = ChatUser(
                 id: selfUserId,
@@ -5470,7 +5593,7 @@ class _ChatState extends State<Chat> {
                                           isGroupChat &&
                                           _isMucSelfMessage(
                                             senderJid: e.senderJid,
-                                            myOccupantId: myOccupantId,
+                                            myOccupantJid: myOccupantJid,
                                             selfNick: selfNick,
                                           );
                                       final isSelf =
@@ -5491,6 +5614,36 @@ class _ChatState extends State<Chat> {
                                             message: e,
                                             isEmailChat: isEmailChat,
                                           );
+                                      final unreadSelfJid = isEmailMessage
+                                          ? resolvedEmailSelfJid
+                                          : currentUserId;
+                                      final normalShowUnreadIndicator =
+                                          isEmailMessage &&
+                                          messageIdPrefix == null &&
+                                          !e.displayed &&
+                                          e.countsTowardUnread(
+                                            selfJid: unreadSelfJid,
+                                            isGroupChat: isGroupChat,
+                                            myOccupantJid: myOccupantJid,
+                                          );
+                                      final debugShowUnreadIndicator =
+                                          _debugForceUnreadIndicators &&
+                                          isEmailMessage &&
+                                          messageIdPrefix == null &&
+                                          e.countsTowardUnread(
+                                            selfJid: unreadSelfJid,
+                                            isGroupChat: isGroupChat,
+                                            myOccupantJid: myOccupantJid,
+                                          ) &&
+                                          !_debugConsumedUnreadIndicatorKeys
+                                              .contains(
+                                                _debugUnreadIndicatorKeyForMessage(
+                                                  e,
+                                                ),
+                                              );
+                                      final showUnreadIndicator =
+                                          normalShowUnreadIndicator ||
+                                          debugShowUnreadIndicator;
                                       String? authorAvatarPath;
                                       if (isGroupChat) {
                                         if (isSelf) {
@@ -5830,6 +5983,8 @@ class _ChatState extends State<Chat> {
                                               e.forwardedFromJid,
                                           'forwardedSubjectSenderLabel':
                                               forwardedSubjectSenderLabel,
+                                          'showUnreadIndicator':
+                                              showUnreadIndicator,
                                           'isEmailMessage': isEmailMessage,
                                           'inviteRoom': inviteRoom,
                                           'inviteRoomName': inviteRoomName,
@@ -5965,7 +6120,7 @@ class _ChatState extends State<Chat> {
                                         : _isQuotedMessageFromSelf(
                                             quotedMessage: quotedMessage,
                                             isGroupChat: isGroupChat,
-                                            myOccupantId: myOccupantId,
+                                            myOccupantJid: myOccupantJid,
                                             selfNick: selfNick,
                                             currentUserId: currentUserId,
                                           );
@@ -7006,8 +7161,8 @@ class _ChatState extends State<Chat> {
                                                                                 isEmailChat,
                                                                             selfJid:
                                                                                 selfXmppJid,
-                                                                            myOccupantId:
-                                                                                myOccupantId,
+                                                                            myOccupantJid:
+                                                                                myOccupantJid,
                                                                           );
                                                                           final isSingleSelection =
                                                                               !_multiSelectActive &&
@@ -8535,7 +8690,7 @@ class _ChatState extends State<Chat> {
                                                                               messageAvatarPath = messageMemberEntry.avatarPath!.trim();
                                                                             } else if (messageAvatarOccupant !=
                                                                                 null) {
-                                                                              if (roomState?.myOccupantId ==
+                                                                              if (roomState?.myOccupantJid ==
                                                                                   messageAvatarOccupant.occupantId) {
                                                                                 messageAvatarPath = selfAvatarPath;
                                                                               } else {
@@ -9108,7 +9263,7 @@ class _ChatState extends State<Chat> {
                                                                                   final quotedIsSelf = _isQuotedMessageFromSelf(
                                                                                     quotedMessage: quotedModel,
                                                                                     isGroupChat: isGroupChat,
-                                                                                    myOccupantId: myOccupantId,
+                                                                                    myOccupantJid: myOccupantJid,
                                                                                     selfNick: selfNick,
                                                                                     currentUserId: currentUserId,
                                                                                   );
@@ -9259,12 +9414,18 @@ class _ChatState extends State<Chat> {
                                                                                   child: bubbleStack,
                                                                                 )
                                                                               : bubbleStack;
-                                                                          final shouldShowSenderLabel =
+                                                                          final showUnreadIndicator =
+                                                                              message.customProperties?['showUnreadIndicator']
+                                                                                  as bool? ??
+                                                                              false;
+                                                                          final showSenderLabelText =
                                                                               isRenderableBubble &&
                                                                               !_chatMessagesShouldChain(
                                                                                 message,
                                                                                 previous,
                                                                               );
+                                                                          final shouldShowSenderLabel =
+                                                                              showSenderLabelText;
                                                                           Widget?
                                                                           senderLabel;
                                                                           if (shouldShowSenderLabel) {
@@ -9292,6 +9453,30 @@ class _ChatState extends State<Chat> {
                                                                             child:
                                                                                 measuredBubbleStack,
                                                                           );
+                                                                          final bubbleWithIndicator =
+                                                                              isEmailMessage
+                                                                              ? Row(
+                                                                                  mainAxisSize: MainAxisSize.min,
+                                                                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                                                                  children: [
+                                                                                    if (self)
+                                                                                      _UnreadBubbleSideIndicator(
+                                                                                        visible: showUnreadIndicator,
+                                                                                        isSelf: self,
+                                                                                      ),
+                                                                                    _MessageBubbleRegion(
+                                                                                      messageId: messageModel.stanzaID,
+                                                                                      registry: _bubbleRegionRegistry,
+                                                                                      child: bubbleWithSlack,
+                                                                                    ),
+                                                                                    if (!self)
+                                                                                      _UnreadBubbleSideIndicator(
+                                                                                        visible: showUnreadIndicator,
+                                                                                        isSelf: self,
+                                                                                      ),
+                                                                                  ],
+                                                                                )
+                                                                              : bubbleWithSlack;
                                                                           final Widget
                                                                           bubbleStackWithReply = _ReplyPreviewBubbleColumn(
                                                                             forwardedPreview:
@@ -9301,7 +9486,7 @@ class _ChatState extends State<Chat> {
                                                                             senderLabel:
                                                                                 senderLabel,
                                                                             bubble:
-                                                                                bubbleWithSlack,
+                                                                                bubbleWithIndicator,
                                                                             previewMaxWidth:
                                                                                 replyPreviewMaxWidth,
                                                                             spacing:
@@ -9344,15 +9529,6 @@ class _ChatState extends State<Chat> {
                                                                             ],
                                                                           );
                                                                           final Widget
-                                                                          messageRegion = _MessageBubbleRegion(
-                                                                            messageId:
-                                                                                messageModel.stanzaID,
-                                                                            registry:
-                                                                                _bubbleRegionRegistry,
-                                                                            child:
-                                                                                messageBody,
-                                                                          );
-                                                                          final Widget
                                                                           messageArrival =
                                                                               isRenderableBubble
                                                                               ? _MessageArrivalAnimator(
@@ -9363,9 +9539,9 @@ class _ChatState extends State<Chat> {
                                                                                     messageModel,
                                                                                   ),
                                                                                   isSelf: self,
-                                                                                  child: messageRegion,
+                                                                                  child: messageBody,
                                                                                 )
-                                                                              : messageRegion;
+                                                                              : messageBody;
                                                                           final Widget
                                                                           selectionRegion = TapRegion(
                                                                             groupId:
@@ -9776,7 +9952,7 @@ class _ChatState extends State<Chat> {
     final roomName = (data['roomName'] as String?)?.trim();
     final invitee = data['invitee'] as String?;
     if (roomJid == null) return;
-    if (roomState?.myOccupantId != null) {
+    if (roomState?.myOccupantJid != null) {
       _showSnackbar(l10n.chatInviteAlreadyInRoom);
       return;
     }
@@ -10236,6 +10412,7 @@ class _ChatState extends State<Chat> {
     }
     context.read<ChatsCubit>().setOpenChatRoute(route: nextRoute);
     _updateChatRouteHistoryEntry();
+    _scheduleReadThresholdSync();
   }
 
   void _returnToMainRoute() {
@@ -10814,13 +10991,13 @@ class _PinnedMessageTile extends StatelessWidget {
 
   bool isSelfMessage({required Message message, required String? accountJid}) {
     if (chat.type == ChatType.groupChat) {
-      final myOccupantId = roomState?.myOccupantId;
+      final myOccupantJid = roomState?.myOccupantJid;
       final selfNick =
-          (myOccupantId == null
+          (myOccupantJid == null
               ? null
-              : roomState?.occupants[myOccupantId]?.nick) ??
+              : roomState?.occupants[myOccupantJid]?.nick) ??
           chat.myNickname;
-      final normalizedSelf = myOccupantId?.trim();
+      final normalizedSelf = myOccupantJid?.trim();
       if (normalizedSelf != null &&
           normalizedSelf.isNotEmpty &&
           message.senderJid.trim() == normalizedSelf) {
@@ -11531,7 +11708,7 @@ class _PinnedMessageTile extends StatelessWidget {
           isGroupChat: chat.type == ChatType.groupChat,
           isEmailBacked: chat.isEmailBacked,
           selfJid: accountJid,
-          myOccupantId: roomState?.myOccupantId,
+          myOccupantJid: roomState?.myOccupantJid,
         );
     final Widget? unpinAction = canTogglePins && messageForPin != null
         ? AxiIconButton.destructive(
@@ -17775,6 +17952,11 @@ class _SenderLabelBlock extends StatelessWidget {
         ? CrossAxisAlignment.end
         : CrossAxisAlignment.start;
     final secondaryLabel = this.secondaryLabel?.trim();
+    final trimmedPrimaryLabel = primaryLabel.trim();
+    if (trimmedPrimaryLabel.isEmpty &&
+        (secondaryLabel == null || secondaryLabel.isEmpty)) {
+      return const SizedBox.shrink();
+    }
     final primaryStyle = context.textTheme.small.copyWith(
       color: colors.mutedForeground,
       fontWeight: FontWeight.w600,
@@ -17782,18 +17964,62 @@ class _SenderLabelBlock extends StatelessWidget {
     final secondaryStyle = context.textTheme.muted.copyWith(
       color: colors.mutedForeground,
     );
+    final labelChildren = <Widget>[
+      if (trimmedPrimaryLabel.isNotEmpty)
+        Text(trimmedPrimaryLabel, style: primaryStyle, textAlign: textAlign),
+      if (secondaryLabel != null && secondaryLabel.isNotEmpty)
+        Text(secondaryLabel, style: secondaryStyle, textAlign: textAlign),
+    ];
     return Padding(
       padding: EdgeInsets.only(bottom: spacing.s, left: leftInset),
       child: Column(
         spacing: spacing.xxs,
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: crossAxis,
-        children: [
-          Text(primaryLabel, style: primaryStyle, textAlign: textAlign),
-          if (secondaryLabel != null && secondaryLabel.isNotEmpty)
-            Text(secondaryLabel, style: secondaryStyle, textAlign: textAlign),
-        ],
+        children: labelChildren,
       ),
+    );
+  }
+}
+
+class _UnreadBubbleSideIndicator extends StatelessWidget {
+  const _UnreadBubbleSideIndicator({
+    required this.visible,
+    required this.isSelf,
+  });
+
+  final bool visible;
+  final bool isSelf;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final alignment = isSelf ? Alignment.centerRight : Alignment.centerLeft;
+    return AxiAnimatedSize(
+      duration: _bubbleFocusDuration,
+      reverseDuration: _bubbleFocusDuration,
+      curve: _bubbleFocusCurve,
+      alignment: alignment,
+      clipBehavior: Clip.none,
+      child: visible
+          ? Padding(
+              padding: isSelf
+                  ? EdgeInsets.only(right: spacing.xxs)
+                  : EdgeInsets.only(left: spacing.xxs),
+              child: SizedBox(
+                width: sizing.menuItemIconSize / 2,
+                height: sizing.menuItemIconSize / 2,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: colors.destructive,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            )
+          : const SizedBox.shrink(),
     );
   }
 }

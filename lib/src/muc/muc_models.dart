@@ -170,7 +170,7 @@ class RoomState {
   RoomState({
     required this.roomJid,
     Map<String, Occupant>? occupants,
-    this.myOccupantId,
+    this.myOccupantJid,
     Set<String>? selfPresenceStatusCodes,
     this.selfPresenceReason,
     this.joinErrorCondition,
@@ -187,7 +187,7 @@ class RoomState {
 
   final String roomJid;
   final Map<String, Occupant> occupants;
-  final String? myOccupantId;
+  final String? myOccupantJid;
   final Set<String> selfPresenceStatusCodes;
   final String? selfPresenceReason;
   final MucJoinErrorCondition? joinErrorCondition;
@@ -198,10 +198,10 @@ class RoomState {
   late final _RoomOccupantGroups _occupantGroups = _buildOccupantGroups();
 
   OccupantAffiliation get myAffiliation =>
-      occupants[myOccupantId]?.affiliation ?? OccupantAffiliation.none;
+      occupants[myOccupantJid]?.affiliation ?? OccupantAffiliation.none;
 
   OccupantRole get myRole {
-    final role = occupants[myOccupantId]?.role;
+    final role = occupants[myOccupantJid]?.role;
     return role ?? OccupantRole.none;
   }
 
@@ -291,7 +291,7 @@ class RoomState {
 
   RoomState copyWith({
     Map<String, Occupant>? occupants,
-    String? myOccupantId,
+    String? myOccupantJid,
     Set<String>? selfPresenceStatusCodes,
     String? selfPresenceReason,
     MucJoinErrorCondition? joinErrorCondition,
@@ -302,7 +302,7 @@ class RoomState {
   }) => RoomState(
     roomJid: roomJid,
     occupants: occupants ?? this.occupants,
-    myOccupantId: myOccupantId ?? this.myOccupantId,
+    myOccupantJid: myOccupantJid ?? this.myOccupantJid,
     selfPresenceStatusCodes:
         selfPresenceStatusCodes ?? this.selfPresenceStatusCodes,
     selfPresenceReason: selfPresenceReason ?? this.selfPresenceReason,
@@ -337,11 +337,11 @@ extension RoomStatePresence on RoomState {
   bool get blocksAutoRejoin => joinErrorCondition?.blocksAutoRejoin == true;
 
   bool get hasPresentSelfOccupant {
-    final occupantId = myOccupantId;
-    if (occupantId == null || occupantId.isEmpty) {
+    final occupantJid = myOccupantJid;
+    if (occupantJid == null || occupantJid.isEmpty) {
       return false;
     }
-    return occupants[occupantId]?.isPresent == true;
+    return occupants[occupantJid]?.isPresent == true;
   }
 
   bool get isReadyForMessaging => hasSelfPresence && hasPresentSelfOccupant;

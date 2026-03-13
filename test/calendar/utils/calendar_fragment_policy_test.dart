@@ -32,7 +32,7 @@ RoomState createRoomState({
   return RoomState(
     roomJid: _roomJid,
     occupants: <String, Occupant>{_occupantId: occupant},
-    myOccupantId: _occupantId,
+    myOccupantJid: _occupantId,
   );
 }
 

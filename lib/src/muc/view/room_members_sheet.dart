@@ -216,7 +216,7 @@ class RoomMembersSheet extends StatelessWidget {
                         members: group.members,
                         onAction: onAction,
                         onOpenDirectChat: onOpenDirectChat,
-                        myOccupantId: roomState.myOccupantId,
+                        myOccupantJid: roomState.myOccupantJid,
                         l10n: l10n,
                         animationDuration: animationDuration,
                       );
@@ -514,7 +514,7 @@ class _MemberSection extends StatelessWidget {
     required this.members,
     required this.onAction,
     required this.onOpenDirectChat,
-    required this.myOccupantId,
+    required this.myOccupantJid,
     required this.l10n,
     required this.animationDuration,
   });
@@ -528,7 +528,7 @@ class _MemberSection extends StatelessWidget {
   )
   onAction;
   final Future<void> Function(String jid) onOpenDirectChat;
-  final String? myOccupantId;
+  final String? myOccupantJid;
   final AppLocalizations l10n;
   final Duration animationDuration;
 
@@ -547,7 +547,7 @@ class _MemberSection extends StatelessWidget {
         ...members.map((member) {
           final occupant = member.occupant;
           final subtitle = _roleSubtitle(occupant);
-          final isSelf = occupant.occupantId == myOccupantId;
+          final isSelf = occupant.occupantId == myOccupantJid;
           return Padding(
             padding: EdgeInsets.symmetric(vertical: spacing.xs),
             child: _MemberTile(

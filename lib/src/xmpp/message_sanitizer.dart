@@ -31,7 +31,6 @@ const _pinMutationPinnedAttr = 'pinned';
 const _pinMutationTimestampAttr = 'timestamp';
 const _mucUserXmlns = 'http://jabber.org/protocol/muc#user';
 const _mucJoinXmlns = 'http://jabber.org/protocol/muc';
-const _occupantIdXmlns = 'urn:xmpp:occupant-id:0';
 const _directInviteTag = 'x';
 const _directInviteXmlns = 'jabber:x:conference';
 const _directInviteRoomAttr = 'jid';

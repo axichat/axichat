@@ -575,7 +575,7 @@ class EmailService {
       return;
     }
     _emailReadReceiptsEnabled = enabled;
-    await _applyEmailReadReceiptPreference();
+    await _applyEmailReadReceiptPreference(enabled: enabled);
   }
 
   void updateDefaultChatAttachmentAutoDownload(AttachmentAutoDownload value) {
@@ -4207,16 +4207,20 @@ class EmailService {
   static String _mdnsConfigValue(bool enabled) =>
       enabled ? _mdnsEnabledValue : _mdnsDisabledValue;
 
-  Future<void> _applyEmailReadReceiptPreference() async {
+  Future<void> _applyEmailReadReceiptPreference({
+    Iterable<int>? accountIds,
+    bool? enabled,
+  }) async {
     if (!hasActiveSession) {
       return;
     }
-    final accountIds = await _transport.accountIds();
-    if (accountIds.isEmpty) {
+    final resolvedAccountIds =
+        accountIds?.toList(growable: false) ?? await _transport.accountIds();
+    if (resolvedAccountIds.isEmpty) {
       return;
     }
-    final value = _mdnsConfigValue(_emailReadReceiptsEnabled);
-    for (final accountId in accountIds) {
+    final value = _mdnsConfigValue(enabled ?? _emailReadReceiptsEnabled);
+    for (final accountId in resolvedAccountIds) {
       await _transport.setCoreConfig(
         key: _mdnsEnabledConfigKey,
         value: value,
@@ -4769,7 +4773,10 @@ class EmailService {
   /// Marks messages as seen, triggering MDN if enabled.
   ///
   /// Call this when messages are displayed to the user.
-  Future<bool> markSeenMessages(List<Message> messages) async {
+  Future<bool> markSeenMessages(
+    List<Message> messages, {
+    required bool sendReadReceipts,
+  }) async {
     final idsByAccount = <int, List<int>>{};
     for (final message in messages) {
       final deltaId = message.deltaMsgId;
@@ -4782,6 +4789,10 @@ class EmailService {
       return true;
     }
     await _ensureReady();
+    await _applyEmailReadReceiptPreference(
+      accountIds: idsByAccount.keys,
+      enabled: sendReadReceipts,
+    );
     var success = true;
     for (final entry in idsByAccount.entries) {
       final result = await _transport.markSeenMessages(
