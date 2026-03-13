@@ -343,21 +343,17 @@ abstract interface class XmppBase {
 
   SecretKey? get avatarEncryptionKey;
 
+  StoredAvatar? get cachedSelfAvatar;
+
   Stream<StoredAvatar?> get selfAvatarStream;
 
   bool get selfAvatarHydrating;
 
   Stream<bool> get selfAvatarHydratingStream;
 
-  int? get _selfAvatarBootstrapCompletedGeneration;
-
-  set _selfAvatarBootstrapCompletedGeneration(int? value);
-
   XmppStreamReady? get lastStreamReady;
 
   void _notifySelfAvatarUpdated(StoredAvatar? avatar);
-
-  void _emitSelfAvatarHydrating();
 
   Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream;
 
@@ -371,6 +367,8 @@ abstract interface class XmppBase {
   List<int> secureBytes(int length);
 
   Future<XmppDatabase> get database;
+
+  Future<StoredAvatar?> getOwnAvatar();
 
   Future<void> publishMessageCollectionSyncEntry(
     MessageCollectionMembershipEntry entry,
@@ -551,13 +549,6 @@ class XmppService extends XmppBase
   var _lifecycleEpoch = 0;
   var _activeDbOperations = 0;
   Completer<void>? _dbOperationsDrained;
-  StreamController<StoredAvatar?> _selfAvatarController =
-      StreamController<StoredAvatar?>.broadcast();
-  StreamController<bool> _selfAvatarHydratingController =
-      StreamController<bool>.broadcast(sync: true);
-  StoredAvatar? _cachedSelfAvatar;
-  @override
-  int? _selfAvatarBootstrapCompletedGeneration;
   @override
   String? _databasePrefix;
 
@@ -571,11 +562,6 @@ class XmppService extends XmppBase
   var _autoDownloadVideos = false;
   var _autoDownloadDocuments = false;
   var _autoDownloadArchives = false;
-  StreamController<anti_abuse.SpamSyncUpdate> _spamSyncUpdateController =
-      StreamController<anti_abuse.SpamSyncUpdate>.broadcast();
-  StreamController<anti_abuse.EmailBlocklistSyncUpdate>
-  _emailBlocklistSyncUpdateController =
-      StreamController<anti_abuse.EmailBlocklistSyncUpdate>.broadcast();
 
   AppLocalizations get localizations =>
       _localizations ?? lookupAppLocalizations(const ui.Locale('en'));
@@ -616,14 +602,6 @@ class XmppService extends XmppBase
   @override
   XmppStreamReady? get lastStreamReady => _lastStreamReady;
 
-  bool get hasGlobalMamSyncForCurrentSession {
-    final completedAt = mamGlobalSyncCompletedAt;
-    if (completedAt == null) return false;
-    final streamReady = lastStreamReady;
-    if (streamReady == null) return false;
-    return !completedAt.isBefore(streamReady.timestamp);
-  }
-
   @override
   bool get autoDownloadImages => _autoDownloadImages;
 
@@ -660,81 +638,16 @@ class XmppService extends XmppBase
   }
 
   @override
-  SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
-
-  @override
-  Stream<StoredAvatar?> get selfAvatarStream => _selfAvatarController.stream;
-  StoredAvatar? get cachedSelfAvatar => _cachedSelfAvatar;
-
-  @override
-  bool get selfAvatarHydrating {
-    final bareJid = _myJid?.toBare().toString();
-    if (bareJid == null || bareJid.isEmpty) {
-      return false;
-    }
-    if (connectionState != ConnectionState.connected &&
-        connectionState != ConnectionState.connecting) {
-      return false;
-    }
-    final streamReady = lastStreamReady;
-    if (streamReady == null) {
-      return true;
-    }
-    final completedGeneration = _selfAvatarBootstrapCompletedGeneration;
-    if (completedGeneration == null) {
-      return true;
-    }
-    return completedGeneration < streamReady.generation;
-  }
-
-  @override
-  Stream<bool> get selfAvatarHydratingStream =>
-      _selfAvatarHydratingController.stream;
-
-  @override
   Stream<void> get databaseReloadStream => _databaseReloadController.stream;
-
-  @override
-  Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream =>
-      _spamSyncUpdateController.stream;
-
-  @override
-  Stream<anti_abuse.EmailBlocklistSyncUpdate>
-  get emailBlocklistSyncUpdateStream =>
-      _emailBlocklistSyncUpdateController.stream;
 
   void _notifyDatabaseReloaded() {
     if (_databaseReloadController.isClosed) return;
     _databaseReloadController.add(null);
   }
 
-  @override
-  void _emitSelfAvatarHydrating() {
-    if (_selfAvatarHydratingController.isClosed) return;
-    _selfAvatarHydratingController.add(selfAvatarHydrating);
-  }
-
-  @override
-  void _notifySelfAvatarUpdated(StoredAvatar? avatar) {
-    _cachedSelfAvatar = avatar;
-    if (_selfAvatarController.isClosed) return;
-    _selfAvatarController.add(avatar);
-  }
-
   final fastTokenStorageKey = XmppStateStore.registerKey('fast_token');
   final userAgentStorageKey = XmppStateStore.registerKey('user_agent');
   final resourceStorageKey = XmppStateStore.registerKey('resource');
-  @override
-  final selfAvatarPathKey = XmppStateStore.registerKey('self_avatar_path');
-  @override
-  final selfAvatarHashKey = XmppStateStore.registerKey('self_avatar_hash');
-  @override
-  final selfAvatarPendingPublishKey = XmppStateStore.registerKey(
-    'self_avatar_pending_publish_v1',
-  );
-  final avatarEncryptionSaltKey = XmppStateStore.registerKey(
-    'avatar_encryption_salt',
-  );
 
   StreamController<XmppOperationEvent> _xmppOperationController =
       StreamController<XmppOperationEvent>.broadcast();
@@ -782,20 +695,6 @@ class XmppService extends XmppBase
   @override
   void emitOmemoActivity(mox.OmemoActivityEvent event) {
     _omemoActivityController.add(event);
-  }
-
-  @override
-  void emitSpamSyncUpdate(anti_abuse.SpamSyncUpdate update) {
-    if (_spamSyncUpdateController.isClosed) return;
-    _spamSyncUpdateController.add(update);
-  }
-
-  @override
-  void emitEmailBlocklistSyncUpdate(
-    anti_abuse.EmailBlocklistSyncUpdate update,
-  ) {
-    if (_emailBlocklistSyncUpdateController.isClosed) return;
-    _emailBlocklistSyncUpdateController.add(update);
   }
 
   @override
@@ -900,22 +799,12 @@ class XmppService extends XmppBase
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
-    manager
-      ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
-        _setConnectionState(event.state);
-        if (event.state != ConnectionState.connected) {
-          _pubSubSupportResolved = false;
-        }
-      })
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        _recordStreamReady(event.resumed);
-        _repairConnectionStateFromTraffic(
-          reason: _connectivityRepairReasonStreamNegotiationsDone,
-        );
-        _streamResumptionAttempted = false;
-        await _runPostNegotiationsSetup();
-        // Connection handling is automatic in moxxmpp v0.5.0.
-      });
+    manager.registerHandler<mox.ConnectionStateChangedEvent>((event) async {
+      _setConnectionState(event.state);
+      if (event.state != ConnectionState.connected) {
+        _pubSubSupportResolved = false;
+      }
+    });
     super.configureEventHandlers(manager);
     manager
       ..registerHandler<XmppOperationEvent>((event) async {
@@ -1071,27 +960,6 @@ class XmppService extends XmppBase
   ConversationIndexManager? get conversationIndexManager =>
       _connection.getManager<ConversationIndexManager>();
 
-  Future<StoredAvatar?> getOwnAvatar() async {
-    if (!_stateStore.isCompleted) return null;
-    try {
-      final path = await _dbOpReturning<XmppStateStore, String?>(
-        (ss) => ss.read(key: selfAvatarPathKey) as String?,
-      );
-      final hash = await _dbOpReturning<XmppStateStore, String?>(
-        (ss) => ss.read(key: selfAvatarHashKey) as String?,
-      );
-      if (path == null && hash == null) {
-        _cachedSelfAvatar = null;
-        return null;
-      }
-      final stored = StoredAvatar(path: path, hash: hash);
-      _cachedSelfAvatar = stored;
-      return stored;
-    } on XmppAbortedException {
-      return null;
-    }
-  }
-
   @override
   bool get needsReset =>
       super.needsReset ||
@@ -1187,6 +1055,9 @@ class XmppService extends XmppBase
 
   Future<void> _handleXmppEvent(mox.XmppEvent event) async {
     try {
+      if (event is mox.StreamNegotiationsDoneEvent) {
+        await _handleRootStreamNegotiationsDone(event);
+      }
       await _eventManager.executeHandlers(event);
     } catch (error, stackTrace) {
       _xmppLogger.warning(
@@ -1197,12 +1068,22 @@ class XmppService extends XmppBase
     }
   }
 
+  Future<void> _handleRootStreamNegotiationsDone(
+    mox.StreamNegotiationsDoneEvent event,
+  ) async {
+    _recordStreamReady(event.resumed);
+    _repairConnectionStateFromTraffic(
+      reason: _connectivityRepairReasonStreamNegotiationsDone,
+    );
+    await _runPostNegotiationsSetup();
+    // Connection handling is automatic in moxxmpp v0.5.0.
+  }
+
   var _synchronousConnection = Completer<void>();
   bool _sessionReconnectEnabled = false;
   bool _connectInFlight = false;
   bool _reconnectBlocked = false;
   var _foregroundServiceNotificationSent = false;
-  var _streamResumptionAttempted = false;
   var _connectionPasswordPreHashed = false;
   final Set<int> _timeoutErrorCodes = {60, 110, 10060};
   final int _staleConnectionTimeoutThreshold = 3;
@@ -1212,8 +1093,6 @@ class XmppService extends XmppBase
   var _demoSeedAttempted = false;
   var _demoOfflineMode = false;
   var _deferSelfAvatarBootstrapOnNextConnect = false;
-  SecretKey? _avatarEncryptionKey;
-  List<int>? _avatarEncryptionSalt;
 
   void deferSelfAvatarBootstrapForNextConnect() {
     _deferSelfAvatarBootstrapOnNextConnect = true;
@@ -1670,14 +1549,10 @@ class XmppService extends XmppBase
         );
     await _prepareMucRoomsFromStateStore();
 
-    _streamResumptionAttempted = false;
     if (_enableStreamManagement) {
       final sm = _connection.getManager<XmppStreamManagementManager>();
-      if (sm != null) {
-        _streamResumptionAttempted = await sm.hasPersistedState();
-        if (_streamResumptionAttempted) {
-          await _connection.loadStreamState();
-        }
+      if (sm != null && await sm.hasPersistedState()) {
+        await _connection.loadStreamState();
       }
     }
     await _dbOp<XmppStateStore>((ss) async {
@@ -1704,57 +1579,6 @@ class XmppService extends XmppBase
       return _databaseFactory(prefix, passphrase);
     }
     return _databaseFactory(prefix, passphrase);
-  }
-
-  Future<void> _initializeAvatarEncryption(String passphrase) async {
-    try {
-      final salt = await _loadOrCreateAvatarSalt();
-      final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
-      _avatarEncryptionKey = await hkdf.deriveKey(
-        secretKey: SecretKey(utf8.encode(passphrase)),
-        nonce: salt,
-        info: utf8.encode('axichat-avatar-v1'),
-      );
-    } catch (error, stackTrace) {
-      _xmppLogger.severe(
-        'Failed to initialize avatar encryption key.',
-        error,
-        stackTrace,
-      );
-      _avatarEncryptionKey = null;
-    }
-  }
-
-  Future<List<int>> _loadOrCreateAvatarSalt() async {
-    if (_avatarEncryptionSalt case final cached?) {
-      return cached;
-    }
-    try {
-      final stored = await _dbOpReturning<XmppStateStore, String?>(
-        (ss) => ss.read(key: avatarEncryptionSaltKey) as String?,
-      );
-      if (stored != null) {
-        final decoded = base64Decode(stored);
-        _avatarEncryptionSalt = decoded;
-        return decoded;
-      }
-    } on XmppAbortedException {
-      rethrow;
-    } on FormatException catch (error, stackTrace) {
-      _xmppLogger.warning(
-        'Stored avatar salt could not be decoded, regenerating.',
-        error,
-        stackTrace,
-      );
-    }
-    final fresh = secureBytes(32);
-    final encoded = base64Encode(fresh);
-    await _dbOp<XmppStateStore>(
-      (ss) async => ss.write(key: avatarEncryptionSaltKey, value: encoded),
-      awaitDatabase: true,
-    );
-    _avatarEncryptionSalt = fresh;
-    return fresh;
   }
 
   Future<void> _initDatabases(String prefix, String passphrase) async {
@@ -2509,6 +2333,19 @@ class XmppService extends XmppBase
     await _connection.requestReconnect(trigger);
   }
 
+  Future<void> ensureConnected({
+    ReconnectTrigger trigger = ReconnectTrigger.userAction,
+    Duration timeout = const Duration(seconds: 20),
+  }) async {
+    if (!hasConnectionSettings) return;
+    if (connectionState == ConnectionState.connected) return;
+    await requestReconnect(trigger);
+    if (connectionState == ConnectionState.connected) return;
+    await connectivityStream
+        .firstWhere((state) => state == ConnectionState.connected)
+        .timeout(timeout);
+  }
+
   Future<void> ensureForegroundSocketIfActive() async {
     if (!withForeground) {
       _logForegroundMigrationSkip('withForeground disabled');
@@ -2922,12 +2759,7 @@ class XmppService extends XmppBase
       _xmppLogger.info('Closing database...');
       await previousDatabase.value?.close();
     }
-
-    _streamResumptionAttempted = false;
-    _avatarEncryptionKey = null;
-    _avatarEncryptionSalt = null;
     _databasePrefix = null;
-    _cachedSelfAvatar = null;
     _cachedChatList = null;
 
     await super._reset();

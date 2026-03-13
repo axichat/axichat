@@ -835,9 +835,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<bool> _canPageMam(Chat chat) async {
-    if (!_xmppAllowedForChat(chat)) return false;
-    if (state.xmppConnectionState != ConnectionState.connected) return false;
-    return _messageService.resolveMamSupport();
+    return _messageService.canPageMamForChat(chat);
   }
 
   bool _canPageEmailHistory(Chat chat) {
@@ -870,10 +868,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool _shouldSkipInitialMamSync(Chat chat) {
-    if (chat.type != ChatType.chat) return false;
-    final xmppService = _xmppService;
-    if (xmppService == null) return false;
-    return xmppService.hasGlobalMamSyncForCurrentSession;
+    return _messageService.shouldSkipInitialMamSyncForChat(chat);
   }
 
   Future<void> _prefetchPeerAvatar(Chat chat) async {
@@ -3601,9 +3596,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (!_xmppAllowedForChat(chat)) {
       return;
     }
-    final streamReady = _xmppService?.lastStreamReady;
-    final shouldCatchUp = streamReady?.isResumed != true;
-    if (shouldCatchUp && !_shouldSkipInitialMamSync(chat)) {
+    if (_messageService.shouldCatchUpFromMamOnConnect(chat)) {
       await _catchUpFromMam();
     }
     await _prefetchPeerAvatar(chat);

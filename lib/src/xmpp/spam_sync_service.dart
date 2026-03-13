@@ -31,6 +31,8 @@ final _spamSyncSnapshotIdsKey = XmppStateStore.registerKey(
 enum _SpamSyncDecision { applyRemote, publishLocal, skip }
 
 mixin SpamSyncService on XmppBase, BaseStreamService {
+  StreamController<anti_abuse.SpamSyncUpdate> _spamSyncUpdateController =
+      StreamController<anti_abuse.SpamSyncUpdate>.broadcast();
   bool _spamSnapshotInFlight = false;
   String? _spamSourceId;
   bool _pendingSpamSyncLoaded = false;
@@ -39,6 +41,16 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   bool _spamSnapshotMetaLoaded = false;
   DateTime? _spamLastSnapshotAt;
   final Set<String> _spamLastSnapshotIds = {};
+
+  @override
+  Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream =>
+      _spamSyncUpdateController.stream;
+
+  @override
+  void emitSpamSyncUpdate(anti_abuse.SpamSyncUpdate update) {
+    if (_spamSyncUpdateController.isClosed) return;
+    _spamSyncUpdateController.add(update);
+  }
 
   SpamPubSubManager? get _spamManager =>
       _connection.getManager<SpamPubSubManager>();

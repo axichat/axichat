@@ -2472,7 +2472,7 @@ void main() {
       ),
     ).thenAnswer((_) async => const xmpp.MamPageResult(complete: true));
     when(
-      () => xmppService.loadLastSeenTimestamp(any()),
+      () => xmppService.loadArchiveCursorTimestamp(any()),
     ).thenAnswer((_) async => DateTime(2024));
 
     final mamPages = Queue<xmpp.MamPageResult>.from([

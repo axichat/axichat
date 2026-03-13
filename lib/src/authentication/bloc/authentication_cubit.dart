@@ -169,9 +169,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           return connectionState;
         })
         .listen((_) {});
-    _xmppStreamReadySubscription = _xmppService.streamReadyStream.listen(
-      _handleXmppStreamReady,
-    );
     _foregroundListener = _handleForegroundServiceActiveChanged;
     foregroundServiceActive.addListener(_foregroundListener!);
     final emailService = _emailService;
@@ -246,7 +243,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   late provisioning.EmailProvisioningClient _emailProvisioningClient;
   EmailProvisioningException? _lastEmailProvisioningError;
   StreamSubscription<ConnectionState>? _connectivitySubscription;
-  StreamSubscription<XmppStreamReady>? _xmppStreamReadySubscription;
   StreamSubscription<DeltaChatException>? _emailAuthFailureSubscription;
   VoidCallback? _foregroundListener;
   String? _blockedSignupCredentialKey;
@@ -945,13 +941,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
     }
   }
 
-  Future<void> _handleXmppStreamReady(XmppStreamReady _) async {
-    if (!_stickyAuthActive || state is AuthenticationLogInInProgress) {
-      return;
-    }
-    await _triggerEmailReconnect();
-  }
-
   Future<void> _triggerEmailReconnect() async {
     await _resumeEmailReconnectIfPossible(
       jid: _xmppService.myJid,
@@ -1321,7 +1310,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
   Future<void> close() async {
     _lifecycleListener.dispose();
     await _connectivitySubscription?.cancel();
-    await _xmppStreamReadySubscription?.cancel();
     await _emailAuthFailureSubscription?.cancel();
     if (_foregroundListener != null) {
       foregroundServiceActive.removeListener(_foregroundListener!);

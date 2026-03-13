@@ -448,20 +448,13 @@ class EmailService {
   AppLocalizations? _localizations;
   StreamSubscription<SpamSyncUpdate>? _spamSyncSubscription;
   StreamSubscription<EmailBlocklistSyncUpdate>? _emailBlocklistSyncSubscription;
-  StreamSubscription<XmppStreamReady>? _xmppStreamReadySubscription;
 
   void _attachXmppSyncSubscriptions() {
     final xmppService = _xmppService;
     if (xmppService == null) {
       return;
     }
-    if (xmppService.lastStreamReady != null) {
-      _subscribeXmppSyncStreams(xmppService);
-      return;
-    }
-    _xmppStreamReadySubscription ??= xmppService.streamReadyStream.listen((_) {
-      _subscribeXmppSyncStreams(xmppService);
-    });
+    _subscribeXmppSyncStreams(xmppService);
   }
 
   void _subscribeXmppSyncStreams(XmppService xmppService) {
@@ -494,8 +487,6 @@ class EmailService {
             );
           }
         });
-    _xmppStreamReadySubscription?.cancel();
-    _xmppStreamReadySubscription = null;
   }
 
   AppLocalizations get _l10n =>
@@ -537,8 +528,9 @@ class EmailService {
   final EmailAsyncQueue _reconnectRestartQueue = EmailAsyncQueue();
   final List<_PendingNotification> _pendingNotifications = [];
   int _pendingNotificationSequence = 0;
-  final Map<int, int> _pendingNotificationDropThroughSequenceByAccount =
-      <int, int>{};
+  final Map<_PendingNotificationScope, int>
+  _pendingNotificationDropThroughSequenceByScope =
+      <_PendingNotificationScope, int>{};
   Timer? _notificationFlushTimer;
   Timer? _contactsSyncTimer;
   String? _pendingPushToken;
@@ -2698,6 +2690,7 @@ class EmailService {
       case DeltaEventType.incomingMsgBunch:
         _suppressQueuedNotificationsThroughCurrentSequence(
           accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
+          chatId: event.data1 > 0 ? event.data1 : null,
         );
         break;
       case DeltaEventType.incomingReaction:
@@ -2831,12 +2824,38 @@ class EmailService {
 
   void _suppressQueuedNotificationsThroughCurrentSequence({
     required int accountId,
+    int? chatId,
   }) {
     if (_pendingNotifications.isEmpty) {
       return;
     }
-    _pendingNotificationDropThroughSequenceByAccount[accountId] =
-        _pendingNotificationSequence;
+    final currentSequence = _pendingNotificationSequence;
+    if (chatId != null) {
+      _pendingNotificationDropThroughSequenceByScope[_PendingNotificationScope(
+            accountId: accountId,
+            chatId: chatId,
+          )] =
+          currentSequence;
+      return;
+    }
+    final countsByScope = <_PendingNotificationScope, int>{};
+    for (final entry in _pendingNotifications) {
+      if (entry.accountId != accountId || entry.sequence > currentSequence) {
+        continue;
+      }
+      final scope = _PendingNotificationScope(
+        accountId: entry.accountId,
+        chatId: entry.chatId,
+      );
+      countsByScope.update(scope, (count) => count + 1, ifAbsent: () => 1);
+    }
+    for (final entry in countsByScope.entries) {
+      if (entry.value < 2) {
+        continue;
+      }
+      _pendingNotificationDropThroughSequenceByScope[entry.key] =
+          currentSequence;
+    }
   }
 
   void _dropPendingNotificationsForChat(int chatId, {required int accountId}) {
@@ -2882,9 +2901,12 @@ class EmailService {
     final pending = List<_PendingNotification>.from(_pendingNotifications);
     _pendingNotifications.clear();
     for (final entry in pending) {
+      final scope = _PendingNotificationScope(
+        accountId: entry.accountId,
+        chatId: entry.chatId,
+      );
       final dropThroughSequence =
-          _pendingNotificationDropThroughSequenceByAccount[entry.accountId] ??
-          0;
+          _pendingNotificationDropThroughSequenceByScope[scope] ?? 0;
       if (entry.sequence <= dropThroughSequence) {
         continue;
       }
@@ -3429,7 +3451,7 @@ class EmailService {
     _notificationFlushTimer = null;
     _pendingNotifications.clear();
     _pendingNotificationSequence = 0;
-    _pendingNotificationDropThroughSequenceByAccount.clear();
+    _pendingNotificationDropThroughSequenceByScope.clear();
   }
 
   bool _isForegroundKeepaliveOpCurrent(int operationId) =>
@@ -5599,6 +5621,26 @@ class _PendingNotification {
   final int msgId;
   final int accountId;
   final int sequence;
+}
+
+class _PendingNotificationScope {
+  const _PendingNotificationScope({
+    required this.accountId,
+    required this.chatId,
+  });
+
+  final int accountId;
+  final int chatId;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _PendingNotificationScope &&
+        other.accountId == accountId &&
+        other.chatId == chatId;
+  }
+
+  @override
+  int get hashCode => Object.hash(accountId, chatId);
 }
 
 class _DeltaNotificationContext {

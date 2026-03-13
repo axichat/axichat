@@ -194,7 +194,6 @@ class HomeRefreshSyncService {
 
   Future<void> _rehydrateCalendar(int epoch) async {
     _throwIfSyncAborted(epoch);
-    if (_xmppService.connectionState != ConnectionState.connected) return;
     try {
       await _xmppService.rehydrateCalendarFromMam();
       _throwIfSyncAborted(epoch);
@@ -222,18 +221,10 @@ class HomeRefreshSyncService {
 
   Future<MamGlobalSyncOutcome> _refreshXmppUnread(int epoch) async {
     _throwIfSyncAborted(epoch);
-    if (_xmppService.connectionState != ConnectionState.connected) {
-      return MamGlobalSyncOutcome.failed;
-    }
-    final streamReady = _xmppService.lastStreamReady;
-    if (streamReady == null) {
-      return MamGlobalSyncOutcome.failed;
-    }
-    if (streamReady.isResumed) {
-      return MamGlobalSyncOutcome.skippedResumed;
-    }
     const mamHistoryPageSize = 50;
-    return _xmppService.syncGlobalMamCatchUp(pageSize: mamHistoryPageSize);
+    return _xmppService.syncGlobalMamCatchUpForRefresh(
+      pageSize: mamHistoryPageSize,
+    );
   }
 
   Future<void> _refreshEmailUnread(int epoch) async {
@@ -258,14 +249,11 @@ class HomeRefreshSyncService {
 
   Future<void> _ensureConnected(int epoch) async {
     _throwIfSyncAborted(epoch);
-    if (!_xmppService.hasConnectionSettings) return;
-    if (_xmppService.connectionState == ConnectionState.connected) return;
-    await _xmppService.requestReconnect(ReconnectTrigger.userAction);
-    _throwIfSyncAborted(epoch);
     const connectionTimeout = Duration(seconds: 20);
-    await _xmppService.connectivityStream
-        .firstWhere((state) => state == ConnectionState.connected)
-        .timeout(connectionTimeout);
+    await _xmppService.ensureConnected(
+      trigger: ReconnectTrigger.userAction,
+      timeout: connectionTimeout,
+    );
     _throwIfSyncAborted(epoch);
   }
 
@@ -287,9 +275,6 @@ class HomeRefreshSyncService {
 
   Future<List<MucBookmark>> _refreshMucBookmarks(int epoch) async {
     _throwIfSyncAborted(epoch);
-    if (_xmppService.connectionState != ConnectionState.connected) {
-      return const [];
-    }
     final bookmarks = await _xmppService.syncMucBookmarksSnapshot();
     _throwIfSyncAborted(epoch);
     return bookmarks;
@@ -297,9 +282,6 @@ class HomeRefreshSyncService {
 
   Future<List<ConvItem>> _refreshConversationIndex(int epoch) async {
     _throwIfSyncAborted(epoch);
-    if (_xmppService.connectionState != ConnectionState.connected) {
-      return const [];
-    }
     final items = await _xmppService.syncConversationIndexSnapshot();
     _throwIfSyncAborted(epoch);
     return items;
@@ -342,7 +324,6 @@ class HomeRefreshSyncService {
 
   Future<void> _refreshAntiAbuseLists(int epoch) async {
     _throwIfSyncAborted(epoch);
-    if (_xmppService.connectionState != ConnectionState.connected) return;
     await _xmppService.syncSpamSnapshot();
     _throwIfSyncAborted(epoch);
     await _xmppService.syncEmailBlocklistSnapshot();
@@ -351,14 +332,12 @@ class HomeRefreshSyncService {
 
   Future<void> _refreshAvatars(int epoch) async {
     _throwIfSyncAborted(epoch);
-    if (_xmppService.connectionState != ConnectionState.connected) return;
     await _xmppService.refreshAvatarsForConversationIndex();
     _throwIfSyncAborted(epoch);
   }
 
   Future<void> _refreshDrafts(int epoch) async {
     _throwIfSyncAborted(epoch);
-    if (_xmppService.connectionState != ConnectionState.connected) return;
     await _xmppService.syncDraftsSnapshot();
     _throwIfSyncAborted(epoch);
   }

@@ -141,6 +141,14 @@ final class _SelfAvatarBootstrapReplay {
 
 mixin AvatarService on XmppBase, MucService {
   final _avatarLog = Logger('AvatarService');
+  StreamController<StoredAvatar?> _selfAvatarController =
+      StreamController<StoredAvatar?>.broadcast();
+  StreamController<bool> _selfAvatarHydratingController =
+      StreamController<bool>.broadcast(sync: true);
+  StoredAvatar? _cachedSelfAvatar;
+  int? _selfAvatarBootstrapCompletedGeneration;
+  SecretKey? _avatarEncryptionKey;
+  List<int>? _avatarEncryptionSalt;
   final Set<String> _avatarRefreshInProgress = {};
   final Set<String> _configuredAvatarNodes = {};
   final Set<String> _pubSubAvatarJids = {};
@@ -195,6 +203,63 @@ mixin AvatarService on XmppBase, MucService {
   final Map<String, Future<Uint8List?>> _avatarLoadsInFlight = {};
   final Map<String, Future<void>> _avatarFileOperations = {};
   DateTime? _selfAvatarRepairLastAttempt;
+  @override
+  final selfAvatarPathKey = XmppStateStore.registerKey('self_avatar_path');
+  @override
+  final selfAvatarHashKey = XmppStateStore.registerKey('self_avatar_hash');
+  @override
+  final selfAvatarPendingPublishKey = XmppStateStore.registerKey(
+    'self_avatar_pending_publish_v1',
+  );
+  final avatarEncryptionSaltKey = XmppStateStore.registerKey(
+    'avatar_encryption_salt',
+  );
+
+  @override
+  SecretKey? get avatarEncryptionKey => _avatarEncryptionKey;
+
+  @override
+  StoredAvatar? get cachedSelfAvatar => _cachedSelfAvatar;
+
+  @override
+  Stream<StoredAvatar?> get selfAvatarStream => _selfAvatarController.stream;
+
+  @override
+  bool get selfAvatarHydrating {
+    final bareJid = _myJid?.toBare().toString();
+    if (bareJid == null || bareJid.isEmpty) {
+      return false;
+    }
+    if (connectionState != ConnectionState.connected &&
+        connectionState != ConnectionState.connecting) {
+      return false;
+    }
+    final streamReady = lastStreamReady;
+    if (streamReady == null) {
+      return true;
+    }
+    final completedGeneration = _selfAvatarBootstrapCompletedGeneration;
+    if (completedGeneration == null) {
+      return true;
+    }
+    return completedGeneration < streamReady.generation;
+  }
+
+  @override
+  Stream<bool> get selfAvatarHydratingStream =>
+      _selfAvatarHydratingController.stream;
+
+  void _emitSelfAvatarHydrating() {
+    if (_selfAvatarHydratingController.isClosed) return;
+    _selfAvatarHydratingController.add(selfAvatarHydrating);
+  }
+
+  @override
+  void _notifySelfAvatarUpdated(StoredAvatar? avatar) {
+    _cachedSelfAvatar = avatar;
+    if (_selfAvatarController.isClosed) return;
+    _selfAvatarController.add(avatar);
+  }
 
   Uint8List? cachedAvatarBytes(String path) {
     final normalizedPath = path.trim();
@@ -450,6 +515,79 @@ mixin AvatarService on XmppBase, MucService {
   }
 
   @override
+  Future<StoredAvatar?> getOwnAvatar() async {
+    if (!isStateStoreReady) return null;
+    try {
+      final path = await _dbOpReturning<XmppStateStore, String?>(
+        (ss) => ss.read(key: selfAvatarPathKey) as String?,
+      );
+      final hash = await _dbOpReturning<XmppStateStore, String?>(
+        (ss) => ss.read(key: selfAvatarHashKey) as String?,
+      );
+      if (path == null && hash == null) {
+        _cachedSelfAvatar = null;
+        return null;
+      }
+      final stored = StoredAvatar(path: path, hash: hash);
+      _cachedSelfAvatar = stored;
+      return stored;
+    } on XmppAbortedException {
+      return null;
+    }
+  }
+
+  Future<void> _initializeAvatarEncryption(String passphrase) async {
+    try {
+      final salt = await _loadOrCreateAvatarSalt();
+      final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
+      _avatarEncryptionKey = await hkdf.deriveKey(
+        secretKey: SecretKey(utf8.encode(passphrase)),
+        nonce: salt,
+        info: utf8.encode('axichat-avatar-v1'),
+      );
+    } catch (error, stackTrace) {
+      _avatarLog.severe(
+        'Failed to initialize avatar encryption key.',
+        error,
+        stackTrace,
+      );
+      _avatarEncryptionKey = null;
+    }
+  }
+
+  Future<List<int>> _loadOrCreateAvatarSalt() async {
+    if (_avatarEncryptionSalt case final cached?) {
+      return cached;
+    }
+    try {
+      final stored = await _dbOpReturning<XmppStateStore, String?>(
+        (ss) => ss.read(key: avatarEncryptionSaltKey) as String?,
+      );
+      if (stored != null) {
+        final decoded = base64Decode(stored);
+        _avatarEncryptionSalt = decoded;
+        return decoded;
+      }
+    } on XmppAbortedException {
+      rethrow;
+    } on FormatException catch (error, stackTrace) {
+      _avatarLog.warning(
+        'Stored avatar salt could not be decoded, regenerating.',
+        error,
+        stackTrace,
+      );
+    }
+    final fresh = secureBytes(32);
+    final encoded = base64Encode(fresh);
+    await _dbOp<XmppStateStore>(
+      (ss) async => ss.write(key: avatarEncryptionSaltKey, value: encoded),
+      awaitDatabase: true,
+    );
+    _avatarEncryptionSalt = fresh;
+    return fresh;
+  }
+
+  @override
   Future<void> _reset() async {
     _avatarRefreshInProgress.clear();
     _configuredAvatarNodes.clear();
@@ -461,6 +599,9 @@ mixin AvatarService on XmppBase, MucService {
     _selfAvatarRepairLastAttempt = null;
     _selfAvatarBootstrapReplay = null;
     _pendingSelfAvatarBootstrapGeneration = null;
+    _avatarEncryptionKey = null;
+    _avatarEncryptionSalt = null;
+    _cachedSelfAvatar = null;
     _selfAvatarBootstrapCompletedGeneration = null;
     await super._reset();
   }

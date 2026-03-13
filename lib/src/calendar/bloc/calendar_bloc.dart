@@ -94,8 +94,6 @@ class CalendarBloc extends BaseCalendarBloc {
   StreamSubscription<CalendarSyncDispatch>? _calendarSyncSubscription;
   StreamSubscription<ChatCalendarSyncDispatch>? _chatCalendarSyncSubscription;
   StreamSubscription<CalendarSyncWarning>? _calendarSyncWarningSubscription;
-  StreamSubscription<XmppStreamReady>? _streamReadySubscription;
-  StreamSubscription<XmppStreamReady>? _chatStreamReadySubscription;
   Future<void> _pendingCalendarDispatch = Future<void>.value();
   Future<void> _pendingChatCalendarDispatch = Future<void>.value();
 
@@ -206,14 +204,7 @@ class CalendarBloc extends BaseCalendarBloc {
   }
 
   void _attachCalendarSyncSubscriptions() {
-    final lastReady = _xmppService.lastStreamReady;
-    if (lastReady != null) {
-      _ensureCalendarSyncSubscriptions();
-      return;
-    }
-    _streamReadySubscription ??= _xmppService.streamReadyStream.listen((_) {
-      _ensureCalendarSyncSubscriptions();
-    });
+    _ensureCalendarSyncSubscriptions();
   }
 
   void _ensureCalendarSyncSubscriptions() {
@@ -238,8 +229,6 @@ class CalendarBloc extends BaseCalendarBloc {
         .listen((warning) {
           add(CalendarEvent.syncWarningRaised(warning: warning));
         });
-    _streamReadySubscription?.cancel();
-    _streamReadySubscription = null;
   }
 
   void _ensureChatCalendarSyncSubscription() {
@@ -248,14 +237,6 @@ class CalendarBloc extends BaseCalendarBloc {
       return;
     }
     if (_chatCalendarSyncSubscription != null) {
-      return;
-    }
-    if (_xmppService.lastStreamReady == null) {
-      _chatStreamReadySubscription ??= _xmppService.streamReadyStream.listen((
-        _,
-      ) {
-        _ensureChatCalendarSyncSubscription();
-      });
       return;
     }
     _chatCalendarSyncSubscription ??= _xmppService
@@ -272,8 +253,6 @@ class CalendarBloc extends BaseCalendarBloc {
             }
           });
         });
-    _chatStreamReadySubscription?.cancel();
-    _chatStreamReadySubscription = null;
   }
 
   @override
@@ -504,8 +483,6 @@ class CalendarBloc extends BaseCalendarBloc {
     await _calendarSyncSubscription?.cancel();
     await _chatCalendarSyncSubscription?.cancel();
     await _calendarSyncWarningSubscription?.cancel();
-    await _streamReadySubscription?.cancel();
-    await _chatStreamReadySubscription?.cancel();
     await _pendingCalendarDispatch;
     await _pendingChatCalendarDispatch;
     return super.close();

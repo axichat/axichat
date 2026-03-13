@@ -52,6 +52,8 @@ const String _mamGlobalBootstrapOperationName =
     'MessageService.bootstrapGlobalMamOnNegotiations';
 const String _mamCalendarBootstrapOperationName =
     'MessageService.bootstrapCalendarMamOnNegotiations';
+const String _mamArchiveSnapshotBootstrapOperationName =
+    'MessageService.bootstrapArchiveSnapshotOnNegotiations';
 const String _draftSyncPublishFailedLog = 'Failed to publish draft sync.';
 const String _draftSyncPublishAbortedLog = 'Draft sync publish aborted.';
 const String _draftSyncRetractFailedLog = 'Failed to retract draft sync.';
@@ -767,12 +769,17 @@ final _capabilityCacheKey = XmppStateStore.registerKey(
 const String _mamGlobalLastIdKeyName = 'mam_global_last_id';
 const String _mamGlobalLastSyncKeyName = 'mam_global_last_sync';
 const String _mamGlobalDeniedUntilKeyName = 'mam_global_denied_until';
+const String _mamArchiveSnapshotBootstrapKeyName =
+    'mam_archive_snapshot_bootstrapped';
 final _mamGlobalLastIdKey = XmppStateStore.registerKey(_mamGlobalLastIdKeyName);
 final _mamGlobalLastSyncKey = XmppStateStore.registerKey(
   _mamGlobalLastSyncKeyName,
 );
 final _mamGlobalDeniedUntilKey = XmppStateStore.registerKey(
   _mamGlobalDeniedUntilKeyName,
+);
+final _mamArchiveSnapshotBootstrapKey = XmppStateStore.registerKey(
+  _mamArchiveSnapshotBootstrapKeyName,
 );
 const String _mamGlobalScopeFallback = 'default';
 const String _mamGlobalScopeSeparator = ':';
@@ -1716,6 +1723,59 @@ mixin MessageService
       );
       await ss.delete(key: _mamGlobalLastSyncKey);
     }, awaitDatabase: true);
+  }
+
+  Future<bool> _isMamArchiveSnapshotBootstrapped() async {
+    return _dbOpReturning<XmppStateStore, bool>((ss) async {
+      return ss.read(key: _mamArchiveSnapshotBootstrapKey) == true;
+    });
+  }
+
+  Future<void> _markMamArchiveSnapshotBootstrapped() async {
+    await _dbOp<XmppStateStore>((ss) async {
+      await ss.write(key: _mamArchiveSnapshotBootstrapKey, value: true);
+    }, awaitDatabase: true);
+  }
+
+  Future<bool> _shouldBootstrapArchiveSnapshotForFreshStore() async {
+    if (await _isMamArchiveSnapshotBootstrapped()) {
+      return false;
+    }
+    if (await _loadMamGlobalLastId() != null) {
+      return false;
+    }
+    if (await _loadMamGlobalLastSync() != null) {
+      return false;
+    }
+    final chats = await _loadChatsForMamSync();
+    for (final chat in chats) {
+      final chatJid = _resolvedMamChatJid(chat);
+      if (chatJid == null) continue;
+      final localCount = await countLocalMessages(
+        jid: chatJid,
+        includePseudoMessages: false,
+      );
+      if (localCount > 0) {
+        return false;
+      }
+      if (await loadArchiveCursorTimestamp(chatJid) != null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Future<void> _bootstrapArchiveSnapshotForFreshStore() async {
+    if (connectionState != ConnectionState.connected) return;
+    await syncConversationIndexSnapshot();
+    await syncMucBookmarksSnapshot();
+    if (!await _shouldBootstrapArchiveSnapshotForFreshStore()) {
+      return;
+    }
+    if (_mamLoginSyncInFlight) return;
+    await syncMessageArchiveSnapshot();
+    if (connectionState != ConnectionState.connected) return;
+    await _markMamArchiveSnapshotBootstrapped();
   }
 
   Future<DateTime?> _loadMamGlobalDeniedUntil() async {
@@ -2807,6 +2867,19 @@ mixin MessageService
               _log.fine('Calendar MAM bootstrap failed.', error, stackTrace);
             }
           }, operationName: _mamCalendarBootstrapOperationName);
+          fireAndForget(() async {
+            try {
+              await _bootstrapArchiveSnapshotForFreshStore();
+            } on XmppAbortedException {
+              _log.fine('Archive snapshot bootstrap aborted.');
+            } on Exception catch (error, stackTrace) {
+              _log.fine(
+                'Archive snapshot bootstrap failed.',
+                error,
+                stackTrace,
+              );
+            }
+          }, operationName: _mamArchiveSnapshotBootstrapOperationName);
         }
         fireAndForget(() async {
           try {
@@ -3198,9 +3271,7 @@ mixin MessageService
     final normalizedRoomJid = _roomKey(roomJid);
     final roomState = roomStateFor(normalizedRoomJid);
     final occupantJid = roomState?.myOccupantJid?.trim();
-    final occupant = occupantJid == null || occupantJid.isEmpty
-        ? null
-        : roomState?.occupants[occupantJid];
+    final occupant = roomState?.selfOccupant;
     final occupantNick = occupant?.nick.trim();
     final rememberedNick = _roomNicknames[normalizedRoomJid]?.trim();
     final resolvedNick = occupantNick?.isNotEmpty == true
@@ -3208,10 +3279,7 @@ mixin MessageService
         : rememberedNick;
     if (occupantJid != null &&
         occupantJid.isNotEmpty &&
-        _isRoomNickOccupantId(
-          roomKey: normalizedRoomJid,
-          occupantId: occupantJid,
-        )) {
+        roomState?.isRoomNickOccupantId(occupantJid) == true) {
       return MucActorIdentity.room(occupantJid: occupantJid);
     }
     if (resolvedNick == null || resolvedNick.isEmpty) {
@@ -3459,8 +3527,7 @@ mixin MessageService
         myOccupantJidPresent &&
         myOccupantJid == '$normalizedRoom/$managerNick';
     final selfOccupantPresent =
-        myOccupantJidPresent &&
-        roomState?.occupants[myOccupantJid]?.isPresent == true;
+        myOccupantJidPresent && roomState?.selfOccupant?.isPresent == true;
     final hasPresenceForSend = await _hasMucPresenceForSend(
       roomJid: normalizedRoom,
     );
@@ -4997,9 +5064,58 @@ mixin MessageService
 
   bool get isMamGlobalSyncInFlight => _mamGlobalSyncInFlight;
 
+  bool shouldSkipInitialMamSyncForChat(Chat chat) {
+    if (chat.type != ChatType.chat) return false;
+    final completedAt = _mamGlobalSyncCompletedAt;
+    if (completedAt == null) return false;
+    final streamReady = lastStreamReady;
+    if (streamReady == null) return false;
+    return !completedAt.isBefore(streamReady.timestamp);
+  }
+
+  bool shouldCatchUpFromMamOnConnect(Chat chat) {
+    if (_resolvedMamChatJid(chat) == null) return false;
+    if (lastStreamReady?.isResumed == true) return false;
+    return !shouldSkipInitialMamSyncForChat(chat);
+  }
+
+  Future<bool> canPageMamForChat(Chat chat) async {
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null) return false;
+    if (connectionState != ConnectionState.connected) return false;
+    if (chat.type == ChatType.groupChat) {
+      return _canQueryMucArchive(jid);
+    }
+    return resolveMamSupport();
+  }
+
+  Future<MamGlobalSyncOutcome> syncGlobalMamCatchUpForRefresh({
+    int pageSize = 50,
+  }) async {
+    if (connectionState != ConnectionState.connected) {
+      return MamGlobalSyncOutcome.failed;
+    }
+    final streamReady = lastStreamReady;
+    if (streamReady == null) {
+      return MamGlobalSyncOutcome.failed;
+    }
+    if (streamReady.isResumed) {
+      return MamGlobalSyncOutcome.skippedResumed;
+    }
+    return syncGlobalMamCatchUp(pageSize: pageSize);
+  }
+
   Future<bool> resolveMamSupport() async {
     await _resolveMamSupportForAccount();
     return _mamSupported;
+  }
+
+  String? _resolvedMamChatJid(Chat chat) {
+    if (chat.isEmailBacked) return null;
+    final jid = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
+    final trimmed = jid.trim();
+    if (trimmed.isEmpty) return null;
+    return trimmed;
   }
 
   Future<MamPageResult> fetchBeforeFromArchive({
@@ -6232,34 +6348,28 @@ mixin MessageService
   }
 
   Future<void> _resetMessageStreams() async {
-    if (!_httpUploadSupportController.isClosed) {
-      await _httpUploadSupportController.close();
+    if (_httpUploadSupportController.isClosed) {
+      _httpUploadSupportController =
+          StreamController<HttpUploadSupport>.broadcast();
     }
-    if (!_messageStream.isClosed) {
-      await _messageStream.close();
+    if (_messageStream.isClosed) {
+      _messageStream = StreamController<Message>.broadcast();
     }
-    if (!_calendarSyncDispatchController.isClosed) {
-      await _calendarSyncDispatchController.close();
+    if (_calendarSyncDispatchController.isClosed) {
+      _calendarSyncDispatchController =
+          StreamController<CalendarSyncDispatch>.broadcast();
     }
-    if (!_chatCalendarSyncDispatchController.isClosed) {
-      await _chatCalendarSyncDispatchController.close();
+    if (_chatCalendarSyncDispatchController.isClosed) {
+      _chatCalendarSyncDispatchController =
+          StreamController<ChatCalendarSyncDispatch>.broadcast();
     }
-    if (!_calendarSyncWarningController.isClosed) {
-      await _calendarSyncWarningController.close();
+    if (_calendarSyncWarningController.isClosed) {
+      _calendarSyncWarningController =
+          StreamController<CalendarSyncWarning>.broadcast();
     }
-    if (!_mamSupportController.isClosed) {
-      await _mamSupportController.close();
+    if (_mamSupportController.isClosed) {
+      _mamSupportController = StreamController<bool>.broadcast();
     }
-    _httpUploadSupportController =
-        StreamController<HttpUploadSupport>.broadcast();
-    _messageStream = StreamController<Message>.broadcast();
-    _calendarSyncDispatchController =
-        StreamController<CalendarSyncDispatch>.broadcast();
-    _chatCalendarSyncDispatchController =
-        StreamController<ChatCalendarSyncDispatch>.broadcast();
-    _calendarSyncWarningController =
-        StreamController<CalendarSyncWarning>.broadcast();
-    _mamSupportController = StreamController<bool>.broadcast();
   }
 
   // Future<void> _handleMessage(mox.MessageEvent event) async {
@@ -7164,21 +7274,7 @@ mixin MessageService
     mox.MessageEvent event, {
     required RoomState roomState,
   }) {
-    final sender = event.from.toString();
-    final Occupant? direct = roomState.occupants[sender];
-    if (direct != null) {
-      return direct;
-    }
-    final String nick = event.from.resource;
-    if (nick.isEmpty) {
-      return null;
-    }
-    for (final occupant in roomState.occupants.values) {
-      if (occupant.nick == nick) {
-        return occupant;
-      }
-    }
-    return null;
+    return roomState.occupantForSenderJid(event.from.toString());
   }
 
   bool _isGroupChatMutationAuthorized(mox.MessageEvent event) {
@@ -8112,18 +8208,10 @@ mixin MessageService
           senderJid == myOccupantJid) {
         return (senderJid: accountJid, identityVerified: true);
       }
-      Occupant? occupant = roomState.occupants[senderJid];
-      if (occupant == null) {
-        final senderNick = parseJid(senderJid)?.resource.trim();
-        if (senderNick?.isNotEmpty == true) {
-          for (final candidate in roomState.occupants.values) {
-            if (candidate.nick == senderNick) {
-              occupant = candidate;
-              break;
-            }
-          }
-        }
-      }
+      final occupant = roomState.occupantForSenderJid(
+        senderJid,
+        preferRealJid: true,
+      );
       final realJid = occupant?.realJid?.trim();
       if (realJid != null && realJid.isNotEmpty) {
         if (accountJid != null &&

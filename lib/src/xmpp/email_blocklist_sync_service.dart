@@ -37,6 +37,9 @@ final _emailBlocklistSnapshotIdsKey = XmppStateStore.registerKey(
 enum _EmailBlocklistSyncDecision { applyRemote, publishLocal, skip }
 
 mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
+  StreamController<anti_abuse.EmailBlocklistSyncUpdate>
+  _emailBlocklistSyncUpdateController =
+      StreamController<anti_abuse.EmailBlocklistSyncUpdate>.broadcast();
   bool _emailBlocklistSnapshotInFlight = false;
   String? _emailBlocklistSourceId;
   bool _pendingEmailBlocklistSyncLoaded = false;
@@ -45,6 +48,19 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
   bool _emailBlocklistSnapshotMetaLoaded = false;
   DateTime? _emailBlocklistLastSnapshotAt;
   final Set<String> _emailBlocklistLastSnapshotIds = {};
+
+  @override
+  Stream<anti_abuse.EmailBlocklistSyncUpdate>
+  get emailBlocklistSyncUpdateStream =>
+      _emailBlocklistSyncUpdateController.stream;
+
+  @override
+  void emitEmailBlocklistSyncUpdate(
+    anti_abuse.EmailBlocklistSyncUpdate update,
+  ) {
+    if (_emailBlocklistSyncUpdateController.isClosed) return;
+    _emailBlocklistSyncUpdateController.add(update);
+  }
 
   EmailBlocklistPubSubManager? get _emailBlocklistManager =>
       _connection.getManager<EmailBlocklistPubSubManager>();
