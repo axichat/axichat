@@ -43,10 +43,12 @@ class MessageDeltaSnapshot {
   const MessageDeltaSnapshot({
     required this.stanzaId,
     required this.deltaMsgId,
+    required this.displayed,
   });
 
   final String stanzaId;
   final int? deltaMsgId;
+  final bool displayed;
 }
 
 abstract interface class XmppDatabase implements Database {
@@ -186,6 +188,8 @@ abstract interface class XmppDatabase implements Database {
   });
 
   Future<void> updateMessage(Message message);
+
+  Future<int> countUnreadMessagesForChat(String jid, {String? selfJid});
 
   Future<void> saveMessageMucStanzaId({
     required String stanzaID,
@@ -2174,7 +2178,7 @@ WHERE transport IS NULL
   @override
   Future<List<MessageDeltaSnapshot>> getMessageDeltaSnapshot(String jid) async {
     final query = selectOnly(messages)
-      ..addColumns([messages.stanzaID, messages.deltaMsgId])
+      ..addColumns([messages.stanzaID, messages.deltaMsgId, messages.displayed])
       ..where(messages.chatJid.equals(jid));
     final rows = await query.get();
     return rows
@@ -2182,6 +2186,7 @@ WHERE transport IS NULL
           (row) => MessageDeltaSnapshot(
             stanzaId: row.read(messages.stanzaID) ?? '',
             deltaMsgId: row.read(messages.deltaMsgId),
+            displayed: row.read(messages.displayed) ?? false,
           ),
         )
         .where((snapshot) => snapshot.stanzaId.isNotEmpty)
@@ -2727,8 +2732,12 @@ WHERE transport IS NULL
           fileMetadataId: message.fileMetadataID,
           pseudoMessageType: message.pseudoMessageType,
         ) &&
+        !message.displayed &&
         !isSelfMessage;
     final int unreadIncrement = shouldIncrementUnread ? 1 : 0;
+    final bool isEmailMessage =
+        currentChat?.defaultTransport.isEmail == true ||
+        message.deltaMsgId != null;
     final bool shouldRepairSummaryAfterSave =
         shouldUpdateChatSummary &&
         currentChat?.lastChangeTimestamp.isAfter(messageTimestamp) == true;
@@ -2771,9 +2780,12 @@ WHERE transport IS NULL
         onConflict: DoUpdate.withExcluded(
           (old, excluded) => ChatsCompanion.custom(
             type: excluded.type,
-            unreadCount: const Constant(0).iif(
-              old.open.isValue(true),
-              old.unreadCount + Constant(unreadIncrement),
+            unreadCount: (old.unreadCount + Constant(unreadIncrement)).iif(
+              Constant(isEmailMessage),
+              const Constant(0).iif(
+                old.open.isValue(true),
+                old.unreadCount + Constant(unreadIncrement),
+              ),
             ),
             lastMessage: old.lastMessage,
             lastChangeTimestamp: old.lastChangeTimestamp,
@@ -3811,6 +3823,33 @@ WHERE email_from_address IN ($placeholderClause)
   Future<void> updateMessage(Message message) async {
     _log.fine('Updating message');
     await update(messages).replace(message);
+  }
+
+  @override
+  Future<int> countUnreadMessagesForChat(String jid, {String? selfJid}) async {
+    final normalizedJid = jid.trim();
+    if (normalizedJid.isEmpty) {
+      return 0;
+    }
+    final normalizedSelfJid = selfJid?.trim();
+    final candidates =
+        await (select(messages)..where(
+              (tbl) =>
+                  tbl.chatJid.equals(normalizedJid) &
+                  tbl.displayed.equals(false),
+            ))
+            .get();
+    var unreadCount = 0;
+    for (final message in candidates) {
+      if (!message.hasUnreadContent) {
+        continue;
+      }
+      if (sameNormalizedAddressValue(message.senderJid, normalizedSelfJid)) {
+        continue;
+      }
+      unreadCount += 1;
+    }
+    return unreadCount;
   }
 
   @override
@@ -5337,7 +5376,11 @@ WHERE jid = ?
   @override
   Future<Chat?> openChat(String jid) async {
     const summaryFilter = MessageTimelineFilter.allWithContact;
-    final lastMessage = await getLastMessageForChat(jid, filter: summaryFilter);
+    final normalizedJid = jid.trim();
+    final lastMessage = await getLastMessageForChat(
+      normalizedJid,
+      filter: summaryFilter,
+    );
     final lastMessagePreview = await _messagePreview(
       trimmedBody: lastMessage?.body?.trim(),
       subject: lastMessage?.subject,
@@ -5351,24 +5394,30 @@ WHERE jid = ?
 
     return await transaction(() async {
       final closed = await closeChat();
-      await into(chats).insert(
-        ChatsCompanion.insert(
-          jid: jid,
-          title: _chatTitleForIdentifier(jid),
-          type: ChatType.chat,
-          open: const Value(true),
-          unreadCount: const Value(0),
-          chatState: const Value(mox.ChatState.active),
-          lastMessage: Value(lastMessagePreview),
-          lastChangeTimestamp: lastMessage?.timestamp ?? DateTime.timestamp(),
-          contactJid: Value(jid),
-        ),
-        onConflict: DoUpdate(
-          (old) => const ChatsCompanion(
-            open: Value(true),
-            unreadCount: Value(0),
-            chatState: Value(mox.ChatState.active),
+      final existing = await getChat(normalizedJid);
+      if (existing == null) {
+        await into(chats).insert(
+          ChatsCompanion.insert(
+            jid: normalizedJid,
+            title: _chatTitleForIdentifier(normalizedJid),
+            type: ChatType.chat,
+            open: const Value(true),
+            unreadCount: const Value(0),
+            chatState: const Value(mox.ChatState.active),
+            lastMessage: Value(lastMessagePreview),
+            lastChangeTimestamp: lastMessage?.timestamp ?? DateTime.timestamp(),
+            contactJid: Value(normalizedJid),
           ),
+        );
+        return closed;
+      }
+      await chatsAccessor.updateOne(
+        existing.copyWith(
+          open: true,
+          unreadCount: existing.defaultTransport.isEmail
+              ? existing.unreadCount
+              : 0,
+          chatState: mox.ChatState.active,
         ),
       );
       return closed;

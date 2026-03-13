@@ -308,6 +308,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_XmppConnectionStateChanged>(_onXmppConnectionStateChanged);
     on<ChatMessageFocused>(_onChatMessageFocused);
     on<ChatReadThresholdChanged>(_onChatReadThresholdChanged);
+    on<ChatMessageReadRequested>(_onChatMessageReadRequested);
     on<ChatEmailHeadersRequested>(_onChatEmailHeadersRequested);
     on<ChatEmailDebugDumpRequested>(_onChatEmailDebugDumpRequested);
     on<ChatEmailFullHtmlRequested>(_onChatEmailFullHtmlRequested);
@@ -395,17 +396,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (initialSyncState != null) {
       add(_EmailSyncStateChanged(initialSyncState));
     }
+    _httpUploadSupportSubscription = _messageService.httpUploadSupportStream
+        .listen((support) => add(_HttpUploadSupportUpdated(support.supported)));
+    add(_HttpUploadSupportUpdated(_messageService.httpUploadSupport.supported));
     if (messageService case final XmppService xmppService) {
       _xmppService = xmppService;
       add(_XmppConnectionStateChanged(xmppService.connectionState));
       _connectivitySubscription = xmppService.connectivityStream.listen(
         (connectionState) => add(_XmppConnectionStateChanged(connectionState)),
       );
-      _httpUploadSupportSubscription = xmppService.httpUploadSupportStream
-          .listen(
-            (support) => add(_HttpUploadSupportUpdated(support.supported)),
-          );
-      add(_HttpUploadSupportUpdated(xmppService.httpUploadSupport.supported));
     }
     _lifecycleListener = AppLifecycleListener(
       onResume: () async {
@@ -674,6 +673,70 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       items: state.items,
       allowSend: lifecycleState == AppLifecycleState.resumed,
     );
+  }
+
+  Future<void> _onChatMessageReadRequested(
+    ChatMessageReadRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final chat = state.chat;
+    if (chat == null) {
+      return;
+    }
+    final messageId = event.messageId.trim();
+    if (messageId.isEmpty) {
+      return;
+    }
+    final message = state.items
+        .where((item) => item.chatJid == chat.jid && item.stanzaID == messageId)
+        .firstOrNull;
+    if (message == null || message.displayed || !_countsTowardUnread(message)) {
+      return;
+    }
+    if (_xmppAllowedForChat(chat)) {
+      await _markMessagesDisplayedLocally([message]);
+    }
+    final shouldSendChatReadReceipts =
+        chat.markerResponsive ?? _settingsSnapshot.chatReadReceipts;
+    if (shouldSendChatReadReceipts &&
+        _xmppAllowedForChat(chat) &&
+        chat.type != ChatType.groupChat) {
+      final pendingReadMarkerId = _pendingReadMarkerStanzaId;
+      if (messageId != _lastReadMarkerStanzaId &&
+          messageId != pendingReadMarkerId) {
+        _pendingReadMarkerStanzaId = messageId;
+        try {
+          await _messageService.sendReadMarker(chat.jid, messageId);
+          _lastReadMarkerStanzaId = messageId;
+        } finally {
+          if (_pendingReadMarkerStanzaId == messageId) {
+            _pendingReadMarkerStanzaId = null;
+          }
+        }
+      }
+    }
+    final emailService = _emailService;
+    if (emailService == null || !chat.defaultTransport.isEmail) {
+      return;
+    }
+    if (message.deltaMsgId == null) {
+      return;
+    }
+    if (kEnableDemoChats && _messageService.demoOfflineMode) {
+      await _markMessagesDisplayedLocally([message]);
+      return;
+    }
+    if (!emailService.hasInMemoryReconnectContext) {
+      return;
+    }
+    await _markMessagesDisplayedLocally([message]);
+    final markedSeen = await emailService.markSeenMessages([
+      message,
+    ], sendReadReceipts: _settingsSnapshot.emailReadReceipts);
+    if (markedSeen) {
+      _lastSeenEmailSyncKey =
+          'seen|${message.deltaMsgId?.toString() ?? messageId}';
+    }
   }
 
   Future<void> _syncReadStateForActiveChat({
@@ -1181,7 +1244,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = state.chat;
     if (chat == null) return;
     if (!await _canPageMam(chat)) return;
-    final lastSeen = await _messageService.loadLastSeenTimestamp(
+    final lastSeen = await _messageService.loadArchiveCursorTimestamp(
       chat.remoteJid,
     );
     if (lastSeen == null) return;
@@ -1279,7 +1342,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
     final localCount = await _archivedMessageCount(chat);
     if (localCount >= _currentMessageLimit) return;
-    final lastSeen = await _messageService.loadLastSeenTimestamp(
+    final lastSeen = await _messageService.loadArchiveCursorTimestamp(
       chat.remoteJid,
     );
     final hasLocalMessages = localCount > _emptyMessageCount;

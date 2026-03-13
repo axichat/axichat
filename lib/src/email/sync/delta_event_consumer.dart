@@ -29,7 +29,6 @@ import 'package:logging/logging.dart';
 
 const int _deltaChatLastSpecialId = DeltaChatId.lastSpecial;
 const int _deltaMessageIdUnset = DeltaMessageId.none;
-const int _emptyUnreadCount = 0;
 const int _deltaChatlistArchivedOnlyFlag = DeltaChatlistFlags.archivedOnly;
 const String _emptyJid = '';
 const int _attachmentSizeUnitBase = 1024;
@@ -167,7 +166,7 @@ extension DeltaMessageStateChecks on DeltaMessage {
       }
       return _deltaOutgoingPendingStatus;
     }
-    if (isIncomingNoticed || isIncomingSeen) {
+    if (isIncomingSeen) {
       return _deltaIncomingSeenStatus;
     }
     return _deltaIncomingUnseenStatus;
@@ -382,16 +381,6 @@ class DeltaEventConsumer {
           updated = updated.copyWith(lastMessage: preview);
         }
       }
-      final freshCount = await _context.getFreshMessageCountSafe(chatId);
-      if (freshCount.supported) {
-        final unreadCount = _resolvedFreshUnreadCount(
-          chatOpen: updated.open,
-          freshCount: freshCount,
-        );
-        if (unreadCount != updated.unreadCount) {
-          updated = updated.copyWith(unreadCount: unreadCount);
-        }
-      }
       if (updated != chat) {
         await db.updateChat(updated);
       }
@@ -435,6 +424,7 @@ class DeltaEventConsumer {
           await db.repairChatSummaryPreservingTimestamp(stored.jid);
         }
       }
+      await _updateUnreadCount(chatId);
     }
 
     return didBootstrap;
@@ -574,42 +564,50 @@ class DeltaEventConsumer {
           updated = updated.copyWith(lastMessage: lastPreview);
         }
       }
+      var storedUnreadCount = await db.countUnreadMessagesForChat(
+        updated.jid,
+        selfJid: _selfJid,
+      );
       final freshCount = await _context.getFreshMessageCountSafe(chatId);
-      if (freshCount.supported) {
-        final unreadCount = _resolvedFreshUnreadCount(
-          chatOpen: updated.open,
-          freshCount: freshCount,
-        );
-        if (unreadCount != updated.unreadCount) {
-          updated = updated.copyWith(unreadCount: unreadCount);
-        }
-      }
-      if (freshCount.supported && freshCount.count > 0) {
+      if (storedUnreadCount > 0 ||
+          (freshCount.supported && freshCount.count > 0)) {
         await _syncChatMessages(chatId);
         await _refreshStoredChatSummary(chatJid: updated.jid, db: db);
         hydratedMessages = true;
+        storedUnreadCount = await db.countUnreadMessagesForChat(
+          updated.jid,
+          selfJid: _selfJid,
+        );
       }
       if (hydratedMessages) {
         final refreshed = await db.getChat(updated.jid);
         if (refreshed == null) {
-          if (updated != chat) {
-            await db.updateChat(updated);
+          final nextUpdated = updated.unreadCount == storedUnreadCount
+              ? updated
+              : updated.copyWith(unreadCount: storedUnreadCount);
+          if (nextUpdated != chat) {
+            await db.updateChat(nextUpdated);
           }
         } else {
           var merged = refreshed;
           if (merged.archived != updated.archived ||
-              merged.unreadCount != updated.unreadCount) {
+              merged.unreadCount != storedUnreadCount) {
             merged = merged.copyWith(
               archived: updated.archived,
-              unreadCount: updated.unreadCount,
+              unreadCount: storedUnreadCount,
             );
           }
           if (merged != refreshed) {
             await db.updateChat(merged);
           }
         }
-      } else if (updated != chat) {
-        await db.updateChat(updated);
+      } else {
+        final nextUpdated = updated.unreadCount == storedUnreadCount
+            ? updated
+            : updated.copyWith(unreadCount: storedUnreadCount);
+        if (nextUpdated != chat) {
+          await db.updateChat(nextUpdated);
+        }
       }
     }
   }
@@ -845,30 +843,13 @@ class DeltaEventConsumer {
       accountId: _deltaAccountId,
     );
     if (chat == null) return;
-    final freshCount = await _context.getFreshMessageCountSafe(chatId);
-    if (!freshCount.supported) {
-      return;
-    }
-    final unreadCount = _resolvedFreshUnreadCount(
-      chatOpen: chat.open,
-      freshCount: freshCount,
+    final unreadCount = await db.countUnreadMessagesForChat(
+      chat.jid,
+      selfJid: _selfJid,
     );
     if (unreadCount != chat.unreadCount) {
       await db.updateChat(chat.copyWith(unreadCount: unreadCount));
     }
-  }
-
-  int _resolvedFreshUnreadCount({
-    required bool chatOpen,
-    required DeltaFreshMessageCount freshCount,
-  }) {
-    if (!freshCount.supported) {
-      return _emptyUnreadCount;
-    }
-    if (chatOpen) {
-      return _emptyUnreadCount;
-    }
-    return freshCount.count;
   }
 
   Future<void> _syncChatMessages(int chatId) async {
@@ -911,6 +892,7 @@ class DeltaEventConsumer {
     final visibleIdSet = visibleIds.toSet();
     final snapshots = await db.getMessageDeltaSnapshot(chat.jid);
     final localDeltaIds = <int>{};
+    final refreshIds = <int>{};
     final staleStanzaIds = <String>[];
     for (final snapshot in snapshots) {
       final deltaId = snapshot.deltaMsgId;
@@ -919,6 +901,9 @@ class DeltaEventConsumer {
       }
       if (visibleIdSet.contains(deltaId)) {
         localDeltaIds.add(deltaId);
+        if (!snapshot.displayed) {
+          refreshIds.add(deltaId);
+        }
       } else {
         staleStanzaIds.add(snapshot.stanzaId);
       }
@@ -932,9 +917,10 @@ class DeltaEventConsumer {
         missingIds.add(deltaId);
       }
     }
+    final syncIds = <int>[...missingIds, ...refreshIds];
     const int batchSize = 8;
-    for (var index = 0; index < missingIds.length; index += batchSize) {
-      final chunk = missingIds.skip(index).take(batchSize).toList();
+    for (var index = 0; index < syncIds.length; index += batchSize) {
+      final chunk = syncIds.skip(index).take(batchSize).toList();
       final messages = await Future.wait(chunk.map(_context.getMessage));
       for (final msg in messages) {
         if (msg == null) {

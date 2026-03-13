@@ -299,8 +299,6 @@ abstract interface class XmppBase {
 
   mox.JID? get _myJid;
 
-  HttpUploadSupport get httpUploadSupport;
-
   PubSubSupport get pubSubSupport;
 
   Stream<PubSubSupport> get pubSubSupportStream;
@@ -586,9 +584,6 @@ class XmppService extends XmppBase
     _localizations = localizations;
   }
 
-  StreamController<HttpUploadSupport> _httpUploadSupportController =
-      StreamController<HttpUploadSupport>.broadcast();
-  var _httpUploadSupport = const HttpUploadSupport(supported: false);
   StreamController<PubSubSupport> _pubSubSupportController =
       StreamController<PubSubSupport>.broadcast();
   var _pubSubSupport = const PubSubSupport(
@@ -607,12 +602,6 @@ class XmppService extends XmppBase
   String? get saltedPassword => _connection.saltedPassword;
 
   Stream<bool> get mamSupportStream => _mamSupportController.stream;
-
-  @override
-  HttpUploadSupport get httpUploadSupport => _httpUploadSupport;
-
-  Stream<HttpUploadSupport> get httpUploadSupportStream =>
-      _httpUploadSupportController.stream;
 
   @override
   PubSubSupport get pubSubSupport => _pubSubSupport;
@@ -925,10 +914,6 @@ class XmppService extends XmppBase
         );
         _streamResumptionAttempted = false;
         await _runPostNegotiationsSetup();
-        fireAndForget(
-          _refreshPostNegotiationsSupport,
-          operationName: _postNegotiationsSupportRefreshOperationName,
-        );
         // Connection handling is automatic in moxxmpp v0.5.0.
       });
     super.configureEventHandlers(manager);
@@ -1066,8 +1051,6 @@ class XmppService extends XmppBase
       ? _connection.connectionSettings.jid.resource
       : null;
 
-  bool get supportsHttpUpload => _httpUploadSupport.supported;
-
   bool get connected => connectionState == mox.XmppConnectionState.connected;
 
   bool get hasConnectionSettings => _connection.hasConnectionSettings;
@@ -1133,8 +1116,6 @@ class XmppService extends XmppBase
 
   static const _connectivityRepairReasonStreamNegotiationsDone =
       'stream negotiations done';
-  static const _postNegotiationsSupportRefreshOperationName =
-      'XmppService.refreshPostNegotiationsSupport';
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
   static const _nonRecoverableReconnectDisableLog =
@@ -1153,7 +1134,6 @@ class XmppService extends XmppBase
     }
 
     if (state != ConnectionState.connected) {
-      _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
       _clearStreamReady();
     }
 
@@ -1532,6 +1512,10 @@ class XmppService extends XmppBase
 
     await _messageSubscription?.cancel();
     _messageSubscription = _messageStream.stream.listen((message) async {
+      if (_consumeSuppressedNotificationForMessage(message) ||
+          message.displayed) {
+        return;
+      }
       final chat = await _dbOpReturning<XmppDatabase, Chat?>(
         (db) async => db.getChat(message.chatJid),
       );
@@ -2868,7 +2852,6 @@ class XmppService extends XmppBase
     _demoOfflineMode = false;
     _resetDemoScript();
     _resetStableKeyCache();
-    _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
     _updateMamSupport(false);
     _mamSupportOverride = null;
 
@@ -2982,10 +2965,6 @@ class XmppService extends XmppBase
   }
 
   Future<void> _resetStreamControllers() async {
-    if (_httpUploadSupportController.isClosed) {
-      _httpUploadSupportController =
-          StreamController<HttpUploadSupport>.broadcast();
-    }
     if (_pubSubSupportController.isClosed) {
       _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
     }
@@ -3025,9 +3004,6 @@ class XmppService extends XmppBase
   }
 
   Future<void> _closeStreamControllers() async {
-    if (!_httpUploadSupportController.isClosed) {
-      await _httpUploadSupportController.close();
-    }
     if (!_pubSubSupportController.isClosed) {
       await _pubSubSupportController.close();
     }
@@ -3187,24 +3163,6 @@ class XmppService extends XmppBase
     return List<int>.generate(length, (_) => random.nextInt(256));
   }
 
-  bool _hasHttpUploadIdentity(mox.DiscoInfo info) {
-    final hasIdentity = info.identities.any(
-      (identity) => identity.category == 'store' && identity.type == 'file',
-    );
-    return hasIdentity && info.features.contains(mox.httpFileUploadXmlns);
-  }
-
-  int? _httpUploadMaxFileSize(mox.DiscoInfo info) {
-    for (final form in info.extendedInfo) {
-      for (final field in form.fields) {
-        if (field.varAttr == 'max-file-size') {
-          return int.tryParse(field.values.first);
-        }
-      }
-    }
-    return null;
-  }
-
   Future<void> _runPostNegotiationsSetup() async {
     try {
       if (_connection.carbonsEnabled != true) {
@@ -3218,100 +3176,12 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<void> _refreshPostNegotiationsSupport() async {
-    await Future.wait([
-      () async {
-        try {
-          await _refreshHttpUploadSupport();
-        } on Exception catch (error, stackTrace) {
-          _xmppLogger.fine(
-            'Failed to refresh HTTP upload support after login.',
-            error,
-            stackTrace,
-          );
-        }
-      }(),
-      () async {
-        try {
-          await _refreshPubSubSupport();
-        } on Exception catch (error, stackTrace) {
-          _xmppLogger.fine(
-            'Failed to refresh PubSub support after login.',
-            error,
-            stackTrace,
-          );
-        }
-      }(),
-    ]);
-  }
-
-  void _updateHttpUploadSupport(HttpUploadSupport support) {
-    if (_httpUploadSupport == support) return;
-    _httpUploadSupport = support;
-    if (_httpUploadSupportController.isClosed) return;
-    _httpUploadSupportController.add(support);
-  }
-
   void _updatePubSubSupport(PubSubSupport support) {
     final unchanged = _pubSubSupportResolved && _pubSubSupport == support;
     _pubSubSupport = support;
     _pubSubSupportResolved = true;
     if (unchanged || _pubSubSupportController.isClosed) return;
     _pubSubSupportController.add(support);
-  }
-
-  Future<void> _refreshHttpUploadSupport() async {
-    if (demoOfflineMode) {
-      const demoMaxUploadSize = 1024 * 1024 * 1024;
-      _updateHttpUploadSupport(
-        const HttpUploadSupport(
-          supported: true,
-          maxFileSizeBytes: demoMaxUploadSize,
-        ),
-      );
-      return;
-    }
-    final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
-    final discoManager = _connection.getManager<mox.DiscoManager>();
-    if (uploadManager == null || discoManager == null) {
-      _xmppLogger.fine(
-        'HTTP upload discovery skipped: manager missing (upload=$uploadManager, disco=$discoManager).',
-      );
-      _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
-      return;
-    }
-    try {
-      final supported = await uploadManager.isSupported();
-      String? entityJid;
-      int? maxSize;
-      final discoResult = await discoManager.performDiscoSweep();
-      if (discoResult.isType<List<mox.DiscoInfo>>()) {
-        final infos = discoResult.get<List<mox.DiscoInfo>>();
-        for (final info in infos) {
-          if (_hasHttpUploadIdentity(info)) {
-            entityJid = info.jid.toString();
-            maxSize = _httpUploadMaxFileSize(info);
-            break;
-          }
-        }
-      }
-      final resolvedSupport = HttpUploadSupport(
-        supported: supported && entityJid != null,
-        entityJid: entityJid,
-        maxFileSizeBytes: maxSize,
-      );
-      _xmppLogger.fine(
-        'HTTP upload supported=${resolvedSupport.supported} entity=${entityJid ?? 'none'} maxSize=${maxSize ?? -1}B',
-      );
-      _updateHttpUploadSupport(resolvedSupport);
-    } catch (error, stackTrace) {
-      _xmppLogger.fine(
-        'Failed to refresh HTTP upload support.',
-        error,
-        stackTrace,
-      );
-      _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
-    }
   }
 
   @override

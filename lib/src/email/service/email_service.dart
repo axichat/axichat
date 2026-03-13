@@ -536,6 +536,9 @@ class EmailService {
   int _foregroundKeepaliveOperationId = 0;
   final EmailAsyncQueue _reconnectRestartQueue = EmailAsyncQueue();
   final List<_PendingNotification> _pendingNotifications = [];
+  int _pendingNotificationSequence = 0;
+  final Map<int, int> _pendingNotificationDropThroughSequenceByAccount =
+      <int, int>{};
   Timer? _notificationFlushTimer;
   Timer? _contactsSyncTimer;
   String? _pendingPushToken;
@@ -2693,7 +2696,9 @@ class EmailService {
         }
         break;
       case DeltaEventType.incomingMsgBunch:
-        await _flushQueuedNotifications();
+        _suppressQueuedNotificationsThroughCurrentSequence(
+          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
+        );
         break;
       case DeltaEventType.incomingReaction:
         await _handleIncomingReaction(
@@ -2709,6 +2714,12 @@ class EmailService {
           msgId: event.data2,
           accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
           text: event.data2Text,
+        );
+        break;
+      case DeltaEventType.msgRead:
+        await _handleMessageRead(
+          event.data1,
+          accountId: event.accountId ?? DeltaAccountDefaults.legacyId,
         );
         break;
       case DeltaEventType.msgsNoticed:
@@ -2799,8 +2810,15 @@ class EmailService {
     if (!_canProcessDeltaWork) {
       return;
     }
+    final sequence = _pendingNotificationSequence + 1;
+    _pendingNotificationSequence = sequence;
     _pendingNotifications.add(
-      _PendingNotification(chatId: chatId, msgId: msgId, accountId: accountId),
+      _PendingNotification(
+        chatId: chatId,
+        msgId: msgId,
+        accountId: accountId,
+        sequence: sequence,
+      ),
     );
     _notificationFlushTimer ??= Timer(_notificationFlushDelay, () {
       _notificationFlushTimer = null;
@@ -2809,6 +2827,27 @@ class EmailService {
         operationName: _deltaQueueOperationNameFlushQueuedNotifications,
       );
     });
+  }
+
+  void _suppressQueuedNotificationsThroughCurrentSequence({
+    required int accountId,
+  }) {
+    if (_pendingNotifications.isEmpty) {
+      return;
+    }
+    _pendingNotificationDropThroughSequenceByAccount[accountId] =
+        _pendingNotificationSequence;
+  }
+
+  void _dropPendingNotificationsForChat(int chatId, {required int accountId}) {
+    _pendingNotifications.removeWhere(
+      (entry) => entry.chatId == chatId && entry.accountId == accountId,
+    );
+    if (_pendingNotifications.isNotEmpty) {
+      return;
+    }
+    _notificationFlushTimer?.cancel();
+    _notificationFlushTimer = null;
   }
 
   void _scheduleContactsSyncFromCore() {
@@ -2843,6 +2882,12 @@ class EmailService {
     final pending = List<_PendingNotification>.from(_pendingNotifications);
     _pendingNotifications.clear();
     for (final entry in pending) {
+      final dropThroughSequence =
+          _pendingNotificationDropThroughSequenceByAccount[entry.accountId] ??
+          0;
+      if (entry.sequence <= dropThroughSequence) {
+        continue;
+      }
       await _notifyIncoming(
         chatId: entry.chatId,
         msgId: entry.msgId,
@@ -2855,12 +2900,19 @@ class EmailService {
     int chatId, {
     required int accountId,
   }) async {
-    await _flushQueuedNotifications();
+    _dropPendingNotificationsForChat(chatId, accountId: accountId);
+  }
+
+  Future<void> _handleMessageRead(int chatId, {required int accountId}) async {
+    _dropPendingNotificationsForChat(chatId, accountId: accountId);
     final notificationService = _notificationService;
     if (notificationService == null) return;
     final db = await _databaseBuilder();
     final chat = await db.getChatByDeltaChatId(chatId, accountId: accountId);
     if (chat == null) return;
+    if (chat.unreadCount != _emptyUnreadCount) {
+      return;
+    }
     await notificationService.dismissMessageNotification(
       threadKey: _notificationThreadKey(chat.jid),
     );
@@ -2957,6 +3009,9 @@ class EmailService {
         chatId: chatId,
       );
       if (context == null) {
+        return;
+      }
+      if (context.message.displayed || !context.message.hasUnreadContent) {
         return;
       }
       final l10n = _l10n;
@@ -3373,6 +3428,8 @@ class EmailService {
     _notificationFlushTimer?.cancel();
     _notificationFlushTimer = null;
     _pendingNotifications.clear();
+    _pendingNotificationSequence = 0;
+    _pendingNotificationDropThroughSequenceByAccount.clear();
   }
 
   bool _isForegroundKeepaliveOpCurrent(int operationId) =>
@@ -4757,16 +4814,6 @@ class EmailService {
     if (!noticed) {
       return false;
     }
-    final db = await _databaseBuilder();
-    final Chat stored =
-        await db.getChatByDeltaChatId(
-          chatId,
-          accountId: account.deltaAccountId,
-        ) ??
-        resolvedChat.copyWith(deltaChatId: chatId);
-    if (stored.unreadCount != _emptyUnreadCount) {
-      await db.updateChat(stored.copyWith(unreadCount: _emptyUnreadCount));
-    }
     return true;
   }
 
@@ -5545,11 +5592,13 @@ class _PendingNotification {
     required this.chatId,
     required this.msgId,
     required this.accountId,
+    required this.sequence,
   });
 
   final int chatId;
   final int msgId;
   final int accountId;
+  final int sequence;
 }
 
 class _DeltaNotificationContext {

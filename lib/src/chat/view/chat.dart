@@ -559,7 +559,7 @@ class _ChatTopPanelVisibility extends StatelessWidget {
       child: AnimatedSwitcher(
         duration: duration,
         reverseDuration: duration,
-        switchInCurve: Curves.easeOutCubic,
+        switchInCurve: Curves.easeInOutCubic,
         switchOutCurve: Curves.easeInCubic,
         layoutBuilder: (currentChild, previousChildren) {
           return Stack(
@@ -587,19 +587,14 @@ class _ChatTopPanelTransition extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final curved = CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
-    );
     return ClipRect(
       child: SlideTransition(
         position: Tween<Offset>(
           begin: context.motion.statusBannerSlideOffset,
           end: Offset.zero,
-        ).animate(curved),
+        ).animate(animation),
         child: SizeTransition(
-          sizeFactor: curved,
+          sizeFactor: animation,
           axisAlignment: -1.0,
           child: child,
         ),
@@ -1084,6 +1079,7 @@ class _ChatState extends State<Chat> {
   final _messageListKey = GlobalKey();
   Set<String> _reportedReadThresholdMessageIds = const <String>{};
   final Set<String> _debugConsumedUnreadIndicatorKeys = <String>{};
+  final Set<String> _optimisticReadTapMessageIds = <String>{};
   var _readThresholdSyncScheduled = false;
   final Object _composerTapRegionGroup = Object();
   final Object _selectionTapRegionGroup = Object();
@@ -2039,6 +2035,24 @@ class _ChatState extends State<Chat> {
     _reportedReadThresholdMessageIds = nextIds;
     final messageIds = nextIds.toList(growable: false)..sort();
     context.read<ChatBloc>().add(ChatReadThresholdChanged(messageIds));
+  }
+
+  void _requestImmediateReadOnTap(Message message) {
+    final messageId = message.stanzaID.trim();
+    if (messageId.isEmpty) {
+      return;
+    }
+    var didChange = _optimisticReadTapMessageIds.add(messageId);
+    if (_debugForceUnreadIndicators) {
+      final didAddDebug = _debugConsumedUnreadIndicatorKeys.add(
+        _debugUnreadIndicatorKeyForMessage(message),
+      );
+      didChange = didChange || didAddDebug;
+    }
+    if (didChange && mounted) {
+      setState(() {});
+    }
+    context.read<ChatBloc>().add(ChatMessageReadRequested(messageId));
   }
 
   String _debugUnreadIndicatorKeyForMessage(Message message) {
@@ -3865,6 +3879,9 @@ class _ChatState extends State<Chat> {
     final removedSelections = _multiSelectedMessageIds
         .where((id) => !availableIds.contains(id))
         .toList(growable: false);
+    _optimisticReadTapMessageIds.removeWhere(
+      (id) => !availableIds.contains(id) || messageById[id]?.displayed == true,
+    );
     var didChange = false;
     if (removedKeys.isNotEmpty) {
       for (final id in removedKeys) {
@@ -4556,6 +4573,7 @@ class _ChatState extends State<Chat> {
               listenWhen: (previous, current) =>
                   previous.chat?.jid != current.chat?.jid,
               listener: (_, state) {
+                _optimisticReadTapMessageIds.clear();
                 _animatedMessageIds.clear();
                 _hydratedAnimatedMessages = false;
                 _subjectChangeSuppressed = true;
@@ -5641,8 +5659,13 @@ class _ChatState extends State<Chat> {
                                                   e,
                                                 ),
                                               );
+                                      final optimisticallyReadOnTap =
+                                          _optimisticReadTapMessageIds.contains(
+                                            e.stanzaID,
+                                          );
                                       final showUnreadIndicator =
-                                          normalShowUnreadIndicator ||
+                                          (normalShowUnreadIndicator &&
+                                              !optimisticallyReadOnTap) ||
                                           debugShowUnreadIndicator;
                                       String? authorAvatarPath;
                                       if (isGroupChat) {
@@ -9373,6 +9396,10 @@ class _ChatState extends State<Chat> {
                                                                               bubbleMaxWidthForLayout;
                                                                           final replyPreviewMaxWidth =
                                                                               messageRowMaxWidth;
+                                                                          final showUnreadIndicator =
+                                                                              message.customProperties?['showUnreadIndicator']
+                                                                                  as bool? ??
+                                                                              false;
                                                                           final selectableBubble = MouseRegion(
                                                                             cursor:
                                                                                 widget.readOnly
@@ -9383,6 +9410,11 @@ class _ChatState extends State<Chat> {
                                                                               onTap: widget.readOnly
                                                                                   ? null
                                                                                   : () {
+                                                                                      if (showUnreadIndicator) {
+                                                                                        _requestImmediateReadOnTap(
+                                                                                          messageModel,
+                                                                                        );
+                                                                                      }
                                                                                       _toggleMessageSelection(
                                                                                         messageModel,
                                                                                       );
@@ -9414,10 +9446,6 @@ class _ChatState extends State<Chat> {
                                                                                   child: bubbleStack,
                                                                                 )
                                                                               : bubbleStack;
-                                                                          final showUnreadIndicator =
-                                                                              message.customProperties?['showUnreadIndicator']
-                                                                                  as bool? ??
-                                                                              false;
                                                                           final showSenderLabelText =
                                                                               isRenderableBubble &&
                                                                               !_chatMessagesShouldChain(
@@ -9709,6 +9737,7 @@ class _ChatState extends State<Chat> {
                                     CurvedAnimation(
                                       parent: primaryAnimation,
                                       curve: _chatOverlayFadeCurve,
+                                      reverseCurve: Curves.easeInCubic,
                                     );
                                 final Animation<double> exitAnimation =
                                     CurvedAnimation(
@@ -9716,6 +9745,7 @@ class _ChatState extends State<Chat> {
                                           ? primaryAnimation
                                           : secondaryAnimation,
                                       curve: _chatOverlayFadeCurve,
+                                      reverseCurve: Curves.easeInCubic,
                                     );
                                 if (isExiting) {
                                   final Widget exiting = isOverlaySwap

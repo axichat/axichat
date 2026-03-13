@@ -46,6 +46,8 @@ const String _pinSyncFlushOperationName =
     'MessageService.flushPendingPinSyncOnNegotiations';
 const String _pinSyncEmailReconnectOperationName =
     'MessageService.syncEmailPinsOnNegotiations';
+const String _httpUploadBootstrapOperationName =
+    'MessageService.refreshHttpUploadSupportOnNegotiations';
 const String _mamGlobalBootstrapOperationName =
     'MessageService.bootstrapGlobalMamOnNegotiations';
 const String _mamCalendarBootstrapOperationName =
@@ -988,6 +990,11 @@ mixin MessageService
         ChatsService,
         DraftSyncService,
         BlockingService {
+  HttpUploadSupport get httpUploadSupport => _httpUploadSupport;
+
+  Stream<HttpUploadSupport> get httpUploadSupportStream =>
+      _httpUploadSupportController.stream;
+
   String? get _databasePrefix;
 
   Stream<CalendarSyncDispatch> get calendarSyncDispatchStream =>
@@ -1487,17 +1494,18 @@ mixin MessageService
     }
   }
 
-  RegisteredStateKey _lastSeenKeyFor(String jid) => _lastSeenKeys.putIfAbsent(
-    jid,
-    () => XmppStateStore.registerKey('mam_last_seen_$jid'),
-  );
+  RegisteredStateKey _archiveCursorKeyFor(String jid) =>
+      _archiveCursorKeys.putIfAbsent(
+        jid,
+        () => XmppStateStore.registerKey('mam_archive_cursor_v2_$jid'),
+      );
 
-  Future<void> _recordLastSeenTimestamp(
+  Future<void> _recordArchiveCursorTimestamp(
     String chatJid,
     DateTime? timestamp,
   ) async {
     if (timestamp == null) return;
-    final key = _lastSeenKeyFor(chatJid);
+    final key = _archiveCursorKeyFor(chatJid);
     await _dbOp<XmppStateStore>((ss) async {
       final raw = ss.read(key: key) as String?;
       final existing = raw == null ? null : DateTime.tryParse(raw);
@@ -1508,11 +1516,51 @@ mixin MessageService
     }, awaitDatabase: true);
   }
 
-  Future<DateTime?> loadLastSeenTimestamp(String chatJid) async {
+  Future<DateTime?> loadArchiveCursorTimestamp(String chatJid) async {
     return await _dbOpReturning<XmppStateStore, DateTime?>((ss) {
-      final raw = ss.read(key: _lastSeenKeyFor(chatJid)) as String?;
+      final raw = ss.read(key: _archiveCursorKeyFor(chatJid)) as String?;
       return raw == null ? null : DateTime.tryParse(raw);
     });
+  }
+
+  Future<void> _recordArchiveCursorForInboundMessage({
+    required Message message,
+    required mox.MessageEvent event,
+    required bool isGroupChat,
+  }) async {
+    final timestamp = message.timestamp;
+    if (timestamp == null) {
+      return;
+    }
+    if (_isSelfPinMutation(event) ||
+        (isGroupChat && _isSelfArchivedGroupChatMessageEvent(event))) {
+      return;
+    }
+    await _recordArchiveCursorTimestamp(message.chatJid, timestamp);
+  }
+
+  void _suppressNotificationForMessage(Message message) {
+    for (final id in message.referenceIds) {
+      _suppressedMessageNotificationIds.add(id);
+    }
+  }
+
+  bool _consumeSuppressedNotificationForMessage(Message message) {
+    var suppressed = false;
+    for (final id in message.referenceIds) {
+      if (_suppressedMessageNotificationIds.remove(id)) {
+        suppressed = true;
+      }
+    }
+    return suppressed;
+  }
+
+  Message _applyArchivedUnreadState(Message message, mox.MessageEvent event) {
+    if (!_isArchivedOrOfflineMessage(event)) {
+      return message;
+    }
+    _suppressNotificationForMessage(message);
+    return message;
   }
 
   String _mamScopeToken() {
@@ -2288,6 +2336,8 @@ mixin MessageService
   }
 
   final _log = Logger('MessageService');
+  StreamController<HttpUploadSupport> _httpUploadSupportController =
+      StreamController<HttpUploadSupport>.broadcast();
   StreamController<Message> _messageStream =
       StreamController<Message>.broadcast();
   StreamController<CalendarSyncDispatch> _calendarSyncDispatchController =
@@ -2330,7 +2380,7 @@ mixin MessageService
   final Map<String, Queue<String>> _stableKeyOrder = {};
   final Set<String> _seenAxiWelcomeDuplicateKeys = <String>{};
   final Queue<String> _axiWelcomeDuplicateKeyOrder = Queue<String>();
-  final Map<String, RegisteredStateKey> _lastSeenKeys = {};
+  final Map<String, RegisteredStateKey> _archiveCursorKeys = {};
   bool _mamSupported = false;
   bool? _mamSupportOverride;
   StreamController<bool> _mamSupportController =
@@ -2339,9 +2389,11 @@ mixin MessageService
   final Map<String, _PeerCapabilities> _capabilityCache = {};
   final Map<String, Future<_PeerCapabilities>> _capabilityRequests = {};
   var _capabilityCacheLoaded = false;
+  var _httpUploadSupport = const HttpUploadSupport(supported: false);
   final Map<String, Map<String, String>> _readOnlyTaskOwnersByChat =
       <String, Map<String, String>>{};
   final Map<String, Future<String?>> _inboundAttachmentDownloads = {};
+  final Set<String> _suppressedMessageNotificationIds = <String>{};
   final Set<String> _internalEnvelopeChats = <String>{};
   int? _attachmentCacheBytes;
   Directory? _attachmentDirectory;
@@ -2367,10 +2419,90 @@ mixin MessageService
   bool _emailPinSnapshotInFlight = false;
   mox.JID? _pinPubSubHost;
 
+  bool _hasHttpUploadIdentity(mox.DiscoInfo info) {
+    final hasIdentity = info.identities.any(
+      (identity) => identity.category == 'store' && identity.type == 'file',
+    );
+    return hasIdentity && info.features.contains(mox.httpFileUploadXmlns);
+  }
+
+  int? _httpUploadMaxFileSize(mox.DiscoInfo info) {
+    for (final form in info.extendedInfo) {
+      for (final field in form.fields) {
+        if (field.varAttr == 'max-file-size') {
+          return int.tryParse(field.values.first);
+        }
+      }
+    }
+    return null;
+  }
+
+  void _updateHttpUploadSupport(HttpUploadSupport support) {
+    if (_httpUploadSupport == support) return;
+    _httpUploadSupport = support;
+    if (_httpUploadSupportController.isClosed) return;
+    _httpUploadSupportController.add(support);
+  }
+
+  Future<HttpUploadSupport> refreshHttpUploadSupport() async {
+    if (demoOfflineMode) {
+      const demoMaxUploadSize = 1024 * 1024 * 1024;
+      _updateHttpUploadSupport(
+        const HttpUploadSupport(
+          supported: true,
+          maxFileSizeBytes: demoMaxUploadSize,
+        ),
+      );
+      return _httpUploadSupport;
+    }
+    final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
+    final discoManager = _connection.getManager<mox.DiscoManager>();
+    if (uploadManager == null || discoManager == null) {
+      _log.fine(
+        'HTTP upload discovery skipped: manager missing (upload=$uploadManager, disco=$discoManager).',
+      );
+      _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+      return _httpUploadSupport;
+    }
+    try {
+      final supported = await uploadManager.isSupported();
+      String? entityJid;
+      int? maxSize;
+      final discoResult = await discoManager.performDiscoSweep();
+      if (discoResult.isType<List<mox.DiscoInfo>>()) {
+        final infos = discoResult.get<List<mox.DiscoInfo>>();
+        for (final info in infos) {
+          if (_hasHttpUploadIdentity(info)) {
+            entityJid = info.jid.toString();
+            maxSize = _httpUploadMaxFileSize(info);
+            break;
+          }
+        }
+      }
+      final resolvedSupport = HttpUploadSupport(
+        supported: supported && entityJid != null,
+        entityJid: entityJid,
+        maxFileSizeBytes: maxSize,
+      );
+      _log.fine(
+        'HTTP upload supported=${resolvedSupport.supported} entity=${entityJid ?? 'none'} maxSize=${maxSize ?? -1}B',
+      );
+      _updateHttpUploadSupport(resolvedSupport);
+    } catch (error, stackTrace) {
+      _log.fine('Failed to refresh HTTP upload support.', error, stackTrace);
+      _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+    }
+    return _httpUploadSupport;
+  }
+
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     manager
+      ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
+        if (event.state == ConnectionState.connected) return;
+        _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
+      })
       ..registerHandler<mox.MessageEvent>((event) async {
         if (await _handleError(event)) return;
         if (_isOversizedMessage(event, _log)) return;
@@ -2486,6 +2618,8 @@ mixin MessageService
           return;
         }
 
+        message = _applyArchivedUnreadState(message, event);
+
         final acknowledgement = await _acknowledgeMessage(
           event,
           allowArchivedAcknowledgement: true,
@@ -2566,7 +2700,11 @@ mixin MessageService
           );
         }
 
-        await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
+        await _recordArchiveCursorForInboundMessage(
+          message: message,
+          event: event,
+          isGroupChat: isGroupChat,
+        );
         _messageStream.add(message);
       })
       ..registerHandler<MucSelfPresenceEvent>((event) async {
@@ -2637,6 +2775,19 @@ mixin MessageService
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         _outboundPinMutationsByStanzaId.clear();
+        fireAndForget(() async {
+          try {
+            await refreshHttpUploadSupport();
+          } on XmppAbortedException {
+            _log.fine('HTTP upload support bootstrap aborted.');
+          } on Exception catch (error, stackTrace) {
+            _log.fine(
+              'HTTP upload support bootstrap failed.',
+              error,
+              stackTrace,
+            );
+          }
+        }, operationName: _httpUploadBootstrapOperationName);
         if (!event.resumed) {
           fireAndForget(() async {
             try {
@@ -2711,8 +2862,8 @@ mixin MessageService
             jid: chatJid,
             includePseudoMessages: false,
           );
-          final lastSeen = await loadLastSeenTimestamp(chatJid);
-          final shouldBackfillLatest = localCount == 0 || lastSeen == null;
+          final archiveCursor = await loadArchiveCursorTimestamp(chatJid);
+          final shouldBackfillLatest = localCount == 0 || archiveCursor == null;
 
           if (shouldBackfillLatest) {
             await fetchLatestFromArchive(
@@ -2725,7 +2876,7 @@ mixin MessageService
 
           await _catchUpChatFromArchive(
             jid: chatJid,
-            since: lastSeen,
+            since: archiveCursor,
             isMuc: chat.type == ChatType.groupChat,
           );
         } on XmppAbortedException {
@@ -2781,8 +2932,8 @@ mixin MessageService
         jid: normalizedRoom,
         includePseudoMessages: false,
       );
-      final lastSeen = await loadLastSeenTimestamp(normalizedRoom);
-      final shouldBackfillLatest = localCount == 0 || lastSeen == null;
+      final archiveCursor = await loadArchiveCursorTimestamp(normalizedRoom);
+      final shouldBackfillLatest = localCount == 0 || archiveCursor == null;
 
       if (shouldBackfillLatest) {
         await fetchLatestFromArchive(
@@ -2796,7 +2947,7 @@ mixin MessageService
 
       await _catchUpChatFromArchive(
         jid: normalizedRoom,
-        since: lastSeen,
+        since: archiveCursor,
         isMuc: true,
       );
       success = true;
@@ -3714,7 +3865,6 @@ mixin MessageService
             pseudoMessageType: resolvedPseudoType,
           );
       }
-      await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
       return;
     }
     if (isGroupChat) {
@@ -3777,7 +3927,6 @@ mixin MessageService
       }
       throw XmppMessageException();
     }
-    await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
   }
 
   Future<void> _upsertConversationIndexForPeer({
@@ -3976,7 +4125,6 @@ mixin MessageService
       if (this is DemoScriptService) {
         (this as DemoScriptService)._scheduleDemoAck(message.stanzaID);
       }
-      await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
       final demoFile = File(attachment.path);
       final demoContentType = metadata.mimeType ?? 'application/octet-stream';
       final demoSize = metadata.sizeBytes ?? attachment.sizeBytes;
@@ -4109,7 +4257,6 @@ mixin MessageService
       }
       throw XmppMessageException();
     }
-    await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
     return resolvedUpload;
   }
 
@@ -6044,6 +6191,7 @@ mixin MessageService
 
   @override
   Future<void> _reset() async {
+    _updateHttpUploadSupport(const HttpUploadSupport(supported: false));
     await super._reset();
 
     await _resetMessageStreams();
@@ -6057,10 +6205,11 @@ mixin MessageService
     _mamGlobalDeniedUntilLoaded = false;
     _mamGlobalMaxTimestamp = null;
     _resetStableKeyCache();
-    _lastSeenKeys.clear();
+    _archiveCursorKeys.clear();
     _capabilityCache.clear();
     _capabilityRequests.clear();
     _capabilityCacheLoaded = false;
+    _httpUploadSupport = const HttpUploadSupport(supported: false);
     _outboundPinMutationsByStanzaId.clear();
     _inboundAttachmentDownloads.clear();
     _inboundAttachmentAutoDownloadGlobalLimiter.reset();
@@ -6068,6 +6217,7 @@ mixin MessageService
     _attachmentDirectory = null;
     _attachmentCacheSessionPrefix = null;
     _attachmentCacheBytes = null;
+    _suppressedMessageNotificationIds.clear();
     _internalEnvelopeChats.clear();
     _pinAuthorizedPublishersByChat.clear();
     _pendingPinPublishesByChat.clear();
@@ -6082,6 +6232,9 @@ mixin MessageService
   }
 
   Future<void> _resetMessageStreams() async {
+    if (!_httpUploadSupportController.isClosed) {
+      await _httpUploadSupportController.close();
+    }
     if (!_messageStream.isClosed) {
       await _messageStream.close();
     }
@@ -6097,6 +6250,8 @@ mixin MessageService
     if (!_mamSupportController.isClosed) {
       await _mamSupportController.close();
     }
+    _httpUploadSupportController =
+        StreamController<HttpUploadSupport>.broadcast();
     _messageStream = StreamController<Message>.broadcast();
     _calendarSyncDispatchController =
         StreamController<CalendarSyncDispatch>.broadcast();

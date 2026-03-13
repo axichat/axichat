@@ -631,11 +631,7 @@ class NotificationService {
       );
     } on Exception catch (error, stackTrace) {
       if (Platform.isLinux) {
-        _log.warning(
-          'Failed to show Linux notification.',
-          error,
-          stackTrace,
-        );
+        _log.warning('Failed to show Linux notification.', error, stackTrace);
         return;
       }
       rethrow;

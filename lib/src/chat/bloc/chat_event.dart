@@ -172,6 +172,15 @@ final class ChatReadThresholdChanged extends ChatEvent {
   List<Object?> get props => [messageIds];
 }
 
+final class ChatMessageReadRequested extends ChatEvent {
+  const ChatMessageReadRequested(this.messageId);
+
+  final String messageId;
+
+  @override
+  List<Object?> get props => [messageId];
+}
+
 final class ChatMessageFocused extends ChatEvent {
   const ChatMessageFocused(this.messageID);
 
