@@ -163,6 +163,15 @@ final class ChatEmailServiceUpdated extends ChatEvent {
   List<Object?> get props => [emailService];
 }
 
+final class ChatReadThresholdChanged extends ChatEvent {
+  const ChatReadThresholdChanged(this.messageIds);
+
+  final List<String> messageIds;
+
+  @override
+  List<Object?> get props => [messageIds];
+}
+
 final class ChatMessageFocused extends ChatEvent {
   const ChatMessageFocused(this.messageID);
 

@@ -174,6 +174,10 @@ class _AxichatState extends State<Axichat> {
                     notificationService: context.read<NotificationService>(),
                     xmppService: context.read<XmppService>(),
                     messageService: context.read<MessageService>(),
+                    emailReadReceiptsEnabled: context
+                        .read<SettingsCubit>()
+                        .state
+                        .emailReadReceipts,
                   ),
                 ),
                 RepositoryProvider<HomeRefreshSyncService>(
@@ -234,7 +238,6 @@ class _AxichatState extends State<Axichat> {
                           : null;
                       return ProfileCubit(
                         xmppService: xmppService,
-                        presenceService: xmppService as PresenceService,
                         omemoService: omemoService,
                       );
                     },
@@ -342,6 +345,18 @@ class _AxichatState extends State<Axichat> {
                         } else {
                           await emailService.handleNetworkAvailable();
                         }
+                      },
+                    ),
+                    BlocListener<SettingsCubit, SettingsState>(
+                      listenWhen: (previous, current) =>
+                          previous.emailReadReceipts !=
+                          current.emailReadReceipts,
+                      listener: (context, settings) async {
+                        await context
+                            .read<EmailService>()
+                            .updateEmailReadReceiptsEnabled(
+                              settings.emailReadReceipts,
+                            );
                       },
                     ),
                   ],
@@ -454,11 +469,13 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
         final lightTheme = AppTheme.build(
           shadColor: state.shadColor,
           brightness: Brightness.light,
+          platform: defaultTargetPlatform,
           neutrals: chatNeutrals,
         );
         final darkTheme = AppTheme.build(
           shadColor: state.shadColor,
           brightness: Brightness.dark,
+          platform: defaultTargetPlatform,
           neutrals: chatNeutrals,
         );
         final app = ShadApp.router(
@@ -470,6 +487,7 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
           darkTheme: darkTheme,
           themeMode: state.themeMode,
           materialThemeBuilder: (context, theme) {
+            final bool useAppleSystemTypography = theme.platform.isApple;
             final shadTheme = theme.brightness == Brightness.light
                 ? lightTheme
                 : darkTheme;
@@ -500,30 +518,37 @@ class _MaterialAxichatState extends State<MaterialAxichat> {
             final focusRingColor = materialColors.primary.withValues(
               alpha: theme.brightness == Brightness.dark ? 0.25 : 0.15,
             );
-            final textThemeWithEmojiFallback =
-                TextTheme(
-                  displayLarge: shadTheme.textTheme.h1Large,
-                  displayMedium: shadTheme.textTheme.h1,
-                  displaySmall: shadTheme.textTheme.h2,
-                  titleLarge: shadTheme.textTheme.h3,
-                  titleMedium: shadTheme.textTheme.large,
-                  titleSmall: shadTheme.textTheme.small,
-                  bodyLarge: shadTheme.textTheme.p,
-                  bodyMedium: shadTheme.textTheme.small,
-                  bodySmall: shadTheme.textTheme.muted,
-                  labelLarge: shadTheme.textTheme.muted,
-                  labelMedium: shadTheme.textTheme.muted,
-                  labelSmall: shadTheme.textTheme.muted,
-                ).apply(
-                  fontFamily: interFontFamily,
-                  fontFamilyFallback: interFontFallback,
-                );
-            final appBarTitleStyle = shadTheme.textTheme.h3.copyWith(
-              fontFamily: gabaritoFontFamily,
-              fontFamilyFallback: gabaritoFontFallback,
-              color: materialColors.foreground,
-              fontWeight: appBarTitleFontWeight,
+            final TextTheme baseTextTheme = TextTheme(
+              displayLarge: shadTheme.textTheme.h1Large,
+              displayMedium: shadTheme.textTheme.h1,
+              displaySmall: shadTheme.textTheme.h2,
+              titleLarge: shadTheme.textTheme.h3,
+              titleMedium: shadTheme.textTheme.large,
+              titleSmall: shadTheme.textTheme.small,
+              bodyLarge: shadTheme.textTheme.p,
+              bodyMedium: shadTheme.textTheme.small,
+              bodySmall: shadTheme.textTheme.muted,
+              labelLarge: shadTheme.textTheme.muted,
+              labelMedium: shadTheme.textTheme.muted,
+              labelSmall: shadTheme.textTheme.muted,
             );
+            final textThemeWithEmojiFallback = useAppleSystemTypography
+                ? baseTextTheme
+                : baseTextTheme.apply(
+                    fontFamily: interFontFamily,
+                    fontFamilyFallback: interFontFallback,
+                  );
+            final appBarTitleStyle = useAppleSystemTypography
+                ? shadTheme.textTheme.h3.copyWith(
+                    color: materialColors.foreground,
+                    fontWeight: appBarTitleFontWeight,
+                  )
+                : shadTheme.textTheme.h3.copyWith(
+                    fontFamily: gabaritoFontFamily,
+                    fontFamilyFallback: gabaritoFontFallback,
+                    color: materialColors.foreground,
+                    fontWeight: appBarTitleFontWeight,
+                  );
             return theme.copyWith(
               iconTheme: const IconThemeData(size: axiIconSize),
               textTheme: textThemeWithEmojiFallback,

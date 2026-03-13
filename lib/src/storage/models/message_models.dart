@@ -670,7 +670,7 @@ extension MessageReferenceIds on Message {
     required bool isGroupChat,
     required bool isEmailBacked,
     required String? selfJid,
-    required String? myOccupantId,
+    required String? myOccupantJid,
   }) {
     if (!awaitsMucReference(
       isGroupChat: isGroupChat,
@@ -681,13 +681,47 @@ extension MessageReferenceIds on Message {
     if (error.isNotNone || retracted) {
       return false;
     }
-    final normalizedMyOccupantId = myOccupantId?.trim();
-    if (normalizedMyOccupantId != null && normalizedMyOccupantId.isNotEmpty) {
-      if (senderJid.trim() == normalizedMyOccupantId) {
+    final normalizedMyOccupantJid = myOccupantJid?.trim();
+    if (normalizedMyOccupantJid != null && normalizedMyOccupantJid.isNotEmpty) {
+      if (senderJid.trim() == normalizedMyOccupantJid) {
         return true;
       }
     }
     return sameNormalizedAddressValue(senderJid, selfJid);
+  }
+
+  bool get hasUnreadContent {
+    final hasBody = body?.trim().isNotEmpty == true;
+    final hasAttachment = fileMetadataID?.trim().isNotEmpty == true;
+    final pseudoMessageType = this.pseudoMessageType;
+    if (!(hasBody || hasAttachment)) {
+      return false;
+    }
+    if (pseudoMessageType != null && !pseudoMessageType.isInvite) {
+      return false;
+    }
+    return true;
+  }
+
+  bool countsTowardUnread({
+    required String? selfJid,
+    required bool isGroupChat,
+    required String? myOccupantJid,
+  }) {
+    if (!hasUnreadContent) {
+      return false;
+    }
+    if (sameNormalizedAddressValue(senderJid, selfJid)) {
+      return false;
+    }
+    final normalizedMyOccupantJid = myOccupantJid?.trim();
+    if (isGroupChat &&
+        normalizedMyOccupantJid != null &&
+        normalizedMyOccupantJid.isNotEmpty &&
+        senderJid.trim() == normalizedMyOccupantJid) {
+      return false;
+    }
+    return true;
   }
 
   Set<String> get referenceIds => <String>{

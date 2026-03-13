@@ -911,40 +911,36 @@ class XmppService extends XmppBase
 
   @override
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
-    super.configureEventHandlers(manager);
     manager
-      ..registerHandler<XmppOperationEvent>((event) async {
-        emitXmppOperation(event);
-      })
       ..registerHandler<mox.ConnectionStateChangedEvent>((event) async {
         _setConnectionState(event.state);
         if (event.state != ConnectionState.connected) {
           _pubSubSupportResolved = false;
         }
       })
-      ..registerHandler<mox.StanzaAckedEvent>((event) async {
-        if (event.stanza.id == null) return;
-        await _dbOp<XmppDatabase>(
-          (db) => db.markMessageAcked(event.stanza.id!),
-        );
-      })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         _recordStreamReady(event.resumed);
         _repairConnectionStateFromTraffic(
           reason: _connectivityRepairReasonStreamNegotiationsDone,
         );
-        final resumed = event.resumed;
-        final shouldHandleFailedResumption =
-            !resumed && _streamResumptionAttempted;
         _streamResumptionAttempted = false;
+        await _runPostNegotiationsSetup();
         fireAndForget(
-          () => _runPostNegotiationsSetup(
-            resumed: resumed,
-            shouldHandleFailedResumption: shouldHandleFailedResumption,
-          ),
-          operationName: _postNegotiationsSetupOperationName,
+          _refreshPostNegotiationsSupport,
+          operationName: _postNegotiationsSupportRefreshOperationName,
         );
         // Connection handling is automatic in moxxmpp v0.5.0.
+      });
+    super.configureEventHandlers(manager);
+    manager
+      ..registerHandler<XmppOperationEvent>((event) async {
+        emitXmppOperation(event);
+      })
+      ..registerHandler<mox.StanzaAckedEvent>((event) async {
+        if (event.stanza.id == null) return;
+        await _dbOp<XmppDatabase>(
+          (db) => db.markMessageAcked(event.stanza.id!),
+        );
       })
       ..registerHandler<mox.ResourceBoundEvent>((event) async {
         _xmppLogger.info('Bound resource: ${event.resource}...');
@@ -1137,29 +1133,14 @@ class XmppService extends XmppBase
 
   static const _connectivityRepairReasonStreamNegotiationsDone =
       'stream negotiations done';
-  static const _postNegotiationsSetupOperationName =
-      'XmppService.postNegotiationsSetup';
+  static const _postNegotiationsSupportRefreshOperationName =
+      'XmppService.refreshPostNegotiationsSupport';
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
   static const _nonRecoverableReconnectDisableLog =
       'Failed to disable reconnection after non-recoverable error.';
   static const _reconnectEnableFailedLog =
       'Failed to enable reconnection before requesting reconnect.';
-
-  Future<XmppStreamReady?> waitForStreamReady(Duration timeout) async {
-    if (connectionState != ConnectionState.connected) {
-      return null;
-    }
-    final lastReady = _lastStreamReady;
-    if (lastReady != null) {
-      return lastReady;
-    }
-    try {
-      return await streamReadyStream.first.timeout(timeout);
-    } on TimeoutException {
-      return null;
-    }
-  }
 
   void _setConnectionState(ConnectionState state) {
     if (_connectionState == state) {
@@ -3224,31 +3205,7 @@ class XmppService extends XmppBase
     return null;
   }
 
-  Future<void> _runPostNegotiationsSetup({
-    required bool resumed,
-    required bool shouldHandleFailedResumption,
-  }) async {
-    // Presence is the gating signal for live inbound delivery. Reassert it on
-    // every negotiated stream so resumed sessions cannot remain logically
-    // offline if the server lost visible presence state.
-    try {
-      final presenceManager = _connection.getManager<XmppPresenceManager>();
-      if (presenceManager == null) {
-        _xmppLogger.warning(
-          'Presence manager unavailable after stream negotiations.',
-        );
-      } else {
-        _xmppLogger.info('Sending initial presence after stream negotiations.');
-      }
-      await presenceManager?.sendInitialPresence();
-    } catch (error, stackTrace) {
-      _xmppLogger.warning(
-        'Failed to send initial presence.',
-        error,
-        stackTrace,
-      );
-    }
-
+  Future<void> _runPostNegotiationsSetup() async {
     try {
       if (_connection.carbonsEnabled != true) {
         _xmppLogger.info('Enabling carbons...');
@@ -3259,110 +3216,33 @@ class XmppService extends XmppBase
     } on Exception catch (error, stackTrace) {
       _xmppLogger.warning('Failed to enable carbons.', error, stackTrace);
     }
-
-    // Device publishing is now handled internally by OmemoManager.
-    if (shouldHandleFailedResumption) {
-      try {
-        final sm = _connection.getManager<XmppStreamManagementManager>();
-        await sm?.handleFailedResumption();
-      } on Exception catch (error, stackTrace) {
-        _xmppLogger.warning(
-          'Failed to handle failed stream resumption.',
-          error,
-          stackTrace,
-        );
-      }
-    }
-
-    try {
-      await _refreshHttpUploadSupport();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine(
-        'Failed to refresh HTTP upload support after login.',
-        error,
-        stackTrace,
-      );
-    }
-
-    try {
-      await _refreshPubSubSupport();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine(
-        'Failed to refresh PubSub support after login.',
-        error,
-        stackTrace,
-      );
-    }
-
-    if (!resumed) {
-      await _runPostNegotiationsSnapshotBootstrap();
-    }
-
-    try {
-      await syncGlobalMamCatchUp();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine(
-        'Post-negotiations MAM catch-up failed.',
-        error,
-        stackTrace,
-      );
-    }
   }
 
-  Future<void> _runPostNegotiationsSnapshotBootstrap() async {
-    await _runPostNegotiationsBootstrapStep(
-      label: 'MUC service discovery',
-      action: discoverMucServiceHost,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'MUC bookmark sync',
-      action: () async {
-        await syncMucBookmarksSnapshot();
-      },
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'conversation index sync',
-      action: () async {
-        await syncConversationIndexSnapshot();
-      },
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'draft sync',
-      action: syncDraftsSnapshot,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'message collection sync',
-      action: syncMessageCollectionsSnapshot,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'spam sync',
-      action: syncSpamSnapshot,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'email blocklist sync',
-      action: syncEmailBlocklistSnapshot,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'conversation avatar refresh',
-      action: refreshAvatarsForConversationIndex,
-    );
-    await _runPostNegotiationsBootstrapStep(
-      label: 'calendar MAM rehydration',
-      action: () async {
-        await rehydrateCalendarFromMam();
-      },
-    );
-  }
-
-  Future<void> _runPostNegotiationsBootstrapStep({
-    required String label,
-    required Future<void> Function() action,
-  }) async {
-    try {
-      await action();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine('Post-negotiations $label failed.', error, stackTrace);
-    }
+  Future<void> _refreshPostNegotiationsSupport() async {
+    await Future.wait([
+      () async {
+        try {
+          await _refreshHttpUploadSupport();
+        } on Exception catch (error, stackTrace) {
+          _xmppLogger.fine(
+            'Failed to refresh HTTP upload support after login.',
+            error,
+            stackTrace,
+          );
+        }
+      }(),
+      () async {
+        try {
+          await _refreshPubSubSupport();
+        } on Exception catch (error, stackTrace) {
+          _xmppLogger.fine(
+            'Failed to refresh PubSub support after login.',
+            error,
+            stackTrace,
+          );
+        }
+      }(),
+    ]);
   }
 
   void _updateHttpUploadSupport(HttpUploadSupport support) {
@@ -4308,11 +4188,20 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
       await ss.write(key: clientToServerCountKey, value: state.c2s);
       _log.fine('Saving s2c: ${state.s2c}...');
       await ss.write(key: serverToClientCountKey, value: state.s2c);
-      if (state.streamResumptionId case String resID) {
-        await ss.write(key: streamResumptionIDKey, value: resID);
+      final resumptionId = state.streamResumptionId;
+      if (resumptionId != null) {
+        await ss.write(key: streamResumptionIDKey, value: resumptionId);
+      } else {
+        await ss.delete(key: streamResumptionIDKey);
       }
-      if (state.streamResumptionLocation case String resLoc) {
-        await ss.write(key: streamResumptionLocationKey, value: resLoc);
+      final resumptionLocation = state.streamResumptionLocation;
+      if (resumptionLocation != null) {
+        await ss.write(
+          key: streamResumptionLocationKey,
+          value: resumptionLocation,
+        );
+      } else {
+        await ss.delete(key: streamResumptionLocationKey);
       }
     });
   }
@@ -4344,12 +4233,6 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
     return owner._dbOpReturning<XmppStateStore, bool>(
       (ss) async => ss.read(key: streamResumptionIDKey) != null,
     );
-  }
-
-  Future<void> handleFailedResumption() async {
-    _log.info('Stream resumption was not accepted; clearing SM state.');
-    await resetState();
-    await clearPersistedState();
   }
 
   // This is for delivery receipts in UI, not XEP-0198.

@@ -334,7 +334,7 @@ void main() {
     });
 
     test(
-      'When stream negotiations complete, sends initial presence.',
+      'When stream negotiations complete, does not manually send initial presence.',
       () async {
         final presenceManager = MockPresenceManager();
         when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
@@ -347,38 +347,36 @@ void main() {
         when(
           () => mockConnection.getManager<XmppPresenceManager>(),
         ).thenReturn(presenceManager);
-        when(
-          () => presenceManager.sendInitialPresence(),
-        ).thenAnswer((_) async {});
 
         eventStreamController.add(mox.StreamNegotiationsDoneEvent(false));
 
         await pumpEventQueue();
 
-        verify(() => presenceManager.sendInitialPresence()).called(1);
+        verifyNever(() => presenceManager.sendInitialPresence());
       },
     );
 
-    test('When stream negotiations resume, sends initial presence.', () async {
-      final presenceManager = MockPresenceManager();
-      when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
-      when(() => mockConnection.requestRoster()).thenAnswer((_) async => null);
-      when(
-        () => mockConnection.requestBlocklist(),
-      ).thenAnswer((_) async => null);
-      when(
-        () => mockConnection.getManager<XmppPresenceManager>(),
-      ).thenReturn(presenceManager);
-      when(
-        () => presenceManager.sendInitialPresence(),
-      ).thenAnswer((_) async {});
+    test(
+      'When stream negotiations resume, does not manually send initial presence.',
+      () async {
+        final presenceManager = MockPresenceManager();
+        when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
+        when(
+          () => mockConnection.requestRoster(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockConnection.requestBlocklist(),
+        ).thenAnswer((_) async => null);
+        when(
+          () => mockConnection.getManager<XmppPresenceManager>(),
+        ).thenReturn(presenceManager);
+        eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
 
-      eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
+        await pumpEventQueue();
 
-      await pumpEventQueue();
-
-      verify(() => presenceManager.sendInitialPresence()).called(1);
-    });
+        verifyNever(() => presenceManager.sendInitialPresence());
+      },
+    );
 
     test('When a resource is bound, stores the bound resource.', () async {
       when(() => mockConnection.carbonsEnabled).thenAnswer((_) => true);
@@ -1031,7 +1029,7 @@ void main() {
     });
 
     test(
-      'When enabling carbons throws on a fresh login, still sends presence and runs MAM catch-up.',
+      'When enabling carbons throws on a fresh login, still runs MAM catch-up.',
       () async {
         final mamManager = RecordingMamManager();
         final presenceManager = MockPresenceManager();
@@ -1043,9 +1041,6 @@ void main() {
         when(
           () => mockConnection.getManager<XmppPresenceManager>(),
         ).thenReturn(presenceManager);
-        when(
-          () => presenceManager.sendInitialPresence(),
-        ).thenAnswer((_) async {});
         when(
           () => mockConnection.getManager<mox.MAMManager>(),
         ).thenReturn(mamManager);
@@ -1060,7 +1055,7 @@ void main() {
 
         await pumpEventQueue(times: 20);
 
-        verify(() => presenceManager.sendInitialPresence()).called(1);
+        verifyNever(() => presenceManager.sendInitialPresence());
         expect(mamManager.queryCount, 1);
       },
     );

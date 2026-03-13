@@ -44,10 +44,9 @@ class EventManager<E> {
       if (!match(event)) continue;
       final handlers = List<Function>.from(entry.value, growable: false);
       try {
-        await Future.wait(
-          handlers.map((handler) async => await handler(event)),
-          eagerError: true,
-        );
+        for (final handler in handlers) {
+          await handler(event);
+        }
       } on EventHandlerAbortedException catch (_) {
         continue;
       }

@@ -46,6 +46,10 @@ const String _pinSyncFlushOperationName =
     'MessageService.flushPendingPinSyncOnNegotiations';
 const String _pinSyncEmailReconnectOperationName =
     'MessageService.syncEmailPinsOnNegotiations';
+const String _mamGlobalBootstrapOperationName =
+    'MessageService.bootstrapGlobalMamOnNegotiations';
+const String _mamCalendarBootstrapOperationName =
+    'MessageService.bootstrapCalendarMamOnNegotiations';
 const String _draftSyncPublishFailedLog = 'Failed to publish draft sync.';
 const String _draftSyncPublishAbortedLog = 'Draft sync publish aborted.';
 const String _draftSyncRetractFailedLog = 'Failed to retract draft sync.';
@@ -2456,13 +2460,13 @@ mixin MessageService
           _rememberStableKey(message.chatJid, stableKey);
         }
 
+        if (await _handleMessageStatusSync(event)) return;
         await _handleChatState(event, message.chatJid);
 
         if (await _handleCorrection(event, message.senderJid)) return;
         if (await _handleRetraction(event, message.senderJid)) return;
         if (await _handlePinMessageMutation(event)) return;
 
-        if (await _handleMessageStatusSync(event)) return;
         if (await _handleCalendarSync(event, metadata: metadata)) return;
         if (_isInternalSyncEnvelope(message.body)) {
           await _acknowledgeMessage(event);
@@ -2591,17 +2595,14 @@ mixin MessageService
         const bool isAcked = true;
         final chatJid = event.from.toBare().toString();
         await _dbOp<XmppDatabase>((db) async {
-          switch (event.type) {
-            case mox.ChatMarker.displayed:
-              await db.markMessageDisplayed(event.id, chatJid: chatJid);
-              await db.markMessageReceived(event.id, chatJid: chatJid);
-              await db.markMessageAcked(event.id, chatJid: chatJid);
-            case mox.ChatMarker.received:
-              await db.markMessageReceived(event.id, chatJid: chatJid);
-              await db.markMessageAcked(event.id, chatJid: chatJid);
-            case mox.ChatMarker.acknowledged:
-              await db.markMessageAcked(event.id, chatJid: chatJid);
-          }
+          await _applyOutboundMessageStatus(
+            db,
+            id: event.id,
+            chatJid: chatJid,
+            acked: isAcked,
+            received: isReceived,
+            displayed: isDisplayed,
+          );
         });
 
         await _broadcastMessageStatusSync(
@@ -2636,6 +2637,26 @@ mixin MessageService
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         _outboundPinMutationsByStanzaId.clear();
+        if (!event.resumed) {
+          fireAndForget(() async {
+            try {
+              await syncGlobalMamCatchUp();
+            } on XmppAbortedException {
+              _log.fine('Global MAM bootstrap aborted.');
+            } on Exception catch (error, stackTrace) {
+              _log.fine('Global MAM bootstrap failed.', error, stackTrace);
+            }
+          }, operationName: _mamGlobalBootstrapOperationName);
+          fireAndForget(() async {
+            try {
+              await rehydrateCalendarFromMam();
+            } on XmppAbortedException {
+              _log.fine('Calendar MAM bootstrap aborted.');
+            } on Exception catch (error, stackTrace) {
+              _log.fine('Calendar MAM bootstrap failed.', error, stackTrace);
+            }
+          }, operationName: _mamCalendarBootstrapOperationName);
+        }
         fireAndForget(() async {
           try {
             await _flushPendingPinSync();
@@ -2657,7 +2678,7 @@ mixin MessageService
       });
   }
 
-  Future<void> syncMessageArchiveOnLogin({
+  Future<void> syncMessageArchiveSnapshot({
     bool includeDirect = true,
     bool includeMuc = true,
   }) async {
@@ -2986,7 +3007,7 @@ mixin MessageService
     if (hasLeftRoom(bareRoom)) return false;
     final roomState = roomStateFor(bareRoom);
     if (roomState == null) return false;
-    if (roomState.myOccupantId == null) return false;
+    if (roomState.myOccupantJid == null) return false;
     if (!roomState.hasSelfPresence) return false;
     return true;
   }
@@ -3025,7 +3046,7 @@ mixin MessageService
   }) {
     final normalizedRoomJid = _roomKey(roomJid);
     final roomState = roomStateFor(normalizedRoomJid);
-    final occupantJid = roomState?.myOccupantId?.trim();
+    final occupantJid = roomState?.myOccupantJid?.trim();
     final occupant = occupantJid == null || occupantJid.isEmpty
         ? null
         : roomState?.occupants[occupantJid];
@@ -3280,15 +3301,15 @@ mixin MessageService
           MucStatusCode.selfPresence.code,
         ) ==
         true;
-    final myOccupantId = roomState?.myOccupantId;
-    final myOccupantIdPresent = myOccupantId?.trim().isNotEmpty == true;
-    final expectedOccupantIdMatches =
+    final myOccupantJid = roomState?.myOccupantJid;
+    final myOccupantJidPresent = myOccupantJid?.trim().isNotEmpty == true;
+    final expectedOccupantJidMatches =
         managerNickPresent &&
-        myOccupantIdPresent &&
-        myOccupantId == '$normalizedRoom/$managerNick';
+        myOccupantJidPresent &&
+        myOccupantJid == '$normalizedRoom/$managerNick';
     final selfOccupantPresent =
-        myOccupantIdPresent &&
-        roomState?.occupants[myOccupantId]?.isPresent == true;
+        myOccupantJidPresent &&
+        roomState?.occupants[myOccupantJid]?.isPresent == true;
     final hasPresenceForSend = await _hasMucPresenceForSend(
       roomJid: normalizedRoom,
     );
@@ -3315,8 +3336,8 @@ mixin MessageService
       'roomState=${roomState != null} '
       'selfPresence=$hasSelfPresence '
       'selfStatus=$hasSelfStatus '
-      'occupantId=$myOccupantIdPresent '
-      'occupantIdMatch=$expectedOccupantIdMatches '
+      'occupantJid=$myOccupantJidPresent '
+      'occupantJidMatch=$expectedOccupantJidMatches '
       'occupantPresent=$selfOccupantPresent '
       'presenceForSend=$hasPresenceForSend '
       'occupants=$occupantCount '
@@ -3745,11 +3766,6 @@ mixin MessageService
         }
         throw XmppMessageException();
       }
-      if (shouldStore) {
-        await _dbOp<XmppDatabase>(
-          (db) => db.markMessageAcked(message.stanzaID),
-        );
-      }
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to send message ${message.stanzaID}',
@@ -4077,7 +4093,6 @@ mixin MessageService
         }
         throw XmppMessageException();
       }
-      await _dbOp<XmppDatabase>((db) => db.markMessageAcked(message.stanzaID));
     } catch (error, stackTrace) {
       _log.warning(
         'Failed to send attachment message ${message.stanzaID}',
@@ -4819,22 +4834,9 @@ mixin MessageService
     await _connection.sendChatMarker(
       to: to,
       stanzaID: normalizedStanzaId,
-      marker: mox.ChatMarker.received,
-      messageType: messageType,
-    );
-
-    await _connection.sendChatMarker(
-      to: to,
-      stanzaID: normalizedStanzaId,
       marker: mox.ChatMarker.displayed,
       messageType: messageType,
     );
-
-    await _dbOp<XmppDatabase>((db) async {
-      await db.markMessageDisplayed(normalizedStanzaId, chatJid: to);
-      await db.markMessageReceived(normalizedStanzaId, chatJid: to);
-      await db.markMessageAcked(normalizedStanzaId, chatJid: to);
-    });
   }
 
   Future<MamPageResult> fetchLatestFromArchive({
@@ -5928,17 +5930,56 @@ mixin MessageService
 
     await _dbOp<XmppDatabase>((db) async {
       final chatJid = envelope.chatJid?.trim();
-      if (envelope.displayed) {
-        await db.markMessageDisplayed(envelope.id, chatJid: chatJid);
-      }
-      if (envelope.received) {
-        await db.markMessageReceived(envelope.id, chatJid: chatJid);
-      }
-      if (envelope.acked) {
-        await db.markMessageAcked(envelope.id, chatJid: chatJid);
-      }
+      await _applyOutboundMessageStatus(
+        db,
+        id: envelope.id,
+        chatJid: chatJid,
+        acked: envelope.acked,
+        received: envelope.received,
+        displayed: envelope.displayed,
+      );
     });
     return true;
+  }
+
+  Future<void> _applyOutboundMessageStatus(
+    XmppDatabase db, {
+    required String id,
+    required String? chatJid,
+    required bool acked,
+    required bool received,
+    required bool displayed,
+  }) async {
+    final normalizedId = id.trim();
+    final normalizedChatJid = chatJid?.trim();
+    final normalizedDisplayed = displayed;
+    final normalizedReceived = normalizedDisplayed || received;
+    final normalizedAcked = normalizedReceived || acked;
+    if (normalizedId.isEmpty ||
+        !normalizedAcked && !normalizedReceived && !normalizedDisplayed) {
+      return;
+    }
+    final accountJid = myJid?.trim();
+    if (normalizedDisplayed &&
+        accountJid != null &&
+        accountJid.isNotEmpty &&
+        normalizedChatJid != null &&
+        normalizedChatJid.isNotEmpty) {
+      await db.markOutgoingMessagesDisplayedThrough(
+        messageId: normalizedId,
+        chatJid: normalizedChatJid,
+        senderJid: accountJid,
+      );
+    }
+    if (normalizedDisplayed) {
+      await db.markMessageDisplayed(normalizedId, chatJid: normalizedChatJid);
+    }
+    if (normalizedReceived) {
+      await db.markMessageReceived(normalizedId, chatJid: normalizedChatJid);
+    }
+    if (normalizedAcked) {
+      await db.markMessageAcked(normalizedId, chatJid: normalizedChatJid);
+    }
   }
 
   Future<void> _broadcastMessageStatusSync({
@@ -7036,11 +7077,11 @@ mixin MessageService
     }
     final roomJid = event.from.toBare().toString();
     final roomState = roomStateFor(roomJid);
-    final myOccupantId = roomState?.myOccupantId?.trim();
-    if (myOccupantId == null || myOccupantId.isEmpty) {
+    final myOccupantJid = roomState?.myOccupantJid?.trim();
+    if (myOccupantJid == null || myOccupantJid.isEmpty) {
       return false;
     }
-    if (event.from.toString() == myOccupantId) {
+    if (event.from.toString() == myOccupantJid) {
       return true;
     }
     if (roomState == null) {
@@ -7909,11 +7950,11 @@ mixin MessageService
     }
     final roomState = roomStateFor(normalizedChatJid);
     if (roomState != null) {
-      final myOccupantId = roomState.myOccupantId?.trim();
+      final myOccupantJid = roomState.myOccupantJid?.trim();
       if (accountJid != null &&
-          myOccupantId != null &&
-          myOccupantId.isNotEmpty &&
-          senderJid == myOccupantId) {
+          myOccupantJid != null &&
+          myOccupantJid.isNotEmpty &&
+          senderJid == myOccupantJid) {
         return (senderJid: accountJid, identityVerified: true);
       }
       Occupant? occupant = roomState.occupants[senderJid];

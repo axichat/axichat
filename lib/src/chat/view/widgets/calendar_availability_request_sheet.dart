@@ -18,7 +18,6 @@ import 'package:uuid/uuid.dart';
 const double _availabilityRequestSheetSpacing = 16.0;
 const double _availabilityRequestSheetGap = 8.0;
 const double _availabilityRequestSheetHeaderIconSize = 18.0;
-const double _availabilityRequestSheetProgressStrokeWidth = 2.0;
 const double _availabilityRequestDescriptionMinHeight = 120.0;
 const double _availabilityDecisionSpacing = 12.0;
 const double _availabilityDecisionTextSpacing = 6.0;
@@ -482,35 +481,14 @@ class _AvailabilitySheetActionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const spinner = SizedBox(
-      width: _availabilityRequestSheetHeaderIconSize,
-      height: _availabilityRequestSheetHeaderIconSize,
-      child: CircularProgressIndicator(
-        strokeWidth: _availabilityRequestSheetProgressStrokeWidth,
-      ),
-    );
     return Align(
       alignment: Alignment.centerRight,
-      child: ShadButton(
-        size: ShadButtonSize.sm,
-        onPressed: isBusy ? null : onPressed,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ButtonSpinnerSlot(
-              isVisible: isBusy,
-              spinner: spinner,
-              slotSize: _availabilityRequestSheetHeaderIconSize,
-              gap: _availabilityRequestSheetGap,
-              duration: baseAnimationDuration,
-            ),
-            if (!isBusy) ...[
-              Icon(iconData, size: _availabilityRequestSheetHeaderIconSize),
-              const SizedBox(width: _availabilityRequestSheetGap),
-            ],
-            Text(label),
-          ],
-        ),
+      child: AxiButton.primary(
+        size: AxiButtonSize.sm,
+        loading: isBusy,
+        onPressed: onPressed,
+        leading: Icon(iconData, size: _availabilityRequestSheetHeaderIconSize),
+        child: Text(label),
       ),
     );
   }

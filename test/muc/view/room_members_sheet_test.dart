@@ -26,7 +26,7 @@ void main() {
         child: RoomMembersSheet(
           roomState: RoomState(
             roomJid: roomJid,
-            myOccupantId: selfOccupantId,
+            myOccupantJid: selfOccupantId,
             occupants: <String, Occupant>{
               selfOccupantId: Occupant(
                 occupantId: selfOccupantId,
@@ -99,7 +99,7 @@ void main() {
           child: RoomMembersSheet(
             roomState: RoomState(
               roomJid: roomJid,
-              myOccupantId: selfOccupantId,
+              myOccupantJid: selfOccupantId,
               occupants: <String, Occupant>{
                 selfOccupantId: Occupant(
                   occupantId: selfOccupantId,
@@ -203,7 +203,7 @@ void main() {
         child: RoomMembersSheet(
           roomState: RoomState(
             roomJid: roomJid,
-            myOccupantId: selfOccupantId,
+            myOccupantJid: selfOccupantId,
             occupants: <String, Occupant>{
               selfOccupantId: Occupant(
                 occupantId: selfOccupantId,
@@ -275,7 +275,7 @@ void main() {
         child: RoomMembersSheet(
           roomState: RoomState(
             roomJid: roomJid,
-            myOccupantId: selfOccupantId,
+            myOccupantJid: selfOccupantId,
             occupants: <String, Occupant>{
               selfOccupantId: Occupant(
                 occupantId: selfOccupantId,
@@ -352,7 +352,7 @@ void main() {
         child: RoomMembersSheet(
           roomState: RoomState(
             roomJid: roomJid,
-            myOccupantId: selfOccupantId,
+            myOccupantJid: selfOccupantId,
             occupants: <String, Occupant>{
               selfOccupantId: Occupant(
                 occupantId: selfOccupantId,

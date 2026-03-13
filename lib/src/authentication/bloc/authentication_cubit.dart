@@ -2238,9 +2238,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       _xmppService.scheduleSelfAvatarBootstrap();
     }
     unawaited(_triggerEmailReconnect());
-    if (_xmppService.connectionState == ConnectionState.connected) {
-      unawaited(_homeRefreshSyncService.syncOnLogin());
-    }
   }
 
   Future<void> syncSignupWelcomeMessage({

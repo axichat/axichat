@@ -18,7 +18,6 @@ class AccessibilityFindActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
     final shortcut = findActionShortcut(EnvScope.of(context).platform);
     final shortcutText = shortcutLabel(context, shortcut);
     final tooltip = context.l10n.accessibilityActionsShortcutTooltip(
@@ -27,30 +26,24 @@ class AccessibilityFindActionButton extends StatelessWidget {
     if (compact) {
       return AxiTooltip(
         builder: (_) => Text(tooltip),
-        child: ShadButton.ghost(
+        child: AxiIconButton.ghost(
+          iconData: LucideIcons.lifeBuoy,
+          tooltip: tooltip,
           onPressed: () => context.read<AccessibilityActionBloc>().add(
             const AccessibilityMenuOpened(),
-          ),
-          padding: EdgeInsets.all(spacing.s),
-          child: Icon(
-            LucideIcons.lifeBuoy,
-            size: context.sizing.iconButtonIconSize,
           ),
         ),
       );
     }
-    return ShadButton.outline(
+    return AxiButton.outline(
       onPressed: () => context.read<AccessibilityActionBloc>().add(
         const AccessibilityMenuOpened(),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(LucideIcons.lifeBuoy, size: context.sizing.iconButtonIconSize),
-          SizedBox(width: spacing.s),
-          ShortcutHint(shortcut: shortcut, dense: true),
-        ],
+      leading: Icon(
+        LucideIcons.lifeBuoy,
+        size: context.sizing.iconButtonIconSize,
       ),
+      child: ShortcutHint(shortcut: shortcut, dense: true),
     );
   }
 }

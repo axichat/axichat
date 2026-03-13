@@ -8,7 +8,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 class BlocklistTile extends StatelessWidget {
   const BlocklistTile({super.key, required this.entry, this.avatarPathsByJid});
@@ -32,13 +31,18 @@ class BlocklistTile extends StatelessWidget {
           leading: avatar,
           title: entry.address,
           actions: [
-            ShadButton.ghost(
+            AxiButton.ghost(
+              size: AxiButtonSize.sm,
               onPressed: disabled
                   ? null
                   : () => context.read<BlocklistCubit>().unblock(entry: entry),
-              foregroundColor: context.colorScheme.destructive,
-              child: Text(context.l10n.blocklistUnblock),
-            ).withTapBounce(enabled: !disabled),
+              child: Text(
+                context.l10n.blocklistUnblock,
+                style: context.textTheme.label.copyWith(
+                  color: context.colorScheme.destructive,
+                ),
+              ),
+            ),
           ],
         );
       },

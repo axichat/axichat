@@ -7,13 +7,11 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/avatar/avatar_decode_safety.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 enum AxiAvatarShape { circle, squircle }
 
@@ -52,7 +50,6 @@ class AxiAvatar extends StatefulWidget {
 }
 
 class _AxiAvatarState extends State<AxiAvatar> {
-  late final ShadPopoverController popoverController;
   Uint8List? _resolvedAvatarBytes;
   String? _resolvedPath;
   String? _loadingPath;
@@ -95,14 +92,7 @@ class _AxiAvatarState extends State<AxiAvatar> {
   @override
   void initState() {
     super.initState();
-    popoverController = ShadPopoverController();
     _refreshAvatarBytes();
-  }
-
-  @override
-  void dispose() {
-    popoverController.dispose();
-    super.dispose();
   }
 
   @override
@@ -356,52 +346,6 @@ class _AxiAvatarState extends State<AxiAvatar> {
         ],
       ),
     );
-    if (widget.active && widget.presence != null) {
-      final locate = context.read;
-      child = AxiPopover(
-        controller: popoverController,
-        popover: (context) {
-          return BlocProvider.value(
-            value: locate<ProfileCubit>(),
-            child: IntrinsicWidth(
-              child: Material(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final value
-                        in Presence.values.toList()
-                          ..remove(Presence.unknown)
-                          ..remove(Presence.unavailable))
-                      ListTile(
-                        title: Text(_presenceLabel(context, value)),
-                        leading: PresenceCircle(presence: value),
-                        selected: widget.presence?.name == value.name,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8.0),
-                        ),
-                        selectedColor: context.colorScheme.accentForeground,
-                        selectedTileColor: context.colorScheme.accent,
-                        onTap: () {
-                          context.read<ProfileCubit>().updatePresence(
-                            presence: value,
-                            status: widget.status,
-                          );
-                          popoverController.toggle();
-                        },
-                      ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-        child: ShadGestureDetector(
-          cursor: SystemMouseCursors.click,
-          onTap: popoverController.toggle,
-          child: child,
-        ).withTapBounce(),
-      );
-    }
     final sizedChild = SizedBox.square(dimension: widget.size, child: child);
     final statusText = widget.status?.trim();
     final presenceLabel = widget.presence == null

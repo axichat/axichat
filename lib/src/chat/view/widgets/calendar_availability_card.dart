@@ -5,10 +5,10 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/chat/view/widgets/chat_inline_details.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 
 const double _availabilityCardRadius = 18.0;
 const double _availabilityAccentWidth = 4.0;
@@ -238,14 +238,14 @@ class _AvailabilityRequestBody extends StatelessWidget {
               runSpacing: _availabilityActionSpacing,
               children: [
                 if (onAccept != null)
-                  ShadButton(
-                    size: ShadButtonSize.sm,
+                  AxiButton.primary(
+                    size: AxiButtonSize.sm,
                     onPressed: onAccept,
                     child: const Text(_availabilityAcceptButtonLabel),
                   ),
                 if (onDecline != null)
-                  ShadButton.outline(
-                    size: ShadButtonSize.sm,
+                  AxiButton.outline(
+                    size: AxiButtonSize.sm,
                     onPressed: onDecline,
                     child: const Text(_availabilityDeclineButtonLabel),
                   ),

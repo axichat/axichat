@@ -53,14 +53,29 @@ class BlockButtonInline extends StatelessWidget {
                   callback!();
                 }
               };
-        return ShadButton.ghost(
-          width: double.infinity,
-          mainAxisAlignment: mainAxisAlignment,
+        return AxiButton.ghost(
+          widthBehavior: AxiButtonWidth.expand,
           onPressed: onPressed,
-          foregroundColor: context.colorScheme.destructive,
-          leading: showIcon ? const Icon(LucideIcons.userX) : null,
-          child: Text(context.l10n.blocklistBlock),
-        ).withTapBounce(enabled: onPressed != null);
+          child: Expanded(
+            child: Row(
+              mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.center,
+              children: [
+                if (showIcon)
+                  Icon(
+                    LucideIcons.userX,
+                    color: context.colorScheme.destructive,
+                  ),
+                if (showIcon) SizedBox(width: context.spacing.s),
+                Text(
+                  context.l10n.blocklistBlock,
+                  style: context.textTheme.small.copyWith(
+                    color: context.colorScheme.destructive,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
       },
     );
   }
@@ -83,14 +98,26 @@ class _EmailBlockButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final String? address = emailAddress?.trim();
     if (address == null || address.isEmpty) {
-      return ShadButton.ghost(
-        width: double.infinity,
-        mainAxisAlignment: mainAxisAlignment,
+      return AxiButton.ghost(
+        widthBehavior: AxiButtonWidth.expand,
         onPressed: null,
-        foregroundColor: context.colorScheme.destructive,
-        leading: showIcon ? const Icon(LucideIcons.userX) : null,
-        child: Text(context.l10n.blocklistBlock),
-      ).withTapBounce(enabled: false);
+        child: Expanded(
+          child: Row(
+            mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.center,
+            children: [
+              if (showIcon)
+                Icon(LucideIcons.userX, color: context.colorScheme.destructive),
+              if (showIcon) SizedBox(width: context.spacing.s),
+              Text(
+                context.l10n.blocklistBlock,
+                style: context.textTheme.small.copyWith(
+                  color: context.colorScheme.destructive,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) =>
@@ -106,14 +133,29 @@ class _EmailBlockButton extends StatelessWidget {
                 );
                 callback?.call();
               };
-        return ShadButton.ghost(
-          width: double.infinity,
-          mainAxisAlignment: mainAxisAlignment,
+        return AxiButton.ghost(
+          widthBehavior: AxiButtonWidth.expand,
           onPressed: onPressed,
-          foregroundColor: context.colorScheme.destructive,
-          leading: showIcon ? const Icon(LucideIcons.userX) : null,
-          child: Text(context.l10n.blocklistBlock),
-        ).withTapBounce(enabled: onPressed != null);
+          child: Expanded(
+            child: Row(
+              mainAxisAlignment: mainAxisAlignment ?? MainAxisAlignment.center,
+              children: [
+                if (showIcon)
+                  Icon(
+                    LucideIcons.userX,
+                    color: context.colorScheme.destructive,
+                  ),
+                if (showIcon) SizedBox(width: context.spacing.s),
+                Text(
+                  context.l10n.blocklistBlock,
+                  style: context.textTheme.small.copyWith(
+                    color: context.colorScheme.destructive,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
       },
     );
   }

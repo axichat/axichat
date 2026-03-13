@@ -722,7 +722,7 @@ class DemoChats {
         roomState: RoomState(
           roomJid: groupJid,
           occupants: roomOccupants,
-          myOccupantId: '$groupJid/Ben',
+          myOccupantJid: '$groupJid/Ben',
         ),
       ),
     ];

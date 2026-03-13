@@ -68,8 +68,8 @@ class VerificationSelector extends StatelessWidget {
               DisplayFingerprint(fingerprint: fingerprint.fingerprint),
               const SizedBox.square(dimension: 8),
               if (self)
-                ShadButton.secondary(
-                  enabled: !state.regenerating,
+                AxiButton.secondary(
+                  loading: state.regenerating,
                   child: Text(
                     l10n.verificationRegenerateDevice,
                     style: TextStyle(color: context.colorScheme.destructive),
@@ -86,7 +86,7 @@ class VerificationSelector extends StatelessWidget {
                       context.read<ProfileCubit>().regenerateDevice();
                     }
                   },
-                ).withTapBounce(enabled: !state.regenerating)
+                )
               else ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

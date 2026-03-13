@@ -329,7 +329,7 @@ void main() {
               isPresent: true,
             ),
           },
-          myOccupantId: _roomJidWithSelfNick,
+          myOccupantJid: _roomJidWithSelfNick,
           selfPresenceStatusCodes: {MucStatusCode.selfPresence.code},
           postJoinRefreshPending: true,
         );
@@ -1022,7 +1022,7 @@ void main() {
 
         final room = xmppService.roomStateFor(_roomJid);
         expect(room?.hasSelfPresence, isTrue);
-        expect(room?.myOccupantId, equals(_roomJidWithSelfNick));
+        expect(room?.myOccupantJid, equals(_roomJidWithSelfNick));
         expect(room?.myAffiliation, equals(OccupantAffiliation.owner));
         expect(room?.myRole, equals(OccupantRole.moderator));
         expect(
@@ -1168,52 +1168,49 @@ void main() {
       },
     );
 
-    test(
-      'JOIN-023 [HP] resumed streams invalidate stale joined room state before any next send',
-      () async {
-        final managerRoomState = mox.RoomState(
-          roomJid: mox.JID.fromString(_roomJidBare),
+    test('JOIN-023 [HP] resumed streams preserve joined room state', () async {
+      final managerRoomState = mox.RoomState(
+        roomJid: mox.JID.fromString(_roomJidBare),
+        nick: 'me',
+        joined: true,
+      );
+      when(
+        () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
+      ).thenAnswer((_) async => managerRoomState);
+
+      eventStreamController.add(
+        MucSelfPresenceEvent(
+          roomJid: _roomJid,
+          occupantJid: _roomJidWithSelfNick,
           nick: 'me',
-          joined: true,
-        );
-        when(
-          () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
-        ).thenAnswer((_) async => managerRoomState);
+          affiliation: OccupantAffiliation.owner.xmlValue,
+          role: OccupantRole.moderator.xmlValue,
+          isAvailable: true,
+          isError: false,
+          isNickChange: false,
+          statusCodes: {MucStatusCode.selfPresence.code},
+        ),
+      );
+      await pumpEventQueue();
 
-        eventStreamController.add(
-          MucSelfPresenceEvent(
-            roomJid: _roomJid,
-            occupantJid: _roomJidWithSelfNick,
-            nick: 'me',
-            affiliation: OccupantAffiliation.owner.xmlValue,
-            role: OccupantRole.moderator.xmlValue,
-            isAvailable: true,
-            isError: false,
-            isNickChange: false,
-            statusCodes: {MucStatusCode.selfPresence.code},
-          ),
-        );
-        await pumpEventQueue();
+      expect(xmppService.roomStateFor(_roomJid)?.hasSelfPresence, isTrue);
+      expect(
+        xmppService
+            .roomStateFor(_roomJid)
+            ?.occupants[_roomJidWithSelfNick]
+            ?.isPresent,
+        isTrue,
+      );
+      expect(managerRoomState.joined, isTrue);
 
-        expect(xmppService.roomStateFor(_roomJid)?.hasSelfPresence, isTrue);
-        expect(
-          xmppService
-              .roomStateFor(_roomJid)
-              ?.occupants[_roomJidWithSelfNick]
-              ?.isPresent,
-          isTrue,
-        );
-        expect(managerRoomState.joined, isTrue);
+      eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
+      await pumpEventQueue();
 
-        eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
-        await pumpEventQueue();
-
-        final room = xmppService.roomStateFor(_roomJid);
-        expect(room?.hasSelfPresence, isFalse);
-        expect(room?.occupants[_roomJidWithSelfNick]?.isPresent, isFalse);
-        expect(managerRoomState.joined, isFalse);
-      },
-    );
+      final room = xmppService.roomStateFor(_roomJid);
+      expect(room?.hasSelfPresence, isTrue);
+      expect(room?.occupants[_roomJidWithSelfNick]?.isPresent, isTrue);
+      expect(managerRoomState.joined, isTrue);
+    });
 
     test('JOIN-024 [HP] joinRoom emits room join operation events', () async {
       when(
@@ -1750,7 +1747,7 @@ void main() {
         final subscription = xmppService.xmppOperationStream.listen(events.add);
         addTearDown(subscription.cancel);
 
-        final loginSyncFuture = xmppService.syncMessageArchiveOnLogin();
+        final loginSyncFuture = xmppService.syncMessageArchiveSnapshot();
         await pumpEventQueue();
 
         final joinFuture = xmppService.joinRoom(
@@ -2379,6 +2376,62 @@ void main() {
       },
     );
 
+    test(
+      'PRES-001A [HP] jid-less updates do not reuse stale real jids from offline rows',
+      () async {
+        const occupantId = '$_roomJidBare/Coffee';
+        const staleRealJid = 'alice@axi.im';
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: occupantId,
+          nick: 'Coffee',
+          realJid: staleRealJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: false,
+        );
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: occupantId,
+          nick: 'Coffee',
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room?.occupants[occupantId]?.realJid, isNull);
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: occupantId,
+          nick: 'Coffee',
+          realJid: _inviteeJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: true,
+        );
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: occupantId,
+          nick: 'Coffee',
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.moderator,
+          isPresent: true,
+        );
+
+        final updatedRoom = xmppService.roomStateFor(_roomJid);
+        expect(updatedRoom?.occupants[occupantId]?.realJid, _inviteeJid);
+        expect(
+          updatedRoom?.occupants[occupantId]?.role,
+          OccupantRole.moderator,
+        );
+      },
+    );
+
     test('PRES-002 [HP] removeOccupant deletes a roster entry', () async {
       xmppService.updateOccupantFromPresence(
         roomJid: _roomJid,
@@ -2395,6 +2448,27 @@ void main() {
       final room = xmppService.roomStateFor(_roomJid);
       expect(room?.occupants.containsKey(_roomJidWithNick), isFalse);
     });
+
+    test(
+      'PRES-002A [HP] removeOccupant clears myOccupantJid for self rows',
+      () async {
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+          nick: _roomNick,
+          realJid: _accountBareJid,
+        );
+
+        xmppService.removeOccupant(
+          roomJid: _roomJid,
+          occupantId: _roomJidWithSelfNick,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        expect(room?.myOccupantJid, isNull);
+        expect(room?.occupants.containsKey(_roomJidWithSelfNick), isFalse);
+      },
+    );
 
     test('PRES-003 [EC] removing unknown occupants is safe', () async {
       xmppService.removeOccupant(
@@ -2531,14 +2605,14 @@ void main() {
         );
 
         expect(offlineMember, isNotNull);
-        expect(offlineMember?.nick, equals('friend'));
+        expect(offlineMember?.nick, equals(_inviteeJid));
         expect(offlineMember?.affiliation, OccupantAffiliation.member);
         expect(offlineMember?.isPresent, isFalse);
       },
     );
 
     test(
-      'REG-009A [HP] fetchRoomAffiliations hydrates unresolved live occupants from jid-only entries',
+      'REG-009A [HP] fetchRoomAffiliations keeps jid-only entries separate from live occupants',
       () async {
         const occupantId = '$_roomJidBare/friend';
         xmppService.updateOccupantFromPresence(
@@ -2576,28 +2650,28 @@ void main() {
 
         final room = xmppService.roomStateFor(_roomJid);
         final liveOccupant = room?.occupants[occupantId];
-        final memberMatches =
-            room?.occupants.values
-                .where((occupant) => occupant.realJid == _inviteeJid)
-                .toList(growable: false) ??
-            const <Occupant>[];
+        final offlineMember = room?.occupants.values.singleWhere(
+          (occupant) => occupant.realJid == _inviteeJid,
+        );
 
         expect(liveOccupant, isNotNull);
-        expect(liveOccupant?.realJid, _inviteeJid);
-        expect(liveOccupant?.affiliation, OccupantAffiliation.member);
-        expect(memberMatches, hasLength(1));
-        expect(memberMatches.single.occupantId, occupantId);
+        expect(liveOccupant?.realJid, isNull);
+        expect(liveOccupant?.affiliation, OccupantAffiliation.none);
+        expect(offlineMember, isNotNull);
+        expect(offlineMember?.occupantId, isNot(occupantId));
+        expect(offlineMember?.affiliation, OccupantAffiliation.member);
+        expect(offlineMember?.isPresent, isFalse);
       },
     );
 
     test(
-      'REG-010 [HP] fetchRoomAffiliations does not merge jid entries into same-nick live occupants',
+      'REG-009B [HP] presence hydrates live occupants and absorbs matching synthetic affiliation rows',
       () async {
-        const opaqueOccupantId = 'occupant-id-123';
+        const occupantId = '$_roomJidBare/Coffee';
         xmppService.updateOccupantFromPresence(
           roomJid: _roomJid,
-          occupantId: opaqueOccupantId,
-          nick: _roomNick,
+          occupantId: occupantId,
+          nick: 'Coffee',
           affiliation: OccupantAffiliation.none,
           role: OccupantRole.participant,
           isPresent: _presenceAvailable,
@@ -2611,7 +2685,72 @@ void main() {
               tag: _itemTag,
               attributes: {
                 _jidAttr: _inviteeJid,
-                _nickAttr: _roomNickTrimmed,
+                _affiliationAttr: OccupantAffiliation.member.xmlValue,
+              },
+            ),
+          ],
+        );
+        final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
+
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
+
+        await xmppService.fetchRoomAffiliations(
+          roomJid: _roomJid,
+          affiliation: OccupantAffiliation.member,
+        );
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: occupantId,
+          nick: 'Coffee',
+          realJid: _inviteeJid,
+          affiliation: OccupantAffiliation.member,
+          role: OccupantRole.participant,
+          isPresent: _presenceAvailable,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        final matchingOccupants =
+            room?.occupants.values
+                .where((occupant) => occupant.realJid == _inviteeJid)
+                .toList(growable: false) ??
+            const <Occupant>[];
+
+        expect(matchingOccupants, hasLength(1));
+        expect(matchingOccupants.single.occupantId, occupantId);
+        expect(
+          matchingOccupants.single.affiliation,
+          OccupantAffiliation.member,
+        );
+        expect(matchingOccupants.single.isPresent, isTrue);
+      },
+    );
+
+    test(
+      'REG-010 [HP] fetchRoomAffiliations merges jid-and-nick entries into matching live occupants',
+      () async {
+        const customRoomNick = 'Coffee';
+        const occupantId = '$_roomJidBare/Coffee';
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: occupantId,
+          nick: customRoomNick,
+          affiliation: OccupantAffiliation.none,
+          role: OccupantRole.participant,
+          isPresent: _presenceAvailable,
+        );
+
+        final query = mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: [
+            mox.XMLNode(
+              tag: _itemTag,
+              attributes: {
+                _jidAttr: _inviteeJid,
+                _nickAttr: customRoomNick,
                 _affiliationAttr: OccupantAffiliation.member.xmlValue,
               },
             ),
@@ -2629,18 +2768,107 @@ void main() {
         );
 
         final room = xmppService.roomStateFor(_roomJid);
-        final liveOccupant = room?.occupants[opaqueOccupantId];
-        final offlineMember = room?.occupants.values.singleWhere(
-          (occupant) => occupant.realJid == _inviteeJid,
-        );
+        final liveOccupant = room?.occupants[occupantId];
+        final memberMatches =
+            room?.occupants.values
+                .where((occupant) => occupant.realJid == _inviteeJid)
+                .toList(growable: false) ??
+            const <Occupant>[];
 
         expect(liveOccupant, isNotNull);
-        expect(liveOccupant?.affiliation, OccupantAffiliation.none);
-        expect(liveOccupant?.realJid, isNull);
-        expect(offlineMember, isNotNull);
-        expect(offlineMember?.occupantId, isNot(opaqueOccupantId));
-        expect(offlineMember?.affiliation, OccupantAffiliation.member);
-        expect(offlineMember?.isPresent, isFalse);
+        expect(liveOccupant?.affiliation, OccupantAffiliation.member);
+        expect(liveOccupant?.realJid, _inviteeJid);
+        expect(memberMatches, hasLength(1));
+        expect(memberMatches.single.occupantId, occupantId);
+      },
+    );
+
+    test(
+      'REG-010A [HP] fetchRoomAffiliations does not reuse synthetic same-nick rows for a different jid',
+      () async {
+        const customRoomNick = 'Coffee';
+        const liveOccupantId = '$_roomJidBare/Coffee';
+        const staleRealJid = 'alice@axi.im';
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: '$_roomJidBare/bootstrap',
+          nick: 'bootstrap',
+          isPresent: _presenceAvailable,
+        );
+        final staleQuery = mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: [
+            mox.XMLNode(
+              tag: _itemTag,
+              attributes: {
+                _jidAttr: staleRealJid,
+                _nickAttr: customRoomNick,
+                _affiliationAttr: OccupantAffiliation.member.xmlValue,
+              },
+            ),
+          ],
+        );
+        when(() => mockConnection.sendStanza(any())).thenAnswer(
+          (_) async =>
+              mox.Stanza.iq(type: _iqTypeResult, children: [staleQuery]),
+        );
+
+        await xmppService.fetchRoomAffiliations(
+          roomJid: _roomJid,
+          affiliation: OccupantAffiliation.member,
+        );
+
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: liveOccupantId,
+          nick: customRoomNick,
+          affiliation: OccupantAffiliation.none,
+          role: OccupantRole.participant,
+          isPresent: _presenceAvailable,
+        );
+
+        final query = mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: [
+            mox.XMLNode(
+              tag: _itemTag,
+              attributes: {
+                _jidAttr: _inviteeJid,
+                _nickAttr: customRoomNick,
+                _affiliationAttr: OccupantAffiliation.member.xmlValue,
+              },
+            ),
+          ],
+        );
+        final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
+
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
+
+        await xmppService.fetchRoomAffiliations(
+          roomJid: _roomJid,
+          affiliation: OccupantAffiliation.member,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        final liveOccupant = room?.occupants[liveOccupantId];
+        final staleOccupant = room?.occupants.values.where(
+          (occupant) => occupant.realJid == staleRealJid,
+        );
+        final inviteeMatches =
+            room?.occupants.values
+                .where((occupant) => occupant.realJid == _inviteeJid)
+                .toList(growable: false) ??
+            const <Occupant>[];
+
+        expect(liveOccupant, isNotNull);
+        expect(liveOccupant?.realJid, _inviteeJid);
+        expect(staleOccupant, isEmpty);
+        expect(inviteeMatches, hasLength(1));
+        expect(inviteeMatches.single.occupantId, liveOccupantId);
       },
     );
 
@@ -2973,7 +3201,7 @@ void main() {
         expect(joinBootstrapManager.passwordForRoom(_roomJid), isNull);
         final room = xmppService.roomStateFor(_roomJid);
         expect(room?.occupants, isEmpty);
-        expect(room?.myOccupantId, isNull);
+        expect(room?.myOccupantJid, isNull);
       },
     );
 

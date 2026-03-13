@@ -2189,7 +2189,10 @@ void main() {
         () => emailService.markNoticedChat(any()),
       ).thenAnswer((_) async => true);
       when(
-        () => emailService.markSeenMessages(any()),
+        () => emailService.markSeenMessages(
+          any(),
+          sendReadReceipts: any(named: 'sendReadReceipts'),
+        ),
       ).thenAnswer((_) async => true);
       when(
         () => emailService.messageStreamForChat(
@@ -2229,7 +2232,9 @@ void main() {
       await _pumpBloc();
 
       verify(() => emailService.markNoticedChat(any())).called(1);
-      verify(() => emailService.markSeenMessages(any())).called(1);
+      verify(
+        () => emailService.markSeenMessages(any(), sendReadReceipts: true),
+      ).called(1);
 
       await bloc.close();
       await emailMessageStreamController.close();
@@ -2279,7 +2284,10 @@ void main() {
         () => emailService.markNoticedChat(any()),
       ).thenAnswer((_) async => true);
       when(
-        () => emailService.markSeenMessages(any()),
+        () => emailService.markSeenMessages(
+          any(),
+          sendReadReceipts: any(named: 'sendReadReceipts'),
+        ),
       ).thenAnswer((_) async => true);
       when(
         () => emailService.messageStreamForChat(
@@ -2544,7 +2552,7 @@ void main() {
       roomStateController.add(
         RoomState(
           roomJid: roomJid,
-          myOccupantId: selfOccupantId,
+          myOccupantJid: selfOccupantId,
           occupants: <String, Occupant>{
             selfOccupantId: _occupant(
               occupantId: selfOccupantId,
@@ -2619,7 +2627,7 @@ void main() {
       when(() => mucService.warmRoomFromHistory(roomJid: roomJid)).thenAnswer(
         (_) async => RoomState(
           roomJid: roomJid,
-          myOccupantId: selfOccupantId,
+          myOccupantJid: selfOccupantId,
           occupants: <String, Occupant>{
             selfOccupantId: _occupant(
               occupantId: selfOccupantId,
@@ -2647,7 +2655,7 @@ void main() {
       await _pumpBloc();
       await _pumpBloc();
 
-      expect(bloc.state.roomState?.myOccupantId, selfOccupantId);
+      expect(bloc.state.roomState?.myOccupantJid, selfOccupantId);
       expect(
         bloc.state.roomMemberSections
             .expand((section) => section.members)
@@ -2774,7 +2782,7 @@ void main() {
       roomStateController.add(
         RoomState(
           roomJid: roomJid,
-          myOccupantId: selfOccupantId,
+          myOccupantJid: selfOccupantId,
           occupants: <String, Occupant>{
             selfOccupantId: _occupant(
               occupantId: selfOccupantId,
@@ -2883,7 +2891,7 @@ void main() {
       roomStateController.add(
         RoomState(
           roomJid: roomJid,
-          myOccupantId: selfOccupantId,
+          myOccupantJid: selfOccupantId,
           occupants: <String, Occupant>{
             selfOccupantId: _occupant(
               occupantId: selfOccupantId,
@@ -2912,7 +2920,7 @@ void main() {
 
       final adminRoomState = RoomState(
         roomJid: roomJid,
-        myOccupantId: selfOccupantId,
+        myOccupantJid: selfOccupantId,
         occupants: <String, Occupant>{
           selfOccupantId: _occupant(
             occupantId: selfOccupantId,

@@ -124,43 +124,13 @@ void main() {
     expect(updated?.status, equals('Online'));
   });
 
-  test(
-    'receivePresence stores self presence and status in state store.',
-    () async {
-      await connectSuccessfully(xmppService);
+  test('receivePresence ignores self presence for roster storage.', () async {
+    await connectSuccessfully(xmppService);
 
-      final selfJid = xmppService.myJid!;
-      await xmppService.receivePresence(selfJid, Presence.dnd, status: 'Busy');
+    final selfJid = xmppService.myJid!;
+    await xmppService.receivePresence(selfJid, Presence.dnd, status: 'Busy');
 
-      final storedPresence =
-          stateStore.read(key: xmppService.presenceStorageKey) as Presence?;
-      final storedStatus =
-          stateStore.read(key: xmppService.statusStorageKey) as String?;
-
-      expect(storedPresence, equals(Presence.dnd));
-      expect(storedStatus, equals('Busy'));
-      expect(xmppService.presence, equals(Presence.dnd));
-      expect(xmppService.status, equals('Busy'));
-    },
-  );
-
-  test(
-    'receivePresence does not persist self unavailable presence as the next login preference.',
-    () async {
-      await connectSuccessfully(xmppService);
-
-      final selfJid = xmppService.myJid!;
-      await xmppService.receivePresence(selfJid, Presence.chat, status: 'Free');
-      await xmppService.receivePresence(selfJid, Presence.unavailable);
-
-      final storedPresence =
-          stateStore.read(key: xmppService.presenceStorageKey) as Presence?;
-      final storedStatus =
-          stateStore.read(key: xmppService.statusStorageKey) as String?;
-
-      expect(storedPresence, equals(Presence.chat));
-      expect(storedStatus, equals('Free'));
-      expect(xmppService.presence, equals(Presence.unavailable));
-    },
-  );
+    final updated = await database.getRosterItem(selfJid);
+    expect(updated, isNull);
+  });
 }

@@ -12,32 +12,19 @@ part 'profile_cubit.freezed.dart';
 part 'profile_state.dart';
 
 class ProfileCubit extends Cubit<ProfileState> {
-  ProfileCubit({
-    required XmppService xmppService,
-    PresenceService? presenceService,
-    OmemoService? omemoService,
-  }) : _xmppService = xmppService,
-       _presenceService = presenceService,
-       _omemoService = omemoService,
-       super(
-         ProfileState(
-           jid: xmppService.myJid ?? '',
-           resource: xmppService.resource ?? '',
-           username: xmppService.username ?? '',
-           avatarHydrating: xmppService.selfAvatarHydrating,
-           avatarPath: xmppService.cachedSelfAvatar?.path,
-           avatarHash: xmppService.cachedSelfAvatar?.hash,
-           presence: presenceService?.presence,
-           status: presenceService?.status,
-         ),
-       ) {
-    _presenceSubscription = _presenceService?.presenceStream.listen(
-      (presence) =>
-          emit(state.copyWith(presence: presence ?? Presence.unknown)),
-    );
-    _statusSubscription = _presenceService?.statusStream.listen(
-      (status) => emit(state.copyWith(status: status)),
-    );
+  ProfileCubit({required XmppService xmppService, OmemoService? omemoService})
+    : _xmppService = xmppService,
+      _omemoService = omemoService,
+      super(
+        ProfileState(
+          jid: xmppService.myJid ?? '',
+          resource: xmppService.resource ?? '',
+          username: xmppService.username ?? '',
+          avatarHydrating: xmppService.selfAvatarHydrating,
+          avatarPath: xmppService.cachedSelfAvatar?.path,
+          avatarHash: xmppService.cachedSelfAvatar?.hash,
+        ),
+      ) {
     _selfAvatarSubscription = _xmppService.selfAvatarStream.listen((
       avatar,
     ) async {
@@ -73,11 +60,8 @@ class ProfileCubit extends Cubit<ProfileState> {
   }
 
   final XmppService _xmppService;
-  final PresenceService? _presenceService;
   final OmemoService? _omemoService;
 
-  late final StreamSubscription<Presence?>? _presenceSubscription;
-  late final StreamSubscription<String?>? _statusSubscription;
   late final StreamSubscription<StoredAvatar?> _selfAvatarSubscription;
   late final StreamSubscription<bool> _selfAvatarHydratingSubscription;
   late final StreamSubscription<int>
@@ -85,21 +69,10 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   @override
   Future<void> close() async {
-    await _presenceSubscription?.cancel();
-    await _statusSubscription?.cancel();
     await _selfAvatarSubscription.cancel();
     await _selfAvatarHydratingSubscription.cancel();
     await _storedConversationMessageCountSubscription.cancel();
     return super.close();
-  }
-
-  Future<void> updatePresence({
-    required Presence? presence,
-    required String? status,
-  }) async {
-    try {
-      await _presenceService?.sendPresence(presence: presence, status: status);
-    } on XmppPresenceException catch (_) {}
   }
 
   Future<void> loadFingerprints() async {
@@ -133,8 +106,6 @@ class ProfileCubit extends Cubit<ProfileState> {
         avatarHash: null,
         avatarHydrating: false,
         fingerprint: null,
-        presence: null,
-        status: null,
         storedConversationMessageCount: 0,
       ),
     );

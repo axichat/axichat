@@ -5,6 +5,7 @@ import 'package:axichat/src/common/ui/ui.dart'
     show
         axiBorderRadius,
         axiBorders,
+        emojiFontFallback,
         gabaritoFontFallback,
         gabaritoFontFamily,
         inputSubtextInsets,
@@ -128,8 +129,11 @@ class AppTheme {
   static ShadThemeData build({
     required ShadColor shadColor,
     required Brightness brightness,
+    required TargetPlatform platform,
     ChatNeutrals neutrals = const ChatNeutrals(),
   }) {
+    final bool useAppleSystemTypography =
+        platform == TargetPlatform.macOS || platform == TargetPlatform.iOS;
     final baseScheme = ShadColorScheme.fromName(
       shadColor.name,
       brightness: brightness,
@@ -139,6 +143,13 @@ class AppTheme {
         : _darkScheme(baseScheme, neutrals);
     final baseTextTheme = ShadTextTheme();
     TextStyle inter(TextStyle style, Color color) {
+      if (useAppleSystemTypography) {
+        return style.copyWith(
+          fontFamily: 'CupertinoSystemText',
+          fontFamilyFallback: emojiFontFallback,
+          color: color,
+        );
+      }
       return style.copyWith(
         fontFamily: interFontFamily,
         fontFamilyFallback: interFontFallback,
@@ -147,6 +158,13 @@ class AppTheme {
     }
 
     TextStyle gabarito(TextStyle style, Color color) {
+      if (useAppleSystemTypography) {
+        return style.copyWith(
+          fontFamily: 'CupertinoSystemDisplay',
+          fontFamilyFallback: emojiFontFallback,
+          color: color,
+        );
+      }
       return style.copyWith(
         fontFamily: gabaritoFontFamily,
         fontFamilyFallback: gabaritoFontFallback,

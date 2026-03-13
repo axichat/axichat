@@ -316,6 +316,7 @@ class EmailService {
       'email-prov-20260309-1329';
   static const String _mdnsEnabledConfigKey = 'mdns_enabled';
   static const String _mdnsEnabledValue = '1';
+  static const String _mdnsDisabledValue = '0';
   static const String _mailServerConfigKey = 'mail_server';
   static const String _mailPortConfigKey = 'mail_port';
   static const String _mailSecurityConfigKey = 'mail_security';
@@ -389,9 +390,11 @@ class EmailService {
     Logger? logger,
     ForegroundTaskBridge? foregroundBridge,
     EndpointConfig endpointConfig = const EndpointConfig(),
+    bool emailReadReceiptsEnabled = false,
   }) : _credentialStore = credentialStore,
        _databaseBuilder = databaseBuilder,
        _endpointConfig = endpointConfig,
+       _emailReadReceiptsEnabled = emailReadReceiptsEnabled,
        _connectionConfigBuilder =
            connectionConfigBuilder ??
            const EmailConnectionConfigBuilder(_defaultConnectionConfig),
@@ -437,6 +440,7 @@ class EmailService {
   final EmailConnectionConfigBuilder _connectionConfigBuilder;
   final Logger _log;
   EndpointConfig _endpointConfig;
+  bool _emailReadReceiptsEnabled;
   final NotificationService? _notificationService;
   final MessageService? _messageService;
   final XmppService? _xmppService;
@@ -566,6 +570,14 @@ class EmailService {
     _endpointConfig = config;
   }
 
+  Future<void> updateEmailReadReceiptsEnabled(bool enabled) async {
+    if (_emailReadReceiptsEnabled == enabled) {
+      return;
+    }
+    _emailReadReceiptsEnabled = enabled;
+    await _applyEmailReadReceiptPreference(enabled: enabled);
+  }
+
   void updateDefaultChatAttachmentAutoDownload(AttachmentAutoDownload value) {
     _transport.updateDefaultChatAttachmentAutoDownload(value);
   }
@@ -602,6 +614,9 @@ class EmailService {
   }) {
     final overrides = Map<String, String>.of(_buildConnectionConfig(address));
     overrides[_sendPasswordConfigKey] = password;
+    overrides[_mdnsEnabledConfigKey] = _mdnsConfigValue(
+      _emailReadReceiptsEnabled,
+    );
     if (fetchExistingMessages) {
       overrides[_fetchExistingMsgsConfigKey] = _fetchExistingMsgsEnabledValue;
     }
@@ -1255,6 +1270,7 @@ class EmailService {
       _listenerAttached = true;
     }
     await _transport.start();
+    await _applyEmailReadReceiptPreference();
     _runtimePhase = _EmailRuntimePhase.running;
     _startImapSyncLoop();
   }
@@ -4113,7 +4129,6 @@ class EmailService {
   ) {
     final configValues = <String, String>{
       _showEmailsConfigKey: _showEmailsAllValue,
-      _mdnsEnabledConfigKey: _mdnsEnabledValue,
     };
     final normalizedAddress = address.trim();
     final localPart =
@@ -4187,6 +4202,31 @@ class EmailService {
       return null;
     }
     return normalized;
+  }
+
+  static String _mdnsConfigValue(bool enabled) =>
+      enabled ? _mdnsEnabledValue : _mdnsDisabledValue;
+
+  Future<void> _applyEmailReadReceiptPreference({
+    Iterable<int>? accountIds,
+    bool? enabled,
+  }) async {
+    if (!hasActiveSession) {
+      return;
+    }
+    final resolvedAccountIds =
+        accountIds?.toList(growable: false) ?? await _transport.accountIds();
+    if (resolvedAccountIds.isEmpty) {
+      return;
+    }
+    final value = _mdnsConfigValue(enabled ?? _emailReadReceiptsEnabled);
+    for (final accountId in resolvedAccountIds) {
+      await _transport.setCoreConfig(
+        key: _mdnsEnabledConfigKey,
+        value: value,
+        accountId: accountId,
+      );
+    }
   }
 
   String _normalizeLinkedAccountAddress(String address) =>
@@ -4733,7 +4773,10 @@ class EmailService {
   /// Marks messages as seen, triggering MDN if enabled.
   ///
   /// Call this when messages are displayed to the user.
-  Future<bool> markSeenMessages(List<Message> messages) async {
+  Future<bool> markSeenMessages(
+    List<Message> messages, {
+    required bool sendReadReceipts,
+  }) async {
     final idsByAccount = <int, List<int>>{};
     for (final message in messages) {
       final deltaId = message.deltaMsgId;
@@ -4746,6 +4789,10 @@ class EmailService {
       return true;
     }
     await _ensureReady();
+    await _applyEmailReadReceiptPreference(
+      accountIds: idsByAccount.keys,
+      enabled: sendReadReceipts,
+    );
     var success = true;
     for (final entry in idsByAccount.entries) {
       final result = await _transport.markSeenMessages(

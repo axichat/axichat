@@ -320,6 +320,12 @@ abstract interface class XmppDatabase implements Database {
 
   Future<void> markMessageDisplayed(String stanzaID, {String? chatJid});
 
+  Future<void> markOutgoingMessagesDisplayedThrough({
+    required String messageId,
+    required String chatJid,
+    required String senderJid,
+  });
+
   Future<void> deleteMessage(String stanzaID);
 
   Future<void> replaceDeltaPlaceholderSelfJids({
@@ -3129,7 +3135,6 @@ WHERE jid = ?
 
   @override
   Future<void> markMessageAcked(String stanzaID, {String? chatJid}) async {
-    _log.info('Marking message acked');
     final normalizedChatJid = chatJid?.trim();
     final query = update(messages)
       ..where(
@@ -3137,14 +3142,19 @@ WHERE jid = ?
             (normalizedChatJid == null || normalizedChatJid.isEmpty
                 ? const Constant(true)
                 : tbl.chatJid.equals(normalizedChatJid)) &
-            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)),
+            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)) &
+            tbl.acked.equals(false),
       );
-    await query.write(const MessagesCompanion(acked: Value(true)));
+    final updatedRows = await query.write(
+      const MessagesCompanion(acked: Value(true)),
+    );
+    if (updatedRows > 0) {
+      _log.info('Marking message acked');
+    }
   }
 
   @override
   Future<void> markMessageReceived(String stanzaID, {String? chatJid}) async {
-    _log.info('Marking message received');
     final normalizedChatJid = chatJid?.trim();
     final query = update(messages)
       ..where(
@@ -3152,14 +3162,19 @@ WHERE jid = ?
             (normalizedChatJid == null || normalizedChatJid.isEmpty
                 ? const Constant(true)
                 : tbl.chatJid.equals(normalizedChatJid)) &
-            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)),
+            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)) &
+            tbl.received.equals(false),
       );
-    await query.write(const MessagesCompanion(received: Value(true)));
+    final updatedRows = await query.write(
+      const MessagesCompanion(received: Value(true)),
+    );
+    if (updatedRows > 0) {
+      _log.info('Marking message received');
+    }
   }
 
   @override
   Future<void> markMessageDisplayed(String stanzaID, {String? chatJid}) async {
-    _log.info('Marking message displayed');
     final normalizedChatJid = chatJid?.trim();
     final query = update(messages)
       ..where(
@@ -3167,9 +3182,74 @@ WHERE jid = ?
             (normalizedChatJid == null || normalizedChatJid.isEmpty
                 ? const Constant(true)
                 : tbl.chatJid.equals(normalizedChatJid)) &
-            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)),
+            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)) &
+            tbl.displayed.equals(false),
       );
-    await query.write(const MessagesCompanion(displayed: Value(true)));
+    final updatedRows = await query.write(
+      const MessagesCompanion(displayed: Value(true)),
+    );
+    if (updatedRows > 0) {
+      _log.info('Marking message displayed');
+    }
+  }
+
+  @override
+  Future<void> markOutgoingMessagesDisplayedThrough({
+    required String messageId,
+    required String chatJid,
+    required String senderJid,
+  }) async {
+    final normalizedMessageId = messageId.trim();
+    final normalizedChatJid = chatJid.trim();
+    final normalizedSenderJid = senderJid.trim();
+    if (normalizedMessageId.isEmpty ||
+        normalizedChatJid.isEmpty ||
+        normalizedSenderJid.isEmpty) {
+      return;
+    }
+
+    final updatedRows = await customUpdate(
+      '''
+UPDATE messages
+SET displayed = 1
+WHERE chat_jid = ?
+  AND LOWER(sender_jid) = LOWER(?)
+  AND displayed = 0
+  AND EXISTS (
+    SELECT 1
+    FROM messages target
+    WHERE target.chat_jid = ?
+      AND LOWER(target.sender_jid) = LOWER(?)
+      AND (
+        target.stanza_i_d = ?
+        OR target.origin_i_d = ?
+        OR target.muc_stanza_id = ?
+      )
+      AND (
+        messages.timestamp < target.timestamp
+        OR (
+          messages.timestamp = target.timestamp
+          AND messages.rowid <= target.rowid
+        )
+      )
+  )
+''',
+      variables: [
+        Variable<String>(normalizedChatJid),
+        Variable<String>(normalizedSenderJid),
+        Variable<String>(normalizedChatJid),
+        Variable<String>(normalizedSenderJid),
+        Variable<String>(normalizedMessageId),
+        Variable<String>(normalizedMessageId),
+        Variable<String>(normalizedMessageId),
+      ],
+      updates: {messages},
+    );
+    if (updatedRows > 0) {
+      _log.info(
+        'Marking outgoing messages displayed through $normalizedMessageId',
+      );
+    }
   }
 
   @override

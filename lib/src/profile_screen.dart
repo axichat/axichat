@@ -63,7 +63,6 @@ const double _profileHeaderSpacing = 12.0;
 const double _profileHeaderTextSpacing = 4.0;
 const double _profileHeaderWrapSpacing = 2.0;
 const double _profileCardSectionSpacing = 10.0;
-const double _profileStatusFieldPadding = 8.0;
 const double _profileIndicatorSpacing = 8.0;
 const double _profileWideHeaderSpacing = 12.0;
 const double _profileWideHorizontalPadding = 32.0;
@@ -512,7 +511,6 @@ class _ProfileCardSection extends StatelessWidget {
                       avatarPath: profileState.avatarPath,
                       loading: profileState.avatarHydrating,
                       jid: profileState.jid,
-                      status: profileState.status,
                       onTap: () => context.push(
                         const AvatarEditorRoute().location,
                         extra: locate,
@@ -587,24 +585,6 @@ class _ProfileCardSection extends StatelessWidget {
                 header,
                 Align(
                   alignment: Alignment.center,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: statusFieldMaxWidth),
-                    child: Padding(
-                      padding: const EdgeInsets.all(_profileStatusFieldPadding),
-                      child: AxiTextFormField(
-                        placeholder: Text(l10n.profileStatusPlaceholder),
-                        initialValue: profileState.status,
-                        onSubmitted: (value) =>
-                            context.read<ProfileCubit>().updatePresence(
-                              presence: profileState.presence,
-                              status: value,
-                            ),
-                      ),
-                    ),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.center,
                   child: SessionCapabilityIndicators(
                     xmppState: connectionState,
                     emailState: _emailStateFor(
@@ -643,14 +623,12 @@ class _EditableAvatarButton extends StatefulWidget {
     required this.avatarPath,
     required this.loading,
     required this.jid,
-    required this.status,
     required this.onTap,
   });
 
   final String? avatarPath;
   final bool loading;
   final String jid;
-  final String? status;
   final VoidCallback onTap;
 
   @override
@@ -683,7 +661,7 @@ class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
                 jid: widget.jid,
                 subscription: Subscription.both,
                 presence: null,
-                status: widget.status,
+                status: null,
                 active: false,
                 size: _size,
                 avatarPath: widget.avatarPath,

@@ -215,7 +215,7 @@ class _ChatMessageDetailsState extends State<ChatMessageDetails> {
                   supportsXmppMarkers ||
                   supportsXmppReceipts;
               final showsDisplayedStatus = isEmailTransport
-                  ? settings.emailReadReceipts || message.displayed
+                  ? isFromSelf
                   : supportsXmppMarkers;
               final hasDeliveryFailure = message.error.isNotNone;
               final bool? sentStatus = message.acked
