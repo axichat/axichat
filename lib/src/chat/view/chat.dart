@@ -8470,9 +8470,22 @@ class _ChatState extends State<Chat> {
                                                                                     message: messageModel,
                                                                                     roomState: roomState,
                                                                                   );
+                                                                            final messageMemberEntry =
+                                                                                messageAvatarOccupant ==
+                                                                                    null
+                                                                                ? null
+                                                                                : _resolveRoomMemberEntryForOccupant(
+                                                                                    occupant: messageAvatarOccupant,
+                                                                                    sections: state.roomMemberSections,
+                                                                                  );
                                                                             String?
                                                                             messageAvatarPath;
-                                                                            if (messageAvatarOccupant !=
+                                                                            if (messageMemberEntry !=
+                                                                                    null &&
+                                                                                messageMemberEntry.avatarPath?.trim().isNotEmpty ==
+                                                                                    true) {
+                                                                              messageAvatarPath = messageMemberEntry.avatarPath!.trim();
+                                                                            } else if (messageAvatarOccupant !=
                                                                                 null) {
                                                                               if (roomState?.myOccupantId ==
                                                                                   messageAvatarOccupant.occupantId) {
@@ -12157,6 +12170,34 @@ Occupant? _resolveRoomMessageOccupant({
       return occupant;
     }
     fallback ??= occupant;
+  }
+  return fallback;
+}
+
+RoomMemberEntry? _resolveRoomMemberEntryForOccupant({
+  required Occupant occupant,
+  required List<RoomMemberSection> sections,
+}) {
+  final occupantId = occupant.occupantId.trim();
+  final realJid = occupant.realJid?.trim();
+  final bareRealJid = realJid == null || realJid.isEmpty
+      ? null
+      : bareAddress(realJid) ?? realJid;
+  final nick = occupant.nick.trim();
+  RoomMemberEntry? fallback;
+  for (final section in sections) {
+    for (final member in section.members) {
+      if (member.occupant.occupantId == occupantId) {
+        return member;
+      }
+      if (bareRealJid != null &&
+          sameNormalizedAddressValue(member.occupant.realJid, bareRealJid)) {
+        return member;
+      }
+      if (fallback == null && member.occupant.nick.trim() == nick) {
+        fallback = member;
+      }
+    }
   }
   return fallback;
 }

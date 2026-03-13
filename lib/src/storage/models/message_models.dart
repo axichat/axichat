@@ -603,55 +603,17 @@ final class MessageReference {
   final String value;
 }
 
-enum MucActorReferenceKind { occupantJid, occupantId }
-
-final class MucActorReference {
-  const MucActorReference({required this.kind, required this.value});
-
-  final MucActorReferenceKind kind;
-  final String value;
-}
-
 final class MucActorIdentity {
-  const MucActorIdentity._({
-    required this.senderJid,
-    this.occupantJid,
-    this.occupantId,
-  });
+  const MucActorIdentity._({required this.senderJid, this.occupantJid});
 
   const MucActorIdentity.direct({required String senderJid})
     : this._(senderJid: senderJid);
 
-  const MucActorIdentity.room({required String occupantJid, String? occupantId})
-    : this._(
-        senderJid: occupantJid,
-        occupantJid: occupantJid,
-        occupantId: occupantId,
-      );
+  const MucActorIdentity.room({required String occupantJid})
+    : this._(senderJid: occupantJid, occupantJid: occupantJid);
 
   final String senderJid;
   final String? occupantJid;
-  final String? occupantId;
-
-  bool get hasOccupantId => occupantId?.trim().isNotEmpty == true;
-
-  MucActorReference? get primaryReference {
-    final resolvedOccupantId = occupantId?.trim();
-    if (resolvedOccupantId != null && resolvedOccupantId.isNotEmpty) {
-      return MucActorReference(
-        kind: MucActorReferenceKind.occupantId,
-        value: resolvedOccupantId,
-      );
-    }
-    final resolvedOccupantJid = occupantJid?.trim();
-    if (resolvedOccupantJid != null && resolvedOccupantJid.isNotEmpty) {
-      return MucActorReference(
-        kind: MucActorReferenceKind.occupantJid,
-        value: resolvedOccupantJid,
-      );
-    }
-    return null;
-  }
 }
 
 extension MessageReferenceIds on Message {
@@ -679,14 +641,6 @@ extension MessageReferenceIds on Message {
     return mucId;
   }
 
-  String? get trimmedOccupantId {
-    final occupantId = occupantID?.trim();
-    if (occupantId == null || occupantId.isEmpty) {
-      return null;
-    }
-    return occupantId;
-  }
-
   MucActorIdentity get mucActorIdentity {
     final trimmedSender = senderJid.trim();
     final parsedSender = parseJid(trimmedSender);
@@ -700,10 +654,7 @@ extension MessageReferenceIds on Message {
         ? trimmedSender
         : null;
     if (occupantJid != null) {
-      return MucActorIdentity.room(
-        occupantJid: occupantJid,
-        occupantId: trimmedOccupantId,
-      );
+      return MucActorIdentity.room(occupantJid: occupantJid);
     }
     return MucActorIdentity.direct(senderJid: trimmedSender);
   }
