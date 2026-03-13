@@ -42,6 +42,12 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     required this.progressIndicatorSize,
     required this.progressIndicatorStrokeWidth,
     required this.progressIndicatorBarHeight,
+    required this.profileCompactMaxWidth,
+    required this.profileWideSidebarMinWidth,
+    required this.profileWideSidebarMaxWidth,
+    required this.profileWideSettingsMinWidth,
+    required this.profileHeaderCompactMaxWidth,
+    required this.profileHeaderWideMaxWidth,
   });
 
   final double iconButtonSize;
@@ -80,6 +86,12 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
   final double progressIndicatorSize;
   final double progressIndicatorStrokeWidth;
   final double progressIndicatorBarHeight;
+  final double profileCompactMaxWidth;
+  final double profileWideSidebarMinWidth;
+  final double profileWideSidebarMaxWidth;
+  final double profileWideSettingsMinWidth;
+  final double profileHeaderCompactMaxWidth;
+  final double profileHeaderWideMaxWidth;
 
   @override
   AxiSizing copyWith({
@@ -119,6 +131,12 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
     double? progressIndicatorSize,
     double? progressIndicatorStrokeWidth,
     double? progressIndicatorBarHeight,
+    double? profileCompactMaxWidth,
+    double? profileWideSidebarMinWidth,
+    double? profileWideSidebarMaxWidth,
+    double? profileWideSettingsMinWidth,
+    double? profileHeaderCompactMaxWidth,
+    double? profileHeaderWideMaxWidth,
   }) {
     return AxiSizing(
       iconButtonSize: iconButtonSize ?? this.iconButtonSize,
@@ -170,6 +188,18 @@ class AxiSizing extends ThemeExtension<AxiSizing> {
           progressIndicatorStrokeWidth ?? this.progressIndicatorStrokeWidth,
       progressIndicatorBarHeight:
           progressIndicatorBarHeight ?? this.progressIndicatorBarHeight,
+      profileCompactMaxWidth:
+          profileCompactMaxWidth ?? this.profileCompactMaxWidth,
+      profileWideSidebarMinWidth:
+          profileWideSidebarMinWidth ?? this.profileWideSidebarMinWidth,
+      profileWideSidebarMaxWidth:
+          profileWideSidebarMaxWidth ?? this.profileWideSidebarMaxWidth,
+      profileWideSettingsMinWidth:
+          profileWideSettingsMinWidth ?? this.profileWideSettingsMinWidth,
+      profileHeaderCompactMaxWidth:
+          profileHeaderCompactMaxWidth ?? this.profileHeaderCompactMaxWidth,
+      profileHeaderWideMaxWidth:
+          profileHeaderWideMaxWidth ?? this.profileHeaderWideMaxWidth,
     );
   }
 
@@ -217,4 +247,10 @@ const AxiSizing axiSizing = AxiSizing(
   progressIndicatorSize: 16,
   progressIndicatorStrokeWidth: 2,
   progressIndicatorBarHeight: 8,
+  profileCompactMaxWidth: 500,
+  profileWideSidebarMinWidth: 340,
+  profileWideSidebarMaxWidth: 460,
+  profileWideSettingsMinWidth: 300,
+  profileHeaderCompactMaxWidth: 320,
+  profileHeaderWideMaxWidth: 420,
 );

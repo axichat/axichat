@@ -59,22 +59,6 @@ EmailSyncState _emailStateFor(
   return state.emailState;
 }
 
-const double _profileHeaderSpacing = 12.0;
-const double _profileHeaderTextSpacing = 4.0;
-const double _profileHeaderWrapSpacing = 2.0;
-const double _profileCardSectionSpacing = 10.0;
-const double _profileIndicatorSpacing = 8.0;
-const double _profileWideHeaderSpacing = 12.0;
-const double _profileWideHorizontalPadding = 32.0;
-const double _profileWideColumnSpacing = 16.0;
-const double _profileColumnMinWidth = 340.0;
-const double _profileColumnMaxWidth = 460.0;
-const double _profileSettingsMinWidth = 300.0;
-const double _profileWideLayoutMinWidth =
-    _profileColumnMaxWidth +
-    _profileSettingsMinWidth +
-    _profileWideColumnSpacing +
-    _profileWideHorizontalPadding * 2;
 const Curve _profileFadeCurve = Curves.easeInOutCubic;
 
 class ProfileScreen extends StatelessWidget {
@@ -220,7 +204,7 @@ class _ProfileBodyState extends State<_ProfileBody> {
               actions: [
                 if (kEnableDemoChats && demoOffline)
                   Padding(
-                    padding: const EdgeInsets.only(right: 12),
+                    padding: EdgeInsets.only(right: spacing.m),
                     child: AxiIconButton.ghost(
                       iconData: LucideIcons.refreshCcw,
                       tooltip: l10n.commonRetry,
@@ -243,8 +227,13 @@ class _ProfileBodyState extends State<_ProfileBody> {
                     top: false,
                     child: LayoutBuilder(
                       builder: (context, constraints) {
+                        final profileWideLayoutMinWidth =
+                            sizing.profileWideSidebarMaxWidth +
+                            sizing.profileWideSettingsMinWidth +
+                            spacing.m +
+                            (spacing.l * 2);
                         final isWideLayout =
-                            constraints.maxWidth >= _profileWideLayoutMinWidth;
+                            constraints.maxWidth >= profileWideLayoutMinWidth;
                         final Duration animationDuration = context
                             .watch<SettingsCubit>()
                             .animationDuration;
@@ -313,6 +302,8 @@ class _ProfileMainView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final sizing = context.sizing;
     final emailEnabled = context
         .watch<SettingsCubit>()
         .state
@@ -337,7 +328,6 @@ class _ProfileMainView extends StatelessWidget {
       (cubit) => cubit.canForegroundService,
     );
     if (!isWideLayout) {
-      final spacing = context.spacing;
       final profileSectionPadding = EdgeInsets.symmetric(
         horizontal: spacing.s,
         vertical: spacing.s,
@@ -354,14 +344,16 @@ class _ProfileMainView extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.topCenter,
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 500.0),
+                    constraints: BoxConstraints(
+                      maxWidth: sizing.profileCompactMaxWidth,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         const _ProfileStatusHeader(),
-                        const SizedBox(height: _profileCardSectionSpacing),
+                        SizedBox(height: spacing.s),
                         card,
-                        const SizedBox(height: _profileCardSectionSpacing),
+                        SizedBox(height: spacing.s),
                         const ProfileFingerprint(),
                       ],
                     ),
@@ -369,29 +361,29 @@ class _ProfileMainView extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: _profileIndicatorSpacing),
+            SizedBox(height: spacing.s),
             settings,
           ],
         ),
       );
     }
-    const sidebarPadding = EdgeInsets.symmetric(
-      horizontal: _profileWideHorizontalPadding,
-      vertical: _profileWideHeaderSpacing,
+    final sidebarPadding = EdgeInsets.symmetric(
+      horizontal: spacing.l,
+      vertical: spacing.m,
     );
     final jumpMenuPadding = EdgeInsetsDirectional.only(
-      start: _profileWideHorizontalPadding,
-      end: _profileWideHorizontalPadding,
-      top: _profileWideHeaderSpacing,
-      bottom: _profileWideHeaderSpacing,
+      start: spacing.l,
+      end: spacing.l,
+      top: spacing.m,
+      bottom: spacing.m,
     );
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxWidth: _profileColumnMaxWidth,
-            minWidth: _profileColumnMinWidth,
+          constraints: BoxConstraints(
+            maxWidth: sizing.profileWideSidebarMaxWidth,
+            minWidth: sizing.profileWideSidebarMinWidth,
           ),
           child: ColoredBox(
             color: sidebarColor,
@@ -404,11 +396,11 @@ class _ProfileMainView extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const _ProfileStatusHeader(),
-                      const SizedBox(height: _profileWideHeaderSpacing),
+                      SizedBox(height: spacing.m),
                       card,
-                      const SizedBox(height: _profileCardSectionSpacing),
+                      SizedBox(height: spacing.s),
                       const ProfileFingerprint(),
-                      const SizedBox(height: _profileCardSectionSpacing),
+                      SizedBox(height: spacing.s),
                     ],
                   ),
                 ),
@@ -431,8 +423,11 @@ class _ProfileMainView extends StatelessWidget {
             ),
           ),
         ),
-        Container(width: 1, color: context.colorScheme.border),
-        const SizedBox(width: _profileWideColumnSpacing),
+        Container(
+          width: context.borderSide.width,
+          color: context.colorScheme.border,
+        ),
+        SizedBox(width: spacing.m),
         Expanded(
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
@@ -443,13 +438,10 @@ class _ProfileMainView extends StatelessWidget {
             },
             child: SingleChildScrollView(
               controller: settingsScrollController,
-              padding: const EdgeInsets.only(
-                right: _profileWideHorizontalPadding,
-                top: _profileWideHeaderSpacing,
-              ),
+              padding: EdgeInsets.only(right: spacing.l, top: spacing.m),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                  minWidth: _profileSettingsMinWidth,
+                constraints: BoxConstraints(
+                  minWidth: sizing.profileWideSettingsMinWidth,
                 ),
                 child: settings,
               ),
@@ -497,8 +489,15 @@ class _ProfileCardSection extends StatelessWidget {
         );
         return LayoutBuilder(
           builder: (context, constraints) {
-            final bool wideCard = isWideLayout && constraints.maxWidth >= 360.0;
-            final double statusFieldMaxWidth = wideCard ? 420.0 : 320.0;
+            final spacing = context.spacing;
+            final sizing = context.sizing;
+            final headerSpacing = spacing.m;
+            final bool wideCard =
+                isWideLayout &&
+                constraints.maxWidth >= sizing.composeWindowMinWidth;
+            final double statusFieldMaxWidth = wideCard
+                ? sizing.profileHeaderWideMaxWidth
+                : sizing.profileHeaderCompactMaxWidth;
             final header = Align(
               alignment: Alignment.center,
               child: ConstrainedBox(
@@ -516,7 +515,7 @@ class _ProfileCardSection extends StatelessWidget {
                         extra: locate,
                       ),
                     ),
-                    const SizedBox(width: _profileHeaderSpacing + 4),
+                    SizedBox(width: headerSpacing),
                     Flexible(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -533,45 +532,37 @@ class _ProfileCardSection extends StatelessWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(height: _profileHeaderTextSpacing / 2),
+                          SizedBox(height: spacing.xs),
                           SelectionArea(
-                            child: Wrap(
-                              alignment: WrapAlignment.start,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 0,
-                              runSpacing: _profileHeaderWrapSpacing / 2,
-                              children: [
-                                AxiTooltip(
-                                  builder: (_) => ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 300.0,
-                                    ),
-                                    child: Text(
-                                      l10n.profileJidDescription,
-                                      textAlign: TextAlign.left,
-                                    ),
-                                  ),
-                                  child: Hero(
-                                    tag: 'subtitle',
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: Text(
-                                        profileState.jid,
-                                        style: subtitleStyle,
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 2,
-                                      ),
-                                    ),
+                            child: AxiTooltip(
+                              builder: (_) => ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: sizing.menuMaxWidth,
+                                ),
+                                child: Text(
+                                  l10n.profileJidDescription,
+                                  textAlign: TextAlign.left,
+                                ),
+                              ),
+                              child: Hero(
+                                tag: 'subtitle',
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: Text(
+                                    profileState.jid,
+                                    style: subtitleStyle,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ),
                     if (!hideLogoutButton) ...[
-                      const SizedBox(width: _profileHeaderSpacing),
+                      SizedBox(width: headerSpacing),
                       const LogoutButton(),
                     ],
                   ],
@@ -580,9 +571,10 @@ class _ProfileCardSection extends StatelessWidget {
             );
             final Widget profileCard = Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: _profileCardSectionSpacing,
+              spacing: spacing.s,
               children: [
                 header,
+                SizedBox(height: spacing.s),
                 Align(
                   alignment: Alignment.center,
                   child: SessionCapabilityIndicators(
@@ -601,7 +593,7 @@ class _ProfileCardSection extends StatelessWidget {
             );
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: _profileCardSectionSpacing,
+              spacing: spacing.s,
               children: [profileCard],
             );
           },
@@ -637,55 +629,100 @@ class _EditableAvatarButton extends StatefulWidget {
 
 class _EditableAvatarButtonState extends State<_EditableAvatarButton> {
   bool _hovered = false;
-  static const _size = 59.2;
+  final AxiTapBounceController _bounceController = AxiTapBounceController();
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final motion = context.motion;
+    final sizing = context.sizing;
+    final spacing = context.spacing;
+    final Duration animationDuration = context.select<SettingsCubit, Duration>(
+      (cubit) => cubit.animationDuration,
+    );
     final overlayVisible = _hovered;
+    final avatarSize = sizing.iconButtonTapTarget + spacing.s;
+    final overlayTint = colors.background.withValues(
+      alpha: motion.tapFocusAlpha + motion.tapHoverAlpha,
+    );
+    final Duration pressDuration = Duration(
+      milliseconds:
+          (animationDuration.inMilliseconds *
+                  motion.iconButtonPressDurationFactor)
+              .round(),
+    );
+    final Duration releaseDuration = Duration(
+      milliseconds:
+          (animationDuration.inMilliseconds *
+                  motion.iconButtonReleaseDurationFactor)
+              .round(),
+    );
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
-        onTapDown: (_) => setState(() => _hovered = true),
-        onTapUp: (_) => setState(() => _hovered = false),
-        onTapCancel: () => setState(() => _hovered = false),
+        onTapDown: (details) {
+          _bounceController.handleTapDown(details);
+          setState(() => _hovered = true);
+        },
+        onTapUp: (details) {
+          _bounceController.handleTapUp(details);
+          setState(() => _hovered = false);
+        },
+        onTapCancel: () {
+          _bounceController.handleTapCancel();
+          setState(() => _hovered = false);
+        },
         onTap: widget.onTap,
-        child: Hero(
-          tag: 'avatar',
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              AxiAvatar(
-                jid: widget.jid,
-                subscription: Subscription.both,
-                presence: null,
-                status: null,
-                active: false,
-                size: _size,
-                avatarPath: widget.avatarPath,
-                loading: widget.loading,
-              ),
-              AnimatedOpacity(
-                opacity: overlayVisible ? 0.9 : 0.0,
-                duration: baseAnimationDuration,
-                child: Container(
-                  width: _size,
-                  height: _size,
-                  decoration: BoxDecoration(
-                    color: colors.background.withAlpha((0.4 * 255).round()),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: colors.border),
-                  ),
-                  child: Icon(
-                    LucideIcons.pencil,
-                    color: colors.foreground,
-                    size: 22,
-                  ),
+        child: AxiTapBounce(
+          controller: _bounceController,
+          enabled: animationDuration != Duration.zero,
+          scale: motion.iconButtonBounceScale,
+          hoverScale: motion.iconButtonHoverScale,
+          pressDuration: pressDuration,
+          releaseDuration: releaseDuration,
+          child: Hero(
+            tag: 'avatar',
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                AxiAvatar(
+                  jid: widget.jid,
+                  subscription: Subscription.both,
+                  presence: null,
+                  status: null,
+                  active: false,
+                  size: avatarSize,
+                  avatarPath: widget.avatarPath,
+                  loading: widget.loading,
                 ),
-              ),
-            ],
+                AnimatedSwitcher(
+                  duration: animationDuration,
+                  switchInCurve: _profileFadeCurve,
+                  switchOutCurve: _profileFadeCurve,
+                  child: overlayVisible
+                      ? Container(
+                          key: const ValueKey('profile_avatar_overlay'),
+                          width: avatarSize,
+                          height: avatarSize,
+                          decoration: BoxDecoration(
+                            color: overlayTint,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: colors.border),
+                          ),
+                          child: Icon(
+                            LucideIcons.pencil,
+                            color: colors.foreground,
+                            size: sizing.iconButtonIconSize,
+                          ),
+                        )
+                      : const SizedBox.shrink(
+                          key: ValueKey('profile_avatar_overlay_hidden'),
+                        ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -816,7 +853,7 @@ class _SettingsJumpMenuState extends State<_SettingsJumpMenu> {
           child: IntrinsicWidth(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              spacing: _profileHeaderTextSpacing,
+              spacing: context.spacing.xs,
               children: [
                 for (final entry in sectionLabels.indexed)
                   _SettingsJumpLink(
@@ -937,6 +974,7 @@ class _SettingsJumpLink extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
     final spacing = context.spacing;
+    final sizing = context.sizing;
     final MainAxisAlignment alignment = switch (textAlign) {
       TextAlign.right => MainAxisAlignment.end,
       TextAlign.center => MainAxisAlignment.center,
@@ -948,11 +986,8 @@ class _SettingsJumpLink extends StatelessWidget {
       alpha: selectedOpacity,
     );
     return ShadButton.ghost(
-      size: ShadButtonSize.sm,
-      padding: EdgeInsets.symmetric(
-        horizontal: spacing.xs,
-        vertical: spacing.xs,
-      ),
+      height: sizing.listButtonHeight,
+      padding: EdgeInsets.symmetric(horizontal: spacing.m, vertical: spacing.s),
       mainAxisAlignment: alignment,
       foregroundColor: jumpColor,
       hoverForegroundColor: jumpColor,
@@ -972,11 +1007,15 @@ class _ProfileFormPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sizing = context.sizing;
+    final spacing = context.spacing;
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720.0),
+        constraints: BoxConstraints(
+          maxWidth: sizing.composeWindowExpandedWidth,
+        ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+          padding: EdgeInsets.all(spacing.m),
           child: child,
         ),
       ),
