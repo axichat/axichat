@@ -741,7 +741,6 @@ mixin MucService on XmppBase, BaseStreamService {
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (connectionState != ConnectionState.connected) return;
         if (event.resumed) {
-          await _invalidateSelfPresence(markNeedsJoin: true);
           fireAndForget(() async {
             try {
               await _recoverRoomsAfterResume();

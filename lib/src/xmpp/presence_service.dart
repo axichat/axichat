@@ -7,66 +7,9 @@ final _presenceStatusesKey = XmppStateStore.registerKey('presence_statuses');
 final _directedPresenceTargetsKey = XmppStateStore.registerKey(
   'presence_directed_targets',
 );
-const String _presenceLoadOperationName =
-    'PresenceService.ensurePresenceLoaded';
 
 mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
-  final presenceStorageKey = XmppStateStore.registerKey('my_presence');
-  final statusStorageKey = XmppStateStore.registerKey('my_status');
   final Map<String, Map<String, String>> _presenceStatuses = {};
-  Presence? _cachedPresence;
-  String? _cachedStatus;
-  var _presenceLoaded = false;
-
-  Presence get presence {
-    final cachedPresence = _cachedPresence;
-    if (cachedPresence != null) return cachedPresence;
-    fireAndForget(
-      _ensurePresenceLoaded,
-      operationName: _presenceLoadOperationName,
-    );
-    return Presence.chat;
-  }
-
-  String? get status {
-    final cachedStatus = _cachedStatus;
-    if (cachedStatus != null || _presenceLoaded) return cachedStatus;
-    fireAndForget(
-      _ensurePresenceLoaded,
-      operationName: _presenceLoadOperationName,
-    );
-    return null;
-  }
-
-  Stream<Presence?> get presenceStream =>
-      createSingleItemStream<Presence?, XmppStateStore>(
-        watchFunction: (ss) async =>
-            ss.watch<Presence?>(key: presenceStorageKey) ??
-            Stream.value(Presence.unknown),
-      );
-
-  Stream<String?> get statusStream =>
-      createSingleItemStream<String?, XmppStateStore>(
-        watchFunction: (ss) async =>
-            ss.watch<String?>(key: statusStorageKey) ?? Stream.value(null),
-      );
-
-  Future<void> _ensurePresenceLoaded() async {
-    if (_presenceLoaded) return;
-    _presenceLoaded = true;
-    try {
-      _cachedPresence =
-          await _dbOpReturning<XmppStateStore, Presence?>(
-            (db) => db.read(key: presenceStorageKey) as Presence?,
-          ) ??
-          Presence.chat;
-      _cachedStatus = await _dbOpReturning<XmppStateStore, String?>(
-        (db) => db.read(key: statusStorageKey) as String?,
-      );
-    } on XmppAbortedException {
-      _presenceLoaded = false;
-    }
-  }
 
   @override
   List<mox.XmppManagerBase> get featureManagers =>
@@ -109,30 +52,14 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
     String? status,
     Map<String, String>? statuses,
   }) async {
-    final resolvedStatus =
-        status ?? _preferredStatus(statuses, fallback: this.status);
+    if (jid == myJid) {
+      return;
+    }
+
+    final resolvedStatus = status ?? _preferredStatus(statuses);
 
     if (statuses != null) {
       await _storePresenceStatuses(jid, statuses);
-    }
-
-    if (jid == myJid) {
-      _cachedPresence = presence;
-      _cachedStatus = resolvedStatus;
-      _presenceLoaded = true;
-      if (presence == Presence.unavailable) {
-        return;
-      }
-      await _dbOp<XmppStateStore>(
-        (ss) => ss.writeAll(
-          data: {
-            presenceStorageKey: presence,
-            statusStorageKey: resolvedStatus,
-          },
-        ),
-        awaitDatabase: true,
-      );
-      return;
     }
 
     await _dbOp<XmppDatabase>(
@@ -144,8 +71,8 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
     );
   }
 
-  String? _preferredStatus(Map<String, String>? statuses, {String? fallback}) {
-    if (statuses == null || statuses.isEmpty) return fallback;
+  String? _preferredStatus(Map<String, String>? statuses) {
+    if (statuses == null || statuses.isEmpty) return null;
     final normalized = <String, String>{};
     for (final entry in statuses.entries) {
       final trimmed = entry.value.trim();
@@ -153,7 +80,7 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
       normalized[entry.key] = trimmed;
     }
 
-    if (normalized.isEmpty) return fallback;
+    if (normalized.isEmpty) return null;
 
     final english = normalized['en'];
     if (english != null && english.isNotEmpty) return english;
@@ -261,14 +188,6 @@ mixin PresenceService on XmppBase, BaseStreamService, BlockingService {
       await db.updateRosterAsk(jid: jid, ask: null);
       await db.deleteInvite(jid);
     });
-  }
-
-  @override
-  Future<void> _reset() async {
-    _cachedPresence = null;
-    _cachedStatus = null;
-    _presenceLoaded = false;
-    await super._reset();
   }
 }
 
@@ -383,21 +302,16 @@ class XmppPresenceManager extends mox.PresenceManager {
     status: status,
     to: to,
     trackDirected: trackDirected,
-    persistCurrentPresence: true,
   );
 
   Future<void> sendUnavailablePresenceForDisconnect() async =>
-      _sendPresenceInternal(
-        show: Presence.unavailable.name,
-        persistCurrentPresence: false,
-      );
+      _sendPresenceInternal(show: Presence.unavailable.name);
 
   Future<void> _sendPresenceInternal({
     int? priority,
     String? show,
     String? status,
     mox.JID? to,
-    required bool persistCurrentPresence,
     bool trackDirected = false,
   }) async {
     // Convert show string to Presence enum for backward compatibility
@@ -449,42 +363,6 @@ class XmppPresenceManager extends mox.PresenceManager {
     } else {
       await sendToTarget(to);
     }
-
-    if (to == null && persistCurrentPresence) {
-      _log.info('Persisting current presence: ${presence?.name}');
-      await owner._dbOp<XmppStateStore>((ss) async {
-        await ss.writeAll(
-          data: {
-            owner.presenceStorageKey: presence,
-            owner.statusStorageKey: status,
-          },
-        );
-      });
-      owner._cachedPresence = presence ?? owner._cachedPresence;
-      owner._cachedStatus = status;
-      owner._presenceLoaded = true;
-    }
-  }
-
-  @override
-  Future<void> sendInitialPresence({int? priority}) async {
-    Presence? presence;
-    String? status;
-    await owner._dbOp<XmppStateStore>((ss) {
-      presence = ss.read(key: owner.presenceStorageKey) as Presence?;
-      status = ss.read(key: owner.statusStorageKey) as String?;
-    });
-    if (presence == Presence.unavailable) {
-      _log.warning(
-        'Stored self presence was unavailable; restoring chat presence for login.',
-      );
-      presence = Presence.chat;
-      await owner._dbOp<XmppStateStore>(
-        (ss) => ss.write(key: owner.presenceStorageKey, value: Presence.chat),
-        awaitDatabase: true,
-      );
-    }
-    await sendPresence(show: presence?.name, status: status);
   }
 
   bool _handleMucPresence(mox.Stanza stanza) {
@@ -586,8 +464,8 @@ class XmppPresenceManager extends mox.PresenceManager {
   Future<void> _respondToProbe(mox.JID jid) async {
     try {
       await owner.sendPresence(
-        presence: owner.presence,
-        status: owner.status,
+        presence: Presence.chat,
+        status: null,
         to: jid.toString(),
         trackDirected: true,
       );

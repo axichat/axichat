@@ -1168,52 +1168,49 @@ void main() {
       },
     );
 
-    test(
-      'JOIN-023 [HP] resumed streams invalidate stale joined room state before any next send',
-      () async {
-        final managerRoomState = mox.RoomState(
-          roomJid: mox.JID.fromString(_roomJidBare),
+    test('JOIN-023 [HP] resumed streams preserve joined room state', () async {
+      final managerRoomState = mox.RoomState(
+        roomJid: mox.JID.fromString(_roomJidBare),
+        nick: 'me',
+        joined: true,
+      );
+      when(
+        () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
+      ).thenAnswer((_) async => managerRoomState);
+
+      eventStreamController.add(
+        MucSelfPresenceEvent(
+          roomJid: _roomJid,
+          occupantJid: _roomJidWithSelfNick,
           nick: 'me',
-          joined: true,
-        );
-        when(
-          () => mucManager.getRoomState(mox.JID.fromString(_roomJidBare)),
-        ).thenAnswer((_) async => managerRoomState);
+          affiliation: OccupantAffiliation.owner.xmlValue,
+          role: OccupantRole.moderator.xmlValue,
+          isAvailable: true,
+          isError: false,
+          isNickChange: false,
+          statusCodes: {MucStatusCode.selfPresence.code},
+        ),
+      );
+      await pumpEventQueue();
 
-        eventStreamController.add(
-          MucSelfPresenceEvent(
-            roomJid: _roomJid,
-            occupantJid: _roomJidWithSelfNick,
-            nick: 'me',
-            affiliation: OccupantAffiliation.owner.xmlValue,
-            role: OccupantRole.moderator.xmlValue,
-            isAvailable: true,
-            isError: false,
-            isNickChange: false,
-            statusCodes: {MucStatusCode.selfPresence.code},
-          ),
-        );
-        await pumpEventQueue();
+      expect(xmppService.roomStateFor(_roomJid)?.hasSelfPresence, isTrue);
+      expect(
+        xmppService
+            .roomStateFor(_roomJid)
+            ?.occupants[_roomJidWithSelfNick]
+            ?.isPresent,
+        isTrue,
+      );
+      expect(managerRoomState.joined, isTrue);
 
-        expect(xmppService.roomStateFor(_roomJid)?.hasSelfPresence, isTrue);
-        expect(
-          xmppService
-              .roomStateFor(_roomJid)
-              ?.occupants[_roomJidWithSelfNick]
-              ?.isPresent,
-          isTrue,
-        );
-        expect(managerRoomState.joined, isTrue);
+      eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
+      await pumpEventQueue();
 
-        eventStreamController.add(mox.StreamNegotiationsDoneEvent(true));
-        await pumpEventQueue();
-
-        final room = xmppService.roomStateFor(_roomJid);
-        expect(room?.hasSelfPresence, isFalse);
-        expect(room?.occupants[_roomJidWithSelfNick]?.isPresent, isFalse);
-        expect(managerRoomState.joined, isFalse);
-      },
-    );
+      final room = xmppService.roomStateFor(_roomJid);
+      expect(room?.hasSelfPresence, isTrue);
+      expect(room?.occupants[_roomJidWithSelfNick]?.isPresent, isTrue);
+      expect(managerRoomState.joined, isTrue);
+    });
 
     test('JOIN-024 [HP] joinRoom emits room join operation events', () async {
       when(

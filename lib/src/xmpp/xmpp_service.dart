@@ -923,13 +923,8 @@ class XmppService extends XmppBase
         _repairConnectionStateFromTraffic(
           reason: _connectivityRepairReasonStreamNegotiationsDone,
         );
-        final resumed = event.resumed;
-        final shouldHandleFailedResumption =
-            !resumed && _streamResumptionAttempted;
         _streamResumptionAttempted = false;
-        await _runPostNegotiationsSetup(
-          shouldHandleFailedResumption: shouldHandleFailedResumption,
-        );
+        await _runPostNegotiationsSetup();
         fireAndForget(
           _refreshPostNegotiationsSupport,
           operationName: _postNegotiationsSupportRefreshOperationName,
@@ -3210,30 +3205,7 @@ class XmppService extends XmppBase
     return null;
   }
 
-  Future<void> _runPostNegotiationsSetup({
-    required bool shouldHandleFailedResumption,
-  }) async {
-    // Presence is the gating signal for live inbound delivery. Reassert it on
-    // every negotiated stream so resumed sessions cannot remain logically
-    // offline if the server lost visible presence state.
-    try {
-      final presenceManager = _connection.getManager<XmppPresenceManager>();
-      if (presenceManager == null) {
-        _xmppLogger.warning(
-          'Presence manager unavailable after stream negotiations.',
-        );
-      } else {
-        _xmppLogger.info('Sending initial presence after stream negotiations.');
-      }
-      await presenceManager?.sendInitialPresence();
-    } catch (error, stackTrace) {
-      _xmppLogger.warning(
-        'Failed to send initial presence.',
-        error,
-        stackTrace,
-      );
-    }
-
+  Future<void> _runPostNegotiationsSetup() async {
     try {
       if (_connection.carbonsEnabled != true) {
         _xmppLogger.info('Enabling carbons...');
@@ -3243,20 +3215,6 @@ class XmppService extends XmppBase
       }
     } on Exception catch (error, stackTrace) {
       _xmppLogger.warning('Failed to enable carbons.', error, stackTrace);
-    }
-
-    // Device publishing is now handled internally by OmemoManager.
-    if (shouldHandleFailedResumption) {
-      try {
-        final sm = _connection.getManager<XmppStreamManagementManager>();
-        await sm?.handleFailedResumption();
-      } on Exception catch (error, stackTrace) {
-        _xmppLogger.warning(
-          'Failed to handle failed stream resumption.',
-          error,
-          stackTrace,
-        );
-      }
     }
   }
 
@@ -4230,11 +4188,20 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
       await ss.write(key: clientToServerCountKey, value: state.c2s);
       _log.fine('Saving s2c: ${state.s2c}...');
       await ss.write(key: serverToClientCountKey, value: state.s2c);
-      if (state.streamResumptionId case String resID) {
-        await ss.write(key: streamResumptionIDKey, value: resID);
+      final resumptionId = state.streamResumptionId;
+      if (resumptionId != null) {
+        await ss.write(key: streamResumptionIDKey, value: resumptionId);
+      } else {
+        await ss.delete(key: streamResumptionIDKey);
       }
-      if (state.streamResumptionLocation case String resLoc) {
-        await ss.write(key: streamResumptionLocationKey, value: resLoc);
+      final resumptionLocation = state.streamResumptionLocation;
+      if (resumptionLocation != null) {
+        await ss.write(
+          key: streamResumptionLocationKey,
+          value: resumptionLocation,
+        );
+      } else {
+        await ss.delete(key: streamResumptionLocationKey);
       }
     });
   }
@@ -4266,12 +4233,6 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
     return owner._dbOpReturning<XmppStateStore, bool>(
       (ss) async => ss.read(key: streamResumptionIDKey) != null,
     );
-  }
-
-  Future<void> handleFailedResumption() async {
-    _log.info('Stream resumption was not accepted; clearing SM state.');
-    await resetState();
-    await clearPersistedState();
   }
 
   // This is for delivery receipts in UI, not XEP-0198.
