@@ -154,6 +154,10 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
 
     final colors = context.colorScheme;
     final brightness = ShadTheme.of(context).brightness;
+    final connectingColors = ShadColorScheme.fromName(
+      ShadColor.blue.name,
+      brightness: brightness,
+    );
     final darkForeground = brightness == Brightness.dark
         ? colors.background
         : colors.foreground;
@@ -169,8 +173,8 @@ class _ConnectivityIndicatorState extends State<ConnectivityIndicator> {
         ),
       _ConnectivityIndicatorDisplay.connecting =>
         _ConnectivityIndicatorPresentation(
-          color: colors.primary,
-          foregroundColor: colors.primaryForeground,
+          color: connectingColors.primary,
+          foregroundColor: connectingColors.primaryForeground,
           iconData: LucideIcons.cloudCog,
           text: l10n.connectivityStatusConnecting,
         ),
