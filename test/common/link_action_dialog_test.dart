@@ -4,6 +4,7 @@ import 'package:axichat/src/common/ui/app_theme.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/app_localizations_en.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart' show ShadColor;
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -28,6 +29,7 @@ class LinkDialogHarness extends StatelessWidget {
     final theme = AppTheme.build(
       shadColor: ShadColor.blue,
       brightness: Brightness.light,
+      platform: defaultTargetPlatform,
     );
     return ShadApp(
       theme: theme,

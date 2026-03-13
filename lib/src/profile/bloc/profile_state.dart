@@ -15,7 +15,5 @@ abstract class ProfileState with _$ProfileState {
     String? avatarHash,
     OmemoFingerprint? fingerprint,
     @Default(false) bool regenerating,
-    Presence? presence,
-    String? status,
   }) = _ProfileState;
 }

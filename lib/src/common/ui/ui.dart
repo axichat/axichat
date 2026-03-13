@@ -102,7 +102,15 @@ extension ModalTypography on BuildContext {
   TextStyle get modalHeaderTextStyle {
     final ShadTextTheme theme = ShadTheme.of(this).textTheme;
     final ShadColorScheme colors = ShadTheme.of(this).colorScheme;
-    return theme.h3.copyWith(color: colors.foreground);
+    final TargetPlatform platform = Theme.of(this).platform;
+    if (platform == TargetPlatform.macOS || platform == TargetPlatform.iOS) {
+      return theme.h4.copyWith(color: colors.foreground);
+    }
+    return theme.h4.copyWith(
+      fontFamily: interFontFamily,
+      fontFamilyFallback: interFontFallback,
+      color: colors.foreground,
+    );
   }
 }
 
