@@ -8566,12 +8566,6 @@ class _ChatState extends State<Chat> {
                                                                               fallbackLabel: '',
                                                                               unknownLabel: context.l10n.commonUnknownLabel,
                                                                             );
-                                                                            if (kDebugMode &&
-                                                                                !self) {
-                                                                              debugPrint(
-                                                                                'MUC avatar resolve: stanza=${messageModel.stanzaID} sender=${messageModel.senderJid} projected=${message.user.profileImage} member=${messageMemberEntry?.occupant.occupantId} memberAvatar=${messageMemberEntry?.avatarPath} occupant=${messageAvatarOccupant?.occupantId} realJid=${messageAvatarOccupant?.realJid} final=$messageAvatarPath seed=$messageAvatarSeed',
-                                                                              );
-                                                                            }
                                                                             avatarOverlay = _MessageAvatar(
                                                                               jid:
                                                                                   messageAvatarPath !=
@@ -12200,28 +12194,7 @@ Occupant? _resolveRoomMessageOccupant({
     return direct;
   }
   fallback ??= direct;
-  final senderBareJid = bareAddress(senderJid);
-  if (senderBareJid != null && senderBareJid.isNotEmpty) {
-    final normalizedSenderBareJid = normalizedAddressValue(senderBareJid);
-    for (final occupant in roomState.occupants.values) {
-      final realJid = occupant.realJid?.trim();
-      if (realJid == null || realJid.isEmpty) {
-        continue;
-      }
-      final normalizedRealJid = normalizedAddressValue(
-        bareAddress(realJid) ?? realJid,
-      );
-      if (normalizedRealJid == null || normalizedRealJid.isEmpty) {
-        continue;
-      }
-      if (normalizedRealJid != normalizedSenderBareJid) {
-        continue;
-      }
-      return occupant;
-    }
-  }
   final nick = addressResourcePart(senderJid)?.trim();
-  fallback ??= direct;
   if (nick == null || nick.isEmpty) {
     return fallback;
   }
@@ -12242,17 +12215,12 @@ RoomMemberEntry? _resolveRoomMemberEntryForMessage({
   required List<RoomMemberSection> sections,
 }) {
   final senderJid = message.senderJid.trim();
-  final senderBareJid = bareAddress(senderJid);
   final senderNick = addressResourcePart(senderJid)?.trim();
   RoomMemberEntry? fallback;
   for (final section in sections) {
     for (final member in section.members) {
       if (member.occupant.occupantId == senderJid ||
           sameFullAddress(member.occupant.occupantId, senderJid)) {
-        return member;
-      }
-      if (senderBareJid != null &&
-          sameNormalizedAddressValue(member.occupant.realJid, senderBareJid)) {
         return member;
       }
       if (fallback == null &&
