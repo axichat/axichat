@@ -261,6 +261,34 @@ void main() {
   );
 
   test(
+    'Conversation index normalizes an existing self chat title to Saved Messages.',
+    () async {
+      await connectSuccessfully(xmppService);
+
+      final selfJid = xmppService.myJid!;
+      await database.createChat(
+        Chat(
+          jid: selfJid,
+          title: 'Me',
+          type: ChatType.chat,
+          lastChangeTimestamp: DateTime.utc(2024, 1, 1, 9),
+          contactJid: selfJid,
+        ),
+      );
+
+      await xmppService.applyConversationIndexItems([
+        ConvItem(
+          peerBare: mox.JID.fromString(selfJid).toBare(),
+          lastTimestamp: DateTime.utc(2024, 1, 1, 10),
+        ),
+      ]);
+
+      final chat = await database.getChat(selfJid);
+      expect(chat?.title, 'Saved Messages');
+    },
+  );
+
+  test(
     'Conversation index reconciliation repairs stale chat subtitles from stored messages.',
     () async {
       await connectSuccessfully(xmppService);

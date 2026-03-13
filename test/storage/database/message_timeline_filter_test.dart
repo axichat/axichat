@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:io';
 
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -669,6 +671,34 @@ void main() {
       expect(chat?.favorited, isTrue);
       expect(chat?.archived, isTrue);
       expect(chat?.lastChangeTimestamp, DateTime.utc(2024, 1, 1, 11));
+    },
+  );
+
+  test(
+    'hidden self sync messages keep the self chat titled Saved Messages without surfacing activity',
+    () async {
+      const selfJid = 'me@example.com';
+      final syncEnvelope = jsonEncode({
+        'calendar_sync': CalendarSyncMessage.request().toJson(),
+      });
+      final timestamp = DateTime.utc(2024, 1, 1, 10);
+
+      await db.saveMessage(
+        Message(
+          stanzaID: 'self-sync-1',
+          senderJid: selfJid,
+          chatJid: selfJid,
+          timestamp: timestamp,
+          body: syncEnvelope,
+          encryptionProtocol: EncryptionProtocol.none,
+        ),
+        selfJid: selfJid,
+      );
+
+      final chat = await db.getChat(selfJid);
+      expect(chat?.title, 'Saved Messages');
+      expect(chat?.lastMessage, isNull);
+      expect(chat?.lastChangeTimestamp, DateTime.fromMillisecondsSinceEpoch(0));
     },
   );
 }

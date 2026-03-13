@@ -96,6 +96,11 @@ abstract interface class XmppDatabase implements Database {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
   });
 
+  Future<Message?> getLastMessageForChat(
+    String jid, {
+    MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
+  });
+
   Future<List<MessageDeltaSnapshot>> getMessageDeltaSnapshot(String jid);
 
   Future<void> deleteMessagesByStanzaIds(Iterable<String> stanzaIds);
@@ -1590,10 +1595,13 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
     return trimmed.toLowerCase();
   }
 
-  String _chatTitleForIdentifier(String identifier) {
+  String _chatTitleForIdentifier(String identifier, {String? selfJid}) {
     final trimmed = identifier.trim();
     if (trimmed.isEmpty) {
       return identifier;
+    }
+    if (sameNormalizedAddressValue(trimmed, selfJid)) {
+      return 'Saved Messages';
     }
     try {
       return addressDisplayLabel(trimmed) ?? mox.JID.fromString(trimmed).local;
@@ -2346,6 +2354,7 @@ WHERE transport IS NULL
         .toList();
   }
 
+  @override
   Future<Message?> getLastMessageForChat(
     String jid, {
     MessageTimelineFilter filter = MessageTimelineFilter.directOnly,
@@ -2697,6 +2706,14 @@ WHERE transport IS NULL
       message.senderJid,
       selfJid,
     );
+    final bool isSelfChat = sameNormalizedAddressValue(
+      message.chatJid,
+      selfJid,
+    );
+    final bool shouldNormalizeSelfChatTitle =
+        isSelfChat &&
+        currentChat?.contactDisplayName?.trim().isNotEmpty != true &&
+        currentChat?.title.trim() != 'Saved Messages';
     final bool shouldIncrementUnread =
         shouldUpdateChatSummary &&
         _messageCountsTowardUnread(
@@ -2727,7 +2744,10 @@ WHERE transport IS NULL
             pseudoMessageData: message.pseudoMessageData,
           )
         : null;
-    final chatTitle = _chatTitleForIdentifier(message.chatJid);
+    final chatTitle = _chatTitleForIdentifier(
+      message.chatJid,
+      selfJid: selfJid,
+    );
     await transaction(() async {
       await into(chats).insert(
         ChatsCompanion.insert(
@@ -2769,6 +2789,10 @@ WHERE transport IS NULL
         trusted: trusted,
       );
       await messagesAccessor.insertOne(messageToSave);
+      if (shouldNormalizeSelfChatTitle) {
+        await (update(chats)..where((tbl) => tbl.jid.equals(message.chatJid)))
+            .write(ChatsCompanion(title: Value(chatTitle)));
+      }
       final persisted = await messagesAccessor.selectOne(message.stanzaID);
       if (persisted == null) {
         _log.warning('Message insert ignored; retrying with upsert');

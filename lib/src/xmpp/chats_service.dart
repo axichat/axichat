@@ -34,8 +34,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const _recipientAddressSuggestionLimit = 50000;
   static const Duration _mutedForeverDuration = Duration(days: 3650);
   static const String _signupWelcomeChatJid = 'axichat@welcome.axichat.invalid';
-  static const String _conversationIndexLoginSyncOperationName =
-      'ChatsService.syncConversationIndexOnLogin';
   static const String _mucChatStatePlaceholderBody = '';
   static const List<mox.MessageProcessingHint> _mucChatStateProcessingHints = [
     mox.MessageProcessingHint.noStore,
@@ -80,14 +78,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     super.configureEventHandlers(manager);
     manager
-      ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (event.resumed) return;
-        if (connectionState != ConnectionState.connected) return;
-        fireAndForget(
-          syncConversationIndexOnLogin,
-          operationName: _conversationIndexLoginSyncOperationName,
-        );
-      })
       ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
         await applyConversationIndexItems([event.item]);
       })
@@ -824,11 +814,23 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         if (peerJid.isEmpty) continue;
         if (_isMucChatJid(peerJid)) continue;
         if (_isConversationIndexLocalOnlyChatJid(peerJid)) continue;
+        final isSelfChat = peerJid == myJid;
 
         final archived = item.archived;
         final pinned = item.pinned;
         final muted = item.mutedUntil?.toLocal().isAfter(now) ?? false;
-        final lastChangeCandidate = item.lastTimestamp.toUtc();
+        final messageTimestamp = item.lastTimestamp.toUtc();
+        final lastVisibleSelfMessage = isSelfChat
+            ? await db.getLastMessageForChat(peerJid)
+            : null;
+        final lastVisibleSelfTimestamp = lastVisibleSelfMessage?.timestamp
+            ?.toUtc();
+        final lastChangeCandidate =
+            isSelfChat &&
+                lastVisibleSelfTimestamp != null &&
+                messageTimestamp.isAfter(lastVisibleSelfTimestamp)
+            ? lastVisibleSelfTimestamp
+            : messageTimestamp;
 
         final existing = await db.getChat(peerJid);
         if (existing == null) {
@@ -854,10 +856,11 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
         if (existing.type != ChatType.chat) continue;
 
-        final effectiveLastChange =
-            lastChangeCandidate.isAfter(existing.lastChangeTimestamp)
+        final effectiveLastChange = isSelfChat
             ? lastChangeCandidate
-            : existing.lastChangeTimestamp;
+            : (lastChangeCandidate.isAfter(existing.lastChangeTimestamp)
+                  ? lastChangeCandidate
+                  : existing.lastChangeTimestamp);
 
         final shouldUpdateMuted = existing.muted != muted;
         final shouldUpdatePinned = existing.favorited != pinned;
@@ -865,12 +868,34 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         final shouldUpdateTimestamp =
             effectiveLastChange != existing.lastChangeTimestamp;
         final shouldUpdateContactJid = existing.contactJid != peerJid;
+        final shouldNormalizeSelfTitle =
+            isSelfChat &&
+            existing.contactDisplayName?.trim().isNotEmpty != true &&
+            existing.title.trim() != 'Saved Messages';
 
         if (!shouldUpdateMuted &&
             !shouldUpdatePinned &&
             !shouldUpdateArchived &&
             !shouldUpdateTimestamp &&
-            !shouldUpdateContactJid) {
+            !shouldUpdateContactJid &&
+            !shouldNormalizeSelfTitle) {
+          continue;
+        }
+
+        if (shouldNormalizeSelfTitle) {
+          await db.updateChat(
+            existing.copyWith(
+              title: 'Saved Messages',
+              lastChangeTimestamp: effectiveLastChange,
+              muted: muted,
+              favorited: pinned,
+              archived: archived,
+              contactJid: peerJid,
+            ),
+          );
+          if (shouldUpdateTimestamp) {
+            await db.repairChatSummaryPreservingTimestamp(peerJid);
+          }
           continue;
         }
 

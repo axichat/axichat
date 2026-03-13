@@ -7,6 +7,7 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
 import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
@@ -632,6 +633,8 @@ void main() {
       );
       expect(beforeMessage, isNull);
 
+      clearInteractions(mockConnection);
+
       eventStreamController.add(messageEvent);
 
       await pumpEventQueue();
@@ -641,6 +644,7 @@ void main() {
       );
       expect(afterMessage?.stanzaID, equals(messageEvent.id!));
       expect(afterMessage?.body, equals(messageEvent.text));
+      verifyNever(() => mockConnection.getManager<ConversationIndexManager>());
     });
 
     test(

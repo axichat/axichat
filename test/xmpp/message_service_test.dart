@@ -9,6 +9,7 @@ import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
+import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -378,6 +379,26 @@ void main() {
             ),
           ),
         ).called(1);
+      },
+    );
+
+    test(
+      'Given a valid direct message, does not publish a conversation index update.',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        when(() => mockConnection.generateId()).thenAnswer((_) => uuid.v4());
+        when(
+          () => mockConnection.sendMessage(any()),
+        ).thenAnswer((_) async => true);
+
+        clearInteractions(mockConnection);
+
+        await xmppService.sendMessage(jid: jid, text: text);
+
+        verifyNever(
+          () => mockConnection.getManager<ConversationIndexManager>(),
+        );
       },
     );
 
@@ -984,6 +1005,60 @@ void main() {
       );
 
       verifyNever(() => mockConnection.sendMessage(any()));
+    });
+  });
+
+  group('reaction namespace normalization', () {
+    const sameDomainJid = 'friend@axi.im';
+    const emoji = '\u{1F44D}';
+
+    test('adds the reactions namespace to bare reaction payloads', () {
+      final stanza = mox.Stanza.message(
+        from: sameDomainJid,
+        to: jid,
+        type: 'chat',
+        id: 'reaction-message',
+        children: [
+          mox.XMLNode(
+            tag: 'reactions',
+            attributes: const {'id': 'target-message'},
+            children: [mox.XMLNode(tag: 'reaction', text: emoji)],
+          ),
+        ],
+      );
+
+      final normalized = normalizeReactionNamespace(stanza);
+
+      expect(normalized, isTrue);
+      expect(
+        stanza.firstTag('reactions', xmlns: mox.messageReactionsXmlns),
+        isNotNull,
+      );
+    });
+
+    test('does not rewrite already namespaced reaction payloads', () {
+      final stanza = mox.Stanza.message(
+        from: sameDomainJid,
+        to: jid,
+        type: 'chat',
+        id: 'reaction-message',
+        children: [
+          mox.XMLNode.xmlns(
+            tag: 'reactions',
+            xmlns: mox.messageReactionsXmlns,
+            attributes: const {'id': 'target-message'},
+            children: [mox.XMLNode(tag: 'reaction', text: emoji)],
+          ),
+        ],
+      );
+
+      final normalized = normalizeReactionNamespace(stanza);
+
+      expect(normalized, isFalse);
+      expect(
+        stanza.firstTag('reactions', xmlns: mox.messageReactionsXmlns),
+        isNotNull,
+      );
     });
   });
 
@@ -2964,19 +3039,99 @@ void main() {
       },
     );
 
-    test('Assumes current peer capabilities for @axi.im contacts', () async {
+    test('Bypasses all feature guards for @axi.im contacts', () async {
       await connectSuccessfully(xmppService);
 
       final capabilities = await xmppService.resolvePeerCapabilities(
         jid: 'friend@axi.im',
       );
 
+      expect(capabilities.assumeAllFeatures, isTrue);
+      expect(capabilities.features, isEmpty);
+      expect(capabilities.supportsMarkers, isTrue);
+      expect(capabilities.supportsReceipts, isTrue);
+      expect(capabilities.supportsFeature(mox.messageReactionsXmlns), isTrue);
+      expect(capabilities.supportsFeature(mox.chatStateXmlns), isTrue);
+      expect(capabilities.supportsFeature(mox.mamXmlns), isTrue);
+      expect(capabilities.supportsFeature(mox.omemoXmlns), isTrue);
+      expect(capabilities.supportsFeature(mox.httpFileUploadXmlns), isTrue);
+      expect(capabilities.capabilitiesResolvedAt, isNotNull);
+      verifyNever(() => mockConnection.discoInfoQuery('friend@axi.im'));
+    });
+
+    test('Bypasses all feature guards for same-domain contacts', () async {
+      await connectSuccessfully(
+        xmppService,
+        accountJid: 'me@example.com/resource',
+      );
+
+      final capabilities = await xmppService.resolvePeerCapabilities(
+        jid: 'friend@example.com',
+      );
+
+      expect(capabilities.assumeAllFeatures, isTrue);
+      expect(capabilities.features, isEmpty);
+      expect(capabilities.supportsMarkers, isTrue);
+      expect(capabilities.supportsReceipts, isTrue);
+      expect(capabilities.supportsFeature(mox.messageReactionsXmlns), isTrue);
+      expect(capabilities.supportsFeature(mox.chatStateXmlns), isTrue);
+      expect(capabilities.supportsFeature(mox.mamXmlns), isTrue);
+      expect(capabilities.supportsFeature(mox.omemoXmlns), isTrue);
+      expect(capabilities.capabilitiesResolvedAt, isNotNull);
+      verifyNever(() => mockConnection.discoInfoQuery('friend@example.com'));
+    });
+
+    test('Bypasses all feature guards for the account JID', () async {
+      await connectSuccessfully(xmppService);
+
+      final capabilities = await xmppService.resolvePeerCapabilities(
+        jid: xmppService.myJid!,
+      );
+
+      expect(capabilities.assumeAllFeatures, isTrue);
+      expect(capabilities.supportsFeature(mox.mamXmlns), isTrue);
+      verifyNever(() => mockConnection.discoInfoQuery(xmppService.myJid!));
+    });
+
+    test(
+      'Allows arbitrary feature checks for trusted peers without disco',
+      () async {
+        await connectSuccessfully(xmppService);
+
+        final decision = await xmppService.decideFeatureSupport(
+          jid: 'friend@axi.im',
+          feature: mox.httpFileUploadXmlns,
+          featureLabel: 'HTTP upload',
+        );
+
+        expect(decision.isAllowed, isTrue);
+        verifyNever(() => mockConnection.discoInfoQuery('friend@axi.im'));
+      },
+    );
+
+    test('Queries disco for unknown-domain contacts', () async {
+      const peerJid = 'friend@example.net';
+      await connectSuccessfully(xmppService);
+      when(() => mockConnection.discoInfoQuery(peerJid)).thenAnswer(
+        (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(
+          mox.DiscoInfo(
+            const <String>[mox.chatMarkersXmlns, mox.deliveryXmlns],
+            const <mox.Identity>[],
+            const <mox.DataForm>[],
+            null,
+            mox.JID.fromString(peerJid),
+          ),
+        ),
+      );
+
+      final capabilities = await xmppService.resolvePeerCapabilities(
+        jid: peerJid,
+      );
+
+      expect(capabilities.assumeAllFeatures, isFalse);
       expect(capabilities.features, contains(mox.chatMarkersXmlns));
       expect(capabilities.features, contains(mox.deliveryXmlns));
-      expect(capabilities.features, contains(mox.messageReactionsXmlns));
-      expect(capabilities.features, contains(mox.chatStateXmlns));
-      expect(capabilities.features, contains(mox.omemoXmlns));
-      expect(capabilities.capabilitiesResolvedAt, isNotNull);
+      verify(() => mockConnection.discoInfoQuery(peerJid)).called(1);
     });
 
     test('Caches disco capabilities per peer', () async {

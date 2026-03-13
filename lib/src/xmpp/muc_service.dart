@@ -86,7 +86,6 @@ const _roomAvatarDecodeFailedLog = 'Room avatar decode failed.';
 const _roomAvatarStoreFailedLog = 'Room avatar store failed.';
 const _roomAvatarUpdateFailedLog = 'Failed to update room avatar.';
 const _roomAvatarVCardSubmitFailedLog = 'Room vCard avatar update rejected.';
-const _mucBootstrapOperationName = 'MucService.bootstrapOnLogin';
 const _mucCreateRoomOperationName = 'MucService.createRoom';
 const _mucUpsertBookmarkOperationName = 'MucService.upsertBookmarkForRoom';
 const _mucJoinRoomOperationName = 'MucService.joinRoom';
@@ -747,16 +746,7 @@ mixin MucService on XmppBase, BaseStreamService {
           );
           return;
         }
-        fireAndForget(
-          _bootstrapMucOnLogin,
-          operationName: _mucBootstrapOperationName,
-        );
       });
-  }
-
-  Future<void> _bootstrapMucOnLogin() async {
-    await discoverMucServiceHost();
-    await syncMucBookmarksOnLogin();
   }
 
   Stream<RoomState> roomStateStream(String roomJid) {
@@ -3709,7 +3699,10 @@ mixin MucService on XmppBase, BaseStreamService {
       '$roomKey/~${_normalizeBareJid(jid) ?? jid.trim()}';
 
   String _fallbackNickForAffiliationJid(String jid) =>
-      _normalizeBareJid(jid) ?? jid.trim();
+      addressDisplayLabel(jid) ??
+      addressLocalPart(jid) ??
+      _normalizeBareJid(jid) ??
+      jid.trim();
 
   bool _isRoomNickOccupantId({
     required String roomKey,
@@ -3777,6 +3770,14 @@ mixin MucService on XmppBase, BaseStreamService {
           return occupant.occupantId;
         }
       }
+      final nick = entry.nick?.trim();
+      if (nick == null || nick.isEmpty) {
+        return _unresolvedOccupantIdForAffiliationJid(
+          roomKey: roomKey,
+          occupants: occupants,
+          jid: jid,
+        );
+      }
       return null;
     }
 
@@ -3786,6 +3787,57 @@ mixin MucService on XmppBase, BaseStreamService {
     }
     final occupantId = '$roomKey/$nick';
     return occupants.containsKey(occupantId) ? occupantId : null;
+  }
+
+  String? _unresolvedOccupantIdForAffiliationJid({
+    required String roomKey,
+    required Map<String, Occupant> occupants,
+    required String jid,
+  }) {
+    final nick = addressLocalPart(jid)?.trim();
+    if (nick == null || nick.isEmpty) {
+      return null;
+    }
+    Occupant? presentMatch;
+    Occupant? fallbackMatch;
+    for (final occupant in occupants.values) {
+      if (!_isRoomNickOccupantId(
+        roomKey: roomKey,
+        occupantId: occupant.occupantId,
+      )) {
+        continue;
+      }
+      if (!_sameOccupantNickValue(occupant.nick, nick)) {
+        continue;
+      }
+      if (occupant.realJid?.trim().isNotEmpty == true) {
+        continue;
+      }
+      if (!occupant.affiliation.isNone) {
+        continue;
+      }
+      if (occupant.isPresent) {
+        if (presentMatch != null) {
+          return null;
+        }
+        presentMatch = occupant;
+        continue;
+      }
+      if (fallbackMatch != null) {
+        return null;
+      }
+      fallbackMatch = occupant;
+    }
+    return presentMatch?.occupantId ?? fallbackMatch?.occupantId;
+  }
+
+  bool _sameOccupantNickValue(String left, String right) {
+    final normalizedLeft = left.trim().toLowerCase();
+    final normalizedRight = right.trim().toLowerCase();
+    if (normalizedLeft.isEmpty || normalizedRight.isEmpty) {
+      return false;
+    }
+    return normalizedLeft == normalizedRight;
   }
 
   RoomState _upsertOccupant({

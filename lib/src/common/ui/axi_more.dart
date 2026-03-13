@@ -47,52 +47,44 @@ class _AxiMoreState extends State<AxiMore> {
     final tooltip = widget.tooltip.isEmpty
         ? context.l10n.commonMoreOptions
         : widget.tooltip;
-    const double sheetItemSpacing = 4;
     await showAdaptiveBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
       showDragHandle: true,
-      dialogMaxWidth: 420,
       surfacePadding: EdgeInsets.zero,
       builder: (sheetContext) {
-        final colors = ShadTheme.of(sheetContext).colorScheme;
-        final textTheme = ShadTheme.of(sheetContext).textTheme;
         return AxiSheetScaffold.scroll(
           header: AxiSheetHeader(
             title: Text(tooltip),
             onClose: () => Navigator.of(sheetContext).maybePop(),
           ),
           children: [
-            for (final action in actions) ...[
-              ListTile(
-                enabled: action.enabled,
-                leading:
-                    action.leading ??
-                    (action.icon == null
-                        ? null
-                        : Icon(
-                            action.icon,
-                            color: action.destructive
-                                ? colors.destructive
-                                : colors.primary,
-                          )),
-                title: Text(
-                  action.label,
-                  style: action.destructive
-                      ? textTheme.small.copyWith(
-                          color: colors.destructive,
-                          fontWeight: FontWeight.w700,
-                        )
-                      : null,
-                ),
-                onTap: action.enabled
-                    ? () {
-                        Navigator.of(sheetContext).pop();
-                        action.onPressed?.call();
-                      }
-                    : null,
-              ),
-              const SizedBox(height: sheetItemSpacing),
-            ],
+            for (final action in actions)
+              action.destructive
+                  ? AxiListButton.destructiveGhost(
+                      leading:
+                          action.leading ??
+                          (action.icon == null ? null : Icon(action.icon)),
+                      onPressed: action.enabled
+                          ? () {
+                              Navigator.of(sheetContext).pop();
+                              action.onPressed?.call();
+                            }
+                          : null,
+                      child: Text(action.label),
+                    )
+                  : AxiListButton(
+                      leading:
+                          action.leading ??
+                          (action.icon == null ? null : Icon(action.icon)),
+                      onPressed: action.enabled
+                          ? () {
+                              Navigator.of(sheetContext).pop();
+                              action.onPressed?.call();
+                            }
+                          : null,
+                      child: Text(action.label),
+                    ),
           ],
         );
       },

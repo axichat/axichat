@@ -2531,9 +2531,62 @@ void main() {
         );
 
         expect(offlineMember, isNotNull);
-        expect(offlineMember?.nick, equals(_inviteeJid));
+        expect(offlineMember?.nick, equals('friend'));
         expect(offlineMember?.affiliation, OccupantAffiliation.member);
         expect(offlineMember?.isPresent, isFalse);
+      },
+    );
+
+    test(
+      'REG-009A [HP] fetchRoomAffiliations hydrates unresolved live occupants from jid-only entries',
+      () async {
+        const occupantId = '$_roomJidBare/friend';
+        xmppService.updateOccupantFromPresence(
+          roomJid: _roomJid,
+          occupantId: occupantId,
+          nick: 'friend',
+          affiliation: OccupantAffiliation.none,
+          role: OccupantRole.participant,
+          isPresent: _presenceAvailable,
+        );
+
+        final query = mox.XMLNode.xmlns(
+          tag: _queryTag,
+          xmlns: _mucAdminXmlns,
+          children: [
+            mox.XMLNode(
+              tag: _itemTag,
+              attributes: {
+                _jidAttr: _inviteeJid,
+                _affiliationAttr: OccupantAffiliation.member.xmlValue,
+              },
+            ),
+          ],
+        );
+        final response = mox.Stanza.iq(type: _iqTypeResult, children: [query]);
+
+        when(
+          () => mockConnection.sendStanza(any()),
+        ).thenAnswer((_) async => response);
+
+        await xmppService.fetchRoomAffiliations(
+          roomJid: _roomJid,
+          affiliation: OccupantAffiliation.member,
+        );
+
+        final room = xmppService.roomStateFor(_roomJid);
+        final liveOccupant = room?.occupants[occupantId];
+        final memberMatches =
+            room?.occupants.values
+                .where((occupant) => occupant.realJid == _inviteeJid)
+                .toList(growable: false) ??
+            const <Occupant>[];
+
+        expect(liveOccupant, isNotNull);
+        expect(liveOccupant?.realJid, _inviteeJid);
+        expect(liveOccupant?.affiliation, OccupantAffiliation.member);
+        expect(memberMatches, hasLength(1));
+        expect(memberMatches.single.occupantId, occupantId);
       },
     );
 

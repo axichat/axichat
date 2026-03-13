@@ -5478,21 +5478,61 @@ class _ChatState extends State<Chat> {
                                           isSelfEmail ||
                                           isMucSelf ||
                                           isDeltaPlaceholderSender;
-                                      final occupantId = isGroupChat
-                                          ? (isSelf
-                                                ? myOccupantId
-                                                : e.senderJid)
-                                          : null;
-                                      final occupant = !isGroupChat
+                                      final roomState = state.roomState;
+                                      final occupant =
+                                          !isGroupChat || roomState == null
                                           ? null
-                                          : state
-                                                .roomState
-                                                ?.occupants[occupantId];
+                                          : _resolveRoomMessageOccupant(
+                                              message: e,
+                                              roomState: roomState,
+                                            );
                                       final isEmailMessage =
                                           _isEmailMessageForBubble(
                                             message: e,
                                             isEmailChat: isEmailChat,
                                           );
+                                      String? authorAvatarPath;
+                                      if (isGroupChat) {
+                                        if (isSelf) {
+                                          authorAvatarPath = selfAvatarPath;
+                                        } else {
+                                          final messageMemberEntry =
+                                              _resolveRoomMemberEntryForMessage(
+                                                message: e,
+                                                sections:
+                                                    state.roomMemberSections,
+                                              );
+                                          final memberAvatarPath =
+                                              messageMemberEntry?.avatarPath
+                                                  ?.trim();
+                                          if (memberAvatarPath != null &&
+                                              memberAvatarPath.isNotEmpty) {
+                                            authorAvatarPath = memberAvatarPath;
+                                          } else {
+                                            final occupantRealJid = occupant
+                                                ?.realJid
+                                                ?.trim();
+                                            if (occupantRealJid != null &&
+                                                occupantRealJid.isNotEmpty) {
+                                              final bareRealJid =
+                                                  bareAddress(
+                                                    occupantRealJid,
+                                                  ) ??
+                                                  occupantRealJid;
+                                              final resolvedAvatarPath =
+                                                  avatarPathForBareJid(
+                                                    bareRealJid,
+                                                  )?.trim();
+                                              if (resolvedAvatarPath != null &&
+                                                  resolvedAvatarPath
+                                                      .isNotEmpty) {
+                                                authorAvatarPath =
+                                                    resolvedAvatarPath;
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
                                       final fallbackNick =
                                           _nickFromSender(e.senderJid) ??
                                           state.chat?.title ??
@@ -5509,6 +5549,7 @@ class _ChatState extends State<Chat> {
                                       final author = ChatUser(
                                         id: authorId,
                                         firstName: authorLabel,
+                                        profileImage: authorAvatarPath,
                                       );
                                       final quotedMessage = e.quoting == null
                                           ? null
@@ -6019,8 +6060,8 @@ class _ChatState extends State<Chat> {
                                       );
                                       final canReact =
                                           !isEmailChat &&
-                                          (state.xmppCapabilities?.features
-                                                  .contains(
+                                          (state.xmppCapabilities
+                                                  ?.supportsFeature(
                                                     mox.messageReactionsXmlns,
                                                   ) ??
                                               false);
@@ -6946,7 +6987,7 @@ class _ChatState extends State<Chat> {
                                                                               replyParticipants.isNotEmpty;
                                                                           final canReact =
                                                                               !isEmailChat &&
-                                                                              (state.xmppCapabilities?.features.contains(
+                                                                              (state.xmppCapabilities?.supportsFeature(
                                                                                     mox.messageReactionsXmlns,
                                                                                   ) ??
                                                                                   false);
@@ -8462,25 +8503,32 @@ class _ChatState extends State<Chat> {
                                                                           if (hasAvatarSlot) {
                                                                             final roomState =
                                                                                 state.roomState;
-                                                                            final messageAvatarOccupant =
+                                                                            final messageMemberEntry =
                                                                                 roomState ==
                                                                                     null
                                                                                 ? null
-                                                                                : _resolveRoomMessageOccupant(
+                                                                                : _resolveRoomMemberEntryForMessage(
                                                                                     message: messageModel,
-                                                                                    roomState: roomState,
-                                                                                  );
-                                                                            final messageMemberEntry =
-                                                                                messageAvatarOccupant ==
-                                                                                    null
-                                                                                ? null
-                                                                                : _resolveRoomMemberEntryForOccupant(
-                                                                                    occupant: messageAvatarOccupant,
                                                                                     sections: state.roomMemberSections,
                                                                                   );
+                                                                            final messageAvatarOccupant =
+                                                                                messageMemberEntry?.occupant ??
+                                                                                (roomState ==
+                                                                                        null
+                                                                                    ? null
+                                                                                    : _resolveRoomMessageOccupant(
+                                                                                        message: messageModel,
+                                                                                        roomState: roomState,
+                                                                                      ));
                                                                             String?
                                                                             messageAvatarPath;
-                                                                            if (messageMemberEntry !=
+                                                                            final projectedAvatarPath =
+                                                                                message.user.profileImage?.trim();
+                                                                            if (projectedAvatarPath !=
+                                                                                    null &&
+                                                                                projectedAvatarPath.isNotEmpty) {
+                                                                              messageAvatarPath = projectedAvatarPath;
+                                                                            } else if (messageMemberEntry !=
                                                                                     null &&
                                                                                 messageMemberEntry.avatarPath?.trim().isNotEmpty ==
                                                                                     true) {
@@ -8518,6 +8566,12 @@ class _ChatState extends State<Chat> {
                                                                               fallbackLabel: '',
                                                                               unknownLabel: context.l10n.commonUnknownLabel,
                                                                             );
+                                                                            if (kDebugMode &&
+                                                                                !self) {
+                                                                              debugPrint(
+                                                                                'MUC avatar resolve: stanza=${messageModel.stanzaID} sender=${messageModel.senderJid} projected=${message.user.profileImage} member=${messageMemberEntry?.occupant.occupantId} memberAvatar=${messageMemberEntry?.avatarPath} occupant=${messageAvatarOccupant?.occupantId} realJid=${messageAvatarOccupant?.realJid} final=$messageAvatarPath seed=$messageAvatarSeed',
+                                                                              );
+                                                                            }
                                                                             avatarOverlay = _MessageAvatar(
                                                                               jid:
                                                                                   messageAvatarPath !=
@@ -12132,7 +12186,16 @@ Occupant? _resolveRoomMessageOccupant({
 }) {
   final senderJid = message.senderJid.trim();
   Occupant? fallback;
-  final direct = roomState.occupants[senderJid];
+  Occupant? direct = roomState.occupants[senderJid];
+  if (direct == null) {
+    for (final occupant in roomState.occupants.values) {
+      if (!sameFullAddress(occupant.occupantId, senderJid)) {
+        continue;
+      }
+      direct = occupant;
+      break;
+    }
+  }
   if (direct != null && direct.realJid?.trim().isNotEmpty == true) {
     return direct;
   }
@@ -12163,7 +12226,7 @@ Occupant? _resolveRoomMessageOccupant({
     return fallback;
   }
   for (final occupant in roomState.occupants.values) {
-    if (occupant.nick.trim() != nick) {
+    if (!_sameOccupantNick(occupant.nick, nick)) {
       continue;
     }
     if (occupant.realJid?.trim().isNotEmpty == true) {
@@ -12174,32 +12237,42 @@ Occupant? _resolveRoomMessageOccupant({
   return fallback;
 }
 
-RoomMemberEntry? _resolveRoomMemberEntryForOccupant({
-  required Occupant occupant,
+RoomMemberEntry? _resolveRoomMemberEntryForMessage({
+  required Message message,
   required List<RoomMemberSection> sections,
 }) {
-  final occupantId = occupant.occupantId.trim();
-  final realJid = occupant.realJid?.trim();
-  final bareRealJid = realJid == null || realJid.isEmpty
-      ? null
-      : bareAddress(realJid) ?? realJid;
-  final nick = occupant.nick.trim();
+  final senderJid = message.senderJid.trim();
+  final senderBareJid = bareAddress(senderJid);
+  final senderNick = addressResourcePart(senderJid)?.trim();
   RoomMemberEntry? fallback;
   for (final section in sections) {
     for (final member in section.members) {
-      if (member.occupant.occupantId == occupantId) {
+      if (member.occupant.occupantId == senderJid ||
+          sameFullAddress(member.occupant.occupantId, senderJid)) {
         return member;
       }
-      if (bareRealJid != null &&
-          sameNormalizedAddressValue(member.occupant.realJid, bareRealJid)) {
+      if (senderBareJid != null &&
+          sameNormalizedAddressValue(member.occupant.realJid, senderBareJid)) {
         return member;
       }
-      if (fallback == null && member.occupant.nick.trim() == nick) {
+      if (fallback == null &&
+          senderNick != null &&
+          senderNick.isNotEmpty &&
+          _sameOccupantNick(member.occupant.nick, senderNick)) {
         fallback = member;
       }
     }
   }
   return fallback;
+}
+
+bool _sameOccupantNick(String left, String right) {
+  final normalizedLeft = left.trim().toLowerCase();
+  final normalizedRight = right.trim().toLowerCase();
+  if (normalizedLeft.isEmpty || normalizedRight.isEmpty) {
+    return false;
+  }
+  return normalizedLeft == normalizedRight;
 }
 
 String _roomMemberAvatarKey(Occupant occupant) {
@@ -15263,30 +15336,36 @@ class _ChatCapabilitiesSection extends StatelessWidget {
         : l10n.chatSettingsCapabilitiesUpdated(
             TimeFormatter.formatFriendlyDateTime(l10n, capabilitiesResolvedAt),
           );
-    final featureSet = capabilities?.features.toSet() ?? const <String>{};
+    final supportsMarkers = capabilities?.supportsMarkers ?? false;
+    final supportsReceipts = capabilities?.supportsReceipts ?? false;
+    final supportsTypingIndicators =
+        capabilities?.supportsFeature(mox.chatStateXmlns) ?? false;
+    final supportsReactions =
+        capabilities?.supportsFeature(mox.messageReactionsXmlns) ?? false;
+    final supportsMam = capabilities?.supportsFeature(mox.mamXmlns) ?? false;
+    final supportsMuc =
+        isGroupChat && (capabilities?.supportsFeature(mox.mucXmlns) ?? false);
     final List<_CapabilityEntry> entries = [
-      if (featureSet.contains(mox.chatMarkersXmlns) ||
-          featureSet.contains(mox.deliveryXmlns))
+      if (supportsMarkers || supportsReceipts)
         _CapabilityEntry(
           label: l10n.settingsChatReadReceipts,
           detail: l10n.settingsChatReadReceiptsDescription,
         ),
-      if (featureSet.contains(mox.chatStateXmlns))
+      if (supportsTypingIndicators)
         _CapabilityEntry(
           label: l10n.settingsTypingIndicators,
           detail: l10n.settingsTypingIndicatorsDescription,
         ),
-      if (featureSet.contains(mox.messageReactionsXmlns))
+      if (supportsReactions)
         _CapabilityEntry(
           label: _formatFeatureLabel(mox.messageReactionsXmlns),
           detail: l10n.chatReactionsPrompt,
         ),
-      if (featureSet.contains(mox.mamXmlns))
+      if (supportsMam)
         _CapabilityEntry(label: _formatFeatureLabel(mox.mamXmlns)),
-      if (isGroupChat && featureSet.contains(mox.mucXmlns))
+      if (supportsMuc)
         _CapabilityEntry(label: _formatFeatureLabel(mox.mucXmlns)),
-      if (isGroupChat && featureSet.contains(mox.mucXmlns))
-        _CapabilityEntry(label: l10n.mucSectionModerators),
+      if (supportsMuc) _CapabilityEntry(label: l10n.mucSectionModerators),
     ];
 
     return Column(

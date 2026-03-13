@@ -506,6 +506,25 @@ String? _normalizeStanzaErrorType(String? rawType) {
   return trimmed.toLowerCase();
 }
 
+@visibleForTesting
+bool normalizeReactionNamespace(mox.Stanza stanza) {
+  final reactionNode = stanza.firstTag('reactions');
+  if (reactionNode == null) {
+    return false;
+  }
+  final rawXmlns = reactionNode.attributes[_xmlNamespaceAttr]
+      ?.toString()
+      .trim();
+  if (rawXmlns == mox.messageReactionsXmlns) {
+    return false;
+  }
+  if (rawXmlns != null && rawXmlns.isNotEmpty) {
+    return false;
+  }
+  reactionNode.attributes[_xmlNamespaceAttr] = mox.messageReactionsXmlns;
+  return true;
+}
+
 mox.XMLNode? _findStanzaErrorConditionNode(mox.XMLNode errorNode) {
   for (final child in errorNode.children) {
     final String? xmlns = child.attributes[_xmlNamespaceAttr]?.toString();
@@ -611,6 +630,23 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
   ) async {
     final stanzaId = stanza.id?.trim();
     if (stanzaId == null || stanzaId.isEmpty) return state;
+    final normalizedReactionNamespace = normalizeReactionNamespace(stanza);
+    final reactionNode = stanza.firstTag(
+      'reactions',
+      xmlns: mox.messageReactionsXmlns,
+    );
+    if (reactionNode != null) {
+      final emojis = reactionNode
+          .findTags('reaction')
+          .map((node) => node.innerText())
+          .toList();
+      _log.fine(
+        'Outgoing raw reaction stanza id=$stanzaId to=${stanza.to ?? 'none'} '
+        'type=${stanza.type ?? 'chat'} '
+        'target=${reactionNode.attributes['id']?.toString() ?? 'none'} '
+        'emojis=$emojis normalized=$normalizedReactionNamespace',
+      );
+    }
     final type = stanza.type?.trim();
     if (type != _messageTypeGroupchat) return state;
     final toRaw = stanza.to?.trim();
@@ -644,6 +680,25 @@ class MessageSanitizerManager extends mox.XmppManagerBase {
     if (_isMucInvite(stanza)) {
       state.done = true;
       return state;
+    }
+
+    final normalizedReactionNamespace = normalizeReactionNamespace(stanza);
+    final reactionNode = stanza.firstTag(
+      'reactions',
+      xmlns: mox.messageReactionsXmlns,
+    );
+    if (reactionNode != null) {
+      final emojis = reactionNode
+          .findTags('reaction')
+          .map((node) => node.innerText())
+          .toList();
+      _log.fine(
+        'Incoming raw reaction stanza id=${stanza.id ?? 'none'} '
+        'from=${stanza.from ?? 'none'} to=${stanza.to ?? 'none'} '
+        'type=${stanza.type ?? 'chat'} '
+        'target=${reactionNode.attributes['id']?.toString() ?? 'none'} '
+        'emojis=$emojis normalized=$normalizedReactionNamespace',
+      );
     }
 
     final directInvite = DirectMucInviteData.fromStanza(stanza);

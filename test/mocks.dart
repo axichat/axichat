@@ -217,7 +217,10 @@ void prepareMockConnection() {
   ).thenAnswer((_) => const Stream<mox.OmemoActivityEvent>.empty());
 }
 
-Future<void> connectSuccessfully(XmppService xmppService) async {
+Future<void> connectSuccessfully(
+  XmppService xmppService, {
+  String accountJid = jid,
+}) async {
   when(
     () => mockNotificationService.notificationPreviewsEnabled,
   ).thenReturn(false);
@@ -305,7 +308,7 @@ Future<void> connectSuccessfully(XmppService xmppService) async {
   when(() => mockDatabase.close()).thenAnswer((_) async {});
 
   await xmppService.connect(
-    jid: jid,
+    jid: accountJid,
     password: password,
     databasePrefix: '',
     databasePassphrase: '',

@@ -123,8 +123,6 @@ final XmppOperationEvent _mamFetchFailureEvent = XmppOperationEvent(
   stage: XmppOperationStage.end,
   isSuccess: false,
 );
-const String _conversationIndexUpdateFailedLog =
-    'Failed to update conversation index.';
 const String _mucMutationRejectedLog =
     'Rejected group chat mutation from unknown occupant.';
 const bool _mucSendAllowRejoin = true;
@@ -845,15 +843,23 @@ const Set<String> _allowedHttpUploadPutHeaders = {
 class XmppPeerCapabilities {
   XmppPeerCapabilities({
     required List<String> features,
+    this.assumeAllFeatures = false,
     this.capabilitiesResolvedAt,
   }) : features = List<String>.unmodifiable(features);
 
   final List<String> features;
+  final bool assumeAllFeatures;
   final DateTime? capabilitiesResolvedAt;
 
-  bool get supportsMarkers => features.contains(mox.chatMarkersXmlns);
+  bool get supportsMarkers =>
+      assumeAllFeatures || features.contains(mox.chatMarkersXmlns);
 
-  bool get supportsReceipts => features.contains(mox.deliveryXmlns);
+  bool get supportsReceipts =>
+      assumeAllFeatures || features.contains(mox.deliveryXmlns);
+
+  bool supportsFeature(String feature) {
+    return assumeAllFeatures || features.contains(feature);
+  }
 }
 
 class _PeerCapabilities {
@@ -861,18 +867,21 @@ class _PeerCapabilities {
     required this.supportsMarkers,
     required this.supportsReceipts,
     required this.features,
+    this.assumeAllFeatures = false,
     this.capabilitiesResolvedAt,
   });
 
   final bool supportsMarkers;
   final bool supportsReceipts;
   final List<String> features;
+  final bool assumeAllFeatures;
   final DateTime? capabilitiesResolvedAt;
 
   Map<String, Object> toJson() => {
     'markers': supportsMarkers,
     'receipts': supportsReceipts,
     'features': features,
+    'assumeAllFeatures': assumeAllFeatures,
     if (capabilitiesResolvedAt != null)
       'capabilitiesResolvedAt': capabilitiesResolvedAt!.millisecondsSinceEpoch,
   };
@@ -884,6 +893,7 @@ class _PeerCapabilities {
         features: List<String>.from(
           json['features'] as List<dynamic>? ?? const <String>[],
         ),
+        assumeAllFeatures: json['assumeAllFeatures'] as bool? ?? false,
         capabilitiesResolvedAt: switch (json['capabilitiesResolvedAt']) {
           final int timestamp => DateTime.fromMillisecondsSinceEpoch(timestamp),
           _ => null,
@@ -2553,22 +2563,6 @@ mixin MessageService
         }
 
         await _recordLastSeenTimestamp(message.chatJid, message.timestamp);
-        final isDirectChat =
-            !isGroupChat &&
-            message.chatJid.isNotEmpty &&
-            !_isMucChatJid(message.chatJid);
-        if (isDirectChat) {
-          try {
-            await _upsertConversationIndexForPeer(
-              peerJid: message.chatJid,
-              lastTimestamp: message.timestamp ?? DateTime.timestamp(),
-              lastId: message.originID ?? message.stanzaID,
-            );
-          } catch (error, stackTrace) {
-            _log.fine(_conversationIndexUpdateFailedLog, error, stackTrace);
-          }
-        }
-
         _messageStream.add(message);
       })
       ..registerHandler<MucSelfPresenceEvent>((event) async {
@@ -3146,6 +3140,11 @@ mixin MessageService
       return;
     }
     final stanzaId = _connection.generateId();
+    _log.fine(
+      'Sending reaction stanza=$stanzaId chat=${message.chatJid} '
+      'groupchat=$isGroupChat targetKind=${reactionTarget.kind.name} '
+      'target=${reactionTarget.value} emojis=$emojis',
+    );
     final reactionExtensions = <mox.StanzaHandlerExtension>[
       mox.MessageIdData(stanzaId),
       if (!message.noStore)
@@ -3750,17 +3749,6 @@ mixin MessageService
         await _dbOp<XmppDatabase>(
           (db) => db.markMessageAcked(message.stanzaID),
         );
-      }
-      if (resolvedChatType == ChatType.chat && !_isMucChatJid(jid)) {
-        try {
-          await _upsertConversationIndexForPeer(
-            peerJid: jid,
-            lastTimestamp: message.timestamp ?? DateTime.timestamp(),
-            lastId: message.originID ?? message.stanzaID,
-          );
-        } catch (error, stackTrace) {
-          _log.fine(_conversationIndexUpdateFailedLog, error, stackTrace);
-        }
       }
     } catch (error, stackTrace) {
       _log.warning(
@@ -5278,20 +5266,15 @@ mixin MessageService
     return isAxiJid(parsed.toBare().toString());
   }
 
+  bool _isTrustedPeerJidForCapabilities(String jid) {
+    return _isSameDomainPeerJidForCapabilities(jid) ||
+        _isAxiPeerJidForCapabilities(jid);
+  }
+
   Set<String> _assumedCapabilityFeatures(String jid) {
     final features = <String>{};
     if (_isBareMucRoomJidForCapabilities(jid)) {
       features.add(mox.messageReactionsXmlns);
-    }
-    if (_isSameDomainPeerJidForCapabilities(jid) ||
-        _isAxiPeerJidForCapabilities(jid)) {
-      features.addAll(<String>{
-        mox.chatMarkersXmlns,
-        mox.deliveryXmlns,
-        mox.messageReactionsXmlns,
-        mox.chatStateXmlns,
-        mox.omemoXmlns,
-      });
     }
     return features;
   }
@@ -5305,8 +5288,6 @@ mixin MessageService
       return capabilities;
     }
     final isBareMucRoom = _isBareMucRoomJidForCapabilities(jid);
-    final isSameDomainPeer = _isSameDomainPeerJidForCapabilities(jid);
-    final isAxiPeer = _isAxiPeerJidForCapabilities(jid);
     final supportsMarkers =
         capabilities.supportsMarkers ||
         assumedFeatures.contains(mox.chatMarkersXmlns);
@@ -5319,9 +5300,7 @@ mixin MessageService
     }.toList()..sort();
     final capabilitiesResolvedAt =
         capabilities.capabilitiesResolvedAt ??
-        ((isBareMucRoom || isSameDomainPeer || isAxiPeer)
-            ? DateTime.now()
-            : null);
+        (isBareMucRoom ? DateTime.now() : null);
     if (supportsMarkers == capabilities.supportsMarkers &&
         supportsReceipts == capabilities.supportsReceipts &&
         listEquals(features, capabilities.features) &&
@@ -5332,8 +5311,64 @@ mixin MessageService
       supportsMarkers: supportsMarkers,
       supportsReceipts: supportsReceipts,
       features: features,
+      assumeAllFeatures: capabilities.assumeAllFeatures,
       capabilitiesResolvedAt: capabilitiesResolvedAt,
     );
+  }
+
+  bool _samePeerCapabilities(_PeerCapabilities a, _PeerCapabilities b) {
+    return a.supportsMarkers == b.supportsMarkers &&
+        a.supportsReceipts == b.supportsReceipts &&
+        listEquals(a.features, b.features) &&
+        a.assumeAllFeatures == b.assumeAllFeatures &&
+        a.capabilitiesResolvedAt == b.capabilitiesResolvedAt;
+  }
+
+  Future<void> _cachePeerCapabilities({
+    required String jid,
+    required _PeerCapabilities capabilities,
+  }) async {
+    final cached = _capabilityCache[jid];
+    if (cached != null && _samePeerCapabilities(cached, capabilities)) {
+      return;
+    }
+    _capabilityCache[jid] = capabilities;
+    await _persistCapabilityCache();
+  }
+
+  _PeerCapabilities? _capabilitiesWithoutDisco(
+    String jid, {
+    _PeerCapabilities? cached,
+  }) {
+    final isBareMucRoom = _isBareMucRoomJidForCapabilities(jid);
+    final isTrustedPeer = _isTrustedPeerJidForCapabilities(jid);
+    final shouldReuseTimestamp =
+        cached != null &&
+        cached.capabilitiesResolvedAt != null &&
+        !_isCapabilityStale(cached);
+    if (isTrustedPeer) {
+      return _PeerCapabilities(
+        supportsMarkers: true,
+        supportsReceipts: true,
+        features: cached?.features ?? const <String>[],
+        assumeAllFeatures: true,
+        capabilitiesResolvedAt: shouldReuseTimestamp
+            ? cached.capabilitiesResolvedAt
+            : DateTime.now(),
+      );
+    }
+    if (!isBareMucRoom) {
+      return null;
+    }
+    final baseline = _PeerCapabilities(
+      supportsMarkers: false,
+      supportsReceipts: false,
+      features: const <String>[],
+      capabilitiesResolvedAt: shouldReuseTimestamp
+          ? cached.capabilitiesResolvedAt
+          : DateTime.now(),
+    );
+    return _withCapabilityAssumptions(jid: jid, capabilities: baseline);
   }
 
   Future<_PeerCapabilities> _capabilitiesFor(
@@ -5341,19 +5376,6 @@ mixin MessageService
     bool forceRefresh = false,
   }) async {
     await _ensureCapabilityCacheLoaded();
-    if (_isBareMucRoomJidForCapabilities(jid)) {
-      final capabilities = _withCapabilityAssumptions(
-        jid: jid,
-        capabilities: _PeerCapabilities(
-          supportsMarkers: false,
-          supportsReceipts: false,
-          features: const <String>[],
-          capabilitiesResolvedAt: DateTime.now(),
-        ),
-      );
-      _capabilityCache[jid] = capabilities;
-      return capabilities;
-    }
     if (demoOfflineMode) {
       final capabilities = _withCapabilityAssumptions(
         jid: jid,
@@ -5362,15 +5384,31 @@ mixin MessageService
       _capabilityCache[jid] = capabilities;
       return capabilities;
     }
-    final cached = _capabilityCache[jid];
+    var cached = _capabilityCache[jid];
+    if (cached?.assumeAllFeatures == true &&
+        !_isTrustedPeerJidForCapabilities(jid)) {
+      _capabilityCache.remove(jid);
+      await _persistCapabilityCache();
+      cached = null;
+    }
+    final capabilitiesWithoutDisco = _capabilitiesWithoutDisco(
+      jid,
+      cached: cached,
+    );
+    if (capabilitiesWithoutDisco != null) {
+      await _cachePeerCapabilities(
+        jid: jid,
+        capabilities: capabilitiesWithoutDisco,
+      );
+      return capabilitiesWithoutDisco;
+    }
     if (!forceRefresh && cached != null && !_isCapabilityStale(cached)) {
       final capabilities = _withCapabilityAssumptions(
         jid: jid,
         capabilities: cached,
       );
       if (!identical(capabilities, cached)) {
-        _capabilityCache[jid] = capabilities;
-        await _persistCapabilityCache();
+        await _cachePeerCapabilities(jid: jid, capabilities: capabilities);
       }
       return capabilities;
     }
@@ -5393,8 +5431,7 @@ mixin MessageService
               jid: jid,
               capabilities: _peerCapabilitiesFromInfo(cachedInfo),
             );
-            _capabilityCache[jid] = capabilities;
-            await _persistCapabilityCache();
+            await _cachePeerCapabilities(jid: jid, capabilities: capabilities);
             return capabilities;
           }
         }
@@ -5407,8 +5444,7 @@ mixin MessageService
           capabilities: cached ?? _PeerCapabilities.empty,
         );
         if (cached == null || !identical(fallback, cached)) {
-          _capabilityCache[jid] = fallback;
-          await _persistCapabilityCache();
+          await _cachePeerCapabilities(jid: jid, capabilities: fallback);
         }
         return fallback;
       }
@@ -5418,8 +5454,7 @@ mixin MessageService
         jid: jid,
         capabilities: _peerCapabilitiesFromInfo(info),
       );
-      _capabilityCache[jid] = capabilities;
-      await _persistCapabilityCache();
+      await _cachePeerCapabilities(jid: jid, capabilities: capabilities);
       return capabilities;
     }();
 
@@ -5454,6 +5489,7 @@ mixin MessageService
     );
     return XmppPeerCapabilities(
       features: capabilities.features,
+      assumeAllFeatures: capabilities.assumeAllFeatures,
       capabilitiesResolvedAt: capabilities.capabilitiesResolvedAt,
     );
   }
@@ -5482,9 +5518,13 @@ mixin MessageService
     if (demoOfflineMode) {
       return const CapabilityDecision(CapabilityDecisionKind.allowed);
     }
+    if (_isTrustedPeerJidForCapabilities(jid)) {
+      return const CapabilityDecision(CapabilityDecisionKind.allowed);
+    }
     try {
       final capabilities = await _capabilitiesFor(jid);
-      if (capabilities.features.contains(feature)) {
+      if (capabilities.assumeAllFeatures ||
+          capabilities.features.contains(feature)) {
         return const CapabilityDecision(CapabilityDecisionKind.allowed);
       }
       if (capabilities.capabilitiesResolvedAt == null) {
@@ -6510,7 +6550,10 @@ mixin MessageService
       (db) => db.getMessageByReferenceId(referenceId, chatJid: reactionChatJid),
     );
     if (message == null) {
-      _log.fine('Queueing reactions for unresolved message $referenceId');
+      _log.fine(
+        'Queueing reaction chat=$reactionChatJid from=$rawSenderJid '
+        'target=$referenceId fromMam=${event.isFromMAM} emojis=$sanitizedEmojis',
+      );
       _queuePendingInboundReaction(
         chatJid: reactionChatJid,
         referenceId: referenceId,
@@ -6522,6 +6565,11 @@ mixin MessageService
       );
       return !event.displayable;
     }
+    _log.fine(
+      'Applying reaction chat=$reactionChatJid from=$rawSenderJid '
+      'target=$referenceId resolved=${message.stanzaID} '
+      'fromMam=${event.isFromMAM} emojis=$sanitizedEmojis',
+    );
     await _applyInboundReactionMutation(
       message: message,
       rawSenderJid: rawSenderJid,
