@@ -268,7 +268,7 @@ class NotificationService {
     final notificationDetails = await _notificationDetails();
     final String? sanitizedBody = sanitizeNotificationPreview(body);
 
-    await _plugin.show(
+    await _showNotification(
       id: Random(DateTime.now().millisecondsSinceEpoch).nextInt(10000),
       title: title,
       body: sanitizedBody,
@@ -343,7 +343,7 @@ class NotificationService {
     final bool useMessagingStyle =
         Platform.isAndroid && showPreview && sanitizedBody != null;
 
-    await _plugin.show(
+    await _showNotification(
       id: notificationId,
       title: _resolveMessageNotificationTitle(
         conversationTitle: resolvedConversationTitle,
@@ -502,7 +502,7 @@ class NotificationService {
     String? payload,
   }) async {
     final notificationDetails = await _notificationDetails();
-    await _plugin.show(
+    await _showNotification(
       id: id,
       title: title,
       body: body,
@@ -612,6 +612,34 @@ class NotificationService {
       windows: windowsDetails,
       linux: linuxDetails,
     );
+  }
+
+  Future<void> _showNotification({
+    required int id,
+    required String title,
+    String? body,
+    required NotificationDetails notificationDetails,
+    String? payload,
+  }) async {
+    try {
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: body,
+        notificationDetails: notificationDetails,
+        payload: payload,
+      );
+    } on Exception catch (error, stackTrace) {
+      if (Platform.isLinux) {
+        _log.warning(
+          'Failed to show Linux notification.',
+          error,
+          stackTrace,
+        );
+        return;
+      }
+      rethrow;
+    }
   }
 
   bool _allowMessageNotification(String? threadKey) {
