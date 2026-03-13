@@ -930,6 +930,10 @@ class XmppService extends XmppBase
         await _runPostNegotiationsSetup(
           shouldHandleFailedResumption: shouldHandleFailedResumption,
         );
+        fireAndForget(
+          _refreshPostNegotiationsSupport,
+          operationName: _postNegotiationsSupportRefreshOperationName,
+        );
         // Connection handling is automatic in moxxmpp v0.5.0.
       });
     super.configureEventHandlers(manager);
@@ -1134,6 +1138,8 @@ class XmppService extends XmppBase
 
   static const _connectivityRepairReasonStreamNegotiationsDone =
       'stream negotiations done';
+  static const _postNegotiationsSupportRefreshOperationName =
+      'XmppService.refreshPostNegotiationsSupport';
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
   static const _nonRecoverableReconnectDisableLog =
@@ -3252,26 +3258,33 @@ class XmppService extends XmppBase
         );
       }
     }
+  }
 
-    try {
-      await _refreshHttpUploadSupport();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine(
-        'Failed to refresh HTTP upload support after login.',
-        error,
-        stackTrace,
-      );
-    }
-
-    try {
-      await _refreshPubSubSupport();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine(
-        'Failed to refresh PubSub support after login.',
-        error,
-        stackTrace,
-      );
-    }
+  Future<void> _refreshPostNegotiationsSupport() async {
+    await Future.wait([
+      () async {
+        try {
+          await _refreshHttpUploadSupport();
+        } on Exception catch (error, stackTrace) {
+          _xmppLogger.fine(
+            'Failed to refresh HTTP upload support after login.',
+            error,
+            stackTrace,
+          );
+        }
+      }(),
+      () async {
+        try {
+          await _refreshPubSubSupport();
+        } on Exception catch (error, stackTrace) {
+          _xmppLogger.fine(
+            'Failed to refresh PubSub support after login.',
+            error,
+            stackTrace,
+          );
+        }
+      }(),
+    ]);
   }
 
   void _updateHttpUploadSupport(HttpUploadSupport support) {
