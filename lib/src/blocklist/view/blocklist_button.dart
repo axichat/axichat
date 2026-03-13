@@ -13,12 +13,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-const double _blocklistSpinnerDimension = 16.0;
-const double _blocklistSpinnerPadding = 1.0;
-const double _blocklistSpinnerSlotSize =
-    _blocklistSpinnerDimension + (_blocklistSpinnerPadding * 2);
-const double _blocklistSpinnerGap = 8.0;
-
 class BlocklistAddButton extends StatelessWidget {
   const BlocklistAddButton({super.key});
 
@@ -121,30 +115,16 @@ class BlocklistUnblockAllButton extends StatelessWidget {
     return BlocSelector<BlocklistCubit, BlocklistState, bool>(
       selector: (state) => state is BlocklistLoading && state.jid == null,
       builder: (context, disabled) {
-        final spinner = AxiProgressIndicator(
-          color: context.colorScheme.foreground,
-          semanticsLabel: context.l10n.blocklistWaitingForUnblock,
-        );
-        final spinnerSlot = ButtonSpinnerSlot(
-          isVisible: disabled,
-          spinner: spinner,
-          slotSize: _blocklistSpinnerSlotSize,
-          gap: _blocklistSpinnerGap,
-          duration: baseAnimationDuration,
-        );
-        return ShadButton.destructive(
-          enabled: !disabled,
+        return AxiButton.destructive(
+          loading: disabled,
           onPressed: () async {
             if (await confirm(context) != true) return;
             if (context.mounted) {
               context.read<BlocklistCubit>().unblockAll();
             }
           },
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [spinnerSlot, Text(context.l10n.blocklistUnblockAll)],
-          ),
-        ).withTapBounce(enabled: !disabled);
+          child: Text(context.l10n.blocklistUnblockAll),
+        );
       },
     );
   }

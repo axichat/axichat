@@ -202,17 +202,11 @@ class _CriticalPathCopyActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerRight,
-      child: ShadButton(
-        size: ShadButtonSize.sm,
+      child: AxiButton.primary(
+        size: AxiButtonSize.sm,
         onPressed: onPressed,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(iconData, size: _criticalPathCopyHeaderIconSize),
-            const SizedBox(width: _criticalPathCopySectionGap),
-            Text(label),
-          ],
-        ),
+        leading: Icon(iconData, size: _criticalPathCopyHeaderIconSize),
+        child: Text(label),
       ),
     );
   }

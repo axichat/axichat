@@ -404,8 +404,16 @@ class _AvailabilityViewerSourceButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final button = isSelected
-        ? ShadButton.secondary(onPressed: onPressed, child: Text(label))
-        : ShadButton.outline(onPressed: onPressed, child: Text(label));
+        ? AxiButton.secondary(
+            size: AxiButtonSize.sm,
+            onPressed: onPressed,
+            child: Text(label),
+          )
+        : AxiButton.outline(
+            size: AxiButtonSize.sm,
+            onPressed: onPressed,
+            child: Text(label),
+          );
     return ConstrainedBox(
       constraints: const BoxConstraints(
         minHeight: _availabilityViewerSourceMinHeight,

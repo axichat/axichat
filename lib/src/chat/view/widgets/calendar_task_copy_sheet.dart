@@ -191,17 +191,11 @@ class _TaskCopyActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Align(
       alignment: Alignment.centerRight,
-      child: ShadButton(
-        size: ShadButtonSize.sm,
+      child: AxiButton.primary(
+        size: AxiButtonSize.sm,
         onPressed: onPressed,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(iconData, size: _taskCopyHeaderIconSize),
-            const SizedBox(width: _taskCopySheetGap),
-            Text(label),
-          ],
-        ),
+        leading: Icon(iconData, size: _taskCopyHeaderIconSize),
+        child: Text(label),
       ),
     );
   }
