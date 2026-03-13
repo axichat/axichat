@@ -397,17 +397,7 @@ abstract class Message with _$Message implements Insertable<Message> {
     }
   }
 
-  bool authorizedForMutation({required mox.JID from, String? occupantId}) {
-    final messageOccupantId = occupantID?.trim();
-    if (messageOccupantId != null && messageOccupantId.isNotEmpty) {
-      final resolvedOccupantId = occupantId?.trim();
-      if (resolvedOccupantId != null && resolvedOccupantId.isNotEmpty) {
-        if (resolvedOccupantId == messageOccupantId) {
-          return true;
-        }
-      }
-      return senderJid == from.toString();
-    }
+  bool authorizedForMutation({required mox.JID from}) {
     final sender = senderJid.trim();
     if (sender.isEmpty) {
       return false;
@@ -742,12 +732,6 @@ extension MessageReferenceIds on Message {
     }
     final normalizedMyOccupantId = myOccupantId?.trim();
     if (normalizedMyOccupantId != null && normalizedMyOccupantId.isNotEmpty) {
-      final messageOccupantId = occupantID?.trim();
-      if (messageOccupantId != null &&
-          messageOccupantId.isNotEmpty &&
-          messageOccupantId == normalizedMyOccupantId) {
-        return true;
-      }
       if (senderJid.trim() == normalizedMyOccupantId) {
         return true;
       }
@@ -761,30 +745,7 @@ extension MessageReferenceIds on Message {
     ?trimmedMucStanzaId,
   };
 
-  MessageReference? outboundReference({
-    required bool isGroupChat,
-    DirectMessageReferencePolicy directPolicy =
-        DirectMessageReferencePolicy.currentWire,
-  }) {
-    if (isGroupChat) {
-      final mucId = trimmedMucStanzaId;
-      if (mucId == null) {
-        return null;
-      }
-      return MessageReference(
-        kind: MessageReferenceKind.mucStanzaId,
-        value: mucId,
-      );
-    }
-    if (directPolicy == DirectMessageReferencePolicy.preferOriginId) {
-      final originId = trimmedOriginId;
-      if (originId != null) {
-        return MessageReference(
-          kind: MessageReferenceKind.originId,
-          value: originId,
-        );
-      }
-    }
+  MessageReference? get _stanzaReference {
     final stanzaId = trimmedStanzaId;
     if (stanzaId == null) {
       return null;
@@ -793,6 +754,77 @@ extension MessageReferenceIds on Message {
       kind: MessageReferenceKind.stanzaId,
       value: stanzaId,
     );
+  }
+
+  MessageReference? get _originReference {
+    final originId = trimmedOriginId;
+    if (originId == null) {
+      return null;
+    }
+    return MessageReference(
+      kind: MessageReferenceKind.originId,
+      value: originId,
+    );
+  }
+
+  MessageReference? get _mucStanzaReference {
+    final mucStanzaId = trimmedMucStanzaId;
+    if (mucStanzaId == null) {
+      return null;
+    }
+    return MessageReference(
+      kind: MessageReferenceKind.mucStanzaId,
+      value: mucStanzaId,
+    );
+  }
+
+  MessageReference? markerReference({required bool isGroupChat}) {
+    if (isGroupChat) {
+      return _mucStanzaReference;
+    }
+    return _stanzaReference;
+  }
+
+  MessageReference? receiptReference({required bool isGroupChat}) {
+    if (isGroupChat) {
+      return null;
+    }
+    return _stanzaReference;
+  }
+
+  MessageReference? replyReference({required bool isGroupChat}) {
+    if (isGroupChat) {
+      return _mucStanzaReference;
+    }
+    return _originReference ?? _stanzaReference;
+  }
+
+  MessageReference? reactionReference({required bool isGroupChat}) {
+    if (isGroupChat) {
+      return _mucStanzaReference;
+    }
+    return _originReference ?? _stanzaReference;
+  }
+
+  MessageReference? collectionReference({required bool isGroupChat}) {
+    if (isGroupChat) {
+      return _mucStanzaReference;
+    }
+    return _originReference ?? _stanzaReference;
+  }
+
+  MessageReference? outboundReference({
+    required bool isGroupChat,
+    DirectMessageReferencePolicy directPolicy =
+        DirectMessageReferencePolicy.currentWire,
+  }) {
+    if (isGroupChat) {
+      return _mucStanzaReference;
+    }
+    if (directPolicy == DirectMessageReferencePolicy.preferOriginId) {
+      return _originReference ?? _stanzaReference;
+    }
+    return _stanzaReference;
   }
 
   String? outboundReferenceId({

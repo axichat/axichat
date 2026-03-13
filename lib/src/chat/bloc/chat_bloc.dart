@@ -930,11 +930,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   MessageReference? _quotedMessageReference({
     required Message quotedMessage,
     required Chat? chat,
-  }) => quotedMessage.outboundReference(
+  }) => quotedMessage.replyReference(
     isGroupChat: chat?.type == ChatType.groupChat,
-    directPolicy: chat?.type == ChatType.groupChat
-        ? DirectMessageReferencePolicy.currentWire
-        : DirectMessageReferencePolicy.preferOriginId,
   );
 
   void _emitScrollTargetRequest(Emitter<ChatState> emit, String messageId) {
@@ -2513,12 +2510,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (chat.type == ChatType.groupChat) {
       final myOccupantId = state.roomState?.myOccupantId?.trim();
-      final messageOccupantId = message.occupantID?.trim();
       if (myOccupantId != null &&
           myOccupantId.isNotEmpty &&
-          messageOccupantId != null &&
-          messageOccupantId.isNotEmpty &&
-          messageOccupantId == myOccupantId) {
+          message.senderJid.trim() == myOccupantId) {
         return false;
       }
     }

@@ -1985,10 +1985,6 @@ class _ChatState extends State<Chat> {
     return trimmedOwner;
   }
 
-  String? _normalizeOccupantId(String? jid) {
-    return normalizedOccupantId(jid);
-  }
-
   bool _isMucOccupantSender({
     required String senderJid,
     required String? chatJid,
@@ -2046,20 +2042,16 @@ class _ChatState extends State<Chat> {
       return normalizedAddressKey(senderJid) ==
           normalizedAddressKey(trimmedClaimed);
     }
-    final String? normalizedSender = _normalizeOccupantId(senderJid);
-    final String? normalizedClaimed = _normalizeOccupantId(trimmedClaimed);
-    if (normalizedSender != null && normalizedSender == normalizedClaimed) {
-      return true;
-    }
     final Occupant? occupant = _resolveOccupantForSender(
       senderJid: senderJid,
       roomState: roomState,
     );
     final String? realJid = occupant?.realJid;
-    if (realJid == null) {
-      return false;
+    if (realJid != null && realJid.trim().isNotEmpty) {
+      return normalizedAddressKey(realJid) ==
+          normalizedAddressKey(trimmedClaimed);
     }
-    return normalizedAddressKey(realJid) ==
+    return normalizedAddressKey(senderJid) ==
         normalizedAddressKey(trimmedClaimed);
   }
 
@@ -2072,9 +2064,15 @@ class _ChatState extends State<Chat> {
     if (chat?.type != ChatType.groupChat) {
       return trimmedCurrent?.isEmpty == true ? null : trimmedCurrent;
     }
-    final String? occupantId = roomState?.myOccupantId?.trim();
+    if (trimmedCurrent != null && trimmedCurrent.isNotEmpty) {
+      return trimmedCurrent;
+    }
+    final occupantId = roomState?.myOccupantId?.trim();
     if (occupantId != null && occupantId.isNotEmpty) {
-      return occupantId;
+      final realJid = roomState?.occupants[occupantId]?.realJid?.trim();
+      if (realJid != null && realJid.isNotEmpty) {
+        return bareAddress(realJid) ?? realJid;
+      }
     }
     return null;
   }
@@ -2170,20 +2168,14 @@ class _ChatState extends State<Chat> {
 
   bool _isMucSelfMessage({
     required String senderJid,
-    required String? occupantId,
     required String? myOccupantId,
     required String? selfNick,
   }) {
-    final normalizedSelf = _normalizeOccupantId(myOccupantId);
-    if (normalizedSelf != null) {
-      final normalizedSender = _normalizeOccupantId(senderJid);
-      if (normalizedSender != null && normalizedSender == normalizedSelf) {
-        return true;
-      }
-      final normalizedOccupant = _normalizeOccupantId(occupantId);
-      if (normalizedOccupant != null && normalizedOccupant == normalizedSelf) {
-        return true;
-      }
+    final normalizedSelf = myOccupantId?.trim();
+    if (normalizedSelf != null &&
+        normalizedSelf.isNotEmpty &&
+        senderJid.trim() == normalizedSelf) {
+      return true;
     }
     final trimmedSelfNick = selfNick?.trim();
     if (trimmedSelfNick == null || trimmedSelfNick.isEmpty) {
@@ -2206,7 +2198,6 @@ class _ChatState extends State<Chat> {
     if (isGroupChat) {
       return _isMucSelfMessage(
         senderJid: quotedMessage.senderJid,
-        occupantId: quotedMessage.occupantID,
         myOccupantId: myOccupantId,
         selfNick: selfNick,
       );
@@ -5479,7 +5470,6 @@ class _ChatState extends State<Chat> {
                                           isGroupChat &&
                                           _isMucSelfMessage(
                                             senderJid: e.senderJid,
-                                            occupantId: e.occupantID,
                                             myOccupantId: myOccupantId,
                                             selfNick: selfNick,
                                           );
@@ -10769,17 +10759,19 @@ class _PinnedMessageTile extends StatelessWidget {
               ? null
               : roomState?.occupants[myOccupantId]?.nick) ??
           chat.myNickname;
-      final normalizedSelf = normalizeOccupantId(myOccupantId);
-      if (normalizedSelf != null) {
-        final normalizedSender = normalizeOccupantId(message.senderJid);
-        if (normalizedSender != null && normalizedSender == normalizedSelf) {
-          return true;
-        }
-        final normalizedOccupant = normalizeOccupantId(message.occupantID);
-        if (normalizedOccupant != null &&
-            normalizedOccupant == normalizedSelf) {
-          return true;
-        }
+      final normalizedSelf = myOccupantId?.trim();
+      if (normalizedSelf != null &&
+          normalizedSelf.isNotEmpty &&
+          message.senderJid.trim() == normalizedSelf) {
+        return true;
+      }
+      final occupant = resolveOccupantForMessage(message);
+      final realJid = occupant?.realJid?.trim();
+      if (realJid != null &&
+          realJid.isNotEmpty &&
+          accountJid != null &&
+          sameNormalizedAddressValue(realJid, accountJid)) {
+        return true;
       }
       final trimmedSelfNick = selfNick?.trim();
       if (trimmedSelfNick == null || trimmedSelfNick.isEmpty) {
@@ -10804,10 +10796,6 @@ class _PinnedMessageTile extends StatelessWidget {
 
   String? nickFromSender(String senderJid) {
     return addressResourcePart(senderJid);
-  }
-
-  String? normalizeOccupantId(String? jid) {
-    return normalizedOccupantId(jid);
   }
 
   Occupant? resolveOccupantForMessage(Message message) {
@@ -12136,21 +12124,6 @@ Occupant? _resolveRoomMessageOccupant({
     return direct;
   }
   fallback ??= direct;
-  final normalizedSenderOccupantId = normalizedOccupantId(senderJid);
-  if (normalizedSenderOccupantId != null) {
-    for (final occupant in roomState.occupants.values) {
-      final normalizedRoomOccupantId = normalizedOccupantId(
-        occupant.occupantId,
-      );
-      if (normalizedRoomOccupantId != normalizedSenderOccupantId) {
-        continue;
-      }
-      if (occupant.realJid?.trim().isNotEmpty == true) {
-        return occupant;
-      }
-      fallback ??= occupant;
-    }
-  }
   final senderBareJid = bareAddress(senderJid);
   if (senderBareJid != null && senderBareJid.isNotEmpty) {
     final normalizedSenderBareJid = normalizedAddressValue(senderBareJid);
@@ -15207,7 +15180,7 @@ class _ChatCapabilitiesSection extends StatelessWidget {
   final XmppPeerCapabilities? capabilities;
   final bool isGroupChat;
 
-  String formatFeatureLabel(String feature) {
+  String _formatFeatureLabel(String feature) {
     final trimmed = feature.trim();
     if (trimmed.isEmpty) return trimmed;
     final normalized = trimmed
@@ -15264,13 +15237,13 @@ class _ChatCapabilitiesSection extends StatelessWidget {
         ),
       if (featureSet.contains(mox.messageReactionsXmlns))
         _CapabilityEntry(
-          label: formatFeatureLabel(mox.messageReactionsXmlns),
+          label: _formatFeatureLabel(mox.messageReactionsXmlns),
           detail: l10n.chatReactionsPrompt,
         ),
       if (featureSet.contains(mox.mamXmlns))
-        _CapabilityEntry(label: formatFeatureLabel(mox.mamXmlns)),
+        _CapabilityEntry(label: _formatFeatureLabel(mox.mamXmlns)),
       if (isGroupChat && featureSet.contains(mox.mucXmlns))
-        _CapabilityEntry(label: formatFeatureLabel(mox.mucXmlns)),
+        _CapabilityEntry(label: _formatFeatureLabel(mox.mucXmlns)),
       if (isGroupChat && featureSet.contains(mox.mucXmlns))
         _CapabilityEntry(label: l10n.mucSectionModerators),
     ];
@@ -15341,11 +15314,18 @@ class _CapabilityTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final spacing = context.spacing;
+    final textTheme = context.textTheme;
     return AxiModalSurface(
       padding: EdgeInsets.all(spacing.s),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [Text(label)],
+        children: [
+          Text(label),
+          if (detail != null) ...[
+            SizedBox(height: spacing.xs),
+            Text(detail!, style: textTheme.muted),
+          ],
+        ],
       ),
     );
   }

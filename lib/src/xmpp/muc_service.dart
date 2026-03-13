@@ -3484,8 +3484,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (_leftRooms.contains(_roomKey(message.chatJid))) return;
     final nick = event.from.resource;
     if (nick.isEmpty) return;
-    final occupantId =
-        message.trimmedOccupantId ?? '${_roomKey(message.chatJid)}/$nick';
+    final occupantId = '${_roomKey(message.chatJid)}/$nick';
     _upsertOccupant(
       roomJid: message.chatJid,
       occupantId: occupantId,
