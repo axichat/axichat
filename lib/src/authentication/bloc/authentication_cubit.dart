@@ -950,6 +950,7 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
       return;
     }
     await _triggerEmailReconnect();
+    await _homeRefreshSyncService.syncOnLogin();
   }
 
   Future<void> _triggerEmailReconnect() async {

@@ -2253,6 +2253,43 @@ void main() {
       },
     );
 
+    test(
+      'Authenticated stream-ready events trigger login sync even when auth completed before connection.',
+      () async {
+        final streamReadyController =
+            StreamController<XmppStreamReady>.broadcast();
+        when(
+          () => mockXmppService.streamReadyStream,
+        ).thenAnswer((_) => streamReadyController.stream);
+        when(() => mockXmppService.myJid).thenReturn(validJid);
+
+        final bloc = AuthenticationCubit(
+          credentialStore: mockCredentialStore,
+          initialEndpointConfig: const EndpointConfig(),
+          xmppService: mockXmppService,
+          emailService: mockEmailService,
+          homeRefreshSyncService: mockHomeRefreshSyncService,
+          httpClient: mockHttpClient,
+          emailProvisioningClient: mockProvisioningClient,
+          initialState: const AuthenticationComplete(),
+        );
+
+        streamReadyController.add(
+          XmppStreamReady(
+            resumed: false,
+            timestamp: DateTime.timestamp(),
+            generation: 1,
+          ),
+        );
+        await Future<void>.delayed(Duration.zero);
+
+        verify(() => mockHomeRefreshSyncService.syncOnLogin()).called(1);
+
+        await streamReadyController.close();
+        await bloc.close();
+      },
+    );
+
     blocTest<AuthenticationCubit, AuthenticationState>(
       'User initiated logout clears email credentials when enabled.',
       build: () => AuthenticationCubit(
