@@ -15,8 +15,6 @@ const int _draftsSnapshotStart = 0;
 const int _draftsSnapshotEnd = 0;
 const String _draftSyncFlushPendingOperationName =
     'DraftSyncService.flushPendingOnResume';
-const String _draftSyncLoginOperationName =
-    'DraftSyncService.syncDraftsOnLogin';
 
 final _draftSyncSourceKey = XmppStateStore.registerKey(_draftSyncSourceKeyName);
 final _draftSyncPendingPublishesKey = XmppStateStore.registerKey(
@@ -57,10 +55,6 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
           );
           return;
         }
-        fireAndForget(
-          syncDraftsOnLogin,
-          operationName: _draftSyncLoginOperationName,
-        );
       })
       ..registerHandler<DraftSyncUpdatedEvent>((event) async {
         await _applyDraftSyncUpdate(event.payload);

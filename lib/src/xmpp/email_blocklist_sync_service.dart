@@ -15,8 +15,6 @@ const String _emailBlocklistSnapshotIdsKeyName =
     'email_blocklist_sync_last_snapshot_ids';
 const String _emailBlocklistFlushPendingOperationName =
     'EmailBlocklistSyncService.flushPendingOnResume';
-const String _emailBlocklistSyncOperationName =
-    'EmailBlocklistSyncService.syncOnLogin';
 
 final _emailBlocklistSyncSourceKey = XmppStateStore.registerKey(
   _emailBlocklistSyncSourceKeyName,
@@ -65,10 +63,6 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
           );
           return;
         }
-        fireAndForget(
-          syncEmailBlocklistSnapshot,
-          operationName: _emailBlocklistSyncOperationName,
-        );
       })
       ..registerHandler<EmailBlocklistSyncUpdatedEvent>((event) async {
         await _applyEmailBlocklistSyncUpdate(event.payload);

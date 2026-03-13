@@ -150,6 +150,9 @@ void main() {
     when(() => mockXmppService.connected).thenReturn(false);
     when(() => mockXmppService.databasesInitialized).thenReturn(false);
     when(() => mockXmppService.myJid).thenReturn(null);
+    when(
+      () => mockXmppService.waitForStreamReady(any()),
+    ).thenAnswer((_) async => null);
     when(() => mockXmppService.localizations).thenReturn(localizations);
     when(() => mockXmppService.database).thenAnswer((_) async => mockDatabase);
     when(() => mockXmppService.setClientState(any())).thenAnswer((_) async {});

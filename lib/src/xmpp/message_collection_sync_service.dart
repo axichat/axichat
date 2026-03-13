@@ -9,8 +9,6 @@ const String _messageCollectionSyncPendingPublishesKeyName =
     'message_collection_sync_pending_publishes';
 const String _messageCollectionSyncFlushPendingOperationName =
     'MessageCollectionSyncService.flushPendingOnResume';
-const String _messageCollectionSyncOperationName =
-    'MessageCollectionSyncService.syncOnLogin';
 
 final _messageCollectionSyncSourceKey = XmppStateStore.registerKey(
   _messageCollectionSyncSourceKeyName,
@@ -45,10 +43,6 @@ mixin MessageCollectionSyncService on XmppBase, BaseStreamService {
           );
           return;
         }
-        fireAndForget(
-          syncMessageCollectionsSnapshot,
-          operationName: _messageCollectionSyncOperationName,
-        );
       })
       ..registerHandler<MessageCollectionSyncUpdatedEvent>((event) async {
         await _applyMessageCollectionSyncUpdate(event.payload);

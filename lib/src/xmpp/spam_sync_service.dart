@@ -11,7 +11,6 @@ const String _spamSyncSnapshotAtKeyName = 'spam_sync_last_snapshot_at';
 const String _spamSyncSnapshotIdsKeyName = 'spam_sync_last_snapshot_ids';
 const String _spamSyncFlushPendingOperationName =
     'SpamSyncService.flushPendingOnResume';
-const String _spamSyncOperationName = 'SpamSyncService.syncOnLogin';
 
 final _spamSyncSourceKey = XmppStateStore.registerKey(_spamSyncSourceKeyName);
 final _spamSyncPendingPublishesKey = XmppStateStore.registerKey(
@@ -57,7 +56,6 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
           );
           return;
         }
-        fireAndForget(syncSpamSnapshot, operationName: _spamSyncOperationName);
       })
       ..registerHandler<SpamSyncUpdatedEvent>((event) async {
         await _applySpamSyncUpdate(event.payload);

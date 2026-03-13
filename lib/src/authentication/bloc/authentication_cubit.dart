@@ -162,9 +162,6 @@ class AuthenticationCubit extends Cubit<AuthenticationState> {
           if (connectionState == ConnectionState.connected) {
             await _triggerEmailReconnect();
             await _flushPendingAccountDeletions();
-            if (_xmppService.myJid != null) {
-              unawaited(_homeRefreshSyncService.syncOnLogin());
-            }
           } else if (connectionState == ConnectionState.notConnected ||
               connectionState == ConnectionState.error) {
             await _emailService?.handleNetworkLost();

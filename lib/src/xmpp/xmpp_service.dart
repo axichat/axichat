@@ -1042,6 +1042,19 @@ class XmppService extends XmppBase
 
   bool _shouldIgnoreEntityCapabilityJid(mox.JID jid) {
     if (jid.resource.isNotEmpty) {
+      final local = jid.local.trim();
+      if (local.isNotEmpty) {
+        final jidDomain = jid.domain.trim().toLowerCase();
+        final accountDomain = _myJid?.domain.trim().toLowerCase();
+        if (accountDomain != null &&
+            accountDomain.isNotEmpty &&
+            jidDomain == accountDomain) {
+          return true;
+        }
+        if (jidDomain == EndpointConfig.defaultDomain.trim().toLowerCase()) {
+          return true;
+        }
+      }
       return false;
     }
     return jid.domain == mucServiceHost;
@@ -3281,6 +3294,10 @@ class XmppService extends XmppBase
       );
     }
 
+    if (!resumed) {
+      await _runPostNegotiationsSnapshotBootstrap();
+    }
+
     try {
       await syncGlobalMamCatchUp();
     } on Exception catch (error, stackTrace) {
@@ -3289,6 +3306,62 @@ class XmppService extends XmppBase
         error,
         stackTrace,
       );
+    }
+  }
+
+  Future<void> _runPostNegotiationsSnapshotBootstrap() async {
+    await _runPostNegotiationsBootstrapStep(
+      label: 'MUC service discovery',
+      action: discoverMucServiceHost,
+    );
+    await _runPostNegotiationsBootstrapStep(
+      label: 'MUC bookmark sync',
+      action: () async {
+        await syncMucBookmarksSnapshot();
+      },
+    );
+    await _runPostNegotiationsBootstrapStep(
+      label: 'conversation index sync',
+      action: () async {
+        await syncConversationIndexSnapshot();
+      },
+    );
+    await _runPostNegotiationsBootstrapStep(
+      label: 'draft sync',
+      action: syncDraftsSnapshot,
+    );
+    await _runPostNegotiationsBootstrapStep(
+      label: 'message collection sync',
+      action: syncMessageCollectionsSnapshot,
+    );
+    await _runPostNegotiationsBootstrapStep(
+      label: 'spam sync',
+      action: syncSpamSnapshot,
+    );
+    await _runPostNegotiationsBootstrapStep(
+      label: 'email blocklist sync',
+      action: syncEmailBlocklistSnapshot,
+    );
+    await _runPostNegotiationsBootstrapStep(
+      label: 'conversation avatar refresh',
+      action: refreshAvatarsForConversationIndex,
+    );
+    await _runPostNegotiationsBootstrapStep(
+      label: 'calendar MAM rehydration',
+      action: () async {
+        await rehydrateCalendarFromMam();
+      },
+    );
+  }
+
+  Future<void> _runPostNegotiationsBootstrapStep({
+    required String label,
+    required Future<void> Function() action,
+  }) async {
+    try {
+      await action();
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.fine('Post-negotiations $label failed.', error, stackTrace);
     }
   }
 
