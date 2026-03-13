@@ -174,6 +174,10 @@ class _AxichatState extends State<Axichat> {
                     notificationService: context.read<NotificationService>(),
                     xmppService: context.read<XmppService>(),
                     messageService: context.read<MessageService>(),
+                    emailReadReceiptsEnabled: context
+                        .read<SettingsCubit>()
+                        .state
+                        .emailReadReceipts,
                   ),
                 ),
                 RepositoryProvider<HomeRefreshSyncService>(
@@ -342,6 +346,18 @@ class _AxichatState extends State<Axichat> {
                         } else {
                           await emailService.handleNetworkAvailable();
                         }
+                      },
+                    ),
+                    BlocListener<SettingsCubit, SettingsState>(
+                      listenWhen: (previous, current) =>
+                          previous.emailReadReceipts !=
+                          current.emailReadReceipts,
+                      listener: (context, settings) async {
+                        await context
+                            .read<EmailService>()
+                            .updateEmailReadReceiptsEnabled(
+                              settings.emailReadReceipts,
+                            );
                       },
                     ),
                   ],

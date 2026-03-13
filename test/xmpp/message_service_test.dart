@@ -2366,6 +2366,138 @@ void main() {
     );
 
     test(
+      'Ignores chat-state updates carried by self status sync envelopes.',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        await database.saveMessage(
+          Message(
+            stanzaID: localStanzaId,
+            originID: originId,
+            senderJid: xmppService.myJid!,
+            chatJid: peerJid,
+            timestamp: DateTime.timestamp(),
+            body: 'hello',
+          ),
+        );
+        await database.updateChatState(
+          chatJid: peerJid,
+          state: mox.ChatState.composing,
+        );
+
+        final syncBody = jsonEncode({
+          'message_status_sync': {
+            'v': 1,
+            'id': originId,
+            'chat_jid': peerJid,
+            'acked': true,
+            'received': true,
+            'displayed': true,
+          },
+        });
+        controller.add(
+          mox.MessageEvent(
+            mox.JID.fromString(xmppService.myJid!),
+            mox.JID.fromString(xmppService.myJid!),
+            false,
+            mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+              mox.MessageBodyData(syncBody),
+              mox.MessageIdData(uuid.v4()),
+              mox.ChatState.active,
+            ]),
+            id: uuid.v4(),
+            type: 'chat',
+          ),
+        );
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        final chat = await database.getChat(peerJid);
+        expect(chat?.chatState, mox.ChatState.composing);
+
+        await controller.close();
+      },
+    );
+
+    test(
+      'Duplicate archived self status sync envelopes do not re-emit message updates.',
+      () async {
+        final controller = StreamController<mox.XmppEvent>();
+        when(
+          () => mockConnection.asBroadcastStream(),
+        ).thenAnswer((_) => controller.stream);
+
+        await connectSuccessfully(xmppService);
+
+        await database.saveMessage(
+          Message(
+            stanzaID: localStanzaId,
+            originID: originId,
+            senderJid: xmppService.myJid!,
+            chatJid: peerJid,
+            timestamp: DateTime.timestamp(),
+            body: 'hello',
+          ),
+        );
+
+        final emissions = <List<Message>>[];
+        final subscription = xmppService
+            .messageStreamForChat(peerJid)
+            .listen(emissions.add);
+        await pumpEventQueue();
+
+        final syncBody = jsonEncode({
+          'message_status_sync': {
+            'v': 1,
+            'id': originId,
+            'chat_jid': peerJid,
+            'acked': true,
+            'received': true,
+            'displayed': true,
+          },
+        });
+
+        mox.MessageEvent buildArchivedSyncEvent() => mox.MessageEvent(
+          mox.JID.fromString(xmppService.myJid!),
+          mox.JID.fromString(xmppService.myJid!),
+          false,
+          mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
+            mox.MessageBodyData(syncBody),
+            mox.MessageIdData(uuid.v4()),
+            mox.ChatState.active,
+            mox.DelayedDeliveryData(
+              mox.JID.fromString('axi.im'),
+              DateTime.timestamp(),
+            ),
+          ]),
+          id: uuid.v4(),
+          type: 'chat',
+          isFromMAM: true,
+        );
+
+        controller.add(buildArchivedSyncEvent());
+        await pumpEventQueue();
+        await pumpEventQueue();
+        final afterFirstSync = emissions.length;
+
+        controller.add(buildArchivedSyncEvent());
+        await pumpEventQueue();
+        await pumpEventQueue();
+
+        expect(afterFirstSync, greaterThan(0));
+        expect(emissions.length, afterFirstSync);
+
+        await subscription.cancel();
+        await controller.close();
+      },
+    );
+
+    test(
       'Keeps self status sync scoped to the synced chat when origin-id collides.',
       () async {
         const otherPeerJid = 'other@axi.im';

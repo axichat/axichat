@@ -2456,13 +2456,13 @@ mixin MessageService
           _rememberStableKey(message.chatJid, stableKey);
         }
 
+        if (await _handleMessageStatusSync(event)) return;
         await _handleChatState(event, message.chatJid);
 
         if (await _handleCorrection(event, message.senderJid)) return;
         if (await _handleRetraction(event, message.senderJid)) return;
         if (await _handlePinMessageMutation(event)) return;
 
-        if (await _handleMessageStatusSync(event)) return;
         if (await _handleCalendarSync(event, metadata: metadata)) return;
         if (_isInternalSyncEnvelope(message.body)) {
           await _acknowledgeMessage(event);

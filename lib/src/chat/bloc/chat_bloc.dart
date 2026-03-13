@@ -481,8 +481,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _roomSelfAvatarPath;
   String? _lastReadMarkerStanzaId;
   String? _pendingReadMarkerStanzaId;
-  String? _lastNoticedEmailMessageId;
-  int? _lastNoticedEmailCandidateCount;
   String? _lastSeenEmailSyncKey;
   int? _emailUnreadBoundaryDeltaId;
   int? _emailUnreadBoundaryUnreadCount;
@@ -713,28 +711,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (!emailService.hasInMemoryReconnectContext) {
       return;
     }
-    final latestSeenCandidateId = seenCandidates.isNotEmpty
-        ? seenCandidates.last.stanzaID
-        : null;
-    if (seenCandidates.isNotEmpty) {
-      final shouldNotify =
-          _lastNoticedEmailCandidateCount != seenCandidates.length ||
-          _lastNoticedEmailMessageId != latestSeenCandidateId;
-      if (shouldNotify) {
-        final noticed = await emailService.markNoticedChat(chat);
-        if (noticed) {
-          _lastNoticedEmailCandidateCount = seenCandidates.length;
-          _lastNoticedEmailMessageId = latestSeenCandidateId;
-        }
-      }
-    }
     if (seenCandidates.isEmpty) {
       _lastSeenEmailSyncKey = null;
       return;
     }
-    final shouldSendEmailReadReceipts = _settingsSnapshot.emailReadReceipts;
     final seenSyncKey = [
-      if (shouldSendEmailReadReceipts) 'seen' else 'displayed',
+      'seen',
       ...seenCandidates.map(
         (message) => message.deltaMsgId?.toString() ?? message.stanzaID.trim(),
       ),
@@ -742,13 +724,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (seenSyncKey == _lastSeenEmailSyncKey) {
       return;
     }
-    if (shouldSendEmailReadReceipts) {
-      final markedSeen = await emailService.markSeenMessages(seenCandidates);
-      if (markedSeen) {
-        _lastSeenEmailSyncKey = seenSyncKey;
-      }
-    } else {
-      await _markEmailMessagesDisplayedLocally(seenCandidates);
+    final markedSeen = await emailService.markSeenMessages(seenCandidates);
+    if (markedSeen) {
       _lastSeenEmailSyncKey = seenSyncKey;
     }
   }
@@ -1649,8 +1626,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (resetContext) {
       _lastReadMarkerStanzaId = null;
       _pendingReadMarkerStanzaId = null;
-      _lastNoticedEmailMessageId = null;
-      _lastNoticedEmailCandidateCount = null;
       _lastSeenEmailSyncKey = null;
       _emailUnreadBoundaryDeltaId = null;
       _emailUnreadBoundaryUnreadCount = null;

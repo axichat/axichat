@@ -3129,7 +3129,6 @@ WHERE jid = ?
 
   @override
   Future<void> markMessageAcked(String stanzaID, {String? chatJid}) async {
-    _log.info('Marking message acked');
     final normalizedChatJid = chatJid?.trim();
     final query = update(messages)
       ..where(
@@ -3137,14 +3136,19 @@ WHERE jid = ?
             (normalizedChatJid == null || normalizedChatJid.isEmpty
                 ? const Constant(true)
                 : tbl.chatJid.equals(normalizedChatJid)) &
-            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)),
+            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)) &
+            tbl.acked.equals(false),
       );
-    await query.write(const MessagesCompanion(acked: Value(true)));
+    final updatedRows = await query.write(
+      const MessagesCompanion(acked: Value(true)),
+    );
+    if (updatedRows > 0) {
+      _log.info('Marking message acked');
+    }
   }
 
   @override
   Future<void> markMessageReceived(String stanzaID, {String? chatJid}) async {
-    _log.info('Marking message received');
     final normalizedChatJid = chatJid?.trim();
     final query = update(messages)
       ..where(
@@ -3152,14 +3156,19 @@ WHERE jid = ?
             (normalizedChatJid == null || normalizedChatJid.isEmpty
                 ? const Constant(true)
                 : tbl.chatJid.equals(normalizedChatJid)) &
-            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)),
+            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)) &
+            tbl.received.equals(false),
       );
-    await query.write(const MessagesCompanion(received: Value(true)));
+    final updatedRows = await query.write(
+      const MessagesCompanion(received: Value(true)),
+    );
+    if (updatedRows > 0) {
+      _log.info('Marking message received');
+    }
   }
 
   @override
   Future<void> markMessageDisplayed(String stanzaID, {String? chatJid}) async {
-    _log.info('Marking message displayed');
     final normalizedChatJid = chatJid?.trim();
     final query = update(messages)
       ..where(
@@ -3167,9 +3176,15 @@ WHERE jid = ?
             (normalizedChatJid == null || normalizedChatJid.isEmpty
                 ? const Constant(true)
                 : tbl.chatJid.equals(normalizedChatJid)) &
-            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)),
+            (tbl.stanzaID.equals(stanzaID) | tbl.originID.equals(stanzaID)) &
+            tbl.displayed.equals(false),
       );
-    await query.write(const MessagesCompanion(displayed: Value(true)));
+    final updatedRows = await query.write(
+      const MessagesCompanion(displayed: Value(true)),
+    );
+    if (updatedRows > 0) {
+      _log.info('Marking message displayed');
+    }
   }
 
   @override
