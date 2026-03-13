@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:code_assets/code_assets.dart';
@@ -10,7 +11,9 @@ Future<void> main(List<String> args) async {
     if (!config.buildCodeAssets) {
       return;
     }
+    stdout.writeln('[delta_ffi] Preparing native build.');
     await _ensureDeltachatCrateTypePatched();
+    stdout.writeln('[delta_ffi] Crate type patch check complete.');
 
     final codeConfig = config.code;
     final packageRoot = input.packageRoot;
@@ -18,9 +21,11 @@ Future<void> main(List<String> args) async {
     final targetTriple =
         _rustTargetTriple(codeConfig.targetOS, codeConfig.targetArchitecture);
     final isRelease = _isReleaseBuild(input);
+    final cargoTargetDir = input.outputDirectory.resolve('cargo-target/');
 
     final buildArgs = [
       'build',
+      '-vv',
       '--manifest-path',
       crateDir.resolve('Cargo.toml').toFilePath(),
       '--target',
@@ -33,34 +38,61 @@ Future<void> main(List<String> args) async {
       ..addAll(_cargoEnvForTarget(
         triple: targetTriple,
         codeConfig: codeConfig,
-      ));
+      ))
+      ..['CARGO_TARGET_DIR'] = cargoTargetDir.toFilePath();
 
     final linkerEnvKey = 'CARGO_TARGET_${tripleKeyCargo}_LINKER';
     stdout.writeln(
+        '[delta_ffi] Target: $targetTriple (${codeConfig.targetOS.name}/${codeConfig.targetArchitecture.name})');
+    stdout.writeln(
         '[delta_ffi][warning] Using linker: ${environment[linkerEnvKey] ?? 'default'}');
+    stdout.writeln(
+        '[delta_ffi] Running cargo from ${crateDir.toFilePath()} with args: ${buildArgs.join(' ')}');
+    stdout.writeln(
+        '[delta_ffi] Using cargo target dir: ${cargoTargetDir.toFilePath()}');
 
-    final result = await Process.run(
+    final process = await Process.start(
       'cargo',
       buildArgs,
       workingDirectory: crateDir.toFilePath(),
       environment: environment,
     );
+    stdout.writeln('[delta_ffi] Cargo started with pid ${process.pid}.');
 
-    if (result.exitCode != 0) {
-      final stderrSink = stderr;
-      stderrSink.writeln(result.stdout);
-      stderrSink.writeln(result.stderr);
+    final stdoutOutput = _pipeProcessOutput(
+      process.stdout,
+      stdout,
+    );
+    final stderrOutput = _pipeProcessOutput(
+      process.stderr,
+      stderr,
+    );
+    final stopwatch = Stopwatch()..start();
+    final heartbeat = Timer.periodic(const Duration(seconds: 15), (_) {
+      stdout.writeln(
+        '[delta_ffi] Cargo still running after ${stopwatch.elapsed}.',
+      );
+    });
+    final exitCode = await process.exitCode;
+    heartbeat.cancel();
+    stopwatch.stop();
+    final capturedStdout = await stdoutOutput;
+    final capturedStderr = await stderrOutput;
+    stdout.writeln(
+      '[delta_ffi] Cargo exited with code $exitCode after ${stopwatch.elapsed}.',
+    );
+
+    if (exitCode != 0) {
       throw ProcessException(
         'cargo',
         buildArgs,
-        result.stderr is String ? result.stderr as String : '${result.stderr}',
-        result.exitCode,
+        capturedStderr.isNotEmpty ? capturedStderr : capturedStdout,
+        exitCode,
       );
     }
 
     final libraryName = _libraryFileName(codeConfig.targetOS, 'deltachat_wrap');
-    final artifact = crateDir
-        .resolve('target/')
+    final artifact = cargoTargetDir
         .resolve('$targetTriple/')
         .resolve(isRelease ? 'release/' : 'debug/')
         .resolve(libraryName);
@@ -232,6 +264,18 @@ Map<String, String> _cargoEnvForTarget({
   }
 
   return env;
+}
+
+Future<String> _pipeProcessOutput(
+  Stream<List<int>> stream,
+  IOSink sink,
+) async {
+  final output = StringBuffer();
+  await for (final chunk in systemEncoding.decoder.bind(stream)) {
+    sink.write(chunk);
+    output.write(chunk);
+  }
+  return output.toString();
 }
 
 Future<void> _ensureDeltachatCrateTypePatched() async {
