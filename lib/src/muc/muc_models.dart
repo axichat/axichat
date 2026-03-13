@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 
 enum MucStatusCode {
@@ -145,7 +146,41 @@ class Occupant {
 
   bool get isModerator => role.isModerator;
   bool get isOffline => !isPresent;
+  bool get hasRealJid => realJid?.trim().isNotEmpty == true;
   bool get hasResolvedMembershipState => !affiliation.isNone || !role.isNone;
+  String get normalizedNick => nick.trim().toLowerCase();
+  String get avatarKey {
+    final resolvedRealJid = realJid?.trim();
+    if (resolvedRealJid == null || resolvedRealJid.isEmpty) {
+      return nick;
+    }
+    return bareAddress(resolvedRealJid) ?? resolvedRealJid;
+  }
+
+  bool matchesOccupantId(String? value) {
+    final trimmedValue = value?.trim();
+    if (trimmedValue == null || trimmedValue.isEmpty) {
+      return false;
+    }
+    return occupantId == trimmedValue ||
+        sameFullAddress(occupantId, trimmedValue);
+  }
+
+  bool matchesNick(String? value) {
+    final trimmedValue = value?.trim();
+    if (trimmedValue == null || trimmedValue.isEmpty) {
+      return false;
+    }
+    return normalizedNick == trimmedValue.toLowerCase();
+  }
+
+  bool matchesRealJid(String? value) {
+    final trimmedValue = value?.trim();
+    if (trimmedValue == null || trimmedValue.isEmpty || !hasRealJid) {
+      return false;
+    }
+    return sameBareAddress(realJid, trimmedValue);
+  }
 
   Occupant copyWith({
     String? occupantId,
@@ -196,6 +231,10 @@ class RoomState {
   final String? destroyedAlternateRoomJid;
   final bool postJoinRefreshPending;
   late final _RoomOccupantGroups _occupantGroups = _buildOccupantGroups();
+  late final _RoomOccupantDirectory _occupantDirectory = _RoomOccupantDirectory(
+    roomJid: roomJid,
+    occupants: occupants,
+  );
 
   OccupantAffiliation get myAffiliation =>
       occupants[myOccupantJid]?.affiliation ?? OccupantAffiliation.none;
@@ -216,6 +255,24 @@ class RoomState {
   List<Occupant> get participants => _occupantGroups.participants;
 
   List<Occupant> get visitors => _occupantGroups.visitors;
+
+  Occupant? get selfOccupant {
+    final occupantJid = myOccupantJid;
+    if (occupantJid == null || occupantJid.isEmpty) {
+      return null;
+    }
+    return occupants[occupantJid];
+  }
+
+  String? get selfNick => selfOccupant?.nick;
+
+  String? get selfRealJid {
+    final resolvedRealJid = selfOccupant?.realJid?.trim();
+    if (resolvedRealJid == null || resolvedRealJid.isEmpty) {
+      return null;
+    }
+    return resolvedRealJid;
+  }
 
   bool get roomCreated =>
       selfPresenceStatusCodes.contains(MucStatusCode.roomCreated.code);
@@ -241,6 +298,51 @@ class RoomState {
 
   bool get roomShutdown =>
       selfPresenceStatusCodes.contains(MucStatusCode.roomShutdown.code);
+
+  bool isRoomNickOccupantId(String occupantId) =>
+      _occupantDirectory.isRoomNickOccupantId(occupantId);
+
+  Occupant? occupantForRealJid(
+    String realJid, {
+    bool excludeRoomNickOccupantIds = false,
+  }) => _occupantDirectory.occupantForRealJid(
+    realJid,
+    excludeRoomNickOccupantIds: excludeRoomNickOccupantIds,
+  );
+
+  Occupant? occupantForNick(
+    String nick, {
+    bool preferPresent = false,
+    bool preferRealJid = false,
+    bool roomNickOccupantOnly = false,
+  }) => _occupantDirectory.occupantForNick(
+    nick,
+    preferPresent: preferPresent,
+    preferRealJid: preferRealJid,
+    roomNickOccupantOnly: roomNickOccupantOnly,
+  );
+
+  Occupant? occupantForSenderJid(
+    String senderJid, {
+    bool preferRealJid = false,
+  }) => _occupantDirectory.occupantForSenderJid(
+    senderJid,
+    preferRealJid: preferRealJid,
+  );
+
+  String? canonicalOccupantId(String occupantId) =>
+      _occupantDirectory.canonicalOccupantId(occupantId);
+
+  String? occupantIdForAffiliation({String? realJid, String? nick}) =>
+      _occupantDirectory.occupantIdForAffiliation(realJid: realJid, nick: nick);
+
+  String syntheticOccupantIdForAffiliationJid(String jid) {
+    final normalizedJid = bareAddress(jid) ?? jid.trim();
+    return '$roomJid/~$normalizedJid';
+  }
+
+  String fallbackNickForAffiliationJid(String jid) =>
+      bareAddress(jid) ?? jid.trim();
 
   _RoomOccupantGroups _buildOccupantGroups() {
     final owners = <Occupant>[];
@@ -417,4 +519,184 @@ class _RoomOccupantGroups {
   final List<Occupant> members;
   final List<Occupant> participants;
   final List<Occupant> visitors;
+}
+
+class _RoomOccupantDirectory {
+  const _RoomOccupantDirectory({
+    required this.roomJid,
+    required this.occupants,
+  });
+
+  final String roomJid;
+  final Map<String, Occupant> occupants;
+
+  bool isRoomNickOccupantId(String occupantId) {
+    final parsed = parseJid(occupantId);
+    if (parsed == null) {
+      return false;
+    }
+    final resource = parsed.resource.trim();
+    if (resource.isEmpty) {
+      return false;
+    }
+    return parsed.toBare().toString() == roomJid;
+  }
+
+  Occupant? occupantForRealJid(
+    String realJid, {
+    bool excludeRoomNickOccupantIds = false,
+  }) {
+    final trimmedRealJid = realJid.trim();
+    if (trimmedRealJid.isEmpty) {
+      return null;
+    }
+    Occupant? fallback;
+    for (final occupant in occupants.values) {
+      if (excludeRoomNickOccupantIds &&
+          isRoomNickOccupantId(occupant.occupantId)) {
+        continue;
+      }
+      if (!occupant.matchesRealJid(trimmedRealJid)) {
+        continue;
+      }
+      if (occupant.isPresent) {
+        return occupant;
+      }
+      fallback ??= occupant;
+    }
+    return fallback;
+  }
+
+  Occupant? occupantForNick(
+    String nick, {
+    bool preferPresent = false,
+    bool preferRealJid = false,
+    bool roomNickOccupantOnly = false,
+  }) {
+    final trimmedNick = nick.trim();
+    if (trimmedNick.isEmpty) {
+      return null;
+    }
+    Occupant? fallback;
+    for (final occupant in occupants.values) {
+      if (roomNickOccupantOnly && !isRoomNickOccupantId(occupant.occupantId)) {
+        continue;
+      }
+      if (!occupant.matchesNick(trimmedNick)) {
+        continue;
+      }
+      fallback ??= occupant;
+      if (preferRealJid && occupant.hasRealJid) {
+        return occupant;
+      }
+      if (preferPresent && occupant.isPresent) {
+        return occupant;
+      }
+    }
+    return fallback;
+  }
+
+  Occupant? occupantForSenderJid(
+    String senderJid, {
+    bool preferRealJid = false,
+  }) {
+    final trimmedSenderJid = senderJid.trim();
+    if (trimmedSenderJid.isEmpty) {
+      return null;
+    }
+    final direct = occupants[trimmedSenderJid];
+    Occupant? fallback = direct;
+    if (direct != null && (!preferRealJid || direct.hasRealJid)) {
+      return direct;
+    }
+    for (final occupant in occupants.values) {
+      if (occupant.occupantId == direct?.occupantId) {
+        continue;
+      }
+      if (!occupant.matchesOccupantId(trimmedSenderJid)) {
+        continue;
+      }
+      fallback ??= occupant;
+      if (!preferRealJid || occupant.hasRealJid) {
+        return occupant;
+      }
+    }
+    final senderNick = addressResourcePart(trimmedSenderJid)?.trim();
+    if (senderNick == null || senderNick.isEmpty) {
+      return fallback;
+    }
+    return occupantForNick(
+          senderNick,
+          preferRealJid: preferRealJid,
+          preferPresent: !preferRealJid,
+        ) ??
+        fallback;
+  }
+
+  String? canonicalOccupantId(String occupantId) {
+    final trimmedOccupantId = occupantId.trim();
+    if (trimmedOccupantId.isEmpty) {
+      return null;
+    }
+    if (occupants.containsKey(trimmedOccupantId)) {
+      return trimmedOccupantId;
+    }
+    if (isRoomNickOccupantId(trimmedOccupantId)) {
+      for (final occupant in occupants.values) {
+        if (!isRoomNickOccupantId(occupant.occupantId)) {
+          continue;
+        }
+        if (occupant.matchesOccupantId(trimmedOccupantId)) {
+          return occupant.occupantId;
+        }
+      }
+      final nick = addressResourcePart(trimmedOccupantId)?.trim();
+      if (nick == null || nick.isEmpty) {
+        return null;
+      }
+      return occupantForNick(
+        nick,
+        preferPresent: true,
+        roomNickOccupantOnly: true,
+      )?.occupantId;
+    }
+    return occupantForSenderJid(trimmedOccupantId)?.occupantId;
+  }
+
+  String? occupantIdForAffiliation({String? realJid, String? nick}) {
+    final trimmedRealJid = realJid?.trim();
+    if (trimmedRealJid?.isNotEmpty == true) {
+      final direct = occupantForRealJid(
+        trimmedRealJid!,
+        excludeRoomNickOccupantIds: false,
+      );
+      if (direct != null) {
+        return direct.occupantId;
+      }
+      final trimmedNick = nick?.trim();
+      if (trimmedNick?.isNotEmpty == true) {
+        final roomNickOccupant = occupantForNick(
+          trimmedNick!,
+          preferPresent: true,
+          roomNickOccupantOnly: true,
+        );
+        if (roomNickOccupant == null) {
+          return null;
+        }
+        final occupantRealJid = roomNickOccupant.realJid?.trim();
+        if (occupantRealJid != null &&
+            occupantRealJid.isNotEmpty &&
+            !sameBareAddress(occupantRealJid, trimmedRealJid)) {
+          return null;
+        }
+        return roomNickOccupant.occupantId;
+      }
+      return null;
+    }
+    final trimmedNick = nick?.trim();
+    if (trimmedNick?.isNotEmpty != true) {
+      return null;
+    }
+    return canonicalOccupantId('$roomJid/$trimmedNick');
+  }
 }

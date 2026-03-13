@@ -1008,7 +1008,7 @@ class _RoomMembersDrawerContent extends StatelessWidget {
           onChangeNickname: onChangeNickname,
           onLeaveRoom: onLeaveRoom,
           onDestroyRoom: onDestroyRoom,
-          currentNickname: roomState.occupants[roomState.myOccupantJid]?.nick,
+          currentNickname: roomState.selfNick,
           onClose: onClose,
           useSurface: true,
         );
@@ -2134,23 +2134,7 @@ class _ChatState extends State<Chat> {
     required String senderJid,
     required RoomState? roomState,
   }) {
-    if (roomState == null) {
-      return null;
-    }
-    final Occupant? direct = roomState.occupants[senderJid];
-    if (direct != null) {
-      return direct;
-    }
-    final String? nick = _nickFromSender(senderJid);
-    if (nick == null) {
-      return null;
-    }
-    for (final occupant in roomState.occupants.values) {
-      if (occupant.nick == nick) {
-        return occupant;
-      }
-    }
-    return null;
+    return roomState?.occupantForSenderJid(senderJid, preferRealJid: true);
   }
 
   bool _availabilitySenderMatchesClaim({
@@ -2196,12 +2180,9 @@ class _ChatState extends State<Chat> {
     if (trimmedCurrent != null && trimmedCurrent.isNotEmpty) {
       return trimmedCurrent;
     }
-    final occupantJid = roomState?.myOccupantJid?.trim();
-    if (occupantJid != null && occupantJid.isNotEmpty) {
-      final realJid = roomState?.occupants[occupantJid]?.realJid?.trim();
-      if (realJid != null && realJid.isNotEmpty) {
-        return bareAddress(realJid) ?? realJid;
-      }
+    final realJid = roomState?.selfRealJid;
+    if (realJid != null && realJid.isNotEmpty) {
+      return bareAddress(realJid) ?? realJid;
     }
     return null;
   }
@@ -4725,9 +4706,7 @@ class _ChatState extends State<Chat> {
                           normalizedChatJid == normalizedEmailSelfJid));
               final String? selfAvatarPath = profileState()?.avatarPath?.trim();
               final myOccupantJid = state.roomState?.myOccupantJid;
-              final myOccupant = myOccupantJid == null
-                  ? null
-                  : state.roomState?.occupants[myOccupantJid];
+              final myOccupant = state.roomState?.selfOccupant;
               final selfNick = (myOccupant?.nick ?? chatEntity?.myNickname)
                   ?.trim();
               final String? availabilityActorId = _availabilityActorId(
@@ -4812,19 +4791,10 @@ class _ChatState extends State<Chat> {
                 }
                 final roomState = state.roomState;
                 if (roomState == null) return null;
-                final parsed = parseJid(trimmed);
-                final nick = parsed?.resource.trim() ?? '';
-                if (nick.isEmpty) return null;
-
-                Occupant? occupant = roomState.occupants[trimmed];
-                if (occupant == null) {
-                  for (final candidate in roomState.occupants.values) {
-                    if (candidate.nick == nick) {
-                      occupant = candidate;
-                      break;
-                    }
-                  }
-                }
+                final occupant = roomState.occupantForSenderJid(
+                  trimmed,
+                  preferRealJid: true,
+                );
 
                 final realJid = occupant?.realJid?.trim();
                 if (realJid == null || realJid.isEmpty) return null;
@@ -11022,11 +10992,7 @@ class _PinnedMessageTile extends StatelessWidget {
   bool isSelfMessage({required Message message, required String? accountJid}) {
     if (chat.type == ChatType.groupChat) {
       final myOccupantJid = roomState?.myOccupantJid;
-      final selfNick =
-          (myOccupantJid == null
-              ? null
-              : roomState?.occupants[myOccupantJid]?.nick) ??
-          chat.myNickname;
+      final selfNick = roomState?.selfNick ?? chat.myNickname;
       final normalizedSelf = myOccupantJid?.trim();
       if (normalizedSelf != null &&
           normalizedSelf.isNotEmpty &&
@@ -12384,38 +12350,7 @@ layoutReactionStrip({
 Occupant? _resolveRoomMessageOccupant({
   required Message message,
   required RoomState roomState,
-}) {
-  final senderJid = message.senderJid.trim();
-  Occupant? fallback;
-  Occupant? direct = roomState.occupants[senderJid];
-  if (direct == null) {
-    for (final occupant in roomState.occupants.values) {
-      if (!sameFullAddress(occupant.occupantId, senderJid)) {
-        continue;
-      }
-      direct = occupant;
-      break;
-    }
-  }
-  if (direct != null && direct.realJid?.trim().isNotEmpty == true) {
-    return direct;
-  }
-  fallback ??= direct;
-  final nick = addressResourcePart(senderJid)?.trim();
-  if (nick == null || nick.isEmpty) {
-    return fallback;
-  }
-  for (final occupant in roomState.occupants.values) {
-    if (!_sameOccupantNick(occupant.nick, nick)) {
-      continue;
-    }
-    if (occupant.realJid?.trim().isNotEmpty == true) {
-      return occupant;
-    }
-    fallback ??= occupant;
-  }
-  return fallback;
-}
+}) => roomState.occupantForSenderJid(message.senderJid, preferRealJid: true);
 
 RoomMemberEntry? _resolveRoomMemberEntryForMessage({
   required Message message,
@@ -12451,11 +12386,7 @@ bool _sameOccupantNick(String left, String right) {
 }
 
 String _roomMemberAvatarKey(Occupant occupant) {
-  final realJid = occupant.realJid?.trim();
-  if (realJid == null || realJid.isEmpty) {
-    return occupant.nick;
-  }
-  return bareAddress(realJid) ?? realJid;
+  return occupant.avatarKey;
 }
 
 @visibleForTesting

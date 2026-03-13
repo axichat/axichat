@@ -37,6 +37,38 @@ final class MucSelfPresenceEvent extends mox.XmppEvent {
   final String? newNick;
   final bool isRoomDestroyed;
   final String? destroyAlternateRoomJid;
+
+  OccupantAffiliation get occupantAffiliation =>
+      OccupantAffiliation.fromString(affiliation);
+
+  OccupantRole get occupantRole => OccupantRole.fromString(role);
+
+  MucJoinErrorCondition? get parsedErrorCondition =>
+      MucJoinErrorCondition.fromString(errorCondition);
+
+  bool get shouldLeaveRoom => !isAvailable && !isNickChange;
+
+  String get nextNick {
+    if (isNickChange && newNick?.isNotEmpty == true) {
+      return newNick!.trim();
+    }
+    return nick.trim();
+  }
+
+  String get nextOccupantJid {
+    if (isNickChange && newNick?.isNotEmpty == true) {
+      return '$roomJid/${newNick!.trim()}';
+    }
+    return occupantJid;
+  }
+
+  bool hasStatus(MucStatusCode code) => statusCodes.contains(code.code);
+
+  bool get shouldArchiveRoom =>
+      isRoomDestroyed ||
+      hasStatus(MucStatusCode.roomShutdown) ||
+      hasStatus(MucStatusCode.removedByAffiliationChange) ||
+      hasStatus(MucStatusCode.removedByMembersOnlyChange);
 }
 
 final class MucJoinBootstrapManager extends mox.XmppManagerBase {
