@@ -436,7 +436,8 @@ mixin MucService on XmppBase, BaseStreamService {
     }
   }
 
-  bool _roomHasLeft(String roomKey) => _roomSessionForKey(roomKey)?.hasLeft == true;
+  bool _roomHasLeft(String roomKey) =>
+      _roomSessionForKey(roomKey)?.hasLeft == true;
 
   void _setRoomHasLeft(String roomKey, bool hasLeft) {
     if (!hasLeft) {
@@ -476,9 +477,6 @@ mixin MucService on XmppBase, BaseStreamService {
     }
     _ensureRoomSessionForKey(roomKey).needsJoin = true;
   }
-
-  int _mucJoinInFlightCount(String roomKey) =>
-      _roomSessionForKey(roomKey)?.joinInFlightCount ?? 0;
 
   bool _mucJoinInFlight(String roomKey) =>
       _roomSessionForKey(roomKey)?.joinInFlight == true;
@@ -3579,11 +3577,7 @@ mixin MucService on XmppBase, BaseStreamService {
     if (roomState?.hasSelfPresence != true) {
       _setPendingOwnDataForKey(
         key,
-        _PendingOwnData(
-          nick: nick,
-          affiliation: affiliation,
-          role: role,
-        ),
+        _PendingOwnData(nick: nick, affiliation: affiliation, role: role),
       );
       _logJoinEvent(
         message: _mucJoinOwnDataIgnoredLog,
