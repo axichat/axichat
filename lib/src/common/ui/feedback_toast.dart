@@ -228,20 +228,22 @@ class _FeedbackToastState extends State<FeedbackToast> {
     final effectiveCloseIcon =
         widget.closeIcon ??
         effectiveToastTheme.closeIcon ??
-        ShadIconButton.ghost(
-          icon: Icon(
-            size: 16,
-            widget.closeIconData ??
-                effectiveToastTheme.closeIconData ??
-                LucideIcons.x,
-          ),
-          width: 20,
-          height: 20,
-          padding: EdgeInsets.zero,
-          foregroundColor: effectiveForegroundColor.withValues(alpha: .5),
+        AxiIconButton.ghost(
+          iconData:
+              widget.closeIconData ??
+              effectiveToastTheme.closeIconData ??
+              LucideIcons.x,
+          iconSize: 16,
+          buttonSize: 20,
+          tapTargetSize: 20,
+          color: effectiveForegroundColor.withValues(alpha: .5),
+          hoverColor: effectiveForegroundColor,
+          pressedColor: effectiveForegroundColor,
+          backgroundColor: Colors.transparent,
           hoverBackgroundColor: Colors.transparent,
-          hoverForegroundColor: effectiveForegroundColor,
-          pressedForegroundColor: effectiveForegroundColor,
+          pressedBackgroundColor: Colors.transparent,
+          borderColor: Colors.transparent,
+          semanticLabel: MaterialLocalizations.of(context).closeButtonTooltip,
           onPressed: () => ShadToaster.of(context).hide(),
         );
     final effectiveTitleStyle =

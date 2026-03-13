@@ -64,7 +64,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.byType(InputChip));
+    await tester.tap(find.text('Bob'));
     expect(toggledKey, recipient.key);
   });
 
@@ -116,6 +116,44 @@ void main() {
     await tester.tap(find.byType(TextField));
     await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
     expect(removedKey, recipients.last.key);
+  });
+
+  testWidgets('tapping delete icon removes recipient without toggling', (
+    tester,
+  ) async {
+    String? removedKey;
+    String? toggledKey;
+    final chat = Chat(
+      jid: 'dc-1@delta.chat',
+      title: 'Bob',
+      type: ChatType.chat,
+      lastChangeTimestamp: DateTime.now(),
+    );
+    final recipient = ComposerRecipient(
+      target: FanOutTarget.chat(chat: chat, shareSignatureEnabled: true),
+    );
+
+    await tester.pumpWidget(
+      _wrapWithTheme(
+        RecipientChipsBar(
+          recipients: [recipient],
+          availableChats: const [],
+          latestStatuses: const {},
+          selfIdentity: const SelfIdentitySnapshot(
+            selfJid: null,
+            avatarPath: null,
+          ),
+          onRecipientAdded: (_) {},
+          onRecipientRemoved: (key) => removedKey = key,
+          onRecipientToggled: (key) => toggledKey = key,
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.close));
+
+    expect(removedKey, recipient.key);
+    expect(toggledKey, isNull);
   });
 
   testWidgets('shows latest status for typed recipient via email key', (

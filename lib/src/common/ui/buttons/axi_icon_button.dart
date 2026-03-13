@@ -24,7 +24,11 @@ class AxiIconButton extends StatefulWidget {
     this.tooltip,
     this.semanticLabel,
     this.color,
+    this.hoverColor,
+    this.pressedColor,
     this.backgroundColor,
+    this.hoverBackgroundColor,
+    this.pressedBackgroundColor,
     this.borderColor,
     this.iconSize,
     this.buttonSize,
@@ -50,7 +54,11 @@ class AxiIconButton extends StatefulWidget {
     this.tooltip,
     this.semanticLabel,
     this.color,
+    this.hoverColor,
+    this.pressedColor,
     this.backgroundColor,
+    this.hoverBackgroundColor,
+    this.pressedBackgroundColor,
     this.borderColor,
     this.iconSize,
     this.buttonSize,
@@ -74,11 +82,15 @@ class AxiIconButton extends StatefulWidget {
     this.tooltip,
     this.semanticLabel,
     this.color,
+    this.hoverColor,
+    this.pressedColor,
     this.iconSize,
     this.buttonSize,
     this.tapTargetSize,
     this.cornerRadius,
     this.backgroundColor,
+    this.hoverBackgroundColor,
+    this.pressedBackgroundColor,
     this.borderColor,
     this.loading = false,
     this.selected = false,
@@ -99,10 +111,14 @@ class AxiIconButton extends StatefulWidget {
     this.tooltip,
     this.semanticLabel,
     this.color,
+    this.hoverColor,
+    this.pressedColor,
     this.iconSize,
     this.buttonSize,
     this.tapTargetSize,
     this.cornerRadius,
+    this.hoverBackgroundColor,
+    this.pressedBackgroundColor,
     this.loading = false,
     this.selected = false,
   }) : variant = AxiIconButtonVariant.outline,
@@ -124,12 +140,16 @@ class AxiIconButton extends StatefulWidget {
     this.tooltip,
     this.semanticLabel,
     this.color,
+    this.hoverColor,
+    this.pressedColor,
     this.iconSize,
     this.buttonSize,
     this.tapTargetSize,
     this.cornerRadius,
     this.borderWidth,
     this.backgroundColor,
+    this.hoverBackgroundColor,
+    this.pressedBackgroundColor,
     this.borderColor,
     this.loading = false,
     this.selected = false,
@@ -149,12 +169,16 @@ class AxiIconButton extends StatefulWidget {
     this.tooltip,
     this.semanticLabel,
     this.color,
+    this.hoverColor,
+    this.pressedColor,
     this.iconSize,
     this.buttonSize,
     this.tapTargetSize,
     this.cornerRadius,
     this.borderWidth,
     this.backgroundColor,
+    this.hoverBackgroundColor,
+    this.pressedBackgroundColor,
     this.borderColor,
     this.loading = false,
     this.selected = false,
@@ -173,7 +197,11 @@ class AxiIconButton extends StatefulWidget {
   final String? tooltip;
   final String? semanticLabel;
   final Color? color;
+  final Color? hoverColor;
+  final Color? pressedColor;
   final Color? backgroundColor;
+  final Color? hoverBackgroundColor;
+  final Color? pressedBackgroundColor;
   final Color? borderColor;
   final double? iconSize;
   final double? buttonSize;
@@ -229,7 +257,7 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                   context.colorScheme.destructive,
                 _ => context.colorScheme.foreground,
               };
-        final Color resolvedForeground = widget.color ?? fallbackForeground;
+        final Color baseForeground = widget.color ?? fallbackForeground;
         final Color baseBorder =
             widget.borderColor ??
             (widget.variant == AxiIconButtonVariant.ghost
@@ -264,7 +292,10 @@ class _AxiIconButtonState extends State<AxiIconButton> {
         final VoidCallback? onLongPress = enabled
             ? withSelectionHaptic(widget.onLongPress)
             : null;
+        final bool hovered = states.contains(WidgetState.hovered);
+        final bool focused = states.contains(WidgetState.focused);
         final bool pressed = states.contains(WidgetState.pressed);
+        final bool emphasized = hovered || focused;
         final double resolvedIconSize =
             widget.resolvedIconSize ?? context.sizing.iconButtonIconSize;
         final double resolvedButtonSize =
@@ -282,6 +313,11 @@ class _AxiIconButtonState extends State<AxiIconButton> {
               : BorderRadius.circular(widget.resolvedCornerRadius!),
           side: BorderSide(color: resolvedBorder, width: resolvedBorderWidth),
         );
+        final Color resolvedForeground = pressed
+            ? (widget.pressedColor ?? widget.hoverColor ?? baseForeground)
+            : (emphasized
+                  ? (widget.hoverColor ?? baseForeground)
+                  : baseForeground);
         final Widget iconWidget = widget.loading
             ? AxiProgressIndicator(color: resolvedForeground)
             : (widget.icon == null
@@ -294,14 +330,18 @@ class _AxiIconButtonState extends State<AxiIconButton> {
                       data: IconThemeData(size: resolvedIconSize),
                       child: widget.icon!,
                     ));
-        Color background = resolvedBackground;
+        Color background = emphasized && widget.hoverBackgroundColor != null
+            ? widget.hoverBackgroundColor!
+            : resolvedBackground;
         if (pressed) {
-          background = Color.alphaBlend(
-            context.colorScheme.primary.withValues(
-              alpha: context.motion.tapSplashAlpha,
-            ),
-            background,
-          );
+          background =
+              widget.pressedBackgroundColor ??
+              Color.alphaBlend(
+                context.colorScheme.primary.withValues(
+                  alpha: context.motion.tapSplashAlpha,
+                ),
+                background,
+              );
         }
 
         Widget tappable = SizedBox(

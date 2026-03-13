@@ -8,6 +8,7 @@ import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/axi_editable_text.dart' as axi;
+import 'package:axichat/src/common/ui/buttons/axi_button_haptics.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
@@ -1057,6 +1058,7 @@ class _RecipientChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final included = recipient.included;
     final colorfulAvatars = context.select<SettingsCubit, bool>(
       (cubit) => cubit.state.colorfulAvatars,
@@ -1080,41 +1082,41 @@ class _RecipientChip extends StatelessWidget {
         ? removalColor
         : (included ? accentColor : Colors.transparent);
 
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: chipsBarHeight),
-      child: InputChip(
-        shape: const StadiumBorder(),
-        showCheckmark: false,
-        avatar: _RecipientChipAvatar(
-          target: recipient.target,
-          avatarPathsByJid: avatarPathsByJid,
-          selfIdentity: selfIdentity,
-          status: status,
-        ),
-        label: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [Flexible(child: Text(_label(context)))],
-        ),
-        onPressed: onToggle,
-        selected: included,
-        backgroundColor: effectiveBackground,
-        selectedColor: effectiveBackground,
-        labelStyle: TextStyle(color: effectiveForeground),
-        deleteIcon: onRemove == null
-            ? null
-            : Icon(Icons.close, size: 16, color: effectiveForeground),
-        onDeleted: onRemove,
-        side: BorderSide(
-          color: borderColor,
-          width: pendingRemoval || included ? 1.1 : 0,
-        ),
-        elevation: included ? 1.5 : 0,
-        shadowColor: colors.foreground.withValues(alpha: 0.18),
-        selectedShadowColor: colors.foreground.withValues(alpha: 0.18),
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.compact,
-        padding: const EdgeInsetsDirectional.fromSTEB(4, 0, 8, 0),
-        labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+    return _SquircleChipButton(
+      backgroundColor: effectiveBackground,
+      foregroundColor: effectiveForeground,
+      borderColor: borderColor,
+      borderWidth: pendingRemoval || included ? 1.1 : 0,
+      elevation: included ? 1.5 : 0,
+      shadowColor: colors.foreground.withValues(alpha: 0.18),
+      onPressed: onToggle,
+      selected: included,
+      semanticLabel: _label(context),
+      padding: EdgeInsetsDirectional.only(start: spacing.xxs, end: spacing.s),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _RecipientChipAvatar(
+            target: recipient.target,
+            avatarPathsByJid: avatarPathsByJid,
+            selfIdentity: selfIdentity,
+            status: status,
+          ),
+          SizedBox(width: spacing.xxs),
+          Flexible(
+            child: Text(
+              _label(context),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (onRemove != null) SizedBox(width: spacing.xxs),
+          if (onRemove != null)
+            _RecipientChipDeleteButton(
+              color: effectiveForeground,
+              onPressed: onRemove!,
+            ),
+        ],
       ),
     );
   }
@@ -1262,23 +1264,238 @@ class _ActionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colorScheme;
+    final spacing = context.spacing;
     final foreground = colors.mutedForeground;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: chipsBarHeight),
-      child: ActionChip(
-        shape: const StadiumBorder(),
-        avatar: Icon(icon, size: 14, color: foreground),
-        label: Text(label, style: TextStyle(color: foreground)),
-        onPressed: onPressed,
-        backgroundColor: Color.alphaBlend(
-          colors.primary.withValues(alpha: 0.05),
-          colors.card,
-        ),
-        visualDensity: VisualDensity.compact,
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        side: BorderSide.none,
+    return _SquircleChipButton(
+      backgroundColor: Color.alphaBlend(
+        colors.primary.withValues(alpha: 0.05),
+        colors.card,
       ),
+      foregroundColor: foreground,
+      onPressed: onPressed,
+      semanticLabel: label,
+      padding: EdgeInsets.symmetric(horizontal: spacing.s),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14),
+          SizedBox(width: spacing.xxs),
+          Text(label),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecipientChipDeleteButton extends StatelessWidget {
+  const _RecipientChipDeleteButton({
+    required this.color,
+    required this.onPressed,
+  });
+
+  final Color color;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final sizing = context.sizing;
+    final spacing = context.spacing;
+    final iconButtonExtent = sizing.iconButtonTapTarget / 2;
+    return AxiIconButton.ghost(
+      iconData: Icons.close,
+      iconSize: sizing.iconButtonIconSize - spacing.xxs,
+      buttonSize: iconButtonExtent,
+      tapTargetSize: iconButtonExtent,
+      cornerRadius: context.radii.squircleSm,
+      color: color,
+      backgroundColor: Colors.transparent,
+      borderColor: Colors.transparent,
+      semanticLabel: MaterialLocalizations.of(context).deleteButtonTooltip,
+      onPressed: onPressed,
+    );
+  }
+}
+
+class _SquircleChipButton extends StatefulWidget {
+  const _SquircleChipButton({
+    required this.child,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    this.onPressed,
+    this.borderColor = Colors.transparent,
+    this.borderWidth = 0,
+    this.elevation = 0,
+    this.shadowColor,
+    this.selected = false,
+    this.semanticLabel,
+    this.padding = EdgeInsets.zero,
+  });
+
+  final Widget child;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final VoidCallback? onPressed;
+  final Color borderColor;
+  final double borderWidth;
+  final double elevation;
+  final Color? shadowColor;
+  final bool selected;
+  final String? semanticLabel;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  State<_SquircleChipButton> createState() => _SquircleChipButtonState();
+}
+
+class _SquircleChipButtonState extends State<_SquircleChipButton> {
+  final AxiTapBounceController _bounceController = AxiTapBounceController();
+  bool _hovered = false;
+  bool _pressed = false;
+  bool _focused = false;
+
+  void _setHovered(bool value) {
+    if (_hovered == value) {
+      return;
+    }
+    setState(() => _hovered = value);
+  }
+
+  void _setPressed(bool value) {
+    if (_pressed == value) {
+      return;
+    }
+    setState(() => _pressed = value);
+  }
+
+  void _setFocused(bool value) {
+    if (_focused == value) {
+      return;
+    }
+    setState(() => _focused = value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final Duration animationDuration = context.select<SettingsCubit, Duration>(
+      (cubit) => cubit.animationDuration,
+    );
+    final bool enabled = widget.onPressed != null;
+    final VoidCallback? onTap = enabled
+        ? withSelectionHaptic(widget.onPressed)
+        : null;
+    final bool emphasized = _hovered || _focused;
+    final Color hoverBackground = Color.alphaBlend(
+      context.colorScheme.primary.withValues(
+        alpha: context.motion.tapHoverAlpha,
+      ),
+      widget.backgroundColor,
+    );
+    final Color pressedBackground = Color.alphaBlend(
+      context.colorScheme.primary.withValues(
+        alpha: context.motion.tapSplashAlpha,
+      ),
+      hoverBackground,
+    );
+    final Color resolvedBackground = _pressed
+        ? pressedBackground
+        : (emphasized ? hoverBackground : widget.backgroundColor);
+    final RoundedSuperellipseBorder shape = RoundedSuperellipseBorder(
+      borderRadius: BorderRadius.circular(context.radii.squircle),
+      side: widget.borderWidth > 0
+          ? BorderSide(color: widget.borderColor, width: widget.borderWidth)
+          : BorderSide.none,
+    );
+
+    Widget child = Material(
+      color: resolvedBackground,
+      shape: shape,
+      elevation: widget.elevation,
+      shadowColor: widget.shadowColor,
+      clipBehavior: Clip.antiAlias,
+      child: ShadFocusable(
+        canRequestFocus: enabled,
+        onFocusChange: enabled ? _setFocused : null,
+        builder: (context, focused, child) => child ?? const SizedBox.shrink(),
+        child: ShadGestureDetector(
+          cursor: enabled ? SystemMouseCursors.click : MouseCursor.defer,
+          behavior: HitTestBehavior.opaque,
+          hoverStrategies: ShadTheme.of(context).hoverStrategies,
+          onHoverChange: enabled ? _setHovered : null,
+          onTap: onTap,
+          onTapDown: enabled
+              ? (details) {
+                  _setPressed(true);
+                  _bounceController.handleTapDown(details);
+                }
+              : null,
+          onTapUp: enabled
+              ? (details) {
+                  _setPressed(false);
+                  _bounceController.handleTapUp(details);
+                }
+              : null,
+          onTapCancel: enabled
+              ? () {
+                  _setPressed(false);
+                  _bounceController.handleTapCancel();
+                }
+              : null,
+          onLongPressStart: enabled
+              ? (_) {
+                  _setPressed(true);
+                  _bounceController.setPressed(true);
+                }
+              : null,
+          onLongPressEnd: enabled
+              ? (_) {
+                  _setPressed(false);
+                  _bounceController.setPressed(false);
+                }
+              : null,
+          child: IconTheme.merge(
+            data: IconThemeData(color: widget.foregroundColor),
+            child: DefaultTextStyle(
+              style: context.textTheme.small.copyWith(
+                color: widget.foregroundColor,
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: chipsBarHeight),
+                child: Padding(padding: widget.padding, child: widget.child),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (enabled) {
+      child = AxiTapBounce(
+        controller: _bounceController,
+        enabled: animationDuration != Duration.zero,
+        scale: context.motion.buttonCompactBounceScale,
+        pressDuration: Duration(
+          milliseconds:
+              (animationDuration.inMilliseconds *
+                      context.motion.buttonPressDurationFactor)
+                  .round(),
+        ),
+        releaseDuration: Duration(
+          milliseconds:
+              (animationDuration.inMilliseconds *
+                      context.motion.buttonReleaseDurationFactor)
+                  .round(),
+        ),
+        child: child,
+      );
+    }
+
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      selected: widget.selected,
+      label: widget.semanticLabel,
+      onTap: onTap,
+      child: child,
     );
   }
 }
@@ -1843,9 +2060,13 @@ final class _RecipientAutocompleteOverlayState
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: DecoratedBox(
-                    decoration: BoxDecoration(
+                    decoration: ShapeDecoration(
                       color: widget.backgroundColor,
-                      borderRadius: BorderRadius.circular(chipsBarHeight / 2),
+                      shape: RoundedSuperellipseBorder(
+                        borderRadius: BorderRadius.circular(
+                          context.radii.squircle,
+                        ),
+                      ),
                     ),
                     child: Padding(
                       padding: EdgeInsets.symmetric(
