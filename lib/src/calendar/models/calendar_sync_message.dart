@@ -2,6 +2,8 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'dart:convert';
+
+import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:xml/xml.dart';
 
@@ -70,6 +72,9 @@ class CalendarSyncInbound {
 @freezed
 abstract class CalendarSyncMessage with _$CalendarSyncMessage {
   static const int maxEnvelopeLength = _calendarSyncEnvelopeMaxLength;
+  static const String roomPrimaryViewEntity = 'room_primary_view';
+  static const String roomPrimaryViewPayloadId = 'room_primary_view';
+  static const String roomPrimaryViewDataKey = 'primary_view';
 
   const factory CalendarSyncMessage({
     /// Message type: request, full, update, or snapshot.
@@ -126,6 +131,15 @@ abstract class CalendarSyncMessage with _$CalendarSyncMessage {
     entity: entity,
   );
 
+  factory CalendarSyncMessage.roomPrimaryViewUpdate({
+    required ChatPrimaryView primaryView,
+  }) => CalendarSyncMessage.update(
+    taskId: roomPrimaryViewPayloadId,
+    operation: 'update',
+    data: <String, dynamic>{roomPrimaryViewDataKey: primaryView.wireValue},
+    entity: roomPrimaryViewEntity,
+  );
+
   /// Creates a snapshot message referencing an attachment-based snapshot.
   factory CalendarSyncMessage.snapshot({
     required String snapshotChecksum,
@@ -141,6 +155,20 @@ abstract class CalendarSyncMessage with _$CalendarSyncMessage {
   );
 
   const CalendarSyncMessage._();
+
+  bool get isRoomPrimaryViewUpdate =>
+      type == CalendarSyncType.update && entity == roomPrimaryViewEntity;
+
+  ChatPrimaryView? get roomPrimaryView {
+    if (!isRoomPrimaryViewUpdate) {
+      return null;
+    }
+    final rawValue = data?[roomPrimaryViewDataKey];
+    if (rawValue is! String) {
+      return null;
+    }
+    return ChatPrimaryView.tryParse(rawValue);
+  }
 
   XmlElement toXmppExtension() {
     final element = XmlElement(XmlName('calendar_sync'));

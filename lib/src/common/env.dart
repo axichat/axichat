@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -19,7 +20,7 @@ CommandSurface resolveCommandSurface(BuildContext context) {
       platform == TargetPlatform.macOS ||
       platform == TargetPlatform.linux ||
       platform == TargetPlatform.windows;
-  final bool desktopWidth = (mediaQuery?.size.width ?? 0) >= 900;
+  final bool desktopWidth = (mediaQuery?.size.width ?? 0) >= smallScreen;
   return desktopPlatform || desktopWidth
       ? CommandSurface.menu
       : CommandSurface.sheet;
@@ -35,8 +36,8 @@ class Env {
   final FormFactor formFactor;
 
   static FormFactor _formFactorFor(double width) {
-    if (width >= 900) return FormFactor.desktop;
-    if (width >= 600) return FormFactor.tablet;
+    if (width >= smallScreen) return FormFactor.desktop;
+    if (width >= compactDeviceBreakpoint) return FormFactor.tablet;
     return FormFactor.handset;
   }
 

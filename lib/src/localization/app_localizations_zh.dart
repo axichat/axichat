@@ -2937,6 +2937,23 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get chatsCreateRoomTypeChatTitle => '聊天房间';
+
+  @override
+  String get chatsCreateRoomTypeChatDescription =>
+      '优先打开聊天，对话仍然是主要入口，共享日历仍可在房间中使用。';
+
+  @override
+  String get chatsCreateRoomTypeCalendarTitle => '日历房间';
+
+  @override
+  String get chatsCreateRoomTypeCalendarDescription => '优先打开共享日历，房间聊天仍可从应用栏进入。';
+
+  @override
+  String get chatsCreateRoomTypeHint =>
+      '日历房间适合以共享日历为中心的协作，聊天房间则优先打开对话。两种房间都同时包含聊天和日历功能。';
+
+  @override
   String get chatsArchiveTitle => '存档';
 
   @override
@@ -8813,6 +8830,24 @@ class AppLocalizationsZhHk extends AppLocalizationsZh {
   String chatsRoomNameInvalidCharacterError(Object character) {
     return '聊天室名稱不能包含$character。';
   }
+
+  @override
+  String get chatsCreateRoomTypeChatTitle => '聊天聊天室';
+
+  @override
+  String get chatsCreateRoomTypeChatDescription =>
+      '優先開啟聊天，對話仍然是主要入口，共享日曆仍可在聊天室中使用。';
+
+  @override
+  String get chatsCreateRoomTypeCalendarTitle => '日曆聊天室';
+
+  @override
+  String get chatsCreateRoomTypeCalendarDescription =>
+      '優先開啟共享日曆，聊天室聊天仍可從 App 列進入。';
+
+  @override
+  String get chatsCreateRoomTypeHint =>
+      '日曆聊天室適合以共享日曆為中心的協作，聊天聊天室則優先開啟對話。兩種聊天室都同時包含聊天和日曆功能。';
 
   @override
   String get chatsArchiveTitle => '封存';

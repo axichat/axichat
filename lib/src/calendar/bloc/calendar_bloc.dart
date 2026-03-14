@@ -133,6 +133,13 @@ class CalendarBloc extends BaseCalendarBloc {
               chatType: chatType,
             );
           },
+      applyPrimaryView:
+          ({required String chatJid, required ChatPrimaryView primaryView}) {
+            return _xmppService.applyRoomPrimaryView(
+              roomJid: chatJid,
+              primaryView: primaryView,
+            );
+          },
       sendSnapshotFile: uploadCalendarSnapshot,
     );
     final availabilityCoordinator = CalendarAvailabilityShareCoordinator(

@@ -7,17 +7,20 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_manager.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
+import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   CalendarSyncManager buildManager({
     required CalendarModel Function() readModel,
     required Future<void> Function(CalendarModel) applyModel,
+    Future<void> Function(ChatPrimaryView primaryView)? applyRoomPrimaryView,
   }) {
     return CalendarSyncManager(
       readModel: readModel,
       applyModel: applyModel,
       sendCalendarMessage: (_) async {},
+      applyRoomPrimaryView: applyRoomPrimaryView,
       readSyncState: () => const CalendarSyncState(),
       writeSyncState: (_) async {},
     );
@@ -82,6 +85,43 @@ void main() {
       expect(currentModel.tasks, isEmpty);
       expect(currentModel.deletedTaskIds, contains(taskId));
     });
+
+    test(
+      'applies room primary view updates without mutating calendar data',
+      () async {
+        CalendarModel currentModel = CalendarModel.empty();
+        ChatPrimaryView? appliedPrimaryView;
+        var applyModelCalls = 0;
+
+        final CalendarSyncManager manager = buildManager(
+          readModel: () => currentModel,
+          applyModel: (CalendarModel next) async {
+            applyModelCalls += 1;
+            currentModel = next;
+          },
+          applyRoomPrimaryView: (ChatPrimaryView primaryView) async {
+            appliedPrimaryView = primaryView;
+          },
+        );
+
+        final bool applied = await manager.onCalendarMessage(
+          CalendarSyncInbound(
+            message: CalendarSyncMessage.roomPrimaryViewUpdate(
+              primaryView: ChatPrimaryView.calendar,
+            ),
+            receivedAt: DateTime.utc(2024, 2, 10, 13),
+          ),
+        );
+
+        expect(applied, isTrue);
+        expect(appliedPrimaryView, ChatPrimaryView.calendar);
+        expect(applyModelCalls, equals(0));
+        expect(currentModel.tasks, isEmpty);
+        expect(currentModel.dayEvents, isEmpty);
+        expect(currentModel.journals, isEmpty);
+        expect(currentModel.criticalPaths, isEmpty);
+      },
+    );
 
     test('accepts add when remote update is newer than tombstone', () async {
       final DateTime remoteModifiedAt = deletedAt.add(newerOffset);

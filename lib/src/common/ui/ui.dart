@@ -138,8 +138,8 @@ extension AxiTextStyleStrength on TextStyle {
   TextStyle strongIf(bool enabled) => enabled ? strong : this;
 }
 
-const smallScreen = 920.0;
-const mediumScreen = 900.0;
+const smallScreen = 840.0;
+const mediumScreen = smallScreen;
 const largeScreen = 1200.0;
 const compactDeviceBreakpoint = 600.0;
 const appBarActionOverflowBreakpoint = compactDeviceBreakpoint;

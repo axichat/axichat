@@ -1935,33 +1935,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     for (final occupant in roomState.occupants.values) {
       if (!seen.add(occupant.occupantId)) continue;
       if (!occupant.hasResolvedMembershipState) continue;
-      final kind = _memberSectionKindFor(occupant);
+      final kind = occupant.memberSectionKind;
       membersByKind[kind]!.add(
         RoomMemberEntry(
           occupant: occupant,
-          actions: _moderationActionsFor(
-            occupant: occupant,
-            roomState: roomState,
-          ),
+          actions: roomState.moderationActionsFor(occupant),
           avatarPath: _avatarPathForOccupant(
             occupant: occupant,
             roomState: roomState,
             avatarPathsByBareJid: avatarPathsByBareJid,
             selfAvatarPath: selfAvatarPath,
           ),
-          directChatJid: _directChatJidForOccupant(
-            occupant: occupant,
-            roomState: roomState,
-          ),
+          directChatJid: roomState.directChatJidForOccupant(occupant),
         ),
       );
     }
 
     for (final entries in membersByKind.values) {
       entries.sort(
-        (a, b) => a.occupant.nick.toLowerCase().compareTo(
-          b.occupant.nick.toLowerCase(),
-        ),
+        (a, b) =>
+            a.occupant.normalizedNick.compareTo(b.occupant.normalizedNick),
       );
     }
 
@@ -1981,192 +1974,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return sections;
   }
 
-  RoomMemberSectionKind _memberSectionKindFor(Occupant occupant) {
-    if (occupant.affiliation.isOwner) {
-      return RoomMemberSectionKind.owners;
-    }
-    if (occupant.affiliation.isAdmin) {
-      return RoomMemberSectionKind.admins;
-    }
-    if (occupant.role.isModerator) {
-      return RoomMemberSectionKind.moderators;
-    }
-    if (occupant.affiliation.isMember) {
-      return RoomMemberSectionKind.members;
-    }
-    if (occupant.role.isParticipant) {
-      return RoomMemberSectionKind.participants;
-    }
-    return RoomMemberSectionKind.visitors;
-  }
-
-  List<MucModerationAction> _moderationActionsFor({
-    required Occupant occupant,
-    required RoomState roomState,
-  }) {
-    if (occupant.occupantId == roomState.myOccupantJid) return const [];
-    final myAffiliation = roomState.myAffiliation;
-    final myRole = roomState.myRole;
-    final hasRealJid = _normalizedBareJid(occupant.realJid) != null;
-    final actions = <MucModerationAction>[];
-    if (_canKickOccupant(
-      myAffiliation: myAffiliation,
-      myRole: myRole,
-      occupant: occupant,
-    )) {
-      actions.add(MucModerationAction.kick);
-    }
-    if (_canBanOccupant(
-      myAffiliation: myAffiliation,
-      occupant: occupant,
-      hasRealJid: hasRealJid,
-    )) {
-      actions.add(MucModerationAction.ban);
-    }
-    if (_canChangeAffiliationTo(
-      myAffiliation: myAffiliation,
-      occupant: occupant,
-      nextAffiliation: OccupantAffiliation.member,
-      hasRealJid: hasRealJid,
-    )) {
-      actions.add(MucModerationAction.member);
-    }
-    if (_canChangeAffiliationTo(
-      myAffiliation: myAffiliation,
-      occupant: occupant,
-      nextAffiliation: OccupantAffiliation.admin,
-      hasRealJid: hasRealJid,
-    )) {
-      actions.add(MucModerationAction.admin);
-    }
-    if (_canChangeAffiliationTo(
-      myAffiliation: myAffiliation,
-      occupant: occupant,
-      nextAffiliation: OccupantAffiliation.owner,
-      hasRealJid: hasRealJid,
-    )) {
-      actions.add(MucModerationAction.owner);
-    }
-    if (_canGrantModerator(myAffiliation: myAffiliation, occupant: occupant)) {
-      actions.add(MucModerationAction.moderator);
-    }
-    if (_canRevokeModerator(myAffiliation: myAffiliation, occupant: occupant)) {
-      actions.add(MucModerationAction.participant);
-    }
-    return actions;
-  }
-
-  bool _canKickOccupant({
-    required OccupantAffiliation myAffiliation,
-    required OccupantRole myRole,
-    required Occupant occupant,
-  }) {
-    if (!occupant.isPresent) {
-      return false;
-    }
-    if (!myRole.isModerator &&
-        !myAffiliation.isAdmin &&
-        !myAffiliation.isOwner) {
-      return false;
-    }
-    if (myAffiliation.authorityRank < occupant.affiliation.authorityRank) {
-      return false;
-    }
-    if (occupant.role.isModerator) {
-      return myAffiliation.isAdmin || myAffiliation.isOwner;
-    }
-    return occupant.role.isParticipant || occupant.role.isVisitor;
-  }
-
-  bool _canBanOccupant({
-    required OccupantAffiliation myAffiliation,
-    required Occupant occupant,
-    required bool hasRealJid,
-  }) {
-    if (!hasRealJid) return false;
-    if (myAffiliation.isOwner) return true;
-    if (myAffiliation.isAdmin) {
-      return occupant.affiliation.isMember || occupant.affiliation.isNone;
-    }
-    return false;
-  }
-
-  bool _canChangeAffiliationTo({
-    required OccupantAffiliation myAffiliation,
-    required Occupant occupant,
-    required OccupantAffiliation nextAffiliation,
-    required bool hasRealJid,
-  }) {
-    if (!hasRealJid) return false;
-    if (occupant.affiliation == nextAffiliation) return false;
-    if (myAffiliation.isOwner) {
-      return true;
-    }
-    if (!myAffiliation.isAdmin) {
-      return false;
-    }
-    return nextAffiliation.isMember && occupant.affiliation.isNone;
-  }
-
-  bool _canGrantModerator({
-    required OccupantAffiliation myAffiliation,
-    required Occupant occupant,
-  }) {
-    if (!occupant.isPresent) {
-      return false;
-    }
-    if (!myAffiliation.isOwner && !myAffiliation.isAdmin) {
-      return false;
-    }
-    if (occupant.role.isModerator) {
-      return false;
-    }
-    return occupant.affiliation.isMember || occupant.affiliation.isNone;
-  }
-
-  bool _canRevokeModerator({
-    required OccupantAffiliation myAffiliation,
-    required Occupant occupant,
-  }) {
-    if (!occupant.isPresent) {
-      return false;
-    }
-    if (!myAffiliation.isOwner && !myAffiliation.isAdmin) {
-      return false;
-    }
-    if (!occupant.role.isModerator) {
-      return false;
-    }
-    return occupant.affiliation.isMember || occupant.affiliation.isNone;
-  }
-
-  String? _directChatJidForOccupant({
-    required Occupant occupant,
-    required RoomState roomState,
-  }) {
-    if (occupant.occupantId == roomState.myOccupantJid) {
-      return null;
-    }
-    final realJid = _normalizedBareJid(occupant.realJid);
-    if (realJid == null) {
-      return null;
-    }
-    if (realJid == _normalizedBareJid(roomState.roomJid)) {
-      return null;
-    }
-    return realJid;
-  }
-
   String? _avatarPathForOccupant({
     required Occupant occupant,
     required RoomState roomState,
     required Map<String, String> avatarPathsByBareJid,
     required String? selfAvatarPath,
   }) {
-    if (occupant.occupantId == roomState.myOccupantJid) {
+    if (roomState.isSelfOccupant(occupant)) {
       return selfAvatarPath;
     }
-    final bareJid = _normalizedBareJid(occupant.realJid);
+    final bareJid = occupant.normalizedBareRealJid;
     if (bareJid == null) return null;
     return avatarPathsByBareJid[bareJid];
   }

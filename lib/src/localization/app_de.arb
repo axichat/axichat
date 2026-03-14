@@ -1172,6 +1172,11 @@
       "character": {}
     }
   },
+  "chatsCreateRoomTypeChatTitle": "Chatraum",
+  "chatsCreateRoomTypeChatDescription": "Der Chat wird zuerst geöffnet. Der gemeinsame Kalender bleibt im Raum verfügbar.",
+  "chatsCreateRoomTypeCalendarTitle": "Kalenderraum",
+  "chatsCreateRoomTypeCalendarDescription": "Der gemeinsame Kalender wird zuerst geöffnet. Der Raumchat bleibt über die App-Leiste verfügbar.",
+  "chatsCreateRoomTypeHint": "Kalenderräume sind gemeinsame Räume mit Fokus auf den Kalender, Chaträume öffnen zuerst die Unterhaltung. Beide Raumtypen enthalten weiterhin sowohl Chat als auch Kalender.",
   "chatsArchiveTitle": "Archiv",
   "chatsArchiveEmpty": "Noch keine archivierten Chats",
   "calendarTileNow": "Jetzt: {title}",

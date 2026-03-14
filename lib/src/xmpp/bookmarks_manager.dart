@@ -53,6 +53,7 @@ final class MucBookmark {
     this.password,
     this.autojoin = false,
     this.extensions = const [],
+    this.preserveCachedExtensions = true,
   });
 
   final mox.JID roomBare;
@@ -61,6 +62,7 @@ final class MucBookmark {
   final String? nick;
   final String? password;
   final List<mox.XMLNode> extensions;
+  final bool preserveCachedExtensions;
 
   MucBookmark copyWith({
     mox.JID? roomBare,
@@ -69,6 +71,7 @@ final class MucBookmark {
     String? nick,
     String? password,
     List<mox.XMLNode>? extensions,
+    bool? preserveCachedExtensions,
   }) {
     return MucBookmark(
       roomBare: roomBare ?? this.roomBare,
@@ -77,6 +80,8 @@ final class MucBookmark {
       nick: nick ?? this.nick,
       password: password ?? this.password,
       extensions: extensions ?? this.extensions,
+      preserveCachedExtensions:
+          preserveCachedExtensions ?? this.preserveCachedExtensions,
     );
   }
 
@@ -139,6 +144,7 @@ final class MucBookmark {
       nick: nick,
       password: password,
       extensions: List<mox.XMLNode>.unmodifiable(extensions),
+      preserveCachedExtensions: false,
     );
   }
 
@@ -235,6 +241,9 @@ final class BookmarksManager extends mox.XmppManagerBase {
   }
 
   final Map<String, MucBookmark> _cache = {};
+
+  MucBookmark? cachedBookmark(mox.JID roomBareJid) =>
+      _cache[roomBareJid.toBare().toString()];
   DateTime? _lastEnsureAttempt;
   bool _ensureNodeInFlight = false;
   bool _ensureNodePending = false;
@@ -621,14 +630,16 @@ final class BookmarksManager extends mox.XmppManagerBase {
     MucBookmark? cached,
   }) {
     if (cached == null) return incoming;
-    final mergedExtensions = incoming.extensions.isNotEmpty
-        ? incoming.extensions
-        : cached.extensions;
+    final mergedExtensions =
+        incoming.preserveCachedExtensions && incoming.extensions.isEmpty
+        ? cached.extensions
+        : incoming.extensions;
     return incoming.copyWith(
       name: incoming.name ?? cached.name,
       nick: incoming.nick ?? cached.nick,
       password: incoming.password ?? cached.password,
       extensions: mergedExtensions,
+      preserveCachedExtensions: false,
     );
   }
 

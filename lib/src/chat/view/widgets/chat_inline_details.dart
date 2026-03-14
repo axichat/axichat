@@ -11,10 +11,12 @@ class ChatInlineDetails extends StatelessWidget {
     super.key,
     required this.details,
     this.detailActions = const <int, DynamicInlineDetailAction>{},
+    this.detailOpticalOffsetFactors = const <int, double>{},
   });
 
   final List<InlineSpan> details;
   final Map<int, DynamicInlineDetailAction> detailActions;
+  final Map<int, double> detailOpticalOffsetFactors;
 
   @override
   Widget build(BuildContext context) {
@@ -25,6 +27,7 @@ class ChatInlineDetails extends StatelessWidget {
       text: _emptyDetailsText,
       details: details,
       detailActions: detailActions,
+      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
     );
   }
 }

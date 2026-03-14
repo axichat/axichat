@@ -1172,6 +1172,11 @@
       "character": {}
     }
   },
+  "chatsCreateRoomTypeChatTitle": "聊天房间",
+  "chatsCreateRoomTypeChatDescription": "优先打开聊天，对话仍然是主要入口，共享日历仍可在房间中使用。",
+  "chatsCreateRoomTypeCalendarTitle": "日历房间",
+  "chatsCreateRoomTypeCalendarDescription": "优先打开共享日历，房间聊天仍可从应用栏进入。",
+  "chatsCreateRoomTypeHint": "日历房间适合以共享日历为中心的协作，聊天房间则优先打开对话。两种房间都同时包含聊天和日历功能。",
   "chatsArchiveTitle": "存档",
   "chatsArchiveEmpty": "暂无已存档聊天",
   "calendarTileNow": "现在：{title}",

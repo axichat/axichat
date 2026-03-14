@@ -67,6 +67,16 @@ class ArchivedChatScreen extends StatelessWidget {
                     chatType: chatType,
                   );
                 },
+            applyPrimaryView:
+                ({
+                  required String chatJid,
+                  required chat_models.ChatPrimaryView primaryView,
+                }) async {
+                  await xmppService.applyRoomPrimaryView(
+                    roomJid: chatJid,
+                    primaryView: primaryView,
+                  );
+                },
             sendSnapshotFile: xmppService.uploadCalendarSnapshot,
           );
     final CalendarAvailabilityShareCoordinator? availabilityCoordinator =

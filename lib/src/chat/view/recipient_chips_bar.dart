@@ -1092,7 +1092,7 @@ class _RecipientChip extends StatelessWidget {
       onPressed: onToggle,
       selected: included,
       semanticLabel: _label(context),
-      padding: EdgeInsetsDirectional.only(start: spacing.xxs, end: spacing.s),
+      padding: EdgeInsets.symmetric(horizontal: spacing.s),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

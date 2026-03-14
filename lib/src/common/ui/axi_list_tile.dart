@@ -20,6 +20,7 @@ class AxiListTile extends StatelessWidget {
     this.leading,
     this.leadingConstraints,
     this.title,
+    this.titleWidget,
     this.subtitle,
     this.subtitlePlaceholder,
     this.actions,
@@ -33,11 +34,15 @@ class AxiListTile extends StatelessWidget {
     this.contentPadding,
     this.tapBounce = true,
     this.minTileHeight,
-  });
+  }) : assert(
+         title == null || titleWidget == null,
+         'Provide either title or titleWidget, not both.',
+       );
 
   final Widget? leading;
   final BoxConstraints? leadingConstraints;
   final String? title;
+  final Widget? titleWidget;
   final String? subtitle;
   final String? subtitlePlaceholder;
   final List<Widget>? actions;
@@ -103,16 +108,18 @@ class AxiListTile extends StatelessWidget {
                   const BoxConstraints(maxHeight: 40.0, maxWidth: 40.0),
               child: leading,
             ),
-      title: title == null
-          ? null
-          : Text(
-              title!,
-              style: context.textTheme.small.copyWith(
-                color: colors.foreground,
-                fontWeight: FontWeight.w700,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
+      title:
+          titleWidget ??
+          (title == null
+              ? null
+              : Text(
+                  title!,
+                  style: context.textTheme.small.copyWith(
+                    color: colors.foreground,
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                )),
       subtitle: subtitle == null
           ? subtitlePlaceholder == null
                 ? null

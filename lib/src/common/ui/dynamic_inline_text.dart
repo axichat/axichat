@@ -45,6 +45,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
     required this.text,
     required this.details,
     this.detailActions = const <int, DynamicInlineDetailAction>{},
+    this.detailOpticalOffsetFactors = const <int, double>{},
     this.links = const [],
     this.onLinkTap,
     this.onLinkLongPress,
@@ -53,6 +54,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
   final TextSpan text;
   final List<InlineSpan> details;
   final Map<int, DynamicInlineDetailAction> detailActions;
+  final Map<int, double> detailOpticalOffsetFactors;
   final List<DynamicTextLink> links;
   final LinkTapCallback? onLinkTap;
   final LinkTapCallback? onLinkLongPress;
@@ -63,6 +65,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
         text: text,
         details: details,
         detailActions: detailActions,
+        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
         textDirection: Directionality.of(context),
         textScaler:
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
@@ -80,6 +83,7 @@ class DynamicInlineText extends LeafRenderObjectWidget {
       ..text = text
       ..details = details
       ..detailActions = detailActions
+      ..detailOpticalOffsetFactors = detailOpticalOffsetFactors
       ..textDirection = Directionality.of(context)
       ..textScaler =
           MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling
@@ -94,6 +98,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
     required TextSpan text,
     required List<InlineSpan> details,
     required Map<int, DynamicInlineDetailAction> detailActions,
+    required Map<int, double> detailOpticalOffsetFactors,
     required TextDirection textDirection,
     required TextScaler textScaler,
     List<DynamicTextLink> links = const [],
@@ -102,6 +107,9 @@ class DynamicInlineTextRenderObject extends RenderBox {
   }) : _text = text,
        _details = details,
        _detailActions = Map.unmodifiable(detailActions),
+       _detailOpticalOffsetFactors = Map.unmodifiable(
+         detailOpticalOffsetFactors,
+       ),
        _textDirection = textDirection,
        _textScaler = textScaler,
        _links = List.unmodifiable(links),
@@ -134,6 +142,14 @@ class DynamicInlineTextRenderObject extends RenderBox {
     _cancelDetailTap();
     markNeedsLayout();
     markNeedsSemanticsUpdate();
+  }
+
+  Map<int, double> _detailOpticalOffsetFactors;
+
+  set detailOpticalOffsetFactors(Map<int, double> value) {
+    if (mapEquals(_detailOpticalOffsetFactors, value)) return;
+    _detailOpticalOffsetFactors = Map.unmodifiable(value);
+    markNeedsPaint();
   }
 
   TextDirection _textDirection;
@@ -266,6 +282,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
   double _finalLineWidth = 0;
   double _detailsWidth = 0;
   double _detailsHeight = 0;
+  double _detailBaselineOffset = 0;
+  double _detailBelowBaseline = 0;
   bool _canInlineDetails = false;
   List<LineMetrics> _textLineMetrics = const [];
   List<LineMetrics> _detailLineMetrics = const [];
@@ -383,6 +401,8 @@ class DynamicInlineTextRenderObject extends RenderBox {
     _finalLineWidth = 0;
     _detailsWidth = 0;
     _detailsHeight = 0;
+    _detailBaselineOffset = 0;
+    _detailBelowBaseline = 0;
     _canInlineDetails = false;
     _textLineMetrics = const [];
     _detailLineMetrics = const [];
@@ -423,8 +443,16 @@ class DynamicInlineTextRenderObject extends RenderBox {
           metrics.height + (action?.padding.vertical ?? 0),
           action?.minimumHeight ?? 0,
         );
+        final verticalInset = (detailHeight - metrics.height) / 2;
+        final detailBaselineOffset = verticalInset + metrics.baseline;
+        final detailBelowBaseline =
+            verticalInset + (metrics.height - metrics.baseline);
         _detailsWidth += detailWidth;
-        _detailsHeight = max(_detailsHeight, detailHeight);
+        _detailBaselineOffset = max(
+          _detailBaselineOffset,
+          detailBaselineOffset,
+        );
+        _detailBelowBaseline = max(_detailBelowBaseline, detailBelowBaseline);
         _detailLineMetrics.add(metrics);
         _detailWidths.add(detailWidth);
         _detailHeights.add(detailHeight);
@@ -438,6 +466,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
         _detailsWidth += _detailSpacing;
       }
     }
+    _detailsHeight = _detailBaselineOffset + _detailBelowBaseline;
 
     _maxLineWidth = max(
       textLines.fold(0, (prev, e) => max(prev, e.width)),
@@ -486,6 +515,9 @@ class DynamicInlineTextRenderObject extends RenderBox {
 
     final lastLine = _textLineMetrics.isNotEmpty ? _textLineMetrics.last : null;
     final detailStartGap = hasBodyText ? _detailStartGap : 0.0;
+    final detailBaselineY = _canInlineDetails && lastLine != null
+        ? offset.dy + lastLine.baseline
+        : offset.dy + baseTextHeight + _detailBaselineOffset;
     var dx = _canInlineDetails
         ? offset.dx + _finalLineWidth + detailStartGap
         : offset.dx + size.width - _detailsWidth;
@@ -496,9 +528,6 @@ class DynamicInlineTextRenderObject extends RenderBox {
           : null;
       final detailBaseline =
           metrics?.baseline ?? painter.computeLineMetrics().first.baseline;
-      final dy = _canInlineDetails && lastLine != null
-          ? offset.dy + lastLine.baseline - detailBaseline
-          : offset.dy + baseTextHeight;
       final action = _detailActions[i];
       final horizontalPadding = action?.padding.horizontal ?? 0.0;
       final detailWidth = _detailWidths.length > i
@@ -508,7 +537,11 @@ class DynamicInlineTextRenderObject extends RenderBox {
           ? _detailHeights[i]
           : metrics?.height ?? painter.height;
       final textHeight = metrics?.height ?? painter.height;
-      final backgroundTop = dy - ((detailHeight - textHeight) / 2);
+      final verticalInset = (detailHeight - textHeight) / 2;
+      final opticalOffset =
+          textHeight * (_detailOpticalOffsetFactors[i] ?? 0.0);
+      final textTop = detailBaselineY - detailBaseline + opticalOffset;
+      final backgroundTop = textTop - verticalInset;
       if (action != null) {
         final backgroundRect = Rect.fromLTWH(
           dx,
@@ -527,10 +560,7 @@ class DynamicInlineTextRenderObject extends RenderBox {
       }
       painter.paint(
         context.canvas,
-        Offset(
-          dx + (horizontalPadding / 2),
-          backgroundTop + ((detailHeight - painter.height) / 2),
-        ),
+        Offset(dx + (horizontalPadding / 2), textTop),
       );
       dx += detailWidth;
       final hasTrailingDetail = i < _detailPainters.length - 1;
@@ -548,6 +578,9 @@ class DynamicInlineTextRenderObject extends RenderBox {
     final baseTextHeight = hasBodyText ? _textPainter.height : 0.0;
     final lastLine = _textLineMetrics.isNotEmpty ? _textLineMetrics.last : null;
     final detailStartGap = hasBodyText ? _detailStartGap : 0.0;
+    final detailBaselineY = _canInlineDetails && lastLine != null
+        ? lastLine.baseline
+        : baseTextHeight + _detailBaselineOffset;
     var dx = _canInlineDetails
         ? _finalLineWidth + detailStartGap
         : size.width - _detailsWidth;
@@ -566,11 +599,12 @@ class DynamicInlineTextRenderObject extends RenderBox {
       if (action != null) {
         final detailBaseline =
             metrics?.baseline ?? painter.computeLineMetrics().first.baseline;
-        final dy = _canInlineDetails && lastLine != null
-            ? lastLine.baseline - detailBaseline
-            : baseTextHeight;
         final textHeight = metrics?.height ?? painter.height;
-        final backgroundTop = dy - ((detailHeight - textHeight) / 2);
+        final verticalInset = (detailHeight - textHeight) / 2;
+        final opticalOffset =
+            textHeight * (_detailOpticalOffsetFactors[i] ?? 0.0);
+        final textTop = detailBaselineY - detailBaseline + opticalOffset;
+        final backgroundTop = textTop - verticalInset;
         final rect = Rect.fromLTWH(
           dx,
           backgroundTop,

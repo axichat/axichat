@@ -1165,6 +1165,11 @@
       "character": {}
     }
   },
+  "chatsCreateRoomTypeChatTitle": "聊天聊天室",
+  "chatsCreateRoomTypeChatDescription": "優先開啟聊天，對話仍然是主要入口，共享日曆仍可在聊天室中使用。",
+  "chatsCreateRoomTypeCalendarTitle": "日曆聊天室",
+  "chatsCreateRoomTypeCalendarDescription": "優先開啟共享日曆，聊天室聊天仍可從 App 列進入。",
+  "chatsCreateRoomTypeHint": "日曆聊天室適合以共享日曆為中心的協作，聊天聊天室則優先開啟對話。兩種聊天室都同時包含聊天和日曆功能。",
   "chatsArchiveTitle": "封存",
   "chatsArchiveEmpty": "暫無已封存的聊天",
   "calendarTileNow": "現在：{title}",

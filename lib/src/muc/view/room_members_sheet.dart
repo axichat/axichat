@@ -971,11 +971,7 @@ class _MemberActionDescriptor {
 }
 
 String _avatarKey(Occupant occupant) {
-  final realJid = occupant.realJid;
-  if (realJid == null || realJid.isEmpty) {
-    return occupant.nick;
-  }
-  return bareAddress(realJid) ?? realJid;
+  return occupant.avatarKey;
 }
 
 class RoomAvatarEditorSheet extends StatefulWidget {

@@ -5,19 +5,17 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 const double _defaultAppBarActionSpacing = 8.0;
-const double _inlineActionWidthMultiplier = 2.4;
-const double _inlineActionEstimatedWidth =
-    AxiIconButton.kTapTargetSize * _inlineActionWidthMultiplier;
 
 class AppBarActionItem {
   const AppBarActionItem({
     required this.label,
     required this.iconData,
     this.icon,
-    this.inline,
     this.estimatedWidth,
     this.onPressed,
     this.enabled = true,
+    this.ghost = false,
+    this.loading = false,
     this.destructive = false,
     this.selected = false,
     this.tooltip,
@@ -26,10 +24,11 @@ class AppBarActionItem {
   final String label;
   final IconData iconData;
   final Widget? icon;
-  final Widget? inline;
   final double? estimatedWidth;
   final VoidCallback? onPressed;
   final bool enabled;
+  final bool ghost;
+  final bool loading;
   final bool destructive;
   final bool selected;
   final String? tooltip;
@@ -82,10 +81,7 @@ class AppBarActions extends StatelessWidget {
           spacingWidth,
           (total, action) {
             final double actionWidth =
-                action.estimatedWidth ??
-                (action.inline != null
-                    ? _inlineActionEstimatedWidth
-                    : AxiIconButton.kTapTargetSize);
+                action.estimatedWidth ?? AxiIconButton.kTapTargetSize;
             return total + actionWidth;
           },
         );
@@ -123,17 +119,27 @@ class AppBarActions extends StatelessWidget {
                 key: ValueKey<String>(
                   'app-bar-action-${actions[index].iconData}',
                 ),
-                child:
-                    actions[index].inline ??
-                    AxiIconButton.outline(
-                      iconData: actions[index].iconData,
-                      icon: actions[index].icon,
-                      tooltip: actions[index].tooltip ?? actions[index].label,
-                      selected: actions[index].selected,
-                      onPressed: actions[index].enabled
-                          ? actions[index].onPressed
-                          : null,
-                    ),
+                child: actions[index].ghost
+                    ? AxiIconButton.ghost(
+                        iconData: actions[index].iconData,
+                        icon: actions[index].icon,
+                        tooltip: actions[index].tooltip ?? actions[index].label,
+                        selected: actions[index].selected,
+                        loading: actions[index].loading,
+                        onPressed: actions[index].enabled
+                            ? actions[index].onPressed
+                            : null,
+                      )
+                    : AxiIconButton.outline(
+                        iconData: actions[index].iconData,
+                        icon: actions[index].icon,
+                        tooltip: actions[index].tooltip ?? actions[index].label,
+                        selected: actions[index].selected,
+                        loading: actions[index].loading,
+                        onPressed: actions[index].enabled
+                            ? actions[index].onPressed
+                            : null,
+                      ),
               ),
               if (index < actions.length - 1) SizedBox(width: spacing),
             ],

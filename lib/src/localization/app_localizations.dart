@@ -5460,6 +5460,36 @@ abstract class AppLocalizations {
   /// **'Room names cannot contain {character}.'**
   String chatsRoomNameInvalidCharacterError(Object character);
 
+  /// No description provided for @chatsCreateRoomTypeChatTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat Room'**
+  String get chatsCreateRoomTypeChatTitle;
+
+  /// No description provided for @chatsCreateRoomTypeChatDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat focused. Shared calendar still available via app bar.'**
+  String get chatsCreateRoomTypeChatDescription;
+
+  /// No description provided for @chatsCreateRoomTypeCalendarTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar Room'**
+  String get chatsCreateRoomTypeCalendarTitle;
+
+  /// No description provided for @chatsCreateRoomTypeCalendarDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared calendar focused. Group chat still accessible via app bar.'**
+  String get chatsCreateRoomTypeCalendarDescription;
+
+  /// No description provided for @chatsCreateRoomTypeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Calendar rooms are calendar-focused shared rooms, and chat rooms are normal conversation-first rooms. Both room types still include both chat and calendar.'**
+  String get chatsCreateRoomTypeHint;
+
   /// No description provided for @chatsArchiveTitle.
   ///
   /// In en, this message translates to:

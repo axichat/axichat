@@ -25,6 +25,11 @@ typedef ChatCalendarSendMessage =
 
 typedef ChatCalendarSnapshotSender =
     Future<CalendarSnapshotUploadResult> Function(File file);
+typedef ChatCalendarApplyPrimaryView =
+    Future<void> Function({
+      required String chatJid,
+      required ChatPrimaryView primaryView,
+    });
 
 const String _chatCalendarTaskAddOperation = 'add';
 
@@ -32,15 +37,18 @@ class ChatCalendarSyncCoordinator {
   ChatCalendarSyncCoordinator({
     required ChatCalendarStorage storage,
     required ChatCalendarSendMessage sendMessage,
+    required ChatCalendarApplyPrimaryView applyPrimaryView,
     ChatCalendarSnapshotSender? sendSnapshotFile,
     ChatCalendarSyncStateStore? syncStateStore,
   }) : _storage = storage,
        _sendMessage = sendMessage,
+       _applyPrimaryView = applyPrimaryView,
        _sendSnapshotFile = sendSnapshotFile,
        _syncStateStore = syncStateStore ?? const ChatCalendarSyncStateStore();
 
   final ChatCalendarStorage _storage;
   final ChatCalendarSendMessage _sendMessage;
+  final ChatCalendarApplyPrimaryView _applyPrimaryView;
   final ChatCalendarSnapshotSender? _sendSnapshotFile;
   final ChatCalendarSyncStateStore _syncStateStore;
   final Map<String, _ChatCalendarSyncContext> _contexts =
@@ -113,6 +121,9 @@ class ChatCalendarSyncCoordinator {
         readModel: context.readModel,
         applyModel: context.applyModel,
         sendCalendarMessage: context.send,
+        applyRoomPrimaryView: chatType == ChatType.groupChat
+            ? context.applyPrimaryView
+            : null,
         sendSnapshotFile: _sendSnapshotFile,
         readSyncState: context.readSyncState,
         writeSyncState: context.writeSyncState,
@@ -133,6 +144,7 @@ class ChatCalendarSyncCoordinator {
         chatType: chatType,
         storage: _storage,
         sendMessage: _sendMessage,
+        applyPrimaryView: _applyPrimaryView,
         syncStateStore: _syncStateStore,
       ),
     )..setChatType(chatType);
@@ -151,9 +163,11 @@ class _ChatCalendarSyncContext {
     required ChatType chatType,
     required ChatCalendarStorage storage,
     required ChatCalendarSendMessage sendMessage,
+    required ChatCalendarApplyPrimaryView applyPrimaryView,
     required ChatCalendarSyncStateStore syncStateStore,
   }) : _storage = storage,
        _sendMessage = sendMessage,
+       _applyPrimaryView = applyPrimaryView,
        _syncStateStore = syncStateStore,
        _chatType = chatType {
     _resetToStorage();
@@ -162,6 +176,7 @@ class _ChatCalendarSyncContext {
   final String chatJid;
   final ChatCalendarStorage _storage;
   final ChatCalendarSendMessage _sendMessage;
+  final ChatCalendarApplyPrimaryView _applyPrimaryView;
   final ChatCalendarSyncStateStore _syncStateStore;
   ChatType _chatType;
   late CalendarModel Function() _readModel;
@@ -188,6 +203,9 @@ class _ChatCalendarSyncContext {
   CalendarModel readModel() => _readModel();
 
   Future<void> applyModel(CalendarModel model) => _applyModel(model);
+
+  Future<void> applyPrimaryView(ChatPrimaryView primaryView) =>
+      _applyPrimaryView(chatJid: chatJid, primaryView: primaryView);
 
   CalendarSyncState readSyncState() => _syncStateStore.read(chatJid);
 

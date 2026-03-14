@@ -495,6 +495,15 @@ class ChatsCubit extends Cubit<ChatsState> {
     return null;
   }
 
+  ChatRouteIndex _defaultOpenRouteForChat(String jid, {ChatRouteIndex? route}) {
+    if (route != null) {
+      return route;
+    }
+    return _chatFor(jid)?.opensToCalendar == true
+        ? ChatRouteIndex.calendar
+        : ChatRouteIndex.main;
+  }
+
   void _stageOpenChatUnreadBoundarySeed(String jid) {
     final unreadCount = _chatFor(jid)?.unreadCount ?? 0;
     _chatsService.stageOpenChatUnreadBoundarySeed(
@@ -503,15 +512,16 @@ class ChatsCubit extends Cubit<ChatsState> {
     );
   }
 
-  Future<void> openChat({required String jid}) async {
+  Future<void> openChat({required String jid, ChatRouteIndex? route}) async {
     _stageOpenChatUnreadBoundarySeed(jid);
+    final openRoute = _defaultOpenRouteForChat(jid, route: route);
     emit(
       state.copyWith(
         openStack: <String>[jid],
         forwardStack: const <String>[],
         openJid: jid,
-        openChatCalendar: false,
-        openChatRoute: ChatRouteIndex.main,
+        openChatCalendar: openRoute.isCalendar,
+        openChatRoute: openRoute,
         pendingOpenMessageChatJid: null,
         pendingOpenMessageReferenceId: null,
       ),
@@ -525,10 +535,10 @@ class ChatsCubit extends Cubit<ChatsState> {
   }) async {
     final normalizedMessageReferenceId = messageReferenceId.trim();
     if (normalizedMessageReferenceId.isEmpty) {
-      await openChat(jid: jid);
+      await openChat(jid: jid, route: ChatRouteIndex.main);
       return;
     }
-    await openChat(jid: jid);
+    await openChat(jid: jid, route: ChatRouteIndex.main);
     emit(
       state.copyWith(
         pendingOpenMessageChatJid: jid,
@@ -746,6 +756,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     required String title,
     String? nickname,
     AvatarUploadPayload? avatar,
+    ChatPrimaryView primaryView = ChatPrimaryView.chat,
   }) async {
     emit(
       state.copyWith(
@@ -759,6 +770,7 @@ class ChatsCubit extends Cubit<ChatsState> {
         name: title,
         nickname: nickname,
         avatar: avatar,
+        primaryView: primaryView,
       );
       emit(
         state.copyWith(
@@ -767,7 +779,12 @@ class ChatsCubit extends Cubit<ChatsState> {
         ),
       );
       fireAndForget(
-        () => openChat(jid: roomJid),
+        () => openChat(
+          jid: roomJid,
+          route: primaryView.isCalendar
+              ? ChatRouteIndex.calendar
+              : ChatRouteIndex.main,
+        ),
         operationName: 'ChatsCubit.openCreatedRoom',
       );
     } on XmppMucCreateConflictException {

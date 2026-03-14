@@ -408,15 +408,17 @@ class _ProfileMainView extends StatelessWidget {
                   thickness: context.borderSide.width,
                   color: context.colorScheme.border,
                 ),
-                Padding(
-                  padding: jumpMenuPadding,
-                  child: _SettingsJumpMenu(
-                    anchors: settingsAnchors,
-                    showImportantSection: showImportantSection,
-                    emailEnabled: emailEnabled,
-                    scrollController: settingsScrollController,
-                    scrollOffsetListenable: settingsScrollOffset,
-                    textAlign: TextAlign.right,
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: jumpMenuPadding,
+                    child: _SettingsJumpMenu(
+                      anchors: settingsAnchors,
+                      showImportantSection: showImportantSection,
+                      emailEnabled: emailEnabled,
+                      scrollController: settingsScrollController,
+                      scrollOffsetListenable: settingsScrollOffset,
+                      textAlign: TextAlign.right,
+                    ),
                   ),
                 ),
               ],

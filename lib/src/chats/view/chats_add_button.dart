@@ -11,15 +11,31 @@ import 'package:axichat/src/avatar/view/avatar_error_l10n.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
-import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/common/request_status.dart';
+import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+
+enum _RoomCreateType {
+  chat,
+  calendar;
+
+  ChatPrimaryView get primaryView => switch (this) {
+    _RoomCreateType.chat => ChatPrimaryView.chat,
+    _RoomCreateType.calendar => ChatPrimaryView.calendar,
+  };
+
+  IconData get iconData => switch (this) {
+    _RoomCreateType.chat => LucideIcons.messagesSquare,
+    _RoomCreateType.calendar => LucideIcons.calendarClock,
+  };
+}
 
 class ChatsAddButton extends StatelessWidget {
   const ChatsAddButton({super.key});
@@ -62,6 +78,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
   String _title = '';
   String? _validationError;
   bool _showAvatarEditor = false;
+  _RoomCreateType _roomType = _RoomCreateType.chat;
 
   void _handleTitleChanged(String value) {
     setState(() {
@@ -119,6 +136,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
     context.read<ChatsCubit>().createChatRoom(
       title: trimmed,
       avatar: avatarPayload,
+      primaryView: _roomType.primaryView,
     );
   }
 
@@ -127,6 +145,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
     final l10n = context.l10n;
     final spacing = context.spacing;
     final sizing = context.sizing;
+    final locate = context.read;
     final fieldPadding = EdgeInsets.all(spacing.s);
     final errorPadding = EdgeInsets.only(
       left: spacing.s,
@@ -198,6 +217,23 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                               ),
                             ),
                           ],
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          spacing.s,
+                          0,
+                          spacing.s,
+                          spacing.s,
+                        ),
+                        child: _RoomCreateTypeSelector(
+                          value: _roomType,
+                          enabled: !loading,
+                          onChanged: (value) {
+                            setState(() {
+                              _roomType = value;
+                            });
+                          },
                         ),
                       ),
                       if (avatarErrorText != null)
@@ -281,8 +317,7 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
                                           avatarState.canShuffleBackground,
                                       onShuffleBackground:
                                           avatarState.canShuffleBackground
-                                          ? () => context
-                                                .read<AvatarEditorCubit>()
+                                          ? () => locate<AvatarEditorCubit>()
                                                 .shuffleBackground(
                                                   context.colorScheme,
                                                 )
@@ -318,6 +353,121 @@ class _ChatRoomCreateDialogState extends State<_ChatRoomCreateDialog> {
           },
         );
       },
+    );
+  }
+}
+
+class _RoomCreateTypeSelector extends StatelessWidget {
+  const _RoomCreateTypeSelector({
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final _RoomCreateType value;
+  final bool enabled;
+  final ValueChanged<_RoomCreateType> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _RoomCreateTypeOption(
+          value: _RoomCreateType.chat,
+          selected: value == _RoomCreateType.chat,
+          onPressed: enabled ? () => onChanged(_RoomCreateType.chat) : null,
+        ),
+        SizedBox(height: spacing.s),
+        _RoomCreateTypeOption(
+          value: _RoomCreateType.calendar,
+          selected: value == _RoomCreateType.calendar,
+          onPressed: enabled ? () => onChanged(_RoomCreateType.calendar) : null,
+        ),
+      ],
+    );
+  }
+}
+
+class _RoomCreateTypeOption extends StatelessWidget {
+  const _RoomCreateTypeOption({
+    required this.value,
+    required this.selected,
+    this.onPressed,
+  });
+
+  final _RoomCreateType value;
+  final bool selected;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final title = switch (value) {
+      _RoomCreateType.chat => l10n.chatsCreateRoomTypeChatTitle,
+      _RoomCreateType.calendar => l10n.chatsCreateRoomTypeCalendarTitle,
+    };
+    final description = switch (value) {
+      _RoomCreateType.chat => l10n.chatsCreateRoomTypeChatDescription,
+      _RoomCreateType.calendar => l10n.chatsCreateRoomTypeCalendarDescription,
+    };
+
+    return AxiListButton(
+      variant: AxiButtonVariant.outline,
+      selected: selected,
+      onPressed: onPressed,
+      leading: DecoratedBox(
+        decoration: ShapeDecoration(
+          color: selected
+              ? colors.primary.withValues(alpha: context.motion.tapSplashAlpha)
+              : colors.secondary.withValues(
+                  alpha: context.motion.tapHoverAlpha,
+                ),
+          shape: RoundedSuperellipseBorder(
+            borderRadius: BorderRadius.circular(context.radii.squircle),
+            side: BorderSide(
+              color: selected ? colors.primary : context.borderSide.color,
+              width: context.borderSide.width,
+            ),
+          ),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(spacing.s),
+          child: Icon(
+            value.iconData,
+            size: sizing.menuItemIconSize,
+            color: selected ? colors.primary : colors.secondaryForeground,
+          ),
+        ),
+      ),
+      trailing: Padding(
+        padding: EdgeInsets.only(top: spacing.xxs),
+        child: Icon(
+          selected
+              ? Icons.radio_button_checked_rounded
+              : Icons.radio_button_off_rounded,
+          size: sizing.menuItemIconSize,
+          color: selected ? colors.primary : colors.mutedForeground,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(title, style: context.textTheme.small),
+          SizedBox(height: spacing.xxs),
+          Text(
+            description,
+            style: context.textTheme.muted.copyWith(
+              color: colors.mutedForeground,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

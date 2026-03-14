@@ -3076,6 +3076,24 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get chatsCreateRoomTypeChatTitle => 'Sala de chat';
+
+  @override
+  String get chatsCreateRoomTypeChatDescription =>
+      'La conversación se abre primero. El calendario compartido sigue disponible en la sala.';
+
+  @override
+  String get chatsCreateRoomTypeCalendarTitle => 'Sala de calendario';
+
+  @override
+  String get chatsCreateRoomTypeCalendarDescription =>
+      'El calendario compartido se abre primero. El chat de la sala sigue disponible desde la barra superior.';
+
+  @override
+  String get chatsCreateRoomTypeHint =>
+      'Las salas de calendario son salas compartidas centradas en el calendario, y las salas de chat abren primero la conversación. Ambos tipos de sala siguen incluyendo chat y calendario.';
+
+  @override
   String get chatsArchiveTitle => 'Archivo';
 
   @override

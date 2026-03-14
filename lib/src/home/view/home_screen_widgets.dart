@@ -142,6 +142,9 @@ class _NexusScaffold extends StatelessWidget {
     final l10n = context.l10n;
     final locate = context.read;
     final showToast = ShadToaster.maybeOf(context)?.show;
+    final shortcut = findActionShortcut(EnvScope.of(context).platform);
+    final shortcutText = shortcutLabel(context, shortcut);
+    final homeRefreshLoading = chatsState.refreshStatus.isLoading;
     final chatItems = chatsState.items ?? const <m.Chat>[];
     final selectedChats = chatsState.selectedJids.isEmpty
         ? const <m.Chat>[]
@@ -171,7 +174,7 @@ class _NexusScaffold extends StatelessWidget {
         AppBarActionItem(
           label: l10n.accessibilityActionsLabel,
           iconData: LucideIcons.lifeBuoy,
-          inline: const _FindActionIconButton(),
+          tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
           onPressed: () => locate<AccessibilityActionBloc>().add(
             const AccessibilityMenuOpened(),
           ),
@@ -180,16 +183,15 @@ class _NexusScaffold extends StatelessWidget {
         AppBarActionItem(
           label: l10n.homeSyncTooltip,
           iconData: LucideIcons.refreshCw,
-          inline: const _DesktopHomeRefreshButton(),
-          onPressed: () => locate<ChatsCubit>().refreshHomeSync(),
+          loading: homeRefreshLoading,
+          enabled: !homeRefreshLoading,
+          onPressed: homeRefreshLoading
+              ? null
+              : () => locate<ChatsCubit>().refreshHomeSync(),
         ),
       AppBarActionItem(
         label: searchState.active ? l10n.chatSearchClose : l10n.commonSearch,
         iconData: LucideIcons.search,
-        inline: _SearchToggleButton(
-          active: searchState.active,
-          onPressed: () => locate<HomeSearchCubit>().toggleSearch(),
-        ),
         onPressed: () => locate<HomeSearchCubit>().toggleSearch(),
       ),
     ];
@@ -1616,66 +1618,6 @@ class _ProfileRailItem extends StatelessWidget {
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-}
-
-class _FindActionIconButton extends StatelessWidget {
-  const _FindActionIconButton();
-
-  @override
-  Widget build(BuildContext context) {
-    final locate = context.read;
-    final shortcut = findActionShortcut(EnvScope.of(context).platform);
-    final shortcutText = shortcutLabel(context, shortcut);
-    final l10n = context.l10n;
-    return AxiIconButton.outline(
-      iconData: LucideIcons.lifeBuoy,
-      tooltip: l10n.accessibilityActionsShortcutTooltip(shortcutText),
-      onPressed: () => locate<AccessibilityActionBloc>().add(
-        const AccessibilityMenuOpened(),
-      ),
-    );
-  }
-}
-
-class _SearchToggleButton extends StatelessWidget {
-  const _SearchToggleButton({required this.active, this.onPressed});
-
-  final bool active;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = context.l10n;
-    return AxiIconButton.outline(
-      iconData: LucideIcons.search,
-      tooltip: active ? l10n.chatSearchClose : l10n.commonSearch,
-      onPressed: onPressed,
-    );
-  }
-}
-
-class _DesktopHomeRefreshButton extends StatelessWidget {
-  const _DesktopHomeRefreshButton();
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocSelector<ChatsCubit, ChatsState, RequestStatus>(
-      selector: (state) => state.refreshStatus,
-      builder: (context, status) {
-        final locate = context.read;
-        final isLoading = status.isLoading;
-        final l10n = context.l10n;
-        return AxiIconButton.outline(
-          iconData: LucideIcons.refreshCw,
-          tooltip: l10n.homeSyncTooltip,
-          loading: isLoading,
-          onPressed: isLoading
-              ? null
-              : () => locate<ChatsCubit>().refreshHomeSync(),
         );
       },
     );

@@ -1306,6 +1306,11 @@
       "character": {}
     }
   },
+  "chatsCreateRoomTypeChatTitle": "Chat Room",
+  "chatsCreateRoomTypeChatDescription": "Chat focused. Shared calendar still available via app bar.",
+  "chatsCreateRoomTypeCalendarTitle": "Calendar Room",
+  "chatsCreateRoomTypeCalendarDescription": "Shared calendar focused. Group chat still accessible via app bar.",
+  "chatsCreateRoomTypeHint": "Calendar rooms are calendar-focused shared rooms, and chat rooms are normal conversation-first rooms. Both room types still include both chat and calendar.",
   "chatsArchiveTitle": "Archive",
   "chatsArchiveEmpty": "No archived chats yet",
   "calendarTileNow": "Now: {title}",

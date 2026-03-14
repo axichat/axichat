@@ -3033,6 +3033,24 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get chatsCreateRoomTypeChatTitle => 'Chat Room';
+
+  @override
+  String get chatsCreateRoomTypeChatDescription =>
+      'Chat focused. Shared calendar still available via app bar.';
+
+  @override
+  String get chatsCreateRoomTypeCalendarTitle => 'Calendar Room';
+
+  @override
+  String get chatsCreateRoomTypeCalendarDescription =>
+      'Shared calendar focused. Group chat still accessible via app bar.';
+
+  @override
+  String get chatsCreateRoomTypeHint =>
+      'Calendar rooms are calendar-focused shared rooms, and chat rooms are normal conversation-first rooms. Both room types still include both chat and calendar.';
+
+  @override
   String get chatsArchiveTitle => 'Archive';
 
   @override

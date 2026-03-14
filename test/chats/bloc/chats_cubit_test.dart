@@ -20,11 +20,13 @@ Chat _chat({
   bool spam = false,
   bool favorited = false,
   DateTime? spamUpdatedAt,
+  ChatPrimaryView primaryView = ChatPrimaryView.chat,
 }) {
   return Chat(
     jid: jid,
     title: title,
     type: ChatType.chat,
+    primaryView: primaryView,
     lastChangeTimestamp: timestamp,
     spam: spam,
     favorited: favorited,
@@ -207,6 +209,32 @@ void main() {
     },
   );
 
+  test(
+    'opening a calendar-first room defaults to the calendar route',
+    () async {
+      final room = _chat(
+        jid: 'planning@conference.axi.im',
+        title: 'Planning',
+        timestamp: DateTime(2024, 1, 1),
+        primaryView: ChatPrimaryView.calendar,
+      ).copyWith(type: ChatType.groupChat);
+      when(() => xmppService.cachedChatList).thenReturn([room]);
+      when(() => xmppService.openChat(any())).thenAnswer((_) async {});
+
+      final cubit = ChatsCubit(
+        xmppService: xmppService,
+        homeRefreshSyncService: homeRefreshSyncService,
+      );
+      addTearDown(cubit.close);
+
+      await cubit.openChat(jid: room.jid);
+
+      expect(cubit.state.openJid, room.jid);
+      expect(cubit.state.openChatRoute, ChatRouteIndex.calendar);
+      expect(cubit.state.openChatCalendar, isTrue);
+    },
+  );
+
   test('create room conflict surfaces alreadyExists failure state', () async {
     final xmppMucService = MockXmppMucService();
     when(
@@ -224,6 +252,7 @@ void main() {
         name: any(named: 'name'),
         nickname: any(named: 'nickname'),
         avatar: any(named: 'avatar'),
+        primaryView: ChatPrimaryView.chat,
       ),
     ).thenThrow(XmppMucCreateConflictException());
 
@@ -237,5 +266,48 @@ void main() {
 
     expect(cubit.state.creationStatus.isFailure, isTrue);
     expect(cubit.state.creationFailure, ChatsCreateRoomFailure.alreadyExists);
+  });
+
+  test('create room forwards the selected primary view', () async {
+    final xmppMucService = MockXmppMucService();
+    when(
+      () => xmppMucService.chatsStream(),
+    ).thenAnswer((_) => const Stream<List<Chat>>.empty());
+    when(
+      () => xmppMucService.recipientAddressSuggestionsStream(),
+    ).thenAnswer((_) => const Stream<List<String>>.empty());
+    when(
+      () => xmppMucService.demoResetStream,
+    ).thenAnswer((_) => const Stream<void>.empty());
+    when(() => xmppMucService.cachedChatList).thenReturn(const <Chat>[]);
+    when(
+      () => xmppMucService.createRoom(
+        name: 'Roadmap',
+        nickname: null,
+        avatar: null,
+        primaryView: ChatPrimaryView.calendar,
+      ),
+    ).thenAnswer((_) async => 'roadmap@conference.axi.im');
+    when(() => xmppMucService.openChat(any())).thenAnswer((_) async {});
+
+    final cubit = ChatsCubit(
+      xmppService: xmppMucService,
+      homeRefreshSyncService: homeRefreshSyncService,
+    );
+    addTearDown(cubit.close);
+
+    await cubit.createChatRoom(
+      title: 'Roadmap',
+      primaryView: ChatPrimaryView.calendar,
+    );
+
+    verify(
+      () => xmppMucService.createRoom(
+        name: 'Roadmap',
+        nickname: null,
+        avatar: null,
+        primaryView: ChatPrimaryView.calendar,
+      ),
+    ).called(1);
   });
 }

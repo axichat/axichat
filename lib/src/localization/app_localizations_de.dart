@@ -3085,6 +3085,24 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get chatsCreateRoomTypeChatTitle => 'Chatraum';
+
+  @override
+  String get chatsCreateRoomTypeChatDescription =>
+      'Der Chat wird zuerst geöffnet. Der gemeinsame Kalender bleibt im Raum verfügbar.';
+
+  @override
+  String get chatsCreateRoomTypeCalendarTitle => 'Kalenderraum';
+
+  @override
+  String get chatsCreateRoomTypeCalendarDescription =>
+      'Der gemeinsame Kalender wird zuerst geöffnet. Der Raumchat bleibt über die App-Leiste verfügbar.';
+
+  @override
+  String get chatsCreateRoomTypeHint =>
+      'Kalenderräume sind gemeinsame Räume mit Fokus auf den Kalender, Chaträume öffnen zuerst die Unterhaltung. Beide Raumtypen enthalten weiterhin sowohl Chat als auch Kalender.';
+
+  @override
   String get chatsArchiveTitle => 'Archiv';
 
   @override

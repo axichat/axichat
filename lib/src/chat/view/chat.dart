@@ -1020,7 +1020,6 @@ class _RoomMembersDrawerContent extends StatelessWidget {
 class _ChatState extends State<Chat> {
   static bool get _debugShowAllComposerBanners => kDebugMode && false;
   static bool get _debugCycleComposerBanners => kDebugMode && false;
-  static const bool _debugForceUnreadIndicators = true;
 
   late final ShadPopoverController _emojiPopoverController;
   late final FocusNode _focusNode;
@@ -1078,8 +1077,6 @@ class _ChatState extends State<Chat> {
   final _bubbleRegionRegistry = _BubbleRegionRegistry();
   final _messageListKey = GlobalKey();
   Set<String> _reportedReadThresholdMessageIds = const <String>{};
-  final Set<String> _debugConsumedUnreadIndicatorKeys = <String>{};
-  final Set<String> _optimisticReadTapMessageIds = <String>{};
   var _readThresholdSyncScheduled = false;
   final Object _composerTapRegionGroup = Object();
   final Object _selectionTapRegionGroup = Object();
@@ -1188,10 +1185,12 @@ class _ChatState extends State<Chat> {
   ({
     List<InlineSpan> details,
     Map<int, DynamicInlineDetailAction> detailActions,
+    Map<int, double> detailOpticalOffsetFactors,
   })
   _emailInlineDetailActionData({
     required BuildContext context,
     required List<InlineSpan> details,
+    required Map<int, double> detailOpticalOffsetFactors,
     required bool enabled,
     required String label,
     required VoidCallback onTap,
@@ -1200,6 +1199,7 @@ class _ChatState extends State<Chat> {
       return (
         details: details,
         detailActions: const <int, DynamicInlineDetailAction>{},
+        detailOpticalOffsetFactors: detailOpticalOffsetFactors,
       );
     }
     final colors = context.colorScheme;
@@ -1232,6 +1232,7 @@ class _ChatState extends State<Chat> {
               (context.borderSide.width * 2),
         ),
       },
+      detailOpticalOffsetFactors: detailOpticalOffsetFactors,
     );
   }
 
@@ -1479,6 +1480,16 @@ class _ChatState extends State<Chat> {
               jid: jid,
               outbound: outbound,
               chatType: chatType,
+            );
+          },
+      applyPrimaryView:
+          ({
+            required String chatJid,
+            required ChatPrimaryView primaryView,
+          }) async {
+            await locate<XmppService>().applyRoomPrimaryView(
+              roomJid: chatJid,
+              primaryView: primaryView,
             );
           },
       sendSnapshotFile: (file) =>
@@ -2010,24 +2021,6 @@ class _ChatState extends State<Chat> {
     }
     final chatState = context.read<ChatBloc>().state;
     final nextIds = _readThresholdMessageIds(chatState);
-    var debugIndicatorDidChange = false;
-    if (_debugForceUnreadIndicators) {
-      for (final message in chatState.items) {
-        if (!_isEmailBackedMessage(message)) {
-          continue;
-        }
-        if (!nextIds.contains(message.stanzaID)) {
-          continue;
-        }
-        final didAdd = _debugConsumedUnreadIndicatorKeys.add(
-          _debugUnreadIndicatorKeyForMessage(message),
-        );
-        debugIndicatorDidChange = debugIndicatorDidChange || didAdd;
-      }
-    }
-    if (debugIndicatorDidChange) {
-      setState(() {});
-    }
     if (nextIds.length == _reportedReadThresholdMessageIds.length &&
         nextIds.containsAll(_reportedReadThresholdMessageIds)) {
       return;
@@ -2037,28 +2030,12 @@ class _ChatState extends State<Chat> {
     context.read<ChatBloc>().add(ChatReadThresholdChanged(messageIds));
   }
 
-  void _requestImmediateReadOnTap(Message message) {
+  void _requestReadOnTap(Message message) {
     final messageId = message.stanzaID.trim();
     if (messageId.isEmpty) {
       return;
     }
-    var didChange = _optimisticReadTapMessageIds.add(messageId);
-    if (_debugForceUnreadIndicators) {
-      final didAddDebug = _debugConsumedUnreadIndicatorKeys.add(
-        _debugUnreadIndicatorKeyForMessage(message),
-      );
-      didChange = didChange || didAddDebug;
-    }
-    if (didChange && mounted) {
-      setState(() {});
-    }
     context.read<ChatBloc>().add(ChatMessageReadRequested(messageId));
-  }
-
-  String _debugUnreadIndicatorKeyForMessage(Message message) {
-    final chatJid = message.chatJid.trim();
-    final stanzaId = message.stanzaID.trim();
-    return '$chatJid|$stanzaId';
   }
 
   void _scheduleReadThresholdSync() {
@@ -2078,14 +2055,21 @@ class _ChatState extends State<Chat> {
   void _restoreScrollOffsetForCurrentChat() {
     final target = _restoreScrollOffset();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scrollController.hasClients) return;
+      if (!_scrollController.hasClients) {
+        _scheduleReadThresholdSync();
+        return;
+      }
       final position = _scrollController.position;
-      if (!position.hasPixels) return;
+      if (!position.hasPixels) {
+        _scheduleReadThresholdSync();
+        return;
+      }
       final maxExtent = position.maxScrollExtent;
       final clamped = target.clamp(0.0, math.max(0.0, maxExtent)).toDouble();
       if (position.pixels != clamped) {
         _scrollController.jumpTo(clamped);
       }
+      _scheduleReadThresholdSync();
     });
   }
 
@@ -3860,9 +3844,6 @@ class _ChatState extends State<Chat> {
     final removedSelections = _multiSelectedMessageIds
         .where((id) => !availableIds.contains(id))
         .toList(growable: false);
-    _optimisticReadTapMessageIds.removeWhere(
-      (id) => !availableIds.contains(id) || messageById[id]?.displayed == true,
-    );
     var didChange = false;
     if (removedKeys.isNotEmpty) {
       for (final id in removedKeys) {
@@ -4554,7 +4535,6 @@ class _ChatState extends State<Chat> {
               listenWhen: (previous, current) =>
                   previous.chat?.jid != current.chat?.jid,
               listener: (_, state) {
-                _optimisticReadTapMessageIds.clear();
                 _animatedMessageIds.clear();
                 _hydratedAnimatedMessages = false;
                 _subjectChangeSuppressed = true;
@@ -4806,22 +4786,7 @@ class _ChatState extends State<Chat> {
               final chatCalendarCoordinator = _resolveChatCalendarCoordinator(
                 storageManager: storageManager,
               );
-              final bool demoEmailCalendarEnabled =
-                  kEnableDemoChats &&
-                  (chatEntity?.defaultTransport.isEmail ?? false);
               final storage = storageManager.authStorage;
-              final ChatCalendarSyncCoordinator? demoEmailCoordinator =
-                  demoEmailCalendarEnabled && storage != null
-                  ? ChatCalendarSyncCoordinator(
-                      storage: ChatCalendarStorage(storage: storage),
-                      sendMessage:
-                          ({
-                            required String jid,
-                            required CalendarSyncOutbound outbound,
-                            required ChatType chatType,
-                          }) async {},
-                    )
-                  : null;
               final bool personalCalendarAvailable =
                   storageManager.isAuthStorageReady;
               final bool supportsChatCalendar =
@@ -4829,14 +4794,10 @@ class _ChatState extends State<Chat> {
               final bool chatCalendarReady =
                   storageManager.isAuthStorageReady &&
                   chatCalendarCoordinator != null;
-              final bool demoEmailCalendarReady = demoEmailCoordinator != null;
               final bool chatCalendarEnabled =
-                  (supportsChatCalendar && chatCalendarReady) ||
-                  demoEmailCalendarReady;
+                  supportsChatCalendar && chatCalendarReady;
               final ChatCalendarSyncCoordinator?
-              resolvedChatCalendarCoordinator = supportsChatCalendar
-                  ? chatCalendarCoordinator
-                  : demoEmailCoordinator;
+              resolvedChatCalendarCoordinator = chatCalendarCoordinator;
               final bool chatCalendarAvailable =
                   chatCalendarEnabled &&
                   resolvedChatCalendarCoordinator != null &&
@@ -4930,18 +4891,11 @@ class _ChatState extends State<Chat> {
               final canTogglePins = !readOnly && canManagePins;
               final int pinnedCount = state.pinnedMessages.length;
               const IconData pinnedIcon = LucideIcons.pin;
+              final bool calendarFirstRoom =
+                  chatEntity?.isCalendarFirstRoom ?? false;
               final bool showingChatCalendar =
                   openChatCalendar || _chatRoute.isCalendar;
-              final AppBarActionItem? closeAction = readOnly
-                  ? null
-                  : AppBarActionItem(
-                      label: context.l10n.commonClose,
-                      iconData: LucideIcons.x,
-                      onPressed: () {
-                        _dismissTextInputFocus();
-                        context.read<ChatsCubit>().closeAllChats();
-                      },
-                    );
+              final bool showCloseButton = !readOnly;
               final List<AppBarActionItem> navigationActions =
                   <AppBarActionItem>[
                     if (!readOnly && openStack.length > 1)
@@ -4963,11 +4917,7 @@ class _ChatState extends State<Chat> {
                         },
                       ),
                   ];
-              final List<AppBarActionItem> leadingActions = <AppBarActionItem>[
-                ?closeAction,
-                ...navigationActions,
-              ];
-              final int leadingActionCount = leadingActions.length;
+              final int navigationActionCount = navigationActions.length;
               final int chatActionCount =
                   _chatBaseActionCount +
                   (isEmailBacked ? 1 : 0) +
@@ -4981,48 +4931,125 @@ class _ChatState extends State<Chat> {
                   final leadingSpacing = spacing.xs;
                   final actionSpacing = spacing.xxs;
                   final appBarActionsPadding = spacing.s;
+                  final appBarTitleSpacing = spacing.m;
                   final collapsedLeadingWidth = 0.0;
                   final avatarTitleSpacing = spacing.m;
                   final titleMinWidth = context.sizing.iconButtonTapTarget * 3;
-                  final showTitleAvatar = !isEmailBacked;
+                  final showTitleAvatar = !isEmailBacked && chatEntity != null;
+                  final rosterItems = jid == null
+                      ? const <RosterItem>[]
+                      : context.select<RosterCubit, List<RosterItem>>(
+                          (cubit) => cubit.state.items ?? const <RosterItem>[],
+                        );
+                  final item = jid == null
+                      ? null
+                      : rosterItems
+                            .where((entry) => entry.jid == jid)
+                            .singleOrNull;
+                  final canRenameContact =
+                      !readOnly &&
+                      chatEntity != null &&
+                      chatEntity.type == ChatType.chat &&
+                      !chatEntity.isAxichatWelcomeThread;
+                  final statusLabel = item?.status?.trim() ?? '';
+                  final addressLabel = isWelcomeChat || jid == null
+                      ? _emptyText
+                      : jid.trim();
+                  const addressStatusSeparator = ' · ';
+                  final secondaryLabel = switch ((
+                    addressLabel.isNotEmpty,
+                    statusLabel.isNotEmpty,
+                  )) {
+                    (true, true) =>
+                      '$addressLabel$addressStatusSeparator$statusLabel',
+                    (true, false) => addressLabel,
+                    (false, true) => statusLabel,
+                    (false, false) => _emptyText,
+                  };
+                  final presence = item?.presence;
+                  final subscription = item?.subscription;
+                  final avatarTooltip = isGroupChat
+                      ? context.l10n.chatRoomMembers
+                      : null;
+                  final baseTitleStyle = context.textTheme.h4;
+                  final titleStyle = baseTitleStyle.copyWith(
+                    fontSize: context.textTheme.large.fontSize,
+                  );
+                  final TextStyle subtitleStyle = context.textTheme.muted;
+                  final textScaler =
+                      MediaQuery.maybeTextScalerOf(context) ??
+                      TextScaler.noScaling;
+                  double measureTextWidth(String text, TextStyle style) {
+                    final normalized = text.trim();
+                    if (normalized.isEmpty) {
+                      return 0.0;
+                    }
+                    final painter = TextPainter(
+                      text: TextSpan(text: normalized, style: style),
+                      textDirection: Directionality.of(context),
+                      textScaler: textScaler,
+                      maxLines: 1,
+                    )..layout();
+                    return painter.width;
+                  }
+
                   final double appBarWidth = constraints.maxWidth;
-                  final double leadingWidthExpanded = leadingActionCount == 0
+                  final int leadingButtonCountExpanded =
+                      navigationActionCount + (showCloseButton ? 1 : 0);
+                  final double leadingWidthExpanded =
+                      leadingButtonCountExpanded == 0
                       ? collapsedLeadingWidth
                       : leadingInset +
                             (AxiIconButton.kTapTargetSize *
-                                leadingActionCount) +
+                                leadingButtonCountExpanded) +
                             (leadingSpacing *
-                                math.max(0, leadingActionCount - 1));
+                                math.max(0, leadingButtonCountExpanded - 1));
                   final double chatActionsWidth = chatActionCount == 0
                       ? 0
                       : (AxiIconButton.kTapTargetSize * chatActionCount) +
                             (actionSpacing * math.max(0, chatActionCount - 1));
-                  final double titleReserveWidth =
-                      (showTitleAvatar
-                          ? context.sizing.iconButtonSize + avatarTitleSpacing
-                          : 0.0) +
-                      titleMinWidth;
+                  final double titleReserveWidth = math.max(
+                    titleMinWidth,
+                    (showTitleAvatar
+                            ? context.sizing.iconButtonSize + avatarTitleSpacing
+                            : 0.0) +
+                        math.max(
+                          measureTextWidth(
+                            state.chat?.displayName ?? _emptyText,
+                            titleStyle,
+                          ),
+                          measureTextWidth(secondaryLabel, subtitleStyle),
+                        ),
+                  );
                   final double actionsPaddingWidth = appBarActionsPadding * 2;
+                  final double toolbarMiddleSpacingWidth =
+                      appBarTitleSpacing * 2;
+                  final double trailingActionsAvailableWidth = math.max(
+                    0.0,
+                    appBarWidth -
+                        leadingWidthExpanded -
+                        titleReserveWidth -
+                        actionsPaddingWidth -
+                        toolbarMiddleSpacingWidth,
+                  );
                   final bool collapseAppBarActions =
-                      leadingActionCount > 0 &&
-                      appBarWidth <
-                          leadingWidthExpanded +
-                              chatActionsWidth +
-                              titleReserveWidth +
-                              actionsPaddingWidth;
-                  final List<AppBarActionItem> visibleLeadingActions =
-                      collapseAppBarActions
-                      ? <AppBarActionItem>[?closeAction]
-                      : leadingActions;
-                  final int visibleLeadingActionCount =
-                      visibleLeadingActions.length;
-                  final double leadingWidth = visibleLeadingActionCount == 0
+                      trailingActionsAvailableWidth < chatActionsWidth;
+                  final int visibleLeadingButtonCount =
+                      (showCloseButton ? 1 : 0) +
+                      (collapseAppBarActions ? 0 : navigationActionCount);
+                  final double navigationActionsWidth =
+                      navigationActionCount == 0
+                      ? 0.0
+                      : (AxiIconButton.kTapTargetSize * navigationActionCount) +
+                            (leadingSpacing *
+                                math.max(0, navigationActionCount - 1));
+                  final double leadingWidth = visibleLeadingButtonCount == 0
                       ? collapsedLeadingWidth
                       : leadingInset +
                             (AxiIconButton.kTapTargetSize *
-                                visibleLeadingActionCount) +
+                                visibleLeadingButtonCount) +
                             (leadingSpacing *
-                                math.max(0, visibleLeadingActionCount - 1));
+                                math.max(0, visibleLeadingButtonCount - 1));
                   return Scaffold(
                     backgroundColor: context.colorScheme.background,
                     appBar: AppBar(
@@ -5030,6 +5057,7 @@ class _ChatState extends State<Chat> {
                       forceMaterialTransparency: true,
                       automaticallyImplyLeading: false,
                       centerTitle: false,
+                      titleSpacing: appBarTitleSpacing,
                       shape: Border(
                         bottom: BorderSide(color: context.colorScheme.border),
                       ),
@@ -5037,65 +5065,52 @@ class _ChatState extends State<Chat> {
                         horizontal: appBarActionsPadding,
                       ),
                       leadingWidth: leadingWidth,
-                      leading: visibleLeadingActionCount == 0
+                      leading: visibleLeadingButtonCount == 0
                           ? null
                           : Padding(
                               padding: EdgeInsets.only(left: leadingInset),
                               child: Align(
                                 alignment: Alignment.centerLeft,
-                                child: AppBarActions(
-                                  actions: visibleLeadingActions,
-                                  spacing: leadingSpacing,
-                                  overflowBreakpoint: 0,
-                                  availableWidth: leadingWidth,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (showCloseButton)
+                                      AxiIconButton.ghost(
+                                        iconData: LucideIcons.arrowLeft,
+                                        tooltip: context.l10n.commonBack,
+                                        onPressed: () {
+                                          _dismissTextInputFocus();
+                                          context
+                                              .read<ChatsCubit>()
+                                              .closeAllChats();
+                                        },
+                                      ),
+                                    if (showCloseButton &&
+                                        !collapseAppBarActions &&
+                                        navigationActionCount > 0)
+                                      SizedBox(width: leadingSpacing),
+                                    if (!collapseAppBarActions &&
+                                        navigationActionCount > 0)
+                                      AppBarActions(
+                                        actions: navigationActions,
+                                        spacing: leadingSpacing,
+                                        overflowBreakpoint: 0,
+                                        availableWidth: navigationActionsWidth,
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
                       title: jid == null
                           ? const SizedBox.shrink()
-                          : BlocBuilder<RosterCubit, RosterState>(
-                              buildWhen: (previous, current) =>
-                                  previous.items != current.items,
-                              builder: (context, rosterState) {
-                                final rosterItems =
-                                    rosterState.items ??
-                                    (context.read<RosterCubit>()[RosterCubit
-                                            .itemsCacheKey]
-                                        as List<RosterItem>?) ??
-                                    const <RosterItem>[];
-                                final item = rosterItems
-                                    .where((entry) => entry.jid == jid)
-                                    .singleOrNull;
-                                final canRenameContact =
-                                    !readOnly &&
-                                    chatEntity != null &&
-                                    chatEntity.type == ChatType.chat &&
-                                    !chatEntity.isAxichatWelcomeThread;
-                                final statusLabel = item?.status?.trim() ?? '';
-                                final addressLabel = isWelcomeChat
-                                    ? _emptyText
-                                    : jid.trim();
-                                const addressStatusSeparator = ' · ';
-                                final secondaryLabel = switch ((
-                                  addressLabel.isNotEmpty,
-                                  statusLabel.isNotEmpty,
-                                )) {
-                                  (true, true) =>
-                                    '$addressLabel$addressStatusSeparator$statusLabel',
-                                  (true, false) => addressLabel,
-                                  (false, true) => statusLabel,
-                                  (false, false) => _emptyText,
-                                };
-                                final presence = item?.presence;
-                                final subscription = item?.subscription;
-                                final avatarTooltip = isGroupChat
-                                    ? context.l10n.chatRoomMembers
-                                    : null;
-                                final spacing = context.spacing;
-                                final bool showChatAvatar = !isEmailBacked;
-                                Widget? avatar = showChatAvatar
-                                    ? TransportAwareAvatar(
-                                        chat: chatEntity!,
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (showTitleAvatar)
+                                  Builder(
+                                    builder: (context) {
+                                      Widget avatar = TransportAwareAvatar(
+                                        chat: chatEntity,
                                         selfIdentity: selfIdentity,
                                         size: context.sizing.iconButtonSize,
                                         badgeOffset: Offset(
@@ -5105,56 +5120,55 @@ class _ChatState extends State<Chat> {
                                         presence: presence,
                                         status: statusLabel,
                                         subscription: subscription,
-                                      )
-                                    : null;
-                                if (avatar != null && avatarTooltip != null) {
-                                  avatar = AxiTooltip(
-                                    builder: (context) => Text(avatarTooltip),
-                                    child: avatar,
-                                  );
-                                }
-                                if (avatar != null && isGroupChat) {
-                                  avatar = MouseRegion(
-                                    cursor: SystemMouseCursors.click,
-                                    child: GestureDetector(
-                                      onTap: _showMembers,
-                                      child: avatar,
-                                    ),
-                                  );
-                                }
-                                final baseTitleStyle = context.textTheme.h4;
-                                final titleStyle = baseTitleStyle.copyWith(
-                                  fontSize: context.textTheme.large.fontSize,
-                                );
-                                final TextStyle subtitleStyle =
-                                    context.textTheme.muted;
-                                return Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ?avatar,
-                                    if (avatar != null)
-                                      SizedBox(width: spacing.m),
-                                    Flexible(
-                                      fit: FlexFit.loose,
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                      );
+                                      if (avatarTooltip != null) {
+                                        avatar = AxiTooltip(
+                                          builder: (context) =>
+                                              Text(avatarTooltip),
+                                          child: avatar,
+                                        );
+                                      }
+                                      if (isGroupChat) {
+                                        avatar = MouseRegion(
+                                          cursor: SystemMouseCursors.click,
+                                          child: GestureDetector(
+                                            onTap: _showMembers,
+                                            child: avatar,
+                                          ),
+                                        );
+                                      }
+                                      return avatar;
+                                    },
+                                  ),
+                                if (showTitleAvatar)
+                                  SizedBox(width: avatarTitleSpacing),
+                                Flexible(
+                                  fit: FlexFit.loose,
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(
                                         mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.center,
                                         children: [
-                                          Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.center,
-                                            children: [
-                                              Flexible(
-                                                fit: FlexFit.loose,
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Text(
+                                          Flexible(
+                                            fit: FlexFit.loose,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                if (canRenameContact)
+                                                  AxiPlainHeaderButton(
+                                                    onPressed:
+                                                        _promptContactRename,
+                                                    semanticLabel: context
+                                                        .l10n
+                                                        .chatContactRenameTooltip,
+                                                    child: Text(
                                                       state.chat?.displayName ??
                                                           '',
                                                       maxLines: 1,
@@ -5162,47 +5176,31 @@ class _ChatState extends State<Chat> {
                                                           TextOverflow.ellipsis,
                                                       style: titleStyle,
                                                     ),
-                                                    if (secondaryLabel
-                                                        .isNotEmpty)
-                                                      SelectableText(
-                                                        secondaryLabel,
-                                                        maxLines: 1,
-                                                        style: subtitleStyle,
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                              if (canRenameContact)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsetsDirectional.only(
-                                                        start: 6,
-                                                      ),
-                                                  child: AxiTooltip(
-                                                    builder: (context) => Text(
-                                                      context
-                                                          .l10n
-                                                          .chatContactRenameTooltip,
-                                                    ),
-                                                    child: AxiIconButton.ghost(
-                                                      onPressed:
-                                                          _promptContactRename,
-                                                      iconData: LucideIcons
-                                                          .pencilLine,
-                                                      iconSize: context
-                                                          .sizing
-                                                          .menuItemIconSize,
-                                                    ),
+                                                  )
+                                                else
+                                                  Text(
+                                                    state.chat?.displayName ??
+                                                        '',
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: titleStyle,
                                                   ),
-                                                ),
-                                            ],
+                                                if (secondaryLabel.isNotEmpty)
+                                                  SelectableText(
+                                                    secondaryLabel,
+                                                    maxLines: 1,
+                                                    style: subtitleStyle,
+                                                  ),
+                                              ],
+                                            ),
                                           ),
                                         ],
                                       ),
-                                    ),
-                                  ],
-                                );
-                              },
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                       actions: [
                         if (jid != null)
@@ -5287,20 +5285,37 @@ class _ChatState extends State<Chat> {
                                       onPressed: _togglePinnedMessages,
                                     ),
                                     if (chatCalendarAvailable)
-                                      AppBarActionItem(
-                                        label: showingChatCalendar
-                                            ? l10n.commonClose
-                                            : l10n.homeRailCalendar,
-                                        iconData: LucideIcons.calendarClock,
-                                        selected: showingChatCalendar,
-                                        onPressed: () {
-                                          if (showingChatCalendar) {
-                                            _closeChatCalendar();
-                                            return;
-                                          }
-                                          _openChatCalendar();
-                                        },
-                                      ),
+                                      calendarFirstRoom
+                                          ? AppBarActionItem(
+                                              label: showingChatCalendar
+                                                  ? l10n.sessionCapabilityChat
+                                                  : l10n.homeRailCalendar,
+                                              iconData: showingChatCalendar
+                                                  ? LucideIcons.messagesSquare
+                                                  : LucideIcons.calendarClock,
+                                              onPressed: () {
+                                                if (showingChatCalendar) {
+                                                  _returnToMainRoute();
+                                                  return;
+                                                }
+                                                _openChatCalendar();
+                                              },
+                                            )
+                                          : AppBarActionItem(
+                                              label: showingChatCalendar
+                                                  ? l10n.commonClose
+                                                  : l10n.homeRailCalendar,
+                                              iconData:
+                                                  LucideIcons.calendarClock,
+                                              selected: showingChatCalendar,
+                                              onPressed: () {
+                                                if (showingChatCalendar) {
+                                                  _closeChatCalendar();
+                                                  return;
+                                                }
+                                                _openChatCalendar();
+                                              },
+                                            ),
                                     if (canShowSettings)
                                       AppBarActionItem(
                                         label: isSettingsRoute
@@ -5322,7 +5337,7 @@ class _ChatState extends State<Chat> {
                                 actions: combinedActions,
                                 spacing: actionSpacing,
                                 overflowBreakpoint: 0,
-                                availableWidth: appBarWidth,
+                                availableWidth: trailingActionsAvailableWidth,
                                 forceCollapsed: collapseAppBarActions
                                     ? true
                                     : null,
@@ -5614,29 +5629,8 @@ class _ChatState extends State<Chat> {
                                             isGroupChat: isGroupChat,
                                             myOccupantJid: myOccupantJid,
                                           );
-                                      final debugShowUnreadIndicator =
-                                          _debugForceUnreadIndicators &&
-                                          isEmailMessage &&
-                                          messageIdPrefix == null &&
-                                          e.countsTowardUnread(
-                                            selfJid: unreadSelfJid,
-                                            isGroupChat: isGroupChat,
-                                            myOccupantJid: myOccupantJid,
-                                          ) &&
-                                          !_debugConsumedUnreadIndicatorKeys
-                                              .contains(
-                                                _debugUnreadIndicatorKeyForMessage(
-                                                  e,
-                                                ),
-                                              );
-                                      final optimisticallyReadOnTap =
-                                          _optimisticReadTapMessageIds.contains(
-                                            e.stanzaID,
-                                          );
                                       final showUnreadIndicator =
-                                          (normalShowUnreadIndicator &&
-                                              !optimisticallyReadOnTap) ||
-                                          debugShowUnreadIndicator;
+                                          normalShowUnreadIndicator;
                                       String? authorAvatarPath;
                                       if (isGroupChat) {
                                         if (isSelf) {
@@ -6833,11 +6827,9 @@ class _ChatState extends State<Chat> {
                                                                                     message.text);
                                                                           final timeColor =
                                                                               detailColor;
-                                                                          final detailStyle = context.textTheme.small.copyWith(
+                                                                          final detailStyle = context.textTheme.muted.copyWith(
                                                                             color:
                                                                                 timeColor,
-                                                                            fontSize:
-                                                                                11.0,
                                                                             height:
                                                                                 1.0,
                                                                             textBaseline:
@@ -7075,6 +7067,18 @@ class _ChatState extends State<Chat> {
                                                                                         null)
                                                                                   status,
                                                                               ];
+                                                                          final detailOpticalOffsetFactors =
+                                                                              isEmailMessage
+                                                                              ? const <
+                                                                                  int,
+                                                                                  double
+                                                                                >{
+                                                                                  1: 0.08,
+                                                                                }
+                                                                              : const <
+                                                                                  int,
+                                                                                  double
+                                                                                >{};
                                                                           final surfaceDetails =
                                                                               <
                                                                                 InlineSpan
@@ -7449,6 +7453,7 @@ class _ChatState extends State<Chat> {
                                                                                 baseStyle: baseTextStyle,
                                                                                 linkStyle: linkStyle,
                                                                                 details: messageDetails,
+                                                                                detailOpticalOffsetFactors: detailOpticalOffsetFactors,
                                                                                 onLinkTap: _handleLinkTap,
                                                                                 onLinkLongPress: _handleLinkTap,
                                                                               ),
@@ -7513,6 +7518,7 @@ class _ChatState extends State<Chat> {
                                                                                   style: baseTextStyle,
                                                                                 ),
                                                                                 details: messageDetails,
+                                                                                detailOpticalOffsetFactors: detailOpticalOffsetFactors,
                                                                                 onLinkTap: _handleLinkTap,
                                                                                 onLinkLongPress: _handleLinkTap,
                                                                               ),
@@ -7854,18 +7860,15 @@ class _ChatState extends State<Chat> {
                                                                                     : ChatCalendarTaskCard(
                                                                                         task: calendarTaskIcs,
                                                                                         readOnly:
-                                                                                            (calendarTaskIcsReadOnly &&
-                                                                                                !self) ||
-                                                                                            demoEmailCalendarEnabled,
+                                                                                            calendarTaskIcsReadOnly &&
+                                                                                            !self,
                                                                                         requireImportConfirmation: !self,
-                                                                                        allowChatCopy: !demoEmailCalendarEnabled,
+                                                                                        allowChatCopy: true,
                                                                                         canAddToPersonalCalendar: personalCalendarAvailable,
                                                                                         onCopyToPersonalCalendar: personalCalendarAvailable
                                                                                             ? _copyTaskToPersonalCalendar
                                                                                             : null,
-                                                                                        demoQuickAdd:
-                                                                                            demoEmailCalendarEnabled &&
-                                                                                            !self,
+                                                                                        demoQuickAdd: false,
                                                                                         footerDetails: taskFooterDetails,
                                                                                         isShareFragment: true,
                                                                                       ),
@@ -7917,7 +7920,10 @@ class _ChatState extends State<Chat> {
                                                                                 metadataIdForCaption.isNotEmpty;
                                                                             final String
                                                                             fullEmailPreviewText =
-                                                                                displayMessageText.trim();
+                                                                                displayMessageText.trim().isNotEmpty
+                                                                                ? displayMessageText.trim()
+                                                                                : (normalizedHtmlText?.trim() ??
+                                                                                      _emptyText);
                                                                             final bool
                                                                             hasRemoteHtmlImages =
                                                                                 normalizedHtmlBody !=
@@ -8024,6 +8030,7 @@ class _ChatState extends State<Chat> {
                                                                                     style: baseTextStyle,
                                                                                   ),
                                                                                   details: messageDetails,
+                                                                                  detailOpticalOffsetFactors: detailOpticalOffsetFactors,
                                                                                   onLinkTap: _handleLinkTap,
                                                                                   onLinkLongPress: _handleLinkTap,
                                                                                 ),
@@ -8032,9 +8039,11 @@ class _ChatState extends State<Chat> {
                                                                               final (
                                                                                 details: collapsedPreviewDetails,
                                                                                 detailActions: collapsedPreviewDetailActions,
+                                                                                detailOpticalOffsetFactors: collapsedPreviewDetailOpticalOffsetFactors,
                                                                               ) = _emailInlineDetailActionData(
                                                                                 context: context,
                                                                                 details: messageDetails,
+                                                                                detailOpticalOffsetFactors: detailOpticalOffsetFactors,
                                                                                 enabled: shouldShowEmailHtmlAction,
                                                                                 label: l10n.chatMessageViewHtmlAction,
                                                                                 onTap: () => _toggleInlineEmailBody(
@@ -8070,6 +8079,7 @@ class _ChatState extends State<Chat> {
                                                                                   child: ChatInlineDetails(
                                                                                     details: collapsedPreviewDetails,
                                                                                     detailActions: collapsedPreviewDetailActions,
+                                                                                    detailOpticalOffsetFactors: collapsedPreviewDetailOpticalOffsetFactors,
                                                                                   ),
                                                                                 ),
                                                                               );
@@ -8118,9 +8128,11 @@ class _ChatState extends State<Chat> {
                                                                               final (
                                                                                 details: htmlBodyDetails,
                                                                                 detailActions: htmlBodyDetailActions,
+                                                                                detailOpticalOffsetFactors: htmlBodyDetailOpticalOffsetFactors,
                                                                               ) = _emailInlineDetailActionData(
                                                                                 context: context,
                                                                                 details: messageDetails,
+                                                                                detailOpticalOffsetFactors: detailOpticalOffsetFactors,
                                                                                 enabled:
                                                                                     shouldShowEmailHtmlAction &&
                                                                                     shouldRenderHtmlBody,
@@ -8217,6 +8229,7 @@ class _ChatState extends State<Chat> {
                                                                                   child: ChatInlineDetails(
                                                                                     details: htmlBodyDetails,
                                                                                     detailActions: htmlBodyDetailActions,
+                                                                                    detailOpticalOffsetFactors: htmlBodyDetailOpticalOffsetFactors,
                                                                                   ),
                                                                                 ),
                                                                               );
@@ -8224,9 +8237,11 @@ class _ChatState extends State<Chat> {
                                                                               final (
                                                                                 details: textBodyDetails,
                                                                                 detailActions: textBodyDetailActions,
+                                                                                detailOpticalOffsetFactors: textBodyDetailOpticalOffsetFactors,
                                                                               ) = _emailInlineDetailActionData(
                                                                                 context: context,
                                                                                 details: messageDetails,
+                                                                                detailOpticalOffsetFactors: detailOpticalOffsetFactors,
                                                                                 enabled: shouldShowEmailHtmlAction,
                                                                                 label: l10n.chatMessageViewHtmlAction,
                                                                                 onTap: () => _toggleInlineEmailBody(
@@ -8255,6 +8270,7 @@ class _ChatState extends State<Chat> {
                                                                                     linkStyle: linkStyle,
                                                                                     details: textBodyDetails,
                                                                                     detailActions: textBodyDetailActions,
+                                                                                    detailOpticalOffsetFactors: textBodyDetailOpticalOffsetFactors,
                                                                                     onLinkTap: _handleLinkTap,
                                                                                     onLinkLongPress: _handleLinkTap,
                                                                                   ),
@@ -8269,6 +8285,7 @@ class _ChatState extends State<Chat> {
                                                                                     child: ChatInlineDetails(
                                                                                       details: textBodyDetails,
                                                                                       detailActions: textBodyDetailActions,
+                                                                                      detailOpticalOffsetFactors: textBodyDetailOpticalOffsetFactors,
                                                                                     ),
                                                                                   ),
                                                                                 );
@@ -9381,7 +9398,7 @@ class _ChatState extends State<Chat> {
                                                                                   ? null
                                                                                   : () {
                                                                                       if (showUnreadIndicator) {
-                                                                                        _requestImmediateReadOnTap(
+                                                                                        _requestReadOnTap(
                                                                                           messageModel,
                                                                                         );
                                                                                       }
@@ -9666,6 +9683,9 @@ class _ChatState extends State<Chat> {
                             onToggleNotifications: _toggleNotifications,
                             onSpamToggle: (sendToSpam) =>
                                 _handleSpamToggle(sendToSpam: sendToSpam),
+                            onRenameContact: canRenameContact
+                                ? _promptContactRename
+                                : null,
                             isChatBlocked: isChatBlocked,
                             blocklistEntry: chatBlocklistEntry,
                             blockAddress: blockAddress,
@@ -10882,20 +10902,10 @@ class _ChatPinnedMessagesPanelState extends State<_ChatPinnedMessagesPanel> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    l10n.chatPinnedMessagesTitle,
-                    style: context.textTheme.large,
-                  ),
-                ),
-                AxiIconButton(
-                  iconData: LucideIcons.x,
-                  tooltip: l10n.commonClose,
-                  onPressed: widget.onClose,
-                ),
-              ],
+            _ChatIndexedHeader(
+              title: l10n.chatPinnedMessagesTitle,
+              onClose: widget.onClose,
+              padding: EdgeInsets.zero,
             ),
             SizedBox(height: spacing.m),
             Flexible(fit: FlexFit.loose, child: panelBody),
@@ -11327,6 +11337,9 @@ class _PinnedMessageTile extends StatelessWidget {
         ),
       if (isSelf && statusIcon != null) iconDetailSpan(statusIcon, detailColor),
     ];
+    final detailOpticalOffsetFactors = isEmailMessage
+        ? const <int, double>{1: 0.08}
+        : const <int, double>{};
     final shareMetadataDetails = hideTaskText && calendarTask != null
         ? calendarTaskShareMetadata(calendarTask, context.l10n, detailStyle)
         : _emptyInlineSpans;
@@ -11445,6 +11458,7 @@ class _PinnedMessageTile extends StatelessWidget {
               baseStyle: baseTextStyle,
               linkStyle: linkStyle,
               details: detailSpans,
+              detailOpticalOffsetFactors: detailOpticalOffsetFactors,
               onLinkTap: onMessageLinkTap,
               onLinkLongPress: onMessageLinkTap,
             ),
@@ -11479,6 +11493,7 @@ class _PinnedMessageTile extends StatelessWidget {
             baseStyle: baseTextStyle,
             linkStyle: linkStyle,
             details: detailSpans,
+            detailOpticalOffsetFactors: detailOpticalOffsetFactors,
             onLinkTap: onMessageLinkTap,
             onLinkLongPress: onMessageLinkTap,
           ),
@@ -11509,6 +11524,7 @@ class _PinnedMessageTile extends StatelessWidget {
             key: ValueKey(previewProperties['id'] ?? effectiveMessage.stanzaID),
             text: TextSpan(text: caption, style: baseTextStyle),
             details: detailSpans,
+            detailOpticalOffsetFactors: detailOpticalOffsetFactors,
             onLinkTap: onMessageLinkTap,
             onLinkLongPress: onMessageLinkTap,
           ),
@@ -11537,7 +11553,10 @@ class _PinnedMessageTile extends StatelessWidget {
         contentChildren.add(
           Padding(
             padding: EdgeInsets.only(top: spacing.xs),
-            child: ChatInlineDetails(details: detailSpans),
+            child: ChatInlineDetails(
+              details: detailSpans,
+              detailOpticalOffsetFactors: detailOpticalOffsetFactors,
+            ),
           ),
         );
       } else if (shouldRenderTextContent && messageText.isNotEmpty) {
@@ -11548,6 +11567,7 @@ class _PinnedMessageTile extends StatelessWidget {
             baseStyle: baseTextStyle,
             linkStyle: linkStyle,
             details: detailSpans,
+            detailOpticalOffsetFactors: detailOpticalOffsetFactors,
             onLinkTap: onMessageLinkTap,
             onLinkLongPress: onMessageLinkTap,
           ),
@@ -12016,6 +12036,7 @@ class _ChatDetailsOverlay extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: _ChatSubrouteShell(
+          title: context.l10n.chatActionDetails,
           child: ChatMessageDetails(
             onAddRecipient: onAddRecipient,
             loadedEmailImageMessageIds: loadedEmailImageMessageIds,
@@ -12028,33 +12049,64 @@ class _ChatDetailsOverlay extends StatelessWidget {
 }
 
 class _ChatSubrouteShell extends StatelessWidget {
-  const _ChatSubrouteShell({required this.child});
+  const _ChatSubrouteShell({required this.title, required this.child});
 
+  final String title;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final spacing = context.spacing;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: EdgeInsets.all(spacing.m),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: AxiIconButton.ghost(
-              iconData: LucideIcons.arrowLeft,
-              tooltip: context.l10n.commonBack,
-              onPressed: () {
-                context.read<ChatsCubit>().setOpenChatRoute(
-                  route: ChatRouteIndex.main,
-                );
-              },
-            ),
-          ),
+        _ChatIndexedHeader(
+          title: title,
+          onClose: () {
+            context.read<ChatsCubit>().setOpenChatRoute(
+              route: ChatRouteIndex.main,
+            );
+          },
         ),
         Expanded(child: child),
       ],
+    );
+  }
+}
+
+class _ChatIndexedHeader extends StatelessWidget {
+  const _ChatIndexedHeader({
+    required this.title,
+    required this.onClose,
+    this.padding,
+  });
+
+  final String title;
+  final VoidCallback onClose;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    return Padding(
+      padding: padding ?? EdgeInsets.all(spacing.m),
+      child: Row(
+        children: [
+          AxiIconButton.ghost(
+            iconData: LucideIcons.x,
+            tooltip: context.l10n.commonClose,
+            onPressed: onClose,
+          ),
+          SizedBox(width: spacing.s),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.textTheme.large,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -12065,6 +12117,7 @@ class _ChatSettingsOverlay extends StatelessWidget {
     required this.onViewFilterChanged,
     required this.onToggleNotifications,
     required this.onSpamToggle,
+    required this.onRenameContact,
     required this.isChatBlocked,
     required this.blocklistEntry,
     required this.blockAddress,
@@ -12074,6 +12127,7 @@ class _ChatSettingsOverlay extends StatelessWidget {
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<bool> onToggleNotifications;
   final ValueChanged<bool> onSpamToggle;
+  final VoidCallback? onRenameContact;
   final bool isChatBlocked;
   final BlocklistEntry? blocklistEntry;
   final String? blockAddress;
@@ -12085,11 +12139,13 @@ class _ChatSettingsOverlay extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: _ChatSubrouteShell(
+          title: context.l10n.chatSettings,
           child: _ChatSettingsButtons(
             state: state,
             onViewFilterChanged: onViewFilterChanged,
             onToggleNotifications: onToggleNotifications,
             onSpamToggle: onSpamToggle,
+            onRenameContact: onRenameContact,
             isChatBlocked: isChatBlocked,
             blocklistEntry: blocklistEntry,
             blockAddress: blockAddress,
@@ -12133,6 +12189,7 @@ class _ChatGalleryOverlay extends StatelessWidget {
         child: SafeArea(
           top: false,
           child: _ChatSubrouteShell(
+            title: context.l10n.chatAttachmentTooltip,
             child: AttachmentGalleryView(
               chatOverride: currentChat,
               showChatLabel: false,
@@ -12156,6 +12213,7 @@ class _ChatImportantOverlay extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: _ChatSubrouteShell(
+          title: context.l10n.chatImportantMessagesTooltip,
           child: ImportantMessagesList(
             onPressed: (item) => onMessageSelected(item.messageReferenceId),
           ),
@@ -12185,11 +12243,9 @@ class _ChatCalendarOverlay extends StatelessWidget {
       color: context.colorScheme.background,
       child: SafeArea(
         top: false,
-        child: _ChatSubrouteShell(
-          child: _ChatCalendarPanel(
-            chat: currentChat,
-            calendarAvailable: calendarAvailable,
-          ),
+        child: _ChatCalendarPanel(
+          chat: currentChat,
+          calendarAvailable: calendarAvailable,
         ),
       ),
     );
@@ -15234,6 +15290,7 @@ class _ChatSettingsButtons extends StatelessWidget {
     required this.onViewFilterChanged,
     required this.onToggleNotifications,
     required this.onSpamToggle,
+    required this.onRenameContact,
     required this.isChatBlocked,
     required this.blocklistEntry,
     required this.blockAddress,
@@ -15243,6 +15300,7 @@ class _ChatSettingsButtons extends StatelessWidget {
   final ValueChanged<MessageTimelineFilter> onViewFilterChanged;
   final ValueChanged<bool> onToggleNotifications;
   final ValueChanged<bool> onSpamToggle;
+  final VoidCallback? onRenameContact;
   final bool isChatBlocked;
   final BlocklistEntry? blocklistEntry;
   final String? blockAddress;
@@ -15269,6 +15327,8 @@ class _ChatSettingsButtons extends StatelessWidget {
         : l10n.chatSignatureHintDisabled;
     final String signatureWarning = l10n.chatSignatureHintWarning;
     final bool showAttachmentToggle = chat.type != ChatType.note;
+    final bool canRenameContact =
+        chat.type == ChatType.chat && !chat.isAxichatWelcomeThread;
     final bool notificationsMuted = chat.muted;
     final bool isSpamChat = chat.spam;
     final String spamLabel = l10n.chatReportSpam;
@@ -15293,6 +15353,18 @@ class _ChatSettingsButtons extends StatelessWidget {
         !blockActionInFlight &&
         (isChatBlocked ? hasBlockEntry : hasBlockAddress);
     final List<Widget> tiles = [
+      if (canRenameContact && onRenameContact != null)
+        Padding(
+          padding: itemPadding,
+          child: AxiListButton(
+            leading: Icon(
+              LucideIcons.pencilLine,
+              size: context.sizing.menuItemIconSize,
+            ),
+            onPressed: onRenameContact,
+            child: Text(l10n.chatContactRenameTooltip),
+          ),
+        ),
       if (showXmppCapabilities)
         Padding(
           padding: itemPadding,
@@ -17090,6 +17162,7 @@ class _ParsedMessageBody extends StatefulWidget {
     required this.details,
     required this.onLinkTap,
     this.detailActions = const <int, DynamicInlineDetailAction>{},
+    this.detailOpticalOffsetFactors = const <int, double>{},
     this.onLinkLongPress,
     this.contentKey,
   });
@@ -17099,6 +17172,7 @@ class _ParsedMessageBody extends StatefulWidget {
   final TextStyle linkStyle;
   final List<InlineSpan> details;
   final Map<int, DynamicInlineDetailAction> detailActions;
+  final Map<int, double> detailOpticalOffsetFactors;
   final ValueChanged<String> onLinkTap;
   final ValueChanged<String>? onLinkLongPress;
   final Object? contentKey;
@@ -17157,6 +17231,7 @@ class _ParsedMessageBodyState extends State<_ParsedMessageBody> {
       text: _parsed.body,
       details: widget.details,
       detailActions: widget.detailActions,
+      detailOpticalOffsetFactors: widget.detailOpticalOffsetFactors,
       links: _parsed.links,
       onLinkTap: handleLinkTap,
       onLinkLongPress: handleLinkLongPress,
@@ -17957,30 +18032,42 @@ class _UnreadBubbleSideIndicator extends StatelessWidget {
     final colors = context.colorScheme;
     final spacing = context.spacing;
     final sizing = context.sizing;
-    final alignment = isSelf ? Alignment.centerRight : Alignment.centerLeft;
+    final collapseAlignment = isSelf
+        ? Alignment.centerRight
+        : Alignment.centerLeft;
+    final indicatorAlignment = isSelf
+        ? Alignment.centerLeft
+        : Alignment.centerRight;
+    final dotSize = sizing.menuItemIconSize / 2;
+    final indicatorExtent = dotSize + spacing.xs;
     return AxiAnimatedSize(
       duration: _bubbleFocusDuration,
       reverseDuration: _bubbleFocusDuration,
       curve: _bubbleFocusCurve,
-      alignment: alignment,
+      alignment: collapseAlignment,
       clipBehavior: Clip.none,
-      child: visible
-          ? Padding(
-              padding: isSelf
-                  ? EdgeInsets.only(right: spacing.xxs)
-                  : EdgeInsets.only(left: spacing.xxs),
-              child: SizedBox(
-                width: sizing.menuItemIconSize / 2,
-                height: sizing.menuItemIconSize / 2,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: colors.destructive,
-                    shape: BoxShape.circle,
-                  ),
+      child: SizedBox(
+        width: visible ? indicatorExtent : 0,
+        height: dotSize,
+        child: Align(
+          alignment: indicatorAlignment,
+          child: AnimatedOpacity(
+            duration: _bubbleFocusDuration,
+            curve: _bubbleFocusCurve,
+            opacity: visible ? 1 : 0,
+            child: SizedBox(
+              width: dotSize,
+              height: dotSize,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: colors.destructive,
+                  shape: BoxShape.circle,
                 ),
               ),
-            )
-          : const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

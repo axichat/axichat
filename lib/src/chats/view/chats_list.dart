@@ -5,6 +5,10 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
+import 'package:axichat/src/calendar/storage/calendar_storage_manager.dart';
+import 'package:axichat/src/calendar/storage/chat_calendar_storage.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
@@ -29,6 +33,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -149,6 +154,9 @@ class _ChatsListBody extends StatelessWidget {
     final l10n = context.l10n;
     final showToast = ShadToaster.maybeOf(context)?.show;
     final profileJid = context.watch<ProfileCubit>().state.jid;
+    final calendarStorage = calendarAvailable
+        ? context.watch<CalendarStorageManager>().authStorage
+        : null;
     final resolvedProfileJid = profileJid.trim();
     final String? selfJid = resolvedProfileJid.isNotEmpty
         ? resolvedProfileJid
@@ -229,6 +237,7 @@ class _ChatsListBody extends StatelessWidget {
                     selectedJids: state.selectedJids,
                     openJid: state.openJid,
                     timestampNowListenable: nowListenable,
+                    calendarStorage: calendarStorage,
                     selfIdentity: selfIdentity,
                   ),
                 ),
@@ -282,6 +291,7 @@ class _AnimatedChatTile extends StatelessWidget {
     required this.isSelected,
     required this.isOpen,
     required this.timestampNowListenable,
+    required this.calendarStorage,
     required this.selfIdentity,
   });
 
@@ -295,6 +305,7 @@ class _AnimatedChatTile extends StatelessWidget {
   final bool isSelected;
   final bool isOpen;
   final ValueListenable<DateTime> timestampNowListenable;
+  final Storage? calendarStorage;
   final SelfIdentitySnapshot selfIdentity;
 
   @override
@@ -320,6 +331,7 @@ class _AnimatedChatTile extends StatelessWidget {
           isSelected: isSelected,
           isOpen: isOpen,
           timestampNowListenable: timestampNowListenable,
+          calendarStorage: calendarStorage,
           selfIdentity: selfIdentity,
         ),
       ),
@@ -336,6 +348,7 @@ class _ChatTileSlot extends StatelessWidget {
     required this.isSelected,
     required this.isOpen,
     required this.timestampNowListenable,
+    required this.calendarStorage,
     required this.selfIdentity,
   });
 
@@ -346,6 +359,7 @@ class _ChatTileSlot extends StatelessWidget {
   final bool isSelected;
   final bool isOpen;
   final ValueListenable<DateTime> timestampNowListenable;
+  final Storage? calendarStorage;
   final SelfIdentitySnapshot selfIdentity;
 
   @override
@@ -362,10 +376,94 @@ class _ChatTileSlot extends StatelessWidget {
             isSelected: isSelected,
             isOpen: isOpen,
             timestampNow: timestampNow,
+            calendarStorage: calendarStorage,
             selfIdentity: selfIdentity,
           ),
         );
       },
+    );
+  }
+}
+
+@immutable
+class _CalendarRoomTileSummary {
+  const _CalendarRoomTileSummary({required this.subtitle, this.startTime});
+
+  final String subtitle;
+  final DateTime? startTime;
+}
+
+_CalendarRoomTileSummary _calendarRoomTileSummary({
+  required BuildContext context,
+  required Chat chat,
+  required Storage? storage,
+  required DateTime now,
+}) {
+  final l10n = context.l10n;
+  if (!chat.isCalendarFirstRoom || storage == null) {
+    return _CalendarRoomTileSummary(subtitle: l10n.calendarTileNone);
+  }
+  final calendarState =
+      ChatCalendarStorage(storage: storage).readState(chat.jid) ??
+      CalendarState.initial();
+  final currentTask = calendarState.currentTaskAt(now);
+  final nextTask = _nextCalendarRoomTask(calendarState, now);
+  final displayTask = currentTask ?? nextTask;
+  final subtitle = switch ((currentTask, nextTask)) {
+    (final CalendarTask task?, _) => l10n.calendarTileNow(task.title),
+    (_, final CalendarTask task?) => l10n.calendarTileNext(task.title),
+    _ => l10n.calendarTileNone,
+  };
+  return _CalendarRoomTileSummary(
+    subtitle: subtitle,
+    startTime: displayTask?.scheduledTime,
+  );
+}
+
+CalendarTask? _nextCalendarRoomTask(CalendarState state, DateTime now) {
+  final upcomingTasks =
+      state.model.tasks.values
+          .where(
+            (task) =>
+                !task.isCompleted &&
+                task.scheduledTime != null &&
+                task.scheduledTime!.isAfter(now),
+          )
+          .toList(growable: false)
+        ..sort((a, b) => a.scheduledTime!.compareTo(b.scheduledTime!));
+  return upcomingTasks.isEmpty ? null : upcomingTasks.first;
+}
+
+class _CalendarRoomTitle extends StatelessWidget {
+  const _CalendarRoomTitle({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    return Row(
+      children: [
+        Icon(
+          LucideIcons.calendarClock,
+          size: sizing.menuItemIconSize,
+          color: colors.primary,
+        ),
+        SizedBox(width: spacing.xs),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.textTheme.small.copyWith(
+              color: colors.foreground,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -379,6 +477,7 @@ class ChatListTile extends StatefulWidget {
     required this.isOpen,
     required this.timestampNow,
     required this.selfIdentity,
+    this.calendarStorage,
     this.archivedContext = false,
     this.spamContext = false,
     this.spamUpdating = false,
@@ -391,6 +490,7 @@ class ChatListTile extends StatefulWidget {
   final bool isSelected;
   final bool isOpen;
   final DateTime timestampNow;
+  final Storage? calendarStorage;
   final SelfIdentitySnapshot selfIdentity;
   final bool archivedContext;
   final bool spamContext;
@@ -411,6 +511,7 @@ class AnimatedChatsListView extends StatefulWidget {
     required this.selectedJids,
     required this.openJid,
     required this.timestampNowListenable,
+    required this.calendarStorage,
     required this.selfIdentity,
   });
 
@@ -420,6 +521,7 @@ class AnimatedChatsListView extends StatefulWidget {
   final Set<String> selectedJids;
   final String? openJid;
   final ValueListenable<DateTime> timestampNowListenable;
+  final Storage? calendarStorage;
   final SelfIdentitySnapshot selfIdentity;
 
   @override
@@ -475,6 +577,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
         isSelected: widget.selectedJids.contains(removedChat.jid),
         isOpen: widget.openJid == removedChat.jid,
         timestampNowListenable: widget.timestampNowListenable,
+        calendarStorage: widget.calendarStorage,
         selfIdentity: widget.selfIdentity,
       );
     }
@@ -558,6 +661,7 @@ class _AnimatedChatsListViewState extends State<AnimatedChatsListView> {
             isSelected: widget.selectedJids.contains(chat.jid),
             isOpen: widget.openJid == chat.jid,
             timestampNowListenable: widget.timestampNowListenable,
+            calendarStorage: widget.calendarStorage,
             selfIdentity: widget.selfIdentity,
           );
         },
@@ -611,7 +715,8 @@ class _ChatListTileState extends State<ChatListTile> {
         _showActions = false;
       });
     }
-    if (oldWidget.item.lastMessage != widget.item.lastMessage) {
+    if (oldWidget.item.lastMessage != widget.item.lastMessage ||
+        oldWidget.item.primaryView != widget.item.primaryView) {
       _cachedTimestampLabel = null;
       _cachedTimestampWidth = 0;
     }
@@ -646,6 +751,13 @@ class _ChatListTileState extends State<ChatListTile> {
     }
 
     final displayName = item.displayName;
+    final calendarSummary = _calendarRoomTileSummary(
+      context: context,
+      chat: item,
+      storage: widget.calendarStorage,
+      now: widget.timestampNow,
+    );
+    final isCalendarFirstRoom = item.isCalendarFirstRoom;
     final int unreadCount = math.max(0, item.unreadCount);
     final bool showUnreadBadge = unreadCount > 0;
     final double unreadDiameter = showUnreadBadge
@@ -659,8 +771,15 @@ class _ChatListTileState extends State<ChatListTile> {
             (unreadDiameter / 2) + unreadCutoutVerticalClearance,
           )
         : 0.0;
-    final subtitleText = _subtitlePreview(item.lastMessage);
-    final timestampLabel = item.lastMessage == null
+    final subtitleText = isCalendarFirstRoom
+        ? calendarSummary.subtitle
+        : _subtitlePreview(item.lastMessage);
+    final trailingTimestampLabel = isCalendarFirstRoom
+        ? _calendarRoomTimestampLabel(calendarSummary.startTime)
+        : null;
+    final timestampLabel = isCalendarFirstRoom
+        ? null
+        : item.lastMessage == null
         ? null
         : formatTimeSinceLabel(
             l10n,
@@ -700,6 +819,17 @@ class _ChatListTileState extends State<ChatListTile> {
       top: scaled(spacing.xs),
       bottom: scaled(spacing.xs),
     );
+    final tileActions = trailingTimestampLabel == null
+        ? null
+        : <Widget>[
+            Text(
+              trailingTimestampLabel,
+              style: context.textTheme.small.copyWith(
+                color: colors.mutedForeground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ];
     final tile = AxiListTile(
       key: Key(item.jid),
       onTap: tileOnTap,
@@ -725,9 +855,15 @@ class _ChatListTileState extends State<ChatListTile> {
         chat: item,
         selfIdentity: widget.selfIdentity,
       ),
-      title: displayName,
+      title: isCalendarFirstRoom ? null : displayName,
+      titleWidget: isCalendarFirstRoom
+          ? _CalendarRoomTitle(title: displayName)
+          : null,
       subtitle: subtitleText,
-      subtitlePlaceholder: l10n.chatEmptyMessages,
+      subtitlePlaceholder: isCalendarFirstRoom
+          ? l10n.calendarTileNone
+          : l10n.chatEmptyMessages,
+      actions: tileActions,
     );
 
     final cutoutGap = spacing.xxs;
@@ -910,6 +1046,13 @@ class _ChatListTileState extends State<ChatListTile> {
       return baseDiameter;
     }
     return scaledDiameter;
+  }
+
+  String? _calendarRoomTimestampLabel(DateTime? startTime) {
+    if (startTime == null) {
+      return null;
+    }
+    return TimeOfDay.fromDateTime(startTime).format(context);
   }
 
   String? _subtitlePreview(String? rawMessage) {

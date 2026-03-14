@@ -19,6 +19,7 @@ import 'package:axichat/src/calendar/models/calendar_model.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/day_event.dart';
+import 'package:axichat/src/storage/models/chat_models.dart';
 import 'package:axichat/src/calendar/sync/calendar_snapshot_codec.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/common/safe_logging.dart';
@@ -54,12 +55,14 @@ class CalendarSyncManager {
     required CalendarModel Function() readModel,
     required Future<void> Function(CalendarModel) applyModel,
     required Future<void> Function(CalendarSyncOutbound) sendCalendarMessage,
+    Future<void> Function(ChatPrimaryView primaryView)? applyRoomPrimaryView,
     Future<CalendarSnapshotUploadResult> Function(File file)? sendSnapshotFile,
     CalendarSyncState Function()? readSyncState,
     Future<void> Function(CalendarSyncState)? writeSyncState,
   }) : _readModel = readModel,
        _applyModel = applyModel,
        _sendCalendarMessage = sendCalendarMessage,
+       _applyRoomPrimaryView = applyRoomPrimaryView,
        _sendSnapshotFile = sendSnapshotFile,
        _readSyncState = readSyncState ?? CalendarSyncState.read,
        _writeSyncState = writeSyncState ?? ((s) => s.write());
@@ -67,6 +70,8 @@ class CalendarSyncManager {
   final CalendarModel Function() _readModel;
   final Future<void> Function(CalendarModel) _applyModel;
   final Future<void> Function(CalendarSyncOutbound) _sendCalendarMessage;
+  final Future<void> Function(ChatPrimaryView primaryView)?
+  _applyRoomPrimaryView;
   final Future<CalendarSnapshotUploadResult> Function(File file)?
   _sendSnapshotFile;
   final CalendarSyncState Function() _readSyncState;
@@ -236,9 +241,14 @@ class CalendarSyncManager {
 
     try {
       bool applied = false;
+      var shouldTrackCalendarSnapshotCounter = true;
       final String operation =
           message.operation ?? _calendarSyncOperationUpdate;
       switch (message.entity) {
+        case CalendarSyncMessage.roomPrimaryViewEntity:
+          applied = await _mergeRoomPrimaryView(message, operation);
+          shouldTrackCalendarSnapshotCounter = false;
+          break;
         case _calendarSyncEntityDayEvent:
           final DayEvent event = DayEvent.fromJson(message.data!);
           applied = await _mergeDayEvent(event, operation);
@@ -260,9 +270,11 @@ class CalendarSyncManager {
       }
 
       if (applied) {
-        await _incrementCounterAndMaybeSnapshot(
-          allowSnapshot: !inbound.isFromMam,
-        );
+        if (shouldTrackCalendarSnapshotCounter) {
+          await _incrementCounterAndMaybeSnapshot(
+            allowSnapshot: !inbound.isFromMam,
+          );
+        }
         await _recordAppliedMessage(inbound: inbound);
       }
       return applied;
@@ -270,6 +282,22 @@ class CalendarSyncManager {
       SafeLogging.debugLog('Error handling calendar update: $e');
     }
     return false;
+  }
+
+  Future<bool> _mergeRoomPrimaryView(
+    CalendarSyncMessage message,
+    String operation,
+  ) async {
+    if (operation == _calendarSyncOperationDelete) {
+      return false;
+    }
+    final ChatPrimaryView? primaryView = message.roomPrimaryView;
+    final applyRoomPrimaryView = _applyRoomPrimaryView;
+    if (primaryView == null || applyRoomPrimaryView == null) {
+      return false;
+    }
+    await applyRoomPrimaryView(primaryView);
+    return true;
   }
 
   /// Records that a message was applied, updating the sync state.
