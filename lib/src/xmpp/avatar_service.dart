@@ -129,16 +129,6 @@ final class _AvatarMetadataLoadFailed extends _AvatarMetadataLoadResult {
   const _AvatarMetadataLoadFailed();
 }
 
-final class _SelfAvatarBootstrapReplay {
-  const _SelfAvatarBootstrapReplay({
-    required this.generation,
-    required this.future,
-  });
-
-  final int generation;
-  final Future<void> future;
-}
-
 mixin AvatarService on XmppBase, MucService {
   final _avatarLog = Logger('AvatarService');
   StreamController<StoredAvatar?> _selfAvatarController =
@@ -146,15 +136,15 @@ mixin AvatarService on XmppBase, MucService {
   StreamController<bool> _selfAvatarHydratingController =
       StreamController<bool>.broadcast(sync: true);
   StoredAvatar? _cachedSelfAvatar;
-  int? _selfAvatarBootstrapCompletedGeneration;
+  bool _hasSelfAvatarNegotiatedStream = false;
+  bool _selfAvatarInitialSyncCompleted = false;
   SecretKey? _avatarEncryptionKey;
   List<int>? _avatarEncryptionSalt;
   final Set<String> _avatarRefreshInProgress = {};
   final Set<String> _configuredAvatarNodes = {};
   final Set<String> _pubSubAvatarJids = {};
   final Map<String, DateTime> _conversationAvatarRefreshAttempts = {};
-  _SelfAvatarBootstrapReplay? _selfAvatarBootstrapReplay;
-  int? _pendingSelfAvatarBootstrapGeneration;
+  Future<void>? _selfAvatarBootstrapFuture;
   Directory? _avatarDirectory;
   final AesGcm _avatarCipher = AesGcm.with256bits();
   static const int _maxAvatarBytes = 512 * 1024;
@@ -234,15 +224,7 @@ mixin AvatarService on XmppBase, MucService {
         connectionState != ConnectionState.connecting) {
       return false;
     }
-    final streamReady = lastStreamReady;
-    if (streamReady == null) {
-      return true;
-    }
-    final completedGeneration = _selfAvatarBootstrapCompletedGeneration;
-    if (completedGeneration == null) {
-      return true;
-    }
-    return completedGeneration < streamReady.generation;
+    return !_selfAvatarInitialSyncCompleted;
   }
 
   @override
@@ -252,6 +234,13 @@ mixin AvatarService on XmppBase, MucService {
   void _emitSelfAvatarHydrating() {
     if (_selfAvatarHydratingController.isClosed) return;
     _selfAvatarHydratingController.add(selfAvatarHydrating);
+  }
+
+  void _clearSelfAvatarNegotiationState() {
+    _hasSelfAvatarNegotiatedStream = false;
+    _selfAvatarInitialSyncCompleted = false;
+    _selfAvatarBootstrapFuture = null;
+    _emitSelfAvatarHydrating();
   }
 
   @override
@@ -460,6 +449,8 @@ mixin AvatarService on XmppBase, MucService {
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         _avatarLog.fine('Stream negotiations done. resumed=${event.resumed}.');
+        _hasSelfAvatarNegotiatedStream = true;
+        _emitSelfAvatarHydrating();
         fireAndForget(
           _bootstrapSelfAvatarIfReady,
           operationName: 'AvatarService.refreshSelfAvatarOnNegotiations',
@@ -597,71 +588,45 @@ mixin AvatarService on XmppBase, MucService {
     _avatarFileOperations.clear();
     _avatarDirectory = null;
     _selfAvatarRepairLastAttempt = null;
-    _selfAvatarBootstrapReplay = null;
-    _pendingSelfAvatarBootstrapGeneration = null;
+    _selfAvatarBootstrapFuture = null;
     _avatarEncryptionKey = null;
     _avatarEncryptionSalt = null;
     _cachedSelfAvatar = null;
-    _selfAvatarBootstrapCompletedGeneration = null;
+    _clearSelfAvatarNegotiationState();
     await super._reset();
   }
 
   Future<void> _bootstrapSelfAvatarIfReady() async {
-    final initialStreamReady = lastStreamReady;
-    if (initialStreamReady == null) return;
+    if (!_hasSelfAvatarNegotiatedStream) return;
+    if (_selfAvatarInitialSyncCompleted) return;
     if (avatarEncryptionKey == null) return;
-    var requestedGeneration = initialStreamReady.generation;
-    while (true) {
-      final pendingGeneration = _pendingSelfAvatarBootstrapGeneration;
-      if (pendingGeneration == null ||
-          pendingGeneration < requestedGeneration) {
-        _pendingSelfAvatarBootstrapGeneration = requestedGeneration;
+    final inFlight = _selfAvatarBootstrapFuture;
+    if (inFlight != null) {
+      await inFlight;
+      return;
+    }
+    final next = _runSelfAvatarBootstrap();
+    _selfAvatarBootstrapFuture = next;
+    try {
+      await next;
+    } finally {
+      if (identical(_selfAvatarBootstrapFuture, next)) {
+        _selfAvatarBootstrapFuture = null;
       }
-
-      final replay = _selfAvatarBootstrapReplay;
-      if (replay == null) {
-        final nextGeneration = _pendingSelfAvatarBootstrapGeneration;
-        if (nextGeneration == null) return;
-        final nextReplay = _SelfAvatarBootstrapReplay(
-          generation: nextGeneration,
-          future: _runSelfAvatarBootstrap(nextGeneration),
-        );
-        _selfAvatarBootstrapReplay = nextReplay;
-        try {
-          await nextReplay.future;
-        } finally {
-          if (identical(_selfAvatarBootstrapReplay, nextReplay)) {
-            _selfAvatarBootstrapReplay = null;
-          }
-        }
-      } else {
-        await replay.future;
-      }
-
-      final latestStreamReady = lastStreamReady;
-      if (latestStreamReady == null) return;
-      final completedGeneration = _selfAvatarBootstrapCompletedGeneration;
-      if (completedGeneration != null &&
-          completedGeneration >= latestStreamReady.generation) {
-        final pendingGeneration = _pendingSelfAvatarBootstrapGeneration;
-        if (pendingGeneration != null &&
-            pendingGeneration <= completedGeneration) {
-          _pendingSelfAvatarBootstrapGeneration = null;
-        }
-        return;
-      }
-      requestedGeneration = latestStreamReady.generation;
     }
   }
 
-  Future<void> _runSelfAvatarBootstrap(int generation) async {
+  Future<void> _runSelfAvatarBootstrap() async {
+    final operationEpoch = lifecycleEpoch;
     try {
       await _notifyCachedSelfAvatarIfAvailable();
       await _publishPendingSelfAvatarIfAvailable();
       await refreshSelfAvatarIfNeeded();
     } finally {
-      _selfAvatarBootstrapCompletedGeneration = generation;
-      _emitSelfAvatarHydrating();
+      if (operationEpoch == lifecycleEpoch) {
+        _selfAvatarInitialSyncCompleted = true;
+        _emitSelfAvatarHydrating();
+      }
     }
   }
 
@@ -714,7 +679,7 @@ mixin AvatarService on XmppBase, MucService {
   }
 
   Future<void> refreshAvatarsForConversationIndex() async {
-    if (connectionState != ConnectionState.connected) return;
+    if (!_hasUsableXmppStream) return;
     List<Chat> chats;
     try {
       chats = await _dbOpReturning<XmppDatabase, List<Chat>>(

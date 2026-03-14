@@ -37,9 +37,6 @@ void main() {
       () => xmppService.connectivityStream,
     ).thenAnswer((_) => const Stream<ConnectionState>.empty());
     when(
-      () => xmppService.streamReadyStream,
-    ).thenAnswer((_) => const Stream<XmppStreamReady>.empty());
-    when(
       () => xmppService.connectionState,
     ).thenReturn(ConnectionState.notConnected);
 

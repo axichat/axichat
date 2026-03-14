@@ -242,6 +242,30 @@ class Invites extends Table {
 
 enum ChatType { chat, groupChat, note }
 
+enum ChatPrimaryView {
+  chat,
+  calendar;
+
+  bool get isChat => this == chat;
+
+  bool get isCalendar => this == calendar;
+
+  String get wireValue => name;
+
+  static ChatPrimaryView? tryParse(String? value) {
+    final normalized = value?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    for (final candidate in values) {
+      if (candidate.wireValue == normalized) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+}
+
 enum AttachmentAutoDownload {
   blocked,
   allowed;
@@ -279,6 +303,7 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
     required String jid,
     required String title,
     required ChatType type,
+    @Default(ChatPrimaryView.chat) ChatPrimaryView primaryView,
     required DateTime lastChangeTimestamp,
     @Default(MessageTransport.xmpp) MessageTransport transport,
     String? myNickname,
@@ -314,6 +339,7 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
     required String jid,
     required String title,
     required ChatType type,
+    required ChatPrimaryView primaryView,
     required String? myNickname,
     required String? avatarPath,
     required String? avatarHash,
@@ -362,6 +388,7 @@ abstract class Chat with _$Chat implements Insertable<Chat> {
       'jid': Variable<String>(jid),
       'title': Variable<String>(title),
       'type': Variable<int>(type.index),
+      'primary_view': Variable<int>(primaryView.index),
       'alert': Variable<String>(alert),
       'last_change_timestamp': Variable<DateTime>(lastChangeTimestamp),
       'transport': Variable<int>(transport.index),
@@ -439,6 +466,10 @@ class Chats extends Table {
   TextColumn get title => text()();
 
   IntColumn get type => intEnum<ChatType>()();
+
+  IntColumn get primaryView => intEnum<ChatPrimaryView>().withDefault(
+    Constant(ChatPrimaryView.chat.index),
+  )();
 
   IntColumn get transport => intEnum<MessageTransport>().withDefault(
     Constant(MessageTransport.xmpp.index),
@@ -564,6 +595,12 @@ bool isAxichatWelcomeThreadJid(String? jid) {
 
 extension ChatSystemThreadExtension on Chat {
   bool get isAxichatWelcomeThread => isAxichatWelcomeThreadJid(jid);
+}
+
+extension ChatPrimaryViewExtension on Chat {
+  bool get opensToCalendar => primaryView.isCalendar;
+
+  bool get isCalendarFirstRoom => type == ChatType.groupChat && opensToCalendar;
 }
 
 extension ChatTransportExtension on Chat {

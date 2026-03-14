@@ -693,9 +693,6 @@ String _resolveOperationLabel(
       l10n.xmppOperationPubSubFetchSuccess,
     XmppOperationLabelKey.pubSubFetchFailure =>
       l10n.xmppOperationPubSubFetchFailure,
-    XmppOperationLabelKey.mamLoginStart => l10n.xmppOperationMamLoginStart,
-    XmppOperationLabelKey.mamLoginSuccess => l10n.xmppOperationMamLoginSuccess,
-    XmppOperationLabelKey.mamLoginFailure => l10n.xmppOperationMamLoginFailure,
     XmppOperationLabelKey.mamGlobalStart => l10n.xmppOperationMamGlobalStart,
     XmppOperationLabelKey.mamGlobalSuccess =>
       l10n.xmppOperationMamGlobalSuccess,

@@ -35,9 +35,6 @@ mixin MessageCollectionSyncService on XmppBase, BaseStreamService {
     super.configureEventHandlers(manager);
     manager
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (connectionState != ConnectionState.connected) {
-          return;
-        }
         if (event.resumed) {
           fireAndForget(
             _flushPendingMessageCollectionSync,
@@ -63,14 +60,13 @@ mixin MessageCollectionSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> syncMessageCollectionsSnapshot() async {
-    if (_messageCollectionSnapshotInFlight ||
-        connectionState != ConnectionState.connected) {
+    if (_messageCollectionSnapshotInFlight || !_hasUsableXmppStream) {
       return;
     }
     _messageCollectionSnapshotInFlight = true;
     try {
       await database;
-      if (connectionState != ConnectionState.connected) {
+      if (!_hasUsableXmppStream) {
         return;
       }
       await _ensurePendingMessageCollectionSyncLoaded();
@@ -136,7 +132,7 @@ mixin MessageCollectionSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       await _queueMessageCollectionPublish(itemId);
       return;
     }
@@ -383,8 +379,7 @@ mixin MessageCollectionSyncService on XmppBase, BaseStreamService {
 
   Future<void> _flushPendingMessageCollectionSync() async {
     await _ensurePendingMessageCollectionSyncLoaded();
-    if (_pendingMessageCollectionPublishes.isEmpty ||
-        connectionState != ConnectionState.connected) {
+    if (_pendingMessageCollectionPublishes.isEmpty || !_hasUsableXmppStream) {
       return;
     }
     final support = await refreshPubSubSupport();

@@ -351,8 +351,6 @@ abstract interface class XmppBase {
 
   Stream<bool> get selfAvatarHydratingStream;
 
-  XmppStreamReady? get lastStreamReady;
-
   void _notifySelfAvatarUpdated(StoredAvatar? avatar);
 
   Stream<anti_abuse.SpamSyncUpdate> get spamSyncUpdateStream;
@@ -375,6 +373,10 @@ abstract interface class XmppBase {
   );
 
   Stream<void> get databaseReloadStream;
+
+  int get lifecycleEpoch;
+
+  bool get _hasUsableXmppStream;
 
   bool get needsReset => false;
 
@@ -443,20 +445,6 @@ abstract interface class XmppBase {
   void emitOmemoActivity(mox.OmemoActivityEvent event) {}
 
   bool get demoOfflineMode;
-}
-
-class XmppStreamReady {
-  const XmppStreamReady({
-    required this.resumed,
-    required this.timestamp,
-    required this.generation,
-  });
-
-  final bool resumed;
-  final DateTime timestamp;
-  final int generation;
-
-  bool get isResumed => resumed;
 }
 
 class _AxiEntityCapabilitiesManager extends mox.EntityCapabilitiesManager {
@@ -578,10 +566,6 @@ class XmppService extends XmppBase
     bookmarks2Supported: false,
   );
   var _pubSubSupportResolved = false;
-  StreamController<XmppStreamReady> _streamReadyController =
-      StreamController<XmppStreamReady>.broadcast();
-  XmppStreamReady? _lastStreamReady;
-  var _streamReadyGeneration = 0;
 
   bool get mamSupported => _mamSupported;
 
@@ -595,12 +579,6 @@ class XmppService extends XmppBase
   @override
   Stream<PubSubSupport> get pubSubSupportStream =>
       _pubSubSupportController.stream;
-
-  Stream<XmppStreamReady> get streamReadyStream =>
-      _streamReadyController.stream;
-
-  @override
-  XmppStreamReady? get lastStreamReady => _lastStreamReady;
 
   @override
   bool get autoDownloadImages => _autoDownloadImages;
@@ -668,6 +646,9 @@ class XmppService extends XmppBase
 
   @override
   bool get isStateStoreReady => _stateStore.isCompleted;
+
+  @override
+  int get lifecycleEpoch => _lifecycleEpoch;
 
   @override
   Stream<XmppOperationEvent> get xmppOperationStream =>
@@ -976,14 +957,20 @@ class XmppService extends XmppBase
   @override
   ConnectionState get connectionState => _connectionState;
   var _connectionState = ConnectionState.notConnected;
+  var _streamNegotiationsDispatchDepth = 0;
+
+  @override
+  bool get _hasUsableXmppStream =>
+      _connectionState == ConnectionState.connected ||
+      (_streamNegotiationsDispatchDepth > 0 &&
+          _connectionState != ConnectionState.notConnected &&
+          _connectionState != ConnectionState.error);
 
   @override
   Stream<ConnectionState> get connectivityStream => _connectivityStream.stream;
   StreamController<ConnectionState> _connectivityStream =
       StreamController<ConnectionState>.broadcast();
 
-  static const _connectivityRepairReasonStreamNegotiationsDone =
-      'stream negotiations done';
   static const _connectivityNotificationUpdateOperationName =
       'XmppService.updateConnectivityNotification';
   static const _nonRecoverableReconnectDisableLog =
@@ -1002,7 +989,8 @@ class XmppService extends XmppBase
     }
 
     if (state != ConnectionState.connected) {
-      _clearStreamReady();
+      _clearMamNegotiationState();
+      _clearSelfAvatarNegotiationState();
     }
 
     if (withForeground) {
@@ -1022,41 +1010,17 @@ class XmppService extends XmppBase
     }, operationName: _connectivityNotificationUpdateOperationName);
   }
 
-  void _recordStreamReady(bool resumed) {
-    final ready = XmppStreamReady(
-      resumed: resumed,
-      timestamp: DateTime.timestamp(),
-      generation: ++_streamReadyGeneration,
-    );
-    _lastStreamReady = ready;
-    if (_streamReadyController.isClosed) return;
-    _streamReadyController.add(ready);
-    _emitSelfAvatarHydrating();
-  }
-
-  void _clearStreamReady() {
-    _lastStreamReady = null;
-    _emitSelfAvatarHydrating();
-  }
-
-  void _repairConnectionStateFromTraffic({required String reason}) {
-    if (!_synchronousConnection.isCompleted) {
-      return;
-    }
-    if (!_connection.hasConnectionSettings) {
-      return;
-    }
-    if (_connectionState == ConnectionState.connected) {
-      return;
-    }
-    _xmppLogger.finer('Repairing connection state to connected ($reason).');
-    _setConnectionState(ConnectionState.connected);
-  }
-
   Future<void> _handleXmppEvent(mox.XmppEvent event) async {
     try {
       if (event is mox.StreamNegotiationsDoneEvent) {
-        await _handleRootStreamNegotiationsDone(event);
+        _streamNegotiationsDispatchDepth += 1;
+        try {
+          await _handleRootStreamNegotiationsDone();
+          await _eventManager.executeHandlers(event);
+        } finally {
+          _streamNegotiationsDispatchDepth -= 1;
+        }
+        return;
       }
       await _eventManager.executeHandlers(event);
     } catch (error, stackTrace) {
@@ -1068,13 +1032,7 @@ class XmppService extends XmppBase
     }
   }
 
-  Future<void> _handleRootStreamNegotiationsDone(
-    mox.StreamNegotiationsDoneEvent event,
-  ) async {
-    _recordStreamReady(event.resumed);
-    _repairConnectionStateFromTraffic(
-      reason: _connectivityRepairReasonStreamNegotiationsDone,
-    );
+  Future<void> _handleRootStreamNegotiationsDone() async {
     await _runPostNegotiationsSetup();
     // Connection handling is automatic in moxxmpp v0.5.0.
   }
@@ -1101,7 +1059,7 @@ class XmppService extends XmppBase
   void scheduleSelfAvatarBootstrap() {
     fireAndForget(() async {
       await _bootstrapSelfAvatarIfReady();
-      if (lastStreamReady == null) {
+      if (!_hasSelfAvatarNegotiatedStream) {
         await refreshSelfAvatarIfNeeded();
       }
     }, operationName: 'XmppService.scheduleSelfAvatarBootstrap');
@@ -1440,7 +1398,7 @@ class XmppService extends XmppBase
     await _initDatabases(databasePrefix, databasePassphrase);
     if (!deferSelfAvatarBootstrap) {
       await _bootstrapSelfAvatarIfReady();
-      if (lastStreamReady == null) {
+      if (!_hasSelfAvatarNegotiatedStream) {
         await refreshSelfAvatarIfNeeded();
       }
     }
@@ -2800,9 +2758,6 @@ class XmppService extends XmppBase
     if (_pubSubSupportController.isClosed) {
       _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
     }
-    if (_streamReadyController.isClosed) {
-      _streamReadyController = StreamController<XmppStreamReady>.broadcast();
-    }
     if (_databaseReloadController.isClosed) {
       _databaseReloadController = StreamController<void>.broadcast(sync: true);
     }
@@ -2838,9 +2793,6 @@ class XmppService extends XmppBase
   Future<void> _closeStreamControllers() async {
     if (!_pubSubSupportController.isClosed) {
       await _pubSubSupportController.close();
-    }
-    if (!_streamReadyController.isClosed) {
-      await _streamReadyController.close();
     }
     if (!_databaseReloadController.isClosed) {
       await _databaseReloadController.close();
@@ -3053,7 +3005,7 @@ class XmppService extends XmppBase
       _updatePubSubSupport(support);
       return support;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return _pubSubSupport;
     }
     final discoManager = _connection.getManager<mox.DiscoManager>();

@@ -73,7 +73,6 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     super.configureEventHandlers(manager);
     manager
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (connectionState != ConnectionState.connected) return;
         if (event.resumed) {
           fireAndForget(
             _flushPendingEmailBlocklistSync,
@@ -111,13 +110,13 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     if (_emailBlocklistSnapshotInFlight) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     _emailBlocklistSnapshotInFlight = true;
     try {
       await database;
-      if (connectionState != ConnectionState.connected) {
+      if (!_hasUsableXmppStream) {
         return;
       }
       await _ensurePendingEmailBlocklistSyncLoaded();
@@ -298,7 +297,7 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       await _queueEmailBlocklistPublish(normalized);
       return;
     }
@@ -337,7 +336,7 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       await _queueEmailBlocklistRetraction(normalized);
       return;
     }
@@ -690,7 +689,7 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
         _pendingEmailBlocklistRetractions.isEmpty) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     final support = await refreshPubSubSupport();

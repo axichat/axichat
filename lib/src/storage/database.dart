@@ -1621,7 +1621,7 @@ class XmppDrift extends _$XmppDrift implements XmppDatabase {
   }
 
   @override
-  int get schemaVersion => 36;
+  int get schemaVersion => 37;
 
   @override
   MigrationStrategy get migration {
@@ -1895,6 +1895,9 @@ WHERE transport IS NULL
           await m.createTable(messageCollections);
           await m.createTable(messageCollectionMemberships);
           await seedSystemMessageCollections();
+        }
+        if (from < 37) {
+          await m.addColumn(chats, chats.primaryView);
         }
       },
       beforeOpen: (_) async {

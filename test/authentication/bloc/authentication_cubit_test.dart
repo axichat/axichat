@@ -104,9 +104,6 @@ void main() {
     ).thenAnswer((_) async => true);
     when(() => mockXmppService.hasInMemoryReconnectContext).thenReturn(true);
     when(
-      () => mockXmppService.streamReadyStream,
-    ).thenAnswer((_) => const Stream<XmppStreamReady>.empty());
-    when(
       () => mockXmppService.connectionState,
     ).thenReturn(ConnectionState.notConnected);
     when(() => mockEmailService.currentAccount(any())).thenAnswer(
@@ -2240,43 +2237,6 @@ void main() {
 
         await subscription.cancel();
         await connectivityController.close();
-        await bloc.close();
-      },
-    );
-
-    test(
-      'Authenticated stream-ready events trigger email reconnect even when auth completed before connection.',
-      () async {
-        final streamReadyController =
-            StreamController<XmppStreamReady>.broadcast();
-        when(
-          () => mockXmppService.streamReadyStream,
-        ).thenAnswer((_) => streamReadyController.stream);
-        when(() => mockXmppService.myJid).thenReturn(validJid);
-
-        final bloc = AuthenticationCubit(
-          credentialStore: mockCredentialStore,
-          initialEndpointConfig: const EndpointConfig(),
-          xmppService: mockXmppService,
-          emailService: mockEmailService,
-          homeRefreshSyncService: mockHomeRefreshSyncService,
-          httpClient: mockHttpClient,
-          emailProvisioningClient: mockProvisioningClient,
-          initialState: const AuthenticationComplete(),
-        );
-
-        streamReadyController.add(
-          XmppStreamReady(
-            resumed: false,
-            timestamp: DateTime.timestamp(),
-            generation: 1,
-          ),
-        );
-        await Future<void>.delayed(Duration.zero);
-
-        verify(() => mockEmailService.handleNetworkAvailable()).called(1);
-
-        await streamReadyController.close();
         await bloc.close();
       },
     );

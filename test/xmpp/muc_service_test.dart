@@ -4,10 +4,13 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:axichat/main.dart';
+import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/bookmarks_manager.dart';
+import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -145,6 +148,54 @@ mox.XMLNode _singleValueField(String name, String value) => mox.XMLNode(
   children: [mox.XMLNode(tag: 'value', text: value)],
 );
 
+mox.XMLNode _calendarPrimaryViewBookmarkExtension() => mox.XMLNode.xmlns(
+  tag: 'room',
+  xmlns: 'urn:axichat:bookmark:room:0',
+  attributes: {'primary-view': ChatPrimaryView.calendar.wireValue},
+);
+
+class _RecordingBookmarksPubSubManager extends SafePubSubManager {
+  final List<mox.XMLNode> publishedPayloads = <mox.XMLNode>[];
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, bool>> publish(
+    mox.JID jid,
+    String node,
+    mox.XMLNode payload, {
+    String? id,
+    mox.PubSubPublishOptions? options,
+    bool autoCreate = false,
+    mox.NodeConfig? createNodeConfig,
+  }) async {
+    publishedPayloads.add(payload);
+    return const moxlib.Result(true);
+  }
+}
+
+mox.XmppManagerAttributes _bookmarksManagerAttributes({
+  required SafePubSubManager pubSubManager,
+}) {
+  final fullJid = mox.JID.fromString(_accountBareJid);
+  return mox.XmppManagerAttributes(
+    sendStanza: (_) async => null,
+    sendNonza: (_) {},
+    getManagerById: <T extends mox.XmppManagerBase>(id) {
+      if (id == mox.pubsubManager && pubSubManager is T) {
+        return pubSubManager as T;
+      }
+      return null;
+    },
+    sendEvent: (_) {},
+    getConnectionSettings: () =>
+        mox.ConnectionSettings(jid: fullJid, password: password),
+    getFullJID: () => fullJid,
+    getSocket: () => throw UnimplementedError(),
+    getConnection: () => throw UnimplementedError(),
+    getNegotiatorById: <T extends mox.XmppFeatureNegotiatorBase>(String _) =>
+        null,
+  );
+}
+
 mox.Stanza _memberAffiliationQueryResult(String jid) {
   final query = mox.XMLNode.xmlns(
     tag: _queryTag,
@@ -240,10 +291,12 @@ void main() {
     when(
       () => mockConnection.getManager<mox.DiscoManager>(),
     ).thenReturn(discoManager);
+    when(() => mockConnection.getManager<BookmarksManager>()).thenReturn(null);
     when(
       () => mockConnection.getManager<MucJoinBootstrapManager>(),
     ).thenReturn(joinBootstrapManager);
     when(() => mockConnection.sendStanza(any())).thenAnswer((_) async => null);
+    when(() => mockConnection.sendMessage(any())).thenAnswer((_) async => true);
     when(() => mockDatabase.getChat(any())).thenAnswer((_) async => null);
     when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
     when(() => mockDatabase.updateChat(any())).thenAnswer((_) async {});
@@ -1598,6 +1651,104 @@ void main() {
     );
 
     test(
+      'BOOKMARK-001 [HP] applyMucBookmarks restores calendar room primary view',
+      () async {
+        when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
+
+        await xmppService.applyMucBookmarks([
+          MucBookmark(
+            roomBare: mox.JID.fromString(_roomJidBare).toBare(),
+            name: _roomName,
+            nick: _roomNick,
+            extensions: [_calendarPrimaryViewBookmarkExtension()],
+            preserveCachedExtensions: false,
+          ),
+        ]);
+
+        final Chat createdChat =
+            verify(() => mockDatabase.createChat(captureAny())).captured.single
+                as Chat;
+
+        expect(createdChat.jid, _roomJidBare);
+        expect(createdChat.type, ChatType.groupChat);
+        expect(createdChat.primaryView, ChatPrimaryView.calendar);
+      },
+    );
+
+    test(
+      'CREATE-005 [HP] createRoom propagates calendar room primary view',
+      () async {
+        final bookmarksPubSubManager = _RecordingBookmarksPubSubManager();
+        final bookmarksManager = BookmarksManager()
+          ..register(
+            _bookmarksManagerAttributes(pubSubManager: bookmarksPubSubManager),
+          );
+        await xmppService.setMucServiceHost(_serviceJid);
+        when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
+        when(() => mockConnection.generateId()).thenReturn(_stanzaId);
+        when(
+          () => mockConnection.getManager<BookmarksManager>(),
+        ).thenReturn(bookmarksManager);
+        when(
+          () => mucManager.joinRoom(
+            any(),
+            any(),
+            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
+          ),
+        ).thenAnswer((_) async {
+          eventStreamController.add(
+            MucSelfPresenceEvent(
+              roomJid: 'planning-room@$_serviceJid',
+              occupantJid: 'planning-room@$_serviceJid/me',
+              nick: 'me',
+              affiliation: OccupantAffiliation.owner.xmlValue,
+              role: OccupantRole.moderator.xmlValue,
+              isAvailable: true,
+              isError: false,
+              isNickChange: false,
+              statusCodes: {
+                MucStatusCode.selfPresence.code,
+                MucStatusCode.roomCreated.code,
+              },
+            ),
+          );
+          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
+        });
+
+        await xmppService.createRoom(
+          name: _roomName,
+          nickname: 'me',
+          primaryView: ChatPrimaryView.calendar,
+        );
+        await pumpEventQueue();
+
+        final MucBookmark? bookmark = MucBookmark.fromBookmarks2Xml(
+          bookmarksPubSubManager.publishedPayloads.single,
+          itemId: 'planning-room@$_serviceJid',
+        );
+        expect(
+          bookmark?.extensions.single.attributes['primary-view'],
+          ChatPrimaryView.calendar.wireValue,
+        );
+
+        final mox.MessageEvent event =
+            verify(
+                  () => mockConnection.sendMessage(captureAny()),
+                ).captured.single
+                as mox.MessageEvent;
+        final String? body = event.extensions.get<mox.MessageBodyData>()?.body;
+        final CalendarSyncMessage? syncMessage = body == null
+            ? null
+            : CalendarSyncMessage.tryParseEnvelope(body);
+
+        expect(event.type, _messageTypeGroupchat);
+        expect(event.to.toBare().toString(), 'planning-room@$_serviceJid');
+        expect(syncMessage?.isRoomPrimaryViewUpdate, isTrue);
+        expect(syncMessage?.roomPrimaryView, ChatPrimaryView.calendar);
+      },
+    );
+
+    test(
       'JOIN-025 [HP] joining a room triggers room history sync operation events',
       () async {
         await xmppService.setMucServiceHost(_serviceJid);
@@ -1661,105 +1812,6 @@ void main() {
         final events = await captureXmppOperations(
           () => xmppService.joinRoom(roomJid: _roomJid, nickname: 'me'),
         );
-        await pumpEventQueue();
-
-        final roomHistoryEvents = events
-            .where((event) => event.kind == XmppOperationKind.mamMucSync)
-            .toList(growable: false);
-
-        expect(roomHistoryEvents, hasLength(2));
-        expect(roomHistoryEvents.first.stage, XmppOperationStage.start);
-        expect(roomHistoryEvents.last.stage, XmppOperationStage.end);
-        expect(roomHistoryEvents.last.isSuccess, isFalse);
-      },
-    );
-
-    test(
-      'JOIN-026 [HP] deferred room history sync waits for join completion after login sync',
-      () async {
-        await xmppService.setMucServiceHost(_serviceJid);
-        await xmppService.setMamSupportOverride(true);
-        final loginSyncGate = Completer<List<Chat>>();
-        when(
-          () => mockDatabase.getChats(
-            start: any(named: 'start'),
-            end: any(named: 'end'),
-          ),
-        ).thenAnswer((_) => loginSyncGate.future);
-        when(
-          () => mucManager.joinRoom(
-            any(),
-            any(),
-            maxHistoryStanzas: any(named: 'maxHistoryStanzas'),
-          ),
-        ).thenAnswer((_) async {
-          eventStreamController.add(
-            MucSelfPresenceEvent(
-              roomJid: _roomJid,
-              occupantJid: _roomJidWithSelfNick,
-              nick: 'me',
-              affiliation: OccupantAffiliation.owner.xmlValue,
-              role: OccupantRole.moderator.xmlValue,
-              isAvailable: true,
-              isError: false,
-              isNickChange: false,
-              statusCodes: {MucStatusCode.selfPresence.code},
-            ),
-          );
-          return const moxlib.Result<bool, mox.MUCError>(_presenceAvailable);
-        });
-        when(() => mockConnection.sendStanza(any())).thenAnswer((invocation) {
-          final details =
-              invocation.positionalArguments.first as mox.StanzaDetails;
-          final stanza = details.stanza;
-          if (stanza.firstTag(_queryTag, xmlns: _mucAdminXmlns) != null) {
-            return Future<mox.XMLNode?>.value(
-              mox.Stanza.iq(
-                type: _iqTypeResult,
-                children: [
-                  mox.XMLNode.xmlns(tag: _queryTag, xmlns: _mucAdminXmlns),
-                ],
-              ),
-            );
-          }
-          if (stanza.firstTag(_queryTag, xmlns: _mucOwnerXmlns) != null) {
-            return Future<mox.XMLNode?>.value(
-              mox.Stanza.iq(
-                type: _iqTypeResult,
-                children: [
-                  mox.XMLNode.xmlns(tag: _queryTag, xmlns: _mucOwnerXmlns),
-                ],
-              ),
-            );
-          }
-          if (stanza.firstTag(_queryTag, xmlns: mox.mamXmlns) != null) {
-            return Future<mox.XMLNode?>.value(
-              mox.Stanza.iq(
-                type: _iqTypeError,
-                children: [mox.XMLNode(tag: _errorTag)],
-              ),
-            );
-          }
-          return Future<mox.XMLNode?>.value(null);
-        });
-
-        final events = <XmppOperationEvent>[];
-        final subscription = xmppService.xmppOperationStream.listen(events.add);
-        addTearDown(subscription.cancel);
-
-        final loginSyncFuture = xmppService.syncMessageArchiveSnapshot();
-        await pumpEventQueue();
-
-        final joinFuture = xmppService.joinRoom(
-          roomJid: _roomJid,
-          nickname: 'me',
-        );
-        await pumpEventQueue();
-
-        loginSyncGate.complete(const <Chat>[]);
-        await loginSyncFuture;
-        await joinFuture;
-        await Future<void>.delayed(const Duration(milliseconds: 50));
         await pumpEventQueue();
 
         final roomHistoryEvents = events

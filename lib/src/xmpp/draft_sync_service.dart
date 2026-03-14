@@ -49,7 +49,6 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     super.configureEventHandlers(manager);
     manager
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (connectionState != ConnectionState.connected) return;
         if (event.resumed) {
           fireAndForget(
             _flushPendingDraftSync,
@@ -88,13 +87,13 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (_draftSnapshotInFlight) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     _draftSnapshotInFlight = true;
     try {
       await database;
-      if (connectionState != ConnectionState.connected) {
+      if (!_hasUsableXmppStream) {
         return;
       }
       await _ensurePendingDraftSyncLoaded();
@@ -226,7 +225,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       await _queueDraftPublish(syncId);
       return;
     }
@@ -265,7 +264,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       await _queueDraftRetraction(normalized);
       return;
     }
@@ -600,7 +599,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (_hasAttachmentUrl(metadata)) {
       return metadata;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return metadata;
     }
     final path = metadata.path?.trim();
@@ -877,7 +876,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (_pendingDraftPublishes.isEmpty && _pendingDraftRetractions.isEmpty) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     final support = await refreshPubSubSupport();

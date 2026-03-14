@@ -82,7 +82,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     manager
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
         if (event.resumed) return;
-        if (connectionState != ConnectionState.connected) return;
         fireAndForget(
           syncConversationIndexSnapshot,
           operationName: _conversationIndexBootstrapOperationName,
@@ -99,7 +98,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   Future<List<ConvItem>> syncConversationIndexSnapshot() async {
     final pendingSync = _conversationIndexLoginSync;
     if (pendingSync != null) return pendingSync;
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return _emptyConversationIndexSnapshot;
     }
     final task = _syncConversationIndexSnapshot();
@@ -114,7 +113,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   Future<List<ConvItem>> _syncConversationIndexSnapshot() async {
     try {
       await database;
-      if (connectionState != ConnectionState.connected) {
+      if (!_hasUsableXmppStream) {
         return _emptyConversationIndexSnapshot;
       }
 

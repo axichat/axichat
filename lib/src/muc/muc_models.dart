@@ -125,6 +125,22 @@ enum OccupantRole {
   };
 }
 
+final class MucAffiliationEntry {
+  const MucAffiliationEntry({
+    required this.affiliation,
+    this.jid,
+    this.nick,
+    this.role,
+    this.reason,
+  });
+
+  final OccupantAffiliation affiliation;
+  final String? jid;
+  final String? nick;
+  final OccupantRole? role;
+  final String? reason;
+}
+
 class Occupant {
   Occupant({
     required this.occupantId,
@@ -149,12 +165,51 @@ class Occupant {
   bool get hasRealJid => realJid?.trim().isNotEmpty == true;
   bool get hasResolvedMembershipState => !affiliation.isNone || !role.isNone;
   String get normalizedNick => nick.trim().toLowerCase();
-  String get avatarKey {
+  String? get bareRealJid {
     final resolvedRealJid = realJid?.trim();
     if (resolvedRealJid == null || resolvedRealJid.isEmpty) {
-      return nick;
+      return null;
     }
     return bareAddress(resolvedRealJid) ?? resolvedRealJid;
+  }
+
+  String? get normalizedBareRealJid {
+    final resolvedRealJid = realJid?.trim();
+    if (resolvedRealJid == null || resolvedRealJid.isEmpty) {
+      return null;
+    }
+    final normalized = normalizedAddressKey(resolvedRealJid);
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  String get avatarKey {
+    final resolvedRealJid = bareRealJid;
+    if (resolvedRealJid == null) {
+      return nick;
+    }
+    return resolvedRealJid;
+  }
+
+  RoomMemberSectionKind get memberSectionKind {
+    if (affiliation.isOwner) {
+      return RoomMemberSectionKind.owners;
+    }
+    if (affiliation.isAdmin) {
+      return RoomMemberSectionKind.admins;
+    }
+    if (role.isModerator) {
+      return RoomMemberSectionKind.moderators;
+    }
+    if (affiliation.isMember) {
+      return RoomMemberSectionKind.members;
+    }
+    if (role.isParticipant) {
+      return RoomMemberSectionKind.participants;
+    }
+    return RoomMemberSectionKind.visitors;
   }
 
   bool matchesOccupantId(String? value) {
@@ -180,6 +235,112 @@ class Occupant {
       return false;
     }
     return sameBareAddress(realJid, trimmedValue);
+  }
+
+  bool canBeKickedBy({
+    required OccupantAffiliation actorAffiliation,
+    required OccupantRole actorRole,
+  }) {
+    if (!isPresent) {
+      return false;
+    }
+    if (!actorRole.isModerator &&
+        !actorAffiliation.isAdmin &&
+        !actorAffiliation.isOwner) {
+      return false;
+    }
+    if (actorAffiliation.authorityRank < affiliation.authorityRank) {
+      return false;
+    }
+    if (role.isModerator) {
+      return actorAffiliation.isAdmin || actorAffiliation.isOwner;
+    }
+    return role.isParticipant || role.isVisitor;
+  }
+
+  bool canBeBannedBy({required OccupantAffiliation actorAffiliation}) {
+    if (normalizedBareRealJid == null) return false;
+    if (actorAffiliation.isOwner) return true;
+    if (actorAffiliation.isAdmin) {
+      return affiliation.isMember || affiliation.isNone;
+    }
+    return false;
+  }
+
+  bool canChangeAffiliationTo({
+    required OccupantAffiliation actorAffiliation,
+    required OccupantAffiliation nextAffiliation,
+  }) {
+    if (normalizedBareRealJid == null) return false;
+    if (affiliation == nextAffiliation) return false;
+    if (actorAffiliation.isOwner) {
+      return true;
+    }
+    if (!actorAffiliation.isAdmin) {
+      return false;
+    }
+    return nextAffiliation.isMember && affiliation.isNone;
+  }
+
+  bool canBeGrantedModeratorBy({
+    required OccupantAffiliation actorAffiliation,
+  }) {
+    if (!isPresent) {
+      return false;
+    }
+    if (!actorAffiliation.isOwner && !actorAffiliation.isAdmin) {
+      return false;
+    }
+    if (role.isModerator) {
+      return false;
+    }
+    return affiliation.isMember || affiliation.isNone;
+  }
+
+  bool canBeRevokedModeratorBy({
+    required OccupantAffiliation actorAffiliation,
+  }) {
+    if (!isPresent) {
+      return false;
+    }
+    if (!actorAffiliation.isOwner && !actorAffiliation.isAdmin) {
+      return false;
+    }
+    if (!role.isModerator) {
+      return false;
+    }
+    return affiliation.isMember || affiliation.isNone;
+  }
+
+  String? nextRealJid(String? realJid, {Occupant? fallback}) =>
+      realJid ?? (isPresent ? this.realJid : null) ?? fallback?.realJid;
+
+  OccupantAffiliation nextAffiliation(
+    OccupantAffiliation? affiliation, {
+    Occupant? fallback,
+  }) {
+    final nextAffiliation = affiliation ?? this.affiliation;
+    if (!nextAffiliation.isNone) {
+      return nextAffiliation;
+    }
+    return fallback?.affiliation ?? OccupantAffiliation.none;
+  }
+
+  OccupantRole nextRole(OccupantRole? role, {Occupant? fallback}) {
+    final nextRole = role ?? this.role;
+    if (!nextRole.isNone) {
+      return nextRole;
+    }
+    return fallback?.role ?? OccupantRole.none;
+  }
+
+  bool nextPresence(bool? isPresent) => isPresent ?? this.isPresent;
+
+  Occupant withUnavailable() {
+    if (!isPresent) {
+      return this;
+    }
+    return copyWith(isPresent: false);
   }
 
   Occupant copyWith({
@@ -256,6 +417,21 @@ class RoomState {
 
   List<Occupant> get visitors => _occupantGroups.visitors;
 
+  bool isSelfOccupantId(String? occupantId) {
+    final trimmedOccupantId = occupantId?.trim();
+    if (trimmedOccupantId == null || trimmedOccupantId.isEmpty) {
+      return false;
+    }
+    final trimmedSelfOccupantId = myOccupantJid?.trim();
+    if (trimmedSelfOccupantId == null || trimmedSelfOccupantId.isEmpty) {
+      return false;
+    }
+    return trimmedSelfOccupantId == trimmedOccupantId;
+  }
+
+  bool isSelfOccupant(Occupant occupant) =>
+      isSelfOccupantId(occupant.occupantId);
+
   Occupant? get selfOccupant {
     final occupantJid = myOccupantJid;
     if (occupantJid == null || occupantJid.isEmpty) {
@@ -302,6 +478,16 @@ class RoomState {
   bool isRoomNickOccupantId(String occupantId) =>
       _occupantDirectory.isRoomNickOccupantId(occupantId);
 
+  bool shouldPreferMatchedOccupantId(
+    String occupantId,
+    String matchedOccupantId,
+  ) {
+    if (isRoomNickOccupantId(occupantId)) {
+      return false;
+    }
+    return isRoomNickOccupantId(matchedOccupantId);
+  }
+
   Occupant? occupantForRealJid(
     String realJid, {
     bool excludeRoomNickOccupantIds = false,
@@ -330,6 +516,24 @@ class RoomState {
     preferRealJid: preferRealJid,
   );
 
+  Occupant? matchingOccupant(String occupantId, {String? realJid}) {
+    final trimmedRealJid = realJid?.trim();
+    if (trimmedRealJid != null && trimmedRealJid.isNotEmpty) {
+      final matchedByRealJid = occupantForRealJid(
+        trimmedRealJid,
+        excludeRoomNickOccupantIds: true,
+      );
+      if (matchedByRealJid != null) {
+        return matchedByRealJid;
+      }
+    }
+    final canonicalId = canonicalOccupantId(occupantId);
+    if (canonicalId == null) {
+      return null;
+    }
+    return occupants[canonicalId];
+  }
+
   String? canonicalOccupantId(String occupantId) =>
       _occupantDirectory.canonicalOccupantId(occupantId);
 
@@ -344,6 +548,455 @@ class RoomState {
   String fallbackNickForAffiliationJid(String jid) =>
       bareAddress(jid) ?? jid.trim();
 
+  List<MucModerationAction> moderationActionsFor(Occupant occupant) {
+    if (isSelfOccupant(occupant)) return const <MucModerationAction>[];
+    final actions = <MucModerationAction>[];
+    if (occupant.canBeKickedBy(
+      actorAffiliation: myAffiliation,
+      actorRole: myRole,
+    )) {
+      actions.add(MucModerationAction.kick);
+    }
+    if (occupant.canBeBannedBy(actorAffiliation: myAffiliation)) {
+      actions.add(MucModerationAction.ban);
+    }
+    if (occupant.canChangeAffiliationTo(
+      actorAffiliation: myAffiliation,
+      nextAffiliation: OccupantAffiliation.member,
+    )) {
+      actions.add(MucModerationAction.member);
+    }
+    if (occupant.canChangeAffiliationTo(
+      actorAffiliation: myAffiliation,
+      nextAffiliation: OccupantAffiliation.admin,
+    )) {
+      actions.add(MucModerationAction.admin);
+    }
+    if (occupant.canChangeAffiliationTo(
+      actorAffiliation: myAffiliation,
+      nextAffiliation: OccupantAffiliation.owner,
+    )) {
+      actions.add(MucModerationAction.owner);
+    }
+    if (occupant.canBeGrantedModeratorBy(actorAffiliation: myAffiliation)) {
+      actions.add(MucModerationAction.moderator);
+    }
+    if (occupant.canBeRevokedModeratorBy(actorAffiliation: myAffiliation)) {
+      actions.add(MucModerationAction.participant);
+    }
+    return actions;
+  }
+
+  String? directChatJidForOccupant(Occupant occupant) {
+    if (isSelfOccupant(occupant)) {
+      return null;
+    }
+    final realJid = occupant.normalizedBareRealJid;
+    if (realJid == null) {
+      return null;
+    }
+    final bareRoomJid = normalizedAddressKey(roomJid) ?? roomJid.trim();
+    if (realJid == bareRoomJid) {
+      return null;
+    }
+    return realJid;
+  }
+
+  RoomState withSelfPresence({
+    required Set<String> statusCodes,
+    String? reason,
+  }) {
+    final sameStatusCodes =
+        statusCodes.length == selfPresenceStatusCodes.length &&
+        statusCodes.containsAll(selfPresenceStatusCodes);
+    if (sameStatusCodes &&
+        selfPresenceReason == reason &&
+        joinErrorCondition == null &&
+        joinErrorText == null) {
+      return this;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: occupants,
+      myOccupantJid: myOccupantJid,
+      selfPresenceStatusCodes: statusCodes,
+      selfPresenceReason: reason,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
+  RoomState withSelfOccupantId(String? occupantId) {
+    final trimmedOccupantId = occupantId?.trim();
+    final nextOccupantId =
+        trimmedOccupantId == null || trimmedOccupantId.isEmpty
+        ? null
+        : trimmedOccupantId;
+    if (myOccupantJid == nextOccupantId) {
+      return this;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: occupants,
+      myOccupantJid: nextOccupantId,
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      joinErrorCondition: joinErrorCondition,
+      joinErrorText: joinErrorText,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
+  RoomState withSelfOccupant(String occupantId, {String? realJid}) {
+    final trimmedOccupantId = occupantId.trim();
+    if (trimmedOccupantId.isEmpty) {
+      return this;
+    }
+    var room = this;
+    final previousSelfOccupantId = myOccupantJid;
+    final trimmedRealJid = realJid?.trim();
+    if (trimmedRealJid != null && trimmedRealJid.isNotEmpty) {
+      room = room.withoutOtherOccupantsForRealJid(
+        keepOccupantId: trimmedOccupantId,
+        realJid: trimmedRealJid,
+      );
+    }
+    if (previousSelfOccupantId != null &&
+        previousSelfOccupantId != trimmedOccupantId) {
+      room = room.withoutExactOccupant(previousSelfOccupantId);
+    }
+    return room.withSelfOccupantId(trimmedOccupantId);
+  }
+
+  RoomState withJoinFailure({MucJoinErrorCondition? condition, String? text}) {
+    if (joinErrorCondition == condition && joinErrorText == text) {
+      return this;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: occupants,
+      myOccupantJid: myOccupantJid,
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      joinErrorCondition: condition,
+      joinErrorText: text,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
+  RoomState withoutJoinFailure() {
+    if (joinErrorCondition == null && joinErrorText == null) {
+      return this;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: occupants,
+      myOccupantJid: myOccupantJid,
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
+  RoomState withDestroyedState({
+    required bool destroyed,
+    String? alternateRoomJid,
+  }) {
+    final nextAlternateRoomJid = destroyed ? alternateRoomJid : null;
+    if (isDestroyed == destroyed &&
+        destroyedAlternateRoomJid == nextAlternateRoomJid) {
+      return this;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: occupants,
+      myOccupantJid: myOccupantJid,
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      joinErrorCondition: joinErrorCondition,
+      joinErrorText: joinErrorText,
+      isDestroyed: destroyed,
+      destroyedAlternateRoomJid: nextAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
+  RoomState withoutSelfPresenceStatusCode(String statusCode) {
+    if (!selfPresenceStatusCodes.contains(statusCode)) {
+      return this;
+    }
+    final updatedStatusCodes = Set<String>.of(selfPresenceStatusCodes)
+      ..remove(statusCode);
+    return withSelfPresence(
+      statusCodes: updatedStatusCodes,
+      reason: selfPresenceReason,
+    );
+  }
+
+  RoomState withPostJoinRefreshPending(bool pending) {
+    if (postJoinRefreshPending == pending) {
+      return this;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: occupants,
+      myOccupantJid: myOccupantJid,
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      joinErrorCondition: joinErrorCondition,
+      joinErrorText: joinErrorText,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: pending,
+    );
+  }
+
+  RoomState withAffiliationEntries({
+    required OccupantAffiliation queriedAffiliation,
+    required List<MucAffiliationEntry> entries,
+    String? selfRealJid,
+  }) {
+    final updated = Map<String, Occupant>.of(occupants);
+    var nextMyOccupantJid = myOccupantJid;
+    final retainedOccupantIds = <String>{};
+    for (final entry in entries) {
+      final nick = entry.nick?.trim();
+      final realJid = entry.jid;
+      final workingRoom = RoomState(
+        roomJid: roomJid,
+        occupants: updated,
+        myOccupantJid: nextMyOccupantJid,
+        selfPresenceStatusCodes: selfPresenceStatusCodes,
+        selfPresenceReason: selfPresenceReason,
+        joinErrorCondition: joinErrorCondition,
+        joinErrorText: joinErrorText,
+        isDestroyed: isDestroyed,
+        destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+        postJoinRefreshPending: postJoinRefreshPending,
+      );
+      final occupantId = workingRoom.occupantIdForAffiliation(
+        realJid: realJid,
+        nick: nick,
+      );
+      if (occupantId == null) {
+        if ((nick == null || nick.isEmpty) &&
+            (realJid == null || realJid.isEmpty)) {
+          continue;
+        }
+        final resolvedOccupantId = realJid == null || realJid.isEmpty
+            ? '$roomJid/$nick'
+            : workingRoom.syntheticOccupantIdForAffiliationJid(realJid);
+        final resolvedNick = (nick == null || nick.isEmpty)
+            ? workingRoom.fallbackNickForAffiliationJid(realJid!)
+            : nick;
+        final isSelf =
+            selfRealJid != null &&
+            realJid != null &&
+            parseJidOrThrow(realJid).toBare().toString() ==
+                parseJidOrThrow(selfRealJid).toBare().toString();
+        if (isSelf &&
+            nextMyOccupantJid != null &&
+            nextMyOccupantJid != resolvedOccupantId) {
+          updated.remove(nextMyOccupantJid);
+        }
+        updated[resolvedOccupantId] = Occupant(
+          occupantId: resolvedOccupantId,
+          nick: resolvedNick,
+          realJid: realJid,
+          affiliation: entry.affiliation,
+          role: entry.role ?? OccupantRole.none,
+          isPresent: false,
+        );
+        if (isSelf) {
+          nextMyOccupantJid = resolvedOccupantId;
+        }
+        retainedOccupantIds.add(resolvedOccupantId);
+        continue;
+      }
+      final occupant = updated[occupantId];
+      if (occupant == null) continue;
+      updated[occupantId] = occupant.copyWith(
+        nick: nick ?? occupant.nick,
+        affiliation: entry.affiliation,
+        role: entry.role ?? occupant.role,
+        realJid: occupant.realJid ?? realJid,
+      );
+      retainedOccupantIds.add(occupantId);
+    }
+    updated.removeWhere((occupantId, occupant) {
+      if (occupant.affiliation != queriedAffiliation) {
+        return false;
+      }
+      if (occupant.isPresent) {
+        return false;
+      }
+      final realJid = occupant.realJid;
+      if (realJid == null || realJid.isEmpty) {
+        return false;
+      }
+      return !retainedOccupantIds.contains(occupantId);
+    });
+    if (nextMyOccupantJid != null && !updated.containsKey(nextMyOccupantJid)) {
+      nextMyOccupantJid = null;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: updated,
+      myOccupantJid: nextMyOccupantJid,
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      joinErrorCondition: joinErrorCondition,
+      joinErrorText: joinErrorText,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
+  RoomState withSelfOccupantUnavailable() {
+    final occupantJid = myOccupantJid;
+    if (occupantJid == null) {
+      return this;
+    }
+    final occupant = occupants[occupantJid];
+    if (occupant == null) {
+      return this;
+    }
+    final updatedOccupant = occupant.withUnavailable();
+    if (identical(updatedOccupant, occupant)) {
+      return this;
+    }
+    final updated = Map<String, Occupant>.of(occupants)
+      ..[occupantJid] = updatedOccupant;
+    return copyWith(occupants: updated);
+  }
+
+  RoomState withoutOccupants() {
+    if (occupants.isEmpty && myOccupantJid == null) {
+      return this;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: const <String, Occupant>{},
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      joinErrorCondition: joinErrorCondition,
+      joinErrorText: joinErrorText,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
+  RoomState withoutOtherOccupantsForRealJid({
+    required String keepOccupantId,
+    required String realJid,
+  }) {
+    var changed = false;
+    var nextMyOccupantJid = myOccupantJid;
+    final updated = Map<String, Occupant>.of(occupants);
+    updated.removeWhere((occupantId, occupant) {
+      final occupantRealJid = occupant.realJid;
+      if (occupantId == keepOccupantId ||
+          occupantRealJid == null ||
+          !sameBareAddress(occupantRealJid, realJid)) {
+        return false;
+      }
+      if (occupantId == nextMyOccupantJid) {
+        nextMyOccupantJid = null;
+      }
+      changed = true;
+      return true;
+    });
+    if (!changed) {
+      return this;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: updated,
+      myOccupantJid: nextMyOccupantJid,
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      joinErrorCondition: joinErrorCondition,
+      joinErrorText: joinErrorText,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
+  RoomState withoutPresenceAndJoinState() {
+    if (selfPresenceStatusCodes.isEmpty &&
+        selfPresenceReason == null &&
+        joinErrorCondition == null &&
+        joinErrorText == null &&
+        !isDestroyed &&
+        destroyedAlternateRoomJid == null &&
+        !postJoinRefreshPending) {
+      return this;
+    }
+    return RoomState(
+      roomJid: roomJid,
+      occupants: occupants,
+      myOccupantJid: myOccupantJid,
+      selfPresenceStatusCodes: const <String>{},
+      selfPresenceReason: null,
+      isDestroyed: false,
+      destroyedAlternateRoomJid: null,
+      postJoinRefreshPending: false,
+    );
+  }
+
+  RoomState withoutOccupant(String occupantId) {
+    final resolvedOccupantId = canonicalOccupantId(occupantId);
+    if (resolvedOccupantId == null) {
+      return this;
+    }
+    final updated = Map<String, Occupant>.of(occupants)
+      ..remove(resolvedOccupantId);
+    return RoomState(
+      roomJid: roomJid,
+      occupants: updated,
+      myOccupantJid: myOccupantJid == resolvedOccupantId ? null : myOccupantJid,
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      joinErrorCondition: joinErrorCondition,
+      joinErrorText: joinErrorText,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
+  RoomState withoutExactOccupant(String occupantId) {
+    final trimmedOccupantId = occupantId.trim();
+    if (trimmedOccupantId.isEmpty ||
+        !occupants.containsKey(trimmedOccupantId)) {
+      return this;
+    }
+    final updated = Map<String, Occupant>.of(occupants)
+      ..remove(trimmedOccupantId);
+    return RoomState(
+      roomJid: roomJid,
+      occupants: updated,
+      myOccupantJid: myOccupantJid == trimmedOccupantId ? null : myOccupantJid,
+      selfPresenceStatusCodes: selfPresenceStatusCodes,
+      selfPresenceReason: selfPresenceReason,
+      joinErrorCondition: joinErrorCondition,
+      joinErrorText: joinErrorText,
+      isDestroyed: isDestroyed,
+      destroyedAlternateRoomJid: destroyedAlternateRoomJid,
+      postJoinRefreshPending: postJoinRefreshPending,
+    );
+  }
+
   _RoomOccupantGroups _buildOccupantGroups() {
     final owners = <Occupant>[];
     final admins = <Occupant>[];
@@ -355,18 +1008,19 @@ class RoomState {
     for (final occupant in occupants.values) {
       if (occupant.affiliation.isOutcast) continue;
       if (!occupant.hasResolvedMembershipState) continue;
-      if (occupant.affiliation.isOwner) {
-        owners.add(occupant);
-      } else if (occupant.affiliation.isAdmin) {
-        admins.add(occupant);
-      } else if (occupant.role.isModerator) {
-        moderators.add(occupant);
-      } else if (occupant.affiliation.isMember) {
-        members.add(occupant);
-      } else if (occupant.role.isParticipant) {
-        participants.add(occupant);
-      } else if (occupant.affiliation.isNone) {
-        visitors.add(occupant);
+      switch (occupant.memberSectionKind) {
+        case RoomMemberSectionKind.owners:
+          owners.add(occupant);
+        case RoomMemberSectionKind.admins:
+          admins.add(occupant);
+        case RoomMemberSectionKind.moderators:
+          moderators.add(occupant);
+        case RoomMemberSectionKind.members:
+          members.add(occupant);
+        case RoomMemberSectionKind.participants:
+          participants.add(occupant);
+        case RoomMemberSectionKind.visitors:
+          visitors.add(occupant);
       }
     }
 

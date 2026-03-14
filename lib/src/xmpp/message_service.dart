@@ -52,8 +52,6 @@ const String _mamGlobalBootstrapOperationName =
     'MessageService.bootstrapGlobalMamOnNegotiations';
 const String _mamCalendarBootstrapOperationName =
     'MessageService.bootstrapCalendarMamOnNegotiations';
-const String _mamArchiveSnapshotBootstrapOperationName =
-    'MessageService.bootstrapArchiveSnapshotOnNegotiations';
 const String _draftSyncPublishFailedLog = 'Failed to publish draft sync.';
 const String _draftSyncPublishAbortedLog = 'Draft sync publish aborted.';
 const String _draftSyncRetractFailedLog = 'Failed to retract draft sync.';
@@ -79,19 +77,6 @@ List<mox.XMLNode> messageDeliveryReceiptRequestSendingCallback(
   return <mox.XMLNode>[request!.toXML()];
 }
 
-final XmppOperationEvent _mamLoginStartEvent = XmppOperationEvent(
-  kind: XmppOperationKind.mamLoginSync,
-  stage: XmppOperationStage.start,
-);
-final XmppOperationEvent _mamLoginSuccessEvent = XmppOperationEvent(
-  kind: XmppOperationKind.mamLoginSync,
-  stage: XmppOperationStage.end,
-);
-final XmppOperationEvent _mamLoginFailureEvent = XmppOperationEvent(
-  kind: XmppOperationKind.mamLoginSync,
-  stage: XmppOperationStage.end,
-  isSuccess: false,
-);
 final XmppOperationEvent _mamGlobalStartEvent = XmppOperationEvent(
   kind: XmppOperationKind.mamGlobalSync,
   stage: XmppOperationStage.start,
@@ -752,34 +737,18 @@ enum MamGlobalSyncOutcome {
   failed,
 }
 
-extension MamGlobalSyncOutcomeBehavior on MamGlobalSyncOutcome {
-  bool get shouldFallbackToPerChat => switch (this) {
-    MamGlobalSyncOutcome.failed => true,
-    MamGlobalSyncOutcome.skippedDenied => true,
-    MamGlobalSyncOutcome.completed => false,
-    MamGlobalSyncOutcome.skippedUnsupported => false,
-    MamGlobalSyncOutcome.skippedInFlight => false,
-    MamGlobalSyncOutcome.skippedResumed => false,
-  };
-}
-
 final _capabilityCacheKey = XmppStateStore.registerKey(
   'message_peer_capabilities',
 );
 const String _mamGlobalLastIdKeyName = 'mam_global_last_id';
 const String _mamGlobalLastSyncKeyName = 'mam_global_last_sync';
 const String _mamGlobalDeniedUntilKeyName = 'mam_global_denied_until';
-const String _mamArchiveSnapshotBootstrapKeyName =
-    'mam_archive_snapshot_bootstrapped';
 final _mamGlobalLastIdKey = XmppStateStore.registerKey(_mamGlobalLastIdKeyName);
 final _mamGlobalLastSyncKey = XmppStateStore.registerKey(
   _mamGlobalLastSyncKeyName,
 );
 final _mamGlobalDeniedUntilKey = XmppStateStore.registerKey(
   _mamGlobalDeniedUntilKeyName,
-);
-final _mamArchiveSnapshotBootstrapKey = XmppStateStore.registerKey(
-  _mamArchiveSnapshotBootstrapKeyName,
 );
 const String _mamGlobalScopeFallback = 'default';
 const String _mamGlobalScopeSeparator = ':';
@@ -1725,59 +1694,6 @@ mixin MessageService
     }, awaitDatabase: true);
   }
 
-  Future<bool> _isMamArchiveSnapshotBootstrapped() async {
-    return _dbOpReturning<XmppStateStore, bool>((ss) async {
-      return ss.read(key: _mamArchiveSnapshotBootstrapKey) == true;
-    });
-  }
-
-  Future<void> _markMamArchiveSnapshotBootstrapped() async {
-    await _dbOp<XmppStateStore>((ss) async {
-      await ss.write(key: _mamArchiveSnapshotBootstrapKey, value: true);
-    }, awaitDatabase: true);
-  }
-
-  Future<bool> _shouldBootstrapArchiveSnapshotForFreshStore() async {
-    if (await _isMamArchiveSnapshotBootstrapped()) {
-      return false;
-    }
-    if (await _loadMamGlobalLastId() != null) {
-      return false;
-    }
-    if (await _loadMamGlobalLastSync() != null) {
-      return false;
-    }
-    final chats = await _loadChatsForMamSync();
-    for (final chat in chats) {
-      final chatJid = _resolvedMamChatJid(chat);
-      if (chatJid == null) continue;
-      final localCount = await countLocalMessages(
-        jid: chatJid,
-        includePseudoMessages: false,
-      );
-      if (localCount > 0) {
-        return false;
-      }
-      if (await loadArchiveCursorTimestamp(chatJid) != null) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  Future<void> _bootstrapArchiveSnapshotForFreshStore() async {
-    if (connectionState != ConnectionState.connected) return;
-    await syncConversationIndexSnapshot();
-    await syncMucBookmarksSnapshot();
-    if (!await _shouldBootstrapArchiveSnapshotForFreshStore()) {
-      return;
-    }
-    if (_mamLoginSyncInFlight) return;
-    await syncMessageArchiveSnapshot();
-    if (connectionState != ConnectionState.connected) return;
-    await _markMamArchiveSnapshotBootstrapped();
-  }
-
   Future<DateTime?> _loadMamGlobalDeniedUntil() async {
     final scope = _mamScopeToken();
     if (_mamGlobalDeniedUntilLoaded && _mamGlobalDeniedUntilScope == scope) {
@@ -2279,14 +2195,14 @@ mixin MessageService
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     final context = await _resolvePinNodeContext(normalizedChat);
     _pinSyncInFlight.add(normalizedChat);
     try {
       await database;
-      if (connectionState != ConnectionState.connected) {
+      if (!_hasUsableXmppStream) {
         return;
       }
       await _ensurePendingPinSyncLoaded();
@@ -2355,13 +2271,13 @@ mixin MessageService
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     _emailPinSnapshotInFlight = true;
     try {
       await database;
-      if (connectionState != ConnectionState.connected) {
+      if (!_hasUsableXmppStream) {
         return;
       }
       final support = await refreshPubSubSupport();
@@ -2376,7 +2292,7 @@ mixin MessageService
         (db) => db.getDeltaChats(),
       );
       for (final chat in emailChats) {
-        if (connectionState != ConnectionState.connected) {
+        if (!_hasUsableXmppStream) {
           return;
         }
         if (!chat.isEmailBacked) {
@@ -2421,16 +2337,16 @@ mixin MessageService
   static const Duration _conversationIndexMutedForeverDuration = Duration(
     days: 3650,
   );
-  bool _mamLoginSyncInFlight = false;
   bool _mamGlobalSyncInFlight = false;
-  DateTime? _mamGlobalSyncCompletedAt;
+  bool _hasMamNegotiatedStream = false;
+  bool _mamNegotiationResumed = false;
+  bool _mamGlobalSyncCompletedSinceConnect = false;
   bool _calendarMamRehydrateInFlight = false;
   bool _calendarMamSnapshotSeen = false;
   bool _calendarMamSnapshotUnavailableNotified = false;
   final Queue<DateTime> _calendarSyncInboundTimestamps = Queue<DateTime>();
   final Set<String> _mucMamUnsupportedRooms = {};
   final Set<String> _mucJoinMamSyncRooms = {};
-  final Set<String> _mucJoinMamDeferredRooms = {};
   DateTime? _mamGlobalDeniedUntil;
   String? _mamGlobalDeniedUntilScope;
   bool _mamGlobalDeniedUntilLoaded = false;
@@ -2773,10 +2689,6 @@ mixin MessageService
         final roomJid = event.roomJid.trim();
         if (roomJid.isEmpty) return;
         if (!_isMucChatJid(roomJid)) return;
-        if (_mamLoginSyncInFlight) {
-          _mucJoinMamDeferredRooms.add(roomJid);
-          return;
-        }
         _scheduleMucHistorySyncAfterJoin(roomJid);
       })
       ..registerHandler<OutboundGroupchatStanzaEvent>((event) async {
@@ -2833,7 +2745,9 @@ mixin MessageService
         await _handlePinRetraction(event);
       })
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (connectionState != ConnectionState.connected) return;
+        _hasMamNegotiatedStream = true;
+        _mamNegotiationResumed = event.resumed;
+        _mamGlobalSyncCompletedSinceConnect = false;
         _outboundPinMutationsByStanzaId.clear();
         fireAndForget(() async {
           try {
@@ -2867,19 +2781,6 @@ mixin MessageService
               _log.fine('Calendar MAM bootstrap failed.', error, stackTrace);
             }
           }, operationName: _mamCalendarBootstrapOperationName);
-          fireAndForget(() async {
-            try {
-              await _bootstrapArchiveSnapshotForFreshStore();
-            } on XmppAbortedException {
-              _log.fine('Archive snapshot bootstrap aborted.');
-            } on Exception catch (error, stackTrace) {
-              _log.fine(
-                'Archive snapshot bootstrap failed.',
-                error,
-                stackTrace,
-              );
-            }
-          }, operationName: _mamArchiveSnapshotBootstrapOperationName);
         }
         fireAndForget(() async {
           try {
@@ -2902,84 +2803,6 @@ mixin MessageService
       });
   }
 
-  Future<void> syncMessageArchiveSnapshot({
-    bool includeDirect = true,
-    bool includeMuc = true,
-  }) async {
-    if (_mamLoginSyncInFlight) return;
-    if (connectionState != ConnectionState.connected) return;
-    _mamLoginSyncInFlight = true;
-    var success = false;
-    emitXmppOperation(_mamLoginStartEvent);
-    try {
-      await database;
-      if (connectionState != ConnectionState.connected) return;
-      await _resolveMamSupportForAccount();
-      final canSyncDirect = _mamSupported;
-
-      final chats = await _loadChatsForMamSync();
-
-      for (final chat in chats) {
-        if (connectionState != ConnectionState.connected) return;
-        if (chat.defaultTransport.isEmail) continue;
-        if (chat.type == ChatType.chat && (!includeDirect || !canSyncDirect)) {
-          continue;
-        }
-        if (chat.type == ChatType.groupChat && !includeMuc) continue;
-
-        final chatJid = chat.remoteJid;
-        if (chatJid.isEmpty) continue;
-        if (!chatJid.isValidJid) continue;
-        try {
-          final localCount = await countLocalMessages(
-            jid: chatJid,
-            includePseudoMessages: false,
-          );
-          final archiveCursor = await loadArchiveCursorTimestamp(chatJid);
-          final shouldBackfillLatest = localCount == 0 || archiveCursor == null;
-
-          if (shouldBackfillLatest) {
-            await fetchLatestFromArchive(
-              jid: chatJid,
-              pageSize: mamLoginBackfillMessageLimit,
-              isMuc: chat.type == ChatType.groupChat,
-            );
-            continue;
-          }
-
-          await _catchUpChatFromArchive(
-            jid: chatJid,
-            since: archiveCursor,
-            isMuc: chat.type == ChatType.groupChat,
-          );
-        } on XmppAbortedException {
-          return;
-        } on Exception catch (error, stackTrace) {
-          _log.fine(
-            'Failed to sync one or more chat archives during login.',
-            error,
-            stackTrace,
-          );
-        }
-      }
-      success = true;
-    } on XmppAbortedException {
-      return;
-    } finally {
-      _mamLoginSyncInFlight = false;
-      emitXmppOperation(
-        success ? _mamLoginSuccessEvent : _mamLoginFailureEvent,
-      );
-      if (_mucJoinMamDeferredRooms.isNotEmpty) {
-        final deferred = List<String>.from(_mucJoinMamDeferredRooms);
-        _mucJoinMamDeferredRooms.clear();
-        for (final roomJid in deferred) {
-          _scheduleMucHistorySyncAfterJoin(roomJid);
-        }
-      }
-    }
-  }
-
   void _scheduleMucHistorySyncAfterJoin(String roomJid) {
     fireAndForget(() async {
       await _awaitMucJoinCompleterIfActive(roomJid);
@@ -2988,7 +2811,6 @@ mixin MessageService
   }
 
   Future<void> _syncMucArchiveAfterJoin(String roomJid) async {
-    if (_mamLoginSyncInFlight) return;
     if (connectionState != ConnectionState.connected) return;
     final normalizedRoom = _roomKey(roomJid);
     if (_mucJoinMamSyncRooms.contains(normalizedRoom)) return;
@@ -3090,16 +2912,17 @@ mixin MessageService
     if (_mamGlobalSyncInFlight) {
       return MamGlobalSyncOutcome.skippedInFlight;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return MamGlobalSyncOutcome.failed;
     }
     _mamGlobalSyncInFlight = true;
+    final operationEpoch = lifecycleEpoch;
     var started = false;
     var success = false;
     try {
       await database;
       _mamGlobalMaxTimestamp = null;
-      if (connectionState != ConnectionState.connected) {
+      if (!_hasUsableXmppStream) {
         return MamGlobalSyncOutcome.failed;
       }
       await _resolveMamSupportForAccount();
@@ -3149,7 +2972,9 @@ mixin MessageService
           _mamGlobalMaxTimestamp?.toUtc() ?? DateTime.timestamp().toUtc();
       await _storeMamGlobalLastSync(anchorTimestamp);
       await _storeMamGlobalDeniedUntil(null);
-      _mamGlobalSyncCompletedAt = DateTime.timestamp();
+      if (operationEpoch == lifecycleEpoch) {
+        _mamGlobalSyncCompletedSinceConnect = true;
+      }
       success = true;
       return MamGlobalSyncOutcome.completed;
     } on XmppAbortedException {
@@ -3273,7 +3098,7 @@ mixin MessageService
     final occupantJid = roomState?.myOccupantJid?.trim();
     final occupant = roomState?.selfOccupant;
     final occupantNick = occupant?.nick.trim();
-    final rememberedNick = _roomNicknames[normalizedRoomJid]?.trim();
+    final rememberedNick = _roomNicknameForKey(normalizedRoomJid)?.trim();
     final resolvedNick = occupantNick?.isNotEmpty == true
         ? occupantNick
         : rememberedNick;
@@ -3477,7 +3302,7 @@ mixin MessageService
 
   Future<void> _awaitMucJoinCompleterIfActive(String roomJid) async {
     final String normalizedRoom = _roomKey(roomJid);
-    final joinCompleter = _mucJoinCompleters[normalizedRoom];
+    final joinCompleter = _joinCompleterForKey(normalizedRoom);
     if (joinCompleter == null || joinCompleter.isCompleted) return;
     try {
       await joinCompleter.future.timeout(MucService._mucJoinTimeout);
@@ -3511,7 +3336,7 @@ mixin MessageService
     final managerJoined = managerState?.joined == true;
     final managerNick = managerState?.nick?.trim();
     final managerNickPresent = managerNick?.isNotEmpty == true;
-    final pendingConfig = _instantRoomPendingRooms.contains(normalizedRoom);
+    final pendingConfig = _instantRoomPending(normalizedRoom);
     final roomCreated = roomState?.roomCreated == true;
     final needsJoin = _roomNeedsJoin(normalizedRoom);
     final hasSelfPresence = roomState?.hasSelfPresence == true;
@@ -5060,22 +4885,24 @@ mixin MessageService
   }) async =>
       _fetchMamPage(jid: jid, before: '', pageSize: pageSize, isMuc: isMuc);
 
-  DateTime? get mamGlobalSyncCompletedAt => _mamGlobalSyncCompletedAt;
-
   bool get isMamGlobalSyncInFlight => _mamGlobalSyncInFlight;
+
+  void _clearMamNegotiationState() {
+    _hasMamNegotiatedStream = false;
+    _mamNegotiationResumed = false;
+    _mamGlobalSyncCompletedSinceConnect = false;
+  }
 
   bool shouldSkipInitialMamSyncForChat(Chat chat) {
     if (chat.type != ChatType.chat) return false;
-    final completedAt = _mamGlobalSyncCompletedAt;
-    if (completedAt == null) return false;
-    final streamReady = lastStreamReady;
-    if (streamReady == null) return false;
-    return !completedAt.isBefore(streamReady.timestamp);
+    if (!_hasMamNegotiatedStream) return false;
+    return _mamGlobalSyncCompletedSinceConnect;
   }
 
   bool shouldCatchUpFromMamOnConnect(Chat chat) {
     if (_resolvedMamChatJid(chat) == null) return false;
-    if (lastStreamReady?.isResumed == true) return false;
+    if (!_hasMamNegotiatedStream) return false;
+    if (_mamNegotiationResumed) return false;
     return !shouldSkipInitialMamSyncForChat(chat);
   }
 
@@ -5095,11 +4922,10 @@ mixin MessageService
     if (connectionState != ConnectionState.connected) {
       return MamGlobalSyncOutcome.failed;
     }
-    final streamReady = lastStreamReady;
-    if (streamReady == null) {
+    if (!_hasMamNegotiatedStream) {
       return MamGlobalSyncOutcome.failed;
     }
-    if (streamReady.isResumed) {
+    if (_mamNegotiationResumed) {
       return MamGlobalSyncOutcome.skippedResumed;
     }
     return syncGlobalMamCatchUp(pageSize: pageSize);
@@ -6311,11 +6137,9 @@ mixin MessageService
     await super._reset();
 
     await _resetMessageStreams();
-    _mamLoginSyncInFlight = false;
     _mamGlobalSyncInFlight = false;
-    _mamGlobalSyncCompletedAt = null;
+    _clearMamNegotiationState();
     _mucMamUnsupportedRooms.clear();
-    _mucJoinMamDeferredRooms.clear();
     _mamGlobalDeniedUntil = null;
     _mamGlobalDeniedUntilScope = null;
     _mamGlobalDeniedUntilLoaded = false;
@@ -6495,7 +6319,7 @@ mixin MessageService
       return true;
     }
 
-    final bool pendingConfig = _instantRoomPendingRooms.contains(key);
+    final bool pendingConfig = _instantRoomPending(key);
     if (pendingConfig) return true;
     if (room.roomCreated) return true;
     return room.hasSelfPresence != true;
@@ -7328,15 +7152,11 @@ mixin MessageService
     }
     final roomJid = event.from.toBare().toString();
     final roomState = roomStateFor(roomJid);
-    final myOccupantJid = roomState?.myOccupantJid?.trim();
-    if (myOccupantJid == null || myOccupantJid.isEmpty) {
-      return false;
-    }
-    if (event.from.toString() == myOccupantJid) {
-      return true;
-    }
     if (roomState == null) {
       return false;
+    }
+    if (roomState.isSelfOccupantId(event.from.toString())) {
+      return true;
     }
     final occupant = _mucOccupantForSender(event, roomState: roomState);
     final realJid = occupant?.realJid?.trim();
@@ -7962,7 +7782,7 @@ mixin MessageService
   }) async {
     String? afterId;
     while (true) {
-      if (connectionState != ConnectionState.connected) return;
+      if (!_hasUsableXmppStream) return;
       final result = await fetchSinceFromArchive(
         jid: jid,
         since: since,
@@ -7981,7 +7801,7 @@ mixin MessageService
   Future<void> _backfillCalendarFromArchive({required String jid}) async {
     String? beforeId;
     while (true) {
-      if (connectionState != ConnectionState.connected) return;
+      if (!_hasUsableXmppStream) return;
       final result = beforeId == null
           ? await fetchLatestFromArchive(
               jid: jid,
@@ -9671,7 +9491,7 @@ mixin MessageService
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     await _ensurePendingPinSyncLoaded();
@@ -9692,7 +9512,7 @@ mixin MessageService
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     await _ensurePendingPinSyncLoaded();

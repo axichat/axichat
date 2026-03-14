@@ -38,7 +38,6 @@ class XmppOperation {
       XmppOperationKind.pubSubAvatarMetadata =>
         XmppOperationLabelKey.pubSubAvatarMetadataStart,
       XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchStart,
-      XmppOperationKind.mamLoginSync => XmppOperationLabelKey.mamLoginStart,
       XmppOperationKind.mamGlobalSync => XmppOperationLabelKey.mamGlobalStart,
       XmppOperationKind.mamMucSync => XmppOperationLabelKey.mamMucStart,
       XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchStart,
@@ -60,7 +59,6 @@ class XmppOperation {
       XmppOperationKind.pubSubAvatarMetadata =>
         XmppOperationLabelKey.pubSubAvatarMetadataSuccess,
       XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchSuccess,
-      XmppOperationKind.mamLoginSync => XmppOperationLabelKey.mamLoginSuccess,
       XmppOperationKind.mamGlobalSync => XmppOperationLabelKey.mamGlobalSuccess,
       XmppOperationKind.mamMucSync => XmppOperationLabelKey.mamMucSuccess,
       XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchSuccess,
@@ -82,7 +80,6 @@ class XmppOperation {
       XmppOperationKind.pubSubAvatarMetadata =>
         XmppOperationLabelKey.pubSubAvatarMetadataFailure,
       XmppOperationKind.pubSubFetch => XmppOperationLabelKey.pubSubFetchFailure,
-      XmppOperationKind.mamLoginSync => XmppOperationLabelKey.mamLoginFailure,
       XmppOperationKind.mamGlobalSync => XmppOperationLabelKey.mamGlobalFailure,
       XmppOperationKind.mamMucSync => XmppOperationLabelKey.mamMucFailure,
       XmppOperationKind.mamFetch => XmppOperationLabelKey.mamFetchFailure,
@@ -126,9 +123,6 @@ enum XmppOperationLabelKey {
   pubSubFetchStart,
   pubSubFetchSuccess,
   pubSubFetchFailure,
-  mamLoginStart,
-  mamLoginSuccess,
-  mamLoginFailure,
   mamGlobalStart,
   mamGlobalSuccess,
   mamGlobalFailure,

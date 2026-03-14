@@ -62,7 +62,6 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     super.configureEventHandlers(manager);
     manager
       ..registerHandler<mox.StreamNegotiationsDoneEvent>((event) async {
-        if (connectionState != ConnectionState.connected) return;
         if (event.resumed) {
           fireAndForget(
             _flushPendingSpamSync,
@@ -93,13 +92,13 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (_spamSnapshotInFlight) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     _spamSnapshotInFlight = true;
     try {
       await database;
-      if (connectionState != ConnectionState.connected) {
+      if (!_hasUsableXmppStream) {
         return;
       }
       await _ensurePendingSpamSyncLoaded();
@@ -266,7 +265,7 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       await _queueSpamPublish(normalized);
       return;
     }
@@ -305,7 +304,7 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       await _queueSpamRetraction(normalized);
       return;
     }
@@ -663,7 +662,7 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (_pendingSpamPublishes.isEmpty && _pendingSpamRetractions.isEmpty) {
       return;
     }
-    if (connectionState != ConnectionState.connected) {
+    if (!_hasUsableXmppStream) {
       return;
     }
     final support = await refreshPubSubSupport();

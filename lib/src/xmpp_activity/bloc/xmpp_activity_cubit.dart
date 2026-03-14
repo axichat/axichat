@@ -237,7 +237,6 @@ class XmppActivityCubit extends Cubit<XmppActivityState> {
 
   Duration _maxDurationForOperationKind(XmppOperationKind kind) {
     return switch (kind) {
-      XmppOperationKind.mamLoginSync ||
       XmppOperationKind.mamGlobalSync => _longMamSyncTimeout,
       XmppOperationKind.mamMucSync => _mamMucSyncTimeout,
       _ => _defaultOperationTimeout,

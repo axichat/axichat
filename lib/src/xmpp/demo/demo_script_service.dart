@@ -193,7 +193,6 @@ mixin DemoScriptService on XmppBase, MessageService {
       XmppOperationKind.pubSubBookmarks,
       XmppOperationKind.pubSubDrafts,
       XmppOperationKind.pubSubAvatarMetadata,
-      XmppOperationKind.mamLoginSync,
       XmppOperationKind.mamFetch,
     ];
     const staggerDelay = Duration(milliseconds: 100);

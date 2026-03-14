@@ -11,7 +11,6 @@ enum XmppOperationKind {
   pubSubEmailBlocklist,
   pubSubAvatarMetadata,
   pubSubFetch,
-  mamLoginSync,
   mamGlobalSync,
   mamMucSync,
   mamFetch,
