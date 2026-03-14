@@ -1,20 +1,25 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
+import 'dart:async';
+
+import 'package:axichat/src/xmpp/bookmarks_features.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
+import 'package:axichat/src/xmpp/pubsub_support.dart';
+import 'package:axichat/src/xmpp/capability_decision.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
-/// Compatibility wrapper for moxxmpp's [mox.PubSubManager].
+/// Axichat wrapper around moxxmpp's [mox.PubSubManager].
 ///
 /// Some servers return an empty `<iq type='result'/>` for publish requests. The
 /// base implementation currently treats that as a malformed response even though
 /// the publish succeeded at the IQ level.
-class SafePubSubManager extends mox.PubSubManager {
-  SafePubSubManager();
+class PubSubManager extends mox.PubSubManager {
+  PubSubManager();
 
   static const String _iqSet = 'set';
   static const String _iqGet = 'get';
@@ -29,7 +34,7 @@ class SafePubSubManager extends mox.PubSubManager {
   static const String _affiliationsTag = 'affiliations';
   static const String _affiliationTag = 'affiliation';
   static const String _nodeAttr = 'node';
-  static const String _bookmarksNode = 'urn:xmpp:bookmarks:1';
+  static const String _bookmarksNode = bookmarksNodeXmlns;
   static const String _conversationIndexNode = 'urn:axi:conversations';
   static const String _draftsNode = 'urn:axi:drafts';
   static const String _spamNode = 'urn:axi:spam';
@@ -56,6 +61,56 @@ class SafePubSubManager extends mox.PubSubManager {
   final Map<_SendLastCacheKey, String?> _sendLastValueCache = {};
   final Map<_SendLastCacheKey, Future<String?>> _sendLastValueInFlight = {};
   final Map<String, String?> _sendLastDefaultCache = {};
+  final StreamController<PubSubSupport> _supportController =
+      StreamController<PubSubSupport>.broadcast();
+  var _support = const PubSubSupport(
+    pubSubSupported: false,
+    pepSupported: false,
+    bookmarks2Supported: false,
+  );
+  var _supportResolved = false;
+
+  PubSubSupport get support => _support;
+
+  Stream<PubSubSupport> get supportStream => _supportController.stream;
+
+  void markDisconnected() {
+    _supportResolved = false;
+  }
+
+  CapabilityDecision decideSupport({
+    required bool supported,
+    required String featureLabel,
+  }) {
+    final decision = _supportResolved
+        ? (supported
+              ? const CapabilityDecision(CapabilityDecisionKind.allowed)
+              : const CapabilityDecision(CapabilityDecisionKind.unsupported))
+        : const CapabilityDecision(CapabilityDecisionKind.unknown);
+    if (decision.isAllowed) return decision;
+    if (decision.isUnknown) {
+      logger.fine('Skipping $featureLabel (pubsub support unknown).');
+    } else {
+      logger.fine('Skipping $featureLabel (unsupported).');
+    }
+    return decision;
+  }
+
+  Future<PubSubSupport> refreshSupport({
+    required bool usableXmppStream,
+    required mox.JID? selfJid,
+    bool force = false,
+    bool demoOffline = false,
+  }) async {
+    if (!force && _supportResolved) {
+      return _support;
+    }
+    return _refreshSupport(
+      usableXmppStream: usableXmppStream,
+      selfJid: selfJid,
+      demoOffline: demoOffline,
+    );
+  }
 
   XmppOperationKind _operationKindForNode(String? node) {
     final trimmed = node?.trim();
@@ -95,6 +150,106 @@ class SafePubSubManager extends mox.PubSubManager {
       return _nodeRedactedLabel;
     }
     return trimmed;
+  }
+
+  void _updateSupport(PubSubSupport support) {
+    final unchanged = _supportResolved && _support == support;
+    _support = support;
+    _supportResolved = true;
+    if (unchanged || _supportController.isClosed) return;
+    _supportController.add(support);
+  }
+
+  Future<PubSubSupport> _refreshSupport({
+    required bool usableXmppStream,
+    required mox.JID? selfJid,
+    required bool demoOffline,
+  }) async {
+    if (demoOffline) {
+      const support = PubSubSupport(
+        pubSubSupported: true,
+        pepSupported: true,
+        bookmarks2Supported: true,
+      );
+      _updateSupport(support);
+      return support;
+    }
+    if (!usableXmppStream) {
+      return _support;
+    }
+    final discoManager = getAttributes().getManagerById<mox.DiscoManager>(
+      mox.discoManager,
+    );
+    if (discoManager == null) {
+      _updateSupport(
+        const PubSubSupport(
+          pubSubSupported: false,
+          pepSupported: false,
+          bookmarks2Supported: false,
+        ),
+      );
+      return _support;
+    }
+
+    final selfBare = selfJid?.toBare();
+    final host = selfJid?.domain;
+    final hostJid = host == null ? null : mox.JID.fromString(host);
+    final selfFeatures = await _discoFeaturesFor(
+      discoManager: discoManager,
+      jid: selfBare,
+      demoOffline: demoOffline,
+    );
+    final hostFeatures = await _discoFeaturesFor(
+      discoManager: discoManager,
+      jid: hostJid,
+      demoOffline: demoOffline,
+    );
+
+    final pubSubSupported =
+        selfFeatures.contains(mox.pubsubXmlns) ||
+        selfFeatures.contains(mox.pubsubOwnerXmlns) ||
+        hostFeatures.contains(mox.pubsubXmlns) ||
+        hostFeatures.contains(mox.pubsubOwnerXmlns);
+    final pepSupported =
+        selfFeatures.contains(mox.pubsubEventXmlns) ||
+        selfFeatures.contains(mox.pubsubXmlns);
+    final bookmarks2Supported =
+        selfFeatures.contains(bookmarksNotifyFeature) ||
+        selfFeatures.contains(_bookmarksNode) ||
+        selfFeatures.contains(bookmarksNodeXmlns) ||
+        selfFeatures.contains(bookmarks2CompatFeature) ||
+        selfFeatures.contains(bookmarks2CompatPepFeature) ||
+        selfFeatures.contains(bookmarks2ConversionFeature);
+
+    final support = PubSubSupport(
+      pubSubSupported: pubSubSupported,
+      pepSupported: pepSupported,
+      bookmarks2Supported: bookmarks2Supported,
+    );
+    _updateSupport(support);
+    return support;
+  }
+
+  Future<Set<String>> _discoFeaturesFor({
+    required mox.DiscoManager discoManager,
+    required mox.JID? jid,
+    required bool demoOffline,
+  }) async {
+    if (demoOffline) {
+      return const {};
+    }
+    if (jid == null) {
+      return const {};
+    }
+    try {
+      final response = await discoManager.discoInfoQuery(jid);
+      if (response.isType<mox.StanzaError>()) {
+        return const {};
+      }
+      return response.get<mox.DiscoInfo>().features.toSet();
+    } on Exception {
+      return const {};
+    }
   }
 
   @override
@@ -829,6 +984,12 @@ class SafePubSubManager extends mox.PubSubManager {
     final key = _SubscriptionCacheKey(jid: jid, node: node, subId: subId);
     _subscriptionCache.remove(key);
     subscriptionManager.removeSubscription(jid, node, subId: subId);
+  }
+
+  Future<void> disposeSupport() async {
+    if (!_supportController.isClosed) {
+      await _supportController.close();
+    }
   }
 }
 

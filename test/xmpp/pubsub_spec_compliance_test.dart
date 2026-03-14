@@ -1,4 +1,4 @@
-import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
@@ -29,7 +29,7 @@ void main() {
 
   test('XEP-0060 publish stanza uses pubsub/publish/item hierarchy', () async {
     final sent = <mox.StanzaDetails>[];
-    final manager = SafePubSubManager()
+    final manager = PubSubManager()
       ..register(
         buildAttributes(
           sentStanzas: sent,
@@ -93,7 +93,7 @@ void main() {
   test('XEP-0060 subscribe stanza includes node and jid', () async {
     final sent = <mox.StanzaDetails>[];
     final fullJid = mox.JID.fromString('user@example.com/resource');
-    final manager = SafePubSubManager()
+    final manager = PubSubManager()
       ..register(buildAttributes(sentStanzas: sent, fullJid: fullJid));
 
     final serviceJid = mox.JID.fromString('pubsub.example.com');
@@ -121,7 +121,7 @@ void main() {
   test('XEP-0060 unsubscribe stanza includes node and jid', () async {
     final sent = <mox.StanzaDetails>[];
     final fullJid = mox.JID.fromString('user@example.com/resource');
-    final manager = SafePubSubManager()
+    final manager = PubSubManager()
       ..register(buildAttributes(sentStanzas: sent, fullJid: fullJid));
 
     final serviceJid = mox.JID.fromString('pubsub.example.com');
@@ -146,7 +146,7 @@ void main() {
 
   test('XEP-0060 getItems stanza includes node and max_items', () async {
     final sent = <mox.StanzaDetails>[];
-    final manager = SafePubSubManager()
+    final manager = PubSubManager()
       ..register(
         buildAttributes(
           sentStanzas: sent,
@@ -173,7 +173,7 @@ void main() {
 
   test('XEP-0060 getItem stanza includes item id', () async {
     final sent = <mox.StanzaDetails>[];
-    final manager = SafePubSubManager()
+    final manager = PubSubManager()
       ..register(
         buildAttributes(
           sentStanzas: sent,

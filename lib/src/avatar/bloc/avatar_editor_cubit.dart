@@ -581,10 +581,6 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
       emit(state.copyWith(errorType: AvatarEditorErrorType.missingDraft));
       return;
     }
-    if (!_xmppService.connected) {
-      emit(state.copyWith(errorType: AvatarEditorErrorType.xmppDisconnected));
-      return;
-    }
     emit(state.copyWith(publishing: true, errorType: null));
     try {
       final refreshed = await _refreshDraftPayload(
@@ -608,6 +604,7 @@ class AvatarEditorCubit extends Cubit<AvatarEditorState> {
     } on XmppAvatarException catch (error) {
       final cause = error.wrapped;
       final errorType = switch (cause) {
+        XmppDisconnectedException() => AvatarEditorErrorType.xmppDisconnected,
         TimeoutException() => AvatarEditorErrorType.publishTimeout,
         mox.PubSubError() => AvatarEditorErrorType.publishGeneric,
         mox.AvatarError() => AvatarEditorErrorType.publishRejected,

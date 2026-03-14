@@ -99,6 +99,8 @@ const _mucCreateConflictLog =
     'Rejected room create because the room already exists.';
 const _mucRoomPrimaryViewSyncFailedLog =
     'Failed to sync calendar room primary view.';
+const _mucBookmarkBaselineUnavailableLog =
+    'Bookmark baseline unavailable; skipping metadata-only bookmark upsert.';
 const _mucCreateRollbackFailedLog =
     'Failed to leave room after rejected create attempt.';
 const _roomAffiliationQueryTimeoutLog = 'Room affiliation query timed out.';
@@ -1052,6 +1054,9 @@ mixin MucService on XmppBase, BaseStreamService {
   }
 
   RoomState? roomStateFor(String roomJid) => _roomStates[_roomKey(roomJid)];
+
+  RoomState roomStateForOrEmpty(String roomJid) =>
+      roomStateFor(roomJid) ?? RoomState(roomJid: _roomKey(roomJid));
 
   String? roomSubjectFor(String roomJid) => _roomSubjects[_roomKey(roomJid)];
 
@@ -3375,7 +3380,6 @@ mixin MucService on XmppBase, BaseStreamService {
     await _dbOp<XmppDatabase>((db) async {
       final existing = await db.getChat(normalizedRoomJid);
       if (existing == null) {
-        title = defaultTitle;
         await db.createChat(
           Chat(
             jid: normalizedRoomJid,
@@ -3405,7 +3409,7 @@ mixin MucService on XmppBase, BaseStreamService {
     }, awaitDatabase: true);
     await _upsertBookmarkForRoom(
       roomJid: normalizedRoomJid,
-      title: title?.trim().isNotEmpty == true ? title : defaultTitle,
+      title: title?.trim().isNotEmpty == true ? title : null,
       nickname: nickname,
       primaryView: primaryView,
     );
@@ -3460,26 +3464,37 @@ mixin MucService on XmppBase, BaseStreamService {
     }
     try {
       final roomBare = mox.JID.fromString(roomJid).toBare();
+      final existingBookmark = await manager.bookmarkForRoom(roomBare);
+      if (autojoin == null && existingBookmark == null) {
+        _mucLog.fine(_mucBookmarkBaselineUnavailableLog);
+        return;
+      }
       final normalizedPassword = _normalizePassword(password);
-      final cachedBookmark = manager.cachedBookmark(roomBare);
-      final resolvedAutojoin = autojoin ?? cachedBookmark?.autojoin ?? false;
+      final resolvedAutojoin = autojoin ?? existingBookmark?.autojoin ?? false;
+      final resolvedTitle = title?.trim().isNotEmpty == true
+          ? title?.trim()
+          : existingBookmark?.name;
+      final resolvedNickname = nickname?.trim().isNotEmpty == true
+          ? nickname?.trim()
+          : existingBookmark?.nick;
+      final resolvedPassword = normalizedPassword ?? existingBookmark?.password;
       final extensions = primaryView == null
-          ? cachedBookmark?.extensions ?? const <mox.XMLNode>[]
+          ? existingBookmark?.extensions ?? const <mox.XMLNode>[]
           : _extensionsWithPrimaryView(
               existingExtensions:
-                  cachedBookmark?.extensions ?? const <mox.XMLNode>[],
+                  existingBookmark?.extensions ?? const <mox.XMLNode>[],
               primaryView: primaryView,
             );
       _mucLog.fine('Bookmark upsert start. room=$roomBare');
       await manager.upsertBookmark(
         MucBookmark(
           roomBare: roomBare,
-          name: title?.trim().isNotEmpty == true ? title?.trim() : null,
+          name: resolvedTitle,
           autojoin: resolvedAutojoin,
-          nick: nickname?.trim().isNotEmpty == true ? nickname?.trim() : null,
-          password: normalizedPassword,
+          nick: resolvedNickname,
+          password: resolvedPassword,
           extensions: extensions,
-          preserveCachedExtensions: primaryView == null,
+          preserveCachedExtensions: false,
         ),
       );
       _mucLog.fine('Bookmark upsert completed. room=$roomBare');

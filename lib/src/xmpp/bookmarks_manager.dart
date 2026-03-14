@@ -4,15 +4,15 @@
 import 'dart:async';
 
 import 'package:axichat/src/common/fire_and_forget.dart';
+import 'package:axichat/src/xmpp/bookmarks_features.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
-import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
-const _bookmarksNode = 'urn:xmpp:bookmarks:1';
-const _bookmarksNotifyFeature = 'urn:xmpp:bookmarks:1+notify';
+const _bookmarksNode = bookmarksNodeXmlns;
 const _conferenceTag = 'conference';
 const _conferenceJidAttr = 'jid';
 const _conferenceNameAttr = 'name';
@@ -227,8 +227,6 @@ final class BookmarksManager extends mox.XmppManagerBase {
       super(managerId);
 
   static const String managerId = 'axi.bookmarks';
-  static const String bookmarksNotifyFeature = _bookmarksNotifyFeature;
-
   final String _maxItems;
 
   final StreamController<MucBookmarkUpdate> _updatesController =
@@ -244,6 +242,30 @@ final class BookmarksManager extends mox.XmppManagerBase {
 
   MucBookmark? cachedBookmark(mox.JID roomBareJid) =>
       _cache[roomBareJid.toBare().toString()];
+
+  Future<MucBookmark?> bookmarkForRoom(mox.JID roomBareJid) async {
+    final normalizedRoom = roomBareJid.toBare().toString();
+    final cached = _cache[normalizedRoom];
+    if (cached != null) {
+      return cached;
+    }
+    final pubsub = _pubSub();
+    final host = _selfPepHost();
+    if (pubsub == null || host == null) {
+      return null;
+    }
+    final result = await pubsub.getItem(host, _bookmarksNode, normalizedRoom);
+    if (result.isType<mox.PubSubError>()) {
+      return null;
+    }
+    final bookmark = _parseItem(result.get<mox.PubSubItem>());
+    if (bookmark == null) {
+      return null;
+    }
+    _cache[normalizedRoom] = bookmark;
+    return bookmark;
+  }
+
   DateTime? _lastEnsureAttempt;
   bool _ensureNodeInFlight = false;
   bool _ensureNodePending = false;
@@ -313,7 +335,7 @@ final class BookmarksManager extends mox.XmppManagerBase {
       _nodeConfig(sendLastPublishedItem: sendLastPublishedItem).toNodeConfig();
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
-    SafePubSubManager pubsub,
+    PubSubManager pubsub,
     mox.JID host,
     String node,
     AxiPubSubNodeConfig config,
@@ -352,11 +374,11 @@ final class BookmarksManager extends mox.XmppManagerBase {
     publishModel: _publishModelPublishers,
   );
 
-  SafePubSubManager? _pubSub() =>
-      getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
+  PubSubManager? _pubSub() =>
+      getAttributes().getManagerById<PubSubManager>(mox.pubsubManager);
 
   Future<String?> _resolveSendLastPublishedItem(
-    SafePubSubManager pubsub,
+    PubSubManager pubsub,
     mox.JID host,
   ) => pubsub.resolveSendLastPublishedItemForNode(
     host: host,

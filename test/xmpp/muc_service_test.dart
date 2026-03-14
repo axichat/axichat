@@ -10,7 +10,7 @@ import 'package:axichat/src/notifications/bloc/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
-import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_operation_events.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
@@ -154,8 +154,19 @@ mox.XMLNode _calendarPrimaryViewBookmarkExtension() => mox.XMLNode.xmlns(
   attributes: {'primary-view': ChatPrimaryView.calendar.wireValue},
 );
 
-class _RecordingBookmarksPubSubManager extends SafePubSubManager {
+class _RecordingBookmarksPubSubManager extends PubSubManager {
   final List<mox.XMLNode> publishedPayloads = <mox.XMLNode>[];
+  final Map<String, mox.XMLNode> _storedItems = <String, mox.XMLNode>{};
+
+  String _itemKey(String node, String id) => '$node::$id';
+
+  void seedBookmark({
+    required String node,
+    required String id,
+    required mox.XMLNode payload,
+  }) {
+    _storedItems[_itemKey(node, id)] = payload;
+  }
 
   @override
   Future<moxlib.Result<mox.PubSubError, bool>> publish(
@@ -168,12 +179,30 @@ class _RecordingBookmarksPubSubManager extends SafePubSubManager {
     mox.NodeConfig? createNodeConfig,
   }) async {
     publishedPayloads.add(payload);
+    final resolvedId = id ?? payload.attributes['jid']?.toString() ?? '';
+    if (resolvedId.isNotEmpty) {
+      _storedItems[_itemKey(node, resolvedId)] = payload;
+    }
     return const moxlib.Result(true);
+  }
+
+  @override
+  Future<moxlib.Result<mox.PubSubError, mox.PubSubItem>> getItem(
+    mox.JID jid,
+    String node,
+    String id, {
+    String? subId,
+  }) async {
+    final payload = _storedItems[_itemKey(node, id)];
+    if (payload == null) {
+      return moxlib.Result(mox.ItemNotFoundError());
+    }
+    return moxlib.Result(mox.PubSubItem(id: id, node: node, payload: payload));
   }
 }
 
 mox.XmppManagerAttributes _bookmarksManagerAttributes({
-  required SafePubSubManager pubSubManager,
+  required PubSubManager pubSubManager,
 }) {
   final fullJid = mox.JID.fromString(_accountBareJid);
   return mox.XmppManagerAttributes(
@@ -1672,6 +1701,55 @@ void main() {
         expect(createdChat.jid, _roomJidBare);
         expect(createdChat.type, ChatType.groupChat);
         expect(createdChat.primaryView, ChatPrimaryView.calendar);
+      },
+    );
+
+    test(
+      'BOOKMARK-002 [HP] applyRoomPrimaryView preserves bookmark metadata when cache is cold',
+      () async {
+        final bookmarksPubSubManager = _RecordingBookmarksPubSubManager();
+        final bookmarksManager = BookmarksManager()
+          ..register(
+            _bookmarksManagerAttributes(pubSubManager: bookmarksPubSubManager),
+          );
+        final remoteBookmark = MucBookmark(
+          roomBare: mox.JID.fromString(_roomJidBare).toBare(),
+          name: _roomName,
+          autojoin: true,
+          nick: _roomNick,
+          password: _invitePasswordTrimmed,
+          preserveCachedExtensions: false,
+        );
+        bookmarksPubSubManager.seedBookmark(
+          node: 'urn:xmpp:bookmarks:1',
+          id: _roomJidBare,
+          payload: remoteBookmark.toBookmarks2Xml(),
+        );
+        when(
+          () => mockConnection.getManager<BookmarksManager>(),
+        ).thenReturn(bookmarksManager);
+        when(
+          () => mockDatabase.getChat(_roomJidBare),
+        ).thenAnswer((_) async => null);
+        when(() => mockDatabase.createChat(any())).thenAnswer((_) async {});
+
+        await xmppService.applyRoomPrimaryView(
+          roomJid: _roomJidBare,
+          primaryView: ChatPrimaryView.calendar,
+        );
+
+        final bookmark = MucBookmark.fromBookmarks2Xml(
+          bookmarksPubSubManager.publishedPayloads.single,
+          itemId: _roomJidBare,
+        );
+        expect(bookmark?.name, _roomName);
+        expect(bookmark?.autojoin, isTrue);
+        expect(bookmark?.nick, _roomNick);
+        expect(bookmark?.password, _invitePasswordTrimmed);
+        expect(
+          bookmark?.extensions.single.attributes['primary-view'],
+          ChatPrimaryView.calendar.wireValue,
+        );
       },
     );
 

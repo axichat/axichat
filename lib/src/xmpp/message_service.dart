@@ -907,15 +907,13 @@ List<String> _demoXmppFeatures() {
     mox.userAvatarDataXmlns,
     mox.vCardTempXmlns,
     mox.vCardTempUpdate,
-    BookmarksManager.bookmarksNotifyFeature,
-    _bookmarks2NodeXmlns,
+    bookmarksNotifyFeature,
+    bookmarksNodeXmlns,
     _reportingFeature,
     chatStateFeature,
   };
   return features.toList()..sort();
 }
-
-Set<String> _demoXmppFeatureSet() => _demoXmppFeatures().toSet();
 
 _PeerCapabilities _demoPeerCapabilities() {
   final features = _demoXmppFeatures();
@@ -4893,20 +4891,20 @@ mixin MessageService
     _mamGlobalSyncCompletedSinceConnect = false;
   }
 
-  bool shouldSkipInitialMamSyncForChat(Chat chat) {
+  bool _shouldSkipInitialMamSyncForChat(Chat chat) {
     if (chat.type != ChatType.chat) return false;
     if (!_hasMamNegotiatedStream) return false;
     return _mamGlobalSyncCompletedSinceConnect;
   }
 
-  bool shouldCatchUpFromMamOnConnect(Chat chat) {
+  bool _shouldCatchUpFromMamOnConnect(Chat chat) {
     if (_resolvedMamChatJid(chat) == null) return false;
     if (!_hasMamNegotiatedStream) return false;
     if (_mamNegotiationResumed) return false;
-    return !shouldSkipInitialMamSyncForChat(chat);
+    return !_shouldSkipInitialMamSyncForChat(chat);
   }
 
-  Future<bool> canPageMamForChat(Chat chat) async {
+  Future<bool> _canFetchMamForChat(Chat chat) async {
     final jid = _resolvedMamChatJid(chat);
     if (jid == null) return false;
     if (connectionState != ConnectionState.connected) return false;
@@ -4944,6 +4942,123 @@ mixin MessageService
     return trimmed;
   }
 
+  Future<MamPageResult> fetchLatestFromArchiveForChat({
+    required Chat chat,
+    int pageSize = 50,
+  }) async {
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null || !await _canFetchMamForChat(chat)) {
+      return const MamPageResult(complete: true);
+    }
+    return fetchLatestFromArchive(
+      jid: jid,
+      pageSize: pageSize,
+      isMuc: chat.type == ChatType.groupChat,
+    );
+  }
+
+  Future<MamPageResult> fetchBeforeFromArchiveForChat({
+    required Chat chat,
+    required String before,
+    int pageSize = 50,
+  }) async {
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null || !await _canFetchMamForChat(chat)) {
+      return const MamPageResult(complete: true);
+    }
+    return fetchBeforeFromArchive(
+      jid: jid,
+      before: before,
+      pageSize: pageSize,
+      isMuc: chat.type == ChatType.groupChat,
+    );
+  }
+
+  Future<MamPageResult> fetchSinceFromArchiveForChat({
+    required Chat chat,
+    required DateTime since,
+    int pageSize = 50,
+    String? after,
+  }) async {
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null || !await _canFetchMamForChat(chat)) {
+      return const MamPageResult(complete: true);
+    }
+    return fetchSinceFromArchive(
+      jid: jid,
+      since: since,
+      pageSize: pageSize,
+      isMuc: chat.type == ChatType.groupChat,
+      after: after,
+    );
+  }
+
+  Future<List<MamPageResult>> catchUpChatFromMamOnConnect({
+    required Chat chat,
+    int pageSize = 50,
+  }) async {
+    if (!_shouldCatchUpFromMamOnConnect(chat)) {
+      return const <MamPageResult>[];
+    }
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null) {
+      return const <MamPageResult>[];
+    }
+    final lastSeen = await loadArchiveCursorTimestamp(jid);
+    if (lastSeen == null) {
+      return const <MamPageResult>[];
+    }
+    return _catchUpChatFromMam(chat: chat, since: lastSeen, pageSize: pageSize);
+  }
+
+  Future<({List<MamPageResult> catchUpResults, MamPageResult? latestResult})>
+  hydrateLatestFromMamForChatIfNeeded({
+    required Chat chat,
+    required int currentLocalCount,
+    required int desiredWindow,
+    required MessageTimelineFilter filter,
+    required bool catchUpCompleted,
+    int pageSize = 50,
+  }) async {
+    if (_shouldSkipInitialMamSyncForChat(chat)) {
+      return (catchUpResults: const <MamPageResult>[], latestResult: null);
+    }
+    if (!await _canFetchMamForChat(chat)) {
+      return (catchUpResults: const <MamPageResult>[], latestResult: null);
+    }
+    if (currentLocalCount >= desiredWindow) {
+      return (catchUpResults: const <MamPageResult>[], latestResult: null);
+    }
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null) {
+      return (catchUpResults: const <MamPageResult>[], latestResult: null);
+    }
+
+    List<MamPageResult> catchUpResults = const <MamPageResult>[];
+    final lastSeen = await loadArchiveCursorTimestamp(jid);
+    if (lastSeen != null && currentLocalCount > 0 && !catchUpCompleted) {
+      catchUpResults = await _catchUpChatFromMam(
+        chat: chat,
+        since: lastSeen,
+        pageSize: pageSize,
+      );
+      final refreshedCount = await countLocalMessages(
+        jid: jid,
+        filter: filter,
+        includePseudoMessages: false,
+      );
+      if (refreshedCount >= desiredWindow) {
+        return (catchUpResults: catchUpResults, latestResult: null);
+      }
+    }
+
+    final latestResult = await fetchLatestFromArchiveForChat(
+      chat: chat,
+      pageSize: pageSize,
+    );
+    return (catchUpResults: catchUpResults, latestResult: latestResult);
+  }
+
   Future<MamPageResult> fetchBeforeFromArchive({
     required String jid,
     required String before,
@@ -4965,6 +5080,30 @@ mixin MessageService
     isMuc: isMuc,
     after: after,
   );
+
+  Future<List<MamPageResult>> _catchUpChatFromMam({
+    required Chat chat,
+    required DateTime since,
+    int pageSize = 50,
+  }) async {
+    final results = <MamPageResult>[];
+    String? afterId;
+    while (true) {
+      final result = await fetchSinceFromArchiveForChat(
+        chat: chat,
+        since: since,
+        pageSize: pageSize,
+        after: afterId,
+      );
+      results.add(result);
+      final nextAfter = result.lastId ?? afterId;
+      if (result.complete || nextAfter == afterId || nextAfter == null) {
+        break;
+      }
+      afterId = nextAfter;
+    }
+    return List<MamPageResult>.unmodifiable(results);
+  }
 
   Future<MamPageResult> _fetchMamPage({
     required String jid,
@@ -9071,8 +9210,7 @@ mixin MessageService
     );
   }
 
-  SafePubSubManager? _pinPubSub() =>
-      _connection.getManager<SafePubSubManager>();
+  PubSubManager? _pinPubSub() => _connection.getManager<PubSubManager>();
 
   List<mox.JID> _pinPubSubHosts() {
     final domain = _myJid?.domain.trim();
@@ -9143,7 +9281,7 @@ mixin MessageService
   }
 
   Future<_PinNodePolicy?> _configurePinNode({
-    required SafePubSubManager pubsub,
+    required PubSubManager pubsub,
     required mox.JID host,
     required String nodeId,
     required _PinNodeContext context,
@@ -9162,7 +9300,7 @@ mixin MessageService
   }
 
   Future<bool> _configurePinNodeWithPolicy({
-    required SafePubSubManager pubsub,
+    required PubSubManager pubsub,
     required mox.JID host,
     required String nodeId,
     required _PinNodePolicy policy,
@@ -9260,7 +9398,7 @@ mixin MessageService
   }
 
   Future<bool> _applyPinAffiliationsIfNeeded({
-    required SafePubSubManager pubsub,
+    required PubSubManager pubsub,
     required mox.JID host,
     required String nodeId,
     required _PinNodePolicy policy,
@@ -9863,7 +10001,7 @@ mixin MessageService
   }
 
   Future<bool> _publishPinToServer({
-    required SafePubSubManager pubsub,
+    required PubSubManager pubsub,
     required mox.JID host,
     required String nodeId,
     required PinnedMessageEntry entry,
@@ -9937,7 +10075,7 @@ mixin MessageService
   }
 
   Future<bool> _retractPinFromServer({
-    required SafePubSubManager pubsub,
+    required PubSubManager pubsub,
     required mox.JID host,
     required String nodeId,
     required String messageStanzaId,

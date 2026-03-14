@@ -1,10 +1,10 @@
-import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub_manager.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moxlib/moxlib.dart' as moxlib;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
-class _TestSafePubSubManager extends SafePubSubManager {
-  _TestSafePubSubManager(this.rawResult);
+class _TestPubSubManager extends PubSubManager {
+  _TestPubSubManager(this.rawResult);
 
   final moxlib.Result<mox.PubSubError, bool> rawResult;
 
@@ -25,8 +25,8 @@ class _TestSafePubSubManager extends SafePubSubManager {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('SafePubSubManager treats MalformedResponseError as success', () async {
-    final manager = _TestSafePubSubManager(
+  test('PubSubManager treats MalformedResponseError as success', () async {
+    final manager = _TestPubSubManager(
       moxlib.Result(mox.MalformedResponseError()),
     );
     final jid = mox.JID.fromString('pubsub.example.com');
@@ -38,10 +38,8 @@ void main() {
     expect(result.get<bool>(), isTrue);
   });
 
-  test('SafePubSubManager passes through non-malformed errors', () async {
-    final manager = _TestSafePubSubManager(
-      moxlib.Result(mox.UnknownPubSubError()),
-    );
+  test('PubSubManager passes through non-malformed errors', () async {
+    final manager = _TestPubSubManager(moxlib.Result(mox.UnknownPubSubError()));
     final jid = mox.JID.fromString('pubsub.example.com');
     final payload = (mox.XmlBuilder('payload')..text('value')).build();
 

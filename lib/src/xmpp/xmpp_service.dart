@@ -54,6 +54,8 @@ import 'package:axichat/src/storage/database.dart' hide DraftAttachmentRef;
 import 'package:axichat/src/storage/impatient_completer.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
+import 'package:axichat/src/xmpp/bookmarks_features.dart';
+import 'package:axichat/src/xmpp/capability_decision.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/drafts_pubsub_manager.dart';
@@ -63,7 +65,8 @@ import 'package:axichat/src/xmpp/message_collections_pubsub_manager.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
-import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub_support.dart';
+import 'package:axichat/src/xmpp/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/safe_user_avatar_manager.dart';
 import 'package:axichat/src/xmpp/safe_vcard_manager.dart';
 import 'package:axichat/src/xmpp/spam_pubsub_manager.dart';
@@ -97,8 +100,6 @@ part 'blocking_service.dart';
 part 'spam_sync_service.dart';
 
 part 'email_blocklist_sync_service.dart';
-
-part 'capability_decision.dart';
 
 part 'chats_service.dart';
 
@@ -188,6 +189,8 @@ final class XmppAvatarException extends XmppException {
   XmppAvatarException([super.wrapped]);
 }
 
+final class XmppDisconnectedException extends XmppException {}
+
 final class XmppFileTooBigException extends XmppMessageException {
   XmppFileTooBigException(this.maxBytes);
 
@@ -227,34 +230,6 @@ class HttpUploadSupport {
   int get hashCode => Object.hash(supported, entityJid, maxFileSizeBytes);
 }
 
-class PubSubSupport {
-  const PubSubSupport({
-    required this.pubSubSupported,
-    required this.pepSupported,
-    required this.bookmarks2Supported,
-  });
-
-  final bool pubSubSupported;
-  final bool pepSupported;
-  final bool bookmarks2Supported;
-
-  bool get canUsePepNodes => pubSubSupported && pepSupported;
-
-  bool get canUseBookmarks2 => canUsePepNodes && bookmarks2Supported;
-
-  @override
-  bool operator ==(Object other) {
-    return other is PubSubSupport &&
-        other.pubSubSupported == pubSubSupported &&
-        other.pepSupported == pepSupported &&
-        other.bookmarks2Supported == bookmarks2Supported;
-  }
-
-  @override
-  int get hashCode =>
-      Object.hash(pubSubSupported, pepSupported, bookmarks2Supported);
-}
-
 class StoredAvatar {
   const StoredAvatar({required this.path, required this.hash});
 
@@ -276,11 +251,6 @@ final serverLookup = <String, IOEndpoint>{
   'draugr.de': const IOEndpoint('23.88.8.69', 5222),
   'jix.im': const IOEndpoint('51.77.59.5', 5222),
 };
-
-const String _bookmarks2NodeXmlns = 'urn:xmpp:bookmarks:1';
-const String _bookmarks2CompatFeature = 'urn:xmpp:bookmarks:1#compat';
-const String _bookmarks2CompatPepFeature = 'urn:xmpp:bookmarks:1#compat-pep';
-const String _bookmarks2ConversionFeature = 'urn:xmpp:bookmarks-conversion:0';
 
 typedef ConnectionState = mox.XmppConnectionState;
 
@@ -558,15 +528,6 @@ class XmppService extends XmppBase
     _localizations = localizations;
   }
 
-  StreamController<PubSubSupport> _pubSubSupportController =
-      StreamController<PubSubSupport>.broadcast();
-  var _pubSubSupport = const PubSubSupport(
-    pubSubSupported: false,
-    pepSupported: false,
-    bookmarks2Supported: false,
-  );
-  var _pubSubSupportResolved = false;
-
   bool get mamSupported => _mamSupported;
 
   String? get saltedPassword => _connection.saltedPassword;
@@ -574,11 +535,18 @@ class XmppService extends XmppBase
   Stream<bool> get mamSupportStream => _mamSupportController.stream;
 
   @override
-  PubSubSupport get pubSubSupport => _pubSubSupport;
+  PubSubSupport get pubSubSupport =>
+      _connection.getManager<PubSubManager>()?.support ??
+      const PubSubSupport(
+        pubSubSupported: false,
+        pepSupported: false,
+        bookmarks2Supported: false,
+      );
 
   @override
   Stream<PubSubSupport> get pubSubSupportStream =>
-      _pubSubSupportController.stream;
+      _connection.getManager<PubSubManager>()?.supportStream ??
+      const Stream<PubSubSupport>.empty();
 
   @override
   bool get autoDownloadImages => _autoDownloadImages;
@@ -783,7 +751,7 @@ class XmppService extends XmppBase
     manager.registerHandler<mox.ConnectionStateChangedEvent>((event) async {
       _setConnectionState(event.state);
       if (event.state != ConnectionState.connected) {
-        _pubSubSupportResolved = false;
+        _connection.getManager<PubSubManager>()?.markDisconnected();
       }
     });
     super.configureEventHandlers(manager);
@@ -862,7 +830,7 @@ class XmppService extends XmppBase
             name: appDisplayName,
           ),
         ])..addFeatures(const [
-          BookmarksManager.bookmarksNotifyFeature,
+          bookmarksNotifyFeature,
           conversationIndexNotifyFeature,
           draftsNotifyFeature,
           messageCollectionsNotifyFeature,
@@ -874,7 +842,7 @@ class XmppService extends XmppBase
           _capabilityHashBase,
           shouldIgnoreJid: _shouldIgnoreEntityCapabilityJid,
         ),
-        SafePubSubManager(),
+        PubSubManager(),
         mox.CSIManager(),
         mox.StableIdManager(),
         mox.CryptographicHashManager(),
@@ -1033,7 +1001,16 @@ class XmppService extends XmppBase
   }
 
   Future<void> _handleRootStreamNegotiationsDone() async {
-    await _runPostNegotiationsSetup();
+    try {
+      if (_connection.carbonsEnabled != true) {
+        _xmppLogger.info('Enabling carbons...');
+        if (!await _connection.enableCarbons()) {
+          _xmppLogger.warning('Failed to enable carbons.');
+        }
+      }
+    } on Exception catch (error, stackTrace) {
+      _xmppLogger.warning('Failed to enable carbons.', error, stackTrace);
+    }
     // Connection handling is automatic in moxxmpp v0.5.0.
   }
 
@@ -2755,9 +2732,6 @@ class XmppService extends XmppBase
   }
 
   Future<void> _resetStreamControllers() async {
-    if (_pubSubSupportController.isClosed) {
-      _pubSubSupportController = StreamController<PubSubSupport>.broadcast();
-    }
     if (_databaseReloadController.isClosed) {
       _databaseReloadController = StreamController<void>.broadcast(sync: true);
     }
@@ -2791,9 +2765,6 @@ class XmppService extends XmppBase
   }
 
   Future<void> _closeStreamControllers() async {
-    if (!_pubSubSupportController.isClosed) {
-      await _pubSubSupportController.close();
-    }
     if (!_databaseReloadController.isClosed) {
       await _databaseReloadController.close();
     }
@@ -2821,6 +2792,7 @@ class XmppService extends XmppBase
   }
 
   Future<void> close() async {
+    await _connection.getManager<PubSubManager>()?.disposeSupport();
     await _reset();
     await _closeStreamControllers();
     if (!_mamSupportController.isClosed) {
@@ -2947,33 +2919,18 @@ class XmppService extends XmppBase
     return List<int>.generate(length, (_) => random.nextInt(256));
   }
 
-  Future<void> _runPostNegotiationsSetup() async {
-    try {
-      if (_connection.carbonsEnabled != true) {
-        _xmppLogger.info('Enabling carbons...');
-        if (!await _connection.enableCarbons()) {
-          _xmppLogger.warning('Failed to enable carbons.');
-        }
-      }
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.warning('Failed to enable carbons.', error, stackTrace);
-    }
-  }
-
-  void _updatePubSubSupport(PubSubSupport support) {
-    final unchanged = _pubSubSupportResolved && _pubSubSupport == support;
-    _pubSubSupport = support;
-    _pubSubSupportResolved = true;
-    if (unchanged || _pubSubSupportController.isClosed) return;
-    _pubSubSupportController.add(support);
-  }
-
   @override
   Future<PubSubSupport> refreshPubSubSupport({bool force = false}) async {
-    if (!force && _pubSubSupportResolved) {
-      return _pubSubSupport;
+    final manager = _connection.getManager<PubSubManager>();
+    if (manager == null) {
+      return pubSubSupport;
     }
-    return _refreshPubSubSupport();
+    return manager.refreshSupport(
+      force: force,
+      usableXmppStream: _hasUsableXmppStream,
+      selfJid: _myJid,
+      demoOffline: demoOfflineMode,
+    );
   }
 
   @override
@@ -2981,109 +2938,14 @@ class XmppService extends XmppBase
     required bool supported,
     required String featureLabel,
   }) {
-    final decision = _pubSubSupportResolved
-        ? (supported
-              ? const CapabilityDecision(CapabilityDecisionKind.allowed)
-              : const CapabilityDecision(CapabilityDecisionKind.unsupported))
-        : const CapabilityDecision(CapabilityDecisionKind.unknown);
-    if (decision.isAllowed) return decision;
-    if (decision.isUnknown) {
-      _xmppLogger.fine('Skipping $featureLabel (pubsub support unknown).');
-    } else {
-      _xmppLogger.fine('Skipping $featureLabel (unsupported).');
+    final manager = _connection.getManager<PubSubManager>();
+    if (manager == null) {
+      return const CapabilityDecision(CapabilityDecisionKind.unknown);
     }
-    return decision;
-  }
-
-  Future<PubSubSupport> _refreshPubSubSupport() async {
-    if (demoOfflineMode) {
-      const support = PubSubSupport(
-        pubSubSupported: true,
-        pepSupported: true,
-        bookmarks2Supported: true,
-      );
-      _updatePubSubSupport(support);
-      return support;
-    }
-    if (!_hasUsableXmppStream) {
-      return _pubSubSupport;
-    }
-    final discoManager = _connection.getManager<mox.DiscoManager>();
-    if (discoManager == null) {
-      _updatePubSubSupport(
-        const PubSubSupport(
-          pubSubSupported: false,
-          pepSupported: false,
-          bookmarks2Supported: false,
-        ),
-      );
-      return _pubSubSupport;
-    }
-
-    final selfBare = _myJid?.toBare();
-    final host = _myJid?.domain;
-    final hostJid = _safeJidFromString(host);
-    final selfFeatures = await _discoFeaturesFor(
-      discoManager: discoManager,
-      jid: selfBare,
+    return manager.decideSupport(
+      supported: supported,
+      featureLabel: featureLabel,
     );
-    final hostFeatures = await _discoFeaturesFor(
-      discoManager: discoManager,
-      jid: hostJid,
-    );
-
-    final pubSubSupported =
-        selfFeatures.contains(mox.pubsubXmlns) ||
-        selfFeatures.contains(mox.pubsubOwnerXmlns) ||
-        hostFeatures.contains(mox.pubsubXmlns) ||
-        hostFeatures.contains(mox.pubsubOwnerXmlns);
-    final pepSupported =
-        selfFeatures.contains(mox.pubsubEventXmlns) ||
-        selfFeatures.contains(mox.pubsubXmlns);
-    final bookmarks2Supported =
-        selfFeatures.contains(BookmarksManager.bookmarksNotifyFeature) ||
-        selfFeatures.contains(_bookmarks2NodeXmlns) ||
-        selfFeatures.contains(_bookmarks2CompatFeature) ||
-        selfFeatures.contains(_bookmarks2CompatPepFeature) ||
-        selfFeatures.contains(_bookmarks2ConversionFeature);
-
-    final support = PubSubSupport(
-      pubSubSupported: pubSubSupported,
-      pepSupported: pepSupported,
-      bookmarks2Supported: bookmarks2Supported,
-    );
-    _updatePubSubSupport(support);
-    return support;
-  }
-
-  Future<Set<String>> _discoFeaturesFor({
-    required mox.DiscoManager discoManager,
-    required mox.JID? jid,
-  }) async {
-    if (demoOfflineMode) {
-      return _demoXmppFeatureSet();
-    }
-    if (jid == null) return const {};
-    try {
-      final result = await discoManager.discoInfoQuery(jid);
-      if (result.isType<mox.StanzaError>()) {
-        return const {};
-      }
-      final info = result.get<mox.DiscoInfo>();
-      return info.features.toSet();
-    } on Exception catch (error, stackTrace) {
-      _xmppLogger.fine('Disco feature query failed.', error, stackTrace);
-      return const {};
-    }
-  }
-
-  mox.JID? _safeJidFromString(String? raw) {
-    if (raw == null || raw.isEmpty) return null;
-    try {
-      return mox.JID.fromString(raw);
-    } on Exception {
-      return null;
-    }
   }
 
   static String generateResource() =>
@@ -3906,7 +3768,7 @@ class XmppStreamManagementManager extends mox.StreamManagementManager {
   }
 }
 
-// PubSubManager wrapper lives in safe_pubsub_manager.dart.
+// PubSubManager wrapper lives in pubsub_manager.dart.
 
 /// Custom SASL SCRAM negotiator that adds support for pre-hashed passwords.
 ///

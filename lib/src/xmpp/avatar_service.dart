@@ -1415,6 +1415,9 @@ mixin AvatarService on XmppBase, MucService {
     AvatarUploadPayload payload, {
     bool public = true,
   }) async {
+    if (!_hasUsableXmppStream) {
+      throw XmppAvatarException(XmppDisconnectedException());
+    }
     final targetJid = _avatarSafeBareJid(payload.jid ?? myJid);
     if (targetJid == null) {
       throw XmppAvatarException();
@@ -1522,7 +1525,7 @@ mixin AvatarService on XmppBase, MucService {
     final presenceBasedDelivery = public
         ? presenceBasedDeliveryDisabled
         : presenceBasedDeliveryEnabled;
-    final pubsub = _connection.getManager<SafePubSubManager>();
+    final pubsub = _connection.getManager<PubSubManager>();
     if (pubsub == null) {
       _avatarLog.warning('PubSub unavailable; cannot publish avatar.');
       throw XmppAvatarException('PubSub is unavailable');

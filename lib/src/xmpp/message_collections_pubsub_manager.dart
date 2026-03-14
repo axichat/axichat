@@ -12,7 +12,7 @@ import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/xmpp/pubsub_events.dart';
 import 'package:axichat/src/xmpp/pubsub_error_extensions.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
-import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub_manager.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
@@ -330,7 +330,7 @@ final class MessageCollectionsPubSubManager extends mox.XmppManagerBase {
   );
 
   Future<mox.PubSubError?> _configureNodeWithFallback(
-    SafePubSubManager pubsub,
+    PubSubManager pubsub,
     mox.JID host,
     String node,
     AxiPubSubNodeConfig config,
@@ -373,11 +373,11 @@ final class MessageCollectionsPubSubManager extends mox.XmppManagerBase {
     }
   }
 
-  SafePubSubManager? _pubSub() =>
-      getAttributes().getManagerById<SafePubSubManager>(mox.pubsubManager);
+  PubSubManager? _pubSub() =>
+      getAttributes().getManagerById<PubSubManager>(mox.pubsubManager);
 
   Future<String?> _resolveSendLastPublishedItem(
-    SafePubSubManager pubsub,
+    PubSubManager pubsub,
     mox.JID host,
   ) => pubsub.resolveSendLastPublishedItemForNode(
     host: host,

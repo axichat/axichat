@@ -10,7 +10,7 @@ import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/pubsub_forms.dart';
-import 'package:axichat/src/xmpp/safe_pubsub_manager.dart';
+import 'package:axichat/src/xmpp/pubsub_manager.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:drift/native.dart';
 import 'package:flutter/widgets.dart' show AppLifecycleState;
@@ -98,7 +98,7 @@ class RecordingMamManager extends mox.MAMManager {
   }
 }
 
-class RecordingAvatarPubSubManager extends SafePubSubManager {
+class RecordingAvatarPubSubManager extends PubSubManager {
   int publishCount = 0;
   final Map<String, mox.XMLNode> _publishedItems = <String, mox.XMLNode>{};
 
@@ -467,7 +467,7 @@ void main() {
           });
 
           when(
-            () => mockConnection.getManager<SafePubSubManager>(),
+            () => mockConnection.getManager<PubSubManager>(),
           ).thenReturn(pubsubManager);
           when(
             () => mockConnection.getManager<mox.PubSubManager>(),
