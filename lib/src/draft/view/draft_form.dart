@@ -9,7 +9,8 @@ import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
+import 'package:axichat/src/chat/bloc/chat_bloc.dart'
+    show ComposerRecipient, ComposerRecipients;
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/attachments/view/pending_attachment_preview.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
@@ -304,8 +305,11 @@ class _DraftFormState extends State<DraftForm> {
                         final hasPreparingAttachments = pendingAttachments.any(
                           (pending) => pending.isPreparing,
                         );
-                        final split = _splitRecipients();
-                        final hasActiveRecipients = split.hasActiveRecipients;
+                        final activeRecipients = _recipients.includedRecipients;
+                        final hasActiveRecipients = activeRecipients.isNotEmpty;
+                        final hasEmailRecipients = activeRecipients
+                            .emailRecipients()
+                            .isNotEmpty;
                         final hasContent = _hasContent();
                         final recipientCount = _recipientStrings().length;
                         var effectiveRecipientCount =
@@ -332,8 +336,7 @@ class _DraftFormState extends State<DraftForm> {
                           hasActiveRecipients: hasActiveRecipients,
                           hasContent: hasContent,
                           emailRecipientsUnavailable:
-                              !endpointConfig.smtpEnabled &&
-                              split.emailTargets.isNotEmpty,
+                              !endpointConfig.smtpEnabled && hasEmailRecipients,
                         );
                         final bool showSendBlockerMessage =
                             _showValidationMessages &&
@@ -703,20 +706,13 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   Future<bool> _handleRecipientAdded(FanOutTarget target) async {
-    final address = target.address?.trim();
-    if (target.chat == null &&
-        target.transport == null &&
+    final address = target.resolvedAddress;
+    if (target.needsTransportSelection &&
         address != null &&
         address.isNotEmpty) {
       final transport = await _resolveAddressTransport(address);
       if (!mounted || transport == null) return false;
-      final resolved = FanOutTarget.address(
-        address: address,
-        displayName: target.displayName,
-        shareSignatureEnabled: target.shareSignatureEnabled,
-        transport: transport,
-      );
-      _applyRecipient(resolved);
+      _applyRecipient(target.withTransport(transport));
       return true;
     }
     _applyRecipient(target);
@@ -728,20 +724,15 @@ class _DraftFormState extends State<DraftForm> {
     var updated = false;
     for (var index = 0; index < nextRecipients.length; index++) {
       final recipient = nextRecipients[index];
-      if (!recipient.included) continue;
-      if (recipient.target.chat != null) continue;
-      if (recipient.target.transport != null) continue;
-      final address = recipient.target.address?.trim();
+      if (!recipient.isIncluded || !recipient.needsTransportSelection) {
+        continue;
+      }
+      final address = recipient.target.resolvedAddress;
       if (address == null || address.isEmpty) continue;
       final transport = await _resolveAddressTransport(address);
       if (!mounted || transport == null) return false;
-      nextRecipients[index] = recipient.copyWith(
-        target: FanOutTarget.address(
-          address: address,
-          displayName: recipient.target.displayName,
-          shareSignatureEnabled: recipient.target.shareSignatureEnabled,
-          transport: transport,
-        ),
+      nextRecipients[index] = recipient.withTarget(
+        recipient.target.withTransport(transport),
       );
       updated = true;
     }
@@ -758,10 +749,9 @@ class _DraftFormState extends State<DraftForm> {
         (recipient) => recipient.key == target.key,
       );
       if (existingIndex >= 0) {
-        _recipients[existingIndex] = _recipients[existingIndex].copyWith(
-          target: target,
-          included: true,
-        );
+        _recipients[existingIndex] = _recipients[existingIndex]
+            .withTarget(target)
+            .withIncluded(true);
       } else {
         _recipients.add(ComposerRecipient(target: target));
       }
@@ -809,7 +799,7 @@ class _DraftFormState extends State<DraftForm> {
       final index = _recipients.indexWhere((recipient) => recipient.key == key);
       if (index == -1) return;
       final recipient = _recipients[index];
-      _recipients[index] = recipient.copyWith(included: !recipient.included);
+      _recipients[index] = recipient.toggledIncluded();
     });
     _revalidateFormIfNeeded();
     _scheduleAutosave();
@@ -1218,12 +1208,14 @@ class _DraftFormState extends State<DraftForm> {
     if (!transportsReady) return;
     final settingsCubit = context.read<SettingsCubit>();
     final settingsState = settingsCubit.state;
-    final split = _splitRecipients();
+    final activeRecipients = _recipients.includedRecipients;
+    final emailRecipients = activeRecipients.emailRecipients();
+    final xmppRecipients = activeRecipients.xmppRecipients();
     final endpointConfig = settingsState.endpointConfig;
     final shareTokenSignatureEnabled = settingsState.shareTokenSignatureEnabled;
-    final xmppTargets = split.xmppTargets
+    final xmppTargets = xmppRecipients
         .map((recipient) {
-          final jid = _resolveXmppJid(recipient);
+          final jid = recipient.xmppJid();
           if (jid == null || jid.isEmpty) {
             return null;
           }
@@ -1237,10 +1229,10 @@ class _DraftFormState extends State<DraftForm> {
         })
         .whereType<DraftXmppTarget>()
         .toList();
-    final emailTargets = split.emailTargets.map((recipient) {
+    final emailTargets = emailRecipients.map((recipient) {
       final chat = recipient.target.chat;
       if (chat != null) {
-        final address = _recipientAddress(chat);
+        final address = recipient.target.preferredEmailAddress;
         if (address != null && address.isNotEmpty) {
           return FanOutTarget.address(
             address: address,
@@ -1253,10 +1245,10 @@ class _DraftFormState extends State<DraftForm> {
       return recipient.target;
     }).toList();
     final validationMessage = _sendValidationMessage(
-      hasActiveRecipients: split.hasActiveRecipients,
+      hasActiveRecipients: activeRecipients.isNotEmpty,
       hasContent: _hasContent(),
       emailRecipientsUnavailable:
-          !endpointConfig.smtpEnabled && split.emailTargets.isNotEmpty,
+          !endpointConfig.smtpEnabled && emailRecipients.isNotEmpty,
     );
     final formValid = _formKey.currentState?.validate() ?? false;
     if (validationMessage != null || !formValid) return;
@@ -1355,107 +1347,7 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   List<String> _recipientStrings() {
-    return _recipients
-        .where((recipient) => recipient.included)
-        .map((recipient) {
-          final chat = recipient.target.chat;
-          if (chat != null) {
-            return chat.jid;
-          }
-          final xmppJid = _resolveXmppJid(recipient);
-          if (xmppJid != null) {
-            return xmppJid;
-          }
-          return recipient.target.normalizedAddress ??
-              recipient.target.address ??
-              '';
-        })
-        .where((value) => value.isNotEmpty)
-        .toList();
-  }
-
-  ({
-    List<ComposerRecipient> emailTargets,
-    List<ComposerRecipient> xmppTargets,
-    bool hasActiveRecipients,
-  })
-  _splitRecipients() {
-    final emailTargets = <ComposerRecipient>[];
-    final xmppTargets = <ComposerRecipient>[];
-    var hasActiveRecipients = false;
-    for (final recipient in _recipients) {
-      if (!recipient.included) continue;
-      hasActiveRecipients = true;
-      final xmppJid = _resolveXmppJid(recipient);
-      final isEmailRecipient = _isEmailRecipient(recipient);
-      if (isEmailRecipient) {
-        emailTargets.add(recipient);
-        continue;
-      }
-      if (xmppJid != null) {
-        xmppTargets.add(recipient);
-      }
-    }
-    return (
-      emailTargets: emailTargets,
-      xmppTargets: xmppTargets,
-      hasActiveRecipients: hasActiveRecipients,
-    );
-  }
-
-  String? _resolveXmppJid(ComposerRecipient recipient) {
-    final chat = recipient.target.chat;
-    final transport = recipient.target.transport ?? chat?.defaultTransport;
-    if (transport?.isEmail ?? false) {
-      return null;
-    }
-    if (transport?.isXmpp ?? false) {
-      if (chat != null) {
-        return chat.jid;
-      }
-    }
-    if (chat != null) {
-      return null;
-    }
-    final normalizedAddress = recipient.target.normalizedAddress;
-    final rawAddress = recipient.target.address;
-    final candidate = normalizedAddress ?? rawAddress?.trim();
-    if (candidate == null || candidate.isEmpty) {
-      return null;
-    }
-    if (transport?.isXmpp ?? false) {
-      return candidate;
-    }
-    return null;
-  }
-
-  bool _isEmailRecipient(ComposerRecipient recipient) {
-    final chat = recipient.target.chat;
-    final transport = recipient.target.transport ?? chat?.defaultTransport;
-    if (transport?.isEmail ?? false) {
-      return true;
-    }
-    if (transport?.isXmpp ?? false) {
-      return false;
-    }
-    if (chat != null) {
-      return false;
-    }
-    final normalizedAddress = recipient.target.normalizedAddress;
-    final rawAddress = recipient.target.address;
-    final candidate = normalizedAddress ?? rawAddress?.trim();
-    if (candidate == null || candidate.isEmpty) {
-      return false;
-    }
-    return false;
-  }
-
-  String? _recipientAddress(Chat chat) {
-    final email = chat.emailAddress?.trim();
-    if (email?.isNotEmpty == true) {
-      return email;
-    }
-    return chat.jid;
+    return _recipients.includedRecipients.recipientAddresses();
   }
 
   List<EmailAttachment> _currentAttachments() =>

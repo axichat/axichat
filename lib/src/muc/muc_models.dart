@@ -450,6 +450,18 @@ class RoomState {
     return resolvedRealJid;
   }
 
+  String? resolvedSelfJid({String? fallbackJid}) {
+    final trimmedFallback = fallbackJid?.trim();
+    if (trimmedFallback != null && trimmedFallback.isNotEmpty) {
+      return trimmedFallback;
+    }
+    final realJid = selfRealJid;
+    if (realJid == null || realJid.isEmpty) {
+      return null;
+    }
+    return bareAddress(realJid) ?? realJid;
+  }
+
   bool get roomCreated =>
       selfPresenceStatusCodes.contains(MucStatusCode.roomCreated.code);
 
@@ -477,6 +489,16 @@ class RoomState {
 
   bool isRoomNickOccupantId(String occupantId) =>
       _occupantDirectory.isRoomNickOccupantId(occupantId);
+
+  bool isOccupantSenderJid(String senderJid) {
+    final senderBare = normalizedAddressKey(senderJid);
+    final roomBare = normalizedAddressKey(roomJid);
+    if (senderBare == null || roomBare == null || senderBare != roomBare) {
+      return false;
+    }
+    final nick = addressResourcePart(senderJid)?.trim();
+    return nick != null && nick.isNotEmpty;
+  }
 
   bool shouldPreferMatchedOccupantId(
     String occupantId,
@@ -515,6 +537,65 @@ class RoomState {
     senderJid,
     preferRealJid: preferRealJid,
   );
+
+  String? senderNick(String senderJid) {
+    final occupantNick = occupantForSenderJid(
+      senderJid,
+      preferRealJid: true,
+    )?.nick.trim();
+    if (occupantNick != null && occupantNick.isNotEmpty) {
+      return occupantNick;
+    }
+    final fallbackNick = addressResourcePart(senderJid)?.trim();
+    if (fallbackNick == null || fallbackNick.isEmpty) {
+      return null;
+    }
+    return fallbackNick;
+  }
+
+  bool senderMatchesClaimedJid({
+    required String senderJid,
+    required String claimedJid,
+  }) {
+    final trimmedClaimed = claimedJid.trim();
+    if (trimmedClaimed.isEmpty) {
+      return false;
+    }
+    if (!isOccupantSenderJid(senderJid)) {
+      return sameNormalizedAddressValue(senderJid, trimmedClaimed);
+    }
+    final realJid = occupantForSenderJid(
+      senderJid,
+      preferRealJid: true,
+    )?.realJid;
+    if (realJid != null && realJid.trim().isNotEmpty) {
+      return sameNormalizedAddressValue(realJid, trimmedClaimed);
+    }
+    return sameNormalizedAddressValue(senderJid, trimmedClaimed);
+  }
+
+  bool isSelfSenderJid(
+    String senderJid, {
+    String? selfJid,
+    String? fallbackSelfNick,
+  }) {
+    if (isSelfOccupantId(senderJid)) {
+      return true;
+    }
+    final resolvedSelfJid = selfRealJid ?? selfJid;
+    final senderRealJid = occupantForSenderJid(
+      senderJid,
+      preferRealJid: true,
+    )?.realJid;
+    if (sameNormalizedAddressValue(senderRealJid, resolvedSelfJid)) {
+      return true;
+    }
+    final resolvedSelfNick = (selfNick ?? fallbackSelfNick)?.trim();
+    if (resolvedSelfNick == null || resolvedSelfNick.isEmpty) {
+      return false;
+    }
+    return senderNick(senderJid) == resolvedSelfNick;
+  }
 
   Occupant? matchingOccupant(String occupantId, {String? realJid}) {
     final trimmedRealJid = realJid?.trim();

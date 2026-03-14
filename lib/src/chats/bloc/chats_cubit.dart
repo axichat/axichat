@@ -181,6 +181,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   _recipientAddressSuggestionsSubscription;
   late final StreamSubscription<void> _demoResetSubscription;
   final List<Timer> _exportCleanupTimers = [];
+  String? _pendingDefaultOpenRouteJid;
 
   void updateEmailService(EmailService? emailService) {
     _emailService = emailService;
@@ -446,15 +447,26 @@ class ChatsCubit extends Cubit<ChatsState> {
       state.forwardStack,
       growable: false,
     );
+    final nextOpenJid = seededStack.isEmpty ? null : seededStack.last;
     final shouldKeepChatCalendar =
-        state.openChatCalendar && seededStack.isNotEmpty;
-    final nextChatRoute = seededStack.isEmpty
+        state.openChatCalendar && nextOpenJid != null;
+    final shouldResolvePendingDefaultRoute =
+        nextOpenJid != null &&
+        _pendingDefaultOpenRouteJid == nextOpenJid &&
+        _chatFor(nextOpenJid, items: items) != null;
+    final nextChatRoute = nextOpenJid == null
         ? ChatRouteIndex.main
         : shouldKeepChatCalendar
         ? ChatRouteIndex.calendar
+        : shouldResolvePendingDefaultRoute
+        ? _defaultOpenRouteForChat(nextOpenJid, items: items)
         : state.openChatRoute.isCalendar
         ? ChatRouteIndex.main
         : state.openChatRoute;
+    if (nextOpenJid != _pendingDefaultOpenRouteJid ||
+        shouldResolvePendingDefaultRoute) {
+      _pendingDefaultOpenRouteJid = null;
+    }
     final derived = _deriveChatViews(
       items: items,
       rosterContacts: state.rosterContacts,
@@ -475,10 +487,10 @@ class ChatsCubit extends Cubit<ChatsState> {
       state.copyWith(
         openStack: seededStack,
         forwardStack: retainedForward,
-        openJid: seededStack.isEmpty ? null : seededStack.last,
+        openJid: nextOpenJid,
         items: items,
         selectedJids: retainedSelection,
-        openChatCalendar: shouldKeepChatCalendar,
+        openChatCalendar: nextChatRoute.isCalendar,
         openChatRoute: nextChatRoute,
         visibleItems: derived.visibleItems,
         archivedItems: derived.archivedItems,
@@ -488,18 +500,22 @@ class ChatsCubit extends Cubit<ChatsState> {
     );
   }
 
-  Chat? _chatFor(String jid) {
-    for (final chat in state.items ?? const <Chat>[]) {
+  Chat? _chatFor(String jid, {List<Chat>? items}) {
+    for (final chat in items ?? state.items ?? const <Chat>[]) {
       if (chat.jid == jid) return chat;
     }
     return null;
   }
 
-  ChatRouteIndex _defaultOpenRouteForChat(String jid, {ChatRouteIndex? route}) {
+  ChatRouteIndex _defaultOpenRouteForChat(
+    String jid, {
+    ChatRouteIndex? route,
+    List<Chat>? items,
+  }) {
     if (route != null) {
       return route;
     }
-    return _chatFor(jid)?.opensToCalendar == true
+    return _chatFor(jid, items: items)?.opensToCalendar == true
         ? ChatRouteIndex.calendar
         : ChatRouteIndex.main;
   }
@@ -515,6 +531,9 @@ class ChatsCubit extends Cubit<ChatsState> {
   Future<void> openChat({required String jid, ChatRouteIndex? route}) async {
     _stageOpenChatUnreadBoundarySeed(jid);
     final openRoute = _defaultOpenRouteForChat(jid, route: route);
+    _pendingDefaultOpenRouteJid = route == null && _chatFor(jid) == null
+        ? jid
+        : null;
     emit(
       state.copyWith(
         openStack: <String>[jid],
@@ -578,6 +597,7 @@ class ChatsCubit extends Cubit<ChatsState> {
       await openChat(jid: jid);
       return;
     }
+    _pendingDefaultOpenRouteJid = null;
     _stageOpenChatUnreadBoundarySeed(jid);
     final filtered = state.openStack
         .where((entry) => entry != jid)
@@ -601,13 +621,19 @@ class ChatsCubit extends Cubit<ChatsState> {
     final nextStack = List<String>.of(state.openStack)..removeLast();
     final nextForward = List<String>.of(state.forwardStack)..add(popped);
     final nextOpen = nextStack.isEmpty ? null : nextStack.last;
+    final openRoute = nextOpen == null
+        ? ChatRouteIndex.main
+        : _defaultOpenRouteForChat(nextOpen);
+    _pendingDefaultOpenRouteJid = nextOpen != null && _chatFor(nextOpen) == null
+        ? nextOpen
+        : null;
     emit(
       state.copyWith(
         openStack: nextStack,
         forwardStack: nextForward,
         openJid: nextOpen,
-        openChatCalendar: false,
-        openChatRoute: ChatRouteIndex.main,
+        openChatCalendar: openRoute.isCalendar,
+        openChatRoute: openRoute,
       ),
     );
     if (nextOpen == null) {
@@ -627,13 +653,15 @@ class ChatsCubit extends Cubit<ChatsState> {
         .where((entry) => entry != restored)
         .toList();
     filteredStack.add(restored);
+    final openRoute = _defaultOpenRouteForChat(restored);
+    _pendingDefaultOpenRouteJid = _chatFor(restored) == null ? restored : null;
     emit(
       state.copyWith(
         forwardStack: nextForward,
         openStack: filteredStack,
         openJid: restored,
-        openChatCalendar: false,
-        openChatRoute: ChatRouteIndex.main,
+        openChatCalendar: openRoute.isCalendar,
+        openChatRoute: openRoute,
       ),
     );
     await _chatsService.openChat(restored);
@@ -641,6 +669,7 @@ class ChatsCubit extends Cubit<ChatsState> {
 
   Future<void> closeAllChats() async {
     if (state.openStack.isEmpty && state.forwardStack.isEmpty) return;
+    _pendingDefaultOpenRouteJid = null;
     emit(
       state.copyWith(
         openStack: const <String>[],
@@ -654,6 +683,7 @@ class ChatsCubit extends Cubit<ChatsState> {
   }
 
   void toggleCalendar() {
+    _pendingDefaultOpenRouteJid = null;
     if (state.openCalendar) {
       emit(state.copyWith(openCalendar: false, openChatCalendar: false));
     } else {
@@ -665,6 +695,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     if (state.openChatRoute == route) {
       return;
     }
+    _pendingDefaultOpenRouteJid = null;
     emit(
       state.copyWith(
         openChatRoute: route,
@@ -678,6 +709,7 @@ class ChatsCubit extends Cubit<ChatsState> {
     if (state.openChatCalendar == open) {
       return;
     }
+    _pendingDefaultOpenRouteJid = null;
     emit(
       state.copyWith(
         openChatCalendar: open,

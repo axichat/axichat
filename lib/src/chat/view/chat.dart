@@ -968,7 +968,10 @@ class _RoomMembersDrawerContent extends StatelessWidget {
       builder: (context, state) {
         final l10n = context.l10n;
         final roomState = state.roomState;
-        if (roomState == null) {
+        if (roomState == null ||
+            (!roomState.isReadyForMessaging &&
+                !roomState.hasJoinError &&
+                !roomState.hasTerminalExit)) {
           final colors = context.colorScheme;
           final textTheme = context.textTheme;
           final spacing = context.spacing;
@@ -1290,20 +1293,13 @@ class _ChatState extends State<Chat> {
   }
 
   void _handleRecipientAdded(FanOutTarget target) {
-    final address = target.address?.trim();
-    if (target.chat == null &&
-        target.transport == null &&
+    final address = target.resolvedAddress;
+    if (target.needsTransportSelection &&
         address != null &&
         address.isNotEmpty) {
       _resolveAddressTransport(address).then((transport) {
         if (!mounted || transport == null) return;
-        final transportResolvedTarget = FanOutTarget.address(
-          address: address,
-          displayName: target.displayName,
-          shareSignatureEnabled: target.shareSignatureEnabled,
-          transport: transport,
-        );
-        _applyRecipient(transportResolvedTarget);
+        _applyRecipient(target.withTransport(transport));
       });
       return;
     }
@@ -1317,7 +1313,7 @@ class _ChatState extends State<Chat> {
     if (index >= 0) {
       final recipient = _recipients[index];
       final updated = List<ComposerRecipient>.from(_recipients)
-        ..[index] = recipient.copyWith(target: target, included: true);
+        ..[index] = recipient.withTarget(target).withIncluded(true);
       setState(() {
         _recipients = updated;
       });
@@ -1360,7 +1356,7 @@ class _ChatState extends State<Chat> {
   void _handleRecipientRemoved(String key) {
     final updated = _recipients
         .where((recipient) {
-          return recipient.key != key || recipient.pinned;
+          return recipient.key != key || recipient.isPinned;
         })
         .toList(growable: false);
     if (updated.length == _recipients.length) return;
@@ -1376,9 +1372,9 @@ class _ChatState extends State<Chat> {
     });
     if (index == -1) return;
     final current = _recipients[index];
-    if (current.pinned) return;
+    if (current.isPinned) return;
     final updated = List<ComposerRecipient>.from(_recipients)
-      ..[index] = current.copyWith(included: !current.included);
+      ..[index] = current.toggledIncluded();
     setState(() {
       _recipients = updated;
     });
@@ -2073,10 +2069,6 @@ class _ChatState extends State<Chat> {
     });
   }
 
-  String? _nickFromSender(String senderJid) {
-    return addressResourcePart(senderJid);
-  }
-
   String? _resolveAvailabilityOwnerLabel({
     required String? ownerJid,
     required String? normalizedXmppSelfJid,
@@ -2096,79 +2088,6 @@ class _ChatState extends State<Chat> {
       return selfLabel;
     }
     return trimmedOwner;
-  }
-
-  bool _isMucOccupantSender({
-    required String senderJid,
-    required String? chatJid,
-  }) {
-    final senderBare = normalizedAddressKey(senderJid);
-    final chatBare = normalizedAddressKey(chatJid);
-    if (senderBare == null || chatBare == null) {
-      return false;
-    }
-    final String? nick = _nickFromSender(senderJid);
-    if (nick == null) {
-      return false;
-    }
-    return senderBare == chatBare;
-  }
-
-  Occupant? _resolveOccupantForSender({
-    required String senderJid,
-    required RoomState? roomState,
-  }) {
-    return roomState?.occupantForSenderJid(senderJid, preferRealJid: true);
-  }
-
-  bool _availabilitySenderMatchesClaim({
-    required String senderJid,
-    required String? chatJid,
-    required String claimedJid,
-    required RoomState? roomState,
-  }) {
-    final String trimmedClaimed = claimedJid.trim();
-    if (trimmedClaimed.isEmpty) {
-      return false;
-    }
-    final bool isMucSender = _isMucOccupantSender(
-      senderJid: senderJid,
-      chatJid: chatJid,
-    );
-    if (!isMucSender) {
-      return normalizedAddressKey(senderJid) ==
-          normalizedAddressKey(trimmedClaimed);
-    }
-    final Occupant? occupant = _resolveOccupantForSender(
-      senderJid: senderJid,
-      roomState: roomState,
-    );
-    final String? realJid = occupant?.realJid;
-    if (realJid != null && realJid.trim().isNotEmpty) {
-      return normalizedAddressKey(realJid) ==
-          normalizedAddressKey(trimmedClaimed);
-    }
-    return normalizedAddressKey(senderJid) ==
-        normalizedAddressKey(trimmedClaimed);
-  }
-
-  String? _availabilityActorId({
-    required chat_models.Chat? chat,
-    required String? currentUserId,
-    required RoomState? roomState,
-  }) {
-    final String? trimmedCurrent = currentUserId?.trim();
-    if (chat?.type != ChatType.groupChat) {
-      return trimmedCurrent?.isEmpty == true ? null : trimmedCurrent;
-    }
-    if (trimmedCurrent != null && trimmedCurrent.isNotEmpty) {
-      return trimmedCurrent;
-    }
-    final realJid = roomState?.selfRealJid;
-    if (realJid != null && realJid.isNotEmpty) {
-      return bareAddress(realJid) ?? realJid;
-    }
-    return null;
   }
 
   bool _isRoomBootstrapInProgress(ChatState state) {
@@ -2193,89 +2112,22 @@ class _ChatState extends State<Chat> {
     return null;
   }
 
-  CalendarAvailabilityMessage? _validatedAvailabilityMessage({
-    required Message message,
-    required RoomState? roomState,
-    required Map<String, String> shareOwnersById,
-    required CalendarAvailabilityShareCoordinator? availabilityCoordinator,
-  }) {
-    final CalendarAvailabilityMessage? raw =
-        message.calendarAvailabilityMessage;
-    if (raw == null) {
-      return null;
-    }
-    final String senderJid = message.senderJid;
-    final String chatJid = message.chatJid;
-    final bool isValid = raw.map(
-      share: (value) => _availabilitySenderMatchesClaim(
-        senderJid: senderJid,
-        chatJid: chatJid,
-        claimedJid: value.share.overlay.owner,
-        roomState: roomState,
-      ),
-      request: (value) {
-        final CalendarAvailabilityRequest request = value.request;
-        final bool senderMatches = _availabilitySenderMatchesClaim(
-          senderJid: senderJid,
-          chatJid: chatJid,
-          claimedJid: request.requesterJid,
-          roomState: roomState,
-        );
-        if (!senderMatches) {
-          return false;
-        }
-        final String? claimedOwner = request.ownerJid?.trim();
-        if (claimedOwner == null || claimedOwner.isEmpty) {
-          return true;
-        }
-        final String? knownOwner =
-            shareOwnersById[request.shareId] ??
-            availabilityCoordinator?.ownerJidForShare(request.shareId);
-        if (knownOwner == null || knownOwner.trim().isEmpty) {
-          return true;
-        }
-        return _availabilitySenderMatchesClaim(
-          senderJid: claimedOwner,
-          chatJid: chatJid,
-          claimedJid: knownOwner,
-          roomState: roomState,
-        );
-      },
-      response: (value) {
-        final CalendarAvailabilityResponse response = value.response;
-        final String? ownerJid =
-            shareOwnersById[response.shareId] ??
-            availabilityCoordinator?.ownerJidForShare(response.shareId);
-        if (ownerJid == null || ownerJid.trim().isEmpty) {
-          return true;
-        }
-        return _availabilitySenderMatchesClaim(
-          senderJid: senderJid,
-          chatJid: chatJid,
-          claimedJid: ownerJid,
-          roomState: roomState,
-        );
-      },
-    );
-    return isValid ? raw : null;
-  }
-
   bool _isMucSelfMessage({
     required String senderJid,
-    required String? myOccupantJid,
-    required String? selfNick,
+    required RoomState? roomState,
+    required String? fallbackSelfNick,
   }) {
-    final normalizedSelf = myOccupantJid?.trim();
-    if (normalizedSelf != null &&
-        normalizedSelf.isNotEmpty &&
-        senderJid.trim() == normalizedSelf) {
-      return true;
+    if (roomState != null) {
+      return roomState.isSelfSenderJid(
+        senderJid,
+        fallbackSelfNick: fallbackSelfNick,
+      );
     }
-    final trimmedSelfNick = selfNick?.trim();
+    final trimmedSelfNick = fallbackSelfNick?.trim();
     if (trimmedSelfNick == null || trimmedSelfNick.isEmpty) {
       return false;
     }
-    final senderNick = _nickFromSender(senderJid);
+    final senderNick = addressResourcePart(senderJid)?.trim();
     if (senderNick == null || senderNick.isEmpty) {
       return false;
     }
@@ -2285,18 +2137,18 @@ class _ChatState extends State<Chat> {
   bool _isQuotedMessageFromSelf({
     required Message quotedMessage,
     required bool isGroupChat,
-    required String? myOccupantJid,
-    required String? selfNick,
+    required RoomState? roomState,
+    required String? fallbackSelfNick,
     required String? currentUserId,
   }) {
     if (isGroupChat) {
       return _isMucSelfMessage(
         senderJid: quotedMessage.senderJid,
-        myOccupantJid: myOccupantJid,
-        selfNick: selfNick,
+        roomState: roomState,
+        fallbackSelfNick: fallbackSelfNick,
       );
     }
-    return bareAddress(quotedMessage.senderJid) == bareAddress(currentUserId);
+    return quotedMessage.isFromAuthorizedJid(currentUserId);
   }
 
   String _forwardedSenderLabel({
@@ -2313,7 +2165,7 @@ class _ChatState extends State<Chat> {
       if (fallbackIsSelf) {
         return l10n.chatSenderYou;
       }
-      final fallbackNick = _nickFromSender(fallbackSenderJid)?.trim();
+      final fallbackNick = roomState?.senderNick(fallbackSenderJid);
       if (fallbackNick != null && fallbackNick.isNotEmpty) {
         return fallbackNick;
       }
@@ -2326,11 +2178,7 @@ class _ChatState extends State<Chat> {
       return l10n.chatSenderYou;
     }
     if (isGroupChat) {
-      final occupant = _resolveOccupantForSender(
-        senderJid: source,
-        roomState: roomState,
-      );
-      final nick = occupant?.nick.trim() ?? _nickFromSender(source)?.trim();
+      final nick = roomState?.senderNick(source);
       if (nick != null && nick.isNotEmpty) {
         return nick;
       }
@@ -2346,12 +2194,7 @@ class _ChatState extends State<Chat> {
     required AppLocalizations l10n,
   }) {
     if (isGroupChat) {
-      final occupant = _resolveOccupantForSender(
-        senderJid: quotedMessage.senderJid,
-        roomState: roomState,
-      );
-      final nick =
-          occupant?.nick.trim() ?? _nickFromSender(quotedMessage.senderJid);
+      final nick = roomState?.senderNick(quotedMessage.senderJid);
       final normalizedNick = nick?.trim() ?? _emptyText;
       if (normalizedNick.isNotEmpty) {
         return normalizedNick;
@@ -2725,38 +2568,11 @@ class _ChatState extends State<Chat> {
     if (chat.defaultTransport.isEmail || chat.isEmailBacked) {
       return true;
     }
-    for (final recipient in recipients) {
-      if (_recipientUsesEmailTransport(recipient)) {
-        return true;
-      }
-    }
-    return false;
+    return recipients.hasEmailRecipients(allowHint: true);
   }
 
-  bool _hasIncludedEmailRecipient(List<ComposerRecipient> recipients) {
-    for (final recipient in recipients) {
-      if (!recipient.included) {
-        continue;
-      }
-      if (_recipientUsesEmailTransport(recipient)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool _recipientUsesEmailTransport(ComposerRecipient recipient) {
-    final chat = recipient.target.chat;
-    if (chat?.isEmailBacked ?? false) {
-      return true;
-    }
-    final transport = recipient.target.transport ?? chat?.defaultTransport;
-    if (transport?.isEmail ?? false) {
-      return true;
-    }
-    final hintedTransport = hintTransportForAddress(recipient.target.address);
-    return hintedTransport?.isEmail ?? false;
-  }
+  bool _hasIncludedEmailRecipient(List<ComposerRecipient> recipients) =>
+      recipients.includedRecipients.hasEmailRecipients(allowHint: true);
 
   bool _isEmailComposerActive({
     required ChatState chatState,
@@ -2939,23 +2755,11 @@ class _ChatState extends State<Chat> {
     required List<ComposerRecipient> recipients,
     required SettingsState settings,
   }) {
-    var hasEmail = false;
-    var hasXmpp = false;
-    for (final recipient in recipients) {
-      if (!recipient.included) {
-        continue;
-      }
-      final transport =
-          recipient.target.transport ?? recipient.target.chat?.defaultTransport;
-      if (transport?.isEmail ?? false) {
-        hasEmail = true;
-      }
-      if (transport?.isXmpp ?? false) {
-        hasXmpp = true;
-      }
-      if (hasEmail && hasXmpp) {
-        return settings.chatSendOnEnter && settings.emailSendOnEnter;
-      }
+    final includedRecipients = recipients.includedRecipients;
+    final hasEmail = includedRecipients.hasEmailRecipients();
+    final hasXmpp = includedRecipients.hasXmppRecipients();
+    if (hasEmail && hasXmpp) {
+      return settings.chatSendOnEnter && settings.emailSendOnEnter;
     }
     if (hasEmail) {
       return settings.emailSendOnEnter;
@@ -3440,26 +3244,7 @@ class _ChatState extends State<Chat> {
   List<String> _resolveDraftRecipients({
     required chat_models.Chat chat,
     required List<ComposerRecipient> recipients,
-  }) {
-    if (recipients.isEmpty) {
-      return [chat.jid];
-    }
-    final recipientIds = <String>{};
-    for (final recipient in recipients) {
-      if (!recipient.included) continue;
-      final chatJid = recipient.target.chat?.jid;
-      final address = recipient.target.address;
-      if (chatJid != null && chatJid.isNotEmpty) {
-        recipientIds.add(chatJid);
-      } else if (address != null && address.isNotEmpty) {
-        recipientIds.add(address);
-      }
-    }
-    if (recipientIds.isEmpty) {
-      return [chat.jid];
-    }
-    return recipientIds.toList();
-  }
+  }) => recipients.includedRecipients.recipientIds(fallbackJid: chat.jid);
 
   Future<void> _handleEditMessage(Message message) async {
     if (!mounted) return;
@@ -4689,11 +4474,12 @@ class _ChatState extends State<Chat> {
               final myOccupant = state.roomState?.selfOccupant;
               final selfNick = (myOccupant?.nick ?? chatEntity?.myNickname)
                   ?.trim();
-              final String? availabilityActorId = _availabilityActorId(
-                chat: chatEntity,
-                currentUserId: currentUserId,
-                roomState: state.roomState,
-              );
+              final trimmedCurrentUserId = currentUserId.trim();
+              final String? availabilityActorId = isGroupChat
+                  ? state.roomState?.resolvedSelfJid(fallbackJid: currentUserId)
+                  : trimmedCurrentUserId.isEmpty
+                  ? null
+                  : trimmedCurrentUserId;
               final roomBootstrapInProgress =
                   isGroupChat && _isRoomBootstrapInProgress(state);
               final roomJoinFailureState = isGroupChat
@@ -4769,8 +4555,7 @@ class _ChatState extends State<Chat> {
                 if (!isRoomParticipant) {
                   return avatarPathForBareJid(bareParticipant);
                 }
-                final roomState = state.roomState;
-                if (roomState == null) return null;
+                final roomState = state.roomState!;
                 final occupant = roomState.occupantForSenderJid(
                   trimmed,
                   preferRealJid: true,
@@ -5472,11 +5257,9 @@ class _ChatState extends State<Chat> {
                                         share: (value) {
                                           final owner =
                                               value.share.overlay.owner;
-                                          final bool isValid =
-                                              _availabilitySenderMatchesClaim(
-                                                senderJid: item.senderJid,
-                                                chatJid: item.chatJid,
-                                                claimedJid: owner,
+                                          final bool isValid = item
+                                              .senderMatchesClaimedJid(
+                                                owner,
                                                 roomState: state.roomState,
                                               );
                                           if (isValid) {
@@ -5596,21 +5379,19 @@ class _ChatState extends State<Chat> {
                                           isGroupChat &&
                                           _isMucSelfMessage(
                                             senderJid: e.senderJid,
-                                            myOccupantJid: myOccupantJid,
-                                            selfNick: selfNick,
+                                            roomState: state.roomState,
+                                            fallbackSelfNick: selfNick,
                                           );
                                       final isSelf =
                                           isSelfXmpp ||
                                           isSelfEmail ||
                                           isMucSelf ||
                                           isDeltaPlaceholderSender;
-                                      final roomState = state.roomState;
-                                      final occupant =
-                                          !isGroupChat || roomState == null
+                                      final occupant = !isGroupChat
                                           ? null
                                           : _resolveRoomMessageOccupant(
                                               message: e,
-                                              roomState: roomState,
+                                              roomState: state.roomState!,
                                             );
                                       final isEmailMessage =
                                           _isEmailMessageForBubble(
@@ -5673,10 +5454,13 @@ class _ChatState extends State<Chat> {
                                           }
                                         }
                                       }
-                                      final fallbackNick =
-                                          _nickFromSender(e.senderJid) ??
-                                          state.chat?.title ??
-                                          '';
+                                      final fallbackNick = isGroupChat
+                                          ? state.roomState!.senderNick(
+                                                  e.senderJid,
+                                                ) ??
+                                                state.chat?.title ??
+                                                ''
+                                          : state.chat?.title ?? '';
                                       final authorLabel =
                                           (isSelf
                                               ? user.firstName
@@ -5901,14 +5685,13 @@ class _ChatState extends State<Chat> {
                                               e.retracted ||
                                               e.edited);
                                       final CalendarAvailabilityMessage?
-                                      validatedAvailabilityMessage =
-                                          _validatedAvailabilityMessage(
-                                            message: e,
+                                      validatedAvailabilityMessage = e
+                                          .validatedCalendarAvailabilityMessage(
                                             roomState: state.roomState,
-                                            shareOwnersById:
-                                                availabilityShareOwnersById,
-                                            availabilityCoordinator:
-                                                availabilityCoordinator,
+                                            ownerJidForShare: (shareId) =>
+                                                availabilityShareOwnersById[shareId] ??
+                                                availabilityCoordinator
+                                                    ?.ownerJidForShare(shareId),
                                           );
                                       final idPrefix =
                                           messageIdPrefix?.trim() ?? '';
@@ -6107,8 +5890,8 @@ class _ChatState extends State<Chat> {
                                         : _isQuotedMessageFromSelf(
                                             quotedMessage: quotedMessage,
                                             isGroupChat: isGroupChat,
-                                            myOccupantJid: myOccupantJid,
-                                            selfNick: selfNick,
+                                            roomState: state.roomState,
+                                            fallbackSelfNick: selfNick,
                                             currentUserId: currentUserId,
                                           );
                                     final quotedSenderLabel =
@@ -7722,6 +7505,30 @@ class _ChatState extends State<Chat> {
                                                                             availabilityOnAccept;
                                                                             VoidCallback?
                                                                             availabilityOnDecline;
+                                                                            bool
+                                                                            availabilityActorMatchesClaimedJid(
+                                                                              String
+                                                                              claimedJid,
+                                                                            ) {
+                                                                              final currentActor = availabilityActorId;
+                                                                              if (currentActor ==
+                                                                                  null) {
+                                                                                return false;
+                                                                              }
+                                                                              final roomState = state.roomState;
+                                                                              if (roomState ==
+                                                                                  null) {
+                                                                                return sameNormalizedAddressValue(
+                                                                                  currentActor,
+                                                                                  claimedJid,
+                                                                                );
+                                                                              }
+                                                                              return roomState.senderMatchesClaimedJid(
+                                                                                senderJid: currentActor,
+                                                                                claimedJid: claimedJid,
+                                                                              );
+                                                                            }
+
                                                                             final calendarMessageCardShape = ContinuousRectangleBorder(
                                                                               borderRadius: BorderRadius.all(
                                                                                 Radius.circular(
@@ -7736,15 +7543,9 @@ class _ChatState extends State<Chat> {
                                                                                     (
                                                                                       value,
                                                                                     ) {
-                                                                                      final bool isOwner =
-                                                                                          availabilityActorId !=
-                                                                                              null &&
-                                                                                          _availabilitySenderMatchesClaim(
-                                                                                            senderJid: availabilityActorId,
-                                                                                            chatJid: chatEntity?.jid,
-                                                                                            claimedJid: value.share.overlay.owner,
-                                                                                            roomState: state.roomState,
-                                                                                          );
+                                                                                      final bool isOwner = availabilityActorMatchesClaimedJid(
+                                                                                        value.share.overlay.owner,
+                                                                                      );
                                                                                       final String? requesterJid = isOwner
                                                                                           ? null
                                                                                           : availabilityActorId;
@@ -7768,25 +7569,17 @@ class _ChatState extends State<Chat> {
                                                                                       bool isOwner = false;
                                                                                       if (ownerJid !=
                                                                                               null &&
-                                                                                          ownerJid.trim().isNotEmpty &&
-                                                                                          availabilityActorId !=
-                                                                                              null) {
-                                                                                        isOwner = _availabilitySenderMatchesClaim(
-                                                                                          senderJid: availabilityActorId,
-                                                                                          chatJid: chatEntity?.jid,
-                                                                                          claimedJid: ownerJid,
-                                                                                          roomState: state.roomState,
+                                                                                          ownerJid.trim().isNotEmpty) {
+                                                                                        isOwner = availabilityActorMatchesClaimedJid(
+                                                                                          ownerJid,
                                                                                         );
                                                                                       } else if (chatEntity?.type ==
                                                                                           ChatType.chat) {
                                                                                         final currentActor = availabilityActorId;
                                                                                         if (currentActor !=
                                                                                             null) {
-                                                                                          isOwner = !_availabilitySenderMatchesClaim(
-                                                                                            senderJid: currentActor,
-                                                                                            chatJid: chatEntity?.jid,
-                                                                                            claimedJid: value.request.requesterJid,
-                                                                                            roomState: state.roomState,
+                                                                                          isOwner = !availabilityActorMatchesClaimedJid(
+                                                                                            value.request.requesterJid,
                                                                                           );
                                                                                         }
                                                                                       }
@@ -9273,8 +9066,8 @@ class _ChatState extends State<Chat> {
                                                                                   final quotedIsSelf = _isQuotedMessageFromSelf(
                                                                                     quotedMessage: quotedModel,
                                                                                     isGroupChat: isGroupChat,
-                                                                                    myOccupantJid: myOccupantJid,
-                                                                                    selfNick: selfNick,
+                                                                                    roomState: state.roomState,
+                                                                                    fallbackSelfNick: selfNick,
                                                                                     currentUserId: currentUserId,
                                                                                   );
                                                                                   return _QuotedMessagePreview(
@@ -10176,18 +9969,9 @@ class _ChatState extends State<Chat> {
     required List<ComposerRecipient> recipients,
   }) {
     if (chat == null) return null;
-    final included = recipients
-        .where((recipient) => recipient.included)
-        .toList();
+    final included = recipients.includedRecipients;
     if (included.length <= 1) return null;
-    final hasEmailRecipient = included.any((recipient) {
-      final targetChat = recipient.target.chat;
-      if (targetChat != null) {
-        return targetChat.supportsEmail;
-      }
-      final address = recipient.target.address;
-      return address != null && address.trim().isNotEmpty;
-    });
+    final hasEmailRecipient = included.hasEmailRecipients(allowHint: true);
     if (!hasEmailRecipient) return null;
     final shouldFanOut = shouldFanOutRecipients(
       chat: chat,
@@ -10202,16 +9986,7 @@ class _ChatState extends State<Chat> {
   bool shouldFanOutRecipients({
     required chat_models.Chat chat,
     required List<ComposerRecipient> recipients,
-  }) {
-    if (recipients.isEmpty) return false;
-    if (recipients.length == 1) {
-      final targetChat = recipients.single.target.chat;
-      if (targetChat != null && targetChat.jid == chat.jid) {
-        return false;
-      }
-    }
-    return true;
-  }
+  }) => recipients.shouldFanOut(chat);
 
   String joinedMessageText(List<Message> messages) {
     final buffer = StringBuffer();
@@ -11001,46 +10776,18 @@ class _PinnedMessageTile extends StatelessWidget {
 
   bool isSelfMessage({required Message message, required String? accountJid}) {
     if (chat.type == ChatType.groupChat) {
-      final myOccupantJid = roomState?.myOccupantJid;
-      final selfNick = roomState?.selfNick ?? chat.myNickname;
-      final normalizedSelf = myOccupantJid?.trim();
-      if (normalizedSelf != null &&
-          normalizedSelf.isNotEmpty &&
-          message.senderJid.trim() == normalizedSelf) {
-        return true;
-      }
-      final occupant = resolveOccupantForMessage(message);
-      final realJid = occupant?.realJid?.trim();
-      if (realJid != null &&
-          realJid.isNotEmpty &&
-          accountJid != null &&
-          sameNormalizedAddressValue(realJid, accountJid)) {
-        return true;
-      }
-      final trimmedSelfNick = selfNick?.trim();
-      if (trimmedSelfNick == null || trimmedSelfNick.isEmpty) {
-        return false;
-      }
-      final senderNick = nickFromSender(message.senderJid);
-      if (senderNick == null || senderNick.isEmpty) {
-        return false;
-      }
-      return senderNick == trimmedSelfNick;
+      return roomState?.isSelfSenderJid(
+            message.senderJid,
+            selfJid: accountJid,
+            fallbackSelfNick: chat.myNickname,
+          ) ??
+          false;
     }
-    final accountJidTrimmed = accountJid?.trim();
-    if (accountJidTrimmed == null || accountJidTrimmed.isEmpty) {
-      return false;
-    }
-    try {
-      return message.authorized(mox.JID.fromString(accountJidTrimmed));
-    } on Exception {
-      return false;
-    }
+    return message.isFromAuthorizedJid(accountJid);
   }
 
-  String? nickFromSender(String senderJid) {
-    return addressResourcePart(senderJid);
-  }
+  String? nickFromSender(String senderJid) =>
+      roomState?.senderNick(senderJid) ?? addressResourcePart(senderJid);
 
   Occupant? resolveOccupantForMessage(Message message) {
     final room = roomState;
@@ -11066,11 +10813,7 @@ class _PinnedMessageTile extends StatelessWidget {
     final isGroupChat = chat.type == ChatType.groupChat;
     String? label;
     if (isGroupChat) {
-      final occupant = resolveOccupantForMessage(message);
-      final String? occupantNick = occupant?.nick;
-      final String? trimmedNick = occupantNick?.trim();
-      final bool hasNick = trimmedNick != null && trimmedNick.isNotEmpty;
-      label = hasNick ? trimmedNick : nickFromSender(message.senderJid);
+      label = nickFromSender(message.senderJid);
     } else {
       final displayName = chat.displayName.trim();
       label = displayName.isNotEmpty ? displayName : null;
@@ -14019,7 +13762,7 @@ class _ChatComposerSection extends StatelessWidget {
       (attachment) => attachment.isPreparing,
     );
     final hasSubjectText = subjectController.text.trim().isNotEmpty;
-    final hasRecipients = recipients.any((recipient) => recipient.included);
+    final hasRecipients = recipients.includedRecipients.isNotEmpty;
     final sendEnabled =
         enabled &&
         !hasPreparingAttachments &&
@@ -18346,7 +18089,7 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
   FanOutTarget? get _selectedTarget {
     for (final recipient in _recipients) {
       final target = recipient.target;
-      if (recipient.included) {
+      if (recipient.isIncluded) {
         return target;
       }
     }
@@ -18356,21 +18099,13 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
   bool get _canSend => _selectedTarget != null;
 
   void _handleRecipientAdded(FanOutTarget target) {
-    final address = target.address?.trim();
-    if (target.chat == null &&
-        target.transport == null &&
+    final address = target.resolvedAddress;
+    if (target.needsTransportSelection &&
         address != null &&
         address.isNotEmpty) {
       _resolveAddressTransport(address).then((transport) {
         if (!mounted || transport == null) return;
-        _applyRecipient(
-          FanOutTarget.address(
-            address: address,
-            displayName: target.displayName,
-            shareSignatureEnabled: target.shareSignatureEnabled,
-            transport: transport,
-          ),
-        );
+        _applyRecipient(target.withTransport(transport));
       });
       return;
     }
@@ -18397,9 +18132,8 @@ class _ForwardRecipientSheetState extends State<_ForwardRecipientSheet> {
     setState(() {
       _recipients = _recipients
           .map(
-            (recipient) => recipient.key == key
-                ? recipient.copyWith(included: !recipient.included)
-                : recipient,
+            (recipient) =>
+                recipient.key == key ? recipient.toggledIncluded() : recipient,
           )
           .toList(growable: false);
     });

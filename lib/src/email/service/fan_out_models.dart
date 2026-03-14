@@ -100,6 +100,88 @@ class FanOutTarget extends Equatable {
 
   String get key => chat?.jid ?? normalizedAddress ?? address!;
 
+  MessageTransport? get configuredTransport =>
+      transport ?? chat?.defaultTransport;
+
+  MessageTransport? get hintedTransport => hintTransportForAddress(address);
+
+  String? get resolvedAddress {
+    final trimmed = address?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String? get normalizedOrResolvedAddress =>
+      normalizedAddress ?? resolvedAddress;
+
+  String? get recipientId {
+    final chatJid = chat?.jid.trim();
+    if (chatJid != null && chatJid.isNotEmpty) {
+      return chatJid;
+    }
+    return resolvedAddress;
+  }
+
+  String? get preferredEmailAddress {
+    final chatEmail = chat?.emailAddress?.trim();
+    if (chatEmail != null && chatEmail.isNotEmpty) {
+      return chatEmail;
+    }
+    final chatJid = chat?.jid.trim();
+    if (chatJid != null && chatJid.isNotEmpty) {
+      return chatJid;
+    }
+    return resolvedAddress;
+  }
+
+  bool get needsTransportSelection {
+    return chat == null && transport == null && resolvedAddress != null;
+  }
+
+  bool usesEmailTransport({bool allowHint = false}) {
+    if (chat?.isEmailBacked ?? false) {
+      return true;
+    }
+    final resolvedTransport =
+        configuredTransport ?? (allowHint ? hintedTransport : null);
+    return resolvedTransport?.isEmail ?? false;
+  }
+
+  String? xmppJid({bool allowHint = false}) {
+    final resolvedTransport =
+        configuredTransport ?? (allowHint ? hintedTransport : null);
+    if (resolvedTransport?.isEmail ?? false) {
+      return null;
+    }
+    final targetChat = chat;
+    if (targetChat != null) {
+      return resolvedTransport?.isXmpp ?? false ? targetChat.jid : null;
+    }
+    final candidate = normalizedOrResolvedAddress;
+    if (candidate == null || candidate.isEmpty) {
+      return null;
+    }
+    return resolvedTransport?.isXmpp ?? false ? candidate : null;
+  }
+
+  FanOutTarget withTransport(MessageTransport nextTransport) {
+    if (transport == nextTransport || chat != null) {
+      return this;
+    }
+    final candidate = resolvedAddress;
+    if (candidate == null || candidate.isEmpty) {
+      return this;
+    }
+    return FanOutTarget.address(
+      address: candidate,
+      displayName: displayName,
+      shareSignatureEnabled: shareSignatureEnabled,
+      transport: nextTransport,
+    );
+  }
+
   String? get normalizedAddress {
     final value = address?.trim();
     if (value == null || value.isEmpty) {

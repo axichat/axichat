@@ -8,6 +8,7 @@ import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
+import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/calendar/utils/calendar_task_ics_codec.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/message_content_limits.dart';
@@ -395,6 +396,32 @@ abstract class Message with _$Message implements Insertable<Message> {
     } on Exception {
       return sender == jid.toString();
     }
+  }
+
+  bool isFromAuthorizedJid(String? jid) {
+    final trimmedJid = jid?.trim();
+    if (trimmedJid == null || trimmedJid.isEmpty) {
+      return false;
+    }
+    try {
+      return authorized(mox.JID.fromString(trimmedJid));
+    } on Exception {
+      return sameBareAddress(senderJid, trimmedJid);
+    }
+  }
+
+  bool senderMatchesClaimedJid(String claimedJid, {RoomState? roomState}) {
+    final trimmedClaimed = claimedJid.trim();
+    if (trimmedClaimed.isEmpty) {
+      return false;
+    }
+    if (roomState == null) {
+      return sameNormalizedAddressValue(senderJid, trimmedClaimed);
+    }
+    return roomState.senderMatchesClaimedJid(
+      senderJid: senderJid,
+      claimedJid: trimmedClaimed,
+    );
   }
 
   bool authorizedForMutation({required mox.JID from}) {
@@ -913,6 +940,54 @@ extension MessageCalendarAvailabilityX on Message {
     } catch (_) {
       return null;
     }
+  }
+
+  CalendarAvailabilityMessage? validatedCalendarAvailabilityMessage({
+    RoomState? roomState,
+    String? Function(String shareId)? ownerJidForShare,
+  }) {
+    final raw = calendarAvailabilityMessage;
+    if (raw == null) {
+      return null;
+    }
+    final isValid = raw.map(
+      share: (value) => senderMatchesClaimedJid(
+        value.share.overlay.owner,
+        roomState: roomState,
+      ),
+      request: (value) {
+        final request = value.request;
+        if (!senderMatchesClaimedJid(
+          request.requesterJid,
+          roomState: roomState,
+        )) {
+          return false;
+        }
+        final claimedOwner = request.ownerJid?.trim();
+        if (claimedOwner == null || claimedOwner.isEmpty) {
+          return true;
+        }
+        final knownOwner = ownerJidForShare?.call(request.shareId)?.trim();
+        if (knownOwner == null || knownOwner.isEmpty) {
+          return true;
+        }
+        if (roomState == null) {
+          return sameNormalizedAddressValue(claimedOwner, knownOwner);
+        }
+        return roomState.senderMatchesClaimedJid(
+          senderJid: claimedOwner,
+          claimedJid: knownOwner,
+        );
+      },
+      response: (value) {
+        final ownerJid = ownerJidForShare?.call(value.response.shareId)?.trim();
+        if (ownerJid == null || ownerJid.isEmpty) {
+          return true;
+        }
+        return senderMatchesClaimedJid(ownerJid, roomState: roomState);
+      },
+    );
+    return isValid ? raw : null;
   }
 }
 

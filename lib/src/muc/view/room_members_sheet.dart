@@ -1287,9 +1287,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
       avatarPath: context.watch<ProfileCubit>().state.avatarPath,
       avatarLoading: context.watch<ProfileCubit>().state.avatarHydrating,
     );
-    final includedRecipients = _recipients
-        .where((recipient) => recipient.included)
-        .toList(growable: false);
+    final includedRecipients = _recipients.includedRecipients;
     final actionsPadding = EdgeInsets.fromLTRB(
       spacing.m,
       0,

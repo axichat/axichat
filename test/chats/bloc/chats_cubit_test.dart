@@ -235,6 +235,63 @@ void main() {
     },
   );
 
+  test(
+    'opening a room before chat hydration resolves to calendar when metadata arrives',
+    () async {
+      final room = _chat(
+        jid: 'planning@conference.axi.im',
+        title: 'Planning',
+        timestamp: DateTime(2024, 1, 1),
+        primaryView: ChatPrimaryView.calendar,
+      ).copyWith(type: ChatType.groupChat);
+      when(() => xmppService.openChat(any())).thenAnswer((_) async {});
+
+      final cubit = ChatsCubit(
+        xmppService: xmppService,
+        homeRefreshSyncService: homeRefreshSyncService,
+      );
+      addTearDown(cubit.close);
+
+      await cubit.openChat(jid: room.jid);
+      expect(cubit.state.openChatRoute, ChatRouteIndex.main);
+
+      chatsStreamController.add([room]);
+      await pumpEventQueue();
+
+      expect(cubit.state.openJid, room.jid);
+      expect(cubit.state.openChatRoute, ChatRouteIndex.calendar);
+      expect(cubit.state.openChatCalendar, isTrue);
+    },
+  );
+
+  test(
+    'explicit main route is preserved when calendar metadata arrives later',
+    () async {
+      final room = _chat(
+        jid: 'planning@conference.axi.im',
+        title: 'Planning',
+        timestamp: DateTime(2024, 1, 1),
+        primaryView: ChatPrimaryView.calendar,
+      ).copyWith(type: ChatType.groupChat);
+      when(() => xmppService.openChat(any())).thenAnswer((_) async {});
+
+      final cubit = ChatsCubit(
+        xmppService: xmppService,
+        homeRefreshSyncService: homeRefreshSyncService,
+      );
+      addTearDown(cubit.close);
+
+      await cubit.openChat(jid: room.jid, route: ChatRouteIndex.main);
+
+      chatsStreamController.add([room]);
+      await pumpEventQueue();
+
+      expect(cubit.state.openJid, room.jid);
+      expect(cubit.state.openChatRoute, ChatRouteIndex.main);
+      expect(cubit.state.openChatCalendar, isFalse);
+    },
+  );
+
   test('create room conflict surfaces alreadyExists failure state', () async {
     final xmppMucService = MockXmppMucService();
     when(

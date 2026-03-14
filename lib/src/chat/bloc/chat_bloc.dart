@@ -115,6 +115,26 @@ class ComposerRecipient extends Equatable {
 
   String get key => target.key;
 
+  bool get isIncluded => included;
+
+  bool get isPinned => pinned;
+
+  String? get recipientId => target.recipientId;
+
+  bool get needsTransportSelection => target.needsTransportSelection;
+
+  bool usesEmailTransport({bool allowHint = false}) =>
+      target.usesEmailTransport(allowHint: allowHint);
+
+  String? xmppJid({bool allowHint = false}) =>
+      target.xmppJid(allowHint: allowHint);
+
+  ComposerRecipient withIncluded(bool included) => copyWith(included: included);
+
+  ComposerRecipient toggledIncluded() => copyWith(included: !included);
+
+  ComposerRecipient withTarget(FanOutTarget target) => copyWith(target: target);
+
   ComposerRecipient copyWith({
     FanOutTarget? target,
     bool? included,
@@ -127,6 +147,93 @@ class ComposerRecipient extends Equatable {
 
   @override
   List<Object?> get props => [target, included, pinned];
+}
+
+extension ComposerRecipients on Iterable<ComposerRecipient> {
+  List<ComposerRecipient> get includedRecipients =>
+      where((recipient) => recipient.isIncluded).toList(growable: false);
+
+  bool hasEmailRecipients({bool allowHint = false}) {
+    for (final recipient in this) {
+      if (recipient.usesEmailTransport(allowHint: allowHint)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool hasXmppRecipients({bool allowHint = false}) {
+    for (final recipient in this) {
+      final xmppJid = recipient.xmppJid(allowHint: allowHint);
+      if (xmppJid != null && xmppJid.isNotEmpty) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  List<ComposerRecipient> emailRecipients({bool allowHint = false}) => where(
+    (recipient) => recipient.usesEmailTransport(allowHint: allowHint),
+  ).toList(growable: false);
+
+  List<ComposerRecipient> xmppRecipients({bool allowHint = false}) =>
+      where((recipient) {
+        final xmppJid = recipient.xmppJid(allowHint: allowHint);
+        return xmppJid != null && xmppJid.isNotEmpty;
+      }).toList(growable: false);
+
+  List<String> recipientAddresses({bool allowHint = false}) {
+    final resolved = <String>[];
+    for (final recipient in this) {
+      final chatJid = recipient.target.chat?.jid.trim();
+      if (chatJid != null && chatJid.isNotEmpty) {
+        resolved.add(chatJid);
+        continue;
+      }
+      final xmppJid = recipient.xmppJid(allowHint: allowHint);
+      if (xmppJid != null && xmppJid.isNotEmpty) {
+        resolved.add(xmppJid);
+        continue;
+      }
+      final address = recipient.target.normalizedOrResolvedAddress;
+      if (address != null && address.isNotEmpty) {
+        resolved.add(address);
+      }
+    }
+    return resolved;
+  }
+
+  List<String> recipientIds({String? fallbackJid}) {
+    final resolved = <String>{};
+    for (final recipient in this) {
+      final recipientId = recipient.recipientId;
+      if (recipientId != null && recipientId.isNotEmpty) {
+        resolved.add(recipientId);
+      }
+    }
+    if (resolved.isNotEmpty) {
+      return resolved.toList();
+    }
+    final trimmedFallback = fallbackJid?.trim();
+    if (trimmedFallback == null || trimmedFallback.isEmpty) {
+      return const <String>[];
+    }
+    return <String>[trimmedFallback];
+  }
+
+  bool shouldFanOut(Chat chat) {
+    final recipients = toList(growable: false);
+    if (recipients.isEmpty) {
+      return false;
+    }
+    if (recipients.length == 1) {
+      final targetChat = recipients.single.target.chat;
+      if (targetChat != null && targetChat.jid == chat.jid) {
+        return false;
+      }
+    }
+    return true;
+  }
 }
 
 class FanOutDraft extends Equatable {
@@ -500,14 +607,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return bareAddress(jid);
   }
 
-  MessageTransport? _transportForRecipient(ComposerRecipient recipient) {
-    final chat = recipient.target.chat;
-    if (chat != null) {
-      return chat.defaultTransport;
-    }
-    return recipient.target.transport;
-  }
-
   List<Message> _initialEmailPresentationMessages({
     required List<Message> messages,
     String? scrollTargetMessageId,
@@ -834,10 +933,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return candidate.trim().isNotEmpty;
   }
 
-  Future<bool> _canPageMam(Chat chat) async {
-    return _messageService.canPageMamForChat(chat);
-  }
-
   bool _canPageEmailHistory(Chat chat) {
     if (!chat.defaultTransport.isEmail) return false;
     final status = state.emailSyncState.status;
@@ -867,16 +962,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return xmppService.uploadCalendarSnapshot(file);
   }
 
-  bool _shouldSkipInitialMamSync(Chat chat) {
-    return _messageService.shouldSkipInitialMamSyncForChat(chat);
-  }
-
   Future<void> _prefetchPeerAvatar(Chat chat) async {
     if (chat.type == ChatType.groupChat) return;
     if (!_xmppAllowedForChat(chat)) return;
     final xmppService = _xmppService;
     if (xmppService == null) return;
-    if (xmppService.connectionState != ConnectionState.connected) return;
     final peerJid = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
     await xmppService.prefetchAvatarForJid(peerJid);
   }
@@ -905,18 +995,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _loadEarlierFromMam({required int desiredWindow}) async {
     final chat = state.chat;
     if (chat == null || _mamLoading || _mamComplete) return;
-    if (!await _canPageMam(chat)) return;
     final beforeId =
         _mamBeforeId ??
         (state.items.isEmpty ? null : state.items.last.stanzaID);
     if (beforeId == null) return;
     _beginMamLoad();
     try {
-      final result = await _messageService.fetchBeforeFromArchive(
-        jid: chat.remoteJid,
+      final result = await _messageService.fetchBeforeFromArchiveForChat(
+        chat: chat,
         before: beforeId,
         pageSize: messageBatchSize,
-        isMuc: chat.type == ChatType.groupChat,
       );
       await _updateMamStateFromResult(
         chat,
@@ -1048,7 +1136,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
     }
-    if (!await _canPageMam(chat)) {
+    if (!_xmppAllowedForChat(chat)) {
       return null;
     }
     if (_mamBeforeId == null && state.items.isEmpty) {
@@ -1116,7 +1204,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
       }
     }
-    if (!await _canPageMam(chat)) {
+    if (!_xmppAllowedForChat(chat)) {
       return null;
     }
     if (_mamBeforeId == null && state.items.isEmpty) {
@@ -1215,7 +1303,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       return;
     }
-    if (!await _canPageMam(chat)) {
+    if (!_xmppAllowedForChat(chat)) {
       return;
     }
     if (_mamBeforeId == null && state.items.isEmpty) {
@@ -1238,11 +1326,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _catchUpFromMam() async {
     final chat = state.chat;
     if (chat == null) return;
-    if (!await _canPageMam(chat)) return;
-    final lastSeen = await _messageService.loadArchiveCursorTimestamp(
-      chat.remoteJid,
-    );
-    if (lastSeen == null) return;
     if (_mamCatchingUp) return;
     if (_mamLoading && _mamLoadingCompleter != null) {
       await _mamLoadingCompleter!.future;
@@ -1252,26 +1335,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _beginMamLoad();
     var completed = true;
     try {
-      String? afterId;
-      while (true) {
-        final result = await _messageService.fetchSinceFromArchive(
-          jid: chat.remoteJid,
-          since: lastSeen,
-          pageSize: messageBatchSize,
-          isMuc: chat.type == ChatType.groupChat,
-          after: afterId,
-        );
+      final results = await _messageService.catchUpChatFromMamOnConnect(
+        chat: chat,
+        pageSize: messageBatchSize,
+      );
+      for (final result in results) {
         await _updateMamStateFromResult(
           chat,
           result,
           updateTotal: false,
           direction: MamPageDirection.after,
         );
-        final nextAfter = result.lastId ?? afterId;
-        if (result.complete || nextAfter == afterId || nextAfter == null) {
-          break;
-        }
-        afterId = nextAfter;
       }
     } on Exception catch (error, stackTrace) {
       completed = false;
@@ -1333,35 +1407,35 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   Future<void> _hydrateLatestFromMam(Chat chat) async {
-    if (!await _canPageMam(chat)) return;
     if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
     final localCount = await _archivedMessageCount(chat);
-    if (localCount >= _currentMessageLimit) return;
-    final lastSeen = await _messageService.loadArchiveCursorTimestamp(
-      chat.remoteJid,
-    );
-    final hasLocalMessages = localCount > _emptyMessageCount;
-    if (lastSeen != null && hasLocalMessages) {
-      if (!_mamCatchUpCompleted) {
-        await _catchUpFromMam();
-      }
-      final refreshedCount = await _archivedMessageCount(chat);
-      if (refreshedCount >= _currentMessageLimit) {
-        return;
-      }
-    }
     _beginMamLoad();
     try {
-      final result = await _messageService.fetchLatestFromArchive(
-        jid: chat.remoteJid,
+      final outcome = await _messageService.hydrateLatestFromMamForChatIfNeeded(
+        chat: chat,
+        currentLocalCount: localCount,
+        desiredWindow: _currentMessageLimit,
+        filter: state.viewFilter,
+        catchUpCompleted: _mamCatchUpCompleted,
         pageSize: messageBatchSize,
-        isMuc: chat.type == ChatType.groupChat,
       );
-      await _updateMamStateFromResult(
-        chat,
-        result,
-        direction: MamPageDirection.before,
-      );
+      for (final result in outcome.catchUpResults) {
+        await _updateMamStateFromResult(
+          chat,
+          result,
+          updateTotal: false,
+          direction: MamPageDirection.after,
+        );
+      }
+      _mamCatchUpCompleted = true;
+      final latestResult = outcome.latestResult;
+      if (latestResult != null) {
+        await _updateMamStateFromResult(
+          chat,
+          latestResult,
+          direction: MamPageDirection.before,
+        );
+      }
     } on Exception catch (error, stackTrace) {
       _log.safeFine(_mamHydrateFailedLogMessage, error, stackTrace);
     }
@@ -1399,7 +1473,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   Future<void> _ensureMucMembership(Chat chat) async {
     if (chat.type != ChatType.groupChat) return;
     if (!_xmppAllowedForChat(chat)) return;
-    if (state.xmppConnectionState != ConnectionState.connected) return;
     try {
       await _mucService.ensureJoined(
         roomJid: chat.jid,
@@ -1419,9 +1492,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat == null || chat.type != ChatType.groupChat) return;
     await _ensureMucMembership(chat);
     final roomState =
-        state.roomState ??
-        _mucService.roomStateFor(chat.jid) ??
-        RoomState(roomJid: chat.jid);
+        state.roomState ?? _mucService.roomStateForOrEmpty(chat.jid);
     if (state.roomState == null) {
       emit(
         state.copyWith(
@@ -1597,6 +1668,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final nextViewFilter = resetContext && event.chat.defaultTransport.isEmail
         ? forcedViewFilter
         : state.viewFilter;
+    final nextRoomState = event.chat.type == ChatType.groupChat
+        ? resetContext
+              ? _mucService.roomStateForOrEmpty(event.chat.jid)
+              : state.roomState ??
+                    _mucService.roomStateForOrEmpty(event.chat.jid)
+        : null;
     final unreadCount = event.chat.unreadCount;
     final stagedUnreadCount = _chatsService.consumeOpenChatUnreadBoundarySeed(
       event.chat.jid,
@@ -1624,7 +1701,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emailSubjectAutofilled: resetContext
             ? false
             : state.emailSubjectAutofilled,
-        roomState: resetContext ? null : state.roomState,
+        roomState: nextRoomState,
+        roomMemberSections: resetContext
+            ? const <RoomMemberSection>[]
+            : nextRoomState == null
+            ? const <RoomMemberSection>[]
+            : state.roomState == null
+            ? _buildRoomMemberSections(nextRoomState)
+            : state.roomMemberSections,
         pinnedMessages: resetContext
             ? _emptyPinnedMessageItems
             : state.pinnedMessages,
@@ -1772,8 +1856,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (pinnedContextChanged) {
       await _subscribeToPinnedMessages(event.chat);
     }
-    if (_xmppAllowedForChat(event.chat) &&
-        !_shouldSkipInitialMamSync(event.chat)) {
+    if (_xmppAllowedForChat(event.chat)) {
       await _hydrateLatestFromMam(event.chat);
     }
     if (showXmppCapabilities) {
@@ -1794,6 +1877,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _roomChats = const <Chat>[];
     _roomSelfAvatarPath = null;
     if (event.chat.type == ChatType.groupChat) {
+      if (resetContext) {
+        _refreshRoomMemberSections(emit);
+      }
       _subscribeRoomMemberSources();
       _roomSubscription = _mucService.roomStateStream(event.chat.jid).listen((
         room,
@@ -2452,7 +2538,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         : messageBatchSize;
     final canPageNetwork = chat.defaultTransport.isEmail
         ? _canPageEmailHistory(chat)
-        : await _canPageMam(chat);
+        : _xmppAllowedForChat(chat);
     if (canPageNetwork) {
       await _ensureUnreadWindowLoaded(
         chat: chat,
@@ -3413,9 +3499,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (!_xmppAllowedForChat(chat)) {
       return;
     }
-    if (_messageService.shouldCatchUpFromMamOnConnect(chat)) {
-      await _catchUpFromMam();
-    }
+    await _catchUpFromMam();
     await _prefetchPeerAvatar(chat);
     await _syncPinnedMessagesForChat(chat);
   }
@@ -3888,9 +3972,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final subject = event.subject;
     final quotedDraft = event.quotedDraft;
     final settings = event.settings;
-    final recipients = event.recipients
-        .where((recipient) => recipient.included)
-        .toList(growable: false);
+    final recipients = event.recipients.includedRecipients;
     if (recipients.isEmpty) {
       return;
     }
@@ -4045,7 +4127,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             if (targetChat != null) {
               return !_isEmailCapableChat(targetChat);
             }
-            return recipient.target.address?.isNotEmpty != true;
+            return recipient.target.preferredEmailAddress?.isNotEmpty != true;
           })
         : const <ComposerRecipient>[];
     if (requiresEmail && emailRecipients.isEmpty) {
@@ -4603,7 +4685,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         final canPageNetwork = chat.defaultTransport.isEmail
             ? _canPageEmailHistory(chat)
-            : await _canPageMam(chat) && !_mamComplete;
+            : !_mamComplete;
         if (!canPageNetwork) {
           return;
         }
@@ -5074,13 +5156,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }
 
   bool _isEmailForwardTarget(FanOutTarget target) {
-    final targetChat = target.chat;
-    if (targetChat != null) {
-      return _isEmailCapableChat(targetChat);
-    }
-    final transport =
-        target.transport ?? hintTransportForAddress(target.address);
-    return transport?.isEmail ?? false;
+    return target.usesEmailTransport(allowHint: true);
   }
 
   Future<Chat?> _resolveEmailForwardTarget({
@@ -5297,9 +5373,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     Emitter<ChatState> emit,
   ) async {
     final chat = event.chat;
-    final recipients = event.recipients
-        .where((recipient) => recipient.included)
-        .toList(growable: false);
+    final recipients = event.recipients.includedRecipients;
     if (recipients.isEmpty) {
       return;
     }
@@ -5413,9 +5487,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (pending == null || pending.status != PendingAttachmentStatus.failed) {
       return;
     }
-    final recipients = event.recipients
-        .where((recipient) => recipient.included)
-        .toList(growable: false);
+    final recipients = event.recipients.includedRecipients;
     if (recipients.isEmpty) {
       return;
     }
@@ -5527,9 +5599,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       return;
     }
     final draft = event.draft;
-    final recipients = event.recipients
-        .where((recipient) => recipient.included)
-        .toList();
+    final recipients = event.recipients.includedRecipients;
     if (recipients.isEmpty) return;
     await _sendFanOut(
       recipients: recipients,
@@ -5807,7 +5877,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final processed = <String>{};
     for (final recipient in recipients) {
       final targetChat = recipient.target.chat;
-      final targetJid = (targetChat?.jid ?? recipient.target.address)?.trim();
+      final targetJid = recipient.recipientId;
       if (targetJid == null || targetJid.isEmpty) {
         continue;
       }
@@ -6217,21 +6287,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   List<String> _draftRecipientJids({
     required Chat chat,
     required List<ComposerRecipient> recipients,
-  }) {
-    if (recipients.isEmpty) {
-      return [chat.jid];
-    }
-    final resolved = <String>{};
-    for (final recipient in recipients) {
-      final chatJid = recipient.target.chat?.jid;
-      final address = recipient.target.address;
-      final value = chatJid ?? address;
-      if (value != null && value.isNotEmpty) {
-        resolved.add(value);
-      }
-    }
-    return resolved.toList();
-  }
+  }) => recipients.recipientIds(fallbackJid: chat.jid);
 
   String _draftSignature({
     required List<String> recipients,
@@ -6839,21 +6895,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     required bool forceEmail,
   }) {
-    final emailRecipients = <ComposerRecipient>[];
-    final xmppRecipients = <ComposerRecipient>[];
-    for (final recipient in recipients) {
-      if (forceEmail) {
-        emailRecipients.add(recipient);
-        continue;
-      }
-      final transport = _transportForRecipient(recipient);
-      if (transport?.isEmail ?? false) {
-        emailRecipients.add(recipient);
-      } else {
-        xmppRecipients.add(recipient);
-      }
+    if (forceEmail) {
+      return (
+        emailRecipients: recipients.toList(growable: false),
+        xmppRecipients: const <ComposerRecipient>[],
+      );
     }
-    return (emailRecipients: emailRecipients, xmppRecipients: xmppRecipients);
+    return (
+      emailRecipients: recipients.emailRecipients(),
+      xmppRecipients: recipients.xmppRecipients(),
+    );
   }
 
   bool _hasEmailTarget({
@@ -6863,13 +6914,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (_isEmailCapableChat(chat)) {
       return true;
     }
-    for (final recipient in recipients) {
-      final transport = _transportForRecipient(recipient);
-      if (transport?.isEmail ?? false) {
-        return true;
-      }
-    }
-    return false;
+    return recipients.hasEmailRecipients();
   }
 
   bool _shouldSendAttachmentsViaEmail({
@@ -6879,29 +6924,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (chat.defaultTransport.isEmail) {
       return true;
     }
-    for (final recipient in recipients) {
-      final transport = _transportForRecipient(recipient);
-      if (transport?.isEmail ?? false) {
-        return true;
-      }
-    }
-    return false;
+    return recipients.hasEmailRecipients();
   }
 
   bool _isEmailCapableChat(Chat chat) {
     return chat.supportsEmail;
   }
 
-  bool _shouldFanOut(List<ComposerRecipient> recipients, Chat chat) {
-    if (recipients.isEmpty) return false;
-    if (recipients.length == 1) {
-      final targetChat = recipients.single.target.chat;
-      if (targetChat != null && targetChat.jid == chat.jid) {
-        return false;
-      }
-    }
-    return true;
-  }
+  bool _shouldFanOut(List<ComposerRecipient> recipients, Chat chat) =>
+      recipients.shouldFanOut(chat);
 
   ChatMessageKey _chatMessageKeyForMessageError(
     MessageError error,
