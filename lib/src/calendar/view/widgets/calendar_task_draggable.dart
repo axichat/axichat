@@ -284,7 +284,6 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
 
   void _handleDragStarted() {
     _dragSessionActive = true;
-    widget.interactionController.suppressSurfaceTapOnce();
     final Rect? bounds = _sourceBounds ?? _resolveGlobalBounds();
     if (bounds != null) {
       widget.onDragStarted(widget.task, bounds);

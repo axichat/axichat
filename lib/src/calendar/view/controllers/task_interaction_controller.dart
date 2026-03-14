@@ -205,7 +205,6 @@ class TaskInteractionController extends ChangeNotifier {
   double? _pendingDragWidth;
   bool _pendingDragForceCenter = false;
   ResizeAutoScrollHandler? _resizeAutoScrollHandler;
-  bool _suppressSurfaceTap = false;
 
   final Map<String, CalendarTask> _resizePreviews = {};
 
@@ -259,18 +258,6 @@ class TaskInteractionController extends ChangeNotifier {
     }
     clipboard.value = const TaskClipboardState();
     notifyListeners();
-  }
-
-  void suppressSurfaceTapOnce() {
-    _suppressSurfaceTap = true;
-  }
-
-  bool consumeSurfaceTapSuppression() {
-    if (!_suppressSurfaceTap) {
-      return false;
-    }
-    _suppressSurfaceTap = false;
-    return true;
   }
 
   void setHoveringTask(String taskId, {bool isRead = false}) {

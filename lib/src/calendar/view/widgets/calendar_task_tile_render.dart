@@ -603,7 +603,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _pendingResizeHandle = null;
     _resizeActive = true;
     _activeHandle = handle;
-    interactionController.suppressSurfaceTapOnce();
     interactionController.beginResizeInteraction(
       taskId: task.id,
       handle: handle,

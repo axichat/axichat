@@ -83,7 +83,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     expect(find.byType(CalendarRenderSurface), findsOneWidget);
   });
@@ -129,7 +130,8 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump();
 
     final RenderCalendarSurface renderSurface = tester
         .renderObject<RenderCalendarSurface>(
@@ -149,6 +151,41 @@ void main() {
   });
 
   testWidgets(
+    'CalendarGrid ignores task-originated taps for empty slot quick add',
+    (tester) async {
+      final state = CalendarTestData.weekView();
+      DateTime? tappedSlot;
+
+      await tester.pumpWidget(
+        _GridHarness(
+          state: state,
+          child: CalendarGrid<CalendarBloc>(
+            state: state,
+            onDateSelected: (_) {},
+            onViewChanged: (_) {},
+            onEmptySlotTapped: (slot, _) => tappedSlot = slot,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final RenderCalendarSurface renderSurface = tester
+          .renderObject<RenderCalendarSurface>(
+            find.byType(CalendarRenderSurface),
+          );
+      final Rect taskBounds = renderSurface.globalRectForTask(
+        'task-design-review',
+      )!;
+
+      await tester.tapAt(taskBounds.center);
+      await tester.pump();
+
+      expect(tappedSlot, isNull);
+    },
+  );
+
+  testWidgets(
     'CalendarRenderSurface can refresh an active drag preview from the left edge without a new pointer move',
     (tester) async {
       final state = CalendarTestData.weekView();
@@ -162,7 +199,8 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump();
 
       final Finder surfaceFinder = find.byType(CalendarRenderSurface);
       final RenderCalendarSurface renderSurface = tester
@@ -190,6 +228,41 @@ void main() {
       expect(interactionController.preview.value, isNotNull);
 
       interactionController.endDrag();
+    },
+  );
+
+  testWidgets(
+    'CalendarGrid forwards drag preview notifier updates to the render surface',
+    (tester) async {
+      final state = CalendarTestData.weekView();
+      await tester.pumpWidget(
+        _GridHarness(
+          state: state,
+          child: CalendarGrid<CalendarBloc>(
+            state: state,
+            onDateSelected: (_) {},
+            onViewChanged: (_) {},
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final RenderCalendarSurface renderSurface = tester
+          .renderObject<RenderCalendarSurface>(
+            find.byType(CalendarRenderSurface),
+          );
+      final TaskInteractionController interactionController =
+          renderSurface.interactionController!;
+      final DragPreview preview = DragPreview(
+        start: DateTime(2024, 1, 15, 14),
+        duration: const Duration(hours: 1),
+      );
+
+      interactionController.updatePreview(preview.start, preview.duration);
+      await tester.pump();
+
+      expect(renderSurface.dragPreview, preview);
     },
   );
 }

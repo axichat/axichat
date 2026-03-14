@@ -233,6 +233,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     );
     _gridContextMenuController = ShadPopoverController();
     _taskInteractionController.clipboard.addListener(_handleClipboardChanged);
+    _taskInteractionController.preview.addListener(_handleDragPreviewChanged);
     _taskPopoverController = TaskPopoverController();
     _zoomControlsController = ZoomControlsController(
       autoHideDuration: Duration.zero,
@@ -840,6 +841,9 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     _taskInteractionController.clipboard.removeListener(
       _handleClipboardChanged,
     );
+    _taskInteractionController.preview.removeListener(
+      _handleDragPreviewChanged,
+    );
     _horizontalHeaderController.removeListener(_handleHorizontalHeaderScroll);
     _horizontalGridController.removeListener(_handleHorizontalGridScroll);
     _horizontalHeaderController.dispose();
@@ -874,6 +878,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
 
   void _clearDragPreview() {
     _taskInteractionController.clearPreview();
+  }
+
+  void _handleDragPreviewChanged() {
+    _surfaceController.updateDragPreview(
+      _taskInteractionController.preview.value,
+    );
   }
 
   void _copyTaskInstance(CalendarTask task) {
@@ -1229,6 +1239,19 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           widthForNormalization *
           _taskInteractionController.dragPointerNormalized;
     }
+    final RenderObject? surfaceObject = _surfaceKey.currentContext
+        ?.findRenderObject();
+    if (surfaceObject is! RenderCalendarSurface) {
+      return;
+    }
+    final DragPreview? preview = surfaceObject.previewForGlobalPosition(
+      details.globalPosition,
+    );
+    if (preview != null) {
+      _updateDragPreview(preview.start, preview.duration);
+      return;
+    }
+    _clearDragPreview();
   }
 
   void _handleTaskDragEnded(CalendarTask task) {
@@ -1628,7 +1651,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!_shouldEnableTouchGridMenu) {
       return;
     }
-    _taskInteractionController.suppressSurfaceTapOnce();
     _showGridContextMenuAt(details.globalPosition);
   }
 
@@ -3898,7 +3920,6 @@ class _CalendarGridContent extends StatelessWidget {
           availabilityWindows: availabilityWindows,
           availabilityOverlays: availabilityOverlays,
           hoveredSlot: hoveredSlot,
-          onTap: null,
           dragPreview: gridState._taskInteractionController.preview.value,
           onDragUpdate: gridState._handleSurfaceDragUpdate,
           onDragEnd: gridState._handleSurfaceDragEnd,
@@ -3963,12 +3984,12 @@ class _CalendarGridContent extends StatelessWidget {
           child: menuSurface,
         );
 
-        final Widget touchAwareSurface = GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTapUp: gridState.widget.onEmptySlotTapped == null
+        final Widget touchAwareSurface = _CalendarEmptySurfaceGestureLayer(
+          hitTestEmptySurface: gridState._slotForGlobalPosition,
+          onEmptySurfaceTapUp: gridState.widget.onEmptySlotTapped == null
               ? null
               : gridState._handleEmptySurfaceTapUp,
-          onLongPressStart: gridState._shouldEnableTouchGridMenu
+          onEmptySurfaceLongPressStart: gridState._shouldEnableTouchGridMenu
               ? gridState._handleGridLongPressStart
               : null,
           child: highlightSurface,
@@ -3981,6 +4002,89 @@ class _CalendarGridContent extends StatelessWidget {
           child: touchAwareSurface,
         );
       },
+    );
+  }
+}
+
+class _CalendarEmptySurfaceGestureLayer extends StatefulWidget {
+  const _CalendarEmptySurfaceGestureLayer({
+    required this.hitTestEmptySurface,
+    this.onEmptySurfaceTapUp,
+    this.onEmptySurfaceLongPressStart,
+    required this.child,
+  });
+
+  final DateTime? Function(Offset globalPosition) hitTestEmptySurface;
+  final GestureTapUpCallback? onEmptySurfaceTapUp;
+  final GestureLongPressStartCallback? onEmptySurfaceLongPressStart;
+  final Widget child;
+
+  @override
+  State<_CalendarEmptySurfaceGestureLayer> createState() =>
+      _CalendarEmptySurfaceGestureLayerState();
+}
+
+class _CalendarEmptySurfaceGestureLayerState
+    extends State<_CalendarEmptySurfaceGestureLayer> {
+  late final TapGestureRecognizer _tapRecognizer;
+  late final LongPressGestureRecognizer _longPressRecognizer;
+
+  @override
+  void initState() {
+    super.initState();
+    _tapRecognizer = TapGestureRecognizer(debugOwner: this)
+      ..onTapUp = widget.onEmptySurfaceTapUp;
+    _longPressRecognizer = LongPressGestureRecognizer(debugOwner: this)
+      ..onLongPressStart = widget.onEmptySurfaceLongPressStart;
+  }
+
+  @override
+  void didUpdateWidget(covariant _CalendarEmptySurfaceGestureLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _tapRecognizer.onTapUp = widget.onEmptySurfaceTapUp;
+    _longPressRecognizer.onLongPressStart = widget.onEmptySurfaceLongPressStart;
+  }
+
+  @override
+  void dispose() {
+    _tapRecognizer.dispose();
+    _longPressRecognizer.dispose();
+    super.dispose();
+  }
+
+  void _handlePointerDown(PointerDownEvent event) {
+    if (!_isPrimaryPointer(event)) {
+      return;
+    }
+    if (widget.hitTestEmptySurface(event.position) == null) {
+      return;
+    }
+    if (widget.onEmptySurfaceTapUp != null) {
+      _tapRecognizer.addPointer(event);
+    }
+    if (widget.onEmptySurfaceLongPressStart != null) {
+      _longPressRecognizer.addPointer(event);
+    }
+  }
+
+  bool _isPrimaryPointer(PointerDownEvent event) {
+    if ((event.buttons & kPrimaryButton) != 0) {
+      return true;
+    }
+    if (event.buttons != 0) {
+      return false;
+    }
+    final PointerDeviceKind kind = event.kind;
+    return kind != PointerDeviceKind.mouse &&
+        kind != PointerDeviceKind.trackpad;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: _handlePointerDown,
+      child: widget.child,
     );
   }
 }
