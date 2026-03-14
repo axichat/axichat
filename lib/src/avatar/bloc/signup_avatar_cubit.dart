@@ -693,15 +693,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
     return avatars.isNotEmpty;
   }
 
-  _AvatarSelection? _pickAvatarSelection() {
-    final template = _carouselEngine.pickTemplate(preferAbstract: false);
-    if (template == null) return null;
-    final background = state.backgroundLocked
-        ? (state.lockedBackgroundColor ?? state.backgroundColor)
-        : _randomAvatarBackgroundColor();
-    return _AvatarSelection(template: template, background: background);
-  }
-
   Color _resolveTemplateBackground(
     AvatarTemplate template,
     ShadColorScheme colors, {
@@ -834,13 +825,6 @@ class SignupAvatarCubit extends Cubit<SignupAvatarState> {
 
   bool get _shouldRunCarousel =>
       _isCarouselVisible && !state.hasUserSelectedAvatar && !state.processing;
-}
-
-class _AvatarSelection {
-  const _AvatarSelection({required this.template, required this.background});
-
-  final AvatarTemplate template;
-  final Color background;
 }
 
 enum _CarouselVisibility { visible, hidden }
