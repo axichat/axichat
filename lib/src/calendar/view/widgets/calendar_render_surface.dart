@@ -649,8 +649,6 @@ class RenderCalendarSurface extends RenderBox
   final Map<String, CalendarTaskGeometry> _taskGeometries =
       <String, CalendarTaskGeometry>{};
   final List<_DayColumnGeometry> _dayGeometries = <_DayColumnGeometry>[];
-  static const double _tapTolerance = 12.0;
-  static const double _scrollTapSuppressionThreshold = 1.0;
   static const double _availabilityOverlayAlpha = 0.32;
   static const double _availabilityWindowAlpha = 0.2;
   static const double _availabilityOverlayInset = 1.0;
@@ -660,12 +658,11 @@ class RenderCalendarSurface extends RenderBox
     microseconds: 1,
   );
   int? _activePointerId;
-  Offset? _pointerDownLocal;
+  Offset? _pointerDownGlobal;
   DateTime? _pointerDownSlot;
   bool _pointerDownHitTask = false;
   bool _pointerDownIsPrimary = false;
   bool _pointerDragSessionActive = false;
-  double? _pointerDownScrollOffset;
   String? _currentHoverTaskId;
   String? _externalDragTaskId;
 
@@ -1122,7 +1119,6 @@ class RenderCalendarSurface extends RenderBox
 
   void _handlePointerDragUpdate(Offset localPosition, Offset globalPosition) {
     _pointerDragSessionActive = true;
-    _pointerDownLocal = null;
     _pointerDownSlot = null;
     _pointerDownHitTask = false;
     final TaskInteractionController? controller = _interactionController;
@@ -1229,31 +1225,14 @@ class RenderCalendarSurface extends RenderBox
     );
   }
 
-  void _trackPointerMovement(Offset localPosition) {
-    final Offset? down = _pointerDownLocal;
+  void _trackPointerMovement(Offset globalPosition) {
+    final Offset? down = _pointerDownGlobal;
     if (down == null) {
       return;
     }
-    if ((localPosition - down).distance > _tapTolerance) {
+    if ((globalPosition - down).distance > kTouchSlop) {
       _pointerDragSessionActive = true;
     }
-  }
-
-  double _currentScrollOffset() {
-    final ScrollController? controller = _verticalScrollController;
-    if (controller == null || !controller.hasClients) {
-      return 0.0;
-    }
-    return controller.position.pixels;
-  }
-
-  bool _didScrollDuringPointerGesture() {
-    final double? start = _pointerDownScrollOffset;
-    if (start == null) {
-      return false;
-    }
-    final double delta = (_currentScrollOffset() - start).abs();
-    return delta > _scrollTapSuppressionThreshold;
   }
 
   void _handlePointerUp(Offset localPosition, Offset globalPosition) {
@@ -1303,9 +1282,7 @@ class RenderCalendarSurface extends RenderBox
 
     final bool suppressTap =
         _interactionController?.consumeSurfaceTapSuppression() ?? false;
-    final bool scrolledDuringGesture = _didScrollDuringPointerGesture();
-
-    if (dragSessionActive || suppressTap || scrolledDuringGesture) {
+    if (dragSessionActive || suppressTap) {
       onDragAutoScrollStop?.call();
       _resetPointerState();
       return;
@@ -1317,8 +1294,8 @@ class RenderCalendarSurface extends RenderBox
         : null;
 
     if (onTap != null && _pointerDownSlot != null && _pointerDownIsPrimary) {
-      final Offset down = _pointerDownLocal ?? localPosition;
-      if ((localPosition - down).distance <= _tapTolerance) {
+      final Offset down = _pointerDownGlobal ?? globalPosition;
+      if ((globalPosition - down).distance <= kTouchSlop) {
         final DateTime slot = snappedSlot ?? slotTime ?? _pointerDownSlot!;
         onTap!(
           CalendarSurfaceTapDetails(
@@ -1342,12 +1319,11 @@ class RenderCalendarSurface extends RenderBox
 
   void _resetPointerState() {
     _activePointerId = null;
-    _pointerDownLocal = null;
+    _pointerDownGlobal = null;
     _pointerDownSlot = null;
     _pointerDownHitTask = false;
     _pointerDownIsPrimary = false;
     _pointerDragSessionActive = false;
-    _pointerDownScrollOffset = null;
     _updateHoverTask(null);
   }
 
@@ -2089,12 +2065,11 @@ class RenderCalendarSurface extends RenderBox
     if (_isInTimeColumn(entry.localPosition)) {
       if (event is PointerDownEvent) {
         _activePointerId = null;
-        _pointerDownLocal = null;
+        _pointerDownGlobal = null;
         _pointerDownSlot = null;
         _pointerDownHitTask = false;
         _pointerDownIsPrimary = false;
         _pointerDragSessionActive = false;
-        _pointerDownScrollOffset = null;
       }
       return;
     }
@@ -2103,18 +2078,16 @@ class RenderCalendarSurface extends RenderBox
       final bool isPrimary = _isPrimaryPointer(event);
       _pointerDownIsPrimary = isPrimary;
       if (!isPrimary) {
-        _pointerDownLocal = null;
+        _pointerDownGlobal = null;
         _pointerDownSlot = null;
         _pointerDownHitTask = false;
-        _pointerDownScrollOffset = null;
         return;
       }
       _activePointerId ??= event.pointer;
       if (_activePointerId == event.pointer) {
-        _pointerDownLocal = entry.localPosition;
+        _pointerDownGlobal = event.position;
         _pointerDownSlot = slotForOffset(entry.localPosition);
         _pointerDownHitTask = containsTaskAt(entry.localPosition);
-        _pointerDownScrollOffset = _currentScrollOffset();
       }
       return;
     }
@@ -2127,7 +2100,7 @@ class RenderCalendarSurface extends RenderBox
     }
 
     if (event is PointerMoveEvent) {
-      _trackPointerMovement(entry.localPosition);
+      _trackPointerMovement(event.position);
       if (_isDragInProgress) {
         _handlePointerDragUpdate(entry.localPosition, event.position);
       }

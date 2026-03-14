@@ -122,7 +122,7 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         AutomaticKeepAliveClientMixin<CalendarGrid<T>> {
   static const int startHour = 0;
   static const int endHour = 24;
-  static const int _defaultZoomIndex = 0;
+  static const int _defaultZoomIndex = 1;
   static const double _mobileCompactHourHeight = 60;
   static const int _resizeStepMinutes = 15;
   static const List<CalendarZoomLevel> _zoomLevels = kCalendarZoomLevels;
@@ -202,9 +202,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
   bool _suppressNextEmptySlotTap = false;
   bool _hideCompletedScheduled = false;
   int _dateSlideDirection = 0;
-  int? _surfacePointerTrackingId;
-  Offset? _surfacePointerTrackingOrigin;
-  bool _surfacePointerTrackingMoved = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -1677,9 +1674,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!_shouldTrackTouchHighlight(event.kind)) {
       return;
     }
-    _surfacePointerTrackingId = event.pointer;
-    _surfacePointerTrackingOrigin = event.position;
-    _surfacePointerTrackingMoved = false;
     final DateTime? slot = _slotForGlobalPosition(event.position);
     _updateHoveredSlot(slot);
   }
@@ -1688,36 +1682,13 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!_shouldTrackTouchHighlight(event.kind)) {
       return;
     }
-    if (_surfacePointerTrackingId != event.pointer) {
-      return;
-    }
-    final Offset? origin = _surfacePointerTrackingOrigin;
-    if (origin == null || _surfacePointerTrackingMoved) {
-      return;
-    }
-    final double distance = (event.position - origin).distance;
-    if (distance > kTouchSlop) {
-      _surfacePointerTrackingMoved = true;
-    }
+    final DateTime? slot = _slotForGlobalPosition(event.position);
+    _updateHoveredSlot(slot);
   }
 
   void _handleSurfacePointerUp(PointerUpEvent event) {
     if (!_shouldTrackTouchHighlight(event.kind)) {
       return;
-    }
-    final bool moved =
-        _surfacePointerTrackingId == event.pointer &&
-        _surfacePointerTrackingMoved;
-    _surfacePointerTrackingId = null;
-    _surfacePointerTrackingOrigin = null;
-    _surfacePointerTrackingMoved = false;
-    if (moved) {
-      _suppressNextEmptySlotTap = true;
-      _taskInteractionController.suppressSurfaceTapOnce();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        _suppressNextEmptySlotTap = false;
-      });
     }
     _clearSurfaceHover();
   }
@@ -1726,9 +1697,6 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     if (!_shouldTrackTouchHighlight(event.kind)) {
       return;
     }
-    _surfacePointerTrackingId = null;
-    _surfacePointerTrackingOrigin = null;
-    _surfacePointerTrackingMoved = false;
     _clearSurfaceHover();
   }
 
@@ -2359,24 +2327,17 @@ class _CalendarGridState<T extends BaseCalendarBloc>
     final CalendarLayoutTheme layoutTheme = CalendarLayoutTheme.fromContext(
       context,
     );
+    final bool isResizing =
+        _taskInteractionController.activeResizeInteraction != null;
     final Offset localPosition = renderObject.globalToLocal(globalPosition);
     final double pointerX = localPosition.dx;
     final bool isPointerWithinGrid =
         pointerX >= -_autoScrollHorizontalSlop &&
         pointerX <= width + _autoScrollHorizontalSlop;
-    if (!isPointerWithinGrid) {
+    if (!isPointerWithinGrid && !isResizing) {
       _stopEdgeAutoScroll();
       return;
     }
-
-    final double y = localPosition.dy;
-    if (y < 0 || y > height) {
-      _stopEdgeAutoScroll();
-      return;
-    }
-
-    final bool isResizing =
-        _taskInteractionController.activeResizeInteraction != null;
     const double resizeBandFactor = 0.55;
     const double resizeFastSpeedFactor = 0.4;
     const double resizeSlowSpeedFactor = 0.55;
@@ -2395,11 +2356,26 @@ class _CalendarGridState<T extends BaseCalendarBloc>
         : layoutTheme.edgeScrollSlowOffsetPerFrame;
 
     double? offsetPerFrame;
-    if (y <= fastBandHeight || y < 0) {
+    final double y = localPosition.dy;
+    if (y < 0) {
+      if (isResizing) {
+        offsetPerFrame = -fastOffsetPerFrame;
+      } else {
+        _stopEdgeAutoScroll();
+        return;
+      }
+    } else if (y > height) {
+      if (isResizing) {
+        offsetPerFrame = fastOffsetPerFrame;
+      } else {
+        _stopEdgeAutoScroll();
+        return;
+      }
+    } else if (y <= fastBandHeight) {
       offsetPerFrame = -fastOffsetPerFrame;
     } else if (y <= fastBandHeight + slowBandHeight) {
       offsetPerFrame = -slowOffsetPerFrame;
-    } else if (y >= height - fastBandHeight || y > height) {
+    } else if (y >= height - fastBandHeight) {
       offsetPerFrame = fastOffsetPerFrame;
     } else if (y >= height - (fastBandHeight + slowBandHeight)) {
       offsetPerFrame = slowOffsetPerFrame;

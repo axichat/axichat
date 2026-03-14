@@ -195,9 +195,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   String? _pendingResizeHandle;
   bool _useLongPressMoveUpdates = false;
   Offset? _lastLongPressLocalPosition;
+  Offset? _lastResizeLocalPosition;
+  Offset? _lastResizeRawLocalPosition;
 
   double _totalResizeDelta = 0;
-  int _lastAppliedStep = 0;
   double _currentStartHour = 0;
   double _currentDurationHours = 1;
   DateTime? _tempScheduled;
@@ -422,7 +423,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
         if (_shouldDelayResizeForPointer(event)) {
           _startResizeLongPressRecognizer(handle, event);
         } else {
-          _beginResize(handle);
+          _beginResize(handle, event.localPosition);
         }
         return;
       }
@@ -522,7 +523,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
             }
             _useLongPressMoveUpdates = true;
             _lastLongPressLocalPosition = details.localPosition;
-            _beginResize(pendingHandle);
+            _beginResize(pendingHandle, details.localPosition);
           }
           ..onLongPressMoveUpdate = _handleLongPressMoveUpdate
           ..onLongPressEnd = (_) {
@@ -572,13 +573,14 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _pendingTap = false;
     _activeHandle = null;
     _totalResizeDelta = 0;
-    _lastAppliedStep = 0;
     _useLongPressMoveUpdates = false;
     _lastLongPressLocalPosition = null;
+    _lastResizeLocalPosition = null;
+    _lastResizeRawLocalPosition = null;
     cursor = SystemMouseCursors.click;
   }
 
-  void _beginResize(String handle) {
+  void _beginResize(String handle, Offset localPosition) {
     _pendingResizeHandle = null;
     _resizeActive = true;
     _activeHandle = handle;
@@ -597,13 +599,18 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _tempScheduled = null;
     _tempDuration = null;
     _totalResizeDelta = 0;
-    _lastAppliedStep = 0;
+    _lastResizeRawLocalPosition = localPosition;
+    _lastResizeLocalPosition = _effectiveResizeLocalPosition(localPosition);
     HapticFeedback.selectionClick();
   }
 
   void _updateResize(PointerMoveEvent event) {
     onResizePointerMove?.call(event.position);
-    _applyResizeDelta(event.delta.dy);
+    final double delta = _consumeResizePointerDelta(event.localPosition);
+    if (delta == 0) {
+      return;
+    }
+    _applyResizeDelta(delta);
   }
 
   void _handleLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
@@ -615,11 +622,11 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     if (last == null) {
       return;
     }
-    final double delta = details.localPosition.dy - last.dy;
+    onResizePointerMove?.call(details.globalPosition);
+    final double delta = _consumeResizePointerDelta(details.localPosition);
     if (delta == 0) {
       return;
     }
-    onResizePointerMove?.call(details.globalPosition);
     _applyResizeDelta(delta);
   }
 
@@ -635,18 +642,69 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     return _tapSlop;
   }
 
+  double _minimumResizeDurationHours() {
+    final double stepMinutes = (minutesPerStep <= 0 ? 15 : minutesPerStep)
+        .clamp(1, 120)
+        .toDouble();
+    return stepMinutes / 60.0;
+  }
+
+  bool _isPinnedAtMinimumDuration(double minDurationHours) {
+    const double epsilon = 1e-6;
+    return _currentDurationHours <= minDurationHours + epsilon;
+  }
+
+  double _topHandleBoundaryDy() {
+    return _handleExtent.clamp(0.0, size.height);
+  }
+
+  double _bottomHandleBoundaryDy() {
+    return math.max(0.0, size.height - _handleExtent);
+  }
+
+  Offset _effectiveResizeLocalPosition(Offset localPosition) {
+    final double minDurationHours = _minimumResizeDurationHours();
+    if (!_isPinnedAtMinimumDuration(minDurationHours)) {
+      return localPosition;
+    }
+    if (_activeHandle == 'bottom' &&
+        size.height.isFinite &&
+        localPosition.dy < _topHandleBoundaryDy()) {
+      return Offset(localPosition.dx, _topHandleBoundaryDy());
+    }
+    if (_activeHandle == 'top' &&
+        size.height.isFinite &&
+        localPosition.dy > _bottomHandleBoundaryDy()) {
+      return Offset(localPosition.dx, _bottomHandleBoundaryDy());
+    }
+    return localPosition;
+  }
+
+  double _consumeResizePointerDelta(Offset localPosition) {
+    _lastResizeRawLocalPosition = localPosition;
+    final Offset effectiveLocalPosition = _effectiveResizeLocalPosition(
+      localPosition,
+    );
+    final Offset? previous = _lastResizeLocalPosition;
+    _lastResizeLocalPosition = effectiveLocalPosition;
+    if (previous == null) {
+      return 0;
+    }
+    return effectiveLocalPosition.dy - previous.dy;
+  }
+
   void _applyResizeDelta(double deltaDy) {
     if (!_resizeActive || deltaDy == 0) {
       return;
     }
     _totalResizeDelta += deltaDy;
-    final double steps = _totalResizeDelta / (stepHeight == 0 ? 1 : stepHeight);
-    final int stepToApply = steps > 0 ? steps.floor() : steps.ceil();
-    final int deltaSteps = stepToApply - _lastAppliedStep;
+    final double resolvedStepHeight = stepHeight == 0 ? 1 : stepHeight;
+    final double steps = _totalResizeDelta / resolvedStepHeight;
+    final int deltaSteps = steps > 0 ? steps.floor() : steps.ceil();
     if (deltaSteps == 0) {
       return;
     }
-    _lastAppliedStep = stepToApply;
+    _totalResizeDelta -= deltaSteps * resolvedStepHeight;
     final double stepMinutes = (minutesPerStep <= 0 ? 15 : minutesPerStep)
         .clamp(1, 120)
         .toDouble();
@@ -692,9 +750,33 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     if (preview != null) {
       onResizePreview?.call(preview);
     }
+    if (_isPinnedAtMinimumDuration(minDurationHours)) {
+      _totalResizeDelta = 0;
+    }
+    final Offset? rawLocalPosition = _lastResizeRawLocalPosition;
+    if (rawLocalPosition != null) {
+      _lastResizeLocalPosition = _effectiveResizeLocalPosition(
+        rawLocalPosition,
+      );
+    }
   }
 
   void _handleResizeAutoScrollDelta(double delta) {
+    final Offset? rawLocalPosition = _lastResizeRawLocalPosition;
+    final double minDurationHours = _minimumResizeDurationHours();
+    if (_isPinnedAtMinimumDuration(minDurationHours) &&
+        rawLocalPosition != null) {
+      if (_activeHandle == 'bottom' &&
+          size.height.isFinite &&
+          rawLocalPosition.dy < _topHandleBoundaryDy()) {
+        return;
+      }
+      if (_activeHandle == 'top' &&
+          size.height.isFinite &&
+          rawLocalPosition.dy > _bottomHandleBoundaryDy()) {
+        return;
+      }
+    }
     _applyResizeDelta(delta);
   }
 
@@ -704,7 +786,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _resizeActive = false;
     _activeHandle = null;
     _totalResizeDelta = 0;
-    _lastAppliedStep = 0;
     final CalendarTask result = preview ?? task;
     onResizeEnd?.call(result);
     _tempScheduled = null;
