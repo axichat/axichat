@@ -129,6 +129,14 @@ class CalendarSurfaceController {
     surface.handleDragPayloadExit(payload);
     return true;
   }
+
+  bool dispatchActiveDragUpdate(Offset globalPosition) {
+    final RenderCalendarSurface? surface = _activeSurface;
+    if (surface == null) {
+      return false;
+    }
+    return surface.dispatchActiveDragUpdate(globalPosition);
+  }
 }
 
 /// Describes the visible day columns rendered inside [CalendarRenderSurface].
@@ -1132,21 +1140,45 @@ class RenderCalendarSurface extends RenderBox
     if (draggingTask == null) {
       return;
     }
+    _dispatchDragUpdate(
+      localPosition: localPosition,
+      globalPosition: globalPosition,
+      controller: controller,
+      draggingTask: draggingTask,
+    );
+  }
 
-    final Offset clampedLocal = _clampLocalOffset(localPosition);
-    if (_isInTimeColumn(clampedLocal)) {
+  bool dispatchActiveDragUpdate(Offset globalPosition) {
+    final TaskInteractionController? controller = _interactionController;
+    final CalendarTask? draggingTask = controller?.draggingTaskSnapshot;
+    if (controller == null || draggingTask == null) {
       _updateHoverTask(null);
-      onDragExit?.call();
-      onDragAutoScrollStop?.call();
-      return;
+      return false;
     }
+    controller.updateDragPointerGlobalPosition(globalPosition);
+    return _dispatchDragUpdate(
+      localPosition: _contentClampedDragLocalOffset(
+        globalToLocal(globalPosition),
+      ),
+      globalPosition: globalPosition,
+      controller: controller,
+      draggingTask: draggingTask,
+    );
+  }
+
+  bool _dispatchDragUpdate({
+    required Offset localPosition,
+    required Offset globalPosition,
+    required TaskInteractionController controller,
+    required CalendarTask draggingTask,
+  }) {
+    final Offset clampedLocal = _contentClampedDragLocalOffset(localPosition);
 
     final CalendarLayoutMetrics? metrics = _metrics;
     if (metrics == null) {
       _updateHoverTask(null);
       onDragExit?.call();
-      onDragAutoScrollStop?.call();
-      return;
+      return false;
     }
 
     _DayColumnGeometry? columnGeometry = _geometryForOffset(clampedLocal);
@@ -1154,8 +1186,7 @@ class RenderCalendarSurface extends RenderBox
     if (columnGeometry == null) {
       _updateHoverTask(null);
       onDragExit?.call();
-      onDragAutoScrollStop?.call();
-      return;
+      return false;
     }
 
     final _PreviewMetrics? previewMetrics = _computePreviewMetricsForPointer(
@@ -1169,8 +1200,7 @@ class RenderCalendarSurface extends RenderBox
     if (previewMetrics == null) {
       _updateHoverTask(null);
       onDragExit?.call();
-      onDragAutoScrollStop?.call();
-      return;
+      return false;
     }
 
     DateTime previewStart = previewMetrics.start;
@@ -1223,6 +1253,7 @@ class RenderCalendarSurface extends RenderBox
         forceCenterPointer: false,
       ),
     );
+    return true;
   }
 
   void _trackPointerMovement(Offset globalPosition) {
@@ -2199,6 +2230,24 @@ class RenderCalendarSurface extends RenderBox
   bool _isInTimeColumn(Offset localPosition) =>
       localPosition.dx <= _timeColumnWidth;
 
+  Offset _contentClampedDragLocalOffset(Offset localPosition) {
+    final Offset clamped = _clampLocalOffset(localPosition);
+    final double effectiveWidth = size.width.isFinite && size.width > 0
+        ? size.width
+        : clamped.dx;
+    if (effectiveWidth <= _timeColumnWidth) {
+      return clamped;
+    }
+    final double minimumContentDx = (_timeColumnWidth + 1).clamp(
+      0.0,
+      effectiveWidth,
+    );
+    if (clamped.dx < minimumContentDx) {
+      return Offset(minimumContentDx, clamped.dy);
+    }
+    return clamped;
+  }
+
   Offset _clampLocalOffset(Offset localPosition) {
     final double effectiveWidth = size.width.isFinite && size.width > 0
         ? size.width
@@ -2262,12 +2311,9 @@ class RenderCalendarSurface extends RenderBox
       return null;
     }
 
-    final Offset localPosition = _clampLocalOffset(
+    final Offset localPosition = _contentClampedDragLocalOffset(
       globalToLocal(globalPosition),
     );
-    if (_isInTimeColumn(localPosition)) {
-      return null;
-    }
 
     final _DayColumnGeometry? columnGeometry = _geometryForOffset(
       localPosition,

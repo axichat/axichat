@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/bloc/calendar_state.dart';
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/calendar_grid.dart';
+import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_render_surface.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -109,4 +111,85 @@ void main() {
 
     expect(requestedViews, isEmpty);
   });
+
+  testWidgets('CalendarGrid empty slot tap is handled at the widget layer', (
+    tester,
+  ) async {
+    final state = CalendarTestData.weekView();
+    DateTime? tappedSlot;
+
+    await tester.pumpWidget(
+      _GridHarness(
+        state: state,
+        child: CalendarGrid<CalendarBloc>(
+          state: state,
+          onDateSelected: (_) {},
+          onViewChanged: (_) {},
+          onEmptySlotTapped: (slot, _) => tappedSlot = slot,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final RenderCalendarSurface renderSurface = tester
+        .renderObject<RenderCalendarSurface>(
+          find.byType(CalendarRenderSurface),
+        );
+    final metrics = renderSurface.metrics!;
+    final Offset localPosition = Offset(
+      renderSurface.layoutTheme.timeColumnWidth + 40,
+      metrics.slotHeight * 12.5,
+    );
+    final DateTime expectedSlot = renderSurface.slotForOffset(localPosition)!;
+
+    await tester.tapAt(renderSurface.localToGlobal(localPosition));
+    await tester.pump();
+
+    expect(tappedSlot, expectedSlot);
+  });
+
+  testWidgets(
+    'CalendarRenderSurface can refresh an active drag preview from the left edge without a new pointer move',
+    (tester) async {
+      final state = CalendarTestData.weekView();
+      await tester.pumpWidget(
+        _GridHarness(
+          state: state,
+          child: CalendarGrid<CalendarBloc>(
+            state: state,
+            onDateSelected: (_) {},
+            onViewChanged: (_) {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder surfaceFinder = find.byType(CalendarRenderSurface);
+      final RenderCalendarSurface renderSurface = tester
+          .renderObject<RenderCalendarSurface>(surfaceFinder);
+      final TaskInteractionController interactionController =
+          renderSurface.interactionController!;
+      final CalendarTask task = state.model.tasks['task-weekly-sync']!;
+      final Rect taskRect = renderSurface.globalRectForTask(task.id)!;
+      final Offset surfaceOrigin = renderSurface.localToGlobal(Offset.zero);
+
+      interactionController.beginExternalDrag(
+        task: task,
+        snapshot: task.copyWith(),
+        pointerOffset: Offset(taskRect.width / 2, taskRect.height / 2),
+        feedbackSize: taskRect.size,
+        globalPosition: taskRect.topLeft,
+      );
+
+      final bool dispatched = renderSurface.dispatchActiveDragUpdate(
+        Offset(surfaceOrigin.dx + 1, taskRect.center.dy + 120),
+      );
+      await tester.pump();
+
+      expect(dispatched, isTrue);
+      expect(interactionController.preview.value, isNotNull);
+
+      interactionController.endDrag();
+    },
+  );
 }

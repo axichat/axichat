@@ -33,6 +33,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
     required this.task,
     required this.interactionController,
     required this.minutesPerStep,
+    this.viewportScrollOffsetProvider,
     required this.stepHeight,
     required this.enableInteractions,
     required this.isSelectionMode,
@@ -52,6 +53,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
   final CalendarTask task;
   final TaskInteractionController interactionController;
   final int minutesPerStep;
+  final double Function()? viewportScrollOffsetProvider;
   final double stepHeight;
   final bool enableInteractions;
   final bool isSelectionMode;
@@ -72,6 +74,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       task: task,
       interactionController: interactionController,
       minutesPerStep: minutesPerStep,
+      viewportScrollOffsetProvider: viewportScrollOffsetProvider,
       stepHeight: stepHeight,
       enableInteractions: enableInteractions,
       isSelectionMode: isSelectionMode,
@@ -97,6 +100,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       ..task = task
       ..interactionController = interactionController
       ..minutesPerStep = minutesPerStep
+      ..viewportScrollOffsetProvider = viewportScrollOffsetProvider
       ..stepHeight = stepHeight
       ..enableInteractions = enableInteractions
       ..isSelectionMode = isSelectionMode
@@ -118,6 +122,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     required CalendarTask task,
     required TaskInteractionController interactionController,
     required int minutesPerStep,
+    double Function()? viewportScrollOffsetProvider,
     required double stepHeight,
     required bool enableInteractions,
     required bool isSelectionMode,
@@ -135,6 +140,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }) : _task = task,
        _interactionController = interactionController,
        _minutesPerStep = minutesPerStep,
+       _viewportScrollOffsetProvider = viewportScrollOffsetProvider,
        _stepHeight = stepHeight,
        _enableInteractions = enableInteractions,
        _isSelectionMode = isSelectionMode,
@@ -165,6 +171,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   CalendarTask _task;
   TaskInteractionController _interactionController;
   int _minutesPerStep;
+  double Function()? _viewportScrollOffsetProvider;
   double _stepHeight;
   bool _enableInteractions;
   bool _isSelectionMode;
@@ -195,12 +202,11 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   String? _pendingResizeHandle;
   bool _useLongPressMoveUpdates = false;
   Offset? _lastLongPressLocalPosition;
-  Offset? _lastResizeLocalPosition;
-  Offset? _lastResizeRawLocalPosition;
   Offset? _lastResizeGlobalPosition;
-  bool _bottomResizeAutoScrollLocked = false;
-
-  double _totalResizeDelta = 0;
+  double _resizeAnchorPointerGlobalY = 0;
+  double _resizeAnchorScrollOffset = 0;
+  double _resizeAnchorStartHour = 0;
+  double _resizeAnchorDurationHours = 1;
   double _currentStartHour = 0;
   double _currentDurationHours = 1;
   DateTime? _tempScheduled;
@@ -231,6 +237,15 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   set minutesPerStep(int value) {
     if (_minutesPerStep == value) return;
     _minutesPerStep = value;
+  }
+
+  double Function()? get viewportScrollOffsetProvider =>
+      _viewportScrollOffsetProvider;
+  set viewportScrollOffsetProvider(double Function()? value) {
+    if (_viewportScrollOffsetProvider == value) {
+      return;
+    }
+    _viewportScrollOffsetProvider = value;
   }
 
   double get stepHeight => _stepHeight;
@@ -425,7 +440,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
         if (_shouldDelayResizeForPointer(event)) {
           _startResizeLongPressRecognizer(handle, event);
         } else {
-          _beginResize(handle, event.localPosition, event.position);
+          _beginResize(handle, event.position);
         }
         return;
       }
@@ -525,11 +540,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
             }
             _useLongPressMoveUpdates = true;
             _lastLongPressLocalPosition = details.localPosition;
-            _beginResize(
-              pendingHandle,
-              details.localPosition,
-              details.globalPosition,
-            );
+            _beginResize(pendingHandle, details.globalPosition);
           }
           ..onLongPressMoveUpdate = _handleLongPressMoveUpdate
           ..onLongPressEnd = (_) {
@@ -578,21 +589,17 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _resizeActive = false;
     _pendingTap = false;
     _activeHandle = null;
-    _totalResizeDelta = 0;
     _useLongPressMoveUpdates = false;
     _lastLongPressLocalPosition = null;
-    _lastResizeLocalPosition = null;
-    _lastResizeRawLocalPosition = null;
     _lastResizeGlobalPosition = null;
-    _bottomResizeAutoScrollLocked = false;
+    _resizeAnchorPointerGlobalY = 0;
+    _resizeAnchorScrollOffset = 0;
+    _resizeAnchorStartHour = 0;
+    _resizeAnchorDurationHours = 1;
     cursor = SystemMouseCursors.click;
   }
 
-  void _beginResize(
-    String handle,
-    Offset localPosition,
-    Offset globalPosition,
-  ) {
+  void _beginResize(String handle, Offset globalPosition) {
     _pendingResizeHandle = null;
     _resizeActive = true;
     _activeHandle = handle;
@@ -600,6 +607,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     interactionController.beginResizeInteraction(
       taskId: task.id,
       handle: handle,
+      globalPosition: globalPosition,
     );
     interactionController.registerResizeAutoScrollHandler(
       _handleResizeAutoScrollDelta,
@@ -610,22 +618,16 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _currentDurationHours = duration.inMinutes / 60.0;
     _tempScheduled = null;
     _tempDuration = null;
-    _totalResizeDelta = 0;
-    _lastResizeRawLocalPosition = localPosition;
     _lastResizeGlobalPosition = globalPosition;
-    _lastResizeLocalPosition = _effectiveResizeLocalPosition(localPosition);
-    _bottomResizeAutoScrollLocked = false;
+    _resetResizeAnchor(pointerGlobalY: globalPosition.dy);
     HapticFeedback.selectionClick();
   }
 
   void _updateResize(PointerMoveEvent event) {
     onResizePointerMove?.call(event.position);
     _lastResizeGlobalPosition = event.position;
-    final double delta = _consumeResizePointerDelta(event.localPosition);
-    if (delta == 0) {
-      return;
-    }
-    _applyResizeDelta(delta);
+    interactionController.updateResizePointerGlobalPosition(event.position);
+    _recomputeResizeFromCurrentPointer();
   }
 
   void _handleLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
@@ -639,11 +641,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     }
     onResizePointerMove?.call(details.globalPosition);
     _lastResizeGlobalPosition = details.globalPosition;
-    final double delta = _consumeResizePointerDelta(details.localPosition);
-    if (delta == 0) {
-      return;
-    }
-    _applyResizeDelta(delta);
+    interactionController.updateResizePointerGlobalPosition(
+      details.globalPosition,
+    );
+    _recomputeResizeFromCurrentPointer();
   }
 
   double _pointerMoveSlop(PointerDeviceKind kind) {
@@ -658,6 +659,17 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     return _tapSlop;
   }
 
+  double _currentViewportScrollOffset() {
+    return _viewportScrollOffsetProvider?.call() ?? 0.0;
+  }
+
+  void _resetResizeAnchor({required double pointerGlobalY}) {
+    _resizeAnchorPointerGlobalY = pointerGlobalY;
+    _resizeAnchorScrollOffset = _currentViewportScrollOffset();
+    _resizeAnchorStartHour = _currentStartHour;
+    _resizeAnchorDurationHours = _currentDurationHours;
+  }
+
   double _minimumResizeDurationHours() {
     final double stepMinutes = (minutesPerStep <= 0 ? 15 : minutesPerStep)
         .clamp(1, 120)
@@ -665,88 +677,101 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     return stepMinutes / 60.0;
   }
 
-  bool _isPinnedAtMinimumDuration(double minDurationHours) {
-    const double epsilon = 1e-6;
-    return _currentDurationHours <= minDurationHours + epsilon;
+  double? _topHandleBoundaryGlobalY() {
+    final Rect bounds = _globalBounds();
+    if (bounds == Rect.zero) {
+      return null;
+    }
+    final double boundaryOffset = math.min(handleExtent, bounds.height);
+    return bounds.top + boundaryOffset;
   }
 
-  Offset _effectiveResizeLocalPosition(Offset localPosition) {
-    final double minDurationHours = _minimumResizeDurationHours();
-    if (!_isPinnedAtMinimumDuration(minDurationHours)) {
-      return localPosition;
+  double? _bottomHandleBoundaryGlobalY() {
+    final Rect bounds = _globalBounds();
+    if (bounds == Rect.zero) {
+      return null;
     }
-    if (_activeHandle == 'bottom' &&
-        size.height.isFinite &&
-        localPosition.dy < size.height) {
-      return Offset(localPosition.dx, size.height);
-    }
-    if (_activeHandle == 'top' &&
-        size.height.isFinite &&
-        localPosition.dy > 0) {
-      return Offset(localPosition.dx, 0);
-    }
-    return localPosition;
+    final double boundaryOffset = math.min(handleExtent, bounds.height);
+    return bounds.bottom - boundaryOffset;
   }
 
-  double _consumeResizePointerDelta(Offset localPosition) {
-    _lastResizeRawLocalPosition = localPosition;
-    final Offset effectiveLocalPosition = _effectiveResizeLocalPosition(
-      localPosition,
-    );
-    final Offset? previous = _lastResizeLocalPosition;
-    _lastResizeLocalPosition = effectiveLocalPosition;
-    _syncBottomResizeAutoScrollLock(localPosition);
-    if (previous == null) {
-      return 0;
+  bool _pointerIsOutsideValidResizeRegion(double pointerGlobalY) {
+    if (_activeHandle == 'bottom') {
+      final double? topBoundary = _topHandleBoundaryGlobalY();
+      return topBoundary != null && pointerGlobalY < topBoundary;
     }
-    return effectiveLocalPosition.dy - previous.dy;
+    if (_activeHandle == 'top') {
+      final double? bottomBoundary = _bottomHandleBoundaryGlobalY();
+      return bottomBoundary != null && pointerGlobalY > bottomBoundary;
+    }
+    return false;
   }
 
-  Offset? _currentResizeLocalPositionFromGlobal() {
+  void _recomputeResizeFromCurrentPointer() {
+    if (!_resizeActive || _activeHandle == null) {
+      return;
+    }
     final Offset? globalPosition = _lastResizeGlobalPosition;
-    if (globalPosition == null || !attached || !hasSize) {
-      return _lastResizeRawLocalPosition;
-    }
-    return globalToLocal(globalPosition);
-  }
-
-  void _syncBottomResizeAutoScrollLock(Offset localPosition) {
-    if (_activeHandle != 'bottom') {
-      _bottomResizeAutoScrollLocked = false;
+    if (globalPosition == null) {
       return;
     }
-    final double minDurationHours = _minimumResizeDurationHours();
-    if (!_isPinnedAtMinimumDuration(minDurationHours) ||
-        !size.height.isFinite) {
-      _bottomResizeAutoScrollLocked = false;
-      return;
-    }
-    _bottomResizeAutoScrollLocked = localPosition.dy < size.height;
-  }
-
-  void _applyResizeDelta(double deltaDy) {
-    if (!_resizeActive || deltaDy == 0) {
-      return;
-    }
-    _totalResizeDelta += deltaDy;
+    final double pointerGlobalY = globalPosition.dy;
+    final double deltaPixels =
+        (pointerGlobalY - _resizeAnchorPointerGlobalY) +
+        (_currentViewportScrollOffset() - _resizeAnchorScrollOffset);
     final double resolvedStepHeight = stepHeight == 0 ? 1 : stepHeight;
-    final double steps = _totalResizeDelta / resolvedStepHeight;
+    final double steps = deltaPixels / resolvedStepHeight;
     final int deltaSteps = steps > 0 ? steps.floor() : steps.ceil();
-    if (deltaSteps == 0) {
-      return;
-    }
-    _totalResizeDelta -= deltaSteps * resolvedStepHeight;
     final double stepMinutes = (minutesPerStep <= 0 ? 15 : minutesPerStep)
         .clamp(1, 120)
         .toDouble();
+    final double minDurationHours = _minimumResizeDurationHours();
+    final bool outsideValidRegion = _pointerIsOutsideValidResizeRegion(
+      pointerGlobalY,
+    );
+
+    if (outsideValidRegion) {
+      if (_activeHandle == 'top') {
+        final DateTime scheduled = task.scheduledTime!;
+        final double currentEndHour =
+            (_resizeAnchorStartHour + _resizeAnchorDurationHours).clamp(
+              0.0,
+              24.0,
+            );
+        _currentStartHour = currentEndHour - minDurationHours;
+        _currentDurationHours = minDurationHours;
+        final int startMinutes = (_currentStartHour * 60).round();
+        _tempScheduled = DateTime(
+          scheduled.year,
+          scheduled.month,
+          scheduled.day,
+          startMinutes ~/ 60,
+          startMinutes % 60,
+        );
+      } else if (_activeHandle == 'bottom') {
+        _currentStartHour = _resizeAnchorStartHour;
+        _currentDurationHours = minDurationHours;
+        _tempScheduled = task.scheduledTime;
+      }
+      _tempDuration = Duration(minutes: (_currentDurationHours * 60).round());
+      _resetResizeAnchor(pointerGlobalY: pointerGlobalY);
+      final CalendarTask? preview = _resizePreview();
+      if (preview != null) {
+        onResizePreview?.call(preview);
+      }
+      return;
+    }
+
     final double hoursDelta = (deltaSteps * stepMinutes) / 60.0;
-    final double minDurationHours = stepMinutes / 60.0;
 
     if (_activeHandle == 'top') {
       final DateTime scheduled = task.scheduledTime!;
-      final double currentEndHour = (_currentStartHour + _currentDurationHours)
-          .clamp(0.0, 24.0);
-      double newStartHour = (_currentStartHour + hoursDelta).clamp(
+      final double currentEndHour =
+          (_resizeAnchorStartHour + _resizeAnchorDurationHours).clamp(
+            0.0,
+            24.0,
+          );
+      final double newStartHour = (_resizeAnchorStartHour + hoursDelta).clamp(
         0.0,
         currentEndHour - minDurationHours,
       );
@@ -767,11 +792,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       _tempScheduled = updatedStart;
       _tempDuration = Duration(minutes: (_currentDurationHours * 60).round());
     } else if (_activeHandle == 'bottom') {
-      final double maxDuration = 24.0 - _currentStartHour;
-      final double nextDuration = (_currentDurationHours + hoursDelta).clamp(
-        minDurationHours,
-        maxDuration,
-      );
+      final double maxDuration = 24.0 - _resizeAnchorStartHour;
+      final double nextDuration = (_resizeAnchorDurationHours + hoursDelta)
+          .clamp(minDurationHours, maxDuration);
+      _currentStartHour = _resizeAnchorStartHour;
       _currentDurationHours = nextDuration;
       _tempScheduled = task.scheduledTime;
       _tempDuration = Duration(minutes: (_currentDurationHours * 60).round());
@@ -781,55 +805,10 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     if (preview != null) {
       onResizePreview?.call(preview);
     }
-    if (_isPinnedAtMinimumDuration(minDurationHours)) {
-      _totalResizeDelta = 0;
-    }
-    final Offset? rawLocalPosition = _lastResizeRawLocalPosition;
-    if (rawLocalPosition != null) {
-      _lastResizeLocalPosition = _effectiveResizeLocalPosition(
-        rawLocalPosition,
-      );
-      _syncBottomResizeAutoScrollLock(rawLocalPosition);
-    }
   }
 
-  void _handleResizeAutoScrollDelta(double delta) {
-    final Offset? rawLocalPosition = _currentResizeLocalPositionFromGlobal();
-    if (rawLocalPosition != null) {
-      _lastResizeRawLocalPosition = rawLocalPosition;
-    }
-    if (_bottomResizeAutoScrollLocked) {
-      _totalResizeDelta = 0;
-      if (rawLocalPosition != null) {
-        _lastResizeLocalPosition = _effectiveResizeLocalPosition(
-          rawLocalPosition,
-        );
-      }
-      return;
-    }
-    final double minDurationHours = _minimumResizeDurationHours();
-    if (_isPinnedAtMinimumDuration(minDurationHours) &&
-        rawLocalPosition != null) {
-      if (_activeHandle == 'bottom' &&
-          size.height.isFinite &&
-          rawLocalPosition.dy < size.height) {
-        _totalResizeDelta = 0;
-        _lastResizeLocalPosition = _effectiveResizeLocalPosition(
-          rawLocalPosition,
-        );
-        return;
-      }
-      if (_activeHandle == 'top' &&
-          size.height.isFinite &&
-          rawLocalPosition.dy > 0) {
-        _totalResizeDelta = 0;
-        _lastResizeLocalPosition = _effectiveResizeLocalPosition(
-          rawLocalPosition,
-        );
-        return;
-      }
-    }
-    _applyResizeDelta(delta);
+  void _handleResizeAutoScrollDelta(double _) {
+    _recomputeResizeFromCurrentPointer();
   }
 
   void _endResize() {
@@ -837,7 +816,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     interactionController.endResizeInteraction(task.id);
     _resizeActive = false;
     _activeHandle = null;
-    _totalResizeDelta = 0;
     final CalendarTask result = preview ?? task;
     onResizeEnd?.call(result);
     _tempScheduled = null;

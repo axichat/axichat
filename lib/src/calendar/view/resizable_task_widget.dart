@@ -71,6 +71,7 @@ class ResizableTaskWidget extends StatefulWidget {
   final double hourHeight;
   final double stepHeight;
   final int minutesPerStep;
+  final double Function()? viewportScrollOffsetProvider;
   final double width;
   final double height;
   final bool isDayView;
@@ -101,6 +102,7 @@ class ResizableTaskWidget extends StatefulWidget {
     required this.hourHeight,
     required this.stepHeight,
     required this.minutesPerStep,
+    this.viewportScrollOffsetProvider,
     required this.width,
     required this.height,
     required this.isDayView,
@@ -179,6 +181,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
   @override
   Widget build(BuildContext context) {
     final TaskInteractionController controller = widget.interactionController;
+    final Listenable interactionChanges = Listenable.merge(<Listenable>[
+      controller.draggingTaskIdNotifier,
+      controller.hoveredTaskId,
+      controller.resizeInteraction,
+    ]);
     final bool disableAnimations =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final Duration firstInteractionPulseDuration =
@@ -187,10 +194,11 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
       valueListenable: controller.hoveredTaskId,
       builder: (context, hoveredTaskId, _) {
         return AnimatedBuilder(
-          animation: controller,
+          animation: interactionChanges,
           builder: (context, _) {
             final CalendarTask task = widget.task;
-            final bool isDragging = controller.draggingTaskId == task.id;
+            final bool isDragging =
+                controller.draggingTaskIdNotifier.value == task.id;
             final bool isHovering = hoveredTaskId == task.id;
             final bool highlightOnFirstInteraction = controller
                 .shouldHighlightTaskForFirstInteraction(task);
@@ -274,6 +282,8 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                   task: task,
                   interactionController: controller,
                   minutesPerStep: widget.minutesPerStep,
+                  viewportScrollOffsetProvider:
+                      widget.viewportScrollOffsetProvider,
                   stepHeight: widget.stepHeight,
                   enableInteractions: widget.enableInteractions && !isDragging,
                   isSelectionMode: widget.isSelectionMode,

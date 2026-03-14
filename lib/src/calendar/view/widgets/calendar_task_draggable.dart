@@ -80,8 +80,6 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   late final VoidCallback _controllerListener;
   int? _trackedPointerId;
   bool _dragSessionActive = false;
-  DateTime? _lastDragUpdateTime;
-  static const Duration _syntheticUpdateDelay = Duration.zero;
 
   TaskInteractionController get _controller => widget.interactionController;
   CalendarTaskGeometry get _geometry => widget.geometry;
@@ -103,15 +101,19 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       }
     };
     _lastResizeTaskId = _controller.activeResizeInteraction?.taskId;
-    _controller.addListener(_controllerListener);
+    _controller.resizeInteraction.addListener(_controllerListener);
   }
 
   @override
   void didUpdateWidget(covariant CalendarTaskDraggable oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.interactionController != widget.interactionController) {
-      oldWidget.interactionController.removeListener(_controllerListener);
-      widget.interactionController.addListener(_controllerListener);
+      oldWidget.interactionController.resizeInteraction.removeListener(
+        _controllerListener,
+      );
+      widget.interactionController.resizeInteraction.addListener(
+        _controllerListener,
+      );
     }
     if (_geometry != CalendarTaskGeometry.empty && _sourceBounds == null) {
       _sourceBounds = _resolveGlobalBounds();
@@ -122,7 +124,9 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   @override
   void dispose() {
     _stopPointerTracking();
-    widget.interactionController.removeListener(_controllerListener);
+    widget.interactionController.resizeInteraction.removeListener(
+      _controllerListener,
+    );
     super.dispose();
   }
 
@@ -280,7 +284,6 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
 
   void _handleDragStarted() {
     _dragSessionActive = true;
-    _lastDragUpdateTime = DateTime.now();
     widget.interactionController.suppressSurfaceTapOnce();
     final Rect? bounds = _sourceBounds ?? _resolveGlobalBounds();
     if (bounds != null) {
@@ -289,14 +292,12 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    _lastDragUpdateTime = DateTime.now();
     widget.onDragUpdate?.call(details);
   }
 
   void _handleDragFinished({required bool cancelled}) {
     _clearDragSuppression();
     _dragSessionActive = false;
-    _lastDragUpdateTime = null;
     widget.onDragEnded(widget.task);
     _stopPointerTracking();
   }
@@ -416,17 +417,6 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     }
     if (_dragSessionActive && event is PointerMoveEvent) {
       _lastPointerGlobal = event.position;
-      final DateTime now = DateTime.now();
-      final DateTime? lastUpdate = _lastDragUpdateTime;
-      if (lastUpdate == null ||
-          now.difference(lastUpdate) >= _syntheticUpdateDelay) {
-        final DragUpdateDetails syntheticDetails = DragUpdateDetails(
-          sourceTimeStamp: event.timeStamp,
-          delta: event.delta,
-          globalPosition: event.position,
-        );
-        _handleDragUpdate(syntheticDetails);
-      }
     }
     if (!_dragSessionActive &&
         (event is PointerUpEvent || event is PointerCancelEvent)) {

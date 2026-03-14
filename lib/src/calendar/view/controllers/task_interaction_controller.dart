@@ -80,6 +80,71 @@ class TaskResizeInteraction {
   int get hashCode => Object.hash(taskId, handle);
 }
 
+enum CalendarInteractionKind { drag, resizeTop, resizeBottom }
+
+enum CalendarInteractionVerticalIntent { neutral, up, down }
+
+enum CalendarInteractionHorizontalIntent { neutral, backward, forward }
+
+@immutable
+class CalendarInteractionSession {
+  const CalendarInteractionSession({
+    required this.kind,
+    required this.taskId,
+    required this.globalPosition,
+    this.verticalIntent = CalendarInteractionVerticalIntent.neutral,
+    this.horizontalIntent = CalendarInteractionHorizontalIntent.neutral,
+  });
+
+  final CalendarInteractionKind kind;
+  final String taskId;
+  final Offset globalPosition;
+  final CalendarInteractionVerticalIntent verticalIntent;
+  final CalendarInteractionHorizontalIntent horizontalIntent;
+
+  bool get isResize =>
+      kind == CalendarInteractionKind.resizeTop ||
+      kind == CalendarInteractionKind.resizeBottom;
+
+  bool get isDrag => kind == CalendarInteractionKind.drag;
+
+  CalendarInteractionSession copyWith({
+    CalendarInteractionKind? kind,
+    String? taskId,
+    Offset? globalPosition,
+    CalendarInteractionVerticalIntent? verticalIntent,
+    CalendarInteractionHorizontalIntent? horizontalIntent,
+  }) {
+    return CalendarInteractionSession(
+      kind: kind ?? this.kind,
+      taskId: taskId ?? this.taskId,
+      globalPosition: globalPosition ?? this.globalPosition,
+      verticalIntent: verticalIntent ?? this.verticalIntent,
+      horizontalIntent: horizontalIntent ?? this.horizontalIntent,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is CalendarInteractionSession &&
+        other.kind == kind &&
+        other.taskId == taskId &&
+        other.globalPosition == globalPosition &&
+        other.verticalIntent == verticalIntent &&
+        other.horizontalIntent == horizontalIntent;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    kind,
+    taskId,
+    globalPosition,
+    verticalIntent,
+    horizontalIntent,
+  );
+}
+
 class TaskInteractionController extends ChangeNotifier {
   TaskInteractionController({ValueChanged<String>? onTaskInteracted})
     : _onTaskInteracted = onTaskInteracted,
@@ -93,18 +158,24 @@ class TaskInteractionController extends ChangeNotifier {
           anchorDy: 0,
         ),
       ),
+      resizePreviewRevision = ValueNotifier<int>(0),
+      draggingTaskIdNotifier = ValueNotifier<String?>(null),
       hoveredTaskId = ValueNotifier<String?>(null),
       dropHoverTaskId = ValueNotifier<String?>(null),
-      resizeInteraction = ValueNotifier<TaskResizeInteraction?>(null);
+      resizeInteraction = ValueNotifier<TaskResizeInteraction?>(null),
+      interactionSession = ValueNotifier<CalendarInteractionSession?>(null);
 
   final ValueChanged<String>? _onTaskInteracted;
 
   final ValueNotifier<DragPreview?> preview;
   final ValueNotifier<TaskClipboardState> clipboard;
   final ValueNotifier<DragFeedbackHint> feedbackHint;
+  final ValueNotifier<int> resizePreviewRevision;
+  final ValueNotifier<String?> draggingTaskIdNotifier;
   final ValueNotifier<String?> hoveredTaskId;
   final ValueNotifier<String?> dropHoverTaskId;
   final ValueNotifier<TaskResizeInteraction?> resizeInteraction;
+  final ValueNotifier<CalendarInteractionSession?> interactionSession;
 
   CalendarTask? _draggingTaskSnapshot;
   String? _draggingTaskId;
@@ -151,6 +222,8 @@ class TaskInteractionController extends ChangeNotifier {
   String? get currentHoveredTaskId => hoveredTaskId.value;
   String? get currentDropHoverTaskId => dropHoverTaskId.value;
   TaskResizeInteraction? get activeResizeInteraction => resizeInteraction.value;
+  CalendarInteractionSession? get activeInteractionSession =>
+      interactionSession.value;
 
   bool shouldHighlightTaskForFirstInteraction(CalendarTask task) {
     return !task.isRead;
@@ -225,15 +298,27 @@ class TaskInteractionController extends ChangeNotifier {
   void beginResizeInteraction({
     required String taskId,
     required String handle,
+    required Offset globalPosition,
   }) {
     final TaskResizeInteraction next = TaskResizeInteraction(
       taskId: taskId,
       handle: handle,
     );
-    if (resizeInteraction.value == next) {
+    final CalendarInteractionKind kind = handle == 'top'
+        ? CalendarInteractionKind.resizeTop
+        : CalendarInteractionKind.resizeBottom;
+    final CalendarInteractionSession session = CalendarInteractionSession(
+      kind: kind,
+      taskId: taskId,
+      globalPosition: globalPosition,
+    );
+    final bool unchanged =
+        resizeInteraction.value == next && interactionSession.value == session;
+    if (unchanged) {
       return;
     }
     resizeInteraction.value = next;
+    interactionSession.value = session;
     notifyListeners();
   }
 
@@ -242,6 +327,10 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     resizeInteraction.value = null;
+    if (interactionSession.value?.taskId == taskId &&
+        interactionSession.value?.isResize == true) {
+      interactionSession.value = null;
+    }
     _resizeAutoScrollHandler = null;
     notifyListeners();
   }
@@ -249,7 +338,6 @@ class TaskInteractionController extends ChangeNotifier {
   void updatePreview(DateTime start, Duration duration) {
     final DragPreview next = DragPreview(start: start, duration: duration);
     preview.value = next;
-    notifyListeners();
   }
 
   void clearPreview() {
@@ -257,7 +345,6 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     preview.value = null;
-    notifyListeners();
   }
 
   void beginDrag({
@@ -270,6 +357,7 @@ class TaskInteractionController extends ChangeNotifier {
   }) {
     final double normalizedPointer = pointerNormalized.clamp(0.0, 1.0);
     _draggingTaskId = task.id;
+    draggingTaskIdNotifier.value = task.id;
     _draggingTaskBaseId = task.baseId;
     _draggingTaskSnapshot = snapshot;
     _dragStartScheduledTime = task.scheduledTime;
@@ -316,6 +404,11 @@ class TaskInteractionController extends ChangeNotifier {
       Offset(pointerGlobalX, pointerGlobalY),
       notify: false,
     );
+    interactionSession.value = CalendarInteractionSession(
+      kind: CalendarInteractionKind.drag,
+      taskId: task.id,
+      globalPosition: Offset(pointerGlobalX, pointerGlobalY),
+    );
     dragHasMoved = false;
     _dragOriginSlot = originSlot;
     _cancelPendingWidthUpdates();
@@ -324,6 +417,7 @@ class TaskInteractionController extends ChangeNotifier {
 
   void endDrag() {
     _draggingTaskId = null;
+    draggingTaskIdNotifier.value = null;
     _draggingTaskBaseId = null;
     _draggingTaskSnapshot = null;
     _dragStartScheduledTime = null;
@@ -342,6 +436,9 @@ class TaskInteractionController extends ChangeNotifier {
     dragPointerGlobalY = null;
     dragPointerStartGlobalY = null;
     dragPointerNormalized = 0.5;
+    if (interactionSession.value?.isDrag == true) {
+      interactionSession.value = null;
+    }
     dragHasMoved = false;
     _pendingAnchorMinutes = null;
     clearPreview();
@@ -352,17 +449,21 @@ class TaskInteractionController extends ChangeNotifier {
 
   void updatePendingAnchorMinutes(DateTime? anchorMinutes) {
     _pendingAnchorMinutes = anchorMinutes;
-    notifyListeners();
   }
 
   void setResizePreview(String id, CalendarTask task) {
+    final CalendarTask? current = _resizePreviews[id];
+    if (current == task) {
+      return;
+    }
     _resizePreviews[id] = task;
-    notifyListeners();
+    resizePreviewRevision.value += 1;
   }
 
   void clearResizePreview(String id) {
-    if (_resizePreviews.remove(id) != null) {
-      notifyListeners();
+    final CalendarTask? removed = _resizePreviews.remove(id);
+    if (removed != null) {
+      resizePreviewRevision.value += 1;
     }
   }
 
@@ -371,7 +472,7 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     _resizePreviews.clear();
-    notifyListeners();
+    resizePreviewRevision.value += 1;
   }
 
   void registerResizeAutoScrollHandler(ResizeAutoScrollHandler? handler) {
@@ -459,16 +560,51 @@ class TaskInteractionController extends ChangeNotifier {
 
   void updateDragPointerGlobalPosition(
     Offset globalPosition, {
-    bool notify = true,
+    bool notify = false,
   }) {
     final double dx = globalPosition.dx;
     final double dy = globalPosition.dy;
     final bool changed = dragPointerGlobalX != dx || dragPointerGlobalY != dy;
     dragPointerGlobalX = dx;
     dragPointerGlobalY = dy;
+    final CalendarInteractionSession? session = interactionSession.value;
+    if (session != null && session.isDrag) {
+      interactionSession.value = session.copyWith(
+        globalPosition: globalPosition,
+      );
+    }
     if (notify && changed) {
       notifyListeners();
     }
+  }
+
+  void updateResizePointerGlobalPosition(Offset globalPosition) {
+    final CalendarInteractionSession? session = interactionSession.value;
+    if (session == null || !session.isResize) {
+      return;
+    }
+    if (session.globalPosition == globalPosition) {
+      return;
+    }
+    interactionSession.value = session.copyWith(globalPosition: globalPosition);
+  }
+
+  void updateInteractionEdgeIntent({
+    required CalendarInteractionVerticalIntent verticalIntent,
+    required CalendarInteractionHorizontalIntent horizontalIntent,
+  }) {
+    final CalendarInteractionSession? session = interactionSession.value;
+    if (session == null) {
+      return;
+    }
+    if (session.verticalIntent == verticalIntent &&
+        session.horizontalIntent == horizontalIntent) {
+      return;
+    }
+    interactionSession.value = session.copyWith(
+      verticalIntent: verticalIntent,
+      horizontalIntent: horizontalIntent,
+    );
   }
 
   void beginExternalDrag({
@@ -482,6 +618,7 @@ class TaskInteractionController extends ChangeNotifier {
       return;
     }
     _draggingTaskId = task.id;
+    draggingTaskIdNotifier.value = task.id;
     _draggingTaskBaseId = task.baseId;
     _draggingTaskSnapshot = snapshot;
     _dragStartScheduledTime = task.scheduledTime;
@@ -515,6 +652,11 @@ class TaskInteractionController extends ChangeNotifier {
       globalPosition.dy + pointerOffsetY,
     );
     updateDragPointerGlobalPosition(pointerPosition, notify: false);
+    interactionSession.value = CalendarInteractionSession(
+      kind: CalendarInteractionKind.drag,
+      taskId: task.id,
+      globalPosition: pointerPosition,
+    );
     dragHasMoved = false;
     notifyListeners();
   }
@@ -601,9 +743,12 @@ class TaskInteractionController extends ChangeNotifier {
     preview.dispose();
     clipboard.dispose();
     feedbackHint.dispose();
+    resizePreviewRevision.dispose();
+    draggingTaskIdNotifier.dispose();
     hoveredTaskId.dispose();
     dropHoverTaskId.dispose();
     resizeInteraction.dispose();
+    interactionSession.dispose();
     super.dispose();
   }
 

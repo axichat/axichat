@@ -43,6 +43,7 @@ class CalendarLayoutTheme {
     this.zoomControlsLabelPaddingHorizontal = axiSpaceS,
     this.zoomControlsIconSize = calendarZoomControlsIconSize,
     this.dragWidthDebounceDelay = calendarDragWidthDebounceDelay,
+    this.edgeAutoPageDebounceDelay = calendarAutoPageDebounceDelay,
     this.splitPreviewAnimationDuration =
         calendarTaskSplitPreviewAnimationDuration,
     this.scrollAnimationDuration = calendarScrollAnimationDuration,
@@ -77,6 +78,7 @@ class CalendarLayoutTheme {
   final double zoomControlsLabelPaddingHorizontal;
   final double zoomControlsIconSize;
   final Duration dragWidthDebounceDelay;
+  final Duration edgeAutoPageDebounceDelay;
   final Duration splitPreviewAnimationDuration;
   final Duration scrollAnimationDuration;
   final Duration slotHoverAnimationDuration;

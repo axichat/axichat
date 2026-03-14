@@ -774,6 +774,7 @@ CalendarTaskEntryBindings _buildTestBindings({
     stepHeight: 15,
     minutesPerStep: 15,
     hourHeight: 60,
+    viewportScrollOffsetProvider: () => 0,
     addGeometryListener: (_) {},
     removeGeometryListener: (_) {},
     requiresLongPressToDrag: false,

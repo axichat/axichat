@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart';
 
+import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 
 void main() {
@@ -20,4 +22,115 @@ void main() {
 
     controller.dispose();
   });
+
+  test('Resize interaction seeds and clears shared interaction session', () {
+    final controller = TaskInteractionController();
+    const position = Offset(12, 24);
+
+    controller.beginResizeInteraction(
+      taskId: 'task-1',
+      handle: 'bottom',
+      globalPosition: position,
+    );
+
+    expect(controller.activeResizeInteraction?.taskId, 'task-1');
+    expect(
+      controller.activeInteractionSession?.kind,
+      CalendarInteractionKind.resizeBottom,
+    );
+    expect(controller.activeInteractionSession?.globalPosition, position);
+
+    controller.updateResizePointerGlobalPosition(const Offset(20, 40));
+    controller.updateInteractionEdgeIntent(
+      verticalIntent: CalendarInteractionVerticalIntent.down,
+      horizontalIntent: CalendarInteractionHorizontalIntent.forward,
+    );
+
+    expect(
+      controller.activeInteractionSession?.verticalIntent,
+      CalendarInteractionVerticalIntent.down,
+    );
+    expect(
+      controller.activeInteractionSession?.horizontalIntent,
+      CalendarInteractionHorizontalIntent.forward,
+    );
+
+    controller.endResizeInteraction('task-1');
+
+    expect(controller.activeResizeInteraction, isNull);
+    expect(controller.activeInteractionSession, isNull);
+
+    controller.dispose();
+  });
+
+  test('Drag interaction seeds and clears shared interaction session', () {
+    final controller = TaskInteractionController();
+    final task = CalendarTask.create(
+      title: 'Drag task',
+      scheduledTime: DateTime(2024, 1, 1, 10),
+      duration: const Duration(hours: 1),
+    );
+
+    controller.beginDrag(
+      task: task,
+      snapshot: task.copyWith(),
+      bounds: const Rect.fromLTWH(20, 40, 120, 80),
+      pointerNormalized: 0.5,
+      pointerGlobalX: 80,
+      originSlot: task.scheduledTime,
+    );
+
+    expect(
+      controller.activeInteractionSession?.kind,
+      CalendarInteractionKind.drag,
+    );
+    expect(
+      controller.activeInteractionSession?.globalPosition,
+      const Offset(80, 80),
+    );
+
+    controller.updateDragPointerGlobalPosition(const Offset(96, 112));
+
+    expect(
+      controller.activeInteractionSession?.globalPosition,
+      const Offset(96, 112),
+    );
+
+    controller.endDrag();
+
+    expect(controller.activeInteractionSession, isNull);
+
+    controller.dispose();
+  });
+
+  test(
+    'Resize preview revisions increment only when preview state changes',
+    () {
+      final controller = TaskInteractionController();
+      final task = CalendarTask.create(
+        title: 'Resize task',
+        scheduledTime: DateTime(2024, 1, 1, 10),
+        duration: const Duration(hours: 1),
+      );
+      final CalendarTask preview = task.copyWith(
+        duration: const Duration(hours: 2),
+      );
+
+      expect(controller.resizePreviewRevision.value, 0);
+
+      controller.setResizePreview(task.id, preview);
+      expect(controller.resizePreviewRevision.value, 1);
+
+      controller.setResizePreview(task.id, preview);
+      expect(controller.resizePreviewRevision.value, 1);
+
+      controller.clearResizePreview(task.id);
+      expect(controller.resizePreviewRevision.value, 2);
+
+      controller.clearResizePreview(task.id);
+      expect(controller.resizePreviewRevision.value, 2);
+
+      controller.dispose();
+    },
+  );
 }

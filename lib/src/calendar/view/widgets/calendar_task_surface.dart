@@ -66,6 +66,7 @@ class CalendarTaskEntryBindings {
     required this.stepHeight,
     required this.minutesPerStep,
     required this.hourHeight,
+    required this.viewportScrollOffsetProvider,
     required this.addGeometryListener,
     required this.removeGeometryListener,
     required this.requiresLongPressToDrag,
@@ -89,6 +90,7 @@ class CalendarTaskEntryBindings {
   final double stepHeight;
   final int minutesPerStep;
   final double hourHeight;
+  final double Function()? viewportScrollOffsetProvider;
   final void Function(VoidCallback listener) addGeometryListener;
   final void Function(VoidCallback listener) removeGeometryListener;
   final bool requiresLongPressToDrag;
@@ -131,7 +133,8 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     super.initState();
     _menuController = ShadPopoverController();
     _controllerListener = () {
-      final String? nextId = _interactionController.draggingTaskId;
+      final String? nextId =
+          _interactionController.draggingTaskIdNotifier.value;
       if (_lastDraggingTaskId == nextId || !mounted) {
         return;
       }
@@ -159,7 +162,9 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
   @override
   void dispose() {
     _detachGeometryListener();
-    _attachedController?.removeListener(_controllerListener);
+    _attachedController?.draggingTaskIdNotifier.removeListener(
+      _controllerListener,
+    );
     _menuController.dispose();
     super.dispose();
   }
@@ -187,10 +192,12 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
     if (_attachedController == controller) {
       return;
     }
-    _attachedController?.removeListener(_controllerListener);
+    _attachedController?.draggingTaskIdNotifier.removeListener(
+      _controllerListener,
+    );
     _attachedController = controller;
-    _lastDraggingTaskId = controller.draggingTaskId;
-    controller.addListener(_controllerListener);
+    _lastDraggingTaskId = controller.draggingTaskIdNotifier.value;
+    controller.draggingTaskIdNotifier.addListener(_controllerListener);
   }
 
   void _attachGeometryListener(CalendarTaskEntryBindings bindings) {
@@ -282,6 +289,8 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 hourHeight: bindings.hourHeight,
                 stepHeight: bindings.stepHeight,
                 minutesPerStep: bindings.minutesPerStep,
+                viewportScrollOffsetProvider:
+                    bindings.viewportScrollOffsetProvider,
                 width: primaryWidth,
                 height: height,
                 isDayView: widget.isDayView,
@@ -512,6 +521,7 @@ class _CalendarTaskPreviewGhost extends StatelessWidget {
       hourHeight: bindings.hourHeight,
       stepHeight: bindings.stepHeight,
       minutesPerStep: bindings.minutesPerStep,
+      viewportScrollOffsetProvider: bindings.viewportScrollOffsetProvider,
       width: width,
       height: height,
       isDayView: isDayView,
@@ -552,6 +562,7 @@ class _CalendarTaskDragFeedback extends StatelessWidget {
         hourHeight: bindings.hourHeight,
         stepHeight: bindings.stepHeight,
         minutesPerStep: bindings.minutesPerStep,
+        viewportScrollOffsetProvider: bindings.viewportScrollOffsetProvider,
         width: width,
         height: height > 0 ? height : baseHeight,
         isDayView: isDayView,
