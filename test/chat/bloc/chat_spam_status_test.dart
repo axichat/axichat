@@ -98,6 +98,7 @@ void main() {
       final bloc = ChatBloc(
         jid: emailChat.jid,
         messageService: xmppService,
+        draftSyncService: xmppService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,

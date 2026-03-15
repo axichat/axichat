@@ -15,7 +15,6 @@ import 'package:axichat/src/calendar/models/day_event.dart';
 import 'package:axichat/src/calendar/models/calendar_availability.dart';
 import 'package:axichat/src/calendar/models/calendar_ics_meta.dart';
 import 'package:axichat/src/calendar/models/reminder_preferences.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
 
 part 'calendar_event.freezed.dart';
@@ -297,7 +296,7 @@ abstract class CalendarEvent with _$CalendarEvent {
 
   const factory CalendarEvent.taskShareRequested({
     required CalendarTask task,
-    required List<FanOutTarget> recipients,
+    required List<Contact> recipients,
     required String shareText,
     required bool readOnly,
     required Completer<CalendarShareResult> completer,

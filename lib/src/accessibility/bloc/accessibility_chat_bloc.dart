@@ -24,6 +24,7 @@ class AccessibilityChatBloc
   AccessibilityChatBloc({
     required String jid,
     required MessageService messageService,
+    required DraftSyncService draftSyncService,
     required List<AccessibilityContact> contacts,
     required String? myJid,
     required int initialUnreadCount,
@@ -31,6 +32,7 @@ class AccessibilityChatBloc
     EmailService? emailService,
   }) : _jid = jid,
        _messageService = messageService,
+       _draftSyncService = draftSyncService,
        _emailService = emailService,
        _contacts = contacts,
        _myJid = myJid,
@@ -48,6 +50,7 @@ class AccessibilityChatBloc
 
   final String _jid;
   final MessageService _messageService;
+  final DraftSyncService _draftSyncService;
   EmailService? _emailService;
   final Logger _log;
 
@@ -204,7 +207,7 @@ class AccessibilityChatBloc
     }
     emit(state.copyWith(busy: true, statusMessage: null, errorMessage: null));
     try {
-      final result = await _messageService.saveDraft(
+      final result = await _draftSyncService.saveDraft(
         id: event.draftId,
         jids: event.recipients.map((recipient) => recipient.jid).toList(),
         body: event.body,

@@ -6061,7 +6061,9 @@ WHERE jid = ?
     await transaction(() async {
       final existing = await select(contacts).get();
       final existingById = <String, String>{
-        for (final entry in existing) entry.nativeID: entry.jid,
+        for (final entry in existing)
+          if (entry.nativeID != null && entry.nativeID!.isNotEmpty)
+            entry.nativeID!: entry.jid,
       };
       final toDelete = existingById.keys
           .where((id) => !contactsByNativeId.containsKey(id))

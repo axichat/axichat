@@ -1470,6 +1470,7 @@ class _AccessibilityChatScope extends StatelessWidget {
         return AccessibilityChatBloc(
           jid: chatJid,
           messageService: context.read<XmppService>(),
+          draftSyncService: context.read<XmppService>(),
           emailService: emailService,
           contacts: state.contacts,
           myJid: state.myJid,

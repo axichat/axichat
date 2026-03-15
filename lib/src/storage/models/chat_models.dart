@@ -6,6 +6,7 @@ import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:drift/drift.dart' hide JsonKey;
+import 'package:equatable/equatable.dart';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
@@ -574,6 +575,330 @@ class EmailChatAccounts extends Table {
   ];
 }
 
+class Contact extends Equatable implements Insertable<Contact> {
+  const Contact._({
+    this.nativeID,
+    required this.chat,
+    required this.address,
+    required this.providedDisplayName,
+    required this.shareSignatureEnabled,
+    required this.transport,
+  });
+
+  factory Contact.fromDb({required String nativeID, required String jid}) =>
+      Contact._(
+        nativeID: nativeID,
+        chat: null,
+        address: jid,
+        providedDisplayName: null,
+        shareSignatureEnabled: false,
+        transport: null,
+      );
+
+  factory Contact.chat({
+    required Chat chat,
+    required bool shareSignatureEnabled,
+  }) => Contact._(
+    chat: chat,
+    address: chat.emailAddress,
+    providedDisplayName: chat.contactDisplayName,
+    shareSignatureEnabled: shareSignatureEnabled,
+    transport: chat.defaultTransport,
+  );
+
+  factory Contact.address({
+    String? nativeID,
+    required String address,
+    String? displayName,
+    bool shareSignatureEnabled = false,
+    MessageTransport? transport,
+  }) {
+    final trimmed = address.trim();
+    final resolvedDisplayName = displayName?.trim();
+    return Contact._(
+      nativeID: nativeID,
+      chat: null,
+      address: trimmed,
+      providedDisplayName: resolvedDisplayName?.isNotEmpty == true
+          ? resolvedDisplayName
+          : null,
+      shareSignatureEnabled: shareSignatureEnabled,
+      transport: transport,
+    );
+  }
+
+  final String? nativeID;
+  final Chat? chat;
+  final String? address;
+  final String? providedDisplayName;
+  final bool shareSignatureEnabled;
+  final MessageTransport? transport;
+
+  bool get hasBackingChat => chat != null;
+
+  String? get chatJid {
+    final value = chat?.jid.trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return value;
+  }
+
+  String get key => chat?.jid ?? normalizedAddress ?? address!;
+
+  MessageTransport? get configuredTransport =>
+      transport ?? chat?.defaultTransport;
+
+  MessageTransport? get hintedTransport => hintTransportForAddress(address);
+
+  bool get isEmailBacked => chat?.isEmailBacked ?? false;
+
+  bool get supportsEmail {
+    final targetChat = chat;
+    if (targetChat != null) {
+      return targetChat.supportsEmail;
+    }
+    return resolvedAddress?.isNotEmpty == true;
+  }
+
+  bool get isAxichatWelcomeThread =>
+      chat?.isAxichatWelcomeThread ??
+      isAxichatWelcomeThreadJid(chatJid ?? resolvedAddress);
+
+  bool get hasEmailThread => chat?.defaultTransport.isEmail ?? false;
+
+  bool get hasXmppThread => chat != null && !(chat!.defaultTransport.isEmail);
+
+  EncryptionProtocol get encryptionProtocol =>
+      chat?.encryptionProtocol ?? EncryptionProtocol.none;
+
+  ChatType get chatType => chat?.type ?? ChatType.chat;
+
+  String? get resolvedAddress {
+    final trimmed = address?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  String? get normalizedOrResolvedAddress =>
+      normalizedAddress ?? resolvedAddress;
+
+  String? get remoteAddress {
+    final threadedAddress = chat?.remoteJid.trim();
+    if (threadedAddress != null && threadedAddress.isNotEmpty) {
+      return threadedAddress;
+    }
+    return resolvedAddress;
+  }
+
+  String? get bareRemoteAddress {
+    final bareThreadedAddress = bareAddressOrNull(chat?.remoteJid);
+    if (bareThreadedAddress != null && bareThreadedAddress.isNotEmpty) {
+      return bareThreadedAddress;
+    }
+    final bareChatJid = bareAddressOrNull(chatJid);
+    if (bareChatJid != null && bareChatJid.isNotEmpty) {
+      return bareChatJid;
+    }
+    return bareAddressOrNull(resolvedAddress);
+  }
+
+  String? get effectiveAvatarPath => chat?.effectiveAvatarPath;
+
+  String get jid {
+    final value = resolvedAddress;
+    if (value != null && value.isNotEmpty) {
+      return value;
+    }
+    final chatJid = chat?.jid.trim();
+    if (chatJid != null && chatJid.isNotEmpty) {
+      return chatJid;
+    }
+    throw StateError('Contact has no jid.');
+  }
+
+  String? get recipientId {
+    final existingChatJid = chatJid;
+    if (existingChatJid != null && existingChatJid.isNotEmpty) {
+      return existingChatJid;
+    }
+    return resolvedAddress;
+  }
+
+  String? get preferredEmailAddress {
+    final chatEmail = chat?.emailAddress?.trim();
+    if (chatEmail != null && chatEmail.isNotEmpty) {
+      return chatEmail;
+    }
+    final chatJid = chat?.jid.trim();
+    if (chatJid != null && chatJid.isNotEmpty) {
+      return chatJid;
+    }
+    return resolvedAddress;
+  }
+
+  List<String> get identityAddresses {
+    final values = <String>[];
+    void add(String? candidate) {
+      final trimmed = candidate?.trim();
+      if (trimmed == null || trimmed.isEmpty || values.contains(trimmed)) {
+        return;
+      }
+      values.add(trimmed);
+    }
+
+    add(address);
+    add(chat?.jid);
+    add(chat?.emailAddress);
+    add(chat?.remoteJid);
+    return values;
+  }
+
+  List<String> get normalizedIdentityKeys {
+    final values = <String>[];
+    for (final value in identityAddresses) {
+      final normalized = normalizedAddressValue(value);
+      if (normalized == null ||
+          normalized.isEmpty ||
+          values.contains(normalized)) {
+        continue;
+      }
+      values.add(normalized);
+    }
+    return values;
+  }
+
+  List<String> get statusLookupKeys {
+    final values = <String>[];
+    final existingChatJid = chatJid;
+    if (existingChatJid != null && existingChatJid.isNotEmpty) {
+      values.add(existingChatJid);
+    }
+    for (final normalized in normalizedIdentityKeys) {
+      if (values.contains(normalized)) {
+        continue;
+      }
+      values.add(normalized);
+    }
+    return values;
+  }
+
+  String get displayName {
+    final chatDisplayName = chat?.displayName.trim();
+    if (chatDisplayName != null && chatDisplayName.isNotEmpty) {
+      return chatDisplayName;
+    }
+    final resolvedDisplayName = providedDisplayName?.trim();
+    if (resolvedDisplayName != null && resolvedDisplayName.isNotEmpty) {
+      return resolvedDisplayName;
+    }
+    final resolved = resolvedAddress;
+    if (resolved != null && resolved.isNotEmpty) {
+      return resolved;
+    }
+    return jid;
+  }
+
+  String get colorSeed => chat?.jid ?? resolvedAddress ?? key;
+
+  bool matchesChatJid(String jid) {
+    final trimmed = jid.trim();
+    if (trimmed.isEmpty) {
+      return false;
+    }
+    final existingChatJid = chatJid;
+    return existingChatJid != null &&
+        existingChatJid.isNotEmpty &&
+        existingChatJid == trimmed;
+  }
+
+  bool get needsTransportSelection {
+    return chat == null && transport == null && resolvedAddress != null;
+  }
+
+  bool usesEmailTransport({bool allowHint = false}) {
+    if (chat?.isEmailBacked ?? false) {
+      return true;
+    }
+    final resolvedTransport =
+        configuredTransport ?? (allowHint ? hintedTransport : null);
+    return resolvedTransport?.isEmail ?? false;
+  }
+
+  String? xmppJid({bool allowHint = false}) {
+    final resolvedTransport =
+        configuredTransport ?? (allowHint ? hintedTransport : null);
+    if (resolvedTransport?.isEmail ?? false) {
+      return null;
+    }
+    final targetChat = chat;
+    if (targetChat != null) {
+      return resolvedTransport?.isXmpp ?? false ? targetChat.jid : null;
+    }
+    final candidate = normalizedOrResolvedAddress;
+    if (candidate == null || candidate.isEmpty) {
+      return null;
+    }
+    return resolvedTransport?.isXmpp ?? false ? candidate : null;
+  }
+
+  Contact withTransport(MessageTransport nextTransport) {
+    if (transport == nextTransport || chat != null) {
+      return this;
+    }
+    final candidate = resolvedAddress;
+    if (candidate == null || candidate.isEmpty) {
+      return this;
+    }
+    return Contact.address(
+      nativeID: nativeID,
+      address: candidate,
+      displayName: providedDisplayName,
+      shareSignatureEnabled: shareSignatureEnabled,
+      transport: nextTransport,
+    );
+  }
+
+  String? get normalizedAddress {
+    final value = address?.trim();
+    if (value == null || value.isEmpty) {
+      return null;
+    }
+    return value.toLowerCase();
+  }
+
+  @override
+  Map<String, Expression<Object>> toColumns(bool nullToAbsent) {
+    final storedNativeID = nativeID?.trim();
+    final storedJid = resolvedAddress;
+    if (storedNativeID == null ||
+        storedNativeID.isEmpty ||
+        storedJid == null ||
+        storedJid.isEmpty) {
+      throw StateError(
+        'Cannot persist transient Contact without nativeID and jid.',
+      );
+    }
+    return <String, Expression<Object>>{
+      'native_i_d': Variable<String>(storedNativeID),
+      'jid': Variable<String>(storedJid),
+    };
+  }
+
+  @override
+  List<Object?> get props => [
+    nativeID,
+    chat?.jid,
+    address,
+    providedDisplayName,
+    shareSignatureEnabled,
+    transport,
+  ];
+}
+
+@UseRowClass(Contact, constructor: 'fromDb')
 class Contacts extends Table {
   TextColumn get nativeID => text()();
 
@@ -667,6 +992,18 @@ extension ChatTransportExtension on Chat {
 }
 
 extension ChatAvatarExtension on Chat {
+  String? get effectiveAvatarPath {
+    final primary = avatarPath?.trim();
+    if (primary != null && primary.isNotEmpty) {
+      return primary;
+    }
+    final contact = contactAvatarPath?.trim();
+    if (contact != null && contact.isNotEmpty) {
+      return contact;
+    }
+    return null;
+  }
+
   String get avatarIdentifier {
     final displayName = contactDisplayName?.trim();
     if (displayName?.isNotEmpty == true) {
@@ -727,6 +1064,38 @@ extension ChatLabelExtension on Chat {
       return contact!;
     }
     return remoteJid;
+  }
+}
+
+extension ChatIdentityExtension on Chat {
+  List<String> get identityAddresses {
+    final values = <String>[];
+    void add(String? candidate) {
+      final trimmed = candidate?.trim();
+      if (trimmed == null || trimmed.isEmpty || values.contains(trimmed)) {
+        return;
+      }
+      values.add(trimmed);
+    }
+
+    add(jid);
+    add(emailAddress);
+    add(remoteJid);
+    return values;
+  }
+
+  List<String> get normalizedIdentityKeys {
+    final values = <String>[];
+    for (final address in identityAddresses) {
+      final normalized = normalizedAddressValue(address);
+      if (normalized == null ||
+          normalized.isEmpty ||
+          values.contains(normalized)) {
+        continue;
+      }
+      values.add(normalized);
+    }
+    return values;
   }
 }
 

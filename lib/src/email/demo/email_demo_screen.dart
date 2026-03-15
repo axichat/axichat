@@ -6,10 +6,10 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/demo/bloc/email_demo_cubit.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/credential_store.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -179,7 +179,7 @@ class _EmailDemoScreenState extends State<EmailDemoScreen> {
                                       .sendDemoMessage(
                                         account: state.account,
                                         demoTarget: kEnableDemoChats
-                                            ? FanOutTarget.address(
+                                            ? Contact.address(
                                                 address:
                                                     state.account?.address ??
                                                     kDemoSelfJid,

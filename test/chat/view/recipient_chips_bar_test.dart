@@ -13,7 +13,7 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 void main() {
   testWidgets('submitting email adds recipient', (tester) async {
-    FanOutTarget? added;
+    Contact? added;
     await tester.pumpWidget(
       _wrapWithTheme(
         RecipientChipsBar(
@@ -44,7 +44,7 @@ void main() {
       lastChangeTimestamp: DateTime.now(),
     );
     final recipient = ComposerRecipient(
-      target: FanOutTarget.chat(chat: chat, shareSignatureEnabled: true),
+      target: Contact.chat(chat: chat, shareSignatureEnabled: true),
     );
 
     await tester.pumpWidget(
@@ -72,7 +72,7 @@ void main() {
     String? removedKey;
     final recipients = [
       ComposerRecipient(
-        target: FanOutTarget.chat(
+        target: Contact.chat(
           chat: Chat(
             jid: 'dc-1@delta.chat',
             title: 'Pinned',
@@ -84,7 +84,7 @@ void main() {
         pinned: true,
       ),
       ComposerRecipient(
-        target: FanOutTarget.chat(
+        target: Contact.chat(
           chat: Chat(
             jid: 'dc-2@delta.chat',
             title: 'Removable',
@@ -130,7 +130,7 @@ void main() {
       lastChangeTimestamp: DateTime.now(),
     );
     final recipient = ComposerRecipient(
-      target: FanOutTarget.chat(chat: chat, shareSignatureEnabled: true),
+      target: Contact.chat(chat: chat, shareSignatureEnabled: true),
     );
 
     await tester.pumpWidget(
@@ -160,7 +160,7 @@ void main() {
     tester,
   ) async {
     final recipient = ComposerRecipient(
-      target: FanOutTarget.address(
+      target: Contact.address(
         address: 'CaseSensitive@Example.com',
         shareSignatureEnabled: true,
       ),

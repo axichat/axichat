@@ -384,7 +384,7 @@ class _HomeShellState extends State<HomeShell> {
           final locate = context.read;
           return AccessibilityActionBloc(
             chatsService: locate<XmppService>(),
-            messageService: locate<XmppService>(),
+            draftSyncService: locate<XmppService>(),
             rosterService: locate<XmppService>() as RosterService,
           );
         },
@@ -654,9 +654,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     final String resolvedBody = payload.text?.trim() ?? _emptyShareBody;
     final bool hasBody = resolvedBody.isNotEmpty;
-    final messageService = context.read<MessageService>();
+    final draftSyncService = context.read<XmppService>();
     final List<String> attachmentMetadataIds = await _persistSharedAttachments(
-      messageService: messageService,
+      draftSyncService: draftSyncService,
       attachments: payload.attachments,
     );
     if (!mounted) {
@@ -684,7 +684,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<List<String>> _persistSharedAttachments({
-    required MessageService messageService,
+    required DraftSyncService draftSyncService,
     required List<ShareAttachmentPayload> attachments,
   }) async {
     final List<EmailAttachment> prepared = await _prepareSharedAttachments(
@@ -694,7 +694,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (prepared.isEmpty) {
       return const <String>[];
     }
-    return messageService.persistDraftAttachmentMetadata(prepared);
+    return draftSyncService.persistDraftAttachmentMetadata(prepared);
   }
 
   Future<List<EmailAttachment>> _prepareSharedAttachments({
@@ -1261,6 +1261,7 @@ class _HomeContent extends StatelessWidget {
             return ChatBloc(
               jid: resolvedJid,
               messageService: locate<XmppService>(),
+              draftSyncService: locate<XmppService>(),
               chatsService: locate<XmppService>(),
               mucService: locate<XmppService>(),
               notificationService: locate<NotificationService>(),

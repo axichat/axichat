@@ -15,7 +15,6 @@ import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -194,7 +193,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     );
   }
 
-  void _handleRecipientAdded(FanOutTarget target) {
+  void _handleRecipientAdded(Contact target) {
     if (_recipients.any((recipient) => recipient.key == target.key)) {
       return;
     }
@@ -251,7 +250,7 @@ class _CalendarTaskShareSheetState extends State<CalendarTaskShareSheet> {
     setState(() => _isSending = true);
     final String shareText = _bodyController.text.trim();
     final bool readOnly = _isReadOnly;
-    final List<FanOutTarget> targets = includedRecipients
+    final List<Contact> targets = includedRecipients
         .map((recipient) => recipient.target)
         .toList(growable: false);
     final completer = Completer<CalendarShareResult>();

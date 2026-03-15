@@ -25,6 +25,15 @@ final class DraftRecipientData {
   final String jid;
   final String role;
 
+  static DraftRecipientData normalized({
+    required String jid,
+    String role = _roleFallback,
+  }) {
+    final normalizedJid = jid.trim();
+    final normalizedRole = role.trim().isNotEmpty ? role.trim() : _roleFallback;
+    return DraftRecipientData(jid: normalizedJid, role: normalizedRole);
+  }
+
   DraftRecipientData copyWith({String? jid, String? role}) {
     return DraftRecipientData(jid: jid ?? this.jid, role: role ?? this.role);
   }
@@ -41,7 +50,7 @@ final class DraftRecipientData {
     final role = rawRole is String && rawRole.trim().isNotEmpty
         ? rawRole.trim()
         : _roleFallback;
-    return DraftRecipientData(jid: trimmedJid, role: role);
+    return DraftRecipientData.normalized(jid: trimmedJid, role: role);
   }
 }
 
@@ -71,6 +80,162 @@ class DraftRecipientListConverter
         .map((recipient) => recipient.toJson())
         .toList(growable: false);
     return _listConverter.toSql(encoded);
+  }
+}
+
+final class DraftSyncMetadata {
+  const DraftSyncMetadata({
+    required this.id,
+    required this.updatedAt,
+    required this.sourceId,
+  });
+
+  final String id;
+  final DateTime updatedAt;
+  final String sourceId;
+
+  String get normalizedId => id.trim();
+
+  String get normalizedSourceId => sourceId.trim();
+
+  DraftSyncMetadata resolved({
+    required DateTime updatedAt,
+    required String sourceId,
+    required String Function() createId,
+  }) {
+    final resolvedId = normalizedId.isEmpty ? createId() : normalizedId;
+    final resolvedSourceId = normalizedSourceId.isEmpty
+        ? sourceId.trim()
+        : normalizedSourceId;
+    return DraftSyncMetadata(
+      id: resolvedId,
+      updatedAt: updatedAt.toUtc(),
+      sourceId: resolvedSourceId,
+    );
+  }
+}
+
+final class DraftQuoteTarget {
+  const DraftQuoteTarget({required this.stanzaId, required this.referenceKind});
+
+  final String stanzaId;
+  final MessageReferenceKind referenceKind;
+
+  static DraftQuoteTarget? fromDraft({
+    required String? stanzaId,
+    required MessageReferenceKind? referenceKind,
+  }) {
+    final normalizedStanzaId = stanzaId?.trim();
+    if (normalizedStanzaId == null || normalizedStanzaId.isEmpty) {
+      return null;
+    }
+    if (referenceKind == null) {
+      return null;
+    }
+    return DraftQuoteTarget(
+      stanzaId: normalizedStanzaId,
+      referenceKind: referenceKind,
+    );
+  }
+}
+
+final class DraftAttachmentMetadataIds {
+  DraftAttachmentMetadataIds(Iterable<String> ids)
+    : _ids = _normalizeIds(ids).toList(growable: false);
+
+  final List<String> _ids;
+
+  List<String> get values => List<String>.unmodifiable(_ids);
+
+  bool get isNotEmpty => _ids.isNotEmpty;
+
+  List<String> limited({required int maxCount}) {
+    if (_ids.length <= maxCount) {
+      return values;
+    }
+    return List<String>.unmodifiable(
+      _ids.take(maxCount).toList(growable: false),
+    );
+  }
+
+  List<String> staleComparedTo(Iterable<String> incoming) {
+    if (_ids.isEmpty) {
+      return const <String>[];
+    }
+    final incomingIds = _normalizeIds(incoming).toSet();
+    return _ids
+        .where((metadataId) => !incomingIds.contains(metadataId))
+        .toList(growable: false);
+  }
+
+  static Iterable<String> _normalizeIds(Iterable<String> ids) sync* {
+    final seen = <String>{};
+    for (final id in ids) {
+      final normalized = id.trim();
+      if (normalized.isEmpty || !seen.add(normalized)) {
+        continue;
+      }
+      yield normalized;
+    }
+  }
+}
+
+final class DraftRecipients {
+  const DraftRecipients({
+    required List<String> jids,
+    required List<DraftRecipientData> storedRecipients,
+  }) : _jids = jids,
+       _storedRecipients = storedRecipients;
+
+  final List<String> _jids;
+  final List<DraftRecipientData> _storedRecipients;
+
+  List<String> get jids => List<String>.unmodifiable(_jids);
+
+  List<DraftRecipientData> get storedRecipients =>
+      List<DraftRecipientData>.unmodifiable(_storedRecipients);
+
+  List<DraftRecipientData> resolvedStoredRecipients() {
+    if (_jids.isEmpty) {
+      return const <DraftRecipientData>[];
+    }
+    final existingByJid = <String, DraftRecipientData>{};
+    for (final recipient in _storedRecipients) {
+      final normalized = recipient.jid.trim();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      existingByJid[normalized] = recipient.copyWith(jid: normalized);
+    }
+    final resolved = <DraftRecipientData>[];
+    final seen = <String>{};
+    for (final jid in _jids) {
+      final normalized = jid.trim();
+      if (normalized.isEmpty || !seen.add(normalized)) {
+        continue;
+      }
+      final existing = existingByJid[normalized];
+      if (existing != null) {
+        resolved.add(existing);
+        continue;
+      }
+      resolved.add(DraftRecipientData.normalized(jid: normalized));
+    }
+    return List<DraftRecipientData>.unmodifiable(resolved);
+  }
+
+  bool matchesSearchQuery(
+    String lowerQuery, {
+    required String? body,
+    required String? subject,
+  }) {
+    if (lowerQuery.isEmpty) {
+      return true;
+    }
+    final recipientText = _jids.join(', ').toLowerCase();
+    return recipientText.contains(lowerQuery) ||
+        (body?.toLowerCase().contains(lowerQuery) ?? false) ||
+        (subject?.toLowerCase().contains(lowerQuery) ?? false);
   }
 }
 
@@ -247,6 +412,50 @@ abstract class Draft with _$Draft implements Insertable<Draft> {
   }) = _Draft;
 
   const Draft._();
+
+  DraftSyncMetadata get syncMetadata => DraftSyncMetadata(
+    id: draftSyncId,
+    updatedAt: draftUpdatedAt,
+    sourceId: draftSourceId,
+  );
+
+  DraftRecipients get recipients =>
+      DraftRecipients(jids: jids, storedRecipients: draftRecipients);
+
+  DraftAttachmentMetadataIds get attachmentMetadata =>
+      DraftAttachmentMetadataIds(attachmentMetadataIds);
+
+  DraftQuoteTarget? get quoteTarget => DraftQuoteTarget.fromDraft(
+    stanzaId: quotingStanzaId,
+    referenceKind: quotingReferenceKind,
+  );
+
+  bool get hasSyncIdentity => syncMetadata.normalizedId.isNotEmpty;
+
+  bool get hasAttachments => attachmentMetadata.isNotEmpty;
+
+  bool matchesSearchQuery(String lowerQuery) {
+    return recipients.matchesSearchQuery(
+      lowerQuery,
+      body: body,
+      subject: subject,
+    );
+  }
+
+  Draft copyWithSyncMetadata(DraftSyncMetadata metadata) {
+    return copyWith(
+      draftSyncId: metadata.id,
+      draftUpdatedAt: metadata.updatedAt.toUtc(),
+      draftSourceId: metadata.sourceId,
+    );
+  }
+
+  Draft copyWithQuoteTarget(DraftQuoteTarget? target) {
+    return copyWith(
+      quotingStanzaId: target?.stanzaId,
+      quotingReferenceKind: target?.referenceKind,
+    );
+  }
 
   @override
   Map<String, Expression<Object>> toColumns(bool nullToAbsent) =>

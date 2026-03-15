@@ -9,7 +9,6 @@ const String _draftSyncPendingRetractionsKeyName =
     'draft_sync_pending_retractions';
 const String _draftSyncSnapshotAtKeyName = 'draft_sync_last_snapshot_at';
 const String _draftSyncSnapshotIdsKeyName = 'draft_sync_last_snapshot_ids';
-const String _draftRecipientRoleDefault = 'to';
 const String _draftAttachmentUploadStanzaId = 'draft-attachment-upload';
 const int _draftsSnapshotStart = 0;
 const int _draftsSnapshotEnd = 0;
@@ -17,6 +16,10 @@ const String _draftSyncFlushPendingOperationName =
     'DraftSyncService.flushPendingOnResume';
 const String _draftSyncSnapshotBootstrapOperationName =
     'DraftSyncService.bootstrapSnapshotOnNegotiations';
+const String _draftSyncPublishFailedLog = 'Failed to publish draft sync.';
+const String _draftSyncPublishAbortedLog = 'Draft sync publish aborted.';
+const String _draftSyncRetractFailedLog = 'Failed to retract draft sync.';
+const String _draftSyncRetractAbortedLog = 'Draft sync retract aborted.';
 
 final _draftSyncSourceKey = XmppStateStore.registerKey(_draftSyncSourceKeyName);
 final _draftSyncPendingPublishesKey = XmppStateStore.registerKey(
@@ -34,7 +37,7 @@ final _draftSyncSnapshotIdsKey = XmppStateStore.registerKey(
 
 enum _DraftSyncDecision { applyRemote, publishLocal, skip }
 
-mixin DraftSyncService on XmppBase, BaseStreamService {
+mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
   bool _draftSnapshotInFlight = false;
   String? _draftSourceId;
   bool _pendingDraftSyncLoaded = false;
@@ -72,16 +75,13 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
   DraftsPubSubManager? get _draftsManager =>
       _connection.getManager<DraftsPubSubManager>();
 
-  Future<XmppAttachmentUpload> _uploadDraftAttachment(
-    EmailAttachment attachment,
+  Stream<List<Draft>> draftsStream({
+    int start = 0,
+    int end = basePageItemLimit,
+  }) => createPaginatedStream<Draft, XmppDatabase>(
+    watchFunction: (db) async => db.watchDrafts(start: start, end: end),
+    getFunction: (db) => db.getDrafts(start: start, end: end),
   );
-
-  Future<void> _uploadDraftAttachmentFile({
-    required XmppAttachmentUpload upload,
-    required FileMetadataData metadata,
-    required String stanzaId,
-    required bool shouldStore,
-  });
 
   Future<void> syncDraftsSnapshot() async {
     if (_draftSnapshotInFlight) {
@@ -134,7 +134,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
       );
       final localById = <String, Draft>{};
       for (final draft in localDrafts) {
-        final syncId = draft.draftSyncId.trim();
+        final syncId = draft.syncMetadata.normalizedId;
         if (syncId.isEmpty) {
           continue;
         }
@@ -179,8 +179,8 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
         }
         if (_shouldApplyMissingDraftDeletion(
           syncId: syncId,
-          localUpdatedAt: draft.draftUpdatedAt,
-          entrySourceId: draft.draftSourceId,
+          localUpdatedAt: draft.syncMetadata.updatedAt,
+          entrySourceId: draft.syncMetadata.sourceId,
           localSourceId: localSourceId,
           lastSnapshotAt: previousSnapshotAt,
           previousSnapshotIds: previousSnapshotIds,
@@ -192,7 +192,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
         await publishDraftSync(draft);
       }
       for (final draft in localDrafts) {
-        if (draft.draftSyncId.trim().isNotEmpty) {
+        if (draft.hasSyncIdentity) {
           continue;
         }
         await publishDraftSync(draft);
@@ -212,13 +212,203 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     }
   }
 
+  Future<List<String>> persistDraftAttachmentMetadata(
+    Iterable<EmailAttachment> attachments,
+  ) async {
+    if (attachments.isEmpty) {
+      return const <String>[];
+    }
+    final List<String> metadataIds = <String>[];
+    for (final attachment in attachments) {
+      final metadataId = await _persistDraftAttachmentMetadata(attachment);
+      metadataIds.add(metadataId);
+    }
+    return List.unmodifiable(metadataIds);
+  }
+
+  Future<DraftSaveResult> saveDraft({
+    int? id,
+    required List<String> jids,
+    required String body,
+    String? subject,
+    String? quotingStanzaId,
+    MessageReferenceKind? quotingReferenceKind,
+    List<EmailAttachment> attachments = const [],
+  }) async {
+    final Draft? existingDraft = id == null
+        ? null
+        : await _dbOpReturning<XmppDatabase, Draft?>((db) => db.getDraft(id));
+    final draftUpdatedAt = DateTime.timestamp().toUtc();
+    final draftSyncMetadata =
+        (existingDraft?.syncMetadata ??
+                DraftSyncMetadata(
+                  id: '',
+                  updatedAt: draftUpdatedAt,
+                  sourceId: '',
+                ))
+            .resolved(
+              updatedAt: draftUpdatedAt,
+              sourceId: await _ensureDraftSourceId(),
+              createId: uuid.v4,
+            );
+    final draftRecipients = DraftRecipients(
+      jids: jids,
+      storedRecipients:
+          existingDraft?.recipients.storedRecipients ??
+          const <DraftRecipientData>[],
+    ).resolvedStoredRecipients();
+    final quoteTarget = DraftQuoteTarget.fromDraft(
+      stanzaId: quotingStanzaId,
+      referenceKind: quotingReferenceKind,
+    );
+    final metadataIds = <String>[];
+    for (final attachment in attachments) {
+      final metadataId = await _persistDraftAttachmentMetadata(attachment);
+      metadataIds.add(metadataId);
+    }
+    final attachmentMetadata = DraftAttachmentMetadataIds(metadataIds);
+    final savedId = await _dbOpReturning<XmppDatabase, int>(
+      (db) => db.saveDraft(
+        id: id,
+        jids: jids,
+        body: body,
+        draftSyncId: draftSyncMetadata.id,
+        draftUpdatedAt: draftSyncMetadata.updatedAt,
+        draftSourceId: draftSyncMetadata.sourceId,
+        draftRecipients: draftRecipients,
+        subject: subject,
+        quotingStanzaId: quoteTarget?.stanzaId,
+        quotingReferenceKind: quoteTarget?.referenceKind,
+        attachmentMetadataIds: attachmentMetadata.values,
+      ),
+    );
+    final staleMetadataIds =
+        (existingDraft?.attachmentMetadata ??
+                DraftAttachmentMetadataIds(const <String>[]))
+            .staleComparedTo(attachmentMetadata.values);
+    if (staleMetadataIds.isNotEmpty) {
+      await _deleteDraftAttachmentMetadata(staleMetadataIds);
+    }
+    final savedDraft = await _dbOpReturning<XmppDatabase, Draft?>(
+      (db) => savedId > 0
+          ? db.getDraft(savedId)
+          : db.getDraftBySyncId(draftSyncMetadata.id),
+    );
+    final int resolvedDraftId = savedDraft?.id ?? savedId;
+    final resolvedDraft =
+        savedDraft ??
+        Draft(
+          id: resolvedDraftId,
+          jids: jids,
+          draftSyncId: draftSyncMetadata.id,
+          draftUpdatedAt: draftSyncMetadata.updatedAt,
+          draftSourceId: draftSyncMetadata.sourceId,
+          draftRecipients: draftRecipients,
+          body: body,
+          subject: subject,
+          quotingStanzaId: quoteTarget?.stanzaId,
+          quotingReferenceKind: quoteTarget?.referenceKind,
+          attachmentMetadataIds: attachmentMetadata.values,
+        );
+    if (savedDraft != null) {
+      try {
+        await publishDraftSync(savedDraft);
+      } on XmppAbortedException {
+        _log.fine(_draftSyncPublishAbortedLog);
+      } on Exception catch (error, stackTrace) {
+        _log.fine(_draftSyncPublishFailedLog, error, stackTrace);
+      }
+    }
+    final draftCount = await _dbOpReturning<XmppDatabase, int>(
+      (db) => db.countDrafts(),
+    );
+    return DraftSaveResult(draft: resolvedDraft, draftCount: draftCount);
+  }
+
+  Future<List<EmailAttachment>> loadDraftAttachments(
+    Iterable<String> metadataIds,
+  ) async {
+    if (metadataIds.isEmpty) return const [];
+    final attachments = <EmailAttachment>[];
+    for (final metadataId in metadataIds) {
+      final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
+        (db) => db.getFileMetadata(metadataId),
+      );
+      if (metadata == null) {
+        continue;
+      }
+      var path = metadata.path;
+      if (path == null || path.trim().isEmpty) {
+        try {
+          path = await downloadInboundAttachment(metadataId: metadata.id);
+        } on Exception {
+          continue;
+        }
+      }
+      if (path == null || path.trim().isEmpty) {
+        continue;
+      }
+      final file = File(path);
+      if (!await file.exists()) {
+        try {
+          final downloaded = await downloadInboundAttachment(
+            metadataId: metadata.id,
+          );
+          if (downloaded != null && downloaded.trim().isNotEmpty) {
+            path = downloaded;
+          }
+        } on Exception {
+          continue;
+        }
+      }
+      final sourceFile = File(path);
+      if (!await sourceFile.exists()) {
+        continue;
+      }
+      final size = metadata.sizeBytes ?? await sourceFile.length();
+      attachments.add(
+        EmailAttachment(
+          path: path,
+          fileName: metadata.filename,
+          sizeBytes: size,
+          mimeType: metadata.mimeType,
+          width: metadata.width,
+          height: metadata.height,
+          metadataId: metadata.id,
+        ),
+      );
+    }
+    return attachments;
+  }
+
+  Future<void> deleteDraft({required int id}) async {
+    final draft = await _dbOpReturning<XmppDatabase, Draft?>(
+      (db) => db.getDraft(id),
+    );
+    final metadataIds = draft?.attachmentMetadata.values ?? const <String>[];
+    final syncId = draft?.syncMetadata.normalizedId ?? '';
+    await _dbOp<XmppDatabase>((db) => db.removeDraft(id));
+    if (metadataIds.isNotEmpty) {
+      await _deleteDraftAttachmentMetadata(metadataIds);
+    }
+    if (syncId.trim().isNotEmpty) {
+      try {
+        await retractDraftSync(syncId);
+      } on XmppAbortedException {
+        _log.fine(_draftSyncRetractAbortedLog);
+      } on Exception catch (error, stackTrace) {
+        _log.fine(_draftSyncRetractFailedLog, error, stackTrace);
+      }
+    }
+  }
+
   Future<void> publishDraftSync(Draft draft) async {
     final sourceId = await _ensureDraftSourceId();
     final resolvedDraft = await _ensureDraftSyncIdentity(
       draft: draft,
       sourceId: sourceId,
     );
-    final syncId = resolvedDraft.draftSyncId.trim();
+    final syncId = resolvedDraft.syncMetadata.normalizedId;
     if (syncId.isEmpty) {
       return;
     }
@@ -336,9 +526,9 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     if (existing == null) {
       return;
     }
-    final metadataIds = existing.attachmentMetadataIds;
+    final metadataIds = existing.attachmentMetadata.values;
     await _dbOp<XmppDatabase>((db) => db.removeDraft(existing.id));
-    await _removeDraftAttachmentMetadata(metadataIds);
+    await _deleteDraftAttachmentMetadata(metadataIds);
   }
 
   _DraftSyncDecision _resolveDraftSyncDecision({
@@ -346,7 +536,8 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     required DraftSyncPayload remote,
     required String localSourceId,
   }) {
-    final localUpdatedAt = local.draftUpdatedAt.toUtc();
+    final localSyncMetadata = local.syncMetadata;
+    final localUpdatedAt = localSyncMetadata.updatedAt.toUtc();
     final remoteUpdatedAt = remote.updatedAt.toUtc();
     if (remoteUpdatedAt.isAfter(localUpdatedAt)) {
       return _DraftSyncDecision.applyRemote;
@@ -356,7 +547,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     }
 
     final remoteSource = remote.sourceId.trim();
-    final localSource = local.draftSourceId.trim();
+    final localSource = localSyncMetadata.normalizedSourceId;
     if (remoteSource == localSourceId) {
       return _DraftSyncDecision.skip;
     }
@@ -378,9 +569,16 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
         await _dbOpReturning<XmppDatabase, Draft?>(
           (db) => db.getDraftBySyncId(payload.syncId),
         );
-    final existingMetadataIds =
-        resolvedExisting?.attachmentMetadataIds ?? const <String>[];
-    final recipientRecords = _mapDraftRecipientRecords(payload.recipients);
+    final existingMetadata =
+        resolvedExisting?.attachmentMetadata ??
+        DraftAttachmentMetadataIds(const <String>[]);
+    final recipientRecords = DraftRecipients(
+      jids: payload.recipientJids,
+      storedRecipients: _mapDraftRecipientRecords(payload.recipients),
+    ).resolvedStoredRecipients();
+    final attachmentMetadata = DraftAttachmentMetadataIds(
+      payload.attachmentMetadataIds,
+    );
     await _saveDraftAttachmentMetadataFromSync(payload.attachments);
     await _dbOp<XmppDatabase>(
       (db) async => db.upsertDraftFromSync(
@@ -390,80 +588,48 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
         subject: payload.subject,
         quotingStanzaId: payload.quotingStanzaId,
         quotingReferenceKind: payload.quotingReferenceKind,
-        attachmentMetadataIds: payload.attachmentMetadataIds,
+        attachmentMetadataIds: attachmentMetadata.values,
         draftUpdatedAt: payload.updatedAt.toUtc(),
         draftSourceId: payload.sourceId,
         draftRecipients: recipientRecords,
       ),
     );
     await _clearPendingDraftPublish(payload.syncId);
-    final staleMetadataIds = _resolveStaleAttachmentMetadata(
-      existing: existingMetadataIds,
-      incoming: payload.attachmentMetadataIds,
+    final staleMetadataIds = existingMetadata.staleComparedTo(
+      attachmentMetadata.values,
     );
-    await _removeDraftAttachmentMetadata(staleMetadataIds);
+    await _deleteDraftAttachmentMetadata(staleMetadataIds);
   }
 
   Future<DraftSyncPayload?> _buildDraftPayload(Draft draft) async {
-    final syncId = draft.draftSyncId.trim();
+    final syncMetadata = draft.syncMetadata;
+    final syncId = syncMetadata.normalizedId;
     if (syncId.isEmpty) return null;
     final recipients = await _resolveDraftRecipients(draft);
     final attachments = await _resolveDraftAttachments(draft);
     if (attachments == null) {
       return null;
     }
+    final quoteTarget = draft.quoteTarget;
     return DraftSyncPayload(
       syncId: syncId,
-      updatedAt: draft.draftUpdatedAt.toUtc(),
-      sourceId: draft.draftSourceId,
+      updatedAt: syncMetadata.updatedAt.toUtc(),
+      sourceId: syncMetadata.sourceId,
       recipients: recipients,
       subject: draft.subject,
       body: draft.body,
-      quotingStanzaId: draft.quotingStanzaId,
-      quotingReferenceKind: draft.quotingReferenceKind,
+      quotingStanzaId: quoteTarget?.stanzaId,
+      quotingReferenceKind: quoteTarget?.referenceKind,
       attachments: attachments,
     );
   }
 
   Future<List<DraftRecipient>> _resolveDraftRecipients(Draft draft) async {
-    final storedRecipients = draft.draftRecipients;
+    final storedRecipients = draft.recipients.storedRecipients;
     if (storedRecipients.isNotEmpty) {
       return _mapSyncRecipients(storedRecipients);
     }
-    final recipients = await _resolveDraftRecipientRecords(
-      jids: draft.jids,
-      existingRecipients: const <DraftRecipientData>[],
-    );
-    return _mapSyncRecipients(recipients);
-  }
-
-  Future<List<DraftRecipientData>> _resolveDraftRecipientRecords({
-    required List<String> jids,
-    required List<DraftRecipientData> existingRecipients,
-  }) {
-    if (jids.isEmpty) {
-      return Future.value(const <DraftRecipientData>[]);
-    }
-    final existingByJid = <String, DraftRecipientData>{};
-    for (final recipient in existingRecipients) {
-      final normalized = recipient.jid.trim();
-      if (normalized.isEmpty) continue;
-      existingByJid[normalized] = recipient;
-    }
-    final recipients = <DraftRecipientData>[];
-    for (final jid in jids) {
-      final normalized = jid.trim();
-      if (normalized.isEmpty) continue;
-      final existing = existingByJid[normalized];
-      if (existing != null) {
-        recipients.add(existing);
-        continue;
-      }
-      recipients.add(
-        DraftRecipientData(jid: normalized, role: _draftRecipientRoleDefault),
-      );
-    }
-    return Future.value(List<DraftRecipientData>.unmodifiable(recipients));
+    return _mapSyncRecipients(draft.recipients.resolvedStoredRecipients());
   }
 
   List<DraftRecipientData> _mapDraftRecipientRecords(
@@ -490,26 +656,12 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     return List<DraftRecipient>.unmodifiable(mapped);
   }
 
-  List<String> _resolveStaleAttachmentMetadata({
-    required List<String> existing,
-    required List<String> incoming,
-  }) {
-    if (existing.isEmpty) return const <String>[];
-    final incomingSet = incoming.toSet();
-    return existing
-        .where((metadataId) => !incomingSet.contains(metadataId))
-        .toList(growable: false);
-  }
-
   Future<List<DraftAttachmentRef>?> _resolveDraftAttachments(
     Draft draft,
   ) async {
-    final metadataIds =
-        draft.attachmentMetadataIds.length > draftSyncMaxAttachments
-        ? draft.attachmentMetadataIds
-              .take(draftSyncMaxAttachments)
-              .toList(growable: false)
-        : draft.attachmentMetadataIds;
+    final metadataIds = draft.attachmentMetadata.limited(
+      maxCount: draftSyncMaxAttachments,
+    );
     if (metadataIds.isEmpty) return const <DraftAttachmentRef>[];
     final db = await database;
     final attachments = <DraftAttachmentRef>[];
@@ -917,28 +1069,25 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     required Draft draft,
     required String sourceId,
   }) async {
-    final resolvedSyncId = draft.draftSyncId.trim().isEmpty
-        ? uuid.v4()
-        : draft.draftSyncId;
-    final resolvedSourceId = draft.draftSourceId.trim().isEmpty
-        ? sourceId
-        : draft.draftSourceId;
-    if (resolvedSyncId == draft.draftSyncId &&
-        resolvedSourceId == draft.draftSourceId) {
+    final currentSyncMetadata = draft.syncMetadata;
+    final resolvedSyncMetadata = currentSyncMetadata.resolved(
+      updatedAt: currentSyncMetadata.updatedAt,
+      sourceId: sourceId,
+      createId: uuid.v4,
+    );
+    if (resolvedSyncMetadata.id == currentSyncMetadata.id &&
+        resolvedSyncMetadata.sourceId == currentSyncMetadata.sourceId) {
       return draft;
     }
     await _dbOp<XmppDatabase>(
       (db) async => db.updateDraftSyncMetadata(
         id: draft.id,
-        draftSyncId: resolvedSyncId,
-        draftUpdatedAt: draft.draftUpdatedAt.toUtc(),
-        draftSourceId: resolvedSourceId,
+        draftSyncId: resolvedSyncMetadata.id,
+        draftUpdatedAt: resolvedSyncMetadata.updatedAt.toUtc(),
+        draftSourceId: resolvedSyncMetadata.sourceId,
       ),
     );
-    return draft.copyWith(
-      draftSyncId: resolvedSyncId,
-      draftSourceId: resolvedSourceId,
-    );
+    return draft.copyWithSyncMetadata(resolvedSyncMetadata);
   }
 
   Future<String> _ensureDraftSourceId() async {
@@ -962,7 +1111,41 @@ mixin DraftSyncService on XmppBase, BaseStreamService {
     return generated;
   }
 
-  Future<void> _removeDraftAttachmentMetadata(
+  Future<String> _persistDraftAttachmentMetadata(
+    EmailAttachment attachment,
+  ) async {
+    final metadataId = attachment.metadataId ?? uuid.v4();
+    final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
+      (db) => db.getFileMetadata(metadataId),
+    );
+    final fileName = attachment.fileName.isNotEmpty
+        ? attachment.fileName
+        : existing?.filename ?? p.basename(attachment.path);
+    final fileSizeBytes = attachment.sizeBytes > 0
+        ? attachment.sizeBytes
+        : existing?.sizeBytes;
+    final metadata = FileMetadataData(
+      id: metadataId,
+      filename: fileName,
+      path: attachment.path,
+      sourceUrls: existing?.sourceUrls,
+      mimeType: attachment.mimeType ?? existing?.mimeType,
+      sizeBytes: fileSizeBytes,
+      width: attachment.width ?? existing?.width,
+      height: attachment.height ?? existing?.height,
+      encryptionKey: existing?.encryptionKey,
+      encryptionIV: existing?.encryptionIV,
+      encryptionScheme: existing?.encryptionScheme,
+      cipherTextHashes: existing?.cipherTextHashes,
+      plainTextHashes: existing?.plainTextHashes,
+      thumbnailType: existing?.thumbnailType,
+      thumbnailData: existing?.thumbnailData,
+    );
+    await _dbOp<XmppDatabase>((db) => db.saveFileMetadata(metadata));
+    return metadata.id;
+  }
+
+  Future<void> _deleteDraftAttachmentMetadata(
     Iterable<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return;

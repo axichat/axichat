@@ -25,7 +25,6 @@ import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -191,7 +190,7 @@ class _CalendarAvailabilityShareScreenState
         widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled;
     _recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
+        target: Contact.chat(
           chat: lockedChat,
           shareSignatureEnabled: shareSignatureEnabled,
         ),
@@ -448,7 +447,7 @@ class _CalendarAvailabilityShareScreenState
     }
   }
 
-  void _handleRecipientAdded(FanOutTarget target) {
+  void _handleRecipientAdded(Contact target) {
     final Chat? chat = target.chat;
     if (chat == null) {
       return;
@@ -995,7 +994,7 @@ class _AvailabilityRecipientsStep extends StatelessWidget {
   final List<Chat> availableChats;
   final bool isBusy;
   final T Function<T>() locate;
-  final ValueChanged<FanOutTarget> onRecipientAdded;
+  final ValueChanged<Contact> onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
   final ValueChanged<String> onRecipientToggled;
   final VoidCallback onBack;

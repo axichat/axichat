@@ -48,7 +48,7 @@ class RecipientChipsBar extends StatefulWidget {
   final List<RosterItem> rosterItems;
   final List<String> databaseSuggestionAddresses;
   final String? selfJid;
-  final ValueChanged<FanOutTarget> onRecipientAdded;
+  final ValueChanged<Contact> onRecipientAdded;
   final ValueChanged<String> onRecipientToggled;
   final ValueChanged<String> onRecipientRemoved;
   final Map<String, FanOutRecipientState> latestStatuses;
@@ -80,7 +80,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   late List<ComposerRecipient> _renderedRecipients;
   final Set<String> _enteringKeys = <String>{};
   final Set<String> _removingKeys = <String>{};
-  List<FanOutTarget> _suggestions = const <FanOutTarget>[];
+  List<Contact> _suggestions = const <Contact>[];
   final ValueNotifier<int?> _highlightedSuggestionIndex = ValueNotifier<int?>(
     null,
   );
@@ -441,18 +441,16 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       addAvatar(item.jid, item.avatarPath ?? item.contactAvatarPath);
     }
     for (final chat in widget.availableChats) {
-      final path = chat.avatarPath ?? chat.contactAvatarPath;
-      addAvatar(chat.jid, path);
-      addAvatar(chat.emailAddress, path);
+      final path = chat.effectiveAvatarPath;
+      for (final key in chat.identityAddresses) {
+        addAvatar(key, path);
+      }
     }
     for (final recipient in widget.recipients) {
-      final chat = recipient.target.chat;
-      final path = chat?.avatarPath ?? chat?.contactAvatarPath;
-      if (chat != null) {
-        addAvatar(chat.jid, path);
-        addAvatar(chat.emailAddress, path);
+      final path = recipient.target.effectiveAvatarPath;
+      for (final key in recipient.target.identityAddresses) {
+        addAvatar(key, path);
       }
-      addAvatar(recipient.target.address, path);
     }
     return next;
   }
@@ -490,7 +488,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     final nextAvailable = availableChats
         .where(
           (chat) => !recipients.any(
-            (recipient) => recipient.target.chat?.jid == chat.jid,
+            (recipient) => recipient.target.matchesChatJid(chat.jid),
           ),
         )
         .toList(growable: false);
@@ -519,15 +517,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         addDomainFrom(suggestion);
       }
       for (final chat in availableChats) {
-        addDomainFrom(chat.emailAddress);
-        addDomainFrom(chat.jid);
-        addDomainFrom(chat.remoteJid);
+        for (final address in chat.identityAddresses) {
+          addDomainFrom(address);
+        }
       }
       for (final recipient in recipients) {
-        final target = recipient.target;
-        addDomainFrom(target.chat?.emailAddress ?? target.address);
-        addDomainFrom(target.chat?.jid);
-        addDomainFrom(target.chat?.remoteJid);
+        for (final address in recipient.target.identityAddresses) {
+          addDomainFrom(address);
+        }
       }
 
       final addresses = <String>{}
@@ -543,16 +540,14 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       }
 
       for (final chat in availableChats) {
-        addAddress(chat.emailAddress);
-        addAddress(chat.jid);
-        addAddress(chat.remoteJid);
+        for (final address in chat.identityAddresses) {
+          addAddress(address);
+        }
       }
       for (final recipient in recipients) {
-        final target = recipient.target;
-        addAddress(target.address);
-        addAddress(target.chat?.jid);
-        addAddress(target.chat?.emailAddress);
-        addAddress(target.chat?.remoteJid);
+        for (final address in recipient.target.identityAddresses) {
+          addAddress(address);
+        }
       }
       nextDomains = domains;
       nextAddresses = addresses;
@@ -622,7 +617,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
       return false;
     }
     _handleRecipientAdded(
-      FanOutTarget.address(
+      Contact.address(
         address: value,
         shareSignatureEnabled: context
             .read<SettingsCubit>()
@@ -633,7 +628,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return true;
   }
 
-  void _updateSuggestions(List<FanOutTarget> suggestions) {
+  void _updateSuggestions(List<Contact> suggestions) {
     _suggestions = suggestions;
     _highlightedSuggestionIndex.value = null;
   }
@@ -690,7 +685,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
         highlighted < _suggestions.length) {
       _handleRecipientAdded(_suggestions[highlighted]);
       _controller.clear();
-      _updateSuggestions(const <FanOutTarget>[]);
+      _updateSuggestions(const <Contact>[]);
       return true;
     }
     if (text.isEmpty) {
@@ -698,7 +693,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     }
     if (_handleManualEntry(text)) {
       _controller.clear();
-      _updateSuggestions(const <FanOutTarget>[]);
+      _updateSuggestions(const <Contact>[]);
       return true;
     }
     return false;
@@ -744,7 +739,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   List<ComposerRecipient> _removableRecipients() =>
       widget.recipients.where((recipient) => !recipient.pinned).toList();
 
-  void _handleRecipientAdded(FanOutTarget target) {
+  void _handleRecipientAdded(Contact target) {
     _clearPendingRemoval();
     widget.onRecipientAdded(target);
   }
@@ -844,23 +839,11 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }
 
   FanOutRecipientState? _statusFor(ComposerRecipient recipient) {
-    final targetChat = recipient.target.chat;
-    if (targetChat != null) {
-      final byJid = widget.latestStatuses[targetChat.jid];
-      if (byJid != null) {
-        return byJid;
+    for (final key in recipient.target.statusLookupKeys) {
+      final status = widget.latestStatuses[key];
+      if (status != null) {
+        return status;
       }
-      final emailKey = targetChat.emailAddress.normalizedJidKey;
-      if (emailKey != null && emailKey.isNotEmpty) {
-        final byEmail = widget.latestStatuses[emailKey];
-        if (byEmail != null) {
-          return byEmail;
-        }
-      }
-    }
-    final addressKey = recipient.target.address.normalizedJidKey;
-    if (addressKey != null && addressKey.isNotEmpty) {
-      return widget.latestStatuses[addressKey];
     }
     return null;
   }
@@ -885,7 +868,7 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
     return isAxichatWelcomeThreadJid(bare);
   }
 
-  Iterable<FanOutTarget> _autocompleteOptions(
+  Iterable<Contact> _autocompleteOptions(
     String raw,
     List<Chat> candidates,
     Set<String> knownDomains,
@@ -895,22 +878,22 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
   }) {
     const maxSuggestions = 8;
     final knownAddressesLower = _knownAddressesLower;
-    FanOutTarget chatTarget(Chat chat) => FanOutTarget.chat(
+    Contact chatTarget(Chat chat) => Contact.chat(
       chat: chat,
       shareSignatureEnabled:
           chat.shareSignatureEnabled ?? shareTokenSignatureEnabled,
     );
-    FanOutTarget addressTarget(String address) => FanOutTarget.address(
+    Contact addressTarget(String address) => Contact.address(
       address: address,
       shareSignatureEnabled: shareTokenSignatureEnabled,
     );
     final trimmed = raw.trim();
     final query = trimmed.toLowerCase();
-    final results = <FanOutTarget>[];
+    final results = <Contact>[];
     final seen = <String>{};
 
-    bool addTarget(FanOutTarget target) {
-      final rawKey = target.chat?.jid ?? target.address;
+    bool addTarget(Contact target) {
+      final rawKey = target.recipientId ?? target.resolvedAddress;
       final normalizedKey = _normalizeAddress(rawKey);
       if (normalizedKey == null ||
           normalizedKey.isEmpty ||
@@ -995,19 +978,8 @@ class _RecipientChipsBarState extends State<RecipientChipsBar>
 
   Set<String> _recipientNormalizedKeys() {
     final keys = <String>{};
-    void addKey(String? raw) {
-      final normalized = _normalizeAddress(raw);
-      if (normalized != null && normalized.isNotEmpty) {
-        keys.add(normalized);
-      }
-    }
-
     for (final recipient in widget.recipients) {
-      final target = recipient.target;
-      addKey(target.address);
-      addKey(target.chat?.jid);
-      addKey(target.chat?.emailAddress);
-      addKey(target.chat?.remoteJid);
+      keys.addAll(recipient.target.normalizedIdentityKeys);
     }
     return keys;
   }
@@ -1122,21 +1094,17 @@ class _RecipientChip extends StatelessWidget {
   }
 
   String _label(BuildContext context) {
-    if (recipient.target.chat != null) {
-      return recipient.target.chat!.title;
-    }
-    return recipient.target.displayName ??
-        recipient.target.address ??
-        context.l10n.recipientsFallbackLabel;
+    final displayName = recipient.target.displayName.trim();
+    return displayName.isNotEmpty
+        ? displayName
+        : context.l10n.recipientsFallbackLabel;
   }
 
   Color _chipColor(ShadColorScheme colors, bool colorfulAvatars) {
     if (!colorfulAvatars) {
       return colors.secondary;
     }
-    final seed =
-        recipient.target.chat?.jid ?? recipient.target.address ?? recipient.key;
-    return stringToColor(seed);
+    return stringToColor(recipient.target.colorSeed);
   }
 
   Color _foregroundColor(Color background, ShadColorScheme scheme) {
@@ -1155,7 +1123,7 @@ class _RecipientChipAvatar extends StatelessWidget {
     this.status,
   });
 
-  final FanOutTarget target;
+  final Contact target;
   final Map<String, String> avatarPathsByJid;
   final SelfIdentitySnapshot selfIdentity;
   final FanOutRecipientState? status;
@@ -1174,10 +1142,10 @@ class _RecipientChipAvatar extends StatelessWidget {
             avatarPathOverride: _avatarPathForChat(chat),
           )
         : AxiAvatar(
-            jid: target.address ?? target.displayName ?? '',
+            jid: target.recipientId ?? '',
             size: avatarSize,
             shape: AxiAvatarShape.squircle,
-            avatarPath: _avatarPathForKey(target.address ?? target.displayName),
+            avatarPath: _avatarPathForContact(target),
           );
     final badgeIcon = _statusIcon(status, colors);
     if (badgeIcon == null) {
@@ -1244,9 +1212,23 @@ class _RecipientChipAvatar extends StatelessWidget {
   }
 
   String? _avatarPathForChat(Chat chat) {
-    final entry = _avatarPathForKey(chat.jid);
-    if (entry != null) return entry;
-    return _avatarPathForKey(chat.emailAddress);
+    for (final key in chat.identityAddresses) {
+      final entry = _avatarPathForKey(key);
+      if (entry != null) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  String? _avatarPathForContact(Contact contact) {
+    for (final key in contact.identityAddresses) {
+      final entry = _avatarPathForKey(key);
+      if (entry != null) {
+        return entry;
+      }
+    }
+    return null;
   }
 }
 
@@ -1568,12 +1550,12 @@ class _RecipientAutocompleteField extends StatelessWidget {
   final Map<String, String> avatarPathsByJid;
   final SelfIdentitySnapshot selfIdentity;
   final bool showSuggestionsWhenEmpty;
-  final Iterable<FanOutTarget> Function(String raw) optionsBuilder;
+  final Iterable<Contact> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
   final bool Function(String value) onManualEntry;
-  final ValueChanged<List<FanOutTarget>> onOptionsChanged;
+  final ValueChanged<List<Contact>> onOptionsChanged;
   final bool Function() onSubmitted;
-  final ValueChanged<FanOutTarget> onRecipientAdded;
+  final ValueChanged<Contact> onRecipientAdded;
 
   @override
   Widget build(BuildContext context) {
@@ -1630,12 +1612,12 @@ class _RecipientAutocompleteOverlay extends StatefulWidget {
   final Map<String, String> avatarPathsByJid;
   final SelfIdentitySnapshot selfIdentity;
   final bool showSuggestionsWhenEmpty;
-  final Iterable<FanOutTarget> Function(String raw) optionsBuilder;
+  final Iterable<Contact> Function(String raw) optionsBuilder;
   final ValueListenable<int?> highlightedIndexListenable;
   final bool Function(String value) onManualEntry;
-  final ValueChanged<List<FanOutTarget>> onOptionsChanged;
+  final ValueChanged<List<Contact>> onOptionsChanged;
   final bool Function() onSubmitted;
-  final ValueChanged<FanOutTarget> onRecipientAdded;
+  final ValueChanged<Contact> onRecipientAdded;
 
   @override
   State<_RecipientAutocompleteOverlay> createState() =>
@@ -1656,7 +1638,7 @@ final class _RecipientAutocompleteOverlayState
   final LayerLink _layerLink = LayerLink();
   final OverlayPortalController _portalController = OverlayPortalController();
 
-  List<FanOutTarget> _options = const <FanOutTarget>[];
+  List<Contact> _options = const <Contact>[];
 
   void _showOverlayPortal() {
     if (_portalController.isShowing) {
@@ -1684,7 +1666,7 @@ final class _RecipientAutocompleteOverlayState
   void _recomputeOptions() {
     final query = widget.controller.text.trim();
     final next = query.isEmpty && !widget.showSuggestionsWhenEmpty
-        ? const <FanOutTarget>[]
+        ? const <Contact>[]
         : widget.optionsBuilder(query).toList(growable: false);
     if (listEquals(_options, next)) return;
     setState(() => _options = next);
@@ -1702,7 +1684,7 @@ final class _RecipientAutocompleteOverlayState
       _showOverlayPortal();
     } else {
       _hideOverlayPortal();
-      widget.onOptionsChanged(const <FanOutTarget>[]);
+      widget.onOptionsChanged(const <Contact>[]);
     }
   }
 
@@ -1889,7 +1871,7 @@ final class _RecipientAutocompleteOverlayState
 
   void _dismissOverlay() {
     _hideOverlayPortal();
-    widget.onOptionsChanged(const <FanOutTarget>[]);
+    widget.onOptionsChanged(const <Contact>[]);
   }
 
   void _handleOutsideTap() {
@@ -2161,10 +2143,10 @@ class _AutocompleteOptionsList extends StatefulWidget {
     required this.maxHeight,
   });
 
-  final List<FanOutTarget> options;
+  final List<Contact> options;
   final Map<String, String> avatarPathsByJid;
   final SelfIdentitySnapshot selfIdentity;
-  final ValueChanged<FanOutTarget> onSelected;
+  final ValueChanged<Contact> onSelected;
   final TextStyle? titleStyle;
   final TextStyle? subtitleStyle;
   final Color dividerColor;
@@ -2337,10 +2319,7 @@ class _RecipientsAvatarStrip extends StatelessWidget {
     }
     final participants = <String>[];
     for (final recipient in recipients) {
-      final jid =
-          recipient.target.chat?.jid ??
-          recipient.target.address ??
-          recipient.key;
+      final jid = recipient.target.recipientId ?? recipient.key;
       if (jid.isEmpty) continue;
       participants.add(jid);
     }
@@ -2565,7 +2544,7 @@ class _SuggestionAvatar extends StatelessWidget {
     required this.selfIdentity,
   });
 
-  final FanOutTarget option;
+  final Contact option;
   final Map<String, String> avatarPathsByJid;
   final SelfIdentitySnapshot selfIdentity;
 
@@ -2579,9 +2558,19 @@ class _SuggestionAvatar extends StatelessWidget {
         showBadge: false,
       );
     }
-    final address = option.address ?? option.chat?.emailAddress ?? '';
-    final jid = address.isNotEmpty ? address : option.displayName ?? '';
-    final avatarPath = avatarPathsByJid[jid.toLowerCase()];
+    final jid = option.recipientId ?? '';
+    String? avatarPath;
+    for (final key in option.identityAddresses) {
+      final normalized = key.trim().toLowerCase();
+      if (normalized.isEmpty) {
+        continue;
+      }
+      final entry = avatarPathsByJid[normalized];
+      if (entry != null) {
+        avatarPath = entry;
+        break;
+      }
+    }
     return AxiAvatar(
       jid: jid,
       size: 32,

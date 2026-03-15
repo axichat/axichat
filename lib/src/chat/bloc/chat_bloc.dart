@@ -109,7 +109,7 @@ class ComposerRecipient extends Equatable {
     this.pinned = false,
   });
 
-  final FanOutTarget target;
+  final Contact target;
   final bool included;
   final bool pinned;
 
@@ -133,17 +133,14 @@ class ComposerRecipient extends Equatable {
 
   ComposerRecipient toggledIncluded() => copyWith(included: !included);
 
-  ComposerRecipient withTarget(FanOutTarget target) => copyWith(target: target);
+  ComposerRecipient withTarget(Contact target) => copyWith(target: target);
 
-  ComposerRecipient copyWith({
-    FanOutTarget? target,
-    bool? included,
-    bool? pinned,
-  }) => ComposerRecipient(
-    target: target ?? this.target,
-    included: included ?? this.included,
-    pinned: pinned ?? this.pinned,
-  );
+  ComposerRecipient copyWith({Contact? target, bool? included, bool? pinned}) =>
+      ComposerRecipient(
+        target: target ?? this.target,
+        included: included ?? this.included,
+        pinned: pinned ?? this.pinned,
+      );
 
   @override
   List<Object?> get props => [target, included, pinned];
@@ -185,7 +182,7 @@ extension ComposerRecipients on Iterable<ComposerRecipient> {
   List<String> recipientAddresses({bool allowHint = false}) {
     final resolved = <String>[];
     for (final recipient in this) {
-      final chatJid = recipient.target.chat?.jid.trim();
+      final chatJid = recipient.target.chatJid;
       if (chatJid != null && chatJid.isNotEmpty) {
         resolved.add(chatJid);
         continue;
@@ -227,8 +224,7 @@ extension ComposerRecipients on Iterable<ComposerRecipient> {
       return false;
     }
     if (recipients.length == 1) {
-      final targetChat = recipients.single.target.chat;
-      if (targetChat != null && targetChat.jid == chat.jid) {
+      if (recipients.single.target.matchesChatJid(chat.jid)) {
         return false;
       }
     }
@@ -375,6 +371,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ChatBloc({
     required this.jid,
     required MessageService messageService,
+    required DraftSyncService draftSyncService,
     required ChatsService chatsService,
     required NotificationService notificationService,
     required MucService mucService,
@@ -382,6 +379,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     EmailService? emailService,
     OmemoService? omemoService,
   }) : _messageService = messageService,
+       _draftSyncService = draftSyncService,
        _chatsService = chatsService,
        _notificationService = notificationService,
        _emailService = emailService,
@@ -537,6 +535,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final String? jid;
   late final String? _chatLookupJid = normalizeAddress(jid);
   final MessageService _messageService;
+  final DraftSyncService _draftSyncService;
   XmppService? _xmppService;
   final ChatsService _chatsService;
   final NotificationService _notificationService;
@@ -602,7 +601,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   RestartableTimer? _typingTimer;
 
   bool get encryptionAvailable => _omemoService != null;
+
   bool get _isEmailChat => state.chat?.defaultTransport.isEmail ?? false;
+
   String? _bareJid(String? jid) {
     return bareAddress(jid);
   }
@@ -1509,7 +1510,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required RoomState roomState,
   }) async {
     if (!roomState.hasSelfPresence) return;
-    if (state.xmppConnectionState != ConnectionState.connected) return;
     final roomJid = _bareJid(chat.jid);
     if (roomJid == null || roomJid.isEmpty) return;
     if (_roomAffiliationRefreshAttempts.contains(roomJid)) return;
@@ -1767,6 +1767,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         unreadBoundaryStanzaId: resetContext
             ? null
             : state.unreadBoundaryStanzaId,
+        pendingAttachments: resetContext
+            ? const <PendingAttachment>[]
+            : state.pendingAttachments,
         xmppCapabilities: capabilitiesShouldReset || !showXmppCapabilities
             ? null
             : state.xmppCapabilities,
@@ -4052,10 +4055,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final CalendarTask? taskForXmpp = hasQueuedAttachments
         ? null
         : effectiveTaskForXmpp;
-    final Chat? soleRecipientChat = xmppRecipients.length == 1
-        ? xmppRecipients.first.target.chat
+    final String? soleRecipientId = xmppRecipients.length == 1
+        ? xmppRecipients.first.recipientId
         : null;
-    final CalendarTask? fanOutTask = soleRecipientChat?.jid == chat.jid
+    final CalendarTask? fanOutTask = soleRecipientId == chat.jid
         ? taskForXmpp
         : null;
     final quoteId = quotedDraft == null ? null : _messageKey(quotedDraft);
@@ -4123,11 +4126,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     final invalidEmailRecipients = requiresEmail
         ? emailRecipients.where((recipient) {
-            final targetChat = recipient.target.chat;
-            if (targetChat != null) {
-              return !_isEmailCapableChat(targetChat);
-            }
-            return recipient.target.preferredEmailAddress?.isNotEmpty != true;
+            return !recipient.target.supportsEmail;
           })
         : const <ComposerRecipient>[];
     if (requiresEmail && emailRecipients.isEmpty) {
@@ -5000,8 +4999,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final target = event.target;
     final message = event.message;
     final isEmailTarget = _isEmailForwardTarget(target);
-    final targetChat = target.chat;
-    final targetJid = (targetChat?.jid ?? target.address)?.trim();
+    final targetJid = target.recipientId?.trim();
     final emailService = _emailService;
     final syntheticForward = _syntheticForwardEnvelope(message);
     final syntheticXmppText = ChatSubjectCodec.composeXmppBody(
@@ -5110,9 +5108,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           await _messageService.sendAttachment(
             jid: targetJid!,
             attachment: captionedAttachment,
-            encryptionProtocol:
-                targetChat?.encryptionProtocol ?? EncryptionProtocol.none,
-            chatType: targetChat?.type ?? ChatType.chat,
+            encryptionProtocol: target.encryptionProtocol,
+            chatType: target.chatType,
             htmlCaption: index == 0 ? syntheticXmppHtml : null,
             forwarded: true,
             forwardedFromJid: message.senderJid,
@@ -5143,9 +5140,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           htmlBody: syntheticXmppHtml,
           forwarded: true,
           forwardedFromJid: message.senderJid,
-          encryptionProtocol:
-              targetChat?.encryptionProtocol ?? EncryptionProtocol.none,
-          chatType: targetChat?.type ?? ChatType.chat,
+          encryptionProtocol: target.encryptionProtocol,
+          chatType: target.chatType,
         );
       }
       emitForwardSuccess();
@@ -5155,13 +5151,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  bool _isEmailForwardTarget(FanOutTarget target) {
+  bool _isEmailForwardTarget(Contact target) {
     return target.usesEmailTransport(allowHint: true);
   }
 
   Future<Chat?> _resolveEmailForwardTarget({
     required EmailService emailService,
-    required FanOutTarget target,
+    required Contact target,
   }) async {
     final targetChat = target.chat;
     if (targetChat != null) {
@@ -5876,7 +5872,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final resolvedCaption = caption?.trim() ?? '';
     final processed = <String>{};
     for (final recipient in recipients) {
-      final targetChat = recipient.target.chat;
       final targetJid = recipient.recipientId;
       if (targetJid == null || targetJid.isEmpty) {
         continue;
@@ -5887,11 +5882,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _messageService.sendMessage(
         jid: targetJid,
         text: resolvedCaption,
-        encryptionProtocol:
-            targetChat?.encryptionProtocol ?? chat.encryptionProtocol,
+        encryptionProtocol: recipient.target.hasBackingChat
+            ? recipient.target.encryptionProtocol
+            : chat.encryptionProtocol,
         calendarTaskIcs: task,
         calendarTaskIcsReadOnly: taskReadOnly,
-        chatType: targetChat?.type ?? chat.type,
+        chatType: recipient.target.hasBackingChat
+            ? recipient.target.chatType
+            : chat.type,
       );
     }
     return processed.isNotEmpty;
@@ -6119,17 +6117,25 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final orderedAttachments = attachments.toList(growable: false);
     if (orderedAttachments.isEmpty) return true;
     final shouldGroupAttachments = orderedAttachments.length > 1;
-    final targets = <String, Chat>{};
+    final targets = <String, Contact>{};
     if (recipients.isEmpty) {
-      targets[chat.jid] = chat;
+      targets[chat.jid] = Contact.chat(
+        chat: chat,
+        shareSignatureEnabled: chat.shareSignatureEnabled ?? false,
+      );
     } else {
       for (final recipient in recipients) {
-        final targetChat = recipient.target.chat;
-        if (targetChat == null) continue;
-        targets[targetChat.jid] = targetChat;
+        final targetJid = recipient.target.chatJid;
+        if (targetJid == null || targetJid.isEmpty) {
+          continue;
+        }
+        targets[targetJid] = recipient.target;
       }
       if (targets.isEmpty) {
-        targets[chat.jid] = chat;
+        targets[chat.jid] = Contact.chat(
+          chat: chat,
+          shareSignatureEnabled: chat.shareSignatureEnabled ?? false,
+        );
       }
     }
     final attachmentGroupIds = <String, String?>{};
@@ -6153,19 +6159,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _replacePendingAttachment(current, emit);
       try {
         XmppAttachmentUpload? upload;
-        for (final target in targets.values) {
+        for (final entry in targets.entries) {
+          final targetJid = entry.key;
+          final target = entry.value;
           final quote =
               quotedDraft != null &&
-                  quotedDraft.chatJid == target.jid &&
+                  quotedDraft.chatJid == targetJid &&
                   index == 0
               ? quotedDraft
               : null;
-          final groupId = attachmentGroupIds[target.jid];
+          final groupId = attachmentGroupIds[targetJid];
           upload = await _messageService.sendAttachment(
-            jid: target.jid,
+            jid: targetJid,
             attachment: current.attachment,
             encryptionProtocol: target.encryptionProtocol,
-            chatType: target.type,
+            chatType: target.chatType,
             quotedMessage: quote,
             htmlCaption: shouldApplyCaption ? htmlCaption : null,
             transportGroupId: groupId,
@@ -7012,9 +7020,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     final processed = <String>{};
     for (final recipient in recipients) {
-      final targetChat = recipient.target.chat;
-      final targetJid = targetChat?.jid;
-      if (targetChat == null || targetJid == null) {
+      final targetJid = recipient.target.chatJid;
+      if (targetJid == null || targetJid.isEmpty) {
         continue;
       }
       if (!processed.add(targetJid)) continue;
@@ -7024,11 +7031,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       await _messageService.sendMessage(
         jid: targetJid,
         text: body,
-        encryptionProtocol: targetChat.encryptionProtocol,
+        encryptionProtocol: recipient.target.encryptionProtocol,
         quotedMessage: quote,
         calendarTaskIcs: calendarTaskIcs,
         calendarTaskIcsReadOnly: calendarTaskIcsReadOnly,
-        chatType: targetChat.type,
+        chatType: recipient.target.chatType,
         onLocalMessageStored: onLocalMessageStored,
       );
     }
@@ -7363,7 +7370,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? null
         : _quotedMessageReference(quotedMessage: quotedDraft, chat: chat);
     try {
-      await _messageService.saveDraft(
+      await _draftSyncService.saveDraft(
         id: null,
         jids: resolvedRecipients,
         body: trimmedBody,

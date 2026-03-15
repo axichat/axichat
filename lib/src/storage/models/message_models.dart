@@ -608,6 +608,8 @@ abstract class Message with _$Message implements Insertable<Message> {
 }
 
 extension MessageContent on Message {
+  bool get isEmailBacked => deltaChatId != null || deltaMsgId != null;
+
   String? get normalizedHtmlBody => HtmlContentCodec.normalizeHtml(htmlBody);
 
   String get plainText {

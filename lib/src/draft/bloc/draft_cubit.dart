@@ -87,17 +87,20 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
 
   DraftCubit({
     required MessageService messageService,
+    required DraftSyncService draftSyncService,
     EmailService? emailService,
   }) : _messageService = messageService,
+       _draftSyncService = draftSyncService,
        _emailService = emailService,
        super(const DraftsAvailable(items: null, visibleItems: null)) {
-    _draftsSubscription = _messageService.draftsStream().listen((items) {
+    _draftsSubscription = _draftSyncService.draftsStream().listen((items) {
       _items = items;
       emit(_stateForItems(items));
     });
   }
 
   final MessageService _messageService;
+  final DraftSyncService _draftSyncService;
   EmailService? _emailService;
   List<Draft>? _items;
   DraftSearchSnapshot _searchSnapshot = const DraftSearchSnapshot(
@@ -143,7 +146,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     List<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    return _messageService.loadDraftAttachments(metadataIds);
+    return _draftSyncService.loadDraftAttachments(metadataIds);
   }
 
   Future<EmailAttachment> optimizeAttachment(EmailAttachment attachment) async {
@@ -157,7 +160,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   Future<bool> sendDraft({
     required int? id,
     required List<DraftXmppTarget> xmppTargets,
-    required List<FanOutTarget> emailTargets,
+    required List<Contact> emailTargets,
     required String body,
     required bool shareTokenSignatureEnabled,
     String? subject,
@@ -233,7 +236,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     List<EmailAttachment> attachments = const [],
     bool autoSave = false,
   }) async {
-    final result = await _messageService.saveDraft(
+    final result = await _draftSyncService.saveDraft(
       id: id,
       jids: jids,
       body: body,
@@ -262,7 +265,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
 
   Future<void> deleteDraft({required int id}) async {
     final draft = await _loadDraft(id);
-    await _messageService.deleteDraft(id: id);
+    await _draftSyncService.deleteDraft(id: id);
     try {
       await _clearCoreDraftForDraft(draft);
     } on Exception {
@@ -358,7 +361,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   }
 
   Future<void> _sendEmailDraft({
-    required List<FanOutTarget> targets,
+    required List<Contact> targets,
     required String body,
     String? subject,
     required List<EmailAttachment> attachments,
@@ -543,18 +546,15 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     var visibleItems = List<Draft>.from(items);
     if (snapshot.filterAttachmentsOnly) {
       visibleItems = visibleItems
-          .where((draft) => draft.attachmentMetadataIds.isNotEmpty)
+          .where((draft) => draft.hasAttachments)
           .toList();
     }
     final query = snapshot.query;
     if (query.isNotEmpty) {
       final lower = query.toLowerCase();
-      visibleItems = visibleItems.where((draft) {
-        final recipients = draft.jids.join(', ').toLowerCase();
-        return recipients.contains(lower) ||
-            (draft.body?.toLowerCase().contains(lower) ?? false) ||
-            (draft.subject?.toLowerCase().contains(lower) ?? false);
-      }).toList();
+      visibleItems = visibleItems
+          .where((draft) => draft.matchesSearchQuery(lower))
+          .toList();
     }
     visibleItems.sort(
       (a, b) => snapshot.sortOrder.isNewestFirst

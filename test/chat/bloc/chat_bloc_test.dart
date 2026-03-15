@@ -154,6 +154,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late MockMessageService messageService;
+  late MockDraftSyncService draftSyncService;
   late MockChatsService chatsService;
   late MockNotificationService notificationService;
   late MockMucService mucService;
@@ -161,7 +162,7 @@ void main() {
   late StreamController<Chat?> chatStreamController;
 
   setUpAll(() {
-    registerFallbackValue(<FanOutTarget>[]);
+    registerFallbackValue(<Contact>[]);
     registerFallbackValue(<Message>[fallbackMessage]);
     registerFallbackValue(MessageTimelineFilter.allWithContact);
     registerFallbackValue(OccupantAffiliation.none);
@@ -186,6 +187,7 @@ void main() {
 
   setUp(() {
     messageService = MockMessageService();
+    draftSyncService = MockDraftSyncService();
     chatsService = MockChatsService();
     notificationService = MockNotificationService();
     mucService = MockMucService();
@@ -330,7 +332,7 @@ void main() {
       ),
     ).thenAnswer((_) async {});
     when(
-      () => messageService.saveDraft(
+      () => draftSyncService.saveDraft(
         id: any(named: 'id'),
         jids: any(named: 'jids'),
         body: any(named: 'body'),
@@ -389,6 +391,7 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -463,6 +466,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -476,10 +480,10 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: extraChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: extraChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -503,7 +507,7 @@ void main() {
                 useSubjectToken: any(named: 'useSubjectToken'),
               ),
             ).captured.single
-            as List<FanOutTarget>;
+            as List<Contact>;
 
     expect(capturedTargets.map((target) => target.key).toSet(), {
       emailChat.jid,
@@ -560,6 +564,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -573,10 +578,10 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
       ComposerRecipient(
-        target: FanOutTarget.address(
+        target: Contact.address(
           address: 'Carol@Example.com',
           shareSignatureEnabled: true,
         ),
@@ -603,7 +608,7 @@ void main() {
                 useSubjectToken: any(named: 'useSubjectToken'),
               ),
             ).captured.single
-            as List<FanOutTarget>;
+            as List<Contact>;
     expect(capturedTargets.map((target) => target.key).toSet(), {
       emailChat.jid,
       'carol@example.com',
@@ -623,6 +628,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -692,6 +698,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -705,10 +712,10 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: extraChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: extraChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -771,7 +778,7 @@ void main() {
     );
 
     final responses = <FanOutSendReport>[failureReport, successReport];
-    final capturedTargets = <List<FanOutTarget>>[];
+    final capturedTargets = <List<Contact>>[];
     final capturedShareIds = <String?>[];
     when(
       () => emailService.fanOutSend(
@@ -784,7 +791,7 @@ void main() {
       ),
     ).thenAnswer((invocation) async {
       capturedTargets.add(
-        List<FanOutTarget>.from(invocation.namedArguments[#targets] as List),
+        List<Contact>.from(invocation.namedArguments[#targets] as List),
       );
       capturedShareIds.add(invocation.namedArguments[#shareId] as String?);
       return responses.removeAt(0);
@@ -793,6 +800,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -805,10 +813,10 @@ void main() {
     await _pumpBloc();
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: extraChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: extraChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -824,7 +832,7 @@ void main() {
     final retryDraft = bloc.state.fanOutDrafts[failureReport.shareId]!;
     final retryRecipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: extraChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: extraChat, shareSignatureEnabled: true),
         included: true,
       ),
     ];
@@ -869,6 +877,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -882,7 +891,7 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -958,6 +967,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -971,7 +981,7 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -1037,6 +1047,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1089,6 +1100,7 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1102,7 +1114,7 @@ void main() {
     bloc.add(
       ChatMessageForwardRequested(
         message: message,
-        target: FanOutTarget.address(
+        target: Contact.address(
           address: 'fresh@axi.im',
           shareSignatureEnabled: true,
           transport: MessageTransport.xmpp,
@@ -1169,6 +1181,7 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1183,7 +1196,7 @@ void main() {
     bloc.add(
       ChatMessageForwardRequested(
         message: message,
-        target: FanOutTarget.address(
+        target: Contact.address(
           address: 'fresh@example.com',
           shareSignatureEnabled: true,
           transport: MessageTransport.email,
@@ -1252,6 +1265,7 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1287,7 +1301,7 @@ void main() {
           text: 'Reply body',
           recipients: [
             ComposerRecipient(
-              target: FanOutTarget.address(
+              target: Contact.address(
                 address: 'fresh@example.com',
                 shareSignatureEnabled: true,
                 transport: MessageTransport.email,
@@ -1349,6 +1363,7 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1365,7 +1380,7 @@ void main() {
           text: 'Reply body',
           recipients: [
             ComposerRecipient(
-              target: FanOutTarget.chat(
+              target: Contact.chat(
                 chat: initialChat,
                 shareSignatureEnabled: true,
               ),
@@ -1379,7 +1394,7 @@ void main() {
       await _pumpBloc();
 
       verify(
-        () => messageService.saveDraft(
+        () => draftSyncService.saveDraft(
           id: null,
           jids: [initialChat.jid],
           body: 'Reply body',
@@ -1424,6 +1439,7 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1437,7 +1453,7 @@ void main() {
     bloc.add(
       ChatMessageForwardRequested(
         message: message,
-        target: FanOutTarget.address(
+        target: Contact.address(
           address: 'fresh@axi.im',
           shareSignatureEnabled: true,
           transport: MessageTransport.xmpp,
@@ -1497,6 +1513,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1510,7 +1527,7 @@ void main() {
 
     final recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(chat: emailChat, shareSignatureEnabled: true),
+        target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
     bloc.add(
@@ -1532,7 +1549,7 @@ void main() {
       ),
     ).called(1);
     verifyNever(
-      () => messageService.saveDraft(
+      () => draftSyncService.saveDraft(
         id: null,
         jids: any(named: 'jids'),
         body: any(named: 'body'),
@@ -1564,6 +1581,7 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1633,6 +1651,7 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -1675,6 +1694,7 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1711,6 +1731,7 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1759,6 +1780,7 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1822,6 +1844,7 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -1934,6 +1957,7 @@ void main() {
       final bloc = ChatBloc(
         jid: emailChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2061,6 +2085,7 @@ void main() {
       final bloc = ChatBloc(
         jid: emailChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2128,6 +2153,7 @@ void main() {
     final bloc = ChatBloc(
       jid: emailChat.jid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -2209,6 +2235,7 @@ void main() {
       final bloc = ChatBloc(
         jid: emailChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2304,6 +2331,7 @@ void main() {
       final bloc = ChatBloc(
         jid: emailChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2335,6 +2363,7 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2383,6 +2412,7 @@ void main() {
       final bloc = ChatBloc(
         jid: initialChat.jid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2493,6 +2523,7 @@ void main() {
     final bloc = ChatBloc(
       jid: initialChat.jid,
       messageService: xmppService,
+      draftSyncService: xmppService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -2538,6 +2569,7 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2643,6 +2675,7 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2685,6 +2718,7 @@ void main() {
     final bloc = ChatBloc(
       jid: roomJid,
       messageService: messageService,
+      draftSyncService: draftSyncService,
       chatsService: chatsService,
       mucService: mucService,
       notificationService: notificationService,
@@ -2727,6 +2761,7 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2768,6 +2803,7 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,
@@ -2877,6 +2913,7 @@ void main() {
       final bloc = ChatBloc(
         jid: roomJid,
         messageService: messageService,
+        draftSyncService: draftSyncService,
         chatsService: chatsService,
         mucService: mucService,
         notificationService: notificationService,

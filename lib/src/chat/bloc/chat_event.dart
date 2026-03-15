@@ -555,7 +555,7 @@ final class ChatMessageForwardRequested extends ChatEvent {
   });
 
   final Message message;
-  final FanOutTarget target;
+  final Contact target;
 
   @override
   List<Object?> get props => [message, target];

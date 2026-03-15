@@ -18,7 +18,6 @@ import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';
@@ -122,7 +121,7 @@ class _CalendarCriticalPathShareSheetState
         widget.locate<SettingsCubit>().state.shareTokenSignatureEnabled;
     _recipients = <ComposerRecipient>[
       ComposerRecipient(
-        target: FanOutTarget.chat(
+        target: Contact.chat(
           chat: initialChat,
           shareSignatureEnabled: shareSignatureEnabled,
         ),
@@ -221,7 +220,7 @@ class _CalendarCriticalPathShareSheetState
     return null;
   }
 
-  void _handleRecipientAdded(FanOutTarget target) {
+  void _handleRecipientAdded(Contact target) {
     final Chat? chat = target.chat;
     if (chat == null) {
       FeedbackSystem.showInfo(

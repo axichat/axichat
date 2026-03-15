@@ -448,6 +448,10 @@ class EmailService {
   AppLocalizations? _localizations;
   StreamSubscription<SpamSyncUpdate>? _spamSyncSubscription;
   StreamSubscription<EmailBlocklistSyncUpdate>? _emailBlocklistSyncSubscription;
+  final _EmailCredentialRuntimeSession _credentialSession =
+      _EmailCredentialRuntimeSession();
+  final _EmailNotificationQueueSession _notificationQueue =
+      _EmailNotificationQueueSession();
 
   void _attachXmppSyncSubscriptions() {
     final xmppService = _xmppService;
@@ -498,25 +502,14 @@ class EmailService {
 
   late final EmailBlockingService blocking;
   late final EmailSpamService spam;
-  final Map<String, RegisteredCredentialKey> _provisionedKeys = {};
-  final Map<String, RegisteredCredentialKey> _connectionOverrideKeys = {};
   late final void Function(DeltaCoreEvent) _eventListener;
   var _listenerAttached = false;
 
   Future<void> _deltaOperationQueue = Future<void>.value();
   int _deltaOperationQueueEpoch = 0;
 
-  String? _databasePrefix;
-  String? _databasePassphrase;
-  EmailAccount? _activeAccount;
-  EmailAccount? _sessionCredentials;
-  String? _activeCredentialScope;
   _EmailRuntimePhase _runtimePhase = _EmailRuntimePhase.stopped;
   Future<void>? _stopFuture;
-  final Map<String, RegisteredCredentialKey> _addressKeys = {};
-  final Map<String, RegisteredCredentialKey> _passwordKeys = {};
-  final Set<String> _ephemeralProvisionedScopes = {};
-  final Set<String> _ephemeralConnectionOverrideScopes = {};
   final _authFailureController = StreamController<DeltaChatException>.broadcast(
     sync: true,
   );
@@ -526,12 +519,6 @@ class EmailService {
   final EmailAsyncQueue _foregroundKeepaliveQueue = EmailAsyncQueue();
   int _foregroundKeepaliveOperationId = 0;
   final EmailAsyncQueue _reconnectRestartQueue = EmailAsyncQueue();
-  final List<_PendingNotification> _pendingNotifications = [];
-  int _pendingNotificationSequence = 0;
-  final Map<_PendingNotificationScope, int>
-  _pendingNotificationDropThroughSequenceByScope =
-      <_PendingNotificationScope, int>{};
-  Timer? _notificationFlushTimer;
   Timer? _contactsSyncTimer;
   String? _pendingPushToken;
   final _syncStateController = StreamController<EmailSyncState>.broadcast(
@@ -544,9 +531,6 @@ class EmailService {
   int? _lastLoggedConnectivityValue;
   DateTime? _lastConnectivityLoggedAt;
   final EmailAsyncQueue _channelOverflowRecoveryQueue = EmailAsyncQueue();
-  final Map<String, RegisteredCredentialKey> _bootstrapKeys = {};
-  Future<void>? _bootstrapFuture;
-  int _bootstrapOperationId = 0;
   EmailImapCapabilities _imapCapabilities = const EmailImapCapabilities(
     idleSupported: false,
     connectionLimit: _imapConnectionLimitSingle,
@@ -580,24 +564,13 @@ class EmailService {
   void cacheSessionCredentials({
     required String address,
     required String? password,
-  }) {
-    final normalizedAddress = address.trim();
-    final normalizedPassword = password?.trim();
-    if (normalizedAddress.isEmpty ||
-        normalizedPassword == null ||
-        normalizedPassword.isEmpty) {
-      _sessionCredentials = null;
-      return;
-    }
-    _sessionCredentials = EmailAccount(
-      address: normalizedAddress,
-      password: normalizedPassword,
-    );
-  }
+  }) => _credentialSession.cacheSessionCredentials(
+    address: address,
+    password: password,
+  );
 
-  void clearSessionCredentials() {
-    _sessionCredentials = null;
-  }
+  void clearSessionCredentials() =>
+      _credentialSession.clearSessionCredentials();
 
   Map<String, String> _buildConnectionConfig(String address) =>
       _connectionConfigBuilder(address, _endpointConfig);
@@ -638,7 +611,7 @@ class EmailService {
     required String scope,
     required bool persistCredentials,
   }) async {
-    if (_ephemeralConnectionOverrideScopes.contains(scope)) {
+    if (_credentialSession.hasEphemeralConnectionOverride(scope)) {
       return true;
     }
     if (!persistCredentials) {
@@ -658,7 +631,7 @@ class EmailService {
     if (!_hasConnectionOverrides(connectionOverrides)) {
       return;
     }
-    _ephemeralConnectionOverrideScopes.add(scope);
+    _credentialSession.markEphemeralConnectionOverride(scope);
     if (!persistCredentials) {
       return;
     }
@@ -756,9 +729,9 @@ class EmailService {
   bool _isPortConfigKey(String key) =>
       key == _mailPortConfigKey || key == _sendPortConfigKey;
 
-  EmailAccount? get activeAccount => _activeAccount;
+  EmailAccount? get activeAccount => _credentialSession.activeAccount;
 
-  EmailAccount? get sessionCredentials => _sessionCredentials;
+  EmailAccount? get sessionCredentials => _credentialSession.sessionCredentials;
 
   bool get isSmtpOnly =>
       _endpointConfig.smtpEnabled && !_endpointConfig.xmppEnabled;
@@ -773,11 +746,10 @@ class EmailService {
 
   bool get isRunning => _acceptsRuntimeWork;
 
-  bool get hasActiveSession =>
-      _databasePrefix != null && _databasePassphrase != null;
+  bool get hasActiveSession => _credentialSession.hasActiveSession;
 
   bool get hasInMemoryReconnectContext =>
-      hasActiveSession && _activeCredentialScope != null;
+      _credentialSession.hasInMemoryReconnectContext;
 
   Stream<DeltaCoreEvent> get events => _transport.events;
 
@@ -787,6 +759,53 @@ class EmailService {
 
   Stream<DeltaChatException> get authFailureStream =>
       _authFailureController.stream;
+
+  String? get _databasePrefix => _credentialSession.databasePrefix;
+
+  String? get _databasePassphrase => _credentialSession.databasePassphrase;
+
+  EmailAccount? get _activeAccount => _credentialSession.activeAccount;
+
+  set _activeAccount(EmailAccount? value) {
+    _credentialSession.activeAccount = value;
+  }
+
+  String? get _activeCredentialScope =>
+      _credentialSession.activeCredentialScope;
+
+  set _activeCredentialScope(String? value) {
+    _credentialSession.activeCredentialScope = value;
+  }
+
+  Map<String, RegisteredCredentialKey> get _addressKeys =>
+      _credentialSession.addressKeys;
+
+  Map<String, RegisteredCredentialKey> get _passwordKeys =>
+      _credentialSession.passwordKeys;
+
+  Map<String, RegisteredCredentialKey> get _provisionedKeys =>
+      _credentialSession.provisionedKeys;
+
+  Map<String, RegisteredCredentialKey> get _connectionOverrideKeys =>
+      _credentialSession.connectionOverrideKeys;
+
+  Map<String, RegisteredCredentialKey> get _bootstrapKeys =>
+      _credentialSession.bootstrapKeys;
+
+  Set<String> get _ephemeralProvisionedScopes =>
+      _credentialSession.ephemeralProvisionedScopes;
+
+  Future<void>? get _bootstrapFuture => _credentialSession.bootstrapFuture;
+
+  set _bootstrapFuture(Future<void>? value) {
+    _credentialSession.bootstrapFuture = value;
+  }
+
+  int get _bootstrapOperationId => _credentialSession.bootstrapOperationId;
+
+  set _bootstrapOperationId(int value) {
+    _credentialSession.bootstrapOperationId = value;
+  }
 
   Future<bool> canReconnectConfiguredSession({String? jid}) async {
     if (!hasActiveSession) {
@@ -863,8 +882,10 @@ class EmailService {
         _databasePrefix != databasePrefix ||
         _databasePassphrase != databasePassphrase;
     if (needsInit) {
-      _databasePrefix = databasePrefix;
-      _databasePassphrase = databasePassphrase;
+      _credentialSession.bindDatabaseRuntime(
+        databasePrefix: databasePrefix,
+        databasePassphrase: databasePassphrase,
+      );
       _resetImapCapabilities();
       await _transport.ensureInitialized(
         databasePrefix: databasePrefix,
@@ -1243,8 +1264,10 @@ class EmailService {
       address: address,
       deltaAccountId: deltaAccountId,
     );
-    _activeCredentialScope = scope;
-    _activeAccount = EmailAccount(address: address, password: password);
+    _credentialSession.activateAccount(
+      scope: scope,
+      account: EmailAccount(address: address, password: password),
+    );
     await _markConnectionOverridesApplied(
       scope: scope,
       persistCredentials: persistCredentials,
@@ -1350,11 +1373,7 @@ class EmailService {
       }
     }
     await _transport.dispose();
-    _databasePrefix = null;
-    _databasePassphrase = null;
-    _activeAccount = null;
-    _sessionCredentials = null;
-    _activeCredentialScope = null;
+    _credentialSession.clearRuntime();
     _pendingPushToken = null;
     _runtimePhase = _EmailRuntimePhase.stopped;
   }
@@ -1600,7 +1619,7 @@ class EmailService {
   }
 
   Future<FanOutSendReport> fanOutSend({
-    required List<FanOutTarget> targets,
+    required List<Contact> targets,
     String? body,
     String? htmlBody,
     EmailAttachment? attachment,
@@ -1839,7 +1858,7 @@ class EmailService {
   }
 
   Future<FanOutSendReport> _fanOutSendDemo({
-    required List<FanOutTarget> targets,
+    required List<Contact> targets,
     String? body,
     String? htmlBody,
     EmailAttachment? attachment,
@@ -1938,7 +1957,7 @@ class EmailService {
     );
   }
 
-  Chat _demoChatForTarget(FanOutTarget target) {
+  Chat _demoChatForTarget(Contact target) {
     final address = target.address?.trim();
     if (target.chat != null) {
       return target.chat!;
@@ -1946,9 +1965,9 @@ class EmailService {
     final String selectedAddress = address?.isNotEmpty == true
         ? address!
         : kDemoSelfJid;
-    final displayName = target.displayName?.trim();
-    final String resolvedTitle = displayName?.isNotEmpty == true
-        ? displayName!
+    final displayName = target.displayName.trim();
+    final String resolvedTitle = displayName.isNotEmpty
+        ? displayName
         : selectedAddress;
     return Chat.fromJid(selectedAddress).copyWith(
       title: resolvedTitle,
@@ -2803,70 +2822,32 @@ class EmailService {
     if (!_canProcessDeltaWork) {
       return;
     }
-    final sequence = _pendingNotificationSequence + 1;
-    _pendingNotificationSequence = sequence;
-    _pendingNotifications.add(
-      _PendingNotification(
-        chatId: chatId,
-        msgId: msgId,
-        accountId: accountId,
-        sequence: sequence,
-      ),
+    _notificationQueue.enqueue(
+      chatId: chatId,
+      msgId: msgId,
+      accountId: accountId,
+      flushDelay: _notificationFlushDelay,
+      onFlush: () {
+        _enqueueDeltaOperation(
+          _flushQueuedNotifications,
+          operationName: _deltaQueueOperationNameFlushQueuedNotifications,
+        );
+      },
     );
-    _notificationFlushTimer ??= Timer(_notificationFlushDelay, () {
-      _notificationFlushTimer = null;
-      _enqueueDeltaOperation(
-        _flushQueuedNotifications,
-        operationName: _deltaQueueOperationNameFlushQueuedNotifications,
-      );
-    });
   }
 
   void _suppressQueuedNotificationsThroughCurrentSequence({
     required int accountId,
     int? chatId,
   }) {
-    if (_pendingNotifications.isEmpty) {
-      return;
-    }
-    final currentSequence = _pendingNotificationSequence;
-    if (chatId != null) {
-      _pendingNotificationDropThroughSequenceByScope[_PendingNotificationScope(
-            accountId: accountId,
-            chatId: chatId,
-          )] =
-          currentSequence;
-      return;
-    }
-    final countsByScope = <_PendingNotificationScope, int>{};
-    for (final entry in _pendingNotifications) {
-      if (entry.accountId != accountId || entry.sequence > currentSequence) {
-        continue;
-      }
-      final scope = _PendingNotificationScope(
-        accountId: entry.accountId,
-        chatId: entry.chatId,
-      );
-      countsByScope.update(scope, (count) => count + 1, ifAbsent: () => 1);
-    }
-    for (final entry in countsByScope.entries) {
-      if (entry.value < 2) {
-        continue;
-      }
-      _pendingNotificationDropThroughSequenceByScope[entry.key] =
-          currentSequence;
-    }
+    _notificationQueue.suppressThroughCurrentSequence(
+      accountId: accountId,
+      chatId: chatId,
+    );
   }
 
   void _dropPendingNotificationsForChat(int chatId, {required int accountId}) {
-    _pendingNotifications.removeWhere(
-      (entry) => entry.chatId == chatId && entry.accountId == accountId,
-    );
-    if (_pendingNotifications.isNotEmpty) {
-      return;
-    }
-    _notificationFlushTimer?.cancel();
-    _notificationFlushTimer = null;
+    _notificationQueue.dropForChat(chatId, accountId: accountId);
   }
 
   void _scheduleContactsSyncFromCore() {
@@ -2891,22 +2872,18 @@ class EmailService {
   }
 
   Future<void> _flushQueuedNotifications() async {
-    _notificationFlushTimer?.cancel();
-    _notificationFlushTimer = null;
     if (!_canProcessDeltaWork) {
-      _pendingNotifications.clear();
+      _notificationQueue.clear();
       return;
     }
-    if (_pendingNotifications.isEmpty) return;
-    final pending = List<_PendingNotification>.from(_pendingNotifications);
-    _pendingNotifications.clear();
+    final pending = _notificationQueue.drain();
+    if (pending.isEmpty) return;
     for (final entry in pending) {
       final scope = _PendingNotificationScope(
         accountId: entry.accountId,
         chatId: entry.chatId,
       );
-      final dropThroughSequence =
-          _pendingNotificationDropThroughSequenceByScope[scope] ?? 0;
+      final dropThroughSequence = _notificationQueue.dropThroughSequence(scope);
       if (entry.sequence <= dropThroughSequence) {
         continue;
       }
@@ -3447,11 +3424,7 @@ class EmailService {
   }
 
   void _clearNotificationQueue() {
-    _notificationFlushTimer?.cancel();
-    _notificationFlushTimer = null;
-    _pendingNotifications.clear();
-    _pendingNotificationSequence = 0;
-    _pendingNotificationDropThroughSequenceByScope.clear();
+    _notificationQueue.clear();
   }
 
   bool _isForegroundKeepaliveOpCurrent(int operationId) =>
@@ -4083,9 +4056,7 @@ class EmailService {
   String? _selfSenderJidForAccount(int accountId) =>
       _transport.selfJidForAccount(accountId);
 
-  Future<Map<String, Chat>> _resolveFanOutTargets(
-    List<FanOutTarget> targets,
-  ) async {
+  Future<Map<String, Chat>> _resolveFanOutTargets(List<Contact> targets) async {
     final chatByJid = <String, Chat>{};
     final pending = <String, Future<Chat>>{};
     for (final target in targets) {
@@ -4104,7 +4075,7 @@ class EmailService {
         target.key,
         () => ensureChatForAddress(
           address: address,
-          displayName: target.displayName ?? address,
+          displayName: target.displayName,
         ),
       );
     }
@@ -4743,12 +4714,11 @@ class EmailService {
     await _credentialStore.delete(key: _passwordKeyForScope(scope));
     await _credentialStore.delete(key: _provisionedKeyForScope(scope));
     await _credentialStore.delete(key: _connectionOverrideKeyForScope(scope));
-    if (_activeCredentialScope == scope) {
-      _activeCredentialScope = null;
-      _activeAccount = null;
-    }
-    _ephemeralProvisionedScopes.remove(scope);
-    _ephemeralConnectionOverrideScopes.remove(scope);
+    _credentialSession.clearScope(
+      scope,
+      preserveActiveSession: false,
+      clearEphemeralState: true,
+    );
   }
 
   Future<T> _guardDeltaOperation<T>({
@@ -4802,14 +4772,11 @@ class EmailService {
     await _credentialStore.delete(key: _passwordKeyForScope(scope));
     await _credentialStore.delete(key: _provisionedKeyForScope(scope));
     await _credentialStore.delete(key: _connectionOverrideKeyForScope(scope));
-    if (!preserveActiveSession && _activeCredentialScope == scope) {
-      _activeCredentialScope = null;
-      _activeAccount = null;
-    }
-    if (!preserveActiveSession) {
-      _ephemeralProvisionedScopes.remove(scope);
-      _ephemeralConnectionOverrideScopes.remove(scope);
-    }
+    _credentialSession.clearScope(
+      scope,
+      preserveActiveSession: preserveActiveSession,
+      clearEphemeralState: !preserveActiveSession,
+    );
   }
 
   /// Marks a chat as noticed, clearing unread badges in core.
@@ -5607,6 +5574,200 @@ class EmailService {
 
 String _stanzaId(int msgId, {required int accountId}) {
   return deltaMessageStanzaId(msgId);
+}
+
+final class _EmailCredentialRuntimeSession {
+  final Map<String, RegisteredCredentialKey> provisionedKeys =
+      <String, RegisteredCredentialKey>{};
+  final Map<String, RegisteredCredentialKey> connectionOverrideKeys =
+      <String, RegisteredCredentialKey>{};
+  final Map<String, RegisteredCredentialKey> addressKeys =
+      <String, RegisteredCredentialKey>{};
+  final Map<String, RegisteredCredentialKey> passwordKeys =
+      <String, RegisteredCredentialKey>{};
+  final Map<String, RegisteredCredentialKey> bootstrapKeys =
+      <String, RegisteredCredentialKey>{};
+  final Set<String> ephemeralProvisionedScopes = <String>{};
+  final Set<String> ephemeralConnectionOverrideScopes = <String>{};
+
+  String? databasePrefix;
+  String? databasePassphrase;
+  EmailAccount? activeAccount;
+  EmailAccount? sessionCredentials;
+  String? activeCredentialScope;
+  Future<void>? bootstrapFuture;
+  int bootstrapOperationId = 0;
+
+  bool get hasActiveSession =>
+      databasePrefix != null && databasePassphrase != null;
+
+  bool get hasInMemoryReconnectContext =>
+      hasActiveSession && activeCredentialScope != null;
+
+  void bindDatabaseRuntime({
+    required String databasePrefix,
+    required String databasePassphrase,
+  }) {
+    this.databasePrefix = databasePrefix;
+    this.databasePassphrase = databasePassphrase;
+  }
+
+  void cacheSessionCredentials({
+    required String address,
+    required String? password,
+  }) {
+    final normalizedAddress = address.trim();
+    final normalizedPassword = password?.trim();
+    if (normalizedAddress.isEmpty ||
+        normalizedPassword == null ||
+        normalizedPassword.isEmpty) {
+      sessionCredentials = null;
+      return;
+    }
+    sessionCredentials = EmailAccount(
+      address: normalizedAddress,
+      password: normalizedPassword,
+    );
+  }
+
+  void clearSessionCredentials() {
+    sessionCredentials = null;
+  }
+
+  void activateAccount({required String scope, required EmailAccount account}) {
+    activeCredentialScope = scope;
+    activeAccount = account;
+  }
+
+  void clearRuntime() {
+    databasePrefix = null;
+    databasePassphrase = null;
+    activeAccount = null;
+    clearSessionCredentials();
+    activeCredentialScope = null;
+  }
+
+  void clearScope(
+    String scope, {
+    required bool preserveActiveSession,
+    required bool clearEphemeralState,
+  }) {
+    if (!preserveActiveSession && activeCredentialScope == scope) {
+      activeCredentialScope = null;
+      activeAccount = null;
+    }
+    if (!clearEphemeralState) {
+      return;
+    }
+    ephemeralProvisionedScopes.remove(scope);
+    ephemeralConnectionOverrideScopes.remove(scope);
+  }
+
+  bool hasEphemeralConnectionOverride(String scope) =>
+      ephemeralConnectionOverrideScopes.contains(scope);
+
+  void markEphemeralConnectionOverride(String scope) {
+    ephemeralConnectionOverrideScopes.add(scope);
+  }
+}
+
+final class _EmailNotificationQueueSession {
+  final List<_PendingNotification> _pendingNotifications =
+      <_PendingNotification>[];
+  int _pendingNotificationSequence = 0;
+  final Map<_PendingNotificationScope, int>
+  _pendingNotificationDropThroughSequenceByScope =
+      <_PendingNotificationScope, int>{};
+  Timer? _notificationFlushTimer;
+
+  void enqueue({
+    required int chatId,
+    required int msgId,
+    required int accountId,
+    required Duration flushDelay,
+    required void Function() onFlush,
+  }) {
+    final sequence = _pendingNotificationSequence + 1;
+    _pendingNotificationSequence = sequence;
+    _pendingNotifications.add(
+      _PendingNotification(
+        chatId: chatId,
+        msgId: msgId,
+        accountId: accountId,
+        sequence: sequence,
+      ),
+    );
+    _notificationFlushTimer ??= Timer(flushDelay, () {
+      _notificationFlushTimer = null;
+      onFlush();
+    });
+  }
+
+  void suppressThroughCurrentSequence({required int accountId, int? chatId}) {
+    if (_pendingNotifications.isEmpty) {
+      return;
+    }
+    final currentSequence = _pendingNotificationSequence;
+    if (chatId != null) {
+      _pendingNotificationDropThroughSequenceByScope[_PendingNotificationScope(
+            accountId: accountId,
+            chatId: chatId,
+          )] =
+          currentSequence;
+      return;
+    }
+    final countsByScope = <_PendingNotificationScope, int>{};
+    for (final entry in _pendingNotifications) {
+      if (entry.accountId != accountId || entry.sequence > currentSequence) {
+        continue;
+      }
+      final scope = _PendingNotificationScope(
+        accountId: entry.accountId,
+        chatId: entry.chatId,
+      );
+      countsByScope.update(scope, (count) => count + 1, ifAbsent: () => 1);
+    }
+    for (final entry in countsByScope.entries) {
+      if (entry.value < 2) {
+        continue;
+      }
+      _pendingNotificationDropThroughSequenceByScope[entry.key] =
+          currentSequence;
+    }
+  }
+
+  void dropForChat(int chatId, {required int accountId}) {
+    _pendingNotifications.removeWhere(
+      (entry) => entry.chatId == chatId && entry.accountId == accountId,
+    );
+    if (_pendingNotifications.isNotEmpty) {
+      return;
+    }
+    _notificationFlushTimer?.cancel();
+    _notificationFlushTimer = null;
+  }
+
+  List<_PendingNotification> drain() {
+    _notificationFlushTimer?.cancel();
+    _notificationFlushTimer = null;
+    if (_pendingNotifications.isEmpty) {
+      return const <_PendingNotification>[];
+    }
+    final pending = List<_PendingNotification>.from(_pendingNotifications);
+    _pendingNotifications.clear();
+    return pending;
+  }
+
+  int dropThroughSequence(_PendingNotificationScope scope) =>
+      _pendingNotificationDropThroughSequenceByScope[scope] ?? 0;
+
+  void clear() {
+    _notificationFlushTimer?.cancel();
+    _notificationFlushTimer = null;
+    _pendingNotifications.clear();
+    _pendingNotificationSequence = 0;
+    _pendingNotificationDropThroughSequenceByScope.clear();
+  }
 }
 
 class _PendingNotification {

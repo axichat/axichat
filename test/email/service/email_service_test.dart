@@ -841,8 +841,8 @@ void main() {
 
       final report = await service.fanOutSend(
         targets: [
-          FanOutTarget.chat(chat: chatA, shareSignatureEnabled: true),
-          FanOutTarget.chat(chat: chatB, shareSignatureEnabled: true),
+          Contact.chat(chat: chatA, shareSignatureEnabled: true),
+          Contact.chat(chat: chatB, shareSignatureEnabled: true),
         ],
         body: 'Hello everyone',
         quotedStanzaId: 'quoted-stanza',
@@ -1478,9 +1478,7 @@ void main() {
       ).thenAnswer((_) async => 202);
 
       await service.fanOutSend(
-        targets: [
-          FanOutTarget.chat(chat: chatBob, shareSignatureEnabled: true),
-        ],
+        targets: [Contact.chat(chat: chatBob, shareSignatureEnabled: true)],
         body: 'Retrying Carol only',
         shareId: shareId,
       );

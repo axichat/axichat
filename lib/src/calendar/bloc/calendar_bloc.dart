@@ -28,10 +28,8 @@ import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/models/chat_models.dart';
-import 'package:axichat/src/storage/models/message_models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:hydrated_bloc/hydrated_bloc.dart';
 import 'base_calendar_bloc.dart';
@@ -590,11 +588,7 @@ class CalendarBloc extends BaseCalendarBloc {
         return;
       }
       final emailTargets = recipients
-          .where(
-            (target) =>
-                target.chat == null ||
-                target.chat?.defaultTransport.isEmail == true,
-          )
+          .where((target) => !target.hasBackingChat || target.hasEmailThread)
           .toList(growable: false);
       final xmppChats = recipients
           .map((target) => target.chat)
@@ -786,7 +780,7 @@ class CalendarBloc extends BaseCalendarBloc {
   }
 
   Future<void> _sendDemoTaskShare({
-    required List<FanOutTarget> recipients,
+    required List<Contact> recipients,
     required CalendarTask task,
     required String shareText,
     required bool readOnly,
@@ -794,7 +788,7 @@ class CalendarBloc extends BaseCalendarBloc {
     final seenJids = <String>{};
     for (final target in recipients) {
       final targetChat = target.chat;
-      final targetJid = (targetChat?.jid ?? target.address)?.trim();
+      final targetJid = target.recipientId?.trim();
       if (targetJid == null || targetJid.isEmpty) {
         continue;
       }
@@ -804,11 +798,10 @@ class CalendarBloc extends BaseCalendarBloc {
       await _xmppService.sendMessage(
         jid: targetJid,
         text: shareText,
-        encryptionProtocol:
-            targetChat?.encryptionProtocol ?? EncryptionProtocol.none,
+        encryptionProtocol: target.encryptionProtocol,
         calendarTaskIcs: task,
         calendarTaskIcsReadOnly: readOnly,
-        chatType: targetChat?.type ?? ChatType.chat,
+        chatType: target.chatType,
       );
       _xmppService.notifyDemoOutboundAttachmentMessage(chatJid: targetJid);
       if (!readOnly && targetChat != null) {

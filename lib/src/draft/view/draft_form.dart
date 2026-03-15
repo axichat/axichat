@@ -27,7 +27,6 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
 import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -624,7 +623,7 @@ class _DraftFormState extends State<DraftForm> {
       if (match != null) {
         recipients.add(
           ComposerRecipient(
-            target: FanOutTarget.chat(
+            target: Contact.chat(
               chat: match,
               shareSignatureEnabled:
                   match.shareSignatureEnabled ??
@@ -638,7 +637,7 @@ class _DraftFormState extends State<DraftForm> {
       } else {
         recipients.add(
           ComposerRecipient(
-            target: FanOutTarget.address(
+            target: Contact.address(
               address: trimmed,
               shareSignatureEnabled: context
                   .read<SettingsCubit>()
@@ -705,7 +704,7 @@ class _DraftFormState extends State<DraftForm> {
     return attachment.copyWith(mimeType: resolvedMimeType);
   }
 
-  Future<bool> _handleRecipientAdded(FanOutTarget target) async {
+  Future<bool> _handleRecipientAdded(Contact target) async {
     final address = target.resolvedAddress;
     if (target.needsTransportSelection &&
         address != null &&
@@ -742,7 +741,7 @@ class _DraftFormState extends State<DraftForm> {
     return true;
   }
 
-  void _applyRecipient(FanOutTarget target) {
+  void _applyRecipient(Contact target) {
     setState(() {
       _sendErrorMessage = null;
       final existingIndex = _recipients.indexWhere(
@@ -1219,26 +1218,22 @@ class _DraftFormState extends State<DraftForm> {
           if (jid == null || jid.isEmpty) {
             return null;
           }
-          final chat = recipient.target.chat;
           return DraftXmppTarget(
             jid: jid,
-            encryptionProtocol:
-                chat?.encryptionProtocol ?? EncryptionProtocol.none,
-            chatType: chat?.type ?? ChatType.chat,
+            encryptionProtocol: recipient.target.encryptionProtocol,
+            chatType: recipient.target.chatType,
           );
         })
         .whereType<DraftXmppTarget>()
         .toList();
     final emailTargets = emailRecipients.map((recipient) {
-      final chat = recipient.target.chat;
-      if (chat != null) {
+      if (recipient.target.hasBackingChat) {
         final address = recipient.target.preferredEmailAddress;
         if (address != null && address.isNotEmpty) {
-          return FanOutTarget.address(
+          return Contact.address(
             address: address,
-            displayName: chat.contactDisplayName ?? chat.title,
-            shareSignatureEnabled:
-                chat.shareSignatureEnabled ?? shareTokenSignatureEnabled,
+            displayName: recipient.target.displayName,
+            shareSignatureEnabled: recipient.target.shareSignatureEnabled,
           );
         }
       }

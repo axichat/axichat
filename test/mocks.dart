@@ -41,6 +41,8 @@ class MockNotificationService extends Mock implements NotificationService {}
 
 class MockMessageService extends Mock implements MessageService {}
 
+class MockDraftSyncService extends Mock implements DraftSyncService {}
+
 class MockChatsService extends Mock implements ChatsService {}
 
 class MockMucService extends Mock implements MucService {}

@@ -16,7 +16,6 @@ import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/calendar/view/widgets/calendar_sheet_header.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/muc/muc_models.dart';
@@ -1216,23 +1215,15 @@ bool _isMucInviteEligibleChat(
   );
 }
 
-bool _isMucInviteEligibleTarget(
-  FanOutTarget target, {
-  required String? domain,
-}) {
-  final chat = target.chat;
-  if (chat != null) {
-    return _isMucInviteEligibleChat(chat, domain: domain);
+bool _isMucInviteEligibleTarget(Contact target, {required String? domain}) {
+  if (target.isEmailBacked || target.isAxichatWelcomeThread) {
+    return false;
   }
-  return _isMucInviteEligibleAddress(target.address, domain: domain);
+  return _isMucInviteEligibleAddress(target.bareRemoteAddress, domain: domain);
 }
 
-String? _mucInviteAddressForTarget(FanOutTarget target) {
-  final chat = target.chat;
-  if (chat != null) {
-    return _mucInviteChatAddress(chat);
-  }
-  return bareAddressOrNull(target.address);
+String? _mucInviteAddressForTarget(Contact target) {
+  return target.bareRemoteAddress;
 }
 
 String? _mucInviteChatAddress(chat_models.Chat chat) {
@@ -1394,7 +1385,7 @@ class _InviteChipsSheetState extends State<_InviteChipsSheet> {
     );
   }
 
-  void _addRecipient(FanOutTarget target) {
+  void _addRecipient(Contact target) {
     setState(() {
       final existingIndex = _recipients.indexWhere(
         (recipient) => recipient.key == target.key,

@@ -271,6 +271,7 @@ class _AxichatState extends State<Axichat> {
                   BlocProvider(
                     create: (context) => DraftCubit(
                       messageService: context.read<MessageService>(),
+                      draftSyncService: context.read<XmppService>(),
                       emailService:
                           context
                               .read<SettingsCubit>()

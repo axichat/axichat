@@ -121,6 +121,7 @@ class ArchivedChatScreen extends StatelessWidget {
               create: (_) => ChatBloc(
                 jid: jid,
                 messageService: xmppService,
+                draftSyncService: xmppService,
                 chatsService: xmppService,
                 mucService: xmppService,
                 notificationService: notificationService,

@@ -7,10 +7,10 @@ import 'package:logging/logging.dart';
 
 import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/storage/credential_store.dart';
+import 'package:axichat/src/storage/models.dart';
 
 part 'email_demo_state.dart';
 part 'email_demo_cubit.freezed.dart';
@@ -160,7 +160,7 @@ class EmailDemoCubit extends Cubit<EmailDemoState> {
 
   Future<void> sendDemoMessage({
     required EmailAccount? account,
-    required FanOutTarget? demoTarget,
+    required Contact? demoTarget,
     required String body,
     required String displayName,
   }) async {
