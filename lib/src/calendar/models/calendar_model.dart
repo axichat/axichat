@@ -671,6 +671,360 @@ bool _shouldPreferRemote({
   return remoteSequence > localSequence;
 }
 
+extension CalendarModelRemoteMerge on CalendarModel {
+  ({CalendarModel model, bool applied}) mergeRemoteTask(
+    CalendarTask remoteTask, {
+    required bool deleted,
+  }) {
+    if (!deleted) {
+      final CalendarTask? localTask = tasks[remoteTask.id];
+      if (localTask == null) {
+        final DateTime? deletedAt = deletedTaskIds[remoteTask.id];
+        if (deletedAt != null &&
+            !_isSyncInstantAfter(remoteTask.modifiedAt, deletedAt)) {
+          return _mergeResult(this);
+        }
+        final CalendarModel updated = _clearTaskTombstone(
+          remoteTask.id,
+        ).addTask(remoteTask);
+        return _mergeResult(updated);
+      }
+      if (!_shouldPreferRemote(
+        localModifiedAt: localTask.modifiedAt,
+        remoteModifiedAt: remoteTask.modifiedAt,
+        localMeta: localTask.icsMeta,
+        remoteMeta: remoteTask.icsMeta,
+      )) {
+        return _mergeResult(this);
+      }
+      return _mergeResult(updateTask(remoteTask));
+    }
+
+    final CalendarTask? existing = tasks[remoteTask.id];
+    if (existing != null) {
+      if (!_shouldPreferRemote(
+        localModifiedAt: existing.modifiedAt,
+        remoteModifiedAt: remoteTask.modifiedAt,
+        localMeta: existing.icsMeta,
+        remoteMeta: remoteTask.icsMeta,
+      )) {
+        return _mergeResult(this);
+      }
+    } else {
+      final DateTime? deletedAt = deletedTaskIds[remoteTask.id];
+      if (deletedAt != null &&
+          !_isSyncInstantAfter(remoteTask.modifiedAt, deletedAt)) {
+        return _mergeResult(this);
+      }
+    }
+
+    CalendarModel baseModel = existing == null
+        ? this
+        : deleteTask(remoteTask.id);
+    if (existing != null) {
+      baseModel = baseModel._clearTaskTombstone(remoteTask.id);
+    }
+    return _mergeResult(
+      baseModel._withTaskTombstone(remoteTask.id, remoteTask.modifiedAt),
+    );
+  }
+
+  ({CalendarModel model, bool applied}) mergeRemoteDayEvent(
+    DayEvent remoteEvent, {
+    required bool deleted,
+  }) {
+    if (!deleted) {
+      final DayEvent? localEvent = dayEvents[remoteEvent.id];
+      if (localEvent == null) {
+        final DateTime? deletedAt = deletedDayEventIds[remoteEvent.id];
+        if (deletedAt != null &&
+            !_isSyncInstantAfter(remoteEvent.modifiedAt, deletedAt)) {
+          return _mergeResult(this);
+        }
+        final CalendarModel updated = _clearDayEventTombstone(
+          remoteEvent.id,
+        ).addDayEvent(remoteEvent);
+        return _mergeResult(updated);
+      }
+      if (!_shouldPreferRemote(
+        localModifiedAt: localEvent.modifiedAt,
+        remoteModifiedAt: remoteEvent.modifiedAt,
+        localMeta: localEvent.icsMeta,
+        remoteMeta: remoteEvent.icsMeta,
+      )) {
+        return _mergeResult(this);
+      }
+      return _mergeResult(updateDayEvent(remoteEvent));
+    }
+
+    final DayEvent? existing = dayEvents[remoteEvent.id];
+    if (existing != null) {
+      if (!_shouldPreferRemote(
+        localModifiedAt: existing.modifiedAt,
+        remoteModifiedAt: remoteEvent.modifiedAt,
+        localMeta: existing.icsMeta,
+        remoteMeta: remoteEvent.icsMeta,
+      )) {
+        return _mergeResult(this);
+      }
+    } else {
+      final DateTime? deletedAt = deletedDayEventIds[remoteEvent.id];
+      if (deletedAt != null &&
+          !_isSyncInstantAfter(remoteEvent.modifiedAt, deletedAt)) {
+        return _mergeResult(this);
+      }
+    }
+
+    CalendarModel baseModel = existing == null
+        ? this
+        : deleteDayEvent(remoteEvent.id);
+    if (existing != null) {
+      baseModel = baseModel._clearDayEventTombstone(remoteEvent.id);
+    }
+    return _mergeResult(
+      baseModel._withDayEventTombstone(remoteEvent.id, remoteEvent.modifiedAt),
+    );
+  }
+
+  ({CalendarModel model, bool applied}) mergeRemoteJournal(
+    CalendarJournal remoteJournal, {
+    required bool deleted,
+  }) {
+    if (!deleted) {
+      final CalendarJournal? localJournal = journals[remoteJournal.id];
+      if (localJournal == null) {
+        final DateTime? deletedAt = deletedJournalIds[remoteJournal.id];
+        if (deletedAt != null &&
+            !_isSyncInstantAfter(remoteJournal.modifiedAt, deletedAt)) {
+          return _mergeResult(this);
+        }
+        final CalendarModel updated = _clearJournalTombstone(
+          remoteJournal.id,
+        ).addJournal(remoteJournal);
+        return _mergeResult(updated);
+      }
+      if (!_shouldPreferRemote(
+        localModifiedAt: localJournal.modifiedAt,
+        remoteModifiedAt: remoteJournal.modifiedAt,
+        localMeta: localJournal.icsMeta,
+        remoteMeta: remoteJournal.icsMeta,
+      )) {
+        return _mergeResult(this);
+      }
+      return _mergeResult(updateJournal(remoteJournal));
+    }
+
+    final CalendarJournal? existing = journals[remoteJournal.id];
+    if (existing != null) {
+      if (!_shouldPreferRemote(
+        localModifiedAt: existing.modifiedAt,
+        remoteModifiedAt: remoteJournal.modifiedAt,
+        localMeta: existing.icsMeta,
+        remoteMeta: remoteJournal.icsMeta,
+      )) {
+        return _mergeResult(this);
+      }
+    } else {
+      final DateTime? deletedAt = deletedJournalIds[remoteJournal.id];
+      if (deletedAt != null &&
+          !_isSyncInstantAfter(remoteJournal.modifiedAt, deletedAt)) {
+        return _mergeResult(this);
+      }
+    }
+
+    CalendarModel baseModel = existing == null
+        ? this
+        : deleteJournal(remoteJournal.id);
+    if (existing != null) {
+      baseModel = baseModel._clearJournalTombstone(remoteJournal.id);
+    }
+    return _mergeResult(
+      baseModel._withJournalTombstone(
+        remoteJournal.id,
+        remoteJournal.modifiedAt,
+      ),
+    );
+  }
+
+  ({CalendarModel model, bool applied}) mergeRemoteCriticalPath(
+    CalendarCriticalPath remotePath, {
+    required bool deleted,
+  }) {
+    if (!deleted) {
+      final CalendarCriticalPath? localPath = criticalPaths[remotePath.id];
+      if (localPath == null) {
+        final DateTime? deletedAt = deletedCriticalPathIds[remotePath.id];
+        if (deletedAt != null &&
+            !_isSyncInstantAfter(remotePath.modifiedAt, deletedAt)) {
+          return _mergeResult(this);
+        }
+        final CalendarModel updated = _clearCriticalPathTombstone(
+          remotePath.id,
+        ).addCriticalPath(remotePath);
+        return _mergeResult(updated);
+      }
+      if (!_isSyncInstantAfter(remotePath.modifiedAt, localPath.modifiedAt)) {
+        return _mergeResult(this);
+      }
+      return _mergeResult(updateCriticalPath(remotePath));
+    }
+
+    final CalendarCriticalPath? existing = criticalPaths[remotePath.id];
+    if (existing != null) {
+      if (!_isSyncInstantAfter(remotePath.modifiedAt, existing.modifiedAt)) {
+        return _mergeResult(this);
+      }
+    } else {
+      final DateTime? deletedAt = deletedCriticalPathIds[remotePath.id];
+      if (deletedAt != null &&
+          !_isSyncInstantAfter(remotePath.modifiedAt, deletedAt)) {
+        return _mergeResult(this);
+      }
+    }
+
+    final CalendarModel baseModel = existing == null
+        ? this
+        : _archiveCriticalPathForRemoteDelete(
+            remotePath.id,
+            modifiedAt: remotePath.modifiedAt,
+          );
+    return _mergeResult(
+      baseModel._withCriticalPathTombstone(
+        remotePath.id,
+        remotePath.modifiedAt,
+      ),
+    );
+  }
+
+  ({CalendarModel model, bool applied}) _mergeResult(CalendarModel updated) =>
+      (model: updated, applied: !identical(updated, this));
+
+  CalendarModel _clearTaskTombstone(String taskId) {
+    if (!deletedTaskIds.containsKey(taskId)) {
+      return this;
+    }
+    final Map<String, DateTime> updatedDeletedTaskIds =
+        Map<String, DateTime>.from(deletedTaskIds)..remove(taskId);
+    return copyWith(deletedTaskIds: updatedDeletedTaskIds);
+  }
+
+  CalendarModel _clearDayEventTombstone(String eventId) {
+    if (!deletedDayEventIds.containsKey(eventId)) {
+      return this;
+    }
+    final Map<String, DateTime> updatedDeletedDayEventIds =
+        Map<String, DateTime>.from(deletedDayEventIds)..remove(eventId);
+    return copyWith(deletedDayEventIds: updatedDeletedDayEventIds);
+  }
+
+  CalendarModel _clearJournalTombstone(String journalId) {
+    if (!deletedJournalIds.containsKey(journalId)) {
+      return this;
+    }
+    final Map<String, DateTime> updatedDeletedJournalIds =
+        Map<String, DateTime>.from(deletedJournalIds)..remove(journalId);
+    return copyWith(deletedJournalIds: updatedDeletedJournalIds);
+  }
+
+  CalendarModel _clearCriticalPathTombstone(String pathId) {
+    if (!deletedCriticalPathIds.containsKey(pathId)) {
+      return this;
+    }
+    final Map<String, DateTime> updatedDeletedCriticalPathIds =
+        Map<String, DateTime>.from(deletedCriticalPathIds)..remove(pathId);
+    return copyWith(deletedCriticalPathIds: updatedDeletedCriticalPathIds);
+  }
+
+  CalendarModel _withTaskTombstone(String taskId, DateTime deletedAt) {
+    final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
+    final DateTime? existing = deletedTaskIds[taskId];
+    if (existing != null &&
+        !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
+      return this;
+    }
+    final Map<String, DateTime> updatedDeletedTaskIds =
+        Map<String, DateTime>.from(deletedTaskIds)
+          ..[taskId] = normalizedDeletedAt;
+    final CalendarModel updated = copyWith(
+      deletedTaskIds: updatedDeletedTaskIds,
+      lastModified: DateTime.now().toUtc(),
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel _withDayEventTombstone(String eventId, DateTime deletedAt) {
+    final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
+    final DateTime? existing = deletedDayEventIds[eventId];
+    if (existing != null &&
+        !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
+      return this;
+    }
+    final Map<String, DateTime> updatedDeletedDayEventIds =
+        Map<String, DateTime>.from(deletedDayEventIds)
+          ..[eventId] = normalizedDeletedAt;
+    final CalendarModel updated = copyWith(
+      deletedDayEventIds: updatedDeletedDayEventIds,
+      lastModified: DateTime.now().toUtc(),
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel _withJournalTombstone(String journalId, DateTime deletedAt) {
+    final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
+    final DateTime? existing = deletedJournalIds[journalId];
+    if (existing != null &&
+        !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
+      return this;
+    }
+    final Map<String, DateTime> updatedDeletedJournalIds =
+        Map<String, DateTime>.from(deletedJournalIds)
+          ..[journalId] = normalizedDeletedAt;
+    final CalendarModel updated = copyWith(
+      deletedJournalIds: updatedDeletedJournalIds,
+      lastModified: DateTime.now().toUtc(),
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel _withCriticalPathTombstone(String pathId, DateTime deletedAt) {
+    final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
+    final DateTime? existing = deletedCriticalPathIds[pathId];
+    if (existing != null &&
+        !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
+      return this;
+    }
+    final Map<String, DateTime> updatedDeletedCriticalPathIds =
+        Map<String, DateTime>.from(deletedCriticalPathIds)
+          ..[pathId] = normalizedDeletedAt;
+    final CalendarModel updated = copyWith(
+      deletedCriticalPathIds: updatedDeletedCriticalPathIds,
+      lastModified: DateTime.now().toUtc(),
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+
+  CalendarModel _archiveCriticalPathForRemoteDelete(
+    String pathId, {
+    required DateTime modifiedAt,
+  }) {
+    final CalendarCriticalPath? existing = criticalPaths[pathId];
+    if (existing == null) {
+      return this;
+    }
+    final Map<String, CalendarCriticalPath> updatedPaths =
+        Map<String, CalendarCriticalPath>.from(criticalPaths)
+          ..[pathId] = existing.copyWith(
+            isArchived: true,
+            modifiedAt: modifiedAt,
+          );
+    final CalendarModel updated = copyWith(
+      criticalPaths: updatedPaths,
+      lastModified: DateTime.now().toUtc(),
+    );
+    return updated.copyWith(checksum: updated.calculateChecksum());
+  }
+}
+
 extension CalendarModelMerge on CalendarModel {
   CalendarModel mergeWith(CalendarModel remote) {
     final mergedTasks = <String, CalendarTask>{};

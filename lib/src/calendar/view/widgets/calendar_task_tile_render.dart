@@ -417,6 +417,9 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (_activePointer != null && _activePointer != event.pointer) {
+      return;
+    }
     _activePointer = event.pointer;
     _downLocalPosition = event.localPosition;
     _pendingTap = true;
@@ -430,12 +433,23 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     );
     final bool primaryButton = _isPrimaryButton(event);
     if (primaryButton) {
+      final String? handle = _canResize
+          ? _hitHandle(event.localPosition)
+          : null;
+      final CalendarTaskPointerTarget pointerTarget = switch (handle) {
+        'top' => CalendarTaskPointerTarget.resizeTop,
+        'bottom' => CalendarTaskPointerTarget.resizeBottom,
+        _ => CalendarTaskPointerTarget.body,
+      };
+      interactionController.beginTaskPointerClassification(
+        taskId: task.id,
+        pointerId: event.pointer,
+        target: pointerTarget,
+      );
       interactionController.acknowledgeTaskInteraction(
         task.id,
         isRead: task.isRead,
       );
-      onDragPointerDown?.call(_normalizedFromLocal(event.localPosition));
-      final String? handle = _hitHandle(event.localPosition);
       if (_canResize && handle != null && !_resizeActive) {
         if (_shouldDelayResizeForPointer(event)) {
           _startResizeLongPressRecognizer(handle, event);
@@ -444,6 +458,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
         }
         return;
       }
+      onDragPointerDown?.call(_normalizedFromLocal(event.localPosition));
     } else if (_hitHandle(event.localPosition) != null && _canResize) {
       // Secondary drag shouldn't initiate resize; ensure cursor updates only.
       _updateCursor(event.localPosition);
@@ -584,6 +599,13 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   }
 
   void _resetPointerState() {
+    final int? activePointer = _activePointer;
+    if (activePointer != null) {
+      interactionController.clearTaskPointerClassification(
+        taskId: task.id,
+        pointerId: activePointer,
+      );
+    }
     _activePointer = null;
     _downLocalPosition = null;
     _resizeActive = false;
@@ -603,6 +625,13 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     _pendingResizeHandle = null;
     _resizeActive = true;
     _activeHandle = handle;
+    final int? activePointer = _activePointer;
+    if (activePointer != null) {
+      interactionController.clearTaskPointerClassification(
+        taskId: task.id,
+        pointerId: activePointer,
+      );
+    }
     interactionController.beginResizeInteraction(
       taskId: task.id,
       handle: handle,

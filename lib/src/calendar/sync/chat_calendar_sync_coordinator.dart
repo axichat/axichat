@@ -51,16 +51,17 @@ class ChatCalendarSyncCoordinator {
   final ChatCalendarApplyPrimaryView _applyPrimaryView;
   final ChatCalendarSnapshotSender? _sendSnapshotFile;
   final ChatCalendarSyncStateStore _syncStateStore;
-  final Map<String, _ChatCalendarSyncContext> _contexts =
-      <String, _ChatCalendarSyncContext>{};
-  final Map<String, CalendarSyncManager> _managers =
-      <String, CalendarSyncManager>{};
+  final Map<String, _ChatCalendarSession> _sessions =
+      <String, _ChatCalendarSession>{};
 
   CalendarSyncManager managerFor({
     required String chatJid,
     required ChatType chatType,
   }) {
-    return _ensureManager(chatJid: chatJid, chatType: chatType);
+    return _ensureSession(
+      chatJid: chatJid,
+      chatType: chatType,
+    ).manager(sendSnapshotFile: _sendSnapshotFile);
   }
 
   void registerBloc({
@@ -69,8 +70,8 @@ class ChatCalendarSyncCoordinator {
     required CalendarModel Function() readModel,
     required Future<void> Function(CalendarModel) applyModel,
   }) {
-    final context = _ensureContext(chatJid: chatJid, chatType: chatType);
-    context.attachBloc(
+    final session = _ensureSession(chatJid: chatJid, chatType: chatType);
+    session.attachBloc(
       chatType: chatType,
       readModel: readModel,
       applyModel: applyModel,
@@ -78,18 +79,18 @@ class ChatCalendarSyncCoordinator {
   }
 
   void unregisterBloc({required String chatJid}) {
-    final context = _contexts[_chatKey(chatJid)];
-    if (context == null) {
+    final session = _sessions[_chatKey(chatJid)];
+    if (session == null) {
       return;
     }
-    context.detachBloc();
+    session.detachBloc();
   }
 
   Future<void> handleInbound(ChatCalendarSyncEnvelope envelope) async {
-    final manager = _ensureManager(
+    final manager = _ensureSession(
       chatJid: envelope.chatJid,
       chatType: envelope.chatType,
-    );
+    ).manager(sendSnapshotFile: _sendSnapshotFile);
     await manager.onCalendarMessage(envelope.inbound);
   }
 
@@ -98,48 +99,23 @@ class ChatCalendarSyncCoordinator {
     required ChatType chatType,
     required CalendarTask task,
   }) async {
-    final context = _ensureContext(chatJid: chatJid, chatType: chatType);
-    final manager = _ensureManager(chatJid: chatJid, chatType: chatType);
-    final model = context.readModel();
+    final session = _ensureSession(chatJid: chatJid, chatType: chatType);
+    final manager = session.manager(sendSnapshotFile: _sendSnapshotFile);
+    final model = session.readModel();
     final updated = model.addTask(task);
-    await context.applyModel(updated);
+    await session.applyModel(updated);
     await manager.sendTaskUpdate(task, _chatCalendarTaskAddOperation);
   }
 
-  CalendarSyncManager _ensureManager({
+  _ChatCalendarSession _ensureSession({
     required String chatJid,
     required ChatType chatType,
   }) {
     final normalizedJid = _normalizeChatJid(chatJid);
     final key = _chatKey(normalizedJid);
-    return _managers.putIfAbsent(key, () {
-      final context = _ensureContext(
-        chatJid: normalizedJid,
-        chatType: chatType,
-      );
-      return CalendarSyncManager(
-        readModel: context.readModel,
-        applyModel: context.applyModel,
-        sendCalendarMessage: context.send,
-        applyRoomPrimaryView: chatType == ChatType.groupChat
-            ? context.applyPrimaryView
-            : null,
-        sendSnapshotFile: _sendSnapshotFile,
-        readSyncState: context.readSyncState,
-        writeSyncState: context.writeSyncState,
-      );
-    });
-  }
-
-  _ChatCalendarSyncContext _ensureContext({
-    required String chatJid,
-    required ChatType chatType,
-  }) {
-    final normalizedJid = _normalizeChatJid(chatJid);
-    final key = _chatKey(normalizedJid);
-    return _contexts.putIfAbsent(
+    return _sessions.putIfAbsent(
       key,
-      () => _ChatCalendarSyncContext(
+      () => _ChatCalendarSession(
         chatJid: normalizedJid,
         chatType: chatType,
         storage: _storage,
@@ -157,8 +133,8 @@ String _normalizeChatJid(String chatJid) {
 
 String _chatKey(String chatJid) => chatCalendarStorageId(chatJid);
 
-class _ChatCalendarSyncContext {
-  _ChatCalendarSyncContext({
+class _ChatCalendarSession {
+  _ChatCalendarSession({
     required this.chatJid,
     required ChatType chatType,
     required ChatCalendarStorage storage,
@@ -179,6 +155,7 @@ class _ChatCalendarSyncContext {
   final ChatCalendarApplyPrimaryView _applyPrimaryView;
   final ChatCalendarSyncStateStore _syncStateStore;
   ChatType _chatType;
+  CalendarSyncManager? _manager;
   late CalendarModel Function() _readModel;
   late Future<void> Function(CalendarModel) _applyModel;
 
@@ -198,6 +175,22 @@ class _ChatCalendarSyncContext {
 
   void detachBloc() {
     _resetToStorage();
+  }
+
+  CalendarSyncManager manager({
+    required ChatCalendarSnapshotSender? sendSnapshotFile,
+  }) {
+    return _manager ??= CalendarSyncManager(
+      readModel: readModel,
+      applyModel: applyModel,
+      sendCalendarMessage: send,
+      applyRoomPrimaryView: _chatType == ChatType.groupChat
+          ? applyPrimaryView
+          : null,
+      sendSnapshotFile: sendSnapshotFile,
+      readSyncState: readSyncState,
+      writeSyncState: writeSyncState,
+    );
   }
 
   CalendarModel readModel() => _readModel();

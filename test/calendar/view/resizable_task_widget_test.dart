@@ -124,6 +124,91 @@ void main() {
   });
 
   testWidgets(
+    'Top handle pointer down does not forward drag pointer callback',
+    (tester) async {
+      final task = CalendarTask.create(
+        title: 'Handle Pointer Task',
+        scheduledTime: DateTime(2024, 1, 1, 10),
+        duration: const Duration(hours: 1),
+      );
+      Offset? capturedOffset;
+
+      await tester.pumpWidget(
+        _wrapWithShadTheme(
+          Align(
+            alignment: Alignment.topLeft,
+            child: ResizableTaskWidget(
+              interactionController: TaskInteractionController(),
+              task: task,
+              onResizePreview: (_) {},
+              onResizeEnd: (_) {},
+              hourHeight: 40,
+              stepHeight: 10,
+              minutesPerStep: 15,
+              width: 120,
+              height: 80,
+              isDayView: false,
+              onDragPointerDown: (offset) => capturedOffset = offset,
+              resizeHandleExtent: 12,
+            ),
+          ),
+        ),
+      );
+
+      final Rect rect = tester.getRect(find.byType(ResizableTaskWidget));
+      final gesture = await tester.createGesture(
+        kind: PointerDeviceKind.mouse,
+        buttons: kPrimaryButton,
+      );
+      await gesture.down(Offset(rect.center.dx, rect.top + 2));
+      await tester.pump();
+      await gesture.up();
+
+      expect(capturedOffset, isNull);
+    },
+  );
+
+  testWidgets('Unscheduled top edge still forwards drag pointer callback', (
+    tester,
+  ) async {
+    final task = CalendarTask.create(title: 'Unscheduled Handle Edge Task');
+    Offset? capturedOffset;
+
+    await tester.pumpWidget(
+      _wrapWithShadTheme(
+        Align(
+          alignment: Alignment.topLeft,
+          child: ResizableTaskWidget(
+            interactionController: TaskInteractionController(),
+            task: task,
+            onResizePreview: (_) {},
+            onResizeEnd: (_) {},
+            hourHeight: 40,
+            stepHeight: 10,
+            minutesPerStep: 15,
+            width: 120,
+            height: 80,
+            isDayView: false,
+            onDragPointerDown: (offset) => capturedOffset = offset,
+            resizeHandleExtent: 12,
+          ),
+        ),
+      ),
+    );
+
+    final Rect rect = tester.getRect(find.byType(ResizableTaskWidget));
+    final gesture = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kPrimaryButton,
+    );
+    await gesture.down(Offset(rect.center.dx, rect.top + 2));
+    await tester.pump();
+    await gesture.up();
+
+    expect(capturedOffset, isNotNull);
+  });
+
+  testWidgets(
     'Bottom handle overshoot above top handle does not bank resize movement',
     (tester) async {
       Future<CalendarTask?> runDrag(List<double> yPositions) async {

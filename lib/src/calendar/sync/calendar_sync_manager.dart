@@ -47,7 +47,6 @@ const String _calendarSyncEntityJournal = 'journal';
 const String _calendarSyncOperationAdd = 'add';
 const String _calendarSyncOperationUpdate = 'update';
 const String _calendarSyncOperationDelete = 'delete';
-const int _calendarSequenceDefault = 0;
 const Duration _calendarSyncFutureTimestampTolerance = Duration(minutes: 2);
 
 class CalendarSyncManager {
@@ -560,27 +559,7 @@ class CalendarSyncManager {
     return digest.toString();
   }
 
-  bool _shouldPreferRemote({
-    required DateTime localModifiedAt,
-    required DateTime remoteModifiedAt,
-    required int localSequence,
-    required int remoteSequence,
-  }) {
-    final int timestampComparison = _compareSyncInstants(
-      remoteModifiedAt,
-      localModifiedAt,
-    );
-    if (timestampComparison > 0) {
-      return true;
-    }
-    if (timestampComparison < 0) {
-      return false;
-    }
-    return remoteSequence > localSequence;
-  }
-
   Future<bool> _mergeTask(CalendarTask remoteTask, String operation) async {
-    final CalendarModel currentModel = _readModel();
     final CalendarTask normalizedRemoteTask = _normalizeTaskForSync(remoteTask);
     final DateTime remoteModifiedAt = _resolveRemoteModifiedAt(
       normalizedRemoteTask.modifiedAt,
@@ -594,98 +573,35 @@ class CalendarSyncManager {
         ? normalizedRemoteTask
         : normalizedRemoteTask.copyWith(modifiedAt: remoteModifiedAt);
 
-    CalendarModel updatedModel;
+    final CalendarModel currentModel = _readModel();
+    ({CalendarModel model, bool applied}) mergeResult;
     switch (operation) {
       case _calendarSyncOperationAdd:
       case _calendarSyncOperationUpdate:
-        final CalendarTask? localTask =
-            currentModel.tasks[resolvedRemoteTask.id];
-        if (localTask == null) {
-          final DateTime? deletedAt =
-              currentModel.deletedTaskIds[resolvedRemoteTask.id];
-          if (deletedAt != null &&
-              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
-            return false;
-          }
-          CalendarModel baseModel = currentModel;
-          if (deletedAt != null) {
-            final Map<String, DateTime> updatedDeletedTaskIds =
-                Map<String, DateTime>.from(currentModel.deletedTaskIds)
-                  ..remove(resolvedRemoteTask.id);
-            baseModel = currentModel.copyWith(
-              deletedTaskIds: updatedDeletedTaskIds,
-            );
-          }
-          updatedModel = baseModel.addTask(resolvedRemoteTask);
-          break;
-        }
-        final bool preferRemote = _shouldPreferRemote(
-          localModifiedAt: localTask.modifiedAt,
-          remoteModifiedAt: remoteModifiedAt,
-          localSequence:
-              localTask.icsMeta?.sequence ?? _calendarSequenceDefault,
-          remoteSequence:
-              resolvedRemoteTask.icsMeta?.sequence ?? _calendarSequenceDefault,
+        mergeResult = currentModel.mergeRemoteTask(
+          resolvedRemoteTask,
+          deleted: false,
         );
-        if (preferRemote) {
-          updatedModel = currentModel.updateTask(resolvedRemoteTask);
-        } else {
-          return false;
-        }
         break;
       case _calendarSyncOperationDelete:
-        final CalendarTask? existing =
-            currentModel.tasks[resolvedRemoteTask.id];
-        if (existing != null) {
-          final bool preferRemote = _shouldPreferRemote(
-            localModifiedAt: existing.modifiedAt,
-            remoteModifiedAt: remoteModifiedAt,
-            localSequence:
-                existing.icsMeta?.sequence ?? _calendarSequenceDefault,
-            remoteSequence:
-                resolvedRemoteTask.icsMeta?.sequence ??
-                _calendarSequenceDefault,
-          );
-          if (!preferRemote) {
-            return false;
-          }
-        } else {
-          final DateTime? deletedAt =
-              currentModel.deletedTaskIds[resolvedRemoteTask.id];
-          if (deletedAt != null &&
-              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
-            return false;
-          }
-        }
-        CalendarModel baseModel = existing == null
-            ? currentModel
-            : currentModel.deleteTask(resolvedRemoteTask.id);
-        if (existing != null) {
-          baseModel = baseModel.copyWith(
-            deletedTaskIds: Map<String, DateTime>.from(baseModel.deletedTaskIds)
-              ..remove(resolvedRemoteTask.id),
-          );
-        }
-        updatedModel = _withTaskTombstone(
-          baseModel,
-          resolvedRemoteTask.id,
-          remoteModifiedAt,
+        mergeResult = currentModel.mergeRemoteTask(
+          resolvedRemoteTask,
+          deleted: true,
         );
-        if (identical(updatedModel, currentModel)) {
-          return false;
-        }
         break;
       default:
         SafeLogging.debugLog('Unknown task operation: $operation');
         return false;
     }
 
-    await _applyModel(updatedModel);
+    if (!mergeResult.applied) {
+      return false;
+    }
+    await _applyModel(mergeResult.model);
     return true;
   }
 
   Future<bool> _mergeDayEvent(DayEvent remoteEvent, String operation) async {
-    final CalendarModel currentModel = _readModel();
     final DayEvent normalizedRemoteEvent = _normalizeDayEventForSync(
       remoteEvent,
     );
@@ -701,91 +617,31 @@ class CalendarSyncManager {
         ? normalizedRemoteEvent
         : normalizedRemoteEvent.copyWith(modifiedAt: remoteModifiedAt);
 
-    CalendarModel updatedModel;
+    final CalendarModel currentModel = _readModel();
+    ({CalendarModel model, bool applied}) mergeResult;
     switch (operation) {
       case _calendarSyncOperationAdd:
       case _calendarSyncOperationUpdate:
-        final DayEvent? localEvent =
-            currentModel.dayEvents[resolvedRemoteEvent.id];
-        if (localEvent == null) {
-          final DateTime? deletedAt =
-              currentModel.deletedDayEventIds[resolvedRemoteEvent.id];
-          if (deletedAt != null &&
-              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
-            return false;
-          }
-          CalendarModel baseModel = currentModel;
-          if (deletedAt != null) {
-            final Map<String, DateTime> updatedDeletedDayEventIds =
-                Map<String, DateTime>.from(currentModel.deletedDayEventIds)
-                  ..remove(resolvedRemoteEvent.id);
-            baseModel = currentModel.copyWith(
-              deletedDayEventIds: updatedDeletedDayEventIds,
-            );
-          }
-          updatedModel = baseModel.addDayEvent(resolvedRemoteEvent);
-        } else if (_shouldPreferRemote(
-          localModifiedAt: localEvent.modifiedAt,
-          remoteModifiedAt: remoteModifiedAt,
-          localSequence:
-              localEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
-          remoteSequence:
-              resolvedRemoteEvent.icsMeta?.sequence ?? _calendarSequenceDefault,
-        )) {
-          updatedModel = currentModel.updateDayEvent(resolvedRemoteEvent);
-        } else {
-          return false;
-        }
+        mergeResult = currentModel.mergeRemoteDayEvent(
+          resolvedRemoteEvent,
+          deleted: false,
+        );
         break;
       case _calendarSyncOperationDelete:
-        final DayEvent? existing =
-            currentModel.dayEvents[resolvedRemoteEvent.id];
-        if (existing != null) {
-          final bool preferRemote = _shouldPreferRemote(
-            localModifiedAt: existing.modifiedAt,
-            remoteModifiedAt: remoteModifiedAt,
-            localSequence:
-                existing.icsMeta?.sequence ?? _calendarSequenceDefault,
-            remoteSequence:
-                resolvedRemoteEvent.icsMeta?.sequence ??
-                _calendarSequenceDefault,
-          );
-          if (!preferRemote) {
-            return false;
-          }
-        } else {
-          final DateTime? deletedAt =
-              currentModel.deletedDayEventIds[resolvedRemoteEvent.id];
-          if (deletedAt != null &&
-              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
-            return false;
-          }
-        }
-        CalendarModel baseModel = existing == null
-            ? currentModel
-            : currentModel.deleteDayEvent(resolvedRemoteEvent.id);
-        if (existing != null) {
-          baseModel = baseModel.copyWith(
-            deletedDayEventIds: Map<String, DateTime>.from(
-              baseModel.deletedDayEventIds,
-            )..remove(resolvedRemoteEvent.id),
-          );
-        }
-        updatedModel = _withDayEventTombstone(
-          baseModel,
-          resolvedRemoteEvent.id,
-          remoteModifiedAt,
+        mergeResult = currentModel.mergeRemoteDayEvent(
+          resolvedRemoteEvent,
+          deleted: true,
         );
-        if (identical(updatedModel, currentModel)) {
-          return false;
-        }
         break;
       default:
         SafeLogging.debugLog('Unknown day event operation: $operation');
         return false;
     }
 
-    await _applyModel(updatedModel);
+    if (!mergeResult.applied) {
+      return false;
+    }
+    await _applyModel(mergeResult.model);
     return true;
   }
 
@@ -793,7 +649,6 @@ class CalendarSyncManager {
     CalendarCriticalPath remotePath,
     String operation,
   ) async {
-    final CalendarModel currentModel = _readModel();
     final CalendarCriticalPath normalizedRemotePath = _normalizePathForSync(
       remotePath,
     );
@@ -809,82 +664,31 @@ class CalendarSyncManager {
         ? normalizedRemotePath
         : normalizedRemotePath.copyWith(modifiedAt: remoteModifiedAt);
 
-    CalendarModel updatedModel;
+    final CalendarModel currentModel = _readModel();
+    ({CalendarModel model, bool applied}) mergeResult;
     switch (operation) {
       case _calendarSyncOperationAdd:
       case _calendarSyncOperationUpdate:
-        final CalendarCriticalPath? localPath =
-            currentModel.criticalPaths[resolvedRemotePath.id];
-        if (localPath == null) {
-          final DateTime? deletedAt =
-              currentModel.deletedCriticalPathIds[resolvedRemotePath.id];
-          if (deletedAt != null &&
-              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
-            return false;
-          }
-          CalendarModel baseModel = currentModel;
-          if (deletedAt != null) {
-            final Map<String, DateTime> updatedDeletedCriticalPathIds =
-                Map<String, DateTime>.from(currentModel.deletedCriticalPathIds)
-                  ..remove(resolvedRemotePath.id);
-            baseModel = currentModel.copyWith(
-              deletedCriticalPathIds: updatedDeletedCriticalPathIds,
-            );
-          }
-          updatedModel = baseModel.addCriticalPath(resolvedRemotePath);
-        } else if (_isSyncInstantAfter(
-          remoteModifiedAt,
-          localPath.modifiedAt,
-        )) {
-          updatedModel = currentModel.updateCriticalPath(resolvedRemotePath);
-        } else {
-          return false;
-        }
+        mergeResult = currentModel.mergeRemoteCriticalPath(
+          resolvedRemotePath,
+          deleted: false,
+        );
         break;
       case _calendarSyncOperationDelete:
-        final CalendarCriticalPath? existing =
-            currentModel.criticalPaths[resolvedRemotePath.id];
-        if (existing != null &&
-            !_isSyncInstantAfter(remoteModifiedAt, existing.modifiedAt)) {
-          return false;
-        }
-        if (existing == null) {
-          final DateTime? deletedAt =
-              currentModel.deletedCriticalPathIds[resolvedRemotePath.id];
-          if (deletedAt != null &&
-              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
-            return false;
-          }
-        }
-        CalendarModel baseModel = currentModel;
-        if (existing != null) {
-          final Map<String, CalendarCriticalPath> updatedPaths =
-              Map<String, CalendarCriticalPath>.from(currentModel.criticalPaths)
-                ..[resolvedRemotePath.id] = existing.copyWith(
-                  isArchived: true,
-                  modifiedAt: remoteModifiedAt,
-                );
-          final CalendarModel changed = currentModel.copyWith(
-            criticalPaths: updatedPaths,
-            lastModified: _syncNowUtc(),
-          );
-          baseModel = changed.copyWith(checksum: changed.calculateChecksum());
-        }
-        updatedModel = _withCriticalPathTombstone(
-          baseModel,
-          resolvedRemotePath.id,
-          remoteModifiedAt,
+        mergeResult = currentModel.mergeRemoteCriticalPath(
+          resolvedRemotePath,
+          deleted: true,
         );
-        if (identical(updatedModel, currentModel)) {
-          return false;
-        }
         break;
       default:
         SafeLogging.debugLog('Unknown critical path operation: $operation');
         return false;
     }
 
-    await _applyModel(updatedModel);
+    if (!mergeResult.applied) {
+      return false;
+    }
+    await _applyModel(mergeResult.model);
     return true;
   }
 
@@ -892,7 +696,6 @@ class CalendarSyncManager {
     CalendarJournal remoteJournal,
     String operation,
   ) async {
-    final CalendarModel currentModel = _readModel();
     final CalendarJournal normalizedRemoteJournal = _normalizeJournalForSync(
       remoteJournal,
     );
@@ -908,92 +711,31 @@ class CalendarSyncManager {
         ? normalizedRemoteJournal
         : normalizedRemoteJournal.copyWith(modifiedAt: remoteModifiedAt);
 
-    CalendarModel updatedModel;
+    final CalendarModel currentModel = _readModel();
+    ({CalendarModel model, bool applied}) mergeResult;
     switch (operation) {
       case _calendarSyncOperationAdd:
       case _calendarSyncOperationUpdate:
-        final CalendarJournal? localJournal =
-            currentModel.journals[resolvedRemoteJournal.id];
-        if (localJournal == null) {
-          final DateTime? deletedAt =
-              currentModel.deletedJournalIds[resolvedRemoteJournal.id];
-          if (deletedAt != null &&
-              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
-            return false;
-          }
-          CalendarModel baseModel = currentModel;
-          if (deletedAt != null) {
-            final Map<String, DateTime> updatedDeletedJournalIds =
-                Map<String, DateTime>.from(currentModel.deletedJournalIds)
-                  ..remove(resolvedRemoteJournal.id);
-            baseModel = currentModel.copyWith(
-              deletedJournalIds: updatedDeletedJournalIds,
-            );
-          }
-          updatedModel = baseModel.addJournal(resolvedRemoteJournal);
-        } else if (_shouldPreferRemote(
-          localModifiedAt: localJournal.modifiedAt,
-          remoteModifiedAt: remoteModifiedAt,
-          localSequence:
-              localJournal.icsMeta?.sequence ?? _calendarSequenceDefault,
-          remoteSequence:
-              resolvedRemoteJournal.icsMeta?.sequence ??
-              _calendarSequenceDefault,
-        )) {
-          updatedModel = currentModel.updateJournal(resolvedRemoteJournal);
-        } else {
-          return false;
-        }
+        mergeResult = currentModel.mergeRemoteJournal(
+          resolvedRemoteJournal,
+          deleted: false,
+        );
         break;
       case _calendarSyncOperationDelete:
-        final CalendarJournal? existing =
-            currentModel.journals[resolvedRemoteJournal.id];
-        if (existing != null) {
-          final bool preferRemote = _shouldPreferRemote(
-            localModifiedAt: existing.modifiedAt,
-            remoteModifiedAt: remoteModifiedAt,
-            localSequence:
-                existing.icsMeta?.sequence ?? _calendarSequenceDefault,
-            remoteSequence:
-                resolvedRemoteJournal.icsMeta?.sequence ??
-                _calendarSequenceDefault,
-          );
-          if (!preferRemote) {
-            return false;
-          }
-        } else {
-          final DateTime? deletedAt =
-              currentModel.deletedJournalIds[resolvedRemoteJournal.id];
-          if (deletedAt != null &&
-              !_isSyncInstantAfter(remoteModifiedAt, deletedAt)) {
-            return false;
-          }
-        }
-        CalendarModel baseModel = existing == null
-            ? currentModel
-            : currentModel.deleteJournal(resolvedRemoteJournal.id);
-        if (existing != null) {
-          baseModel = baseModel.copyWith(
-            deletedJournalIds: Map<String, DateTime>.from(
-              baseModel.deletedJournalIds,
-            )..remove(resolvedRemoteJournal.id),
-          );
-        }
-        updatedModel = _withJournalTombstone(
-          baseModel,
-          resolvedRemoteJournal.id,
-          remoteModifiedAt,
+        mergeResult = currentModel.mergeRemoteJournal(
+          resolvedRemoteJournal,
+          deleted: true,
         );
-        if (identical(updatedModel, currentModel)) {
-          return false;
-        }
         break;
       default:
         SafeLogging.debugLog('Unknown journal operation: $operation');
         return false;
     }
 
-    await _applyModel(updatedModel);
+    if (!mergeResult.applied) {
+      return false;
+    }
+    await _applyModel(mergeResult.model);
     return true;
   }
 
@@ -1215,84 +957,4 @@ CalendarModel _normalizeModelForSync(CalendarModel model) {
     lastModified: _normalizeSyncInstant(model.lastModified),
   );
   return normalized.copyWith(checksum: normalized.calculateChecksum());
-}
-
-CalendarModel _withTaskTombstone(
-  CalendarModel model,
-  String taskId,
-  DateTime deletedAt,
-) {
-  final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
-  final DateTime? existing = model.deletedTaskIds[taskId];
-  if (existing != null && !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
-    return model;
-  }
-  final Map<String, DateTime> updatedDeletedTaskIds =
-      Map<String, DateTime>.from(model.deletedTaskIds)
-        ..[taskId] = normalizedDeletedAt;
-  final CalendarModel updated = model.copyWith(
-    deletedTaskIds: updatedDeletedTaskIds,
-    lastModified: _syncNowUtc(),
-  );
-  return updated.copyWith(checksum: updated.calculateChecksum());
-}
-
-CalendarModel _withDayEventTombstone(
-  CalendarModel model,
-  String eventId,
-  DateTime deletedAt,
-) {
-  final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
-  final DateTime? existing = model.deletedDayEventIds[eventId];
-  if (existing != null && !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
-    return model;
-  }
-  final Map<String, DateTime> updatedDeletedDayEventIds =
-      Map<String, DateTime>.from(model.deletedDayEventIds)
-        ..[eventId] = normalizedDeletedAt;
-  final CalendarModel updated = model.copyWith(
-    deletedDayEventIds: updatedDeletedDayEventIds,
-    lastModified: _syncNowUtc(),
-  );
-  return updated.copyWith(checksum: updated.calculateChecksum());
-}
-
-CalendarModel _withJournalTombstone(
-  CalendarModel model,
-  String journalId,
-  DateTime deletedAt,
-) {
-  final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
-  final DateTime? existing = model.deletedJournalIds[journalId];
-  if (existing != null && !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
-    return model;
-  }
-  final Map<String, DateTime> updatedDeletedJournalIds =
-      Map<String, DateTime>.from(model.deletedJournalIds)
-        ..[journalId] = normalizedDeletedAt;
-  final CalendarModel updated = model.copyWith(
-    deletedJournalIds: updatedDeletedJournalIds,
-    lastModified: _syncNowUtc(),
-  );
-  return updated.copyWith(checksum: updated.calculateChecksum());
-}
-
-CalendarModel _withCriticalPathTombstone(
-  CalendarModel model,
-  String pathId,
-  DateTime deletedAt,
-) {
-  final DateTime normalizedDeletedAt = _normalizeSyncInstant(deletedAt);
-  final DateTime? existing = model.deletedCriticalPathIds[pathId];
-  if (existing != null && !_isSyncInstantAfter(normalizedDeletedAt, existing)) {
-    return model;
-  }
-  final Map<String, DateTime> updatedDeletedPathIds =
-      Map<String, DateTime>.from(model.deletedCriticalPathIds)
-        ..[pathId] = normalizedDeletedAt;
-  final CalendarModel updated = model.copyWith(
-    deletedCriticalPathIds: updatedDeletedPathIds,
-    lastModified: _syncNowUtc(),
-  );
-  return updated.copyWith(checksum: updated.calculateChecksum());
 }

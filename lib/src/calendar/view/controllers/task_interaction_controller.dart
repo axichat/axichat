@@ -80,6 +80,8 @@ class TaskResizeInteraction {
   int get hashCode => Object.hash(taskId, handle);
 }
 
+enum CalendarTaskPointerTarget { body, resizeTop, resizeBottom }
+
 enum CalendarInteractionKind { drag, resizeTop, resizeBottom }
 
 enum CalendarInteractionVerticalIntent { neutral, up, down }
@@ -205,6 +207,8 @@ class TaskInteractionController extends ChangeNotifier {
   double? _pendingDragWidth;
   bool _pendingDragForceCenter = false;
   ResizeAutoScrollHandler? _resizeAutoScrollHandler;
+  final Map<int, (String taskId, CalendarTaskPointerTarget target)>
+  _pendingTaskPointerTargets = <int, (String, CalendarTaskPointerTarget)>{};
 
   final Map<String, CalendarTask> _resizePreviews = {};
 
@@ -307,6 +311,43 @@ class TaskInteractionController extends ChangeNotifier {
     resizeInteraction.value = next;
     interactionSession.value = session;
     notifyListeners();
+  }
+
+  void beginTaskPointerClassification({
+    required String taskId,
+    required int pointerId,
+    required CalendarTaskPointerTarget target,
+  }) {
+    final (String taskId, CalendarTaskPointerTarget target)? existing =
+        _pendingTaskPointerTargets[pointerId];
+    if (existing != null && existing.$1 == taskId && existing.$2 == target) {
+      return;
+    }
+    _pendingTaskPointerTargets[pointerId] = (taskId, target);
+  }
+
+  CalendarTaskPointerTarget? taskPointerClassification({
+    required String taskId,
+    required int pointerId,
+  }) {
+    final (String taskId, CalendarTaskPointerTarget target)? existing =
+        _pendingTaskPointerTargets[pointerId];
+    if (existing == null || existing.$1 != taskId) {
+      return null;
+    }
+    return existing.$2;
+  }
+
+  void clearTaskPointerClassification({
+    required String taskId,
+    required int pointerId,
+  }) {
+    final (String taskId, CalendarTaskPointerTarget target)? existing =
+        _pendingTaskPointerTargets[pointerId];
+    if (existing == null || existing.$1 != taskId) {
+      return;
+    }
+    _pendingTaskPointerTargets.remove(pointerId);
   }
 
   void endResizeInteraction(String taskId) {

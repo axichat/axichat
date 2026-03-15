@@ -63,6 +63,34 @@ void main() {
     controller.dispose();
   });
 
+  test('Task pointer classification stores and clears per pointer', () {
+    final controller = TaskInteractionController();
+
+    controller.beginTaskPointerClassification(
+      taskId: 'task-1',
+      pointerId: 7,
+      target: CalendarTaskPointerTarget.resizeTop,
+    );
+
+    expect(
+      controller.taskPointerClassification(taskId: 'task-1', pointerId: 7),
+      CalendarTaskPointerTarget.resizeTop,
+    );
+    expect(
+      controller.taskPointerClassification(taskId: 'task-1', pointerId: 8),
+      isNull,
+    );
+
+    controller.clearTaskPointerClassification(taskId: 'task-1', pointerId: 7);
+
+    expect(
+      controller.taskPointerClassification(taskId: 'task-1', pointerId: 7),
+      isNull,
+    );
+
+    controller.dispose();
+  });
+
   test('Drag interaction seeds and clears shared interaction session', () {
     final controller = TaskInteractionController();
     final task = CalendarTask.create(
