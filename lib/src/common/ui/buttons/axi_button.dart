@@ -168,6 +168,7 @@ class AxiButton extends StatefulWidget {
     this.loading = false,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
+    this.tooltip,
     this.semanticLabel,
   });
 
@@ -183,6 +184,7 @@ class AxiButton extends StatefulWidget {
     this.loading = false,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
+    this.tooltip,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.primary;
 
@@ -198,6 +200,7 @@ class AxiButton extends StatefulWidget {
     this.loading = false,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
+    this.tooltip,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.secondary;
 
@@ -213,6 +216,7 @@ class AxiButton extends StatefulWidget {
     this.loading = false,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
+    this.tooltip,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.outline;
 
@@ -228,6 +232,7 @@ class AxiButton extends StatefulWidget {
     this.loading = false,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
+    this.tooltip,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.ghost;
 
@@ -243,6 +248,7 @@ class AxiButton extends StatefulWidget {
     this.loading = false,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
+    this.tooltip,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.link;
 
@@ -258,6 +264,7 @@ class AxiButton extends StatefulWidget {
     this.loading = false,
     this.widthBehavior = AxiButtonWidth.fit,
     this.width,
+    this.tooltip,
     this.semanticLabel,
   }) : variant = AxiButtonVariant.destructive;
 
@@ -272,6 +279,7 @@ class AxiButton extends StatefulWidget {
   final bool loading;
   final AxiButtonWidth widthBehavior;
   final double? width;
+  final String? tooltip;
   final String? semanticLabel;
 
   @override
@@ -502,11 +510,19 @@ class _AxiButtonState extends State<AxiButton> {
           child: button,
         );
 
+        if (widget.tooltip != null) {
+          button = AxiTooltip(
+            builder: (context) =>
+                Text(widget.tooltip!, style: context.textTheme.muted),
+            child: button,
+          );
+        }
+
         return Semantics(
           button: true,
           enabled: enabled,
           selected: widget.selected,
-          label: widget.semanticLabel,
+          label: widget.semanticLabel ?? widget.tooltip,
           onTap: onTap,
           onLongPress: onLongPress,
           child: button,

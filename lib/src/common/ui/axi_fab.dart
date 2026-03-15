@@ -20,16 +20,12 @@ class AxiFab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget button = AxiButton.primary(
+    return AxiButton.primary(
       onPressed: onPressed,
       leading: Icon(iconData),
+      tooltip: tooltip,
+      semanticLabel: tooltip,
       child: Text(text),
     );
-
-    if (tooltip != null) {
-      button = AxiTooltip(builder: (_) => Text(tooltip!), child: button);
-    }
-
-    return button;
   }
 }

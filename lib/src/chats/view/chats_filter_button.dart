@@ -4,7 +4,6 @@
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
-import 'package:axichat/src/home/home_search_definitions.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -64,13 +63,11 @@ class _ChatsFilterButtonState extends State<ChatsFilterButton> {
             onPressed: popoverController.toggle,
           );
         } else {
-          trigger = AxiTooltip(
-            builder: (_) => Text(tooltip),
-            child: AxiButton.secondary(
-              onPressed: popoverController.toggle,
-              leading: Icon(LucideIcons.listFilter, size: iconSize),
-              child: Text(selectedFilter.label),
-            ),
+          trigger = AxiButton.secondary(
+            onPressed: popoverController.toggle,
+            tooltip: tooltip,
+            leading: Icon(LucideIcons.listFilter, size: iconSize),
+            child: Text(selectedFilter.label),
           );
         }
         return AxiPopover(

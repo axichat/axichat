@@ -1131,7 +1131,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   dragSourceTab != null;
               final bool shakeSchedule = dragHintActive;
               final bool shakeTasks = dragHintActive;
-              final avatar = AxiAvatar(
+              final avatar = HydratedAxiAvatar(
                 jid: profile.jid,
                 subscription: m.Subscription.both,
                 avatarPath: profile.avatarPath,
@@ -1187,8 +1187,8 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   ),
                   GButton(
                     icon: LucideIcons.calendarClock,
-                    text: l10n.calendarScheduleLabel,
-                    leading: _BottomNavShake(
+                    text: l10n.homeRailCalendar,
+                    leading: AxiAttentionShake(
                       enabled: shakeSchedule,
                       child: _HomeBottomNavBadgeIcon(
                         iconData: LucideIcons.calendarClock,
@@ -1207,7 +1207,7 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
                   GButton(
                     icon: LucideIcons.squareCheck,
                     text: l10n.calendarFragmentTaskLabel,
-                    leading: _BottomNavShake(
+                    leading: AxiAttentionShake(
                       enabled: shakeTasks,
                       child: _HomeBottomNavBadgeIcon(
                         iconData: LucideIcons.squareCheck,
@@ -1236,71 +1236,6 @@ class _HomeShellDefaultBarState extends State<_HomeShellDefaultBar> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _BottomNavShake extends StatefulWidget {
-  const _BottomNavShake({required this.enabled, required this.child});
-
-  final bool enabled;
-  final Widget child;
-
-  @override
-  State<_BottomNavShake> createState() => _BottomNavShakeState();
-}
-
-class _BottomNavShakeState extends State<_BottomNavShake>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: baseAnimationDuration,
-    );
-    if (widget.enabled) {
-      _controller.repeat();
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant _BottomNavShake oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.enabled == widget.enabled) {
-      return;
-    }
-    if (widget.enabled) {
-      _controller.repeat();
-      return;
-    }
-    _controller.stop();
-    _controller.value = 0;
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.enabled) {
-      return widget.child;
-    }
-    final maxAngle =
-        (context.spacing.xxs / context.sizing.iconButtonSize) * 2.0;
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final phase = _controller.value * math.pi * 2;
-        final angle = math.sin(phase) * maxAngle;
-        return Transform.rotate(angle: angle, child: child);
-      },
-      child: widget.child,
     );
   }
 }
@@ -1473,7 +1408,7 @@ class _TabActionGroup extends StatelessWidget {
     if (includePrimaryActions) {
       actions.addAll([
         ChatsFilterButton(locate: locate),
-        const DraftButton(),
+        const DraftButton(compact: true),
         const ChatsAddButton(),
       ]);
     }
@@ -1567,7 +1502,7 @@ class _ProfileRailItem extends StatelessWidget {
     final textTheme = context.textTheme;
     return BlocBuilder<ProfileCubit, ProfileState>(
       builder: (context, state) {
-        final avatar = AxiAvatar(
+        final avatar = HydratedAxiAvatar(
           jid: state.jid,
           subscription: m.Subscription.both,
           avatarPath: state.avatarPath,
