@@ -9,10 +9,10 @@ import 'dart:ui' as ui;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:charset_converter/charset_converter.dart';
@@ -77,7 +77,7 @@ Future<void> showPendingAttachmentPreview({
 
 Future<_PendingAttachmentPreviewData?> _buildPreviewData({
   required File file,
-  required EmailAttachment attachment,
+  required Attachment attachment,
 }) async {
   final report = await inspectFileType(
     file: file,
@@ -92,7 +92,7 @@ Future<_PendingAttachmentPreviewData?> _buildPreviewData({
       attachment.mimeType?.toLowerCase() ??
       _extensionBasedMime(attachment.fileName, attachment.path);
   if (isImageKind) {
-    final intrinsicSize = await resolveEmailAttachmentSize(
+    final intrinsicSize = await resolveAttachmentSize(
       attachment: attachment,
       file: file,
     );
@@ -228,8 +228,8 @@ String? _extensionBasedMime(String fileName, String path) {
   return null;
 }
 
-Future<Size?> resolveEmailAttachmentSize({
-  required EmailAttachment attachment,
+Future<Size?> resolveAttachmentSize({
+  required Attachment attachment,
   required File file,
 }) async {
   final width = attachment.width;
@@ -267,7 +267,7 @@ class _PendingAttachmentPreviewData {
 
   factory _PendingAttachmentPreviewData.image({
     required File file,
-    required EmailAttachment attachment,
+    required Attachment attachment,
     required FileTypeReport report,
     Size? intrinsicSize,
   }) => _PendingAttachmentPreviewData._(
@@ -280,7 +280,7 @@ class _PendingAttachmentPreviewData {
 
   factory _PendingAttachmentPreviewData.pdf({
     required File file,
-    required EmailAttachment attachment,
+    required Attachment attachment,
     required FileTypeReport report,
   }) => _PendingAttachmentPreviewData._(
     file: file,
@@ -291,7 +291,7 @@ class _PendingAttachmentPreviewData {
 
   factory _PendingAttachmentPreviewData.text({
     required File file,
-    required EmailAttachment attachment,
+    required Attachment attachment,
     required FileTypeReport report,
     required String textContent,
     required bool truncated,
@@ -306,7 +306,7 @@ class _PendingAttachmentPreviewData {
 
   factory _PendingAttachmentPreviewData.metadata({
     required File file,
-    required EmailAttachment attachment,
+    required Attachment attachment,
     required FileTypeReport report,
   }) => _PendingAttachmentPreviewData._(
     file: file,
@@ -316,7 +316,7 @@ class _PendingAttachmentPreviewData {
   );
 
   final File file;
-  final EmailAttachment attachment;
+  final Attachment attachment;
   final FileTypeReport report;
   final _AttachmentPreviewKind kind;
   final Size? intrinsicSize;

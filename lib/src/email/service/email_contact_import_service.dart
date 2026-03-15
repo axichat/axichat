@@ -6,7 +6,6 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:axichat/src/common/email_validation.dart';
-import 'package:axichat/src/email/service/email_contact_import_models.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:path/path.dart' as p;
@@ -106,6 +105,67 @@ const Set<String> _nicknameHeaderKeys = <String>{
   _headerShortNameKey,
   _headerNickKey,
 };
+
+const String _csvExtension = 'csv';
+const String _vcardExtension = 'vcf';
+const String _vcardAlternateExtension = 'vcard';
+const int _emptyCount = 0;
+const List<String> _csvExtensions = <String>[_csvExtension];
+const List<String> _vcardExtensions = <String>[
+  _vcardExtension,
+  _vcardAlternateExtension,
+];
+
+enum EmailContactImportFormat { gmail, outlook, yahoo, genericCsv, vcard }
+
+extension EmailContactImportFormatMetadata on EmailContactImportFormat {
+  bool get isVcard => this == EmailContactImportFormat.vcard;
+
+  bool get isCsv => !isVcard;
+
+  List<String> get allowedExtensions =>
+      isVcard ? _vcardExtensions : _csvExtensions;
+}
+
+enum EmailContactImportFailureReason {
+  noEmailAccount,
+  emptyFile,
+  readFailure,
+  fileTooLarge,
+  unsupportedFileType,
+  noContacts,
+  tooManyContacts,
+  importFailed,
+}
+
+class EmailContactImportContact {
+  const EmailContactImportContact({required this.address, this.displayName});
+
+  final String address;
+  final String? displayName;
+}
+
+class EmailContactImportSummary {
+  const EmailContactImportSummary({
+    required this.total,
+    required this.imported,
+    required this.duplicates,
+    required this.invalid,
+    required this.failed,
+  });
+
+  final int total;
+  final int imported;
+  final int duplicates;
+  final int invalid;
+  final int failed;
+
+  int get skipped => duplicates + invalid + failed;
+
+  bool get hasFailures => failed > _emptyCount;
+
+  bool get hasImported => imported > _emptyCount;
+}
 
 sealed class EmailContactImportException implements Exception {
   const EmailContactImportException();

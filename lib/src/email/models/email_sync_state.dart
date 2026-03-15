@@ -3,7 +3,7 @@
 
 import 'package:equatable/equatable.dart';
 
-import 'delta_chat_exception.dart';
+import 'package:axichat/src/email/service/delta_chat_exception.dart';
 
 enum EmailSyncStatus { ready, offline, recovering, error }
 

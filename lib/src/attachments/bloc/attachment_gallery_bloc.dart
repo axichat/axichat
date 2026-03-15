@@ -7,6 +7,7 @@ import 'package:axichat/src/common/address_tools.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:bloc/bloc.dart';
@@ -15,6 +16,47 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'attachment_gallery_bloc.freezed.dart';
 part 'attachment_gallery_event.dart';
 part 'attachment_gallery_state.dart';
+
+extension AttachmentGallerySortLocalization on AttachmentGallerySortOption {
+  String label(AppLocalizations l10n) {
+    return switch (this) {
+      AttachmentGallerySortOption.newestFirst => l10n.chatSearchSortNewestFirst,
+      AttachmentGallerySortOption.oldestFirst => l10n.chatSearchSortOldestFirst,
+      AttachmentGallerySortOption.nameAscending =>
+        l10n.attachmentGallerySortNameAscLabel,
+      AttachmentGallerySortOption.nameDescending =>
+        l10n.attachmentGallerySortNameDescLabel,
+      AttachmentGallerySortOption.sizeAscending =>
+        l10n.attachmentGallerySortSizeAscLabel,
+      AttachmentGallerySortOption.sizeDescending =>
+        l10n.attachmentGallerySortSizeDescLabel,
+    };
+  }
+}
+
+extension AttachmentGalleryTypeFilterLocalization
+    on AttachmentGalleryTypeFilter {
+  String label(AppLocalizations l10n) {
+    return switch (this) {
+      AttachmentGalleryTypeFilter.all => l10n.attachmentGalleryAllLabel,
+      AttachmentGalleryTypeFilter.images => l10n.attachmentGalleryImagesLabel,
+      AttachmentGalleryTypeFilter.videos => l10n.attachmentGalleryVideosLabel,
+      AttachmentGalleryTypeFilter.files => l10n.attachmentGalleryFilesLabel,
+    };
+  }
+}
+
+extension AttachmentGallerySourceFilterLocalization
+    on AttachmentGallerySourceFilter {
+  String label(AppLocalizations l10n) {
+    return switch (this) {
+      AttachmentGallerySourceFilter.all => l10n.attachmentGalleryAllLabel,
+      AttachmentGallerySourceFilter.sent => l10n.attachmentGallerySentLabel,
+      AttachmentGallerySourceFilter.received =>
+        l10n.attachmentGalleryReceivedLabel,
+    };
+  }
+}
 
 enum AttachmentGallerySortOption {
   newestFirst,

@@ -7,7 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/bloc/email_contact_import_cubit.dart';
-import 'package:axichat/src/email/service/email_contact_import_models.dart';
+import 'package:axichat/src/email/service/email_contact_import_service.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:file_picker/file_picker.dart';

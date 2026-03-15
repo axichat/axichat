@@ -3,7 +3,6 @@
 
 import 'dart:io';
 
-import 'package:axichat/src/email/service/email_contact_import_models.dart';
 import 'package:axichat/src/email/service/email_contact_import_service.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:bloc/bloc.dart';
