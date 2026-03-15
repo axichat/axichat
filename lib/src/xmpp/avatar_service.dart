@@ -284,6 +284,49 @@ mixin AvatarService on XmppBase, BaseStreamService {
     _cacheSafeAvatarBytes(path, bytes);
   }
 
+  Future<Uint8List?> resolveSafeAvatarBytes({
+    String? avatarPath,
+    Uint8List? avatarBytes,
+  }) async {
+    final providedBytes = avatarBytes != null && avatarBytes.isNotEmpty
+        ? avatarBytes
+        : null;
+    final normalizedPath = avatarPath?.trim();
+    if (providedBytes != null) {
+      final safeBytes = await sanitizeAvatarBytes(providedBytes);
+      if (safeBytes == null || safeBytes.isEmpty) {
+        return null;
+      }
+      if (normalizedPath != null && normalizedPath.isNotEmpty) {
+        _cacheSafeAvatarBytes(normalizedPath, safeBytes);
+      }
+      return safeBytes;
+    }
+    if (normalizedPath == null || normalizedPath.isEmpty) {
+      return null;
+    }
+    final safeCached = cachedSafeAvatarBytes(normalizedPath);
+    if (safeCached != null && safeCached.isNotEmpty) {
+      return safeCached;
+    }
+    final cached = cachedAvatarBytes(normalizedPath);
+    if (cached != null && cached.isNotEmpty) {
+      final safeBytes = await sanitizeAvatarBytes(cached);
+      if (safeBytes == null || safeBytes.isEmpty) {
+        return null;
+      }
+      _cacheSafeAvatarBytes(normalizedPath, safeBytes);
+      return safeBytes;
+    }
+    final bytes = await loadAvatarBytes(normalizedPath);
+    final safeBytes = await sanitizeAvatarBytes(bytes);
+    if (safeBytes == null || safeBytes.isEmpty) {
+      return null;
+    }
+    _cacheSafeAvatarBytes(normalizedPath, safeBytes);
+    return safeBytes;
+  }
+
   void _cacheAvatarBytes(String path, Uint8List bytes) {
     if (bytes.isEmpty) return;
     final normalizedPath = path.trim();
@@ -343,7 +386,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
         await _refreshAvatarForJid(bareJid, metadata: event.metadata);
       })
       ..registerHandler<ConversationIndexItemUpdatedEvent>((event) async {
-        if (connectionState != ConnectionState.connected) return;
         final peerJid = event.item.peerBare.toBare().toString();
         if (peerJid.isEmpty) return;
         if (peerJid == myJid) return;
@@ -656,7 +698,6 @@ mixin AvatarService on XmppBase, BaseStreamService {
   }
 
   Future<void> refreshAvatarsForConversationIndex() async {
-    if (!_hasUsableXmppStream) return;
     List<Chat> chats;
     try {
       chats = await _dbOpReturning<XmppDatabase, List<Chat>>(
@@ -1364,7 +1405,7 @@ mixin AvatarService on XmppBase, BaseStreamService {
     AvatarUploadPayload payload, {
     bool public = true,
   }) async {
-    if (!_hasUsableXmppStream) {
+    if (connectionState != ConnectionState.connected) {
       throw XmppAvatarException(XmppDisconnectedException());
     }
     final targetJid = _avatarSafeBareJid(payload.jid ?? myJid);

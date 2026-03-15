@@ -291,6 +291,20 @@ void main() {
     ).called(1);
   });
 
+  test('requestRoster does not create direct chats for room JIDs', () async {
+    await connectSuccessfully(xmppService);
+    await xmppService.setMucServiceHost('conference.axi.im');
+    final roomItem = RosterItem.fromJid('room@conference.axi.im');
+    when(() => mockConnection.requestRoster()).thenAnswer(
+      (_) async =>
+          moxlib.Result(mox.RosterRequestResult([roomItem.toMox()], '')),
+    );
+
+    await xmppService.requestRoster();
+
+    expect(await database.getChat(roomItem.jid), isNull);
+  });
+
   group('addToRoster', () {
     final jid = generateRandomJid();
 

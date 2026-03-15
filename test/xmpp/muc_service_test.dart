@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/muc/muc_models.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/bookmarks_manager.dart';
@@ -25,12 +25,11 @@ import 'package:path_provider_platform_interface/path_provider_platform_interfac
 import '../mocks.dart';
 
 const String _accountBareJid = 'jid@axi.im';
-const String _accountDomain = 'axi.im';
-const String _serviceJid = 'muc.axi.im';
-const String _roomJid = 'room@muc.axi.im';
+const String _serviceJid = 'conference.axi.im';
+const String _roomJid = 'room@conference.axi.im';
 const String _roomJidBare = _roomJid;
-const String _roomJidWithNick = 'room@muc.axi.im/nick';
-const String _roomJidWithSelfNick = 'room@muc.axi.im/me';
+const String _roomJidWithNick = 'room@conference.axi.im/nick';
+const String _roomJidWithSelfNick = 'room@conference.axi.im/me';
 const String _roomName = 'Planning Room';
 const String _roomNick = 'Nick';
 const String _roomNickTrimmed = 'Nick';
@@ -301,7 +300,7 @@ void main() {
       final jid = target is mox.JID
           ? target.toBare().toString()
           : target.toString();
-      final features = jid == _serviceJid || jid == 'muc.axi.im'
+      final features = jid == _serviceJid || jid == 'conference.axi.im'
           ? <String>[_mucDiscoFeature]
           : <String>[mox.mamXmlns];
       final discoInfo = mox.DiscoInfo(
@@ -446,23 +445,32 @@ void main() {
       },
     );
 
-    test('DISC-013 [UP] disco item errors fall back to domain info', () async {
-      final info = MockDiscoInfo();
-      when(() => info.features).thenReturn([_mucDiscoFeature]);
+    test('DISC-012 [HP] setMucServiceHost ignores unsupported hosts', () async {
+      await xmppService.setMucServiceHost('conference.notaxi.im');
 
-      when(() => discoManager.discoItemsQuery(any())).thenAnswer(
-        (_) async => moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>(
-          FakeStanzaError(),
-        ),
-      );
-      when(() => discoManager.discoInfoQuery(any())).thenAnswer(
-        (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(info),
-      );
-
-      await xmppService.discoverMucServiceHost();
-
-      expect(xmppService.mucServiceHost, equals(_accountDomain));
+      expect(xmppService.mucServiceHost, equals(_serviceJid));
     });
+
+    test(
+      'DISC-013 [UP] disco item errors fall back to the default conference host',
+      () async {
+        final info = MockDiscoInfo();
+        when(() => info.features).thenReturn([_mucDiscoFeature]);
+
+        when(() => discoManager.discoItemsQuery(any())).thenAnswer(
+          (_) async => moxlib.Result<mox.StanzaError, List<mox.DiscoItem>>(
+            FakeStanzaError(),
+          ),
+        );
+        when(() => discoManager.discoInfoQuery(any())).thenAnswer(
+          (_) async => moxlib.Result<mox.StanzaError, mox.DiscoInfo>(info),
+        );
+
+        await xmppService.discoverMucServiceHost();
+
+        expect(xmppService.mucServiceHost, equals(_serviceJid));
+      },
+    );
 
     test(
       'DISC-014 [HP] refreshPubSubSupport treats bookmarks compatibility features as bookmarks support',

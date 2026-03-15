@@ -7,7 +7,7 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/connectivity/bloc/connectivity_cubit.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';

@@ -10,13 +10,14 @@ import 'dart:ui' as ui;
 
 import 'package:axichat/main.dart';
 import 'package:flutter/foundation.dart';
+import 'package:axichat/src/avatar/avatar_decode_safety.dart';
 import 'package:axichat/src/calendar/models/calendar_acl.dart';
 import 'package:axichat/src/calendar/models/calendar_availability_message.dart';
 import 'package:axichat/src/calendar/models/calendar_fragment.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/models/calendar_task_ics_message.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
-import 'package:axichat/src/calendar/models/calendar_sync_warning.dart';
+import 'package:axichat/src/calendar/bloc/calendar_state.dart';
 import 'package:axichat/src/calendar/sync/calendar_sync_state.dart';
 import 'package:axichat/src/calendar/sync/chat_calendar_sync_envelope.dart';
 import 'package:axichat/src/calendar/utils/calendar_acl_utils.dart';
@@ -44,10 +45,8 @@ import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/draft/models/draft_save_result.dart';
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/storage/database.dart' hide DraftAttachmentRef;
@@ -305,6 +304,12 @@ abstract interface class XmppBase {
     required String featureLabel,
   });
 
+  Future<CapabilityDecision> decideFeatureSupport({
+    required String jid,
+    required String feature,
+    required String featureLabel,
+  });
+
   RegisteredStateKey get selfAvatarPathKey;
 
   RegisteredStateKey get selfAvatarHashKey;
@@ -343,8 +348,6 @@ abstract interface class XmppBase {
   Stream<void> get databaseReloadStream;
 
   int get lifecycleEpoch;
-
-  bool get _hasUsableXmppStream;
 
   bool get needsReset => false;
 
@@ -449,10 +452,10 @@ class XmppService extends XmppBase
     with
         BaseStreamService,
         AvatarService,
-        MucService,
-        ChatsService,
         BlockingService,
         MessageService,
+        MucService,
+        ChatsService,
         DraftSyncService,
         MessageCollectionSyncService,
         DemoScriptService,
@@ -526,7 +529,7 @@ class XmppService extends XmppBase
     _localizations = localizations;
   }
 
-  bool get mamSupported => _mamSupported;
+  bool get mamSupported => _mamSupportResolved && _mamSupported;
 
   String? get saltedPassword => _connection.saltedPassword;
 
@@ -748,9 +751,6 @@ class XmppService extends XmppBase
   void configureEventHandlers(EventManager<mox.XmppEvent> manager) {
     manager.registerHandler<mox.ConnectionStateChangedEvent>((event) async {
       _setConnectionState(event.state);
-      if (event.state != ConnectionState.connected) {
-        _connection.getManager<PubSubManager>()?.markDisconnected();
-      }
     });
     super.configureEventHandlers(manager);
     manager
@@ -874,7 +874,7 @@ class XmppService extends XmppBase
       }
       return false;
     }
-    return jid.domain == mucServiceHost;
+    return _normalizeSupportedMucServiceHost(jid.domain) != null;
   }
 
   @override
@@ -923,14 +923,6 @@ class XmppService extends XmppBase
   @override
   ConnectionState get connectionState => _connectionState;
   var _connectionState = ConnectionState.notConnected;
-  var _streamNegotiationsDispatchDepth = 0;
-
-  @override
-  bool get _hasUsableXmppStream =>
-      _connectionState == ConnectionState.connected ||
-      (_streamNegotiationsDispatchDepth > 0 &&
-          _connectionState != ConnectionState.notConnected &&
-          _connectionState != ConnectionState.error);
 
   @override
   Stream<ConnectionState> get connectivityStream => _connectivityStream.stream;
@@ -979,13 +971,8 @@ class XmppService extends XmppBase
   Future<void> _handleXmppEvent(mox.XmppEvent event) async {
     try {
       if (event is mox.StreamNegotiationsDoneEvent) {
-        _streamNegotiationsDispatchDepth += 1;
-        try {
-          await _handleRootStreamNegotiationsDone();
-          await _eventManager.executeHandlers(event);
-        } finally {
-          _streamNegotiationsDispatchDepth -= 1;
-        }
+        await _handleRootStreamNegotiationsDone();
+        await _eventManager.executeHandlers(event);
         return;
       }
       await _eventManager.executeHandlers(event);
@@ -2416,11 +2403,11 @@ class XmppService extends XmppBase
       _omemoActivitySubscription = _connection.omemoActivityStream.listen(
         _omemoActivityController.add,
       );
+      _myJid = existingJid;
       await _initConnection(preHashed: _connectionPasswordPreHashed);
       _eventSubscription = _connection.asBroadcastStream().listen(
         _handleXmppEvent,
       );
-      _myJid = existingJid;
       _connection.connectionSettings = XmppConnectionSettings(
         jid: existingJid,
         password: existingPassword,
@@ -2472,11 +2459,11 @@ class XmppService extends XmppBase
         _omemoActivitySubscription = _connection.omemoActivityStream.listen(
           _omemoActivityController.add,
         );
+        _myJid = existingJid;
         await _initConnection(preHashed: _connectionPasswordPreHashed);
         _eventSubscription = _connection.asBroadcastStream().listen(
           _handleXmppEvent,
         );
-        _myJid = existingJid;
         _connection.connectionSettings = XmppConnectionSettings(
           jid: existingJid,
           password: existingPassword,
@@ -2622,7 +2609,7 @@ class XmppService extends XmppBase
     _demoOfflineMode = false;
     _resetDemoScript();
     _resetStableKeyCache();
-    _updateMamSupport(false);
+    _clearMamSupportState();
     _mamSupportOverride = null;
 
     resetEventHandlers();
@@ -2919,7 +2906,6 @@ class XmppService extends XmppBase
     }
     return manager.refreshSupport(
       force: force,
-      usableXmppStream: _hasUsableXmppStream,
       selfJid: _myJid,
       demoOffline: demoOfflineMode,
     );

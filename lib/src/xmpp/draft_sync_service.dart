@@ -3,6 +3,28 @@
 
 part of 'package:axichat/src/xmpp/xmpp_service.dart';
 
+class DraftSaveResult {
+  const DraftSaveResult({
+    this.draft,
+    int? draftId,
+    List<String> attachmentMetadataIds = const <String>[],
+    required this.draftCount,
+  }) : assert(draft != null || draftId != null),
+       _draftId = draftId,
+       _attachmentMetadataIds = attachmentMetadataIds;
+
+  final Draft? draft;
+  final int draftCount;
+  final int? _draftId;
+  final List<String> _attachmentMetadataIds;
+
+  int get draftId => draft?.id ?? _draftId!;
+
+  List<String> get attachmentMetadataIds =>
+      draft?.attachmentMetadata.values ??
+      List<String>.unmodifiable(_attachmentMetadataIds);
+}
+
 const String _draftSyncSourceKeyName = 'draft_sync_source_id';
 const String _draftSyncPendingPublishesKeyName = 'draft_sync_pending_publishes';
 const String _draftSyncPendingRetractionsKeyName =
@@ -87,15 +109,9 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
     if (_draftSnapshotInFlight) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      return;
-    }
     _draftSnapshotInFlight = true;
     try {
       await database;
-      if (!_hasUsableXmppStream) {
-        return;
-      }
       await _ensurePendingDraftSyncLoaded();
       final support = await refreshPubSubSupport();
       final decision = decidePubSubSupport(
@@ -213,7 +229,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
   }
 
   Future<List<String>> persistDraftAttachmentMetadata(
-    Iterable<EmailAttachment> attachments,
+    Iterable<Attachment> attachments,
   ) async {
     if (attachments.isEmpty) {
       return const <String>[];
@@ -233,7 +249,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
     String? subject,
     String? quotingStanzaId,
     MessageReferenceKind? quotingReferenceKind,
-    List<EmailAttachment> attachments = const [],
+    List<Attachment> attachments = const [],
   }) async {
     final Draft? existingDraft = id == null
         ? null
@@ -325,11 +341,11 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
     return DraftSaveResult(draft: resolvedDraft, draftCount: draftCount);
   }
 
-  Future<List<EmailAttachment>> loadDraftAttachments(
+  Future<List<Attachment>> loadDraftAttachments(
     Iterable<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
-    final attachments = <EmailAttachment>[];
+    final attachments = <Attachment>[];
     for (final metadataId in metadataIds) {
       final metadata = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
         (db) => db.getFileMetadata(metadataId),
@@ -367,7 +383,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
       }
       final size = metadata.sizeBytes ?? await sourceFile.length();
       attachments.add(
-        EmailAttachment(
+        Attachment(
           path: path,
           fileName: metadata.filename,
           sizeBytes: size,
@@ -415,33 +431,33 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      await _queueDraftPublish(syncId);
-      return;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.canUsePepNodes,
-      featureLabel: 'draft sync',
-    );
-    if (!decision.isAllowed) {
-      return;
-    }
-    final manager = _draftsManager;
-    if (manager == null) {
-      await _queueDraftPublish(syncId);
-      return;
-    }
-    final payload = await _buildDraftPayload(resolvedDraft);
-    if (payload == null) {
-      await _queueDraftPublish(syncId);
-      return;
-    }
-    await manager.ensureNode();
-    final published = await manager.publishDraft(payload);
-    if (published) {
-      await _clearPendingDraftPublish(syncId);
-    } else {
+    try {
+      final support = await refreshPubSubSupport();
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'draft sync',
+      );
+      if (!decision.isAllowed) {
+        return;
+      }
+      final manager = _draftsManager;
+      if (manager == null) {
+        await _queueDraftPublish(syncId);
+        return;
+      }
+      final payload = await _buildDraftPayload(resolvedDraft);
+      if (payload == null) {
+        await _queueDraftPublish(syncId);
+        return;
+      }
+      await manager.ensureNode();
+      final published = await manager.publishDraft(payload);
+      if (published) {
+        await _clearPendingDraftPublish(syncId);
+      } else {
+        await _queueDraftPublish(syncId);
+      }
+    } on Exception {
       await _queueDraftPublish(syncId);
     }
   }
@@ -454,27 +470,27 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      await _queueDraftRetraction(normalized);
-      return;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.canUsePepNodes,
-      featureLabel: 'draft sync',
-    );
-    if (!decision.isAllowed) {
-      return;
-    }
-    final manager = _draftsManager;
-    if (manager == null) {
-      await _queueDraftRetraction(normalized);
-      return;
-    }
-    final retracted = await manager.retractDraft(normalized);
-    if (retracted) {
-      await _clearPendingDraftRetraction(normalized);
-    } else {
+    try {
+      final support = await refreshPubSubSupport();
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'draft sync',
+      );
+      if (!decision.isAllowed) {
+        return;
+      }
+      final manager = _draftsManager;
+      if (manager == null) {
+        await _queueDraftRetraction(normalized);
+        return;
+      }
+      final retracted = await manager.retractDraft(normalized);
+      if (retracted) {
+        await _clearPendingDraftRetraction(normalized);
+      } else {
+        await _queueDraftRetraction(normalized);
+      }
+    } on Exception {
       await _queueDraftRetraction(normalized);
     }
   }
@@ -751,9 +767,6 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
     if (_hasAttachmentUrl(metadata)) {
       return metadata;
     }
-    if (!_hasUsableXmppStream) {
-      return metadata;
-    }
     final path = metadata.path?.trim();
     if (path == null || path.isEmpty) {
       return metadata;
@@ -763,7 +776,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
       return metadata;
     }
     final sizeBytes = metadata.sizeBytes ?? await file.length();
-    final attachment = EmailAttachment(
+    final attachment = Attachment(
       path: path,
       fileName: metadata.filename,
       sizeBytes: sizeBytes,
@@ -1028,9 +1041,6 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
     if (_pendingDraftPublishes.isEmpty && _pendingDraftRetractions.isEmpty) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      return;
-    }
     final support = await refreshPubSubSupport();
     final decision = decidePubSubSupport(
       supported: support.canUsePepNodes,
@@ -1111,9 +1121,7 @@ mixin DraftSyncService on XmppBase, BaseStreamService, MessageService {
     return generated;
   }
 
-  Future<String> _persistDraftAttachmentMetadata(
-    EmailAttachment attachment,
-  ) async {
+  Future<String> _persistDraftAttachmentMetadata(Attachment attachment) async {
     final metadataId = attachment.metadataId ?? uuid.v4();
     final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
       (db) => db.getFileMetadata(metadataId),

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:axichat/main.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';

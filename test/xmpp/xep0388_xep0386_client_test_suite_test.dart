@@ -1,6 +1,6 @@
 import 'package:axichat/main.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/state_store.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';

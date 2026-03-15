@@ -148,6 +148,10 @@ mixin RosterService
     final existing = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(normalized),
     );
+    if (_resolvedChatTypeForPeer(chatJid: normalized, chat: existing) ==
+        ChatType.groupChat) {
+      return;
+    }
     if (existing == null) {
       await _dbOp<XmppDatabase>(
         (db) => db.createChat(

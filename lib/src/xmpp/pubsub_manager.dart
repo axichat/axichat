@@ -74,10 +74,6 @@ class PubSubManager extends mox.PubSubManager {
 
   Stream<PubSubSupport> get supportStream => _supportController.stream;
 
-  void markDisconnected() {
-    _supportResolved = false;
-  }
-
   CapabilityDecision decideSupport({
     required bool supported,
     required String featureLabel,
@@ -97,7 +93,6 @@ class PubSubManager extends mox.PubSubManager {
   }
 
   Future<PubSubSupport> refreshSupport({
-    required bool usableXmppStream,
     required mox.JID? selfJid,
     bool force = false,
     bool demoOffline = false,
@@ -105,11 +100,7 @@ class PubSubManager extends mox.PubSubManager {
     if (!force && _supportResolved) {
       return _support;
     }
-    return _refreshSupport(
-      usableXmppStream: usableXmppStream,
-      selfJid: selfJid,
-      demoOffline: demoOffline,
-    );
+    return _refreshSupport(selfJid: selfJid, demoOffline: demoOffline);
   }
 
   XmppOperationKind _operationKindForNode(String? node) {
@@ -161,7 +152,6 @@ class PubSubManager extends mox.PubSubManager {
   }
 
   Future<PubSubSupport> _refreshSupport({
-    required bool usableXmppStream,
     required mox.JID? selfJid,
     required bool demoOffline,
   }) async {
@@ -174,20 +164,10 @@ class PubSubManager extends mox.PubSubManager {
       _updateSupport(support);
       return support;
     }
-    if (!usableXmppStream) {
-      return _support;
-    }
     final discoManager = getAttributes().getManagerById<mox.DiscoManager>(
       mox.discoManager,
     );
     if (discoManager == null) {
-      _updateSupport(
-        const PubSubSupport(
-          pubSubSupported: false,
-          pepSupported: false,
-          bookmarks2Supported: false,
-        ),
-      );
       return _support;
     }
 
@@ -204,6 +184,9 @@ class PubSubManager extends mox.PubSubManager {
       jid: hostJid,
       demoOffline: demoOffline,
     );
+    if (selfFeatures == null || hostFeatures == null) {
+      return _support;
+    }
 
     final pubSubSupported =
         selfFeatures.contains(mox.pubsubXmlns) ||
@@ -230,7 +213,7 @@ class PubSubManager extends mox.PubSubManager {
     return support;
   }
 
-  Future<Set<String>> _discoFeaturesFor({
+  Future<Set<String>?> _discoFeaturesFor({
     required mox.DiscoManager discoManager,
     required mox.JID? jid,
     required bool demoOffline,
@@ -239,16 +222,16 @@ class PubSubManager extends mox.PubSubManager {
       return const {};
     }
     if (jid == null) {
-      return const {};
+      return null;
     }
     try {
       final response = await discoManager.discoInfoQuery(jid);
       if (response.isType<mox.StanzaError>()) {
-        return const {};
+        return null;
       }
       return response.get<mox.DiscoInfo>().features.toSet();
     } on Exception {
-      return const {};
+      return null;
     }
   }
 

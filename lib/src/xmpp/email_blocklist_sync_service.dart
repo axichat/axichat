@@ -110,15 +110,9 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     if (_emailBlocklistSnapshotInFlight) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      return;
-    }
     _emailBlocklistSnapshotInFlight = true;
     try {
       await database;
-      if (!_hasUsableXmppStream) {
-        return;
-      }
       await _ensurePendingEmailBlocklistSyncLoaded();
       final support = await refreshPubSubSupport();
       final decision = decidePubSubSupport(
@@ -297,33 +291,33 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      await _queueEmailBlocklistPublish(normalized);
-      return;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.canUsePepNodes,
-      featureLabel: 'email blocklist sync',
-    );
-    if (!decision.isAllowed) {
-      return;
-    }
-    final manager = _emailBlocklistManager;
-    if (manager == null) {
-      await _queueEmailBlocklistPublish(normalized);
-      return;
-    }
-    await manager.ensureNode();
-    final payload = EmailBlocklistSyncPayload(
-      address: normalized,
-      updatedAt: entry.blockedAt.toUtc(),
-      sourceId: _normalizeEmailBlocklistSourceId(entry.sourceId),
-    );
-    final published = await manager.publishBlock(payload);
-    if (published) {
-      await _clearPendingEmailBlocklistPublish(normalized);
-    } else {
+    try {
+      final support = await refreshPubSubSupport();
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'email blocklist sync',
+      );
+      if (!decision.isAllowed) {
+        return;
+      }
+      final manager = _emailBlocklistManager;
+      if (manager == null) {
+        await _queueEmailBlocklistPublish(normalized);
+        return;
+      }
+      await manager.ensureNode();
+      final payload = EmailBlocklistSyncPayload(
+        address: normalized,
+        updatedAt: entry.blockedAt.toUtc(),
+        sourceId: _normalizeEmailBlocklistSourceId(entry.sourceId),
+      );
+      final published = await manager.publishBlock(payload);
+      if (published) {
+        await _clearPendingEmailBlocklistPublish(normalized);
+      } else {
+        await _queueEmailBlocklistPublish(normalized);
+      }
+    } on Exception {
       await _queueEmailBlocklistPublish(normalized);
     }
   }
@@ -336,27 +330,27 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      await _queueEmailBlocklistRetraction(normalized);
-      return;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.canUsePepNodes,
-      featureLabel: 'email blocklist sync',
-    );
-    if (!decision.isAllowed) {
-      return;
-    }
-    final manager = _emailBlocklistManager;
-    if (manager == null) {
-      await _queueEmailBlocklistRetraction(normalized);
-      return;
-    }
-    final retracted = await manager.retractBlock(normalized);
-    if (retracted) {
-      await _clearPendingEmailBlocklistRetraction(normalized);
-    } else {
+    try {
+      final support = await refreshPubSubSupport();
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'email blocklist sync',
+      );
+      if (!decision.isAllowed) {
+        return;
+      }
+      final manager = _emailBlocklistManager;
+      if (manager == null) {
+        await _queueEmailBlocklistRetraction(normalized);
+        return;
+      }
+      final retracted = await manager.retractBlock(normalized);
+      if (retracted) {
+        await _clearPendingEmailBlocklistRetraction(normalized);
+      } else {
+        await _queueEmailBlocklistRetraction(normalized);
+      }
+    } on Exception {
       await _queueEmailBlocklistRetraction(normalized);
     }
   }
@@ -687,9 +681,6 @@ mixin EmailBlocklistSyncService on XmppBase, BaseStreamService {
     await _ensurePendingEmailBlocklistSyncLoaded();
     if (_pendingEmailBlocklistPublishes.isEmpty &&
         _pendingEmailBlocklistRetractions.isEmpty) {
-      return;
-    }
-    if (!_hasUsableXmppStream) {
       return;
     }
     final support = await refreshPubSubSupport();

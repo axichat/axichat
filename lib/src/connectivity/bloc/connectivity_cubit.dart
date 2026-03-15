@@ -5,7 +5,7 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 
 part 'connectivity_state.dart';

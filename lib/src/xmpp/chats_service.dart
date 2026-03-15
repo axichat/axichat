@@ -18,12 +18,12 @@ class ChatTransportPreference {
 final class InboundChatStateEvent extends mox.XmppEvent {
   InboundChatStateEvent({
     required this.chatJid,
-    required this.senderJid,
+    required this.participantId,
     required this.state,
   });
 
   final String chatJid;
-  final String senderJid;
+  final String participantId;
   final mox.ChatState state;
 }
 
@@ -102,10 +102,9 @@ final class _TypingParticipantsSession {
   }
 }
 
-mixin ChatsService on XmppBase, BaseStreamService, MucService {
+mixin ChatsService on XmppBase, BaseStreamService, MessageService {
   static final _transportKeys = <String, RegisteredStateKey>{};
   static final _viewFilterKeys = <String, RegisteredStateKey>{};
-  final Logger _chatLog = Logger('ChatsService');
   static const _typingParticipantLinger = Duration(seconds: 6);
   static const _typingParticipantMaxCount = 7;
   static const int _conversationIndexSnapshotStart = 0;
@@ -121,10 +120,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   static const String _signupWelcomeChatJid = 'axichat@welcome.axichat.invalid';
   static const String _conversationIndexBootstrapOperationName =
       'ChatsService.bootstrapConversationIndexOnNegotiations';
-  static const String _mucChatStatePlaceholderBody = '';
-  static const List<mox.MessageProcessingHint> _mucChatStateProcessingHints = [
-    mox.MessageProcessingHint.noStore,
-  ];
   static const List<ConvItem> _emptyConversationIndexSnapshot = <ConvItem>[];
   static const List<Chat> _emptyChatList = <Chat>[];
   final Map<String, _TypingParticipantsSession> _typingParticipantSessions = {};
@@ -172,7 +167,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       ..registerHandler<InboundChatStateEvent>((event) async {
         _trackTypingParticipant(
           chatJid: event.chatJid,
-          senderJid: event.senderJid,
+          participantId: event.participantId,
           state: event.state,
         );
       })
@@ -187,9 +182,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   Future<List<ConvItem>> syncConversationIndexSnapshot() async {
     final pendingSync = _conversationIndexLoginSync;
     if (pendingSync != null) return pendingSync;
-    if (!_hasUsableXmppStream) {
-      return _emptyConversationIndexSnapshot;
-    }
     final task = _syncConversationIndexSnapshot();
     _conversationIndexLoginSync = task;
     return task.whenComplete(() {
@@ -202,10 +194,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   Future<List<ConvItem>> _syncConversationIndexSnapshot() async {
     try {
       await database;
-      if (!_hasUsableXmppStream) {
-        return _emptyConversationIndexSnapshot;
-      }
-
       final support = await refreshPubSubSupport();
       final decision = decidePubSubSupport(
         supported: support.canUsePepNodes,
@@ -437,20 +425,18 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
 
   void _trackTypingParticipant({
     required String chatJid,
-    required String senderJid,
+    required String participantId,
     required mox.ChatState state,
   }) {
     final myBare = _myJid?.toBare().toString();
-    final senderBare = _safeBareJid(senderJid);
+    final senderBare = _safeBareJid(participantId);
     if (senderBare != null && senderBare == myBare) {
       return;
     }
-    final normalizedSender = _safeParticipantId(senderJid);
-    if (normalizedSender == null) return;
     _typingSessionFor(
       chatJid,
       create: true,
-    )!.track(participantId: normalizedSender, state: state);
+    )!.track(participantId: participantId, state: state);
   }
 
   void _disposeTypingParticipantsIfIdle(String jid) {
@@ -486,20 +472,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
     }
   }
 
-  String? _safeParticipantId(String? jid) {
-    if (jid == null || jid.isEmpty) return null;
-    try {
-      final parsed = mox.JID.fromString(jid);
-      if (_isMucChatJid(parsed.toBare().toString()) &&
-          parsed.resource.isNotEmpty) {
-        return parsed.toString();
-      }
-      return parsed.toBare().toString();
-    } on Exception {
-      return null;
-    }
-  }
-
   static List<Chat> sortChats(List<Chat> chats) => chats.toList()
     ..sort((a, b) {
       if (a.favorited == b.favorited) {
@@ -508,101 +480,11 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       return (!a.favorited).toSign;
     });
 
-  @override
-  List<mox.XmppManagerBase> get featureManagers =>
-      super.featureManagers..addAll([mox.ChatStateManager()]);
-
-  Future<void> _sendMucChatStateWithNoStore({
-    required String roomJid,
-    required mox.ChatState state,
-    required String messageType,
-  }) async {
-    final messageManager = _connection.getManager<mox.MessageManager>();
-    if (messageManager == null) {
-      return;
-    }
-
-    late final mox.JID to;
-    try {
-      to = mox.JID.fromString(roomJid).toBare();
-    } on Exception {
-      return;
-    }
-    await messageManager.sendMessage(
-      to,
-      mox.TypedMap<mox.StanzaHandlerExtension>.fromList([
-        state,
-        const mox.MessageBodyData(_mucChatStatePlaceholderBody),
-        const mox.MessageProcessingHintData(_mucChatStateProcessingHints),
-      ]),
-      type: messageType,
-    );
-  }
-
   Future<void> sendChatState({
     required String jid,
     required mox.ChatState state,
   }) async {
-    final decision = await _chatStateDecision(jid);
-    if (!decision.isAllowed) {
-      _logChatStateDecision(jid, decision);
-      return;
-    }
-    final messageType = _chatStateMessageType(jid);
-    final isMuc = _isMucChatJid(jid);
-    String? mucRoomJid;
-    if (isMuc) {
-      if (connectionState != ConnectionState.connected) return;
-      final roomJid = _safeBareJid(jid);
-      if (roomJid == null) return;
-      mucRoomJid = roomJid;
-      final hasPresence = await _hasMucPresenceForSend(roomJid: roomJid);
-      if (!hasPresence) {
-        return;
-      }
-    }
-    if (isMuc && messageType == _messageTypeGroupchat && mucRoomJid != null) {
-      await _sendMucChatStateWithNoStore(
-        roomJid: mucRoomJid,
-        state: state,
-        messageType: messageType,
-      );
-      return;
-    }
-    await _connection.sendChatState(
-      state: state,
-      jid: jid,
-      messageType: messageType,
-    );
-  }
-
-  Future<CapabilityDecision> _chatStateDecision(String jid) async {
-    const chatStateFeature = 'http://jabber.org/protocol/chatstates';
-    if (this is MessageService) {
-      return (this as MessageService).decideFeatureSupport(
-        jid: jid,
-        feature: chatStateFeature,
-        featureLabel: 'chat states',
-      );
-    }
-    return const CapabilityDecision(CapabilityDecisionKind.unknown);
-  }
-
-  void _logChatStateDecision(String jid, CapabilityDecision decision) {
-    if (decision.isAllowed) return;
-    if (decision.isError) {
-      _chatLog.warning(
-        'Failed to resolve chat state capability for $jid',
-        decision.error,
-        decision.stackTrace,
-      );
-      return;
-    }
-    if (decision.isUnknown) {
-      _chatLog.fine('Skipping chat state for $jid (capabilities unknown).');
-      return;
-    }
-    _chatLog.fine('Skipping chat state for $jid (unsupported).');
+    await _sendChatState(jid: jid, state: state);
   }
 
   Future<void> sendTyping({required String jid, required bool typing}) async {
@@ -842,7 +724,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
       for (final item in items) {
         final peerJid = item.peerBare.toBare().toString();
         if (peerJid.isEmpty) continue;
-        if (_isMucChatJid(peerJid)) continue;
         if (_isConversationIndexLocalOnlyChatJid(peerJid)) continue;
         final isSelfChat = peerJid == myJid;
 
@@ -971,7 +852,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
         final normalized = _normalizeBareChatJid(chat.jid);
         if (normalized == null || normalized.isEmpty) continue;
         if (normalized == selfJid) continue;
-        if (_isMucChatJid(normalized)) continue;
         if (_isConversationIndexLocalOnlyChatJid(normalized)) continue;
         if (knownPeers.contains(normalized)) continue;
         if (chat.archived) continue;
@@ -983,7 +863,6 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   Future<void> _applyConversationIndexRetraction(mox.JID peerBare) async {
     final peer = peerBare.toBare().toString();
     if (peer.isEmpty) return;
-    if (_isMucChatJid(peer)) return;
     if (_isConversationIndexLocalOnlyChatJid(peer)) return;
     await _dbOp<XmppDatabase>((db) async {
       final existing = await db.getChat(peer);
@@ -997,9 +876,7 @@ mixin ChatsService on XmppBase, BaseStreamService, MucService {
   }
 
   Future<void> _syncConversationIndexMeta({required String jid}) async {
-    if (connectionState != ConnectionState.connected) return;
     if (jid.isEmpty) return;
-    if (_isMucChatJid(jid)) return;
     if (_isConversationIndexLocalOnlyChatJid(jid)) return;
 
     final manager = _connection.getManager<ConversationIndexManager>();

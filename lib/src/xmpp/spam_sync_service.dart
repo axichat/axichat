@@ -92,15 +92,9 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (_spamSnapshotInFlight) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      return;
-    }
     _spamSnapshotInFlight = true;
     try {
       await database;
-      if (!_hasUsableXmppStream) {
-        return;
-      }
       await _ensurePendingSpamSyncLoaded();
       final support = await refreshPubSubSupport();
       final decision = decidePubSubSupport(
@@ -265,33 +259,33 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      await _queueSpamPublish(normalized);
-      return;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.canUsePepNodes,
-      featureLabel: 'spam sync',
-    );
-    if (!decision.isAllowed) {
-      return;
-    }
-    final manager = _spamManager;
-    if (manager == null) {
-      await _queueSpamPublish(normalized);
-      return;
-    }
-    await manager.ensureNode();
-    final payload = SpamSyncPayload(
-      jid: normalized,
-      updatedAt: entry.flaggedAt.toUtc(),
-      sourceId: _normalizeSpamSourceId(entry.sourceId),
-    );
-    final published = await manager.publishSpam(payload);
-    if (published) {
-      await _clearPendingSpamPublish(normalized);
-    } else {
+    try {
+      final support = await refreshPubSubSupport();
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'spam sync',
+      );
+      if (!decision.isAllowed) {
+        return;
+      }
+      final manager = _spamManager;
+      if (manager == null) {
+        await _queueSpamPublish(normalized);
+        return;
+      }
+      await manager.ensureNode();
+      final payload = SpamSyncPayload(
+        jid: normalized,
+        updatedAt: entry.flaggedAt.toUtc(),
+        sourceId: _normalizeSpamSourceId(entry.sourceId),
+      );
+      final published = await manager.publishSpam(payload);
+      if (published) {
+        await _clearPendingSpamPublish(normalized);
+      } else {
+        await _queueSpamPublish(normalized);
+      }
+    } on Exception {
       await _queueSpamPublish(normalized);
     }
   }
@@ -304,27 +298,27 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      await _queueSpamRetraction(normalized);
-      return;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.canUsePepNodes,
-      featureLabel: 'spam sync',
-    );
-    if (!decision.isAllowed) {
-      return;
-    }
-    final manager = _spamManager;
-    if (manager == null) {
-      await _queueSpamRetraction(normalized);
-      return;
-    }
-    final retracted = await manager.retractSpam(normalized);
-    if (retracted) {
-      await _clearPendingSpamRetraction(normalized);
-    } else {
+    try {
+      final support = await refreshPubSubSupport();
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'spam sync',
+      );
+      if (!decision.isAllowed) {
+        return;
+      }
+      final manager = _spamManager;
+      if (manager == null) {
+        await _queueSpamRetraction(normalized);
+        return;
+      }
+      final retracted = await manager.retractSpam(normalized);
+      if (retracted) {
+        await _clearPendingSpamRetraction(normalized);
+      } else {
+        await _queueSpamRetraction(normalized);
+      }
+    } on Exception {
       await _queueSpamRetraction(normalized);
     }
   }
@@ -660,9 +654,6 @@ mixin SpamSyncService on XmppBase, BaseStreamService {
   Future<void> _flushPendingSpamSync() async {
     await _ensurePendingSpamSyncLoaded();
     if (_pendingSpamPublishes.isEmpty && _pendingSpamRetractions.isEmpty) {
-      return;
-    }
-    if (!_hasUsableXmppStream) {
       return;
     }
     final support = await refreshPubSubSupport();

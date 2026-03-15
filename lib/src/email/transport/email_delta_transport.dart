@@ -6,9 +6,9 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:axichat/src/common/app_owned_storage.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/email/email_metadata.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/util/delta_jids.dart';
 import 'package:axichat/src/email/util/delta_message_ids.dart';

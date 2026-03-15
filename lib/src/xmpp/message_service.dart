@@ -38,14 +38,14 @@ const String _attachmentUploadCompleteLog = 'Upload complete for attachment.';
 const String _attachmentUploadFailedLog = 'Failed to upload attachment.';
 const String _pinSyncFlushFailedLog = 'Failed to flush pending pin sync.';
 const String _pinSyncFlushAbortedLog = 'Pending pin sync aborted.';
-const String _pinSyncEmailReconnectFailedLog =
-    'Failed to sync email pinned messages after reconnect.';
-const String _pinSyncEmailReconnectAbortedLog =
-    'Email pin sync after reconnect aborted.';
 const String _pinSyncFlushOperationName =
     'MessageService.flushPendingPinSyncOnNegotiations';
-const String _pinSyncEmailReconnectOperationName =
-    'MessageService.syncEmailPinsOnNegotiations';
+const String _pinSyncReconnectRefreshFailedLog =
+    'Failed to refresh pinned messages after reconnect.';
+const String _pinSyncReconnectRefreshAbortedLog =
+    'Pinned message refresh after reconnect aborted.';
+const String _pinSyncReconnectRefreshOperationName =
+    'MessageService.refreshPinnedMessagesOnNegotiations';
 const String _httpUploadBootstrapOperationName =
     'MessageService.refreshHttpUploadSupportOnNegotiations';
 const String _mamGlobalBootstrapOperationName =
@@ -270,6 +270,35 @@ final class _MessageStatusSyncEnvelope {
 
   static bool isEnvelope(String raw) => tryParseEnvelope(raw) != null;
 }
+
+final class OutboundMessageErrorEvent extends mox.XmppEvent {
+  OutboundMessageErrorEvent({
+    required this.stanzaEvent,
+    required this.stanzaId,
+    required this.summaryChatType,
+    required this.summaryChatJid,
+    required this.shouldPersistError,
+    required this.errorCondition,
+  });
+
+  final mox.MessageEvent stanzaEvent;
+  final String stanzaId;
+  final ChatType? summaryChatType;
+  final String? summaryChatJid;
+  final bool shouldPersistError;
+  final StanzaErrorConditionData? errorCondition;
+}
+
+final class OutboundGroupchatStanzaRejectedEvent extends mox.XmppEvent {
+  OutboundGroupchatStanzaRejectedEvent({required this.stanzaId});
+
+  final String stanzaId;
+}
+
+const _chatStatePlaceholderBody = '';
+const List<mox.MessageProcessingHint> _chatStateProcessingHints = [
+  mox.MessageProcessingHint.noStore,
+];
 
 enum _OutboundMessageKind { message, attachment }
 
@@ -576,6 +605,8 @@ String? _chatJidFromPinNode(String nodeId) {
 
 enum _PinNodePolicy { shared, restricted }
 
+enum _PinSyncBackend { sharedMutations, pubSub }
+
 final class _PinNodeContext {
   const _PinNodeContext({
     required this.policy,
@@ -834,6 +865,19 @@ class MamPageResult {
   final int? count;
 }
 
+final class _ChatMamSession {
+  _ChatMamSession({this.chatJid});
+
+  String? chatJid;
+  String? beforeId;
+  int? totalCount;
+  bool complete = false;
+  bool loading = false;
+  bool catchingUp = false;
+  bool catchUpCompleted = false;
+  Completer<void>? loadingCompleter;
+}
+
 enum MamGlobalSyncOutcome {
   completed,
   skippedUnsupported,
@@ -1062,8 +1106,7 @@ class XmppUploadHeader {
   final String value;
 }
 
-mixin MessageService
-    on XmppBase, BaseStreamService, MucService, BlockingService {
+mixin MessageService on XmppBase, BaseStreamService, BlockingService {
   HttpUploadSupport get httpUploadSupport => _httpUploadSupport;
 
   Stream<HttpUploadSupport> get httpUploadSupportStream =>
@@ -1260,22 +1303,133 @@ mixin MessageService
     }
 
     final bareJid = parsed.toBare().toString();
-    if (_isMucChatJid(bareJid) || roomStateFor(bareJid) != null) {
-      return ChatType.groupChat;
-    }
-
     try {
       final chat = await _dbOpReturning<XmppDatabase, Chat?>(
         (db) => db.getChat(bareJid),
       );
-      if (chat?.type == ChatType.groupChat) {
-        return ChatType.groupChat;
-      }
+      return _resolvedChatTypeForPeer(chatJid: bareJid, chat: chat);
     } on XmppAbortedException {
       return requestedChatType;
     }
+  }
 
-    return requestedChatType;
+  ChatType _resolvedChatTypeForPeer({required String chatJid, Chat? chat}) {
+    if (chat?.type == ChatType.groupChat) {
+      return ChatType.groupChat;
+    }
+    return ChatType.chat;
+  }
+
+  Future<void> _prepareOutboundChatSend({
+    required String chatJid,
+    required ChatType chatType,
+  }) async {}
+
+  String _outboundSenderJidForChat({
+    required String chatJid,
+    required String accountJid,
+    required ChatType chatType,
+  }) {
+    return accountJid;
+  }
+
+  void _scheduleArchiveSyncAfterJoin({
+    required String chatJid,
+    required ChatType chatType,
+  }) {}
+
+  Future<bool> _canFetchArchiveForChat({
+    required String chatJid,
+    required ChatType chatType,
+  }) async {
+    if (chatType == ChatType.groupChat) {
+      return false;
+    }
+    return await resolveMamSupport();
+  }
+
+  String _chatJidForEvent(mox.MessageEvent event) {
+    if (event.type == _messageTypeGroupchat) {
+      return event.from.toBare().toString();
+    }
+    final accountJid = myJid;
+    if (accountJid != null &&
+        sameNormalizedAddressValue(event.from.toString(), accountJid)) {
+      return event.to.toBare().toString();
+    }
+    return event.from.toBare().toString();
+  }
+
+  bool _isInboundMessageMutationAuthorized(mox.MessageEvent event) {
+    if (event.type != _messageTypeGroupchat) {
+      return true;
+    }
+    return event.isFromMAM;
+  }
+
+  bool _isInboundPinMutationAuthorized(mox.MessageEvent event) {
+    return _isInboundMessageMutationAuthorized(event);
+  }
+
+  bool _isSelfMutationEvent(mox.MessageEvent event) {
+    final accountJid = myJid;
+    if (accountJid == null) {
+      return false;
+    }
+    if (event.type == _messageTypeGroupchat) {
+      return false;
+    }
+    return sameNormalizedAddressValue(
+      event.from.toBare().toString(),
+      accountJid,
+    );
+  }
+
+  bool _isSelfArchivedMessageEvent({
+    required mox.MessageEvent event,
+    required ChatType chatType,
+  }) {
+    return false;
+  }
+
+  ({String senderJid, bool identityVerified})
+  _resolveInboundReactionSenderIdentity({
+    required String senderJid,
+    required String chatJid,
+    required bool isGroupChat,
+  }) {
+    if (!isGroupChat) {
+      return (
+        senderJid: bareAddress(senderJid) ?? senderJid,
+        identityVerified: true,
+      );
+    }
+    return (senderJid: senderJid, identityVerified: false);
+  }
+
+  void _updateUnsupportedArchiveChats(Set<String> chatJids) {}
+
+  CalendarChatRole? _resolvedCalendarSyncSenderRole(
+    mox.MessageEvent event, {
+    required String chatJid,
+    required ChatType chatType,
+  }) {
+    if (chatType != ChatType.groupChat) {
+      return CalendarChatRole.participant;
+    }
+    return null;
+  }
+
+  Future<void> _sendResolvedChatState({
+    required String jid,
+    required mox.ChatState state,
+    required ChatType chatType,
+  }) async {
+    await _connection.sendChatState(
+      state: state,
+      jid: jid,
+      messageType: _messageTypeChat,
+    );
   }
 
   Future<DateTime> _resolveDemoTimestampForChat(
@@ -1314,11 +1468,18 @@ mixin MessageService
   }
 
   Future<void> _updateMamSupport(bool supported) async {
-    if (_mamSupported == supported) return;
+    final alreadyResolved = _mamSupportResolved;
+    if (alreadyResolved && _mamSupported == supported) return;
+    _mamSupportResolved = true;
     _mamSupported = supported;
     if (!_mamSupportController.isClosed) {
       _mamSupportController.add(supported);
     }
+  }
+
+  void _clearMamSupportState() {
+    _mamSupportResolved = false;
+    _mamSupported = false;
   }
 
   @visibleForTesting
@@ -1331,7 +1492,7 @@ mixin MessageService
 
   Future<void> purgeMessageHistory({bool awaitDatabase = true}) async {
     _resetStableKeyCache();
-    final chats = awaitDatabase ? await _loadChatsForMamSync() : const <Chat>[];
+    final chats = awaitDatabase ? await _loadAllChatsPaged() : const <Chat>[];
     await _dbOp<XmppDatabase>(
       (db) => db.clearMessageHistory(),
       awaitDatabase: awaitDatabase,
@@ -1606,8 +1767,11 @@ mixin MessageService
     if (timestamp == null) {
       return;
     }
-    if (_isSelfPinMutation(event) ||
-        (isGroupChat && _isSelfArchivedGroupChatMessageEvent(event))) {
+    if (_isSelfMutationEvent(event) ||
+        _isSelfArchivedMessageEvent(
+          event: event,
+          chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+        )) {
       return;
     }
     await _recordArchiveCursorTimestamp(message.chatJid, timestamp);
@@ -2032,50 +2196,26 @@ mixin MessageService
     return affiliations;
   }
 
-  int _appendPinAffiliations(
-    Map<String, mox.PubSubAffiliation> affiliations,
-    List<MucAffiliationEntry> entries,
-  ) {
-    var added = 0;
-    for (final entry in entries) {
-      final jid = entry.jid?.trim();
-      if (jid == null || jid.isEmpty) {
-        continue;
-      }
-      if (affiliations.containsKey(jid)) {
-        continue;
-      }
-      affiliations[jid] = _pinAffiliationPublisher;
-      added += 1;
-    }
-    return added;
-  }
-
   Future<Map<String, mox.PubSubAffiliation>?> _pinGroupAffiliations(
     Chat chat,
-  ) async {
-    final affiliations = _basePinAffiliations();
-    if (affiliations == null) {
-      return null;
-    }
-    final roomJid = chat.jid.trim();
-    if (roomJid.isEmpty) {
-      return null;
-    }
-    try {
-      final members = await fetchRoomMembers(roomJid: roomJid);
-      final admins = await fetchRoomAdmins(roomJid: roomJid);
-      final owners = await fetchRoomOwners(roomJid: roomJid);
-      final entries = <MucAffiliationEntry>[...members, ...admins, ...owners];
-      final added = _appendPinAffiliations(affiliations, entries);
-      if (added == 0) {
-        return null;
-      }
-      return affiliations;
-    } on Exception {
-      return null;
-    }
-  }
+  ) async => null;
+
+  bool _chatSupportsArchiveQueries(Chat? chat) =>
+      chat?.defaultTransport.isXmpp ?? true;
+
+  _PinSyncBackend _pinSyncBackendForChat(Chat? chat) =>
+      _chatSupportsArchiveQueries(chat)
+      ? _PinSyncBackend.sharedMutations
+      : _PinSyncBackend.pubSub;
+
+  bool _usesSharedPinMutations(Chat? chat) =>
+      _pinSyncBackendForChat(chat) == _PinSyncBackend.sharedMutations;
+
+  bool _usesPubSubPins(Chat? chat) =>
+      _pinSyncBackendForChat(chat) == _PinSyncBackend.pubSub;
+
+  bool _supportsConversationIndexSync(Chat? chat) =>
+      chat?.transport.isXmpp ?? true;
 
   Future<_PinNodeContext> _resolvePinNodeContext(String chatJid) async {
     final chat = await _dbOpReturning<XmppDatabase, Chat?>(
@@ -2088,7 +2228,7 @@ mixin MessageService
         affiliations: _basePinAffiliations(),
       );
     }
-    if (chat.isEmailBacked) {
+    if (_usesPubSubPins(chat)) {
       return _PinNodeContext(
         policy: _PinNodePolicy.restricted,
         chat: chat,
@@ -2130,7 +2270,7 @@ mixin MessageService
     }
     final chat = context.chat;
     if (chat != null &&
-        !chat.isEmailBacked &&
+        _usesSharedPinMutations(chat) &&
         chat.type != ChatType.groupChat) {
       final peerJid = chat.remoteJid.trim();
       if (peerJid.isNotEmpty) {
@@ -2291,9 +2431,6 @@ mixin MessageService
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      return;
-    }
     final syncSession = _pinSyncSession(normalizedChat);
     if (!syncSession.markSyncInFlight()) {
       return;
@@ -2301,9 +2438,6 @@ mixin MessageService
     try {
       final context = await _resolvePinNodeContext(normalizedChat);
       await database;
-      if (!_hasUsableXmppStream) {
-        return;
-      }
       await _ensurePendingPinSyncLoaded();
       await _normalizeActivePinnedMessageAliasesForChat(normalizedChat);
       if (!_usesPubSubPinSync(context)) {
@@ -2363,22 +2497,16 @@ mixin MessageService
     }
   }
 
-  Future<void> _syncEmailPinnedMessagesOnReconnect() async {
-    if (_emailPinSnapshotInFlight) {
+  Future<void> _refreshPinsAfterReconnect() async {
+    if (_pinReconnectRefreshInFlight) {
       return;
     }
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      return;
-    }
-    _emailPinSnapshotInFlight = true;
+    _pinReconnectRefreshInFlight = true;
     try {
       await database;
-      if (!_hasUsableXmppStream) {
-        return;
-      }
       final support = await refreshPubSubSupport();
       final decision = decidePubSubSupport(
         supported: support.pubSubSupported,
@@ -2387,14 +2515,9 @@ mixin MessageService
       if (!decision.isAllowed) {
         return;
       }
-      final emailChats = await _dbOpReturning<XmppDatabase, List<Chat>>(
-        (db) => db.getDeltaChats(),
-      );
-      for (final chat in emailChats) {
-        if (!_hasUsableXmppStream) {
-          return;
-        }
-        if (!chat.isEmailBacked) {
+      final chats = await _loadAllChatsPaged();
+      for (final chat in chats) {
+        if (!_usesPubSubPins(chat)) {
           continue;
         }
         final chatJid = chat.jid.trim();
@@ -2406,7 +2529,7 @@ mixin MessageService
     } on XmppAbortedException {
       return;
     } finally {
-      _emailPinSnapshotInFlight = false;
+      _pinReconnectRefreshInFlight = false;
     }
   }
 
@@ -2425,7 +2548,6 @@ mixin MessageService
 
   final Map<String, _OutboundMessageSummary> _outboundMessageSummaries =
       <String, _OutboundMessageSummary>{};
-  final Map<String, String> _outboundGroupchatStanzaRooms = <String, String>{};
   final Map<String, _OutboundPinMutation> _outboundPinMutationsByStanzaId =
       <String, _OutboundPinMutation>{};
   final Map<String, _OutboundReactionMutation>
@@ -2455,10 +2577,12 @@ mixin MessageService
   final Set<String> _seenAxiWelcomeDuplicateKeys = <String>{};
   final Queue<String> _axiWelcomeDuplicateKeyOrder = Queue<String>();
   final Map<String, RegisteredStateKey> _archiveCursorKeys = {};
+  bool _mamSupportResolved = false;
   bool _mamSupported = false;
   bool? _mamSupportOverride;
   StreamController<bool> _mamSupportController =
       StreamController<bool>.broadcast();
+  final Map<String, _ChatMamSession> _chatMamSessions = {};
 
   final Map<String, _PeerCapabilities> _capabilityCache = {};
   final Map<String, Future<_PeerCapabilities>> _capabilityRequests = {};
@@ -2485,7 +2609,7 @@ mixin MessageService
   _pendingInboundReactionsByChatAndReference = {};
   final SyncRateLimiter _pinSyncRateLimiter = SyncRateLimiter(pinSyncRateLimit);
   final Set<String> _pinCreateRetryKeys = <String>{};
-  bool _emailPinSnapshotInFlight = false;
+  bool _pinReconnectRefreshInFlight = false;
   mox.JID? _pinPubSubHost;
 
   bool _hasHttpUploadIdentity(mox.DiscoInfo info) {
@@ -2614,8 +2738,10 @@ mixin MessageService
           final bool isSelfDirectMessage =
               !isGroupChat &&
               sameNormalizedAddressValue(message.senderJid, accountJid);
-          final bool isSelfGroupMessage =
-              isGroupChat && _isSelfArchivedGroupChatMessageEvent(event);
+          final bool isSelfGroupMessage = _isSelfArchivedMessageEvent(
+            event: event,
+            chatType: isGroupChat ? ChatType.groupChat : ChatType.chat,
+          );
           if (isSelfDirectMessage || isSelfGroupMessage) {
             message = message.copyWith(acked: true);
           }
@@ -2746,10 +2872,6 @@ mixin MessageService
           }
         }
 
-        if (isGroupChat) {
-          handleMucIdentifiersFromMessage(event, message);
-        }
-
         _rememberReadOnlyTaskShare(message);
 
         if (!message.noStore) {
@@ -2776,18 +2898,12 @@ mixin MessageService
         );
         _messageStream.add(message);
       })
-      ..registerHandler<MucSelfPresenceEvent>((event) async {
-        if (!event.isAvailable) return;
-        if (event.isNickChange) return;
+      ..registerHandler<MucArchiveSyncRequestedEvent>((event) async {
         final roomJid = event.roomJid.trim();
         if (roomJid.isEmpty) return;
-        if (!_isMucChatJid(roomJid)) return;
-        _scheduleMucHistorySyncAfterJoin(roomJid);
-      })
-      ..registerHandler<OutboundGroupchatStanzaEvent>((event) async {
-        _trackOutboundGroupchatStanza(
-          stanzaId: event.stanzaId,
-          roomJid: event.roomJid,
+        _scheduleArchiveSyncAfterJoin(
+          chatJid: roomJid,
+          chatType: ChatType.groupChat,
         );
       })
       ..registerHandler<mox.ChatMarkerEvent>((event) async {
@@ -2886,70 +3002,17 @@ mixin MessageService
         }, operationName: _pinSyncFlushOperationName);
         fireAndForget(() async {
           try {
-            await _syncEmailPinnedMessagesOnReconnect();
+            await _refreshPinsAfterReconnect();
           } on XmppAbortedException {
-            _log.fine(_pinSyncEmailReconnectAbortedLog);
+            _log.fine(_pinSyncReconnectRefreshAbortedLog);
           } on Exception catch (error, stackTrace) {
-            _log.fine(_pinSyncEmailReconnectFailedLog, error, stackTrace);
+            _log.fine(_pinSyncReconnectRefreshFailedLog, error, stackTrace);
           }
-        }, operationName: _pinSyncEmailReconnectOperationName);
+        }, operationName: _pinSyncReconnectRefreshOperationName);
       });
   }
 
-  void _scheduleMucHistorySyncAfterJoin(String roomJid) {
-    fireAndForget(() async {
-      await _awaitMucJoinCompleterIfActive(roomJid);
-      await _syncMucArchiveAfterJoin(roomJid);
-    }, operationName: 'MessageService.syncMucArchiveAfterJoin');
-  }
-
-  Future<void> _syncMucArchiveAfterJoin(String roomJid) async {
-    if (connectionState != ConnectionState.connected) return;
-    final normalizedRoom = _roomKey(roomJid);
-    if (_mucJoinMamSyncRooms.contains(normalizedRoom)) return;
-    _mucJoinMamSyncRooms.add(normalizedRoom);
-    var started = false;
-    var success = false;
-    try {
-      final mamSupported = await resolveMamSupport();
-      if (!mamSupported) return;
-      if (!_canQueryMucArchive(normalizedRoom)) return;
-      started = true;
-      emitXmppOperation(_mamMucStartEvent);
-      final localCount = await countLocalMessages(
-        jid: normalizedRoom,
-        includePseudoMessages: false,
-      );
-      final archiveCursor = await loadArchiveCursorTimestamp(normalizedRoom);
-      final shouldBackfillLatest = localCount == 0 || archiveCursor == null;
-
-      if (shouldBackfillLatest) {
-        await fetchLatestFromArchive(
-          jid: normalizedRoom,
-          pageSize: mamLoginBackfillMessageLimit,
-          isMuc: true,
-        );
-        success = true;
-        return;
-      }
-
-      await _catchUpChatFromArchive(
-        jid: normalizedRoom,
-        since: archiveCursor,
-        isMuc: true,
-      );
-      success = true;
-    } on XmppAbortedException {
-      return;
-    } finally {
-      _mucJoinMamSyncRooms.remove(normalizedRoom);
-      if (started) {
-        emitXmppOperation(success ? _mamMucSuccessEvent : _mamMucFailureEvent);
-      }
-    }
-  }
-
-  Future<List<Chat>> _loadChatsForMamSync() async {
+  Future<List<Chat>> _loadAllChatsPaged() async {
     final chats = <Chat>[];
     var start = 0;
     while (true) {
@@ -3005,9 +3068,6 @@ mixin MessageService
     if (_mamGlobalSyncInFlight) {
       return MamGlobalSyncOutcome.skippedInFlight;
     }
-    if (!_hasUsableXmppStream) {
-      return MamGlobalSyncOutcome.failed;
-    }
     _mamGlobalSyncInFlight = true;
     final operationEpoch = lifecycleEpoch;
     var started = false;
@@ -3015,11 +3075,8 @@ mixin MessageService
     try {
       await database;
       _mamGlobalMaxTimestamp = null;
-      if (!_hasUsableXmppStream) {
-        return MamGlobalSyncOutcome.failed;
-      }
       await _resolveMamSupportForAccount();
-      if (!_mamSupported) {
+      if (_mamSupportResolved && !_mamSupported) {
         return MamGlobalSyncOutcome.skippedUnsupported;
       }
 
@@ -3187,8 +3244,7 @@ mixin MessageService
       extraExtensions: extraExtensions,
       toJidOverride: toJid,
       type: type,
-      includeOriginId:
-          chatType == ChatType.chat && !_isMucChatJid(message.chatJid),
+      includeOriginId: chatType == ChatType.chat,
     );
   }
 
@@ -3239,15 +3295,19 @@ mixin MessageService
     required Message message,
     required List<String> emojis,
     required List<String> previousEmojis,
-    required bool isGroupChat,
+    required ChatType chatType,
   }) async {
     final sender = myJid;
     final fromJid = _myJid;
     if (sender == null || fromJid == null) {
       return;
     }
+    final isGroupChat = chatType == ChatType.groupChat;
     if (isGroupChat) {
-      await _ensureMucJoinForSend(roomJid: message.chatJid);
+      await _prepareOutboundChatSend(
+        chatJid: message.chatJid,
+        chatType: chatType,
+      );
     }
     final reactionTarget = message.reactionReference(isGroupChat: isGroupChat);
     if (reactionTarget == null || reactionTarget.value.isEmpty) {
@@ -3280,20 +3340,18 @@ mixin MessageService
       senderJid: sender,
       previousEmojis: previousEmojis,
     );
-    if (isGroupChat) {
-      _trackOutboundGroupchatStanza(
-        stanzaId: stanzaId,
-        roomJid: message.chatJid,
-      );
-    }
     try {
       final sent = await _connection.sendMessage(reactionEvent);
       if (!sent) {
         throw XmppMessageException();
       }
     } catch (error, stackTrace) {
+      if (isGroupChat) {
+        await _eventManager.executeHandlers(
+          OutboundGroupchatStanzaRejectedEvent(stanzaId: stanzaId),
+        );
+      }
       _takeOutboundReactionMutation(stanzaId);
-      _outboundGroupchatStanzaRooms.remove(stanzaId);
       _log.warning(
         'Failed to send reaction for ${message.stanzaID}',
         error,
@@ -3376,24 +3434,6 @@ mixin MessageService
     );
     _outboundMessageSummaries[stanzaId] = summary;
     _trimOutboundMessageSummaries();
-  }
-
-  void _trackOutboundGroupchatStanza({
-    required String stanzaId,
-    required String roomJid,
-  }) {
-    final trimmedId = stanzaId.trim();
-    if (trimmedId.isEmpty) return;
-    final normalizedRoom = _normalizeMucRoomJidCandidate(roomJid);
-    if (normalizedRoom == null) return;
-    _outboundGroupchatStanzaRooms[trimmedId] = normalizedRoom;
-    _trimOutboundGroupchatStanzas();
-  }
-
-  String? _takeOutboundGroupchatRoomJid(String stanzaId) {
-    final trimmedId = stanzaId.trim();
-    if (trimmedId.isEmpty) return null;
-    return _outboundGroupchatStanzaRooms.remove(trimmedId);
   }
 
   void _trackOutboundPinMutation({
@@ -3510,14 +3550,6 @@ mixin MessageService
     _outboundMessageSummaries.remove(oldestKey);
   }
 
-  void _trimOutboundGroupchatStanzas() {
-    if (_outboundGroupchatStanzaRooms.length <= _outboundSummaryLimit) {
-      return;
-    }
-    final oldestKey = _outboundGroupchatStanzaRooms.keys.first;
-    _outboundGroupchatStanzaRooms.remove(oldestKey);
-  }
-
   EncryptionProtocol _resolveOutboundEncryptionProtocol(
     EncryptionProtocol protocol,
   ) {
@@ -3534,6 +3566,7 @@ mixin MessageService
     bool forwarded = false,
     String? forwardedFromJid,
     Message? quotedMessage,
+    MessageReference? quotedReference,
     CalendarFragment? calendarFragment,
     CalendarTask? calendarTaskIcs,
     bool calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
@@ -3557,10 +3590,11 @@ mixin MessageService
       jid: jid,
       requestedChatType: chatType,
     );
-    final isGroupChat = resolvedChatType == ChatType.groupChat;
-    final senderIdentity = isGroupChat
-        ? _outboundMucActorIdentity(roomJid: jid, accountJid: accountJid)
-        : MucActorIdentity.direct(senderJid: accountJid);
+    final senderJid = _outboundSenderJidForChat(
+      chatJid: jid,
+      accountJid: accountJid,
+      chatType: resolvedChatType,
+    );
     final storePreference = storeLocally ?? true;
     final shouldStore = storePreference && !noStore;
     final normalizedHtml = HtmlContentCodec.normalizeHtml(htmlBody);
@@ -3625,8 +3659,8 @@ mixin MessageService
     final DateTime timestamp = offlineDemo
         ? await _resolveDemoTimestampForChat(jid, demoNow())
         : DateTime.timestamp();
-    final quotedReference = quotedMessage == null
-        ? null
+    final resolvedQuotedReference = quotedMessage == null
+        ? quotedReference
         : _outboundReplyReference(
             message: quotedMessage,
             chatType: resolvedChatType,
@@ -3634,14 +3668,14 @@ mixin MessageService
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
-      senderJid: senderIdentity.senderJid,
+      senderJid: senderJid,
       chatJid: jid,
       body: messageText,
       htmlBody: normalizedHtml,
       encryptionProtocol: resolvedEncryptionProtocol,
       noStore: noStore,
-      quoting: quotedReference?.value,
-      quotingReferenceKind: quotedReference?.kind,
+      quoting: resolvedQuotedReference?.value,
+      quotingReferenceKind: resolvedQuotedReference?.kind,
       timestamp: timestamp,
       acked: false,
       received: false,
@@ -3658,8 +3692,7 @@ mixin MessageService
       onLocalMessageStored?.call(message.stanzaID);
     }
     if (resolvedEncryptionProtocol == EncryptionProtocol.omemo &&
-        resolvedChatType == ChatType.chat &&
-        !_isMucChatJid(jid)) {
+        resolvedChatType == ChatType.chat) {
       final decision = await _omemoDecision(jid: jid);
       if (!decision.isAllowed) {
         if (shouldStore) {
@@ -3683,20 +3716,18 @@ mixin MessageService
       }
       return;
     }
-    if (isGroupChat) {
-      try {
-        await _ensureMucJoinForSend(roomJid: jid);
-      } catch (error, stackTrace) {
-        _log.warning(
-          'Failed to join room before sending ${message.stanzaID}',
-          error,
-          stackTrace,
-        );
-        if (shouldStore) {
-          await _handleMessageSendFailure(message.stanzaID);
-        }
-        throw XmppMessageException();
+    try {
+      await _prepareOutboundChatSend(chatJid: jid, chatType: resolvedChatType);
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to prepare outbound send for ${message.stanzaID}',
+        error,
+        stackTrace,
+      );
+      if (shouldStore) {
+        await _handleMessageSendFailure(message.stanzaID);
       }
+      throw XmppMessageException();
     }
 
     try {
@@ -3733,6 +3764,11 @@ mixin MessageService
         throw XmppMessageException();
       }
     } catch (error, stackTrace) {
+      if (resolvedChatType == ChatType.groupChat) {
+        await _eventManager.executeHandlers(
+          OutboundGroupchatStanzaRejectedEvent(stanzaId: message.stanzaID),
+        );
+      }
       _log.warning(
         'Failed to send message ${message.stanzaID}',
         error,
@@ -3750,10 +3786,8 @@ mixin MessageService
     required DateTime lastTimestamp,
     required String? lastId,
   }) async {
-    if (connectionState != ConnectionState.connected) return;
     final normalizedPeer = peerJid.trim();
     if (normalizedPeer.isEmpty) return;
-    if (_isMucChatJid(normalizedPeer)) return;
 
     final manager = _connection.getManager<ConversationIndexManager>();
     if (manager == null) return;
@@ -3768,7 +3802,11 @@ mixin MessageService
     final chat = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(peerBare.toString()),
     );
-    if (chat != null && !chat.transport.isXmpp) return;
+    if (!_supportsConversationIndexSync(chat)) return;
+    if (_resolvedChatTypeForPeer(chatJid: normalizedPeer, chat: chat) ==
+        ChatType.groupChat) {
+      return;
+    }
 
     final cached = manager.cachedForPeer(peerBare);
     final cachedTimestamp = cached?.lastTimestamp;
@@ -3824,7 +3862,7 @@ mixin MessageService
 
   Future<XmppAttachmentUpload> sendAttachment({
     required String jid,
-    required EmailAttachment attachment,
+    required Attachment attachment,
     EncryptionProtocol encryptionProtocol = EncryptionProtocol.none,
     String? htmlCaption,
     bool forwarded = false,
@@ -3832,6 +3870,7 @@ mixin MessageService
     String? transportGroupId,
     int? attachmentOrder,
     Message? quotedMessage,
+    MessageReference? quotedReference,
     ChatType chatType = ChatType.chat,
     XmppAttachmentUpload? upload,
     void Function(String stanzaId)? onLocalMessageStored,
@@ -3848,10 +3887,11 @@ mixin MessageService
       jid: jid,
       requestedChatType: chatType,
     );
-    final isGroupChat = resolvedChatType == ChatType.groupChat;
-    final senderIdentity = isGroupChat
-        ? _outboundMucActorIdentity(roomJid: jid, accountJid: accountJid)
-        : MucActorIdentity.direct(senderJid: accountJid);
+    final senderJid = _outboundSenderJidForChat(
+      chatJid: jid,
+      accountJid: accountJid,
+      chatType: resolvedChatType,
+    );
     final metadataId =
         upload?.metadata.id ?? attachment.metadataId ?? uuid.v4();
     final attachmentWithMetadataId = attachment.metadataId == metadataId
@@ -3879,8 +3919,8 @@ mixin MessageService
     final DateTime timestamp = demoOfflineMode
         ? await _resolveDemoTimestampForChat(jid, demoNow())
         : DateTime.timestamp();
-    final quotedReference = quotedMessage == null
-        ? null
+    final resolvedQuotedReference = quotedMessage == null
+        ? quotedReference
         : _outboundReplyReference(
             message: quotedMessage,
             chatType: resolvedChatType,
@@ -3888,15 +3928,15 @@ mixin MessageService
     final message = Message(
       stanzaID: _connection.generateId(),
       originID: _connection.generateId(),
-      senderJid: senderIdentity.senderJid,
+      senderJid: senderJid,
       chatJid: jid,
       body: body,
       htmlBody: normalizedHtmlCaption,
       encryptionProtocol: resolvedEncryptionProtocol,
       timestamp: timestamp,
       fileMetadataID: metadata.id,
-      quoting: quotedReference?.value,
-      quotingReferenceKind: quotedReference?.kind,
+      quoting: resolvedQuotedReference?.value,
+      quotingReferenceKind: resolvedQuotedReference?.kind,
       pseudoMessageData: forwarded
           ? <String, dynamic>{
               'forwarded': true,
@@ -3910,8 +3950,7 @@ mixin MessageService
     await _storeMessage(message, chatType: resolvedChatType);
     onLocalMessageStored?.call(message.stanzaID);
     if (resolvedEncryptionProtocol == EncryptionProtocol.omemo &&
-        resolvedChatType == ChatType.chat &&
-        !_isMucChatJid(jid)) {
+        resolvedChatType == ChatType.chat) {
       final decision = await _omemoDecision(jid: jid);
       if (!decision.isAllowed) {
         await _handleMessageSendFailure(
@@ -3958,20 +3997,18 @@ mixin MessageService
         file: demoFile,
       );
     }
-    if (isGroupChat) {
-      try {
-        await _ensureMucJoinForSend(roomJid: jid);
-      } catch (error, stackTrace) {
-        _log.warning(
-          'Failed to join room before sending attachment ${message.stanzaID}',
-          error,
-          stackTrace,
-        );
-        if (shouldStore) {
-          await _handleMessageSendFailure(message.stanzaID);
-        }
-        throw XmppMessageException();
+    try {
+      await _prepareOutboundChatSend(chatJid: jid, chatType: resolvedChatType);
+    } catch (error, stackTrace) {
+      _log.warning(
+        'Failed to prepare outbound attachment send ${message.stanzaID}',
+        error,
+        stackTrace,
+      );
+      if (shouldStore) {
+        await _handleMessageSendFailure(message.stanzaID);
       }
+      throw XmppMessageException();
     }
     late final XmppAttachmentUpload resolvedUpload;
     try {
@@ -4058,6 +4095,11 @@ mixin MessageService
         throw XmppMessageException();
       }
     } catch (error, stackTrace) {
+      if (resolvedChatType == ChatType.groupChat) {
+        await _eventManager.executeHandlers(
+          OutboundGroupchatStanzaRejectedEvent(stanzaId: message.stanzaID),
+        );
+      }
       _log.warning(
         'Failed to send attachment message ${message.stanzaID}',
         error,
@@ -4076,9 +4118,8 @@ mixin MessageService
     return resolvedUpload;
   }
 
-  Future<XmppAttachmentUpload> _uploadDraftAttachment(
-    EmailAttachment attachment,
-  ) => _uploadAttachment(attachment);
+  Future<XmppAttachmentUpload> _uploadDraftAttachment(Attachment attachment) =>
+      _uploadAttachment(attachment);
 
   Future<void> _uploadDraftAttachmentFile({
     required XmppAttachmentUpload upload,
@@ -4092,9 +4133,7 @@ mixin MessageService
     shouldStore: shouldStore,
   );
 
-  Future<XmppAttachmentUpload> _uploadAttachment(
-    EmailAttachment attachment,
-  ) async {
+  Future<XmppAttachmentUpload> _uploadAttachment(Attachment attachment) async {
     final uploadManager = _connection.getManager<mox.HttpFileUploadManager>();
     if (uploadManager == null) {
       _log.warning('HTTP upload manager unavailable; ensure it is registered.');
@@ -4694,7 +4733,7 @@ mixin MessageService
         message: message,
         emojis: sanitizedEmojis,
         previousEmojis: emojis,
-        isGroupChat: isGroupChat,
+        chatType: resolvedChatType,
       );
       return true;
     } on Exception {
@@ -4760,8 +4799,11 @@ mixin MessageService
     );
   }
 
-  Future<bool> _canSendChatMarkers({required String to}) async {
-    if (_isMucChatJid(to)) return false;
+  Future<bool> _canSendChatMarkers({
+    required String to,
+    required ChatType chatType,
+  }) async {
+    if (chatType == ChatType.groupChat) return false;
     if (to == myJid) return false;
     final decision = await _featureDecision(
       jid: to,
@@ -4778,18 +4820,21 @@ mixin MessageService
     return true;
   }
 
-  Future<void> sendReadMarker(String to, String stanzaID) async {
-    if (!await _canSendChatMarkers(to: to)) return;
+  Future<void> sendReadMarker(
+    String to,
+    String stanzaID, {
+    ChatType chatType = ChatType.chat,
+  }) async {
+    if (!await _canSendChatMarkers(to: to, chatType: chatType)) return;
     final normalizedStanzaId = stanzaID.trim();
     if (normalizedStanzaId.isEmpty) {
       return;
     }
-    final messageType = _chatStateMessageType(to);
     await _connection.sendChatMarker(
       to: to,
       stanzaID: normalizedStanzaId,
       marker: mox.ChatMarker.displayed,
-      messageType: messageType,
+      messageType: _messageTypeChat,
     );
   }
 
@@ -4801,6 +4846,28 @@ mixin MessageService
       _fetchMamPage(jid: jid, before: '', pageSize: pageSize, isMuc: isMuc);
 
   bool get isMamGlobalSyncInFlight => _mamGlobalSyncInFlight;
+
+  String createChatArchiveSession() {
+    final sessionId = const Uuid().v4();
+    _chatMamSessions.putIfAbsent(sessionId, _newChatMamSession);
+    return sessionId;
+  }
+
+  void disposeChatArchiveSession(String sessionId) {
+    final session = _chatMamSessions.remove(sessionId);
+    if (session == null) {
+      return;
+    }
+    _invalidateChatMamSession(session);
+  }
+
+  void resetChatArchiveSession({required String sessionId, Chat? chat}) {
+    final existing = _chatMamSessions[sessionId];
+    if (existing != null) {
+      _invalidateChatMamSession(existing);
+    }
+    _chatMamSessions[sessionId] = _newChatMamSession(chatJid: chat?.jid.trim());
+  }
 
   void _clearMamNegotiationState() {
     _hasMamNegotiatedStream = false;
@@ -4824,19 +4891,13 @@ mixin MessageService
   Future<bool> _canFetchMamForChat(Chat chat) async {
     final jid = _resolvedMamChatJid(chat);
     if (jid == null) return false;
-    if (connectionState != ConnectionState.connected) return false;
-    if (chat.type == ChatType.groupChat) {
-      return _canQueryMucArchive(jid);
-    }
-    return resolveMamSupport();
+    final chatType = _resolvedChatTypeForPeer(chatJid: jid, chat: chat);
+    return await _canFetchArchiveForChat(chatJid: jid, chatType: chatType);
   }
 
   Future<MamGlobalSyncOutcome> syncGlobalMamCatchUpForRefresh({
     int pageSize = 50,
   }) async {
-    if (connectionState != ConnectionState.connected) {
-      return MamGlobalSyncOutcome.failed;
-    }
     if (!_hasMamNegotiatedStream) {
       return MamGlobalSyncOutcome.failed;
     }
@@ -4848,11 +4909,11 @@ mixin MessageService
 
   Future<bool> resolveMamSupport() async {
     await _resolveMamSupportForAccount();
-    return _mamSupported;
+    return !_mamSupportResolved || _mamSupported;
   }
 
   String? _resolvedMamChatJid(Chat chat) {
-    if (chat.isEmailBacked) return null;
+    if (!_chatSupportsArchiveQueries(chat)) return null;
     final jid = chat.remoteJid.isNotEmpty ? chat.remoteJid : chat.jid;
     final trimmed = jid.trim();
     if (trimmed.isEmpty) return null;
@@ -4874,6 +4935,68 @@ mixin MessageService
     );
   }
 
+  Future<void> hydrateLatestFromMamForChatSessionIfNeeded({
+    required String sessionId,
+    required Chat chat,
+    required int desiredWindow,
+    required MessageTimelineFilter filter,
+    required bool visibleWindowEmpty,
+    int pageSize = 50,
+  }) async {
+    final session = _chatMamSession(sessionId, chat: chat);
+    if (session.loading || session.complete || session.beforeId != null) {
+      return;
+    }
+    if (!await _canFetchMamForChat(chat)) {
+      return;
+    }
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null) {
+      return;
+    }
+    final localCount = await countLocalMessages(
+      jid: jid,
+      filter: filter,
+      includePseudoMessages: false,
+    );
+    if (!visibleWindowEmpty && localCount >= desiredWindow) {
+      return;
+    }
+    _beginChatMamLoad(session);
+    try {
+      final outcome = await hydrateLatestFromMamForChatIfNeeded(
+        chat: chat,
+        currentLocalCount: localCount,
+        desiredWindow: desiredWindow,
+        filter: filter,
+        catchUpCompleted: session.catchUpCompleted,
+        pageSize: pageSize,
+      );
+      for (final result in outcome.catchUpResults) {
+        await _applyMamResultToChatSession(
+          session,
+          chat: chat,
+          result: result,
+          filter: filter,
+          updateTotal: false,
+          updateBeforeCursor: false,
+        );
+      }
+      session.catchUpCompleted = true;
+      final latestResult = outcome.latestResult;
+      if (latestResult != null) {
+        await _applyMamResultToChatSession(
+          session,
+          chat: chat,
+          result: latestResult,
+          filter: filter,
+        );
+      }
+    } finally {
+      _finishChatMamLoad(session);
+    }
+  }
+
   Future<MamPageResult> fetchBeforeFromArchiveForChat({
     required Chat chat,
     required String before,
@@ -4889,6 +5012,39 @@ mixin MessageService
       pageSize: pageSize,
       isMuc: chat.type == ChatType.groupChat,
     );
+  }
+
+  Future<void> loadEarlierFromMamForChatSession({
+    required String sessionId,
+    required Chat chat,
+    required String? fallbackBeforeId,
+    required MessageTimelineFilter filter,
+    int pageSize = 50,
+  }) async {
+    final session = _chatMamSession(sessionId, chat: chat);
+    if (session.loading || session.complete) {
+      return;
+    }
+    final beforeId = session.beforeId ?? fallbackBeforeId?.trim();
+    if (beforeId == null || beforeId.isEmpty) {
+      return;
+    }
+    _beginChatMamLoad(session);
+    try {
+      final result = await fetchBeforeFromArchiveForChat(
+        chat: chat,
+        before: beforeId,
+        pageSize: pageSize,
+      );
+      await _applyMamResultToChatSession(
+        session,
+        chat: chat,
+        result: result,
+        filter: filter,
+      );
+    } finally {
+      _finishChatMamLoad(session);
+    }
   }
 
   Future<MamPageResult> fetchSinceFromArchiveForChat({
@@ -4926,6 +5082,44 @@ mixin MessageService
       return const <MamPageResult>[];
     }
     return _catchUpChatFromMam(chat: chat, since: lastSeen, pageSize: pageSize);
+  }
+
+  Future<void> catchUpChatFromMamOnConnectForSession({
+    required String sessionId,
+    required Chat chat,
+    required MessageTimelineFilter filter,
+    int pageSize = 50,
+  }) async {
+    final session = _chatMamSession(sessionId, chat: chat);
+    if (session.catchingUp) {
+      return;
+    }
+    if (session.loading && session.loadingCompleter != null) {
+      await session.loadingCompleter!.future;
+    }
+    session.catchUpCompleted = false;
+    session.catchingUp = true;
+    _beginChatMamLoad(session);
+    try {
+      final results = await catchUpChatFromMamOnConnect(
+        chat: chat,
+        pageSize: pageSize,
+      );
+      for (final result in results) {
+        await _applyMamResultToChatSession(
+          session,
+          chat: chat,
+          result: result,
+          filter: filter,
+          updateTotal: false,
+          updateBeforeCursor: false,
+        );
+      }
+      session.catchUpCompleted = true;
+    } finally {
+      _finishChatMamLoad(session);
+      session.catchingUp = false;
+    }
   }
 
   Future<({List<MamPageResult> catchUpResults, MamPageResult? latestResult})>
@@ -4976,6 +5170,130 @@ mixin MessageService
     return (catchUpResults: catchUpResults, latestResult: latestResult);
   }
 
+  Future<void> ensureArchiveWindowFromMamForChatSession({
+    required String sessionId,
+    required Chat chat,
+    required int desiredWindow,
+    required MessageTimelineFilter filter,
+    required bool visibleWindowEmpty,
+    required String? fallbackBeforeId,
+    int pageSize = 50,
+  }) async {
+    final session = _chatMamSession(sessionId, chat: chat);
+    if (!await _canFetchMamForChat(chat)) {
+      return;
+    }
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null) {
+      return;
+    }
+    var localCount = await countLocalMessages(
+      jid: jid,
+      filter: filter,
+      includePseudoMessages: false,
+    );
+    if (session.beforeId == null && visibleWindowEmpty) {
+      await hydrateLatestFromMamForChatSessionIfNeeded(
+        sessionId: sessionId,
+        chat: chat,
+        desiredWindow: desiredWindow,
+        filter: filter,
+        visibleWindowEmpty: visibleWindowEmpty,
+        pageSize: pageSize,
+      );
+      localCount = await countLocalMessages(
+        jid: jid,
+        filter: filter,
+        includePseudoMessages: false,
+      );
+    }
+    var shouldAttemptNetwork = true;
+    while ((localCount < desiredWindow || shouldAttemptNetwork) &&
+        !session.complete) {
+      shouldAttemptNetwork = false;
+      await loadEarlierFromMamForChatSession(
+        sessionId: sessionId,
+        chat: chat,
+        fallbackBeforeId: fallbackBeforeId,
+        filter: filter,
+        pageSize: pageSize,
+      );
+      final refreshed = await countLocalMessages(
+        jid: jid,
+        filter: filter,
+        includePseudoMessages: false,
+      );
+      if (refreshed <= localCount) {
+        break;
+      }
+      localCount = refreshed;
+    }
+  }
+
+  Future<Message?> ensureMessageAvailableFromMamForChatSession({
+    required String sessionId,
+    required Chat chat,
+    required String messageId,
+    required MessageTimelineFilter filter,
+    required bool visibleWindowEmpty,
+    required String? fallbackBeforeId,
+    int pageSize = 50,
+  }) async {
+    var target = await loadMessageByReferenceId(messageId, chatJid: chat.jid);
+    if (target != null) {
+      return target;
+    }
+    if (!await _canFetchMamForChat(chat)) {
+      return null;
+    }
+    final session = _chatMamSession(sessionId, chat: chat);
+    if (session.beforeId == null && visibleWindowEmpty) {
+      await hydrateLatestFromMamForChatSessionIfNeeded(
+        sessionId: sessionId,
+        chat: chat,
+        desiredWindow: pageSize,
+        filter: filter,
+        visibleWindowEmpty: visibleWindowEmpty,
+        pageSize: pageSize,
+      );
+      target = await loadMessageByReferenceId(messageId, chatJid: chat.jid);
+      if (target != null) {
+        return target;
+      }
+    }
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null) {
+      return null;
+    }
+    while (!session.complete) {
+      final previousCount = await countLocalMessages(
+        jid: jid,
+        filter: filter,
+        includePseudoMessages: false,
+      );
+      await loadEarlierFromMamForChatSession(
+        sessionId: sessionId,
+        chat: chat,
+        fallbackBeforeId: fallbackBeforeId,
+        filter: filter,
+        pageSize: pageSize,
+      );
+      target = await loadMessageByReferenceId(messageId, chatJid: chat.jid);
+      if (target != null) {
+        return target;
+      }
+      final nextCount = await countLocalMessages(
+        jid: jid,
+        filter: filter,
+        includePseudoMessages: false,
+      );
+      if (nextCount <= previousCount) {
+        return null;
+      }
+    }
+    return null;
+  }
+
   Future<MamPageResult> fetchBeforeFromArchive({
     required String jid,
     required String before,
@@ -5022,6 +5340,85 @@ mixin MessageService
     return List<MamPageResult>.unmodifiable(results);
   }
 
+  _ChatMamSession _chatMamSession(String sessionId, {Chat? chat}) {
+    final existing = _chatMamSessions[sessionId];
+    final normalizedChat = chat?.jid.trim();
+    if (existing == null) {
+      final session = _newChatMamSession(chatJid: normalizedChat);
+      _chatMamSessions[sessionId] = session;
+      return session;
+    }
+    if (normalizedChat != null &&
+        normalizedChat.isNotEmpty &&
+        existing.chatJid != normalizedChat) {
+      _invalidateChatMamSession(existing);
+      final replacement = _newChatMamSession(chatJid: normalizedChat);
+      _chatMamSessions[sessionId] = replacement;
+      return replacement;
+    }
+    return existing;
+  }
+
+  _ChatMamSession _newChatMamSession({String? chatJid}) =>
+      _ChatMamSession(chatJid: chatJid);
+
+  void _invalidateChatMamSession(_ChatMamSession session) {
+    session.beforeId = null;
+    session.totalCount = null;
+    session.complete = false;
+    session.loading = false;
+    session.catchingUp = false;
+    session.catchUpCompleted = false;
+    session.loadingCompleter?.complete();
+    session.loadingCompleter = null;
+  }
+
+  void _beginChatMamLoad(_ChatMamSession session) {
+    session.loading = true;
+    session.loadingCompleter = Completer<void>();
+  }
+
+  void _finishChatMamLoad(_ChatMamSession session) {
+    session.loading = false;
+    session.loadingCompleter?.complete();
+    session.loadingCompleter = null;
+  }
+
+  Future<void> _applyMamResultToChatSession(
+    _ChatMamSession session, {
+    required Chat chat,
+    required MamPageResult result,
+    required MessageTimelineFilter filter,
+    bool updateTotal = true,
+    bool updateBeforeCursor = true,
+  }) async {
+    if (updateBeforeCursor) {
+      session.beforeId = result.firstId ?? session.beforeId ?? result.lastId;
+    }
+    if (!updateTotal) {
+      return;
+    }
+    session.totalCount = result.count ?? session.totalCount;
+    if (session.totalCount == null) {
+      session.complete = session.complete || result.complete;
+      return;
+    }
+    final jid = _resolvedMamChatJid(chat);
+    if (jid == null) {
+      session.complete = true;
+      return;
+    }
+    final localCount = await countLocalMessages(
+      jid: jid,
+      filter: filter,
+      includePseudoMessages: false,
+    );
+    session.complete =
+        session.complete ||
+        result.complete ||
+        localCount >= session.totalCount!;
+  }
+
   Future<MamPageResult> _fetchMamPage({
     required String jid,
     String? before,
@@ -5030,7 +5427,10 @@ mixin MessageService
     int pageSize = 50,
     bool isMuc = false,
   }) async {
-    if (isMuc && !_canQueryMucArchive(jid)) {
+    if (!await _canFetchArchiveForChat(
+      chatJid: jid,
+      chatType: isMuc ? ChatType.groupChat : ChatType.chat,
+    )) {
       return const MamPageResult(complete: true);
     }
     var success = false;
@@ -5117,7 +5517,7 @@ mixin MessageService
   }
 
   Future<FileMetadataData> _seedAttachmentMetadata(
-    EmailAttachment attachment,
+    Attachment attachment,
   ) async {
     final metadataId = attachment.metadataId ?? uuid.v4();
     final existing = await _dbOpReturning<XmppDatabase, FileMetadataData?>(
@@ -5211,11 +5611,7 @@ mixin MessageService
   }
 
   Set<String> _assumedCapabilityFeatures(String jid) {
-    final features = <String>{};
-    if (_isBareMucRoomJidForCapabilities(jid)) {
-      features.add(mox.messageReactionsXmlns);
-    }
-    return features;
+    return const <String>{};
   }
 
   _PeerCapabilities _withCapabilityAssumptions({
@@ -5226,7 +5622,7 @@ mixin MessageService
     if (assumedFeatures.isEmpty) {
       return capabilities;
     }
-    final isBareMucRoom = _isBareMucRoomJidForCapabilities(jid);
+    final isBareMucRoom = assumedFeatures.isNotEmpty;
     final supportsMarkers =
         capabilities.supportsMarkers ||
         assumedFeatures.contains(mox.chatMarkersXmlns);
@@ -5279,7 +5675,7 @@ mixin MessageService
     String jid, {
     _PeerCapabilities? cached,
   }) {
-    final isBareMucRoom = _isBareMucRoomJidForCapabilities(jid);
+    final isBareMucRoom = _assumedCapabilityFeatures(jid).isNotEmpty;
     final isTrustedPeer = _isTrustedPeerJidForCapabilities(jid);
     final shouldReuseTimestamp =
         cached != null &&
@@ -5524,6 +5920,7 @@ mixin MessageService
     _log.fine('Skipping $featureLabel for $jid (unsupported).');
   }
 
+  @override
   Future<CapabilityDecision> decideFeatureSupport({
     required String jid,
     required String feature,
@@ -5538,13 +5935,46 @@ mixin MessageService
     return decision;
   }
 
-  Future<bool> _supportsMam(String jid) async {
-    final decision = await _featureDecision(jid: jid, feature: mox.mamXmlns);
-    if (!decision.isAllowed) {
-      _logCapabilityDecision(featureLabel: 'MAM', jid: jid, decision: decision);
-      return false;
+  Future<CapabilityDecision> _chatStateDecision(String jid) async {
+    const chatStateFeature = 'http://jabber.org/protocol/chatstates';
+    return decideFeatureSupport(
+      jid: jid,
+      feature: chatStateFeature,
+      featureLabel: 'chat states',
+    );
+  }
+
+  void _logChatStateDecision(String jid, CapabilityDecision decision) {
+    if (decision.isAllowed) return;
+    if (decision.isError) {
+      _log.warning(
+        'Failed to resolve chat state capability for $jid',
+        decision.error,
+        decision.stackTrace,
+      );
+      return;
     }
-    return true;
+    if (decision.isUnknown) {
+      _log.fine('Skipping chat state for $jid (capabilities unknown).');
+      return;
+    }
+    _log.fine('Skipping chat state for $jid (unsupported).');
+  }
+
+  Future<void> _sendChatState({
+    required String jid,
+    required mox.ChatState state,
+  }) async {
+    final decision = await _chatStateDecision(jid);
+    if (!decision.isAllowed) {
+      _logChatStateDecision(jid, decision);
+      return;
+    }
+    final chatType = await _resolvePersistedChatType(
+      jid: jid,
+      requestedChatType: ChatType.chat,
+    );
+    await _sendResolvedChatState(jid: jid, state: state, chatType: chatType);
   }
 
   Future<void> _resolveMamSupportForAccount() async {
@@ -5554,29 +5984,50 @@ mixin MessageService
     }
     final accountJid = myJid;
     if (accountJid == null) {
+      return;
+    }
+    final decision = await _featureDecision(
+      jid: accountJid,
+      feature: mox.mamXmlns,
+    );
+    if (decision.isAllowed) {
+      await _updateMamSupport(true);
+      return;
+    }
+    if (decision.isUnsupported) {
       await _updateMamSupport(false);
       return;
     }
-    try {
-      final supported = await _supportsMam(accountJid);
-      await _updateMamSupport(supported);
-    } on Exception catch (error, stackTrace) {
-      _log.fine('Failed to resolve MAM support.', error, stackTrace);
-      await _updateMamSupport(false);
+    if (decision.isError) {
+      _log.fine(
+        'Failed to resolve MAM support.',
+        decision.error,
+        decision.stackTrace,
+      );
     }
   }
 
   Future<void> _verifyMamSupportOnLogin() async {
-    if (connectionState != ConnectionState.connected) return;
     final accountJid = myJid;
     if (accountJid != null) {
-      final supportsMam = await _supportsMam(accountJid);
-      if (!supportsMam) {
+      final decision = await _featureDecision(
+        jid: accountJid,
+        feature: mox.mamXmlns,
+      );
+      if (decision.isAllowed) {
+        await _updateMamSupport(true);
+      } else if (decision.isUnsupported) {
         _log.warning(
           'Archive queries may be limited: server did not advertise MAM v2.',
         );
+        await _updateMamSupport(false);
+      } else if (decision.isError) {
+        _log.fine(
+          'Failed to verify MAM support on login.',
+          decision.error,
+          decision.stackTrace,
+        );
       }
-      await _updateMamSupport(supportsMam);
     }
 
     List<Chat> chats;
@@ -5595,26 +6046,29 @@ mixin MessageService
 
     final unsupportedRooms = <String>{};
     for (final chat in mucChats) {
-      try {
-        final hasMam = await _supportsMam(chat.jid);
-        if (!hasMam) {
-          unsupportedRooms.add(
-            mox.JID.fromString(chat.jid).toBare().toString(),
-          );
-        }
-      } on Exception catch (error, stackTrace) {
-        _log.fine('MAM disco for a group chat failed.', error, stackTrace);
+      final decision = await _featureDecision(
+        jid: chat.jid,
+        feature: mox.mamXmlns,
+      );
+      if (decision.isUnsupported) {
+        unsupportedRooms.add(mox.JID.fromString(chat.jid).toBare().toString());
+        continue;
+      }
+      if (decision.isError) {
+        _log.fine(
+          'MAM disco for a group chat failed.',
+          decision.error,
+          decision.stackTrace,
+        );
+        continue;
       }
     }
-    _mucMamUnsupportedRooms
-      ..clear()
-      ..addAll(unsupportedRooms);
+    _updateUnsupportedArchiveChats(unsupportedRooms);
     if (unsupportedRooms.isNotEmpty) {
       _log.warning(
         'Archive backfill may be incomplete: one or more group chats did not advertise MAM v2.',
       );
     }
-    await _updateMamSupport(_mamSupported);
   }
 
   String? _trimmedIncomingMessageStanzaId(mox.MessageEvent event) {
@@ -5731,7 +6185,7 @@ mixin MessageService
     if (sameNormalizedAddressValue(peer, myJid)) {
       return (acked: false, received: false);
     }
-    final chatJid = _messageChatJidForEvent(event);
+    final chatJid = _chatJidForEvent(event);
     final isMuc = event.type == 'groupchat';
     final trackedMessage = isArchived || isMuc
         ? await _resolveIncomingReferencedMessage(event, chatJid: chatJid)
@@ -5760,8 +6214,8 @@ mixin MessageService
       _log.fine('Skipping IM acknowledgement for message without stanza id.');
       return (acked: false, received: false);
     }
-    final target = isMuc ? event.from.toString() : peer;
-    final messageType = _chatStateMessageType(target);
+    final target = peer;
+    const messageType = _messageTypeChat;
     final capabilities = await _capabilitiesFor(peer);
     var acknowledged = false;
 
@@ -5994,9 +6448,13 @@ mixin MessageService
     _suppressedMessageNotificationIds.clear();
     _internalEnvelopeChats.clear();
     _pinChatSyncSessions.clear();
+    for (final session in _chatMamSessions.values) {
+      _invalidateChatMamSession(session);
+    }
+    _chatMamSessions.clear();
     _pendingPinSyncLoaded = false;
+    _pinReconnectRefreshInFlight = false;
     _pinCreateRetryKeys.clear();
-    _emailPinSnapshotInFlight = false;
     _pinPubSubHost = null;
   }
 
@@ -6153,37 +6611,16 @@ mixin MessageService
         (db) => db.saveMessageError(stanzaID: stanzaId, error: error),
       );
     }
-    final String? mappedRoomJid = _takeOutboundGroupchatRoomJid(stanzaId);
-    final bool summaryIsGroupChat = summary?.chatType == ChatType.groupChat;
-    String? roomJid = summaryIsGroupChat
-        ? _resolveGroupChatRoomJid(
-            event: event,
-            summaryChatJid: summary?.chatJid,
-          )
-        : _resolveGroupChatRoomJidFromEvent(event);
-    roomJid ??= mappedRoomJid;
-    roomJid ??= await _resolveGroupChatRoomJidFromDb(stanzaId);
-    if (roomJid != null &&
-        _isMucChatJid(roomJid) &&
-        _shouldAttemptMucRepairForRoom(
-          roomJid: roomJid,
-          conditionData: errorCondition,
-        )) {
-      final String resolvedRoomJid = roomJid;
-      _markRoomNeedsJoin(resolvedRoomJid);
-      if (shouldPersistError &&
-          _shouldClearMucPresenceForError(errorCondition)) {
-        await _markRoomLeft(
-          resolvedRoomJid,
-          statusCodes: _emptyStatusCodes,
-          preserveOccupants: _preserveOccupantsOnMucError,
-        );
-      }
-      fireAndForget(
-        () => _repairMucJoin(resolvedRoomJid),
-        operationName: 'MessageService.repairMucJoin',
-      );
-    }
+    await _eventManager.executeHandlers(
+      OutboundMessageErrorEvent(
+        stanzaEvent: event,
+        stanzaId: stanzaId,
+        summaryChatType: summary?.chatType,
+        summaryChatJid: summary?.chatJid,
+        shouldPersistError: shouldPersistError,
+        errorCondition: errorCondition,
+      ),
+    );
     if (summary == null) {
       if (shouldPersistError) {
         _log.info(_outboundMessageRejectedMissingSummaryLog);
@@ -6205,10 +6642,13 @@ mixin MessageService
 
   Future<void> _handleChatState(mox.MessageEvent event, String jid) async {
     if (event.extensions.get<mox.ChatState>() case final state?) {
+      final participantId = event.type == _messageTypeGroupchat
+          ? event.from.toString()
+          : event.from.toBare().toString();
       await _eventManager.executeHandlers(
         InboundChatStateEvent(
           chatJid: jid,
-          senderJid: event.from.toString(),
+          participantId: participantId,
           state: state,
         ),
       );
@@ -6221,12 +6661,12 @@ mixin MessageService
   Future<bool> _handleCorrection(mox.MessageEvent event, String jid) async {
     final correction = event.extensions.get<mox.LastMessageCorrectionData>();
     if (correction == null) return false;
-    if (!_isGroupChatMutationAuthorized(event)) {
+    if (!_isInboundMessageMutationAuthorized(event)) {
       _log.warning(_mucMutationRejectedLog);
       return true;
     }
 
-    final chatJid = _messageChatJidForEvent(event);
+    final chatJid = _chatJidForEvent(event);
     return await _dbOpReturning<XmppDatabase, bool>((db) async {
       if (await db.getMessageByReferenceId(correction.id, chatJid: chatJid)
           case final message?) {
@@ -6247,12 +6687,12 @@ mixin MessageService
   Future<bool> _handleRetraction(mox.MessageEvent event, String jid) async {
     final retraction = event.extensions.get<mox.MessageRetractionData>();
     if (retraction == null) return false;
-    if (!_isGroupChatMutationAuthorized(event)) {
+    if (!_isInboundMessageMutationAuthorized(event)) {
       _log.warning(_mucMutationRejectedLog);
       return true;
     }
 
-    final chatJid = _messageChatJidForEvent(event);
+    final chatJid = _chatJidForEvent(event);
     return await _dbOpReturning<XmppDatabase, bool>((db) async {
       if (await db.getMessageByReferenceId(retraction.id, chatJid: chatJid)
           case final message?) {
@@ -6271,23 +6711,21 @@ mixin MessageService
     if (mutation == null) {
       return false;
     }
-    if (!_isGroupChatPinMutationAuthorized(event)) {
+    if (!_isInboundPinMutationAuthorized(event)) {
       _log.warning(_mucMutationRejectedLog);
       return true;
     }
-    final normalizedChat = _normalizePinChatJid(
-      _pinMutationChatJid(event, myJid),
-    );
+    final normalizedChat = _normalizePinChatJid(_chatJidForEvent(event));
     if (normalizedChat == null) {
       return true;
     }
     final chat = await _dbOpReturning<XmppDatabase, Chat?>(
       (db) => db.getChat(normalizedChat),
     );
-    if (chat?.isEmailBacked == true) {
+    if (!_usesSharedPinMutations(chat)) {
       return true;
     }
-    final fromSelf = _isSelfPinMutation(event);
+    final fromSelf = _isSelfMutationEvent(event);
     final outboundMutation = fromSelf
         ? _takeOutboundPinMutation(event.id)
         : null;
@@ -6351,7 +6789,7 @@ mixin MessageService
   Future<bool> _handleReactions(mox.MessageEvent event) async {
     final reactions = event.extensions.get<mox.MessageReactionsData>();
     if (reactions == null) return false;
-    if (!_isGroupChatMutationAuthorized(event)) {
+    if (!_isInboundMessageMutationAuthorized(event)) {
       _log.warning(_mucMutationRejectedLog);
       return true;
     }
@@ -6360,7 +6798,7 @@ mixin MessageService
       _log.fine('Dropping reactions with no valid emoji payload');
       return !event.displayable;
     }
-    final reactionChatJid = _messageChatJidForEvent(event);
+    final reactionChatJid = _chatJidForEvent(event);
     final referenceId = reactions.messageId.trim();
     final bool isGroupChat = event.type == _messageTypeGroupchat;
     final rawSenderJid = isGroupChat
@@ -6494,7 +6932,7 @@ mixin MessageService
     required DateTime updatedAt,
     required DateTime? delayedAt,
   }) async {
-    final senderIdentity = _resolveReactionSenderIdentity(
+    final senderIdentity = _resolveInboundReactionSenderIdentity(
       senderJid: rawSenderJid,
       chatJid: message.chatJid,
       isGroupChat: isGroupChat,
@@ -6719,7 +7157,7 @@ mixin MessageService
       syncMessage,
       acl: acl,
     );
-    final CalendarChatRole? senderRole = _calendarSyncSenderRole(
+    final CalendarChatRole? senderRole = _resolvedCalendarSyncSenderRole(
       event,
       chatJid: chatJid,
       chatType: chatType,
@@ -7138,7 +7576,6 @@ mixin MessageService
   }
 
   Future<void> _requestCalendarSnapshotFallback(String jid) async {
-    if (connectionState != ConnectionState.connected) return;
     final syncMessage = CalendarSyncMessage.request();
     final messageJson = jsonEncode({'calendar_sync': syncMessage.toJson()});
     try {
@@ -7226,13 +7663,9 @@ mixin MessageService
     if (await _sharedPinArchiveBootstrapComplete(chatJid)) {
       return;
     }
-    final chatType = _pinMutationChatType(chatJid, chat);
+    final chatType = _resolvedChatTypeForPeer(chatJid: chatJid, chat: chat);
     final isMuc = chatType == ChatType.groupChat;
-    if (isMuc) {
-      if (!_canQueryMucArchive(chatJid)) {
-        return;
-      }
-    } else if (!await resolveMamSupport()) {
+    if (!await _canFetchArchiveForChat(chatJid: chatJid, chatType: chatType)) {
       return;
     }
     final syncSession = _pinSyncSession(chatJid);
@@ -7242,7 +7675,7 @@ mixin MessageService
     try {
       var before = '';
       var completed = false;
-      while (connectionState == ConnectionState.connected) {
+      while (true) {
         final result = before.isEmpty
             ? await fetchLatestFromArchive(
                 jid: chatJid,
@@ -7337,7 +7770,6 @@ mixin MessageService
   }) async {
     String? afterId;
     while (true) {
-      if (!_hasUsableXmppStream) return;
       final result = await fetchSinceFromArchive(
         jid: jid,
         since: since,
@@ -7356,7 +7788,6 @@ mixin MessageService
   Future<void> _backfillCalendarFromArchive({required String jid}) async {
     String? beforeId;
     while (true) {
-      if (!_hasUsableXmppStream) return;
       final result = beforeId == null
           ? await fetchLatestFromArchive(
               jid: jid,
@@ -7523,7 +7954,9 @@ mixin MessageService
       final canonicalSenderJid = _canonicalReactionSenderJid(
         senderJid: reaction.senderJid,
         chatJid: message.chatJid,
-        isGroupChat: _isMucChatJid(message.chatJid),
+        isGroupChat:
+            _resolvedChatTypeForPeer(chatJid: message.chatJid) ==
+            ChatType.groupChat,
       );
       final buckets = grouped.putIfAbsent(
         reaction.messageID,
@@ -7561,7 +7994,7 @@ mixin MessageService
     required String senderJid,
     required String chatJid,
     required bool isGroupChat,
-  }) => _resolveReactionSenderIdentity(
+  }) => _resolveInboundReactionSenderIdentity(
     senderJid: senderJid,
     chatJid: chatJid,
     isGroupChat: isGroupChat,
@@ -8961,9 +9394,6 @@ mixin MessageService
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
-      return;
-    }
     await _ensurePendingPinSyncLoaded();
     final chatIds = <String>{
       for (final entry in _pinChatSyncSessions.entries)
@@ -8979,9 +9409,6 @@ mixin MessageService
 
   Future<void> _flushPendingPinSyncForChat(String chatJid) async {
     if (!_connection.hasConnectionSettings) {
-      return;
-    }
-    if (!_hasUsableXmppStream) {
       return;
     }
     await _ensurePendingPinSyncLoaded();
@@ -9092,7 +9519,7 @@ mixin MessageService
   }
 
   bool _usesPubSubPinSync(_PinNodeContext context) =>
-      context.chat?.isEmailBacked == true;
+      _usesPubSubPins(context.chat);
 
   Future<void> _flushPendingSharedPinMutationsForChat({
     required String chatJid,
@@ -9208,11 +9635,11 @@ mixin MessageService
     if (accountJid == null) {
       return false;
     }
-    final chatType = _pinMutationChatType(chatJid, chat);
+    final chatType = _resolvedChatTypeForPeer(chatJid: chatJid, chat: chat);
     final isGroupChat = chatType == ChatType.groupChat;
     if (isGroupChat) {
       try {
-        await _ensureMucJoinForSend(roomJid: chatJid);
+        await _prepareOutboundChatSend(chatJid: chatJid, chatType: chatType);
       } on Exception {
         return false;
       }
@@ -9226,9 +9653,11 @@ mixin MessageService
       return false;
     }
     final stanzaId = _connection.generateId();
-    final senderIdentity = isGroupChat
-        ? _outboundMucActorIdentity(roomJid: chatJid, accountJid: accountJid)
-        : MucActorIdentity.direct(senderJid: accountJid);
+    final senderJid = _outboundSenderJidForChat(
+      chatJid: chatJid,
+      accountJid: accountJid,
+      chatType: chatType,
+    );
     final targetJid = mox.JID.fromString(chatJid);
     final extensions = <mox.StanzaHandlerExtension>[
       mox.MessageIdData(stanzaId),
@@ -9255,7 +9684,7 @@ mixin MessageService
     }
     try {
       final stanza = mox.MessageEvent(
-        mox.JID.fromString(senderIdentity.senderJid),
+        mox.JID.fromString(senderJid),
         isGroupChat ? targetJid.toBare() : targetJid,
         false,
         mox.TypedMap<mox.StanzaHandlerExtension>.fromList(extensions),
@@ -9264,6 +9693,11 @@ mixin MessageService
       );
       final sent = await _connection.sendMessage(stanza);
       if (!sent) {
+        if (isGroupChat) {
+          await _eventManager.executeHandlers(
+            OutboundGroupchatStanzaRejectedEvent(stanzaId: stanzaId),
+          );
+        }
         return false;
       }
       _trackOutboundMessageSummary(
@@ -9272,9 +9706,6 @@ mixin MessageService
         kind: _OutboundMessageKind.message,
         chatJid: chatJid,
       );
-      if (isGroupChat) {
-        _trackOutboundGroupchatStanza(stanzaId: stanzaId, roomJid: chatJid);
-      }
       _trackOutboundPinMutation(
         stanzaId: stanzaId,
         chatJid: chatJid,
@@ -9283,6 +9714,11 @@ mixin MessageService
       );
       return true;
     } on Exception {
+      if (isGroupChat) {
+        await _eventManager.executeHandlers(
+          OutboundGroupchatStanzaRejectedEvent(stanzaId: stanzaId),
+        );
+      }
       return false;
     }
   }

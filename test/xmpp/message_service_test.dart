@@ -6,7 +6,7 @@ import 'dart:convert';
 import 'package:axichat/main.dart';
 import 'package:axichat/src/calendar/models/calendar_sync_message.dart';
 import 'package:axichat/src/muc/muc_models.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart' hide uuid;
 import 'package:axichat/src/xmpp/conversation_index_manager.dart';

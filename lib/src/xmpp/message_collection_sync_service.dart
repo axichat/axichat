@@ -60,15 +60,12 @@ mixin MessageCollectionSyncService on XmppBase, BaseStreamService {
   }
 
   Future<void> syncMessageCollectionsSnapshot() async {
-    if (_messageCollectionSnapshotInFlight || !_hasUsableXmppStream) {
+    if (_messageCollectionSnapshotInFlight) {
       return;
     }
     _messageCollectionSnapshotInFlight = true;
     try {
       await database;
-      if (!_hasUsableXmppStream) {
-        return;
-      }
       await _ensurePendingMessageCollectionSyncLoaded();
       final support = await refreshPubSubSupport();
       final decision = decidePubSubSupport(
@@ -132,30 +129,30 @@ mixin MessageCollectionSyncService on XmppBase, BaseStreamService {
     if (!_connection.hasConnectionSettings) {
       return;
     }
-    if (!_hasUsableXmppStream) {
+    try {
+      final support = await refreshPubSubSupport();
+      final decision = decidePubSubSupport(
+        supported: support.canUsePepNodes,
+        featureLabel: 'message collection sync',
+      );
+      if (!decision.isAllowed) {
+        return;
+      }
+      final manager = _messageCollectionsManager;
+      if (manager == null) {
+        await _queueMessageCollectionPublish(itemId);
+        return;
+      }
+      await manager.ensureNode();
+      await manager.subscribe();
+      final payload = await _buildMessageCollectionPayload(entry);
+      final published = await manager.publishEntry(payload);
+      if (published) {
+        await _clearPendingMessageCollectionPublish(itemId);
+        return;
+      }
+    } on Exception {
       await _queueMessageCollectionPublish(itemId);
-      return;
-    }
-    final support = await refreshPubSubSupport();
-    final decision = decidePubSubSupport(
-      supported: support.canUsePepNodes,
-      featureLabel: 'message collection sync',
-    );
-    if (!decision.isAllowed) {
-      return;
-    }
-    final manager = _messageCollectionsManager;
-    if (manager == null) {
-      await _queueMessageCollectionPublish(itemId);
-      return;
-    }
-    await manager.ensureNode();
-    await manager.subscribe();
-    final payload = await _buildMessageCollectionPayload(entry);
-    final published = await manager.publishEntry(payload);
-    if (published) {
-      await _clearPendingMessageCollectionPublish(itemId);
-      return;
     }
     await _queueMessageCollectionPublish(itemId);
   }
@@ -379,7 +376,7 @@ mixin MessageCollectionSyncService on XmppBase, BaseStreamService {
 
   Future<void> _flushPendingMessageCollectionSync() async {
     await _ensurePendingMessageCollectionSyncLoaded();
-    if (_pendingMessageCollectionPublishes.isEmpty || !_hasUsableXmppStream) {
+    if (_pendingMessageCollectionPublishes.isEmpty) {
       return;
     }
     final support = await refreshPubSubSupport();
