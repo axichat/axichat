@@ -14,11 +14,12 @@ import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/generate_random.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
-import 'package:axichat/src/email/service/email_provisioning_client.dart'
+import 'package:axichat/src/authentication/bloc/email_provisioning_client.dart'
     as provisioning;
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/home/service/home_refresh_sync_service.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/storage/credential_store.dart';
 import 'package:axichat/src/storage/hive_extensions.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -92,6 +93,53 @@ enum AuthMessageKey {
   accountDeletionFailed,
   deviceOnlyPasswordUnavailable,
   demoModeFailed,
+}
+
+extension AuthMessageLocalization on AuthMessage {
+  String resolve(AppLocalizations l10n) {
+    return switch (this) {
+      AuthKeyMessage(:final key) => key.resolve(l10n),
+      AuthBackoffMessage(:final remainingSeconds) => l10n.authLoginBackoff(
+        remainingSeconds,
+      ),
+      AuthRawMessage(:final text) => text,
+    };
+  }
+}
+
+extension AuthMessageKeyLocalization on AuthMessageKey {
+  String resolve(AppLocalizations l10n) => switch (this) {
+    AuthMessageKey.enableXmppOrSmtp => l10n.authEnableXmppOrSmtp,
+    AuthMessageKey.usernamePasswordMismatch =>
+      l10n.authUsernamePasswordMismatch,
+    AuthMessageKey.storedCredentialsOutdated =>
+      l10n.authStoredCredentialsOutdated,
+    AuthMessageKey.missingDatabaseSecrets => l10n.authMissingDatabaseSecrets,
+    AuthMessageKey.invalidCredentials => l10n.authInvalidCredentials,
+    AuthMessageKey.genericError => l10n.authGenericError,
+    AuthMessageKey.storageLocked => l10n.authStorageLocked,
+    AuthMessageKey.emailServerUnreachable => l10n.authEmailServerUnreachable,
+    AuthMessageKey.emailSetupFailed => l10n.authEmailSetupFailed,
+    AuthMessageKey.emailPasswordMissing => l10n.authEmailPasswordMissing,
+    AuthMessageKey.emailAuthFailed => l10n.authEmailAuthFailed,
+    AuthMessageKey.signupCleanupInProgress => l10n.signupCleanupInProgress,
+    AuthMessageKey.signupFailedTryAgain => l10n.signupFailedTryAgain,
+    AuthMessageKey.passwordMismatch => l10n.authPasswordMismatch,
+    AuthMessageKey.passwordChangeDisabled => l10n.authPasswordChangeDisabled,
+    AuthMessageKey.passwordChangeRejected => l10n.authPasswordChangeRejected,
+    AuthMessageKey.passwordChangeFailed => l10n.authPasswordChangeFailed,
+    AuthMessageKey.passwordChangeSuccess => l10n.authPasswordChangeSuccess,
+    AuthMessageKey.passwordChangeReconnectPending =>
+      l10n.authPasswordChangeReconnectPending,
+    AuthMessageKey.passwordIncorrect => l10n.authPasswordIncorrect,
+    AuthMessageKey.accountNotFound => l10n.authAccountNotFound,
+    AuthMessageKey.accountAlreadyExists => l10n.authAccountAlreadyExists,
+    AuthMessageKey.accountDeletionDisabled => l10n.authAccountDeletionDisabled,
+    AuthMessageKey.accountDeletionFailed => l10n.authAccountDeletionFailed,
+    AuthMessageKey.deviceOnlyPasswordUnavailable =>
+      l10n.authDeviceOnlyPasswordUnavailable,
+    AuthMessageKey.demoModeFailed => l10n.authDemoModeFailed,
+  };
 }
 
 enum LogoutSeverity {
