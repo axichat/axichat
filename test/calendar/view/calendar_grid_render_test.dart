@@ -9,6 +9,7 @@ import 'package:axichat/src/calendar/view/controllers/task_interaction_controlle
 import 'package:axichat/src/calendar/view/widgets/calendar_render_surface.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -149,6 +150,52 @@ void main() {
 
     expect(tappedSlot, expectedSlot);
   });
+
+  testWidgets(
+    'CalendarGrid empty surface scroll gesture does not trigger tap',
+    (tester) async {
+      final state = CalendarTestData.weekView();
+      DateTime? tappedSlot;
+
+      await tester.pumpWidget(
+        _GridHarness(
+          state: state,
+          child: CalendarGrid<CalendarBloc>(
+            state: state,
+            onDateSelected: (_) {},
+            onViewChanged: (_) {},
+            onEmptySlotTapped: (slot, _) => tappedSlot = slot,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      final RenderCalendarSurface renderSurface = tester
+          .renderObject<RenderCalendarSurface>(
+            find.byType(CalendarRenderSurface),
+          );
+      final metrics = renderSurface.metrics!;
+      final Offset start = renderSurface.localToGlobal(
+        Offset(
+          renderSurface.layoutTheme.timeColumnWidth + 40,
+          metrics.slotHeight * 14.5,
+        ),
+      );
+
+      final TestGesture gesture = await tester.startGesture(
+        start,
+        kind: PointerDeviceKind.touch,
+      );
+      await tester.pump();
+      await gesture.moveBy(const Offset(0, -160));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(tappedSlot, isNull);
+    },
+  );
 
   testWidgets(
     'CalendarGrid ignores task-originated taps for empty slot quick add',

@@ -113,6 +113,10 @@ void main() {
       CalendarInteractionKind.drag,
     );
     expect(
+      controller.activeInteractionSession?.source,
+      CalendarInteractionSource.taskSurface,
+    );
+    expect(
       controller.activeInteractionSession?.globalPosition,
       const Offset(80, 80),
     );
@@ -127,6 +131,34 @@ void main() {
     controller.endDrag();
 
     expect(controller.activeInteractionSession, isNull);
+
+    controller.dispose();
+  });
+
+  test('External drag interaction seeds external source in shared session', () {
+    final controller = TaskInteractionController();
+    final task = CalendarTask.create(
+      title: 'External drag task',
+      scheduledTime: DateTime(2024, 1, 1, 10),
+      duration: const Duration(hours: 1),
+    );
+
+    controller.beginExternalDrag(
+      task: task,
+      snapshot: task.copyWith(),
+      pointerOffset: const Offset(24, 36),
+      feedbackSize: const Size(120, 80),
+      globalPosition: const Offset(40, 60),
+    );
+
+    expect(
+      controller.activeInteractionSession?.kind,
+      CalendarInteractionKind.drag,
+    );
+    expect(
+      controller.activeInteractionSession?.source,
+      CalendarInteractionSource.external,
+    );
 
     controller.dispose();
   });

@@ -84,6 +84,8 @@ enum CalendarTaskPointerTarget { body, resizeTop, resizeBottom }
 
 enum CalendarInteractionKind { drag, resizeTop, resizeBottom }
 
+enum CalendarInteractionSource { unknown, taskSurface, external }
+
 enum CalendarInteractionVerticalIntent { neutral, up, down }
 
 enum CalendarInteractionHorizontalIntent { neutral, backward, forward }
@@ -94,6 +96,7 @@ class CalendarInteractionSession {
     required this.kind,
     required this.taskId,
     required this.globalPosition,
+    this.source = CalendarInteractionSource.unknown,
     this.verticalIntent = CalendarInteractionVerticalIntent.neutral,
     this.horizontalIntent = CalendarInteractionHorizontalIntent.neutral,
   });
@@ -101,6 +104,7 @@ class CalendarInteractionSession {
   final CalendarInteractionKind kind;
   final String taskId;
   final Offset globalPosition;
+  final CalendarInteractionSource source;
   final CalendarInteractionVerticalIntent verticalIntent;
   final CalendarInteractionHorizontalIntent horizontalIntent;
 
@@ -114,6 +118,7 @@ class CalendarInteractionSession {
     CalendarInteractionKind? kind,
     String? taskId,
     Offset? globalPosition,
+    CalendarInteractionSource? source,
     CalendarInteractionVerticalIntent? verticalIntent,
     CalendarInteractionHorizontalIntent? horizontalIntent,
   }) {
@@ -121,6 +126,7 @@ class CalendarInteractionSession {
       kind: kind ?? this.kind,
       taskId: taskId ?? this.taskId,
       globalPosition: globalPosition ?? this.globalPosition,
+      source: source ?? this.source,
       verticalIntent: verticalIntent ?? this.verticalIntent,
       horizontalIntent: horizontalIntent ?? this.horizontalIntent,
     );
@@ -133,6 +139,7 @@ class CalendarInteractionSession {
         other.kind == kind &&
         other.taskId == taskId &&
         other.globalPosition == globalPosition &&
+        other.source == source &&
         other.verticalIntent == verticalIntent &&
         other.horizontalIntent == horizontalIntent;
   }
@@ -142,6 +149,7 @@ class CalendarInteractionSession {
     kind,
     taskId,
     globalPosition,
+    source,
     verticalIntent,
     horizontalIntent,
   );
@@ -302,6 +310,7 @@ class TaskInteractionController extends ChangeNotifier {
       kind: kind,
       taskId: taskId,
       globalPosition: globalPosition,
+      source: CalendarInteractionSource.unknown,
     );
     final bool unchanged =
         resizeInteraction.value == next && interactionSession.value == session;
@@ -436,6 +445,7 @@ class TaskInteractionController extends ChangeNotifier {
       kind: CalendarInteractionKind.drag,
       taskId: task.id,
       globalPosition: Offset(pointerGlobalX, pointerGlobalY),
+      source: CalendarInteractionSource.taskSurface,
     );
     dragHasMoved = false;
     _dragOriginSlot = originSlot;
@@ -684,6 +694,7 @@ class TaskInteractionController extends ChangeNotifier {
       kind: CalendarInteractionKind.drag,
       taskId: task.id,
       globalPosition: pointerPosition,
+      source: CalendarInteractionSource.external,
     );
     dragHasMoved = false;
     notifyListeners();

@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show RendererBinding;
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -15,6 +16,142 @@ import 'calendar_task_geometry.dart';
 
 typedef CalendarTaskSnapshotBuilder = CalendarTask Function();
 typedef CalendarTaskGlobalRectProvider = Rect? Function(String taskId);
+
+class _TaskTargetAwareDelayedMultiDragGestureRecognizer
+    extends DelayedMultiDragGestureRecognizer {
+  _TaskTargetAwareDelayedMultiDragGestureRecognizer({
+    required this.interactionController,
+    required this.taskId,
+    required super.delay,
+    super.allowedButtonsFilter,
+  });
+
+  final TaskInteractionController interactionController;
+  final String taskId;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    final CalendarTaskPointerTarget? pointerTarget = interactionController
+        .taskPointerClassification(taskId: taskId, pointerId: event.pointer);
+    if (pointerTarget != CalendarTaskPointerTarget.body) {
+      return;
+    }
+    super.addAllowedPointer(event);
+  }
+}
+
+class _TaskTargetAwareImmediateMultiDragGestureRecognizer
+    extends ImmediateMultiDragGestureRecognizer {
+  _TaskTargetAwareImmediateMultiDragGestureRecognizer({
+    required this.interactionController,
+    required this.taskId,
+    super.allowedButtonsFilter,
+  });
+
+  final TaskInteractionController interactionController;
+  final String taskId;
+
+  @override
+  void addAllowedPointer(PointerDownEvent event) {
+    final CalendarTaskPointerTarget? pointerTarget = interactionController
+        .taskPointerClassification(taskId: taskId, pointerId: event.pointer);
+    if (pointerTarget != CalendarTaskPointerTarget.body) {
+      return;
+    }
+    super.addAllowedPointer(event);
+  }
+}
+
+class _TaskTargetAwareDraggable<T extends Object> extends Draggable<T> {
+  const _TaskTargetAwareDraggable({
+    super.key,
+    required this.interactionController,
+    required this.taskId,
+    required super.child,
+    required super.feedback,
+    super.data,
+    super.axis,
+    super.childWhenDragging,
+    super.feedbackOffset,
+    super.dragAnchorStrategy,
+    super.maxSimultaneousDrags,
+    super.onDragStarted,
+    super.onDragUpdate,
+    super.onDraggableCanceled,
+    super.onDragEnd,
+    super.onDragCompleted,
+    super.ignoringFeedbackSemantics,
+    super.ignoringFeedbackPointer,
+    super.allowedButtonsFilter,
+    super.hitTestBehavior,
+    super.rootOverlay,
+  });
+
+  final TaskInteractionController interactionController;
+  final String taskId;
+
+  @override
+  MultiDragGestureRecognizer createRecognizer(
+    GestureMultiDragStartCallback onStart,
+  ) {
+    return _TaskTargetAwareImmediateMultiDragGestureRecognizer(
+      interactionController: interactionController,
+      taskId: taskId,
+      allowedButtonsFilter: allowedButtonsFilter,
+    )..onStart = onStart;
+  }
+}
+
+class _TaskTargetAwareLongPressDraggable<T extends Object>
+    extends LongPressDraggable<T> {
+  const _TaskTargetAwareLongPressDraggable({
+    super.key,
+    required this.interactionController,
+    required this.taskId,
+    required super.child,
+    required super.feedback,
+    super.data,
+    super.axis,
+    super.childWhenDragging,
+    super.feedbackOffset,
+    super.dragAnchorStrategy,
+    super.maxSimultaneousDrags,
+    super.onDragStarted,
+    super.onDragUpdate,
+    super.onDraggableCanceled,
+    super.onDragEnd,
+    super.onDragCompleted,
+    super.hapticFeedbackOnStart,
+    super.ignoringFeedbackSemantics,
+    super.ignoringFeedbackPointer,
+    super.delay,
+    super.allowedButtonsFilter,
+    super.hitTestBehavior,
+    super.rootOverlay,
+  });
+
+  final TaskInteractionController interactionController;
+  final String taskId;
+
+  @override
+  DelayedMultiDragGestureRecognizer createRecognizer(
+    GestureMultiDragStartCallback onStart,
+  ) {
+    return _TaskTargetAwareDelayedMultiDragGestureRecognizer(
+        interactionController: interactionController,
+        taskId: taskId,
+        delay: delay,
+        allowedButtonsFilter: allowedButtonsFilter,
+      )
+      ..onStart = (Offset position) {
+        final Drag? result = onStart(position);
+        if (result != null && hapticFeedbackOnStart) {
+          HapticFeedback.selectionClick();
+        }
+        return result;
+      };
+  }
+}
 
 /// Wraps a task tile with Flutter's [Draggable] infrastructure.
 class CalendarTaskDraggable extends StatefulWidget {
@@ -68,7 +205,6 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   double? _pointerNormalized;
   double? _pointerOffsetY;
   Rect? _sourceBounds;
-  bool _suppressDrag = false;
   String? _lastResizeTaskId;
   late final VoidCallback _controllerListener;
   int? _trackedPointerId;
@@ -129,7 +265,7 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       return widget.child;
     }
 
-    final bool canDrag = widget.enabled && !_suppressDrag && !_isResizing;
+    final bool canDrag = widget.enabled && !_isResizing;
     final CalendarDragPayload payload = _dragPayload();
 
     final Widget interactiveChild = Listener(
@@ -140,7 +276,9 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     );
 
     if (widget.requiresLongPress) {
-      return LongPressDraggable<CalendarDragPayload>(
+      return _TaskTargetAwareLongPressDraggable<CalendarDragPayload>(
+        interactionController: _controller,
+        taskId: widget.task.id,
         data: payload,
         dragAnchorStrategy: _dragAnchorStrategy,
         maxSimultaneousDrags: canDrag ? 1 : 0,
@@ -156,7 +294,9 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       );
     }
 
-    return Draggable<CalendarDragPayload>(
+    return _TaskTargetAwareDraggable<CalendarDragPayload>(
+      interactionController: _controller,
+      taskId: widget.task.id,
       data: payload,
       dragAnchorStrategy: _dragAnchorStrategy,
       maxSimultaneousDrags: canDrag ? 1 : 0,
@@ -194,15 +334,17 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     if (!mounted || !widget.enabled) {
       return;
     }
-    _stopPointerTracking();
-    final Offset local = event.localPosition;
-    final CalendarTaskGeometry geometry = _geometry;
     final CalendarTaskPointerTarget? pointerTarget = _controller
         .taskPointerClassification(
           taskId: widget.task.id,
           pointerId: event.pointer,
         );
-    final bool suppressDrag = pointerTarget != CalendarTaskPointerTarget.body;
+    if (pointerTarget != CalendarTaskPointerTarget.body) {
+      return;
+    }
+    _stopPointerTracking();
+    final Offset local = event.localPosition;
+    final CalendarTaskGeometry geometry = _geometry;
     final Size size = geometry.rect.size;
 
     double width = size.width.isFinite && size.width > 0
@@ -253,7 +395,6 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
       return;
     }
     setState(() {
-      _suppressDrag = suppressDrag;
       _lastPointerLocal = anchorLocal;
       _lastPointerGlobal = event.position;
       _pointerNormalized = normalizedX;
@@ -262,23 +403,19 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
     });
     _trackedPointerId = event.pointer;
     _startPointerTracking();
-    if (!suppressDrag) {
-      widget.interactionController.setDragPointerOffsetFromTop(
-        pointerOffsetY,
-        notify: false,
-      );
-    }
+    widget.interactionController.setDragPointerOffsetFromTop(
+      pointerOffsetY,
+      notify: false,
+    );
   }
 
   void _handlePointerUp(PointerUpEvent event) {
-    _clearDragSuppression();
     if (!_dragSessionActive && _trackedPointerId == event.pointer) {
       _stopPointerTracking();
     }
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
-    _clearDragSuppression();
     if (!_dragSessionActive && _trackedPointerId == event.pointer) {
       _stopPointerTracking();
     }
@@ -304,23 +441,9 @@ class _CalendarTaskDraggableState extends State<CalendarTaskDraggable> {
   }
 
   void _handleDragFinished({required bool cancelled}) {
-    _clearDragSuppression();
     _dragSessionActive = false;
     widget.onDragEnded(widget.task);
     _stopPointerTracking();
-  }
-
-  void _clearDragSuppression() {
-    if (!_suppressDrag) {
-      return;
-    }
-    if (mounted) {
-      setState(() {
-        _suppressDrag = false;
-      });
-    } else {
-      _suppressDrag = false;
-    }
   }
 
   Rect? _resolveGlobalBounds({Offset? fallbackTopLeft}) {

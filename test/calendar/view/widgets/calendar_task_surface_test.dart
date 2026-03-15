@@ -418,4 +418,96 @@ void main() {
       expect(resizePreview, isNotNull);
     },
   );
+
+  testWidgets('CalendarTaskSurface touch long press drag does not also tap', (
+    tester,
+  ) async {
+    final interactionController = TaskInteractionController();
+    final task = CalendarTask.create(
+      title: 'Touch Drag Tap Exclusivity Task',
+      scheduledTime: DateTime(2024, 1, 1, 10),
+      duration: const Duration(hours: 1),
+    );
+    bool dragStarted = false;
+    bool tapped = false;
+
+    const geometry = CalendarTaskGeometry(
+      rect: Rect.fromLTWH(0, 0, 240, 72),
+      narrowedWidth: 200,
+      splitWidthFactor: 200 / 240,
+    );
+
+    final ValueNotifier<bool> cancelHoverNotifier = ValueNotifier(false);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ShadTheme(
+          data: ShadThemeData(
+            colorScheme: const ShadSlateColorScheme.light(),
+            brightness: Brightness.light,
+          ),
+          child: SizedBox(
+            width: 240,
+            height: 72,
+            child: CalendarTaskSurface(
+              task: task,
+              isDayView: true,
+              bindings: CalendarTaskEntryBindings(
+                isSelectionMode: false,
+                isSelected: false,
+                isPopoverOpen: false,
+                splitPreviewAnimationDuration: Duration.zero,
+                contextMenuGroupId: const ValueKey<String>(
+                  'touch-drag-tap-menu',
+                ),
+                contextMenuBuilderFactory: (_) =>
+                    (_, _) => const <Widget>[],
+                enableContextMenuLongPress: false,
+                resizeHandleExtent: 12,
+                interactionController: interactionController,
+                dragFeedbackHint: interactionController.feedbackHint,
+                cancelBucketHoverNotifier: cancelHoverNotifier,
+                callbacks: CalendarTaskTileCallbacks(
+                  onResizePreview: (_) {},
+                  onResizeEnd: (_) {},
+                  onResizePointerMove: (_) {},
+                  onDragStarted: (_, _) => dragStarted = true,
+                  onDragUpdate: (_) {},
+                  onDragEnded: (_) {},
+                  onDragPointerDown: (_) {},
+                  onEnterSelectionMode: () {},
+                  onToggleSelection: () {},
+                  onTap: (_, _) => tapped = true,
+                ),
+                geometryProvider: (_) => geometry,
+                globalRectProvider: (_) => geometry.rect,
+                stepHeight: 16,
+                minutesPerStep: 15,
+                hourHeight: 48,
+                viewportScrollOffsetProvider: () => 0,
+                addGeometryListener: (_) {},
+                removeGeometryListener: (_) {},
+                requiresLongPressToDrag: true,
+                longPressToDragDelay: const Duration(milliseconds: 300),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final Rect rect = tester.getRect(find.byType(CalendarTaskSurface));
+    final TestGesture gesture = await tester.startGesture(
+      rect.center,
+      kind: PointerDeviceKind.touch,
+    );
+    await tester.pump(const Duration(milliseconds: 325));
+    await gesture.moveBy(const Offset(0, 24));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(dragStarted, isTrue);
+    expect(tapped, isFalse);
+  });
 }

@@ -305,6 +305,7 @@ class _CalendarTaskSurfaceState extends State<CalendarTaskSurface> {
                 contextMenuLongPressEnabled:
                     bindings.enableContextMenuLongPress,
                 resizeHandleExtent: bindings.resizeHandleExtent,
+                touchHoldDelay: bindings.longPressToDragDelay,
                 onDragPointerDown: enableInteractions
                     ? _callbacks.onDragPointerDown
                     : null,
@@ -525,6 +526,7 @@ class _CalendarTaskPreviewGhost extends StatelessWidget {
       width: width,
       height: height,
       isDayView: isDayView,
+      touchHoldDelay: bindings.longPressToDragDelay,
       enableInteractions: false,
       isSelectionMode: false,
       isSelected: false,
@@ -566,6 +568,7 @@ class _CalendarTaskDragFeedback extends StatelessWidget {
         width: width,
         height: height > 0 ? height : baseHeight,
         isDayView: isDayView,
+        touchHoldDelay: bindings.longPressToDragDelay,
         enableInteractions: false,
         isSelectionMode: false,
         isSelected: false,

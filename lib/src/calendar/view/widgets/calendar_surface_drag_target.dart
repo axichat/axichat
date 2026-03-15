@@ -3,6 +3,7 @@
 
 import 'package:flutter/widgets.dart';
 
+import 'package:axichat/src/calendar/view/controllers/task_interaction_controller.dart';
 import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
 import 'calendar_render_surface.dart';
 
@@ -11,10 +12,12 @@ class CalendarSurfaceDragTarget extends StatefulWidget {
   const CalendarSurfaceDragTarget({
     super.key,
     required this.controller,
+    required this.interactionController,
     required this.child,
   });
 
   final CalendarSurfaceController controller;
+  final TaskInteractionController interactionController;
   final Widget child;
 
   @override
@@ -89,7 +92,20 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
     _pendingDropOffset = null;
   }
 
+  bool _shouldDeferToActiveGridDrag(CalendarDragPayload payload) {
+    final CalendarInteractionSession? session =
+        widget.interactionController.activeInteractionSession;
+    if (session == null || !session.isDrag) {
+      return false;
+    }
+    return session.source == CalendarInteractionSource.taskSurface &&
+        session.taskId == payload.task.id;
+  }
+
   bool _handleWillAccept(DragTargetDetails<CalendarDragPayload> details) {
+    if (_shouldDeferToActiveGridDrag(details.data)) {
+      return true;
+    }
     if (!widget.controller.dispatchDragPayloadUpdate(
       details.data,
       details.offset,
@@ -100,6 +116,9 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
   }
 
   void _handleMove(DragTargetDetails<CalendarDragPayload> details) {
+    if (_shouldDeferToActiveGridDrag(details.data)) {
+      return;
+    }
     final bool handled = widget.controller.dispatchDragPayloadUpdate(
       details.data,
       details.offset,
@@ -123,6 +142,9 @@ class _CalendarSurfaceDragTargetState extends State<CalendarSurfaceDragTarget> {
   void _handleLeave(CalendarDragPayload? payload) {
     _cancelDeferredUpdate();
     if (payload == null) {
+      return;
+    }
+    if (_shouldDeferToActiveGridDrag(payload)) {
       return;
     }
     widget.controller.dispatchDragPayloadExit(payload);

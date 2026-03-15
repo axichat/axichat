@@ -10,6 +10,7 @@ import 'package:axichat/src/calendar/utils/time_formatter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -90,6 +91,7 @@ class ResizableTaskWidget extends StatefulWidget {
   final ValueChanged<Offset>? onResizePointerMove;
   final bool contextMenuLongPressEnabled;
   final double resizeHandleExtent;
+  final Duration touchHoldDelay;
   final Color? accentColorOverride;
   final Widget? overlay;
 
@@ -120,6 +122,7 @@ class ResizableTaskWidget extends StatefulWidget {
     this.onResizePointerMove,
     this.contextMenuLongPressEnabled = true,
     this.resizeHandleExtent = 8.0,
+    this.touchHoldDelay = kLongPressTimeout,
     this.accentColorOverride,
     this.overlay,
   });
@@ -297,6 +300,7 @@ class _ResizableTaskWidgetState extends State<ResizableTaskWidget> {
                   onToggleSelection: widget.onToggleSelection,
                   onContextMenuPosition: _captureContextMenuOffsets,
                   handleExtent: widget.resizeHandleExtent,
+                  touchHoldDelay: widget.touchHoldDelay,
                   child: contextualized,
                 ),
               );

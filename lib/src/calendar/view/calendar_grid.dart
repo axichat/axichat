@@ -1261,19 +1261,12 @@ class _CalendarGridState<T extends BaseCalendarBloc>
           widthForNormalization *
           _taskInteractionController.dragPointerNormalized;
     }
-    final RenderObject? surfaceObject = _surfaceKey.currentContext
-        ?.findRenderObject();
-    if (surfaceObject is! RenderCalendarSurface) {
-      return;
-    }
-    final DragPreview? preview = surfaceObject.previewForGlobalPosition(
+    final bool handled = _surfaceController.dispatchActiveDragUpdate(
       details.globalPosition,
     );
-    if (preview != null) {
-      _updateDragPreview(preview.start, preview.duration);
-      return;
+    if (!handled) {
+      _clearDragPreview();
     }
-    _clearDragPreview();
   }
 
   void _handleTaskDragEnded(CalendarTask task) {
@@ -3986,6 +3979,7 @@ class _CalendarGridContent extends StatelessWidget {
 
         final Widget dragAwareSurface = CalendarSurfaceDragTarget(
           controller: gridState._surfaceController,
+          interactionController: gridState._taskInteractionController,
           child: interactiveSurface,
         );
 

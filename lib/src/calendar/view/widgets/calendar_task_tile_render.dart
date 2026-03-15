@@ -47,6 +47,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
     required this.onToggleSelection,
     required this.onContextMenuPosition,
     this.handleExtent = 8.0,
+    this.touchHoldDelay = kLongPressTimeout,
     required super.child,
   });
 
@@ -67,6 +68,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
   final VoidCallback? onToggleSelection;
   final TaskTileContextMenuCallback? onContextMenuPosition;
   final double handleExtent;
+  final Duration touchHoldDelay;
 
   @override
   RenderCalendarTaskTile createRenderObject(BuildContext context) {
@@ -88,6 +90,7 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       onToggleSelection: onToggleSelection,
       onContextMenuPosition: onContextMenuPosition,
       handleExtent: handleExtent,
+      touchHoldDelay: touchHoldDelay,
     );
   }
 
@@ -113,7 +116,8 @@ class CalendarTaskTileRenderRegion extends SingleChildRenderObjectWidget {
       ..onTap = onTap
       ..onToggleSelection = onToggleSelection
       ..onContextMenuPosition = onContextMenuPosition
-      ..handleExtent = handleExtent;
+      ..handleExtent = handleExtent
+      ..touchHoldDelay = touchHoldDelay;
   }
 }
 
@@ -136,6 +140,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
     VoidCallback? onToggleSelection,
     TaskTileContextMenuCallback? onContextMenuPosition,
     double handleExtent = 8.0,
+    Duration touchHoldDelay = kLongPressTimeout,
     super.child,
   }) : _task = task,
        _interactionController = interactionController,
@@ -153,7 +158,8 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
        _onTap = onTap,
        _onToggleSelection = onToggleSelection,
        _onContextMenuPosition = onContextMenuPosition,
-       _handleExtent = handleExtent {
+       _handleExtent = handleExtent,
+       _touchHoldDelay = touchHoldDelay {
     onEnter = _handlePointerEnter;
     onExit = _handlePointerExit;
     cursor = SystemMouseCursors.click;
@@ -161,9 +167,6 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
 
   double _handleExtent;
   static const double _tapSlop = 3.0;
-  static const Duration _touchResizeLongPressDelay = Duration(
-    milliseconds: 200,
-  );
   static const double _touchHandleHorizontalFraction = 0.45;
   static const double _touchHandleHorizontalMax = 56.0;
   static const double _touchHandleHorizontalMin = 28.0;
@@ -184,12 +187,21 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   void Function(CalendarTask task, Rect globalBounds)? _onTap;
   VoidCallback? _onToggleSelection;
   TaskTileContextMenuCallback? _onContextMenuPosition;
+  Duration _touchHoldDelay;
   double get handleExtent => _handleExtent;
   set handleExtent(double value) {
     if (_handleExtent == value) {
       return;
     }
     _handleExtent = value.clamp(4.0, double.infinity);
+  }
+
+  Duration get touchHoldDelay => _touchHoldDelay;
+  set touchHoldDelay(Duration value) {
+    if (_touchHoldDelay == value) {
+      return;
+    }
+    _touchHoldDelay = value;
   }
 
   int? _activePointer;
@@ -492,6 +504,12 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
       _resetPointerState();
       return;
     }
+    final CalendarInteractionSession? session =
+        interactionController.activeInteractionSession;
+    if (session != null && session.isDrag && session.taskId == task.id) {
+      _resetPointerState();
+      return;
+    }
     if (_pendingTap && !_lastPointerSecondary) {
       _triggerTap();
     }
@@ -547,7 +565,7 @@ class RenderCalendarTaskTile extends RenderMouseRegion {
   void _startResizeLongPressRecognizer(String handle, PointerDownEvent event) {
     _pendingResizeHandle = handle;
     final LongPressGestureRecognizer recognizer =
-        LongPressGestureRecognizer(duration: _touchResizeLongPressDelay)
+        LongPressGestureRecognizer(duration: _touchHoldDelay)
           ..onLongPressStart = (details) {
             final String? pendingHandle = _pendingResizeHandle;
             if (pendingHandle == null || _resizeActive) {
