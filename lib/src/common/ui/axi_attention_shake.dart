@@ -17,9 +17,9 @@ class AxiAttentionShake extends StatefulWidget {
   final bool enabled;
   final Widget child;
 
-  static const double _activeScale = 1.5;
+  static const double _activeScale = 1.3;
   static const double _angleMultiplier = 4.0;
-  static const double _speedFactor = 0.5;
+  static const double _speedFactor = 0.5882352941176471;
 
   @override
   State<AxiAttentionShake> createState() => _AxiAttentionShakeState();

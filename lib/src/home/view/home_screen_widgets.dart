@@ -322,6 +322,7 @@ class _TransportStatusChips extends StatelessWidget {
             emailState: sessionEmailState,
             emailEnabled: emailEnabled,
             compact: true,
+            collapseReadyStatus: true,
           ),
         );
         return indicator;

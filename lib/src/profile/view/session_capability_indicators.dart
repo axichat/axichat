@@ -17,12 +17,14 @@ class SessionCapabilityIndicators extends StatelessWidget {
     required this.emailState,
     required this.emailEnabled,
     this.compact = false,
+    this.collapseReadyStatus = false,
   });
 
   final ConnectionState xmppState;
   final EmailSyncState emailState;
   final bool emailEnabled;
   final bool compact;
+  final bool collapseReadyStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -35,9 +37,17 @@ class SessionCapabilityIndicators extends StatelessWidget {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _CapabilityChip(data: chatChip, compact: true),
+          _CapabilityChip(
+            data: chatChip,
+            compact: true,
+            collapseReadyStatus: collapseReadyStatus,
+          ),
           SizedBox(width: spacing.s),
-          _CapabilityChip(data: emailChip, compact: true),
+          _CapabilityChip(
+            data: emailChip,
+            compact: true,
+            collapseReadyStatus: collapseReadyStatus,
+          ),
         ],
       );
     }
@@ -48,8 +58,16 @@ class SessionCapabilityIndicators extends StatelessWidget {
       runSpacing: spacing.xs,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _CapabilityChip(data: chatChip, compact: false),
-        _CapabilityChip(data: emailChip, compact: false),
+        _CapabilityChip(
+          data: chatChip,
+          compact: false,
+          collapseReadyStatus: collapseReadyStatus,
+        ),
+        _CapabilityChip(
+          data: emailChip,
+          compact: false,
+          collapseReadyStatus: collapseReadyStatus,
+        ),
       ],
     );
   }
@@ -150,10 +168,15 @@ class _CapabilityChipData {
 }
 
 class _CapabilityChip extends StatelessWidget {
-  const _CapabilityChip({required this.data, this.compact = false});
+  const _CapabilityChip({
+    required this.data,
+    this.compact = false,
+    this.collapseReadyStatus = false,
+  });
 
   final _CapabilityChipData data;
   final bool compact;
+  final bool collapseReadyStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -178,10 +201,27 @@ class _CapabilityChip extends StatelessWidget {
     );
     final maxLines = compact ? 1 : 2;
     final Widget statusChild = switch (data.level) {
-      _CapabilityLevel.ready => Icon(
-        LucideIcons.check,
-        size: sizing.menuItemIconSize,
-        color: data.foreground,
+      _CapabilityLevel.ready when collapseReadyStatus => Container(
+        width: sizing.menuItemIconSize,
+        height: sizing.menuItemIconSize,
+        decoration: BoxDecoration(
+          color: data.foreground,
+          shape: BoxShape.circle,
+        ),
+      ),
+      _CapabilityLevel.ready => Flexible(
+        fit: FlexFit.loose,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(text: data.label, style: labelStyle),
+              TextSpan(text: ' • ', style: separatorStyle),
+              TextSpan(text: data.status, style: statusStyle),
+            ],
+          ),
+          maxLines: maxLines,
+          overflow: TextOverflow.ellipsis,
+        ),
       ),
       _CapabilityLevel.syncing => Flexible(
         fit: FlexFit.loose,
