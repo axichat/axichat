@@ -517,6 +517,83 @@ final class DraftSyncRetractedEvent extends mox.XmppEvent {
   final String syncId;
 }
 
+final class _PubSubNodeSession {
+  DateTime? _lastEnsureAttempt;
+  bool _ensureInFlight = false;
+  bool _ensurePending = false;
+  bool _nodeReady = false;
+  bool _subscriptionReady = false;
+  Completer<void>? _ensureCompleter;
+  Completer<void>? _subscribeCompleter;
+
+  bool get nodeReady => _nodeReady;
+  bool get subscriptionReady => _subscriptionReady;
+  bool get ensureInFlight => _ensureInFlight;
+  Future<void>? get activeEnsure => _ensureCompleter?.future;
+  Future<void>? get activeSubscribe => _subscribeCompleter?.future;
+
+  bool shouldAttemptEnsure(Duration backoff) {
+    if (_ensureInFlight || _nodeReady) return false;
+    final lastAttempt = _lastEnsureAttempt;
+    if (lastAttempt == null) return true;
+    return DateTime.timestamp().difference(lastAttempt) >= backoff;
+  }
+
+  Completer<void> beginEnsure() {
+    final completer = Completer<void>();
+    _ensureCompleter = completer;
+    _ensureInFlight = true;
+    _lastEnsureAttempt = DateTime.timestamp();
+    return completer;
+  }
+
+  void completeEnsure(Completer<void> completer) {
+    _ensureInFlight = false;
+    _ensureCompleter = null;
+    if (!completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  bool takePendingRetry() {
+    final shouldRetry = _ensurePending && !_nodeReady;
+    _ensurePending = false;
+    return shouldRetry;
+  }
+
+  Completer<void> beginSubscribe() {
+    final completer = Completer<void>();
+    _subscribeCompleter = completer;
+    return completer;
+  }
+
+  void finishSubscribe(Completer<void> completer) {
+    _subscribeCompleter = null;
+    if (!completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  void markNodeReady() {
+    _nodeReady = true;
+  }
+
+  void markSubscriptionReady() {
+    _subscriptionReady = true;
+  }
+
+  void markSubscriptionStale() {
+    _subscriptionReady = false;
+  }
+
+  void resetForNodeRebuild() {
+    _nodeReady = false;
+    _subscriptionReady = false;
+    _lastEnsureAttempt = null;
+    _ensurePending = true;
+  }
+}
+
 final class DraftsPubSubManager extends mox.XmppManagerBase {
   DraftsPubSubManager({String? maxItems})
     : _maxItems = maxItems ?? _defaultMaxItems,
@@ -538,13 +615,7 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
 
   final Map<String, DraftSyncPayload> _cache = {};
   final SyncRateLimiter _rateLimiter = SyncRateLimiter(draftSyncRateLimit);
-  DateTime? _lastEnsureAttempt;
-  bool _ensureNodeInFlight = false;
-  bool _ensureNodePending = false;
-  bool _nodeReady = false;
-  bool _subscriptionReady = false;
-  Completer<void>? _ensureNodeCompleter;
-  Completer<void>? _subscribeCompleter;
+  final _PubSubNodeSession _nodeSession = _PubSubNodeSession();
 
   @override
   Future<bool> isSupported() async => true;
@@ -702,32 +773,21 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
 
   void _setAccessModel(mox.AccessModel accessModel) {
     _accessModel = accessModel;
-    _nodeReady = true;
-  }
-
-  bool _shouldAttemptEnsureNode() {
-    if (_ensureNodeInFlight || _nodeReady) return false;
-    final lastAttempt = _lastEnsureAttempt;
-    if (lastAttempt == null) return true;
-    final now = DateTime.timestamp();
-    return now.difference(lastAttempt) >= _ensureNodeBackoff;
+    _nodeSession.markNodeReady();
   }
 
   Future<void> ensureNode() async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
-    if (_nodeReady) return;
-    final activeCompleter = _ensureNodeCompleter;
-    if (activeCompleter != null) {
-      await activeCompleter.future;
+    if (_nodeSession.nodeReady) return;
+    final activeEnsure = _nodeSession.activeEnsure;
+    if (activeEnsure != null) {
+      await activeEnsure;
       return;
     }
-    if (!_shouldAttemptEnsureNode()) return;
-    final completer = Completer<void>();
-    _ensureNodeCompleter = completer;
-    _ensureNodeInFlight = true;
-    _lastEnsureAttempt = DateTime.timestamp();
+    if (!_nodeSession.shouldAttemptEnsure(_ensureNodeBackoff)) return;
+    final completer = _nodeSession.beginEnsure();
     var success = false;
     getAttributes().sendEvent(_draftsEnsureStartEvent);
     try {
@@ -843,15 +903,11 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         return;
       }
     } finally {
-      _ensureNodeInFlight = false;
-      _ensureNodeCompleter = null;
-      completer.complete();
+      _nodeSession.completeEnsure(completer);
       getAttributes().sendEvent(
         success ? _draftsEnsureSuccessEvent : _draftsEnsureFailureEvent,
       );
-      final shouldRetry = _ensureNodePending && !_nodeReady;
-      _ensureNodePending = false;
-      if (shouldRetry) {
+      if (_nodeSession.takePendingRetry()) {
         fireAndForget(
           _bootstrap,
           operationName: _draftsPubSubBootstrapOperationName,
@@ -864,14 +920,13 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     final pubsub = _pubSub();
     final host = _selfPepHost();
     if (pubsub == null || host == null) return;
-    if (_subscriptionReady) return;
-    final activeCompleter = _subscribeCompleter;
-    if (activeCompleter != null) {
-      await activeCompleter.future;
+    if (_nodeSession.subscriptionReady) return;
+    final activeSubscribe = _nodeSession.activeSubscribe;
+    if (activeSubscribe != null) {
+      await activeSubscribe;
       return;
     }
-    final completer = Completer<void>();
-    _subscribeCompleter = completer;
+    final completer = _nodeSession.beginSubscribe();
     try {
       final result = await pubsub.subscribe(host, draftsPubSubNode);
       if (result.isType<mox.PubSubError>()) {
@@ -879,10 +934,9 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
         if (error is mox.MalformedResponseError) return;
         return;
       }
-      _subscriptionReady = true;
+      _nodeSession.markSubscriptionReady();
     } finally {
-      _subscribeCompleter = null;
-      completer.complete();
+      _nodeSession.finishSubscribe(completer);
     }
   }
 
@@ -1095,10 +1149,10 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (subscriberJid.toString() != host.toString()) return;
 
     if (event.state == mox.SubscriptionState.subscribed) {
-      _subscriptionReady = true;
+      _nodeSession.markSubscriptionReady();
       return;
     }
-    _subscriptionReady = false;
+    _nodeSession.markSubscriptionStale();
     await subscribe();
   }
 
@@ -1108,11 +1162,8 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (host == null) return;
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
-    _nodeReady = false;
-    _subscriptionReady = false;
-    _lastEnsureAttempt = null;
-    _ensureNodePending = true;
-    if (!_ensureNodeInFlight) {
+    _nodeSession.resetForNodeRebuild();
+    if (!_nodeSession.ensureInFlight) {
       fireAndForget(
         _bootstrap,
         operationName: _draftsPubSubBootstrapOperationName,
@@ -1126,11 +1177,8 @@ final class DraftsPubSubManager extends mox.XmppManagerBase {
     if (host == null) return;
     if (!_isFromHost(event.from, host)) return;
     _clearCache();
-    _nodeReady = false;
-    _subscriptionReady = false;
-    _lastEnsureAttempt = null;
-    _ensureNodePending = true;
-    if (!_ensureNodeInFlight) {
+    _nodeSession.resetForNodeRebuild();
+    if (!_nodeSession.ensureInFlight) {
       fireAndForget(
         _bootstrap,
         operationName: _draftsPubSubBootstrapOperationName,

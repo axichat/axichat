@@ -247,6 +247,87 @@ final class MessageCollectionSyncUpdatedEvent extends mox.XmppEvent {
   final MessageCollectionSyncPayload payload;
 }
 
+final class _PubSubNodeSession {
+  DateTime? _lastEnsureAttempt;
+  bool _ensureInFlight = false;
+  bool _ensurePending = false;
+  bool _nodeReady = false;
+  bool _subscriptionReady = false;
+  Completer<void>? _ensureCompleter;
+  Completer<void>? _subscribeCompleter;
+
+  bool get nodeReady => _nodeReady;
+  bool get subscriptionReady => _subscriptionReady;
+  bool get ensureInFlight => _ensureInFlight;
+  Future<void>? get activeEnsure => _ensureCompleter?.future;
+  Future<void>? get activeSubscribe => _subscribeCompleter?.future;
+
+  bool shouldAttemptEnsure(Duration backoff) {
+    if (_ensureInFlight || _nodeReady) {
+      return false;
+    }
+    final lastAttempt = _lastEnsureAttempt;
+    if (lastAttempt == null) {
+      return true;
+    }
+    return DateTime.timestamp().difference(lastAttempt) >= backoff;
+  }
+
+  Completer<void> beginEnsure() {
+    final completer = Completer<void>();
+    _ensureCompleter = completer;
+    _ensureInFlight = true;
+    _lastEnsureAttempt = DateTime.timestamp();
+    return completer;
+  }
+
+  void completeEnsure(Completer<void> completer) {
+    _ensureInFlight = false;
+    _ensureCompleter = null;
+    if (!completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  bool takePendingRetry() {
+    final shouldRetry = _ensurePending && !_nodeReady;
+    _ensurePending = false;
+    return shouldRetry;
+  }
+
+  Completer<void> beginSubscribe() {
+    final completer = Completer<void>();
+    _subscribeCompleter = completer;
+    return completer;
+  }
+
+  void finishSubscribe(Completer<void> completer) {
+    _subscribeCompleter = null;
+    if (!completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  void markNodeReady() {
+    _nodeReady = true;
+  }
+
+  void markSubscriptionReady() {
+    _subscriptionReady = true;
+  }
+
+  void markSubscriptionStale() {
+    _subscriptionReady = false;
+  }
+
+  void resetForNodeRebuild() {
+    _nodeReady = false;
+    _subscriptionReady = false;
+    _lastEnsureAttempt = null;
+    _ensurePending = true;
+  }
+}
+
 final class MessageCollectionsPubSubManager extends mox.XmppManagerBase {
   MessageCollectionsPubSubManager({String? maxItems})
     : _maxItems = maxItems ?? _defaultMaxItems,
@@ -260,13 +341,7 @@ final class MessageCollectionsPubSubManager extends mox.XmppManagerBase {
   final SyncRateLimiter _rateLimiter = SyncRateLimiter(
     messageCollectionSyncRateLimit,
   );
-  DateTime? _lastEnsureAttempt;
-  bool _ensureNodeInFlight = false;
-  bool _ensureNodePending = false;
-  bool _nodeReady = false;
-  bool _subscriptionReady = false;
-  Completer<void>? _ensureNodeCompleter;
-  Completer<void>? _subscribeCompleter;
+  final _PubSubNodeSession _nodeSession = _PubSubNodeSession();
 
   Future<void> close() async {}
 
@@ -397,38 +472,24 @@ final class MessageCollectionsPubSubManager extends mox.XmppManagerBase {
 
   void _setAccessModel(mox.AccessModel accessModel) {
     _accessModel = accessModel;
-    _nodeReady = true;
-  }
-
-  bool _shouldAttemptEnsureNode() {
-    if (_ensureNodeInFlight || _nodeReady) {
-      return false;
-    }
-    final lastAttempt = _lastEnsureAttempt;
-    if (lastAttempt == null) {
-      return true;
-    }
-    return DateTime.timestamp().difference(lastAttempt) >= _ensureNodeBackoff;
+    _nodeSession.markNodeReady();
   }
 
   Future<void> ensureNode() async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
-    if (pubsub == null || host == null || _nodeReady) {
+    if (pubsub == null || host == null || _nodeSession.nodeReady) {
       return;
     }
-    final activeCompleter = _ensureNodeCompleter;
-    if (activeCompleter != null) {
-      await activeCompleter.future;
+    final activeEnsure = _nodeSession.activeEnsure;
+    if (activeEnsure != null) {
+      await activeEnsure;
       return;
     }
-    if (!_shouldAttemptEnsureNode()) {
+    if (!_nodeSession.shouldAttemptEnsure(_ensureNodeBackoff)) {
       return;
     }
-    final completer = Completer<void>();
-    _ensureNodeCompleter = completer;
-    _ensureNodeInFlight = true;
-    _lastEnsureAttempt = DateTime.timestamp();
+    final completer = _nodeSession.beginEnsure();
     try {
       final sendLastPublishedItem = await _resolveSendLastPublishedItem(
         pubsub,
@@ -507,12 +568,8 @@ final class MessageCollectionsPubSubManager extends mox.XmppManagerBase {
         _setAccessModel(mox.AccessModel.authorize);
       }
     } finally {
-      _ensureNodeInFlight = false;
-      _ensureNodeCompleter = null;
-      completer.complete();
-      final shouldRetry = _ensureNodePending && !_nodeReady;
-      _ensureNodePending = false;
-      if (shouldRetry) {
+      _nodeSession.completeEnsure(completer);
+      if (_nodeSession.takePendingRetry()) {
         fireAndForget(_bootstrap);
       }
     }
@@ -521,25 +578,23 @@ final class MessageCollectionsPubSubManager extends mox.XmppManagerBase {
   Future<void> subscribe() async {
     final pubsub = _pubSub();
     final host = _selfPepHost();
-    if (pubsub == null || host == null || _subscriptionReady) {
+    if (pubsub == null || host == null || _nodeSession.subscriptionReady) {
       return;
     }
-    final activeCompleter = _subscribeCompleter;
-    if (activeCompleter != null) {
-      await activeCompleter.future;
+    final activeSubscribe = _nodeSession.activeSubscribe;
+    if (activeSubscribe != null) {
+      await activeSubscribe;
       return;
     }
-    final completer = Completer<void>();
-    _subscribeCompleter = completer;
+    final completer = _nodeSession.beginSubscribe();
     try {
       final result = await pubsub.subscribe(host, messageCollectionsPubSubNode);
       if (result.isType<mox.PubSubError>()) {
         return;
       }
-      _subscriptionReady = true;
+      _nodeSession.markSubscriptionReady();
     } finally {
-      _subscribeCompleter = null;
-      completer.complete();
+      _nodeSession.finishSubscribe(completer);
     }
   }
 
@@ -737,10 +792,10 @@ final class MessageCollectionsPubSubManager extends mox.XmppManagerBase {
       return;
     }
     if (event.state == mox.SubscriptionState.subscribed) {
-      _subscriptionReady = true;
+      _nodeSession.markSubscriptionReady();
       return;
     }
-    _subscriptionReady = false;
+    _nodeSession.markSubscriptionStale();
     await subscribe();
   }
 
@@ -753,11 +808,8 @@ final class MessageCollectionsPubSubManager extends mox.XmppManagerBase {
       return;
     }
     _clearCache();
-    _nodeReady = false;
-    _subscriptionReady = false;
-    _lastEnsureAttempt = null;
-    _ensureNodePending = true;
-    if (!_ensureNodeInFlight) {
+    _nodeSession.resetForNodeRebuild();
+    if (!_nodeSession.ensureInFlight) {
       fireAndForget(_bootstrap);
     }
   }
