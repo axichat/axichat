@@ -3,7 +3,7 @@
 
 import 'package:flutter/widgets.dart';
 
-import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/calendar_drag_payload.dart';
 
 typedef CalendarDragTargetBuilder =
     Widget Function(

@@ -5,16 +5,18 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/common/ui/axi_attention_shake.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/services.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
+import 'package:google_nav_bar/google_nav_bar.dart';
+import 'package:shadcn_ui/shadcn_ui.dart' show LucideIcons;
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/calendar_drag_payload.dart';
 
 enum _CalendarDragSwitchSource { edge, tabBar }
 
@@ -188,181 +190,147 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
     required Widget scheduleTabLabel,
     required Widget tasksTabLabel,
   }) {
-    final scheme = context.colorScheme;
-    final bool scheduleCueActive = _showScheduleTabCue && _isAnyDragActive;
-    final bool tasksCueActive = _showTasksTabCue && _isAnyDragActive;
+    final colors = context.colorScheme;
+    final spacing = context.spacing;
+    final sizing = context.sizing;
+    final l10n = context.l10n;
     final bool lowMotion = context.watch<SettingsCubit>().state.lowMotion;
-    final bool scheduleSelected = mobileTabController.index == 0;
-    final bool tasksSelected = mobileTabController.index == 1;
-    final bool scheduleSwitchHintActive =
-        _isAnyDragActive && mobileTabController.index == 1;
-    final bool tasksSwitchHintActive =
-        _isAnyDragActive && mobileTabController.index == 0;
-    final bool scheduleHighlightActive =
-        _isAnyDragActive &&
-        (scheduleCueActive || (!tasksCueActive && scheduleSelected));
-    final bool tasksHighlightActive =
-        _isAnyDragActive &&
-        (tasksCueActive || (!scheduleCueActive && tasksSelected));
+    final Duration animationDuration = context
+        .watch<SettingsCubit>()
+        .animationDuration;
     final double safeInset = _isAnyDragActive ? 0 : bottomInset;
-    final double baseHeight = context.sizing.listButtonHeight;
-    final double height = baseHeight + safeInset;
-    final Color backgroundColor = context.colorScheme.background;
-
-    final double minTabWidth = context.sizing.listButtonHeight * 2;
-    final Color hoverBackground = scheme.primary.withValues(alpha: 0.08);
-    final Color pressedBackground = scheme.primary.withValues(alpha: 0.14);
-    final Color selectedBackground = scheme.primary.withValues(
-      alpha: context.motion.tapSplashAlpha,
+    final EdgeInsetsDirectional navPadding = EdgeInsetsDirectional.only(
+      start: spacing.xs,
+      end: spacing.xs,
+      top: spacing.s,
+      bottom: spacing.s + safeInset,
     );
-    final ShadDecoration baseDecoration = ShadDecoration(
-      border: ShadBorder.none,
-      secondaryBorder: ShadBorder.none,
-      secondaryFocusedBorder: ShadBorder.none,
-      focusedBorder: ShadBorder.none,
-      errorBorder: ShadBorder.none,
-      secondaryErrorBorder: ShadBorder.none,
-      disableSecondaryBorder: true,
-    );
-    final ShadDecoration selectedDecoration = baseDecoration;
-    final ShadDecoration tabBarDecoration = ShadDecoration(
-      color: backgroundColor,
-      border: ShadBorder.none,
-      secondaryBorder: ShadBorder.none,
-      secondaryFocusedBorder: ShadBorder.none,
-      focusedBorder: ShadBorder.none,
-      errorBorder: ShadBorder.none,
-      secondaryErrorBorder: ShadBorder.none,
-      disableSecondaryBorder: true,
+    final double iconSize = sizing.iconButtonIconSize + spacing.xxs;
+
+    final Widget navBar = AnimatedBuilder(
+      animation: mobileTabController,
+      builder: (context, _) {
+        final bool scheduleCueActive = _showScheduleTabCue && _isAnyDragActive;
+        final bool tasksCueActive = _showTasksTabCue && _isAnyDragActive;
+        final int displayedIndex = scheduleCueActive
+            ? 0
+            : tasksCueActive
+            ? 1
+            : mobileTabController.index;
+        final bool scheduleSelected = displayedIndex == 0;
+        final bool tasksSelected = displayedIndex == 1;
+        final bool scheduleSwitchHintActive =
+            _isAnyDragActive &&
+            mobileTabController.index == 1 &&
+            !scheduleCueActive;
+        final bool tasksSwitchHintActive =
+            _isAnyDragActive &&
+            mobileTabController.index == 0 &&
+            !tasksCueActive;
+        final Color scheduleColor = scheduleSelected
+            ? colors.foreground
+            : colors.mutedForeground;
+        final Color tasksColor = tasksSelected
+            ? colors.foreground
+            : colors.mutedForeground;
+
+        return GNav(
+          selectedIndex: displayedIndex,
+          duration: animationDuration,
+          haptic: true,
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          tabMargin: EdgeInsets.symmetric(horizontal: spacing.xxs),
+          tabBorderRadius: context.radii.squircle,
+          curve: Curves.easeInOutCubic,
+          gap: spacing.s,
+          iconSize: iconSize,
+          color: colors.mutedForeground,
+          activeColor: colors.foreground,
+          textStyle: context.textTheme.small.strong,
+          tabBackgroundColor: colors.secondary.withValues(
+            alpha: context.motion.tapHoverAlpha,
+          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: spacing.s,
+            vertical: spacing.s,
+          ),
+          onTabChange: (value) {
+            if (mobileTabController.index != value) {
+              mobileTabController.animateTo(value);
+            }
+          },
+          tabs: [
+            GButton(
+              icon: LucideIcons.calendarClock,
+              text: l10n.homeRailCalendar,
+              leading: AxiAttentionShake(
+                enabled: !lowMotion && scheduleSwitchHintActive,
+                child: IconTheme.merge(
+                  data: IconThemeData(color: scheduleColor, size: iconSize),
+                  child: scheduleTabLabel,
+                ),
+              ),
+              iconColor: colors.mutedForeground,
+              iconActiveColor: colors.foreground,
+            ),
+            GButton(
+              icon: LucideIcons.squareCheck,
+              text: l10n.calendarFragmentTaskLabel,
+              leading: AxiAttentionShake(
+                enabled: !lowMotion && tasksSwitchHintActive,
+                child: IconTheme.merge(
+                  data: IconThemeData(color: tasksColor, size: iconSize),
+                  child: tasksTabLabel,
+                ),
+              ),
+              iconColor: colors.mutedForeground,
+              iconActiveColor: colors.foreground,
+            ),
+          ],
+        );
+      },
     );
 
-    final Widget tabContent = SizedBox(
-      height: height,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final double width = constraints.maxWidth;
-          final bool useScrollable = width.isFinite && width < minTabWidth * 2;
-          final Alignment tabBarAlignment = useScrollable
-              ? Alignment.centerLeft
-              : Alignment.center;
-
-          return AnimatedBuilder(
-            animation: mobileTabController,
-            builder: (context, _) {
-              final tabs = ShadTabs<int>(
-                value: mobileTabController.index,
-                padding: EdgeInsets.only(bottom: safeInset),
-                gap: 0,
-                scrollable: useScrollable,
-                tabBarAlignment: tabBarAlignment,
-                decoration: tabBarDecoration,
-                onChanged: (value) {
-                  if (mobileTabController.index != value) {
-                    mobileTabController.animateTo(value);
-                  }
-                },
-                tabs: <ShadTab<int>>[
-                  ShadTab<int>(
-                    value: 0,
-                    height: baseHeight,
-                    decoration: baseDecoration,
-                    selectedDecoration: selectedDecoration,
-                    backgroundColor: Colors.transparent,
-                    selectedBackgroundColor: _isAnyDragActive
-                        ? Colors.transparent
-                        : selectedBackground,
-                    hoverBackgroundColor: hoverBackground,
-                    selectedHoverBackgroundColor: hoverBackground,
-                    pressedBackgroundColor: pressedBackground,
-                    foregroundColor: scheme.mutedForeground,
-                    selectedForegroundColor: scheme.foreground,
-                    textStyle: context.textTheme.small,
-                    child: _DragTabLabel(
-                      label: scheduleTabLabel,
-                      scheme: scheme,
-                      selected: scheduleSelected,
-                      showCue: scheduleCueActive,
-                      dragActive: scheduleHighlightActive,
-                      shake:
-                          !lowMotion &&
-                          scheduleSwitchHintActive &&
-                          !scheduleCueActive,
-                    ),
-                  ),
-                  ShadTab<int>(
-                    value: 1,
-                    height: baseHeight,
-                    decoration: baseDecoration,
-                    selectedDecoration: selectedDecoration,
-                    backgroundColor: Colors.transparent,
-                    selectedBackgroundColor: _isAnyDragActive
-                        ? Colors.transparent
-                        : selectedBackground,
-                    hoverBackgroundColor: hoverBackground,
-                    selectedHoverBackgroundColor: hoverBackground,
-                    pressedBackgroundColor: pressedBackground,
-                    foregroundColor: scheme.mutedForeground,
-                    selectedForegroundColor: scheme.foreground,
-                    textStyle: context.textTheme.small,
-                    child: _DragTabLabel(
-                      label: tasksTabLabel,
-                      scheme: scheme,
-                      selected: tasksSelected,
-                      showCue: tasksCueActive,
-                      dragActive: tasksHighlightActive,
-                      shake:
-                          !lowMotion &&
-                          tasksSwitchHintActive &&
-                          !tasksCueActive,
-                    ),
-                  ),
-                ],
-              );
-              if (!_isAnyDragActive) {
-                return tabs;
-              }
-              return Stack(
-                fit: StackFit.expand,
+    final Widget tabContent = Padding(
+      padding: navPadding,
+      child: Stack(
+        fit: StackFit.passthrough,
+        children: [
+          navBar,
+          if (_isAnyDragActive)
+            Positioned.fill(
+              child: Row(
                 children: [
-                  tabs,
-                  Positioned.fill(
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: DragTarget<CalendarDragPayload>(
-                            hitTestBehavior: HitTestBehavior.translucent,
-                            onWillAcceptWithDetails:
-                                _handleScheduleTabDragEvent,
-                            onMove: _handleScheduleTabDragMove,
-                            onLeave: (_) => _handleScheduleTabDragLeave(),
-                            onAcceptWithDetails: (details) {
-                              _handleScheduleTabDragLeave();
-                              onDragCancelRequested(details.data);
-                            },
-                            builder: (context, _, _) => const SizedBox.expand(),
-                          ),
-                        ),
-                        Expanded(
-                          child: DragTarget<CalendarDragPayload>(
-                            hitTestBehavior: HitTestBehavior.translucent,
-                            onWillAcceptWithDetails: _handleTasksTabDragEvent,
-                            onMove: _handleTasksTabDragMove,
-                            onLeave: (_) => _handleTasksTabDragLeave(),
-                            onAcceptWithDetails: (details) {
-                              _handleTasksTabDragLeave();
-                              onDragCancelRequested(details.data);
-                            },
-                            builder: (context, _, _) => const SizedBox.expand(),
-                          ),
-                        ),
-                      ],
+                  Expanded(
+                    child: DragTarget<CalendarDragPayload>(
+                      hitTestBehavior: HitTestBehavior.translucent,
+                      onWillAcceptWithDetails: _handleScheduleTabDragEvent,
+                      onMove: _handleScheduleTabDragMove,
+                      onLeave: (_) => _handleScheduleTabDragLeave(),
+                      onAcceptWithDetails: (details) {
+                        _handleScheduleTabDragLeave();
+                        onDragCancelRequested(details.data);
+                      },
+                      builder: (context, _, _) => const SizedBox.expand(),
+                    ),
+                  ),
+                  Expanded(
+                    child: DragTarget<CalendarDragPayload>(
+                      hitTestBehavior: HitTestBehavior.translucent,
+                      onWillAcceptWithDetails: _handleTasksTabDragEvent,
+                      onMove: _handleTasksTabDragMove,
+                      onLeave: (_) => _handleTasksTabDragLeave(),
+                      onAcceptWithDetails: (details) {
+                        _handleTasksTabDragLeave();
+                        onDragCancelRequested(details.data);
+                      },
+                      builder: (context, _, _) => const SizedBox.expand(),
                     ),
                   ),
                 ],
-              );
-            },
-          );
-        },
+              ),
+            ),
+        ],
       ),
     );
 
@@ -962,157 +930,6 @@ mixin CalendarDragTabMixin<T extends StatefulWidget> on State<T> {
 
 class _CancelDragIntent extends Intent {
   const _CancelDragIntent();
-}
-
-class _DragTabLabel extends StatelessWidget {
-  const _DragTabLabel({
-    required this.label,
-    required this.scheme,
-    required this.selected,
-    required this.showCue,
-    required this.dragActive,
-    required this.shake,
-  });
-
-  final Widget label;
-  final ShadColorScheme scheme;
-  final bool selected;
-  final bool showCue;
-  final bool dragActive;
-  final bool shake;
-
-  @override
-  Widget build(BuildContext context) {
-    final duration = context.watch<SettingsCubit>().animationDuration;
-    final Color cueColor = showCue
-        ? scheme.primary.withValues(alpha: 0.55)
-        : Colors.transparent;
-    final double width = showCue
-        ? context.borderSide.width * 2
-        : context.borderSide.width;
-    final bool emphasize = showCue || selected;
-    final Color baseColor = selected
-        ? scheme.foreground
-        : scheme.mutedForeground;
-    final Color targetColor = dragActive ? scheme.primary : baseColor;
-    final labelContent = AnimatedContainer(
-      duration: duration,
-      padding: EdgeInsets.symmetric(
-        horizontal: context.spacing.xs,
-        vertical: 0,
-      ),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: cueColor, width: width),
-        ),
-      ),
-      child: DefaultTextStyle.merge(
-        style: context.textTheme.label.strongIf(emphasize),
-        child: TweenAnimationBuilder<Color?>(
-          duration: duration,
-          tween: ColorTween(end: targetColor),
-          builder: (context, color, child) {
-            if (color == null) {
-              return child!;
-            }
-            return IconTheme.merge(
-              data: IconThemeData(color: color),
-              child: DefaultTextStyle.merge(
-                style: TextStyle(color: color),
-                child: ColorFiltered(
-                  colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
-                  child: child!,
-                ),
-              ),
-            );
-          },
-          child: Align(alignment: Alignment.center, child: label),
-        ),
-      ),
-    );
-    return _RotatingDragTabLabel(
-      active: shake,
-      scaleDuration: duration,
-      child: labelContent,
-    );
-  }
-}
-
-class _RotatingDragTabLabel extends StatefulWidget {
-  const _RotatingDragTabLabel({
-    required this.active,
-    required this.scaleDuration,
-    required this.child,
-  });
-
-  final bool active;
-  final Duration scaleDuration;
-  final Widget child;
-
-  @override
-  State<_RotatingDragTabLabel> createState() => _RotatingDragTabLabelState();
-}
-
-class _RotatingDragTabLabelState extends State<_RotatingDragTabLabel>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: calendarTaskSplitPreviewAnimationDuration,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    _syncAnimation();
-  }
-
-  @override
-  void didUpdateWidget(covariant _RotatingDragTabLabel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.active != oldWidget.active) {
-      _syncAnimation();
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _syncAnimation() {
-    if (widget.active) {
-      _controller.repeat();
-      return;
-    }
-    _controller
-      ..stop()
-      ..value = 0;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const activeScale = 1.3;
-    const maxAngle = math.pi / 5;
-    return AnimatedScale(
-      alignment: Alignment.center,
-      curve: Curves.easeOutBack,
-      duration: widget.scaleDuration,
-      scale: widget.active ? activeScale : 1,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) {
-          if (!widget.active) {
-            return child!;
-          }
-          final phase = _controller.value * math.pi * 2;
-          final angle = math.sin(phase) * maxAngle;
-          return Transform.rotate(angle: angle, child: child);
-        },
-        child: widget.child,
-      ),
-    );
-  }
 }
 
 typedef _EdgeDragEventHandler =

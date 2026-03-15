@@ -18,7 +18,7 @@ import 'package:axichat/src/calendar/utils/location_autocomplete.dart';
 import 'package:axichat/src/calendar/utils/responsive_helper.dart';
 import 'calendar_navigation.dart';
 import 'feedback_system.dart';
-import 'models/calendar_drag_payload.dart';
+import 'calendar_drag_payload.dart';
 import 'quick_add_modal.dart';
 import 'widgets/calendar_drag_tab_mixin.dart';
 import 'widgets/calendar_error_banner.dart';
@@ -50,6 +50,9 @@ abstract class CalendarExperienceState<
   final ValueNotifier<bool> _cancelBucketHoverNotifier = ValueNotifier<bool>(
     false,
   );
+  final ValueNotifier<bool> _nonGridDragRegionHoverNotifier =
+      ValueNotifier<bool>(false);
+  final ValueNotifier<int> _gridDragCompletionRevision = ValueNotifier<int>(0);
 
   bool get _hasMouseDevice =>
       RendererBinding.instance.mouseTracker.mouseIsConnected;
@@ -63,6 +66,14 @@ abstract class CalendarExperienceState<
   @protected
   ValueNotifier<bool> get cancelBucketHoverNotifier =>
       _cancelBucketHoverNotifier;
+
+  @protected
+  ValueNotifier<int> get gridDragCompletionRevision =>
+      _gridDragCompletionRevision;
+
+  @protected
+  ValueNotifier<bool> get nonGridDragRegionHoverNotifier =>
+      _nonGridDragRegionHoverNotifier;
 
   @protected
   BuildContext get calendarModalContext;
@@ -89,6 +100,8 @@ abstract class CalendarExperienceState<
     _mobileTabController.dispose();
     _tasksTabPulseController.dispose();
     _cancelBucketHoverNotifier.dispose();
+    _nonGridDragRegionHoverNotifier.dispose();
+    _gridDragCompletionRevision.dispose();
     super.dispose();
   }
 
@@ -133,6 +146,9 @@ abstract class CalendarExperienceState<
           onDragSessionEnded: _handleCalendarSidebarDragSessionEnded,
           onDragGlobalPositionChanged:
               _handleCalendarSidebarDragPositionChanged,
+          onDragPayloadConsumed: _handleCalendarDragPayloadConsumed,
+          onNonGridDragRegionHoverChanged:
+              _handleCalendarNonGridDragRegionHoverChanged,
         );
         final bool isMonthView = state.viewMode == CalendarView.month;
         final Widget calendarSurface = isMonthView
@@ -150,6 +166,8 @@ abstract class CalendarExperienceState<
                     _handleCalendarGridDragPositionChanged,
                 onDragSessionEnded: _handleCalendarGridDragSessionEnded,
                 cancelBucketHoverNotifier: _cancelBucketHoverNotifier,
+                nonGridDragRegionHoverNotifier: _nonGridDragRegionHoverNotifier,
+                dragCompletionRevision: _gridDragCompletionRevision,
               );
         final Widget dragTargets = isMonthView
             ? const SizedBox.shrink()
@@ -295,6 +313,7 @@ abstract class CalendarExperienceState<
   }
 
   void _handleCalendarGridDragSessionStarted() {
+    _nonGridDragRegionHoverNotifier.value = false;
     _handleCalendarDragSessionStarted();
     _sidebarKey.currentState?.handleExternalGridDragStarted(
       isTouchMode: !_hasMouseDevice,
@@ -307,11 +326,13 @@ abstract class CalendarExperienceState<
   }
 
   void _handleCalendarGridDragSessionEnded() {
+    _nonGridDragRegionHoverNotifier.value = false;
     _handleCalendarDragSessionEnded();
     _sidebarKey.currentState?.handleExternalGridDragEnded();
   }
 
   void _handleCalendarSidebarDragSessionStarted() {
+    _nonGridDragRegionHoverNotifier.value = false;
     _handleCalendarDragSessionStarted();
   }
 
@@ -320,7 +341,17 @@ abstract class CalendarExperienceState<
   }
 
   void _handleCalendarSidebarDragSessionEnded() {
+    _nonGridDragRegionHoverNotifier.value = false;
     _handleCalendarDragSessionEnded();
+  }
+
+  void _handleCalendarNonGridDragRegionHoverChanged(bool isHovering) {
+    _nonGridDragRegionHoverNotifier.value = isHovering;
+  }
+
+  void _handleCalendarDragPayloadConsumed(CalendarDragPayload payload) {
+    _nonGridDragRegionHoverNotifier.value = false;
+    _gridDragCompletionRevision.value += 1;
   }
 
   void _handleCalendarDragSessionStarted() {
@@ -371,6 +402,7 @@ abstract class CalendarExperienceState<
   void onDragCancelRequested(CalendarDragPayload payload) {
     final CalendarTask restored = restoreTaskFromPayload(payload);
     calendarBloc.add(CalendarEvent.taskUpdated(task: restored));
+    _handleCalendarDragPayloadConsumed(payload);
     FeedbackSystem.showInfo(context, context.l10n.calendarDragCanceled);
   }
 
@@ -506,8 +538,27 @@ abstract class CalendarExperienceState<
 
   /// Builds the tab label for the schedule pane. Subclasses can override to
   /// customize text/style.
-  Widget buildScheduleTabLabel(BuildContext context) =>
-      Icon(LucideIcons.calendarClock, size: context.sizing.menuItemIconSize);
+  Widget buildScheduleTabLabel(BuildContext context) {
+    int scheduledAlertsCount = 0;
+    for (final task in context.watch<B>().state.model.tasks.values) {
+      if (task.isCompleted) {
+        continue;
+      }
+      final hasReminderOffsets = task.effectiveReminders.isEnabled;
+      final hasIcsAlarm = task.icsMeta?.alarms.isNotEmpty ?? false;
+      if (!hasReminderOffsets && !hasIcsAlarm) {
+        continue;
+      }
+      if (task.isScheduled) {
+        scheduledAlertsCount += 1;
+      }
+    }
+    return _CalendarBottomNavBadgeIcon(
+      iconData: LucideIcons.calendarClock,
+      badgeCount: scheduledAlertsCount,
+      iconSize: context.sizing.iconButtonIconSize + context.spacing.xxs,
+    );
+  }
 
   double resolveTabSwitcherBottomInset(
     BuildContext context,
@@ -535,10 +586,29 @@ abstract class CalendarExperienceState<
     bool highlight,
     Animation<double> animation,
   ) {
+    int unscheduledAlertsCount = 0;
+    for (final task in context.watch<B>().state.model.tasks.values) {
+      if (task.isCompleted) {
+        continue;
+      }
+      final hasReminderOffsets = task.effectiveReminders.isEnabled;
+      final hasIcsAlarm = task.icsMeta?.alarms.isNotEmpty ?? false;
+      if (!hasReminderOffsets && !hasIcsAlarm) {
+        continue;
+      }
+      if (!task.isScheduled) {
+        unscheduledAlertsCount += 1;
+      }
+    }
     final colors = context.colorScheme;
-    final iconSize = context.sizing.menuItemIconSize;
+    final iconSize = context.sizing.iconButtonIconSize + context.spacing.xxs;
+    final baseIcon = _CalendarBottomNavBadgeIcon(
+      iconData: LucideIcons.squareCheck,
+      badgeCount: unscheduledAlertsCount,
+      iconSize: iconSize,
+    );
     if (!highlight) {
-      return Icon(LucideIcons.squareCheck, size: iconSize);
+      return baseIcon;
     }
     return AnimatedBuilder(
       animation: animation,
@@ -547,10 +617,9 @@ abstract class CalendarExperienceState<
         final iconColor = Color.lerp(colors.foreground, colors.primary, t)!;
         return Transform.scale(
           scale: 1 + (0.12 * t),
-          child: Icon(
-            LucideIcons.squareCheck,
-            size: iconSize,
-            color: iconColor,
+          child: IconTheme.merge(
+            data: IconThemeData(color: iconColor, size: iconSize),
+            child: baseIcon,
           ),
         );
       },
@@ -667,6 +736,38 @@ abstract class CalendarExperienceState<
         final int clampedDay = base.day.clamp(1, maxDay).toInt();
         return DateTime(targetMonth.year, targetMonth.month, clampedDay);
     }
+  }
+}
+
+class _CalendarBottomNavBadgeIcon extends StatelessWidget {
+  const _CalendarBottomNavBadgeIcon({
+    required this.iconData,
+    required this.badgeCount,
+    required this.iconSize,
+  });
+
+  final IconData iconData;
+  final int badgeCount;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final spacing = context.spacing;
+    final badgeDiameter = context.sizing.iconButtonIconSize;
+    final Color iconColor =
+        IconTheme.of(context).color ?? context.colorScheme.foreground;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Icon(iconData, color: iconColor, size: iconSize),
+        if (badgeCount > 0)
+          PositionedDirectional(
+            top: -spacing.s,
+            end: -spacing.s,
+            child: AxiCountBadge(count: badgeCount, diameter: badgeDiameter),
+          ),
+      ],
+    );
   }
 }
 

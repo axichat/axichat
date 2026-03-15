@@ -22,6 +22,8 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
     required this.onDragGlobalPositionChanged,
     required this.onDragSessionEnded,
     required this.cancelBucketHoverNotifier,
+    required this.nonGridDragRegionHoverNotifier,
+    required this.dragCompletionRevision,
   });
 
   final CalendarState state;
@@ -32,6 +34,8 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
   final ValueChanged<Offset> onDragGlobalPositionChanged;
   final VoidCallback onDragSessionEnded;
   final ValueNotifier<bool> cancelBucketHoverNotifier;
+  final ValueNotifier<bool> nonGridDragRegionHoverNotifier;
+  final ValueNotifier<int> dragCompletionRevision;
 
   @override
   Widget build(BuildContext context) {
@@ -46,6 +50,8 @@ class CalendarGridHost<B extends BaseCalendarBloc> extends StatelessWidget {
       onDragGlobalPositionChanged: onDragGlobalPositionChanged,
       onDragSessionEnded: onDragSessionEnded,
       cancelBucketHoverNotifier: cancelBucketHoverNotifier,
+      nonGridDragRegionHoverNotifier: nonGridDragRegionHoverNotifier,
+      dragCompletionRevision: dragCompletionRevision,
     );
   }
 }

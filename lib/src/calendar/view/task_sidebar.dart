@@ -59,15 +59,14 @@ import 'controllers/task_draft_controller.dart';
 import 'edit_task_dropdown.dart';
 import 'feedback_system.dart';
 import 'layout/calendar_layout.dart';
-import 'models/task_context_action.dart';
 import 'widgets/calendar_drag_target.dart';
+import 'calendar_drag_payload.dart';
 import 'widgets/calendar_sidebar_draggable.dart';
 import 'widgets/calendar_categories_field.dart';
 import 'widgets/calendar_link_geo_fields.dart';
 import 'widgets/calendar_participants_field.dart';
 import 'widgets/deadline_picker_field.dart';
 import 'widgets/location_inline_suggestion.dart';
-import 'widgets/recurrence_spacing_tokens.dart';
 import 'widgets/recurrence_editor.dart';
 import 'widgets/task_field_character_hint.dart';
 import 'widgets/task_form_section.dart';
@@ -85,11 +84,15 @@ class TaskSidebar<B extends BaseCalendarBloc> extends StatefulWidget {
     this.onDragSessionStarted,
     this.onDragSessionEnded,
     this.onDragGlobalPositionChanged,
+    this.onDragPayloadConsumed,
+    this.onNonGridDragRegionHoverChanged,
   });
 
   final VoidCallback? onDragSessionStarted;
   final VoidCallback? onDragSessionEnded;
   final ValueChanged<Offset>? onDragGlobalPositionChanged;
+  final ValueChanged<CalendarDragPayload>? onDragPayloadConsumed;
+  final ValueChanged<bool>? onNonGridDragRegionHoverChanged;
 
   @override
   State<TaskSidebar<B>> createState() => TaskSidebarState<B>();
@@ -300,14 +303,17 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       return;
     }
     if (!_isTouchOnlyInput) {
+      widget.onNonGridDragRegionHoverChanged?.call(false);
       return;
     }
     final CalendarSidebarSection? hoveredSection = _sectionForGlobalPosition(
       globalPosition,
     );
     if (hoveredSection == null) {
+      widget.onNonGridDragRegionHoverChanged?.call(false);
       return;
     }
+    widget.onNonGridDragRegionHoverChanged?.call(true);
     if (_sidebarController.state.expandedSection == hoveredSection) {
       return;
     }
@@ -319,6 +325,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
       return;
     }
     _externalGridDragActive = false;
+    widget.onNonGridDragRegionHoverChanged?.call(false);
   }
 
   CalendarSidebarSection? _sectionForGlobalPosition(Offset globalPosition) {
@@ -1033,16 +1040,28 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
                           sectionKeys: _sectionKeys,
                           onToggleSection: _sidebarController.toggleSection,
                           onSectionDragEnter: _handleSidebarSectionDragEnter,
+                          onSectionDragLeave: () {
+                            widget.onNonGridDragRegionHoverChanged?.call(false);
+                          },
                           onTaskDropped: _handleTaskDroppedIntoSidebar,
+                          onTaskPayloadDropped: (payload) {
+                            widget.onNonGridDragRegionHoverChanged?.call(false);
+                            widget.onDragPayloadConsumed?.call(payload);
+                          },
                           onTaskListHover: _handleSidebarDragTargetHover,
-                          onTaskListLeave: _stopSidebarAutoScroll,
+                          onTaskListLeave: () {
+                            widget.onNonGridDragRegionHoverChanged?.call(false);
+                            _stopSidebarAutoScroll();
+                          },
                           onTaskListDrop: (details) {
+                            widget.onNonGridDragRegionHoverChanged?.call(false);
                             _stopSidebarAutoScroll();
                             _forwardSidebarGlobalPosition(
                               details.globalPosition,
                               notifyParent: false,
                             );
                             _handleTaskDroppedIntoSidebar(details.payload.task);
+                            widget.onDragPayloadConsumed?.call(details.payload);
                           },
                           onUnscheduledReorder: (oldIndex, newIndex) {
                             _handleTaskListReorder(
@@ -1898,6 +1917,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _handleSidebarSectionDragEnter(CalendarSidebarSection section) {
+    widget.onNonGridDragRegionHoverChanged?.call(true);
     _sidebarController.expandSection(section);
   }
 
@@ -1921,6 +1941,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _handleSidebarDragSessionStarted() {
+    widget.onNonGridDragRegionHoverChanged?.call(false);
     if (_isTouchOnlyInput) {
       _sidebarController.expandSection(CalendarSidebarSection.unscheduled);
     }
@@ -1928,6 +1949,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _handleSidebarDragSessionEnded() {
+    widget.onNonGridDragRegionHoverChanged?.call(false);
     _stopSidebarAutoScroll();
     widget.onDragSessionEnded?.call();
   }
@@ -1943,6 +1965,7 @@ class TaskSidebarState<B extends BaseCalendarBloc> extends State<TaskSidebar<B>>
   }
 
   void _handleSidebarDragTargetHover(CalendarDropDetails details) {
+    widget.onNonGridDragRegionHoverChanged?.call(true);
     _forwardSidebarGlobalPosition(details.globalPosition, notifyParent: false);
   }
 
@@ -3784,7 +3807,12 @@ class _SelectionRecurrenceSection extends StatelessWidget {
                 value: recurrence,
                 enabled: hasTasks,
                 fallbackWeekday: fallbackWeekday,
-                spacingConfig: calendarRecurrenceSpacingStandard(context),
+                chipSpacing: context.spacing.s,
+                chipRunSpacing: context.spacing.s,
+                weekdaySpacing: context.spacing.m,
+                advancedSectionSpacing: context.spacing.m,
+                endSpacing: context.spacing.m,
+                fieldGap: context.spacing.m,
                 intervalSelectWidth: 118,
                 onChanged: onChanged,
               ),
@@ -4207,7 +4235,9 @@ class _UnscheduledSidebarContent extends StatelessWidget {
     required this.sectionKeys,
     required this.onToggleSection,
     required this.onSectionDragEnter,
+    required this.onSectionDragLeave,
     required this.onTaskDropped,
+    required this.onTaskPayloadDropped,
     required this.onTaskListHover,
     required this.onTaskListLeave,
     required this.onTaskListDrop,
@@ -4265,7 +4295,9 @@ class _UnscheduledSidebarContent extends StatelessWidget {
   final Map<CalendarSidebarSection, GlobalKey> sectionKeys;
   final ValueChanged<CalendarSidebarSection> onToggleSection;
   final ValueChanged<CalendarSidebarSection> onSectionDragEnter;
+  final VoidCallback onSectionDragLeave;
   final ValueChanged<CalendarTask> onTaskDropped;
+  final ValueChanged<CalendarDragPayload> onTaskPayloadDropped;
   final _CalendarDragDetailsCallback onTaskListHover;
   final VoidCallback onTaskListLeave;
   final _CalendarDragDetailsCallback onTaskListDrop;
@@ -4343,7 +4375,9 @@ class _UnscheduledSidebarContent extends StatelessWidget {
           sectionKeys: sectionKeys,
           onToggleSection: onToggleSection,
           onSectionDragEnter: onSectionDragEnter,
+          onSectionDragLeave: onSectionDragLeave,
           onTaskDropped: onTaskDropped,
+          onTaskPayloadDropped: onTaskPayloadDropped,
           onTaskListHover: onTaskListHover,
           onTaskListLeave: onTaskListLeave,
           onTaskListDrop: onTaskListDrop,
@@ -4417,7 +4451,9 @@ class _TaskSectionsPanel extends StatelessWidget {
     required this.sectionKeys,
     required this.onToggleSection,
     required this.onSectionDragEnter,
+    required this.onSectionDragLeave,
     required this.onTaskDropped,
+    required this.onTaskPayloadDropped,
     required this.onTaskListHover,
     required this.onTaskListLeave,
     required this.onTaskListDrop,
@@ -4437,7 +4473,9 @@ class _TaskSectionsPanel extends StatelessWidget {
   final Map<CalendarSidebarSection, GlobalKey> sectionKeys;
   final ValueChanged<CalendarSidebarSection> onToggleSection;
   final ValueChanged<CalendarSidebarSection> onSectionDragEnter;
+  final VoidCallback onSectionDragLeave;
   final ValueChanged<CalendarTask> onTaskDropped;
+  final ValueChanged<CalendarDragPayload> onTaskPayloadDropped;
   final _CalendarDragDetailsCallback onTaskListHover;
   final VoidCallback onTaskListLeave;
   final _CalendarDragDetailsCallback onTaskListDrop;
@@ -4464,11 +4502,13 @@ class _TaskSectionsPanel extends StatelessWidget {
           sectionKey: sectionKeys[CalendarSidebarSection.unscheduled],
           onToggleSection: onToggleSection,
           onSectionDragEnter: onSectionDragEnter,
+          onSectionDragLeave: onSectionDragLeave,
           trailing: _HideCompletedToggle(
             value: hideCompletedUnscheduled,
             onChanged: onToggleHideCompletedUnscheduled,
           ),
           onTaskDropped: onTaskDropped,
+          onTaskPayloadDropped: onTaskPayloadDropped,
           collapsedChild: _CollapsedTaskPreview(tasks: unscheduledTasks),
           expandedChild: Padding(
             padding: EdgeInsets.symmetric(
@@ -4498,11 +4538,13 @@ class _TaskSectionsPanel extends StatelessWidget {
           sectionKey: sectionKeys[CalendarSidebarSection.reminders],
           onToggleSection: onToggleSection,
           onSectionDragEnter: onSectionDragEnter,
+          onSectionDragLeave: onSectionDragLeave,
           trailing: _HideCompletedToggle(
             value: hideCompletedReminders,
             onChanged: onToggleHideCompletedReminders,
           ),
           onTaskDropped: onTaskDropped,
+          onTaskPayloadDropped: onTaskPayloadDropped,
           collapsedChild: _CollapsedTaskPreview(tasks: reminderTasks),
           expandedChild: Padding(
             padding: EdgeInsets.symmetric(
@@ -4539,7 +4581,9 @@ class _SidebarAccordionSection extends StatelessWidget {
     required this.sectionKey,
     required this.onToggleSection,
     required this.onSectionDragEnter,
+    required this.onSectionDragLeave,
     required this.onTaskDropped,
+    required this.onTaskPayloadDropped,
     this.trailing,
   });
 
@@ -4552,7 +4596,9 @@ class _SidebarAccordionSection extends StatelessWidget {
   final GlobalKey? sectionKey;
   final ValueChanged<CalendarSidebarSection> onToggleSection;
   final ValueChanged<CalendarSidebarSection> onSectionDragEnter;
+  final VoidCallback onSectionDragLeave;
   final ValueChanged<CalendarTask> onTaskDropped;
+  final ValueChanged<CalendarDragPayload> onTaskPayloadDropped;
   final Widget? trailing;
 
   @override
@@ -4647,9 +4693,11 @@ class _SidebarAccordionSection extends StatelessWidget {
                       child: CalendarDragTargetRegion(
                         onEnter: (_) => onSectionDragEnter(section),
                         onMove: (_) => onSectionDragEnter(section),
+                        onLeave: (_) => onSectionDragLeave(),
                         onDrop: (details) {
                           onSectionDragEnter(section);
                           onTaskDropped(details.payload.task);
+                          onTaskPayloadDropped(details.payload);
                         },
                         builder: (context, isHovering, _) {
                           return MouseRegion(
@@ -5196,14 +5244,13 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
       border: Border.all(color: calendarBorderColor, width: borderSide.width),
     );
 
-    Widget buildListTile({VoidCallback? onTap, Color? hoverColor}) {
+    Widget buildListTile({VoidCallback? onTap}) {
       return TaskTileSurface(
         margin: EdgeInsets.only(bottom: context.spacing.s),
         decoration: tileDecoration,
         leadingStripeColor: borderColor,
         leadingStripeWidth: stripWidth,
         onTap: onTap,
-        hoverColor: hoverColor,
         child: Padding(
           padding: EdgeInsets.only(left: context.spacing.xs),
           child: CalendarTaskListTile(
@@ -5222,17 +5269,13 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
       tile = Builder(
         builder: (tileContext) {
           final VoidCallback? customTap = onTapOverride;
-          final Color hoverColor = calendarSidebarBackgroundColor.withValues(
-            alpha: 0.5,
-          );
           if (customTap != null) {
-            return buildListTile(onTap: customTap, hoverColor: hoverColor);
+            return buildListTile(onTap: customTap);
           }
 
           if (host._shouldUseSheetMenus(tileContext)) {
             return buildListTile(
               onTap: () => host._showTaskEditSheet(tileContext, task),
-              hoverColor: hoverColor,
             );
           }
 
@@ -5505,7 +5548,6 @@ class _SidebarTaskTileState<B extends BaseCalendarBloc>
                 anchorToken: _anchorToken,
                 controller: controller,
               ),
-              hoverColor: hoverColor,
             ),
           );
         },
@@ -5943,14 +5985,12 @@ class _AdvancedRecurrenceSection extends StatelessWidget {
           referenceStart: referenceStart,
           showAdvancedToggle: false,
           forceAdvanced: true,
-          spacingConfig: RecurrenceEditorSpacing(
-            chipSpacing: context.spacing.s,
-            chipRunSpacing: context.spacing.s,
-            weekdaySpacing: context.spacing.m,
-            advancedSectionSpacing: context.spacing.m,
-            endSpacing: context.spacing.m,
-            fieldGap: context.spacing.m,
-          ),
+          chipSpacing: context.spacing.s,
+          chipRunSpacing: context.spacing.s,
+          weekdaySpacing: context.spacing.m,
+          advancedSectionSpacing: context.spacing.m,
+          endSpacing: context.spacing.m,
+          fieldGap: context.spacing.m,
           intervalSelectWidth: calendarCompactDayColumnWidth,
           onChanged: onChanged,
         );

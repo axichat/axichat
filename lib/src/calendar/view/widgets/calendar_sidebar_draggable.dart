@@ -7,7 +7,7 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/widgets.dart';
 
 import 'package:axichat/src/calendar/models/calendar_task.dart';
-import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
+import 'package:axichat/src/calendar/view/calendar_drag_payload.dart';
 import 'calendar_drag_exclude.dart';
 
 class CalendarSidebarDraggable extends StatefulWidget {
@@ -155,6 +155,7 @@ class _CalendarSidebarDraggableState extends State<CalendarSidebarDraggable> {
     return CalendarDragPayload(
       task: widget.task,
       snapshot: widget.task.copyWith(),
+      source: CalendarDragPayloadSource.sidebar,
       sourceBounds: bounds,
       pointerNormalizedX: pointerNormalized,
       pointerOffsetY: pointerOffsetY,
