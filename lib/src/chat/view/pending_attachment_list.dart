@@ -4,11 +4,11 @@
 import 'dart:io';
 
 import 'package:axichat/src/app.dart';
+import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
-import 'package:axichat/src/chat/view/chat_l10n.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
@@ -113,7 +113,7 @@ class _PendingAttachmentPreviewState extends State<_PendingAttachmentPreview> {
     _menuController.show();
   }
 
-  Future<FileTypeReport> _resolveTypeReport(EmailAttachment attachment) {
+  Future<FileTypeReport> _resolveTypeReport(Attachment attachment) {
     final String path = attachment.path.trim();
     final String? resolvedPath = path.isEmpty ? null : path;
     final Future<FileTypeReport>? cached = _typeReportFuture;
@@ -897,10 +897,7 @@ String _statusLabel(PendingAttachmentStatus status, AppLocalizations l10n) {
   };
 }
 
-IconData attachmentIcon(
-  EmailAttachment attachment, {
-  FileTypeReport? typeReport,
-}) {
+IconData attachmentIcon(Attachment attachment, {FileTypeReport? typeReport}) {
   if (typeReport?.isDetectedImage ?? false) return Icons.image_outlined;
   if (typeReport?.isDetectedVideo ?? false) return Icons.videocam_outlined;
   if (attachment.isImage) return Icons.image_outlined;

@@ -4,22 +4,23 @@ import 'dart:collection';
 import 'package:axichat/src/chat/bloc/chat_bloc.dart';
 import 'package:axichat/src/chat/models/chat_message.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/common/synthetic_forward.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/draft/models/draft_save_result.dart';
 import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/models/fan_out_models.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/muc/muc_models.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/database.dart';
 import 'package:axichat/src/storage/models.dart';
+import 'package:axichat/src/xmpp/xmpp_service.dart' show DraftSaveResult;
 import 'package:axichat/src/xmpp/xmpp_service.dart' as xmpp;
 import 'package:flutter/material.dart' show AppLifecycleState;
 import 'package:flutter_test/flutter_test.dart';
@@ -53,6 +54,7 @@ ChatMessageSent _messageSent({
   String? subject,
   Message? quotedDraft,
   RoomState? roomState,
+  Completer<List<PendingAttachment>>? completer,
 }) => ChatMessageSent(
   chat: chat,
   text: text,
@@ -64,6 +66,7 @@ ChatMessageSent _messageSent({
   subject: subject,
   quotedDraft: quotedDraft,
   roomState: roomState,
+  completer: completer,
 );
 
 void _mockEmailSync(MockEmailService service) {
@@ -312,7 +315,11 @@ void main() {
     ).thenAnswer((_) async => const <MessageAttachmentData>[]);
 
     when(
-      () => messageService.sendReadMarker(any(), any()),
+      () => messageService.sendReadMarker(
+        any(),
+        any(),
+        chatType: any(named: 'chatType'),
+      ),
     ).thenAnswer((_) async {});
 
     when(
@@ -894,17 +901,20 @@ void main() {
         target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
+    final pickCompleter = Completer<PendingAttachment?>();
     bloc.add(
       ChatAttachmentPicked(
         attachment: attachment,
         recipients: recipients,
         chat: emailChat,
         quotedDraft: null,
+        completer: pickCompleter,
       ),
     );
     await _pumpBloc();
-    expect(bloc.state.pendingAttachments, hasLength(1));
-    var pending = bloc.state.pendingAttachments.single;
+    final picked = await pickCompleter.future;
+    expect(picked, isNotNull);
+    final pending = picked!;
     expect(pending.attachment, attachment);
     expect(pending.status, PendingAttachmentStatus.queued);
     verifyNever(
@@ -914,22 +924,23 @@ void main() {
       ),
     );
 
+    final sendEventCompleter = Completer<List<PendingAttachment>>();
     bloc.add(
       _messageSent(
         chat: emailChat,
         text: 'Hello',
         recipients: recipients,
-        pendingAttachments: bloc.state.pendingAttachments,
+        pendingAttachments: [pending],
         settings: _defaultChatSettings(),
+        completer: sendEventCompleter,
       ),
     );
     await _pumpBloc();
-    pending = bloc.state.pendingAttachments.single;
-    expect(pending.status, PendingAttachmentStatus.uploading);
+    expect(sendEventCompleter.isCompleted, isFalse);
 
     sendCompleter.complete();
     await _pumpBloc();
-    expect(bloc.state.pendingAttachments, isEmpty);
+    expect(await sendEventCompleter.future, isEmpty);
 
     await bloc.close();
   });
@@ -984,35 +995,41 @@ void main() {
         target: Contact.chat(chat: emailChat, shareSignatureEnabled: true),
       ),
     ];
+    final pickCompleter = Completer<PendingAttachment?>();
     bloc.add(
       ChatAttachmentPicked(
         attachment: attachment,
         recipients: recipients,
         chat: emailChat,
         quotedDraft: null,
+        completer: pickCompleter,
       ),
     );
     await _pumpBloc();
-    expect(
-      bloc.state.pendingAttachments.single.status,
-      PendingAttachmentStatus.queued,
-    );
+    final picked = await pickCompleter.future;
+    expect(picked, isNotNull);
+    final pending = picked!;
+    expect(pending.status, PendingAttachmentStatus.queued);
 
+    final sendEventCompleter = Completer<List<PendingAttachment>>();
     bloc.add(
       _messageSent(
         chat: emailChat,
         text: '',
         recipients: recipients,
-        pendingAttachments: bloc.state.pendingAttachments,
+        pendingAttachments: [pending],
         settings: _defaultChatSettings(),
+        completer: sendEventCompleter,
       ),
     );
     await _pumpBloc();
-    final failed = bloc.state.pendingAttachments.single;
+    final failedAttachments = await sendEventCompleter.future;
+    final failed = failedAttachments.single;
     expect(failed.status, PendingAttachmentStatus.failed);
     expect(failed.errorMessage, isNotEmpty);
     expect(attempts, 1);
 
+    final retryCompleter = Completer<PendingAttachment?>();
     bloc.add(
       ChatAttachmentRetryRequested(
         attachment: failed,
@@ -1022,10 +1039,11 @@ void main() {
         subject: null,
         settings: _defaultChatSettings(),
         supportsHttpFileUpload: false,
+        completer: retryCompleter,
       ),
     );
     await _pumpBloc();
-    expect(bloc.state.pendingAttachments, isEmpty);
+    expect(await retryCompleter.future, isNull);
     expect(attempts, 2);
 
     await bloc.close();
@@ -2394,7 +2412,11 @@ void main() {
       await _pumpBloc();
 
       verify(
-        () => messageService.sendReadMarker(initialChat.jid, incoming.stanzaID),
+        () => messageService.sendReadMarker(
+          initialChat.jid,
+          incoming.stanzaID,
+          chatType: initialChat.type,
+        ),
       ).called(1);
 
       await bloc.close();
@@ -2406,7 +2428,11 @@ void main() {
     () async {
       final completer = Completer<void>();
       when(
-        () => messageService.sendReadMarker(initialChat.jid, any()),
+        () => messageService.sendReadMarker(
+          initialChat.jid,
+          any(),
+          chatType: initialChat.type,
+        ),
       ).thenAnswer((_) => completer.future);
 
       final bloc = ChatBloc(
@@ -2448,7 +2474,11 @@ void main() {
       await _pumpBloc();
 
       verify(
-        () => messageService.sendReadMarker(initialChat.jid, incoming.stanzaID),
+        () => messageService.sendReadMarker(
+          initialChat.jid,
+          incoming.stanzaID,
+          chatType: initialChat.type,
+        ),
       ).called(1);
 
       completer.complete();
@@ -2485,7 +2515,11 @@ void main() {
       ),
     ).thenAnswer((_) => messageStreamController.stream);
     when(
-      () => xmppService.sendReadMarker(any(), any()),
+      () => xmppService.sendReadMarker(
+        any(),
+        any(),
+        chatType: any(named: 'chatType'),
+      ),
     ).thenAnswer((_) async {});
     when(
       () => xmppService.countLocalMessages(

@@ -44,7 +44,6 @@ abstract class ChatState with _$ChatState {
     @Default(<int>{}) Set<int> emailQuotedTextUnavailable,
     @Default(<String, FileMetadataData?>{})
     Map<String, FileMetadataData?> fileMetadataById,
-    @Default(<PendingAttachment>[]) List<PendingAttachment> pendingAttachments,
     ChatMessageKey? composerError,
     @Default(0) int composerHydrationId,
     String? composerHydrationText,

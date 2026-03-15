@@ -12,6 +12,7 @@ class ComposeDraftSeed extends Equatable {
     this.jids = const [''],
     this.body = '',
     this.subject = '',
+    this.quoteTarget,
     this.attachmentMetadataIds = const <String>[],
   });
 
@@ -19,6 +20,7 @@ class ComposeDraftSeed extends Equatable {
   final List<String> jids;
   final String body;
   final String subject;
+  final DraftQuoteTarget? quoteTarget;
   final List<String> attachmentMetadataIds;
 
   ComposeDraftSeed copyWith({
@@ -26,6 +28,7 @@ class ComposeDraftSeed extends Equatable {
     List<String>? jids,
     String? body,
     String? subject,
+    DraftQuoteTarget? quoteTarget,
     List<String>? attachmentMetadataIds,
   }) {
     return ComposeDraftSeed(
@@ -33,13 +36,21 @@ class ComposeDraftSeed extends Equatable {
       jids: jids ?? this.jids,
       body: body ?? this.body,
       subject: subject ?? this.subject,
+      quoteTarget: quoteTarget ?? this.quoteTarget,
       attachmentMetadataIds:
           attachmentMetadataIds ?? this.attachmentMetadataIds,
     );
   }
 
   @override
-  List<Object?> get props => [id, jids, body, subject, attachmentMetadataIds];
+  List<Object?> get props => [
+    id,
+    jids,
+    body,
+    subject,
+    quoteTarget,
+    attachmentMetadataIds,
+  ];
 }
 
 @immutable

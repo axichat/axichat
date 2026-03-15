@@ -6,6 +6,7 @@ import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/compose_screen.dart';
 import 'package:axichat/src/draft/bloc/compose_window_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -18,6 +19,7 @@ void openComposeDraft(
   List<String> jids = const [''],
   String body = '',
   String subject = '',
+  DraftQuoteTarget? quoteTarget,
   List<String> attachmentMetadataIds = const <String>[],
   bool scaleFromBottom = false,
 }) {
@@ -35,6 +37,7 @@ void openComposeDraft(
       jids: jids,
       body: body,
       subject: subject,
+      quoteTarget: quoteTarget,
       attachmentMetadataIds: attachmentMetadataIds,
     );
     return;
@@ -47,6 +50,7 @@ void openComposeDraft(
       jids: jids,
       body: body,
       subject: subject,
+      quoteTarget: quoteTarget,
       attachmentMetadataIds: attachmentMetadataIds,
     );
     return;
@@ -57,6 +61,7 @@ void openComposeDraft(
     jids: jids,
     body: body,
     subject: subject,
+    quoteTarget: quoteTarget,
     attachmentMetadataIds: attachmentMetadataIds,
   );
   T locate<T>() => context.read<T>();

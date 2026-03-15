@@ -2,6 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:bloc/bloc.dart';
+import 'package:axichat/src/storage/models.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/material.dart';
 
@@ -18,6 +19,7 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
     List<String> jids = const [''],
     String body = '',
     String subject = '',
+    DraftQuoteTarget? quoteTarget,
     List<String> attachmentMetadataIds = const <String>[],
   }) {
     final entry = ComposeWindowEntry(
@@ -28,6 +30,7 @@ class ComposeWindowCubit extends Cubit<ComposeWindowState> {
         jids: jids,
         body: body,
         subject: subject,
+        quoteTarget: quoteTarget,
         attachmentMetadataIds: attachmentMetadataIds,
       ),
       session: _nextSession++,

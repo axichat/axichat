@@ -19,6 +19,7 @@ import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/chat/models/pinned_message_item.dart';
 import 'package:axichat/src/chat/util/chat_subject_codec.dart';
 import 'package:axichat/src/common/address_tools.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/event_transform.dart';
 import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
@@ -30,18 +31,17 @@ import 'package:axichat/src/common/synthetic_reply.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/demo/demo_chats.dart';
 import 'package:axichat/src/demo/demo_mode.dart';
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_bundle.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/delta_chat_exception.dart';
 import 'package:axichat/src/email/service/delta_error_mapper.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
+import 'package:axichat/src/email/models/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/util/synthetic_forward_html.dart';
 import 'package:axichat/src/muc/muc_models.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/notification_payload.dart';
 import 'package:axichat/src/settings/app_language.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -102,136 +102,6 @@ const _emptyPinnedMessageItems = <PinnedMessageItem>[];
 const _emptyPinnedAttachmentIds = <String>[];
 const _emptyShareReplies = <String, List<Chat>>{};
 
-class ComposerRecipient extends Equatable {
-  const ComposerRecipient({
-    required this.target,
-    this.included = true,
-    this.pinned = false,
-  });
-
-  final Contact target;
-  final bool included;
-  final bool pinned;
-
-  String get key => target.key;
-
-  bool get isIncluded => included;
-
-  bool get isPinned => pinned;
-
-  String? get recipientId => target.recipientId;
-
-  bool get needsTransportSelection => target.needsTransportSelection;
-
-  bool usesEmailTransport({bool allowHint = false}) =>
-      target.usesEmailTransport(allowHint: allowHint);
-
-  String? xmppJid({bool allowHint = false}) =>
-      target.xmppJid(allowHint: allowHint);
-
-  ComposerRecipient withIncluded(bool included) => copyWith(included: included);
-
-  ComposerRecipient toggledIncluded() => copyWith(included: !included);
-
-  ComposerRecipient withTarget(Contact target) => copyWith(target: target);
-
-  ComposerRecipient copyWith({Contact? target, bool? included, bool? pinned}) =>
-      ComposerRecipient(
-        target: target ?? this.target,
-        included: included ?? this.included,
-        pinned: pinned ?? this.pinned,
-      );
-
-  @override
-  List<Object?> get props => [target, included, pinned];
-}
-
-extension ComposerRecipients on Iterable<ComposerRecipient> {
-  List<ComposerRecipient> get includedRecipients =>
-      where((recipient) => recipient.isIncluded).toList(growable: false);
-
-  bool hasEmailRecipients({bool allowHint = false}) {
-    for (final recipient in this) {
-      if (recipient.usesEmailTransport(allowHint: allowHint)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  bool hasXmppRecipients({bool allowHint = false}) {
-    for (final recipient in this) {
-      final xmppJid = recipient.xmppJid(allowHint: allowHint);
-      if (xmppJid != null && xmppJid.isNotEmpty) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  List<ComposerRecipient> emailRecipients({bool allowHint = false}) => where(
-    (recipient) => recipient.usesEmailTransport(allowHint: allowHint),
-  ).toList(growable: false);
-
-  List<ComposerRecipient> xmppRecipients({bool allowHint = false}) =>
-      where((recipient) {
-        final xmppJid = recipient.xmppJid(allowHint: allowHint);
-        return xmppJid != null && xmppJid.isNotEmpty;
-      }).toList(growable: false);
-
-  List<String> recipientAddresses({bool allowHint = false}) {
-    final resolved = <String>[];
-    for (final recipient in this) {
-      final chatJid = recipient.target.chatJid;
-      if (chatJid != null && chatJid.isNotEmpty) {
-        resolved.add(chatJid);
-        continue;
-      }
-      final xmppJid = recipient.xmppJid(allowHint: allowHint);
-      if (xmppJid != null && xmppJid.isNotEmpty) {
-        resolved.add(xmppJid);
-        continue;
-      }
-      final address = recipient.target.normalizedOrResolvedAddress;
-      if (address != null && address.isNotEmpty) {
-        resolved.add(address);
-      }
-    }
-    return resolved;
-  }
-
-  List<String> recipientIds({String? fallbackJid}) {
-    final resolved = <String>{};
-    for (final recipient in this) {
-      final recipientId = recipient.recipientId;
-      if (recipientId != null && recipientId.isNotEmpty) {
-        resolved.add(recipientId);
-      }
-    }
-    if (resolved.isNotEmpty) {
-      return resolved.toList();
-    }
-    final trimmedFallback = fallbackJid?.trim();
-    if (trimmedFallback == null || trimmedFallback.isEmpty) {
-      return const <String>[];
-    }
-    return <String>[trimmedFallback];
-  }
-
-  bool shouldFanOut(Chat chat) {
-    final recipients = toList(growable: false);
-    if (recipients.isEmpty) {
-      return false;
-    }
-    if (recipients.length == 1) {
-      if (recipients.single.target.matchesChatJid(chat.jid)) {
-        return false;
-      }
-    }
-    return true;
-  }
-}
-
 class FanOutDraft extends Equatable {
   const FanOutDraft({
     this.body,
@@ -242,7 +112,7 @@ class FanOutDraft extends Equatable {
   });
 
   final String? body;
-  final EmailAttachment? attachment;
+  final Attachment? attachment;
   final String shareId;
   final String? subject;
   final String? quotedStanzaId;
@@ -360,8 +230,6 @@ class ChatSettingsSnapshot extends Equatable {
   ];
 }
 
-enum MamPageDirection { before, after }
-
 const String _availabilitySendFailureLog =
     'Failed to send availability message';
 
@@ -389,6 +257,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                ? messageService as OmemoService
                : null),
        _mucService = mucService,
+       _chatArchiveSessionId = messageService.createChatArchiveSession(),
        _settingsSnapshot = settings,
        super(
          ChatState(
@@ -458,7 +327,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<_HttpUploadSupportUpdated>(_onHttpUploadSupportUpdated);
     on<ChatAttachmentPicked>(_onChatAttachmentPicked);
     on<ChatAttachmentRetryRequested>(_onChatAttachmentRetryRequested);
-    on<ChatPendingAttachmentRemoved>(_onChatPendingAttachmentRemoved);
+    on<ChatDemoPendingAttachmentsRequested>(
+      _onChatDemoPendingAttachmentsRequested,
+    );
     on<ChatViewFilterChanged>(_onChatViewFilterChanged);
     on<ChatFanOutRetryRequested>(_onFanOutRetryRequested);
     on<ChatSubjectChanged>(
@@ -567,12 +438,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   AppLifecycleListener? _lifecycleListener;
   var _currentMessageLimit = messageBatchSize;
   ChatMessageKey? _emailSyncComposerMessage;
-  String? _mamBeforeId;
-  int? _mamTotalCount;
-  bool _mamComplete = false;
-  bool _mamLoading = false;
-  bool _mamCatchingUp = false;
-  bool _mamCatchUpCompleted = false;
   bool _emailHistoryLoading = false;
   bool _pinHydrationInFlight = false;
   final Set<String> _roomAffiliationRefreshAttempts = <String>{};
@@ -580,7 +445,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   final Set<String> _autoDownloadAttemptedEmailMessages = <String>{};
   final Set<String> _shareContextAttemptedStanzaIds = <String>{};
   Future<void> _autoDownloadQueue = Future<void>.value();
-  Completer<void>? _mamLoadingCompleter;
   List<RosterItem> _roomRosterItems = const <RosterItem>[];
   List<Chat> _roomChats = const <Chat>[];
   String? _roomSelfAvatarPath;
@@ -595,6 +459,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   String? _pendingScrollTargetMessageId;
   bool _awaitingInitialEmailPresentation = false;
   final Set<int> _initialEmailPresentationPendingDeltaIds = <int>{};
+  final String _chatArchiveSessionId;
 
   RestartableTimer? _typingTimer;
 
@@ -804,7 +669,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           messageId != pendingReadMarkerId) {
         _pendingReadMarkerStanzaId = messageId;
         try {
-          await _messageService.sendReadMarker(chat.jid, messageId);
+          await _messageService.sendReadMarker(
+            chat.jid,
+            messageId,
+            chatType: chat.type,
+          );
           _lastReadMarkerStanzaId = messageId;
         } finally {
           if (_pendingReadMarkerStanzaId == messageId) {
@@ -878,7 +747,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           latestId != pendingReadMarkerId) {
         _pendingReadMarkerStanzaId = latestId;
         try {
-          await _messageService.sendReadMarker(chat.jid, latestId);
+          await _messageService.sendReadMarker(
+            chat.jid,
+            latestId,
+            chatType: chat.type,
+          );
           _lastReadMarkerStanzaId = latestId;
         } finally {
           if (_pendingReadMarkerStanzaId == latestId) {
@@ -980,40 +853,32 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   String _nextPendingAttachmentId() => 'pending-${_pendingAttachmentSeed++}';
 
-  void _beginMamLoad() {
-    _mamLoading = true;
-    _mamLoadingCompleter = Completer<void>();
+  String? _oldestLoadedStanzaId() {
+    final items = state.items;
+    if (items.isEmpty) {
+      return null;
+    }
+    final stanzaId = items.last.stanzaID.trim();
+    if (stanzaId.isEmpty) {
+      return null;
+    }
+    return stanzaId;
   }
 
-  void _finishMamLoad() {
-    _mamLoading = false;
-    _mamLoadingCompleter?.complete();
-    _mamLoadingCompleter = null;
-  }
-
-  Future<void> _loadEarlierFromMam({required int desiredWindow}) async {
+  Future<void> _loadEarlierFromMam() async {
     final chat = state.chat;
-    if (chat == null || _mamLoading || _mamComplete) return;
-    final beforeId =
-        _mamBeforeId ??
-        (state.items.isEmpty ? null : state.items.last.stanzaID);
-    if (beforeId == null) return;
-    _beginMamLoad();
+    if (chat == null) return;
     try {
-      final result = await _messageService.fetchBeforeFromArchiveForChat(
+      await _messageService.loadEarlierFromMamForChatSession(
+        sessionId: _chatArchiveSessionId,
         chat: chat,
-        before: beforeId,
+        fallbackBeforeId: _oldestLoadedStanzaId(),
+        filter: state.viewFilter,
         pageSize: messageBatchSize,
-      );
-      await _updateMamStateFromResult(
-        chat,
-        result,
-        direction: MamPageDirection.before,
       );
     } on Exception catch (error, stackTrace) {
       _log.safeFine(_mamLoadFailedLogMessage, error, stackTrace);
     }
-    _finishMamLoad();
   }
 
   Future<void> _loadEarlierFromEmail({required int desiredWindow}) async {
@@ -1138,36 +1003,24 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (!_xmppAllowedForChat(chat)) {
       return null;
     }
-    if (_mamBeforeId == null && state.items.isEmpty) {
-      await _hydrateLatestFromMam(chat);
-      target = await _messageService.loadMessageByReferenceId(
-        messageId,
-        chatJid: chat.jid,
-      );
-      if (target != null) {
-        await _refreshPinnedMessagesFromDatabase(chat);
-        return target;
-      }
+    try {
+      target = await _messageService
+          .ensureMessageAvailableFromMamForChatSession(
+            sessionId: _chatArchiveSessionId,
+            chat: chat,
+            messageId: messageId,
+            filter: state.viewFilter,
+            visibleWindowEmpty: state.items.isEmpty,
+            fallbackBeforeId: _oldestLoadedStanzaId(),
+            pageSize: messageBatchSize,
+          );
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_mamHydrateFailedLogMessage, error, stackTrace);
     }
-    while (!_mamComplete) {
-      final previousCount = await _archivedMessageCount(chat);
-      await _loadEarlierFromMam(
-        desiredWindow: previousCount + messageBatchSize,
-      );
-      target = await _messageService.loadMessageByReferenceId(
-        messageId,
-        chatJid: chat.jid,
-      );
-      if (target != null) {
-        await _refreshPinnedMessagesFromDatabase(chat);
-        return target;
-      }
-      final nextCount = await _archivedMessageCount(chat);
-      if (nextCount <= previousCount) {
-        return null;
-      }
+    if (target != null) {
+      await _refreshPinnedMessagesFromDatabase(chat);
     }
-    return null;
+    return target;
   }
 
   Future<Message?> _ensureImportantMessageAvailableLocally({
@@ -1206,32 +1059,18 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (!_xmppAllowedForChat(chat)) {
       return null;
     }
-    if (_mamBeforeId == null && state.items.isEmpty) {
-      await _hydrateLatestFromMam(chat);
-      target = await _messageService.loadMessageByReferenceId(
-        messageId,
-        chatJid: chat.jid,
+    try {
+      return await _messageService.ensureMessageAvailableFromMamForChatSession(
+        sessionId: _chatArchiveSessionId,
+        chat: chat,
+        messageId: messageId,
+        filter: state.viewFilter,
+        visibleWindowEmpty: state.items.isEmpty,
+        fallbackBeforeId: _oldestLoadedStanzaId(),
+        pageSize: messageBatchSize,
       );
-      if (target != null) {
-        return target;
-      }
-    }
-    while (!_mamComplete) {
-      final previousCount = await _archivedMessageCount(chat);
-      await _loadEarlierFromMam(
-        desiredWindow: previousCount + messageBatchSize,
-      );
-      target = await _messageService.loadMessageByReferenceId(
-        messageId,
-        chatJid: chat.jid,
-      );
-      if (target != null) {
-        return target;
-      }
-      final nextCount = await _archivedMessageCount(chat);
-      if (nextCount <= previousCount) {
-        return null;
-      }
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_mamHydrateFailedLogMessage, error, stackTrace);
     }
     return null;
   }
@@ -1305,55 +1144,33 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (!_xmppAllowedForChat(chat)) {
       return;
     }
-    if (_mamBeforeId == null && state.items.isEmpty) {
-      await _hydrateLatestFromMam(chat);
-      localCount = await _archivedMessageCount(chat);
-    }
-    var shouldAttemptNetwork = true;
-    while ((localCount < desiredWindow || shouldAttemptNetwork) &&
-        !_mamComplete) {
-      shouldAttemptNetwork = false;
-      await _loadEarlierFromMam(desiredWindow: desiredWindow);
-      final refreshed = await _archivedMessageCount(chat);
-      if (refreshed <= localCount) {
-        break;
-      }
-      localCount = refreshed;
+    try {
+      await _messageService.ensureArchiveWindowFromMamForChatSession(
+        sessionId: _chatArchiveSessionId,
+        chat: chat,
+        desiredWindow: desiredWindow,
+        filter: state.viewFilter,
+        visibleWindowEmpty: state.items.isEmpty,
+        fallbackBeforeId: _oldestLoadedStanzaId(),
+        pageSize: messageBatchSize,
+      );
+    } on Exception catch (error, stackTrace) {
+      _log.safeFine(_mamHydrateFailedLogMessage, error, stackTrace);
     }
   }
 
   Future<void> _catchUpFromMam() async {
     final chat = state.chat;
     if (chat == null) return;
-    if (_mamCatchingUp) return;
-    if (_mamLoading && _mamLoadingCompleter != null) {
-      await _mamLoadingCompleter!.future;
-    }
-    _mamCatchUpCompleted = false;
-    _mamCatchingUp = true;
-    _beginMamLoad();
-    var completed = true;
     try {
-      final results = await _messageService.catchUpChatFromMamOnConnect(
+      await _messageService.catchUpChatFromMamOnConnectForSession(
+        sessionId: _chatArchiveSessionId,
         chat: chat,
+        filter: state.viewFilter,
         pageSize: messageBatchSize,
       );
-      for (final result in results) {
-        await _updateMamStateFromResult(
-          chat,
-          result,
-          updateTotal: false,
-          direction: MamPageDirection.after,
-        );
-      }
     } on Exception catch (error, stackTrace) {
-      completed = false;
       _log.safeFine(_mamCatchUpFailedLogMessage, error, stackTrace);
-    }
-    _finishMamLoad();
-    _mamCatchingUp = false;
-    if (completed) {
-      _mamCatchUpCompleted = true;
     }
   }
 
@@ -1366,16 +1183,36 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final effectiveFilter = _forceAllWithContactViewFilter
           ? forcedFilter
           : filter;
-      if (state.viewFilter == effectiveFilter) {
-        return;
-      }
-      emit(state.copyWith(viewFilter: effectiveFilter));
-      await _subscribeToMessages(
-        limit: _currentMessageLimit,
-        filter: effectiveFilter,
+      await _applyViewFilter(
+        effectiveFilter,
+        emit: emit,
+        persist: false,
+        chatJid: jid!,
       );
     } on Exception catch (error, stackTrace) {
       _log.safeFine(_viewFilterLoadFailedLogMessage, error, stackTrace);
+    }
+  }
+
+  Future<void> _applyViewFilter(
+    MessageTimelineFilter filter, {
+    required Emitter<ChatState> emit,
+    required String chatJid,
+    required bool persist,
+  }) async {
+    if (state.viewFilter == filter) {
+      return;
+    }
+    emit(state.copyWith(viewFilter: filter));
+    final chat = state.chat;
+    final resetChat = chat?.jid == chatJid ? chat : null;
+    _messageService.resetChatArchiveSession(
+      sessionId: _chatArchiveSessionId,
+      chat: resetChat,
+    );
+    await _subscribeToMessages(limit: _currentMessageLimit, filter: filter);
+    if (persist && !_forceAllWithContactViewFilter) {
+      await _chatsService.saveChatViewFilter(jid: chatJid, filter: filter);
     }
   }
 
@@ -1393,80 +1230,19 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     await _initializeViewFilter(emit);
   }
 
-  void _resetMamCursors(bool resetContext) {
-    if (!resetContext) return;
-    _mamBeforeId = null;
-    _mamTotalCount = null;
-    _mamComplete = false;
-    _mamLoading = false;
-    _mamCatchingUp = false;
-    _mamCatchUpCompleted = false;
-    _mamLoadingCompleter?.complete();
-    _mamLoadingCompleter = null;
-  }
-
   Future<void> _hydrateLatestFromMam(Chat chat) async {
-    if (_mamLoading || _mamComplete || _mamBeforeId != null) return;
-    final localCount = await _archivedMessageCount(chat);
-    _beginMamLoad();
     try {
-      final outcome = await _messageService.hydrateLatestFromMamForChatIfNeeded(
+      await _messageService.hydrateLatestFromMamForChatSessionIfNeeded(
+        sessionId: _chatArchiveSessionId,
         chat: chat,
-        currentLocalCount: localCount,
         desiredWindow: _currentMessageLimit,
         filter: state.viewFilter,
-        catchUpCompleted: _mamCatchUpCompleted,
+        visibleWindowEmpty: state.items.isEmpty,
         pageSize: messageBatchSize,
       );
-      for (final result in outcome.catchUpResults) {
-        await _updateMamStateFromResult(
-          chat,
-          result,
-          updateTotal: false,
-          direction: MamPageDirection.after,
-        );
-      }
-      _mamCatchUpCompleted = true;
-      final latestResult = outcome.latestResult;
-      if (latestResult != null) {
-        await _updateMamStateFromResult(
-          chat,
-          latestResult,
-          direction: MamPageDirection.before,
-        );
-      }
     } on Exception catch (error, stackTrace) {
       _log.safeFine(_mamHydrateFailedLogMessage, error, stackTrace);
     }
-    _finishMamLoad();
-  }
-
-  Future<void> _updateMamStateFromResult(
-    Chat chat,
-    MamPageResult result, {
-    bool updateTotal = true,
-    MamPageDirection direction = MamPageDirection.before,
-  }) async {
-    if (direction == MamPageDirection.before) {
-      _mamBeforeId = result.firstId ?? _mamBeforeId ?? result.lastId;
-    } else {
-      _mamBeforeId ??= result.firstId ?? result.lastId;
-    }
-    if (!updateTotal) {
-      if (result.complete) {
-        _mamComplete = true;
-      }
-      return;
-    }
-
-    _mamTotalCount = result.count ?? _mamTotalCount;
-    if (_mamTotalCount == null) {
-      _mamComplete = _mamComplete || result.complete;
-      return;
-    }
-    final total = _mamTotalCount!;
-    final localCount = await _archivedMessageCount(chat);
-    _mamComplete = _mamComplete || result.complete || localCount >= total;
   }
 
   Future<void> _ensureMucMembership(Chat chat) async {
@@ -1641,6 +1417,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     _autoDownloadAttemptedEmailMessages.clear();
     _lifecycleListener?.dispose();
     _lifecycleListener = null;
+    _messageService.disposeChatArchiveSession(_chatArchiveSessionId);
     return super.close();
   }
 
@@ -1765,9 +1542,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         unreadBoundaryStanzaId: resetContext
             ? null
             : state.unreadBoundaryStanzaId,
-        pendingAttachments: resetContext
-            ? const <PendingAttachment>[]
-            : state.pendingAttachments,
         xmppCapabilities: capabilitiesShouldReset || !showXmppCapabilities
             ? null
             : state.xmppCapabilities,
@@ -1779,7 +1553,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         viewFilter: nextViewFilter,
       ),
     );
-    _resetMamCursors(resetContext);
+    if (resetContext) {
+      _messageService.resetChatArchiveSession(
+        sessionId: _chatArchiveSessionId,
+        chat: event.chat,
+      );
+    }
     if (resetContext) {
       final seededUnreadCount =
           _pendingUnreadBoundaryCount ?? stagedUnreadCount;
@@ -1894,7 +1673,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     } else {
       emit(state.copyWith(roomState: null, roomMemberSections: const []));
     }
-    await _primeDemoPendingAttachment(event.chat, emit);
   }
 
   Future<void> _onChatCapabilitiesRequested(
@@ -2124,22 +1902,23 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<void> _primeDemoPendingAttachment(
-    Chat chat,
-    Emitter<ChatState> emit,
-  ) async {
-    if (!kEnableDemoChats) return;
+  Future<List<PendingAttachment>> _demoPendingAttachmentsForChat({
+    required Chat chat,
+    required Set<String> existingFileNames,
+  }) async {
+    if (!kEnableDemoChats) return const <PendingAttachment>[];
     final chatJid = _bareJid(chat.jid);
-    if (chatJid == null || chatJid != DemoChats.groupJid) return;
-    if (_seededDemoPendingAttachmentJids.contains(chatJid)) return;
+    if (chatJid == null || chatJid != DemoChats.groupJid) {
+      return const <PendingAttachment>[];
+    }
+    if (_seededDemoPendingAttachmentJids.contains(chatJid)) {
+      return const <PendingAttachment>[];
+    }
     _seededDemoPendingAttachmentJids.add(chatJid);
     final service = _messageService;
     if (service is! XmppService) {
-      return;
+      return const <PendingAttachment>[];
     }
-    final existingFileNames = state.pendingAttachments
-        .map((pending) => pending.attachment.fileName)
-        .toSet();
     final pendingToAdd = <PendingAttachment>[];
     final demoAssets = <DemoAttachmentAsset>[
       ...DemoChats.composerAttachments,
@@ -2160,7 +1939,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       pendingToAdd.add(
         PendingAttachment(
           id: 'demo-pending-${asset.fileName}',
-          attachment: EmailAttachment(
+          attachment: Attachment(
             path: materialized.path,
             fileName: asset.fileName,
             sizeBytes: materialized.sizeBytes,
@@ -2172,12 +1951,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
       existingFileNames.add(asset.fileName);
     }
-    if (pendingToAdd.isEmpty) return;
-    emit(
-      state.copyWith(
-        pendingAttachments: [...state.pendingAttachments, ...pendingToAdd],
-      ),
-    );
+    return pendingToAdd;
   }
 
   Future<void> _onChatMessagesUpdated(
@@ -2799,7 +2573,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (!_forceAllWithContactViewFilter &&
         state.viewFilter == MessageTimelineFilter.directOnly) {
-      emit(state.copyWith(viewFilter: MessageTimelineFilter.allWithContact));
+      await _applyViewFilter(
+        MessageTimelineFilter.allWithContact,
+        emit: emit,
+        persist: false,
+        chatJid: chat.jid,
+      );
     }
     final target = await _ensurePinnedMessageAvailableLocally(
       chat: chat,
@@ -2837,7 +2616,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
     if (!_forceAllWithContactViewFilter &&
         state.viewFilter == MessageTimelineFilter.directOnly) {
-      emit(state.copyWith(viewFilter: MessageTimelineFilter.allWithContact));
+      await _applyViewFilter(
+        MessageTimelineFilter.allWithContact,
+        emit: emit,
+        persist: false,
+        chatJid: chat.jid,
+      );
     }
     final target = await _ensureImportantMessageAvailableLocally(
       chat: chat,
@@ -2877,7 +2661,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     if (!_xmppAllowedForChat(chat)) {
       return;
     }
-    if (_mamBeforeId == null && state.items.isEmpty) {
+    if (state.items.isEmpty) {
       await _hydrateLatestFromMam(chat);
       missingStanzaIds = await _pruneResolvedPinnedMessages(missingStanzaIds);
       await _refreshPinnedMessagesFromDatabase(chat);
@@ -2887,12 +2671,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attempt < _pinnedMessagesFetchPageLimit && missingStanzaIds.isNotEmpty;
       attempt += 1
     ) {
-      final localCount = await _archivedMessageCount(chat);
-      final desiredWindow = localCount + messageBatchSize;
-      await _loadEarlierFromMam(desiredWindow: desiredWindow);
+      final previousCount = await _archivedMessageCount(chat);
+      await _loadEarlierFromMam();
       missingStanzaIds = await _pruneResolvedPinnedMessages(missingStanzaIds);
       await _refreshPinnedMessagesFromDatabase(chat);
-      if (_mamComplete) {
+      final nextCount = await _archivedMessageCount(chat);
+      if (nextCount <= previousCount) {
         break;
       }
     }
@@ -3972,8 +3756,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final subject = event.subject;
     final quotedDraft = event.quotedDraft;
     final settings = event.settings;
+    final attachments = List<PendingAttachment>.from(event.pendingAttachments);
     final recipients = event.recipients.includedRecipients;
     if (recipients.isEmpty) {
+      event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
     final storedStanzaIds = <String>{};
@@ -3990,7 +3776,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ? null
         : requestedTask;
     final CalendarTask? effectiveTaskForEmail = requestedTask;
-    final attachments = List<PendingAttachment>.from(event.pendingAttachments);
     final queuedAttachments = attachments
         .where(
           (attachment) =>
@@ -4025,6 +3810,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       emit(
         state.copyWith(composerError: ChatMessageKey.chatComposerEmptyMessage),
       );
+      event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
     if (state.composerError != null) {
@@ -4111,6 +3897,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           composerError: ChatMessageKey.chatComposerEmailUnavailable,
         ),
       );
+      event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
     if (attachmentsViaXmpp && !event.supportsHttpFileUpload) {
@@ -4119,6 +3906,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           composerError: ChatMessageKey.chatComposerFileUploadUnavailable,
         ),
       );
+      event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
     final invalidEmailRecipients = requiresEmail
@@ -4132,6 +3920,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           composerError: ChatMessageKey.chatComposerSelectRecipient,
         ),
       );
+      event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
     if (requiresEmail && invalidEmailRecipients.isNotEmpty) {
@@ -4140,9 +3929,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           composerError: ChatMessageKey.chatComposerEmailRecipientUnavailable,
         ),
       );
+      event.completer?.complete(List<PendingAttachment>.from(attachments));
       return;
     }
-    emit(state.copyWith(composerClearId: state.composerClearId + 1));
     var emailSendSucceeded = emailAlreadySent;
     var xmppSendSucceeded = xmppAlreadySent;
     try {
@@ -4154,11 +3943,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         final bool shouldSendCalendarTaskAttachment = hasCalendarTaskIcs;
         final shouldBundleEmailAttachments =
             attachmentsViaEmail && queuedAttachments.length > 1;
-        EmailAttachment? bundledEmailAttachment;
+        Attachment? bundledEmailAttachment;
         if (shouldBundleEmailAttachments) {
-          _markPendingAttachmentsPreparing(
+          _markPendingAttachmentsPreparingInList(
+            attachments,
             queuedAttachments,
-            emit,
             preparing: true,
           );
           try {
@@ -4180,9 +3969,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             );
             return;
           } finally {
-            _markPendingAttachmentsPreparing(
+            _markPendingAttachmentsPreparingInList(
+              attachments,
               queuedAttachments,
-              emit,
               preparing: false,
             );
           }
@@ -4257,6 +4046,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             final attachmentsSent = shouldBundleEmailAttachments
                 ? await _sendBundledEmailAttachments(
                     attachments: queuedAttachments,
+                    pendingAttachments: attachments,
                     bundledAttachment: bundledEmailAttachment!,
                     chat: chat,
                     service: emailService,
@@ -4271,6 +4061,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
                   )
                 : await _sendQueuedAttachments(
                     attachments: queuedAttachments,
+                    pendingAttachments: attachments,
                     chat: chat,
                     service: emailService,
                     recipients: emailRecipients,
@@ -4340,6 +4131,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       if (attachmentsViaXmpp) {
         final sent = await _sendXmppAttachments(
           attachments: queuedAttachments,
+          pendingAttachments: attachments,
           chat: chat,
           recipients: xmppRecipients,
           emit: emit,
@@ -4449,11 +4241,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         _lastXmppSendSignature = null;
       }
       if (shouldClearComposer && queuedAttachments.isNotEmpty) {
-        _removePendingAttachmentsByIds(
+        _removePendingAttachmentsByIdsFromList(
+          attachments,
           queuedAttachments.map((pending) => pending.id),
-          emit,
         );
       }
+      if (shouldClearComposer) {
+        emit(state.copyWith(composerClearId: state.composerClearId + 1));
+      }
+      event.completer?.complete(List<PendingAttachment>.from(attachments));
       if (shouldClearComposer && (state.emailSubject?.isNotEmpty ?? false)) {
         _clearEmailSubject(emit);
       }
@@ -4681,7 +4477,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         }
         final canPageNetwork = chat.defaultTransport.isEmail
             ? _canPageEmailHistory(chat)
-            : !_mamComplete;
+            : true;
         if (!canPageNetwork) {
           return;
         }
@@ -4689,7 +4485,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           await _loadEarlierFromEmail(desiredWindow: nextLimit);
           return;
         }
-        await _loadEarlierFromMam(desiredWindow: nextLimit);
+        await _loadEarlierFromMam();
       } on Exception catch (error, stackTrace) {
         _log.safeFine('Failed to load earlier', error, stackTrace);
       }
@@ -5326,9 +5122,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   ) async {
     final message = event.message;
     if (message.deltaChatId != null) {
-      await _rehydrateEmailDraft(message, emit);
+      final attachments = await _rehydrateEmailDraft(message, emit);
+      event.attachmentsCompleter?.complete(attachments);
     } else {
-      await _rehydrateXmppDraft(message, emit);
+      final attachments = await _rehydrateXmppDraft(message, emit);
+      event.attachmentsCompleter?.complete(attachments);
     }
   }
 
@@ -5347,6 +5145,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final chat = event.chat;
     final recipients = event.recipients.includedRecipients;
     if (recipients.isEmpty) {
+      event.completer.complete(null);
       return;
     }
     final split = _splitRecipientsForSend(
@@ -5359,7 +5158,10 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       recipients: recipients,
     );
     final service = _emailService;
-    if (shouldUseEmail && service == null) return;
+    if (shouldUseEmail && service == null) {
+      event.completer.complete(null);
+      return;
+    }
     if (shouldUseEmail &&
         !_hasEmailTarget(chat: chat, recipients: recipients)) {
       const message =
@@ -5370,21 +5172,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ChatToast(message: message, variant: ChatToastVariant.warning),
         ),
       );
+      event.completer.complete(null);
       return;
     }
     final rawCaption = event.attachment.caption?.trim();
     final caption = rawCaption?.isNotEmpty == true ? rawCaption : null;
     var preparedAttachment = event.attachment.copyWith(caption: caption);
     final pendingId = _nextPendingAttachmentId();
-    final placeholder = PendingAttachment(
+    var pending = PendingAttachment(
       id: pendingId,
       attachment: preparedAttachment,
       isPreparing: true,
-    );
-    emit(
-      state.copyWith(
-        pendingAttachments: [...state.pendingAttachments, placeholder],
-      ),
     );
 
     if (preparedAttachment.sizeBytes <= 0) {
@@ -5431,22 +5229,30 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         uploadLimitBytes > 0 &&
         sizeBytes > uploadLimitBytes) {
       const message = ChatMessageKey.messageErrorFileUploadFailure;
-      _replacePendingAttachment(
-        placeholder.copyWith(
-          attachment: preparedAttachment,
-          status: PendingAttachmentStatus.failed,
-          isPreparing: false,
-          errorMessage: message,
-        ),
-        emit,
+      pending = pending.copyWith(
+        attachment: preparedAttachment,
+        status: PendingAttachmentStatus.failed,
+        isPreparing: false,
+        errorMessage: message,
       );
       emit(state.copyWith(composerError: message));
+      event.completer.complete(pending);
       return;
     }
-    _replacePendingAttachment(
-      placeholder.copyWith(attachment: preparedAttachment, isPreparing: false),
-      emit,
+    event.completer.complete(
+      pending.copyWith(attachment: preparedAttachment, isPreparing: false),
     );
+  }
+
+  Future<void> _onChatDemoPendingAttachmentsRequested(
+    ChatDemoPendingAttachmentsRequested event,
+    Emitter<ChatState> emit,
+  ) async {
+    final attachments = await _demoPendingAttachmentsForChat(
+      chat: event.chat,
+      existingFileNames: {...event.existingFileNames},
+    );
+    event.completer.complete(attachments);
   }
 
   Future<void> _onChatAttachmentRetryRequested(
@@ -5456,10 +5262,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final pending = event.attachment;
     final chat = event.chat;
     if (pending.status != PendingAttachmentStatus.failed) {
+      event.completer.complete(pending);
       return;
     }
     final recipients = event.recipients.includedRecipients;
     if (recipients.isEmpty) {
+      event.completer.complete(pending);
       return;
     }
     final split = _splitRecipientsForSend(
@@ -5480,19 +5288,26 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           ),
         ),
       );
+      event.completer.complete(pending);
       return;
     }
     final service = _emailService;
-    if (requiresEmail && service == null) return;
-    final updated = pending.copyWith(
-      status: PendingAttachmentStatus.queued,
-      clearErrorMessage: true,
-    );
-    _replacePendingAttachment(updated, emit);
+    if (requiresEmail && service == null) {
+      event.completer.complete(pending);
+      return;
+    }
+    final pendingAttachments = <PendingAttachment>[
+      pending.copyWith(
+        status: PendingAttachmentStatus.queued,
+        clearErrorMessage: true,
+      ),
+    ];
+    final updated = pendingAttachments.single;
     if (requiresEmail) {
       final EmailService emailService = service!;
       final emailSent = await _sendPendingAttachment(
         pending: updated,
+        pendingAttachments: pendingAttachments,
         chat: chat,
         service: emailService,
         recipients: emailRecipients,
@@ -5503,14 +5318,21 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         retainOnSuccess: requiresXmpp,
       );
       if (!emailSent || !requiresXmpp) {
+        event.completer.complete(
+          pendingAttachments.isEmpty ? null : pendingAttachments.single,
+        );
         return;
       }
     }
     if (!requiresXmpp) {
+      event.completer.complete(
+        pendingAttachments.isEmpty ? null : pendingAttachments.single,
+      );
       return;
     }
     final sent = await _sendXmppAttachments(
       attachments: [updated],
+      pendingAttachments: pendingAttachments,
       chat: chat,
       recipients: xmppRecipients,
       emit: emit,
@@ -5518,16 +5340,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       subject: event.subject,
       quotedDraft: event.quotedDraft,
     );
+    event.completer.complete(
+      pendingAttachments.isEmpty ? null : pendingAttachments.single,
+    );
     if (!sent) {
       return;
     }
-  }
-
-  Future<void> _onChatPendingAttachmentRemoved(
-    ChatPendingAttachmentRemoved event,
-    Emitter<ChatState> emit,
-  ) async {
-    _removePendingAttachment(event.attachmentId, emit);
   }
 
   Future<void> _onChatViewFilterChanged(
@@ -5540,14 +5358,12 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     final effectiveFilter = _forceAllWithContactViewFilter
         ? forcedFilter
         : event.filter;
-    emit(state.copyWith(viewFilter: effectiveFilter));
-    _subscribeToMessages(limit: _currentMessageLimit, filter: effectiveFilter);
-    if (event.persist && !_forceAllWithContactViewFilter) {
-      await _chatsService.saveChatViewFilter(
-        jid: chatJid,
-        filter: effectiveFilter,
-      );
-    }
+    await _applyViewFilter(
+      effectiveFilter,
+      emit: emit,
+      persist: event.persist,
+      chatJid: chatJid,
+    );
   }
 
   Future<void> _onFanOutRetryRequested(
@@ -5608,6 +5424,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<bool> _sendPendingAttachment({
     required PendingAttachment pending,
+    required List<PendingAttachment> pendingAttachments,
     required Chat chat,
     required EmailService service,
     required List<ComposerRecipient> recipients,
@@ -5624,7 +5441,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         status: PendingAttachmentStatus.uploading,
         clearErrorMessage: true,
       );
-      _replacePendingAttachment(current, emit);
+      _replacePendingAttachmentInList(pendingAttachments, current);
     }
     var captionText = current.attachment.caption?.trim() ?? '';
     if (captionText.isEmpty && htmlCaption?.trim().isNotEmpty == true) {
@@ -5657,16 +5474,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         emit: emit,
       );
       if (succeeded) {
-        _handlePendingAttachmentSuccess(
+        _handlePendingAttachmentSuccessInList(
+          pendingAttachments,
           current,
-          emit,
           retainOnSuccess: retainOnSuccess,
         );
         return true;
       } else {
-        _markPendingAttachmentFailed(
+        _markPendingAttachmentFailedInList(
+          pendingAttachments,
           current.id,
-          emit,
           message:
               state.composerError ?? ChatMessageKey.chatAttachmentSendFailed,
         );
@@ -5681,9 +5498,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         htmlCaption: effectiveHtmlCaption,
         quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
       );
-      _handlePendingAttachmentSuccess(
+      _handlePendingAttachmentSuccessInList(
+        pendingAttachments,
         current,
-        emit,
         retainOnSuccess: retainOnSuccess,
       );
       return true;
@@ -5691,11 +5508,15 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       _log.safeWarning(_attachmentSendFailedLogMessage, error, stackTrace);
       final mappedError = DeltaErrorMapper.resolve(error.message);
       final readableMessage = _chatMessageKeyForMessageError(mappedError);
-      _markPendingAttachmentFailed(current.id, emit, message: readableMessage);
+      _markPendingAttachmentFailedInList(
+        pendingAttachments,
+        current.id,
+        message: readableMessage,
+      );
       emit(state.copyWith(composerError: readableMessage));
     } on Exception catch (error, stackTrace) {
       _log.safeWarning(_attachmentSendFailedLogMessage, error, stackTrace);
-      _markPendingAttachmentFailed(current.id, emit);
+      _markPendingAttachmentFailedInList(pendingAttachments, current.id);
       emit(
         state.copyWith(composerError: ChatMessageKey.chatAttachmentSendFailed),
       );
@@ -5703,7 +5524,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return false;
   }
 
-  Future<EmailAttachment?> _buildCalendarTaskEmailAttachment(
+  Future<Attachment?> _buildCalendarTaskEmailAttachment(
     CalendarTask task,
   ) async {
     try {
@@ -5711,7 +5532,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       final File file = await transferService.exportTaskIcs(task: task);
       final int sizeBytes = await file.length();
       final String fileName = p.basename(file.path);
-      return EmailAttachment(
+      return Attachment(
         path: file.path,
         fileName: fileName,
         sizeBytes: sizeBytes,
@@ -5758,7 +5579,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       return true;
     }
-    final EmailAttachment? attachment = await _buildCalendarTaskEmailAttachment(
+    final Attachment? attachment = await _buildCalendarTaskEmailAttachment(
       task,
     );
     if (attachment == null) {
@@ -5774,7 +5595,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       subject: subject,
       quotedDraft: quotedDraft,
     );
-    final EmailAttachment resolvedAttachment = syntheticAttachmentReply == null
+    final Attachment resolvedAttachment = syntheticAttachmentReply == null
         ? (caption == null ? attachment : attachment.copyWith(caption: caption))
         : attachment.copyWith(
             caption: syntheticAttachmentReply.body.isEmpty
@@ -5867,7 +5688,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return processed.isNotEmpty;
   }
 
-  Future<EmailAttachment> _bundlePendingAttachments({
+  Future<Attachment> _bundlePendingAttachments({
     required List<PendingAttachment> attachments,
     required String? caption,
   }) async {
@@ -5877,8 +5698,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     );
   }
 
-  Future<List<EmailAttachment>> _bundleEmailAttachmentList({
-    required List<EmailAttachment> attachments,
+  Future<List<Attachment>> _bundleEmailAttachmentList({
+    required List<Attachment> attachments,
     required String? caption,
   }) async {
     if (attachments.length < _emailAttachmentBundleMinimumCount) {
@@ -5893,6 +5714,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<bool> _sendQueuedAttachments({
     required Iterable<PendingAttachment> attachments,
+    required List<PendingAttachment> pendingAttachments,
     required Chat chat,
     required EmailService service,
     required List<ComposerRecipient> recipients,
@@ -5919,6 +5741,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           : attachment;
       final sent = await _sendPendingAttachment(
         pending: pendingWithCaption,
+        pendingAttachments: pendingAttachments,
         chat: chat,
         service: service,
         recipients: recipients,
@@ -5941,7 +5764,8 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
 
   Future<bool> _sendBundledEmailAttachments({
     required List<PendingAttachment> attachments,
-    required EmailAttachment bundledAttachment,
+    required List<PendingAttachment> pendingAttachments,
+    required Attachment bundledAttachment,
     required Chat chat,
     required EmailService service,
     required List<ComposerRecipient> recipients,
@@ -5954,7 +5778,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     String? htmlCaptionForBundle,
   }) async {
     if (attachments.isEmpty) return true;
-    _markPendingAttachmentsUploading(attachments, emit);
+    _markPendingAttachmentsUploadingInList(pendingAttachments, attachments);
     final syntheticAttachmentReply = _syntheticEmailReplyEnvelope(
       body: captionForBundle ?? '',
       subject: subject,
@@ -5985,16 +5809,16 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           emit: emit,
         );
         if (succeeded) {
-          _handleBundledAttachmentSuccess(
+          _handleBundledAttachmentSuccessInList(
+            pendingAttachments,
             attachments,
-            emit,
             retainOnSuccess: retainOnSuccess,
           );
           return true;
         }
-        _markPendingAttachmentsFailed(
+        _markPendingAttachmentsFailedInList(
+          pendingAttachments,
           attachments,
-          emit,
           message:
               state.composerError ?? ChatMessageKey.chatAttachmentSendFailed,
         );
@@ -6008,9 +5832,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           htmlCaption: effectiveHtmlCaption,
           quotedStanzaId: syntheticAttachmentReply?.quotedStanzaId,
         );
-        _handleBundledAttachmentSuccess(
+        _handleBundledAttachmentSuccessInList(
+          pendingAttachments,
           attachments,
-          emit,
           retainOnSuccess: retainOnSuccess,
         );
         return true;
@@ -6022,9 +5846,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         );
         final mappedError = DeltaErrorMapper.resolve(error.message);
         final readableMessage = _chatMessageKeyForMessageError(mappedError);
-        _markPendingAttachmentsFailed(
+        _markPendingAttachmentsFailedInList(
+          pendingAttachments,
           attachments,
-          emit,
           message: readableMessage,
         );
         emit(state.copyWith(composerError: readableMessage));
@@ -6034,7 +5858,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           error,
           stackTrace,
         );
-        _markPendingAttachmentsFailed(attachments, emit);
+        _markPendingAttachmentsFailedInList(pendingAttachments, attachments);
         emit(
           state.copyWith(
             composerError: ChatMessageKey.chatAttachmentSendFailed,
@@ -6047,26 +5871,27 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return false;
   }
 
-  void _handlePendingAttachmentSuccess(
-    PendingAttachment pending,
-    Emitter<ChatState> emit, {
+  void _handlePendingAttachmentSuccessInList(
+    List<PendingAttachment> pendingAttachments,
+    PendingAttachment pending, {
     required bool retainOnSuccess,
   }) {
     if (retainOnSuccess) {
-      _replacePendingAttachment(
+      _replacePendingAttachmentInList(
+        pendingAttachments,
         pending.copyWith(
           status: PendingAttachmentStatus.queued,
           clearErrorMessage: true,
         ),
-        emit,
       );
       return;
     }
-    _removePendingAttachment(pending.id, emit);
+    _removePendingAttachmentFromList(pendingAttachments, pending.id);
   }
 
   Future<bool> _sendXmppAttachments({
     required Iterable<PendingAttachment> attachments,
+    required List<PendingAttachment> pendingAttachments,
     required Chat chat,
     required List<ComposerRecipient> recipients,
     required Emitter<ChatState> emit,
@@ -6127,7 +5952,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         status: PendingAttachmentStatus.uploading,
         clearErrorMessage: true,
       );
-      _replacePendingAttachment(current, emit);
+      _replacePendingAttachmentInList(pendingAttachments, current);
       try {
         XmppAttachmentUpload? upload;
         for (final entry in targets.entries) {
@@ -6156,10 +5981,14 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             },
           );
         }
-        _removePendingAttachment(current.id, emit);
+        _removePendingAttachmentFromList(pendingAttachments, current.id);
       } on XmppFileTooBigException catch (_) {
         const message = ChatMessageKey.messageErrorFileUploadFailure;
-        _markPendingAttachmentFailed(current.id, emit, message: message);
+        _markPendingAttachmentFailedInList(
+          pendingAttachments,
+          current.id,
+          message: message,
+        );
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
           await _saveXmppDraft(
@@ -6175,7 +6004,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return false;
       } on XmppUploadUnavailableException catch (_) {
         const message = ChatMessageKey.chatComposerFileUploadUnavailable;
-        _markPendingAttachmentFailed(current.id, emit, message: message);
+        _markPendingAttachmentFailedInList(
+          pendingAttachments,
+          current.id,
+          message: message,
+        );
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
           await _saveXmppDraft(
@@ -6191,7 +6024,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return false;
       } on XmppUploadNotSupportedException catch (_) {
         const message = ChatMessageKey.chatComposerFileUploadUnavailable;
-        _markPendingAttachmentFailed(current.id, emit, message: message);
+        _markPendingAttachmentFailedInList(
+          pendingAttachments,
+          current.id,
+          message: message,
+        );
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
           await _saveXmppDraft(
@@ -6207,7 +6044,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return false;
       } on XmppUploadMisconfiguredException catch (_) {
         const message = ChatMessageKey.messageErrorFileUploadFailure;
-        _markPendingAttachmentFailed(current.id, emit, message: message);
+        _markPendingAttachmentFailedInList(
+          pendingAttachments,
+          current.id,
+          message: message,
+        );
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
           await _saveXmppDraft(
@@ -6223,7 +6064,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return false;
       } on XmppMessageException catch (_) {
         const message = ChatMessageKey.chatAttachmentSendFailed;
-        _markPendingAttachmentFailed(current.id, emit, message: message);
+        _markPendingAttachmentFailedInList(
+          pendingAttachments,
+          current.id,
+          message: message,
+        );
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
           await _saveXmppDraft(
@@ -6244,7 +6089,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
           stackTrace,
         );
         const message = ChatMessageKey.chatAttachmentSendFailed;
-        _markPendingAttachmentFailed(current.id, emit, message: message);
+        _markPendingAttachmentFailedInList(
+          pendingAttachments,
+          current.id,
+          message: message,
+        );
         emit(state.copyWith(composerError: message));
         if (storedStanzaId == null) {
           await _saveXmppDraft(
@@ -7016,7 +6865,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     required List<ComposerRecipient> recipients,
     String? text,
     String? htmlBody,
-    EmailAttachment? attachment,
+    Attachment? attachment,
     String? htmlCaption,
     String? shareId,
     String? subject,
@@ -7084,19 +6933,20 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return false;
   }
 
-  Future<void> _rehydrateEmailDraft(
+  Future<List<PendingAttachment>> _rehydrateEmailDraft(
     Message message,
     Emitter<ChatState> emit,
   ) async {
     final chat = state.chat;
     final service = _emailService;
-    if (chat == null || service == null) return;
+    if (chat == null || service == null) {
+      return const <PendingAttachment>[];
+    }
     ShareContext? shareContext = state.shareContexts[message.stanzaID];
     final nextHydrationId = ++_composerHydrationSeed;
     final nextSubject = (shareContext?.subject ?? message.subject)?.trim();
     emit(
       state.copyWith(
-        pendingAttachments: const <PendingAttachment>[],
         composerHydrationId: nextHydrationId,
         composerHydrationText: message.plainText,
         composerError: message.error.isNotNone
@@ -7121,7 +6971,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       );
     }
     final attachments = await _attachmentsForMessage(message);
-    if (attachments.isEmpty) return;
+    if (attachments.isEmpty) {
+      return const <PendingAttachment>[];
+    }
     final pendingAttachments = <PendingAttachment>[];
     for (final attachment in attachments) {
       pendingAttachments.add(
@@ -7131,162 +6983,160 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     }
-    emit(state.copyWith(pendingAttachments: pendingAttachments));
+    return pendingAttachments;
   }
 
-  void _replacePendingAttachment(
+  void _replacePendingAttachmentInList(
+    List<PendingAttachment> attachments,
     PendingAttachment replacement,
-    Emitter<ChatState> emit,
   ) {
-    final updated = state.pendingAttachments
-        .map((pending) => pending.id == replacement.id ? replacement : pending)
-        .toList();
-    emit(state.copyWith(pendingAttachments: updated));
+    final index = attachments.indexWhere(
+      (pending) => pending.id == replacement.id,
+    );
+    if (index == -1) {
+      attachments.add(replacement);
+      return;
+    }
+    attachments[index] = replacement;
   }
 
-  void _removePendingAttachment(String attachmentId, Emitter<ChatState> emit) {
-    final updated = state.pendingAttachments
-        .where((pending) => pending.id != attachmentId)
-        .toList();
-    if (updated.length == state.pendingAttachments.length) return;
-    emit(state.copyWith(pendingAttachments: updated));
+  void _removePendingAttachmentFromList(
+    List<PendingAttachment> attachments,
+    String attachmentId,
+  ) {
+    attachments.removeWhere((pending) => pending.id == attachmentId);
   }
 
-  void _removePendingAttachmentsByIds(
+  void _removePendingAttachmentsByIdsFromList(
+    List<PendingAttachment> attachments,
     Iterable<String> attachmentIds,
-    Emitter<ChatState> emit,
   ) {
     final ids = attachmentIds.toSet();
     if (ids.isEmpty) return;
-    final updated = state.pendingAttachments
-        .where((pending) => !ids.contains(pending.id))
-        .toList();
-    if (updated.length == state.pendingAttachments.length) return;
-    emit(state.copyWith(pendingAttachments: updated));
+    attachments.removeWhere((pending) => ids.contains(pending.id));
   }
 
-  void _markPendingAttachmentFailed(
-    String attachmentId,
-    Emitter<ChatState> emit, {
+  void _markPendingAttachmentFailedInList(
+    List<PendingAttachment> attachments,
+    String attachmentId, {
     ChatMessageKey? message,
   }) {
-    final updated = state.pendingAttachments.map((pending) {
-      if (pending.id != attachmentId) return pending;
-      return pending.copyWith(
-        status: PendingAttachmentStatus.failed,
-        errorMessage: message ?? ChatMessageKey.chatAttachmentSendFailed,
-      );
-    }).toList();
-    emit(state.copyWith(pendingAttachments: updated));
+    final index = attachments.indexWhere(
+      (pending) => pending.id == attachmentId,
+    );
+    if (index == -1) {
+      return;
+    }
+    attachments[index] = attachments[index].copyWith(
+      status: PendingAttachmentStatus.failed,
+      errorMessage: message ?? ChatMessageKey.chatAttachmentSendFailed,
+    );
   }
 
-  void _markPendingAttachmentsFailed(
-    Iterable<PendingAttachment> attachments,
-    Emitter<ChatState> emit, {
+  void _markPendingAttachmentsFailedInList(
+    List<PendingAttachment> pendingAttachments,
+    Iterable<PendingAttachment> attachments, {
     ChatMessageKey? message,
   }) {
     final ids = attachments.map((attachment) => attachment.id).toSet();
     if (ids.isEmpty) return;
     final resolvedMessage = message ?? ChatMessageKey.chatAttachmentSendFailed;
-    final updated = state.pendingAttachments.map((pending) {
-      if (!ids.contains(pending.id)) return pending;
-      return pending.copyWith(
+    for (var index = 0; index < pendingAttachments.length; index += 1) {
+      final pending = pendingAttachments[index];
+      if (!ids.contains(pending.id)) {
+        continue;
+      }
+      pendingAttachments[index] = pending.copyWith(
         status: PendingAttachmentStatus.failed,
         errorMessage: resolvedMessage,
       );
-    }).toList();
-    emit(state.copyWith(pendingAttachments: updated));
+    }
   }
 
-  void _markPendingAttachmentsUploading(
+  void _markPendingAttachmentsUploadingInList(
+    List<PendingAttachment> pendingAttachments,
     Iterable<PendingAttachment> attachments,
-    Emitter<ChatState> emit,
   ) {
     final ids = attachments.map((attachment) => attachment.id).toSet();
     if (ids.isEmpty) return;
-    var hasChanges = false;
-    final updated = state.pendingAttachments.map((pending) {
-      if (!ids.contains(pending.id)) return pending;
+    for (var index = 0; index < pendingAttachments.length; index += 1) {
+      final pending = pendingAttachments[index];
+      if (!ids.contains(pending.id)) {
+        continue;
+      }
       final shouldClearError = pending.errorMessage != null;
       if (pending.status == PendingAttachmentStatus.uploading &&
           !shouldClearError) {
-        return pending;
+        continue;
       }
-      hasChanges = true;
-      return pending.copyWith(
+      pendingAttachments[index] = pending.copyWith(
         status: PendingAttachmentStatus.uploading,
         clearErrorMessage: true,
       );
-    }).toList();
-    if (!hasChanges) return;
-    emit(state.copyWith(pendingAttachments: updated));
+    }
   }
 
-  void _markPendingAttachmentsPreparing(
-    Iterable<PendingAttachment> attachments,
-    Emitter<ChatState> emit, {
+  void _markPendingAttachmentsPreparingInList(
+    List<PendingAttachment> pendingAttachments,
+    Iterable<PendingAttachment> attachments, {
     required bool preparing,
   }) {
     final ids = attachments.map((attachment) => attachment.id).toSet();
     if (ids.isEmpty) return;
-    var hasChanges = false;
-    final updated = state.pendingAttachments.map((pending) {
-      if (!ids.contains(pending.id)) return pending;
-      if (pending.isPreparing == preparing) return pending;
-      hasChanges = true;
-      return pending.copyWith(isPreparing: preparing);
-    }).toList();
-    if (!hasChanges) return;
-    emit(state.copyWith(pendingAttachments: updated));
+    for (var index = 0; index < pendingAttachments.length; index += 1) {
+      final pending = pendingAttachments[index];
+      if (!ids.contains(pending.id) || pending.isPreparing == preparing) {
+        continue;
+      }
+      pendingAttachments[index] = pending.copyWith(isPreparing: preparing);
+    }
   }
 
-  void _queuePendingAttachments(
+  void _queuePendingAttachmentsInList(
+    List<PendingAttachment> pendingAttachments,
     Iterable<PendingAttachment> attachments,
-    Emitter<ChatState> emit,
   ) {
     final ids = attachments.map((attachment) => attachment.id).toSet();
     if (ids.isEmpty) return;
-    var hasChanges = false;
-    final updated = state.pendingAttachments.map((pending) {
-      if (!ids.contains(pending.id)) return pending;
+    for (var index = 0; index < pendingAttachments.length; index += 1) {
+      final pending = pendingAttachments[index];
+      if (!ids.contains(pending.id)) {
+        continue;
+      }
       final shouldClearError = pending.errorMessage != null;
       if (pending.status == PendingAttachmentStatus.queued &&
           !shouldClearError) {
-        return pending;
+        continue;
       }
-      hasChanges = true;
-      return pending.copyWith(
+      pendingAttachments[index] = pending.copyWith(
         status: PendingAttachmentStatus.queued,
         clearErrorMessage: true,
       );
-    }).toList();
-    if (!hasChanges) return;
-    emit(state.copyWith(pendingAttachments: updated));
+    }
   }
 
-  void _handleBundledAttachmentSuccess(
-    Iterable<PendingAttachment> attachments,
-    Emitter<ChatState> emit, {
+  void _handleBundledAttachmentSuccessInList(
+    List<PendingAttachment> pendingAttachments,
+    Iterable<PendingAttachment> attachments, {
     required bool retainOnSuccess,
   }) {
     if (retainOnSuccess) {
-      _queuePendingAttachments(attachments, emit);
+      _queuePendingAttachmentsInList(pendingAttachments, attachments);
       return;
     }
-    _removePendingAttachmentsByIds(
+    _removePendingAttachmentsByIdsFromList(
+      pendingAttachments,
       attachments.map((attachment) => attachment.id),
-      emit,
     );
   }
 
-  Future<void> _rehydrateXmppDraft(
+  Future<List<PendingAttachment>> _rehydrateXmppDraft(
     Message message,
     Emitter<ChatState> emit,
   ) async {
     final nextHydrationId = ++_composerHydrationSeed;
     emit(
       state.copyWith(
-        pendingAttachments: const <PendingAttachment>[],
         composerHydrationId: nextHydrationId,
         composerHydrationText: message.plainText,
         composerError: message.error.isNotNone
@@ -7295,7 +7145,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       ),
     );
     final attachments = await _attachmentsForMessage(message);
-    if (attachments.isEmpty) return;
+    if (attachments.isEmpty) {
+      return const <PendingAttachment>[];
+    }
     final pendingAttachments = <PendingAttachment>[];
     for (final attachment in attachments) {
       pendingAttachments.add(
@@ -7305,7 +7157,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         ),
       );
     }
-    emit(state.copyWith(pendingAttachments: pendingAttachments));
+    return pendingAttachments;
   }
 
   Future<void> _saveXmppDraft({
@@ -7352,7 +7204,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  Future<List<EmailAttachment>> _attachmentsForMessage(Message message) async {
+  Future<List<Attachment>> _attachmentsForMessage(Message message) async {
     final messageId = message.id;
     final db = await _messageService.database;
     final metadataIds = <String>[];
@@ -7381,13 +7233,13 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     return _attachmentsFromMetadataIds(metadataIds);
   }
 
-  Future<List<EmailAttachment>> _attachmentsFromMetadataIds(
+  Future<List<Attachment>> _attachmentsFromMetadataIds(
     Iterable<String> metadataIds,
   ) async {
     final db = await _messageService.database;
     final orderedIds = LinkedHashSet<String>.from(metadataIds);
     if (orderedIds.isEmpty) return const [];
-    final resolved = <EmailAttachment>[];
+    final resolved = <Attachment>[];
     for (final metadataId in orderedIds) {
       final metadata = await db.getFileMetadata(metadataId);
       final path = metadata?.path;
@@ -7400,7 +7252,7 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       }
       final size = metadata.sizeBytes ?? await file.length();
       resolved.add(
-        EmailAttachment(
+        Attachment(
           path: path,
           fileName: metadata.filename,
           sizeBytes: size,

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/chat/models/chat_message.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:equatable/equatable.dart';
 
 enum PendingAttachmentStatus { queued, uploading, failed }
@@ -17,13 +17,13 @@ class PendingAttachment extends Equatable {
   });
 
   final String id;
-  final EmailAttachment attachment;
+  final Attachment attachment;
   final PendingAttachmentStatus status;
   final bool isPreparing;
   final ChatMessageKey? errorMessage;
 
   PendingAttachment copyWith({
-    EmailAttachment? attachment,
+    Attachment? attachment,
     PendingAttachmentStatus? status,
     bool? isPreparing,
     ChatMessageKey? errorMessage,

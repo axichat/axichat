@@ -3,14 +3,13 @@
 
 import 'dart:async';
 import 'package:axichat/src/common/bloc_cache.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/html_content.dart';
 import 'package:axichat/src/common/transport.dart';
-import 'package:axichat/src/draft/models/draft_save_result.dart';
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_bundle.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
 import 'package:axichat/src/email/service/email_service.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/models/fan_out_models.dart';
 import 'package:axichat/src/email/service/share_token_codec.dart';
 import 'package:axichat/src/email/util/email_address.dart';
 import 'package:axichat/src/storage/database.dart';
@@ -142,19 +141,27 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     emit(_stateForItems(items));
   }
 
-  Future<List<EmailAttachment>> loadDraftAttachments(
+  Future<List<Attachment>> loadDraftAttachments(
     List<String> metadataIds,
   ) async {
     if (metadataIds.isEmpty) return const [];
     return _draftSyncService.loadDraftAttachments(metadataIds);
   }
 
-  Future<EmailAttachment> optimizeAttachment(EmailAttachment attachment) async {
+  Future<Attachment> optimizeAttachment(Attachment attachment) async {
     return EmailAttachmentOptimizer.optimize(attachment);
   }
 
   Future<void> deleteDraftAttachmentMetadata(String metadataId) async {
     await _messageService.deleteFileMetadata(metadataId);
+  }
+
+  Future<Message?> loadMessageByReferenceId(
+    String messageId, {
+    String? chatJid,
+  }) async {
+    final db = await _loadDatabase();
+    return db.getMessageByReferenceId(messageId, chatJid: chatJid);
   }
 
   Future<bool> sendDraft({
@@ -164,7 +171,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required String body,
     required bool shareTokenSignatureEnabled,
     String? subject,
-    List<EmailAttachment> attachments = const [],
+    DraftQuoteTarget? quoteTarget,
+    List<Attachment> attachments = const [],
   }) async {
     emit(DraftSending(items: _items, visibleItems: _visibleItems));
     try {
@@ -173,6 +181,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           targets: emailTargets,
           body: body,
           subject: subject,
+          quoteTarget: quoteTarget,
           attachments: attachments,
           shareTokenSignatureEnabled: shareTokenSignatureEnabled,
         );
@@ -181,6 +190,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         await _sendXmppDraft(
           targets: xmppTargets,
           body: body,
+          quoteTarget: quoteTarget,
           attachments: attachments,
         );
       }
@@ -233,7 +243,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required List<String> jids,
     required String body,
     String? subject,
-    List<EmailAttachment> attachments = const [],
+    DraftQuoteTarget? quoteTarget,
+    List<Attachment> attachments = const [],
     bool autoSave = false,
   }) async {
     final result = await _draftSyncService.saveDraft(
@@ -241,6 +252,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
       jids: jids,
       body: body,
       subject: subject,
+      quotingStanzaId: quoteTarget?.stanzaId,
+      quotingReferenceKind: quoteTarget?.referenceKind,
       attachments: attachments,
     );
     try {
@@ -282,7 +295,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required List<String> jids,
     required String body,
     String? subject,
-    required List<EmailAttachment> attachments,
+    required List<Attachment> attachments,
   }) async {
     if (!_shouldUseCoreDraftFallback) return;
     final emailService = _emailService;
@@ -364,7 +377,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     required List<Contact> targets,
     required String body,
     String? subject,
-    required List<EmailAttachment> attachments,
+    DraftQuoteTarget? quoteTarget,
+    required List<Attachment> attachments,
     required bool shareTokenSignatureEnabled,
   }) async {
     final emailService = _emailService;
@@ -395,6 +409,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
         body: trimmedBody,
         htmlBody: htmlBody,
         subject: subject,
+        quotedStanzaId: quoteTarget?.stanzaId,
         shareId: shareId,
         useSubjectToken: includeSignatureToken,
         tokenAsSignature: includeSignatureToken,
@@ -421,6 +436,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
             attachment: captionedAttachment,
             htmlCaption: index == 0 ? htmlCaption : null,
             subject: subject,
+            quotedStanzaId: quoteTarget?.stanzaId,
             shareId: shareId,
             useSubjectToken: includeSignatureToken,
             tokenAsSignature: includeSignatureToken,
@@ -440,7 +456,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
   Future<void> _sendXmppDraft({
     required List<DraftXmppTarget> targets,
     required String body,
-    required List<EmailAttachment> attachments,
+    DraftQuoteTarget? quoteTarget,
+    required List<Attachment> attachments,
   }) async {
     final trimmedBody = body.trim();
     final hasBody = trimmedBody.isNotEmpty;
@@ -471,6 +488,7 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           jid: jid,
           text: trimmedBody,
           encryptionProtocol: encryption,
+          quotedReference: quoteTarget?.messageReference,
           chatType: chatType,
         );
         return;
@@ -487,6 +505,9 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
           attachment: resolvedAttachment,
           encryptionProtocol: encryption,
           chatType: chatType,
+          quotedReference: shouldApplyCaption
+              ? quoteTarget?.messageReference
+              : null,
           transportGroupId: attachmentGroupId,
           attachmentOrder: index,
           upload: upload,
@@ -513,8 +534,8 @@ class DraftCubit extends Cubit<DraftState> with BlocCache<DraftState> {
     );
   }
 
-  Future<List<EmailAttachment>> _bundleEmailAttachments({
-    required List<EmailAttachment> attachments,
+  Future<List<Attachment>> _bundleEmailAttachments({
+    required List<Attachment> attachments,
     required String? caption,
   }) async {
     if (attachments.length < _emailAttachmentBundleMinimumCount) {

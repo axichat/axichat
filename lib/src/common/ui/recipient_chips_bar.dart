@@ -4,13 +4,13 @@
 import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart' show ComposerRecipient;
-import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
+import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/common/endpoint_config.dart';
 import 'package:axichat/src/common/ui/axi_editable_text.dart' as axi;
 import 'package:axichat/src/common/ui/buttons/axi_button_haptics.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/email/models/fan_out_models.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -1134,14 +1134,26 @@ class _RecipientChipAvatar extends StatelessWidget {
     final chat = target.chat;
     const double avatarSize = 20.0;
     final avatar = chat != null
-        ? TransportAwareAvatar(
-            chat: chat,
-            selfIdentity: selfIdentity,
-            size: avatarSize,
-            showBadge: false,
-            avatarPathOverride: _avatarPathForChat(chat),
-          )
-        : AxiAvatar(
+        ? (() {
+            final avatarData = chat.avatarData(
+              selfJid: selfIdentity.selfJid,
+              selfAvatarPath: selfIdentity.avatarPath,
+              selfAvatarLoading: selfIdentity.avatarLoading,
+              avatarPathOverride: _avatarPathForChat(chat),
+            );
+            if (avatarData.isAppIcon) {
+              return const AxichatAppIconAvatar(size: avatarSize);
+            }
+            return HydratedAxiAvatar(
+              jid: avatarData.identifier!,
+              size: avatarSize,
+              shape: AxiAvatarShape.squircle,
+              colorSeed: avatarData.colorSeed,
+              loading: avatarData.loading,
+              avatarPath: avatarData.avatarPath,
+            );
+          })()
+        : HydratedAxiAvatar(
             jid: target.recipientId ?? '',
             size: avatarSize,
             shape: AxiAvatarShape.squircle,
@@ -1818,13 +1830,12 @@ final class _RecipientAutocompleteOverlayState
     double widestText = 0.0;
     for (final option in _options) {
       final chat = option.chat;
-      final title = chat?.title ?? option.displayName ?? option.address ?? '';
+      final title = chat?.title ?? option.displayName;
       final subtitleSource =
           chat?.emailAddress ??
           chat?.jid ??
           option.address ??
-          option.displayName ??
-          '';
+          option.displayName;
       final subtitle = subtitleSource.isEmpty || subtitleSource == title
           ? null
           : subtitleSource;
@@ -2217,14 +2228,12 @@ class _AutocompleteOptionsListState extends State<_AutocompleteOptionsList> {
           itemBuilder: (context, index) {
             final option = options[index];
             final chat = option.chat;
-            final title =
-                chat?.title ?? option.displayName ?? option.address ?? '';
+            final title = chat?.title ?? option.displayName;
             final subtitleSource =
                 chat?.emailAddress ??
                 chat?.jid ??
                 option.address ??
-                option.displayName ??
-                '';
+                option.displayName;
             final subtitle = subtitleSource.isEmpty || subtitleSource == title
                 ? null
                 : subtitleSource;
@@ -2528,7 +2537,7 @@ class _RecipientHeaderAvatar extends StatelessWidget {
       height: recipientAvatarSize,
       padding: EdgeInsets.all(borderWidth),
       decoration: ShapeDecoration(color: backgroundColor, shape: shape),
-      child: AxiAvatar(
+      child: HydratedAxiAvatar(
         jid: jid,
         size: recipientAvatarSize - (borderWidth * 2),
         avatarPath: avatarPath,
@@ -2551,11 +2560,22 @@ class _SuggestionAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (option.chat != null) {
-      return TransportAwareAvatar(
-        chat: option.chat!,
-        selfIdentity: selfIdentity,
+      final chat = option.chat!;
+      final avatarData = chat.avatarData(
+        selfJid: selfIdentity.selfJid,
+        selfAvatarPath: selfIdentity.avatarPath,
+        selfAvatarLoading: selfIdentity.avatarLoading,
+      );
+      if (avatarData.isAppIcon) {
+        return const AxichatAppIconAvatar(size: 32);
+      }
+      return HydratedAxiAvatar(
+        jid: avatarData.identifier!,
         size: 32,
-        showBadge: false,
+        shape: AxiAvatarShape.squircle,
+        colorSeed: avatarData.colorSeed,
+        loading: avatarData.loading,
+        avatarPath: avatarData.avatarPath,
       );
     }
     final jid = option.recipientId ?? '';
@@ -2571,7 +2591,7 @@ class _SuggestionAvatar extends StatelessWidget {
         break;
       }
     }
-    return AxiAvatar(
+    return HydratedAxiAvatar(
       jid: jid,
       size: 32,
       shape: AxiAvatarShape.squircle,

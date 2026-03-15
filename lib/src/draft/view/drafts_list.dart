@@ -128,7 +128,7 @@ class _DraftsListBody extends StatelessWidget {
           if (recipients == 1) {
             final normalizedJid = item.jids[0].normalizedJidKey;
             final resolvedKey = normalizedJid ?? item.jids[0].toLowerCase();
-            leadingAvatar = AxiAvatar(
+            leadingAvatar = HydratedAxiAvatar(
               jid: item.jids[0],
               avatarPath: avatarByJid[resolvedKey],
             );
@@ -145,6 +145,7 @@ class _DraftsListBody extends StatelessWidget {
                 jids: item.jids,
                 body: item.body ?? '',
                 subject: item.subject ?? '',
+                quoteTarget: item.quoteTarget,
                 attachmentMetadataIds: item.attachmentMetadataIds,
               ),
               menuItems: [

@@ -20,11 +20,11 @@ class DraftButton extends StatelessWidget {
     }
 
     if (compact) {
-      return AxiIconButton.secondary(
-        iconData: LucideIcons.pencilLine,
+      return AxiButton.primary(
+        onPressed: handleCompose,
         tooltip: l10n.draftComposeMessage,
         semanticLabel: l10n.draftComposeMessage,
-        onPressed: handleCompose,
+        leading: const Icon(LucideIcons.pencilLine),
       );
     }
     return AxiFab(

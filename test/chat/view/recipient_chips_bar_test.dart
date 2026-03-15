@@ -1,7 +1,7 @@
-import 'package:axichat/src/chat/bloc/chat_bloc.dart';
-import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
-import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
-import 'package:axichat/src/email/service/fan_out_models.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
+import 'package:axichat/src/common/ui/recipient_chips_bar.dart';
+import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
+import 'package:axichat/src/email/models/fan_out_models.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
 import 'package:flutter/material.dart';

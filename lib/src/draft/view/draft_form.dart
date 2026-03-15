@@ -8,16 +8,15 @@ import 'package:axichat/src/app.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
 import 'package:axichat/src/calendar/utils/task_share_formatter.dart';
 import 'package:axichat/src/calendar/utils/time_formatter.dart';
-import 'package:axichat/src/calendar/view/models/calendar_drag_payload.dart';
-import 'package:axichat/src/chat/bloc/chat_bloc.dart'
-    show ComposerRecipient, ComposerRecipients;
+import 'package:axichat/src/calendar/view/calendar_drag_payload.dart';
 import 'package:axichat/src/chat/models/pending_attachment.dart';
 import 'package:axichat/src/attachments/view/pending_attachment_preview.dart';
 import 'package:axichat/src/chat/view/pending_attachment_list.dart';
-import 'package:axichat/src/chat/view/recipient_chips_bar.dart';
+import 'package:axichat/src/common/compose_recipient.dart';
 import 'package:axichat/src/chats/bloc/chats_cubit.dart';
 import 'package:axichat/src/common/draft_limits.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
@@ -25,13 +24,11 @@ import 'package:axichat/src/roster/bloc/roster_cubit.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/draft/bloc/draft_cubit.dart';
-import 'package:axichat/src/draft/models/draft_save_result.dart';
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
-import 'package:axichat/src/chats/view/widgets/transport_aware_avatar.dart';
+import 'package:axichat/src/chats/view/widgets/chat_avatar_support.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -46,12 +43,15 @@ class DraftForm extends StatefulWidget {
     this.jids = const [''],
     this.body = '',
     this.subject = '',
+    this.quoteTarget,
     this.attachmentMetadataIds = const [],
     this.suggestionAddresses = const <String>{},
     this.suggestionDomains = const <String>{},
     required this.locate,
     this.recipientCountAdjustment = 0,
     this.subjectTrailing,
+    this.banner,
+    this.onRecipientAddressesChanged,
     this.onClosed,
     this.onDiscarded,
     this.onDraftSaved,
@@ -61,12 +61,15 @@ class DraftForm extends StatefulWidget {
   final List<String> jids;
   final String body;
   final String subject;
+  final DraftQuoteTarget? quoteTarget;
   final List<String> attachmentMetadataIds;
   final Set<String> suggestionAddresses;
   final Set<String> suggestionDomains;
   final T Function<T>() locate;
   final int recipientCountAdjustment;
   final Widget? subjectTrailing;
+  final Widget? banner;
+  final ValueChanged<List<String>>? onRecipientAddressesChanged;
   final VoidCallback? onClosed;
   final VoidCallback? onDiscarded;
   final ValueChanged<int>? onDraftSaved;
@@ -123,6 +126,10 @@ class _DraftFormState extends State<DraftForm> {
     final newId = widget.id;
     if (newId != null && newId != id) {
       id = newId;
+    }
+    if (oldWidget.id == widget.id &&
+        oldWidget.quoteTarget != widget.quoteTarget) {
+      _scheduleAutosave();
     }
   }
 
@@ -412,6 +419,13 @@ class _DraftFormState extends State<DraftForm> {
                                   );
                                 },
                               ),
+                              if (widget.banner case final Widget banner) ...[
+                                SizedBox(height: sectionSpacing),
+                                Padding(
+                                  padding: horizontalPadding,
+                                  child: banner,
+                                ),
+                              ],
                               SizedBox(height: sectionSpacing),
                               Padding(
                                 padding: horizontalPadding,
@@ -605,6 +619,7 @@ class _DraftFormState extends State<DraftForm> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() => _recipients = _initialRecipients(chats));
+      _notifyRecipientAddressesChanged();
     });
   }
 
@@ -678,8 +693,9 @@ class _DraftFormState extends State<DraftForm> {
     );
     final List<PendingAttachment> pending = <PendingAttachment>[];
     for (final attachment in hydrated) {
-      final EmailAttachment resolvedAttachment =
-          await _resolveAttachmentMimeType(attachment);
+      final Attachment resolvedAttachment = await _resolveAttachmentMimeType(
+        attachment,
+      );
       pending.add(
         PendingAttachment(
           id: resolvedAttachment.metadataId ?? _nextPendingAttachmentId(),
@@ -690,9 +706,7 @@ class _DraftFormState extends State<DraftForm> {
     return pending;
   }
 
-  Future<EmailAttachment> _resolveAttachmentMimeType(
-    EmailAttachment attachment,
-  ) async {
+  Future<Attachment> _resolveAttachmentMimeType(Attachment attachment) async {
     final String? resolvedMimeType = await resolveMimeTypeFromPath(
       path: attachment.path,
       fileName: attachment.fileName,
@@ -737,6 +751,7 @@ class _DraftFormState extends State<DraftForm> {
     }
     if (updated && mounted) {
       setState(() => _recipients = nextRecipients);
+      _notifyRecipientAddressesChanged();
     }
     return true;
   }
@@ -755,6 +770,7 @@ class _DraftFormState extends State<DraftForm> {
         _recipients.add(ComposerRecipient(target: target));
       }
     });
+    _notifyRecipientAddressesChanged();
     _revalidateFormIfNeeded();
     _scheduleAutosave();
   }
@@ -788,6 +804,7 @@ class _DraftFormState extends State<DraftForm> {
       _sendErrorMessage = null;
       _recipients.removeWhere((recipient) => recipient.key == key);
     });
+    _notifyRecipientAddressesChanged();
     _revalidateFormIfNeeded();
     _scheduleAutosave();
   }
@@ -800,6 +817,7 @@ class _DraftFormState extends State<DraftForm> {
       final recipient = _recipients[index];
       _recipients[index] = recipient.toggledIncluded();
     });
+    _notifyRecipientAddressesChanged();
     _revalidateFormIfNeeded();
     _scheduleAutosave();
   }
@@ -827,7 +845,7 @@ class _DraftFormState extends State<DraftForm> {
       }
       final pendingId = _nextPendingAttachmentId();
       final fileName = file.name.isNotEmpty ? file.name : path.split('/').last;
-      var attachment = EmailAttachment(
+      var attachment = Attachment(
         path: path,
         fileName: fileName,
         sizeBytes: file.size > 0 ? file.size : 0,
@@ -924,11 +942,12 @@ class _DraftFormState extends State<DraftForm> {
         .map((pending) => pending.id)
         .toList();
     final List<String> recipients = _recipientStrings();
-    final DraftSaveResult result = await context.read<DraftCubit>().saveDraft(
+    final result = await context.read<DraftCubit>().saveDraft(
       id: id,
       jids: recipients,
       body: _bodyTextController.text,
       subject: _subjectTextController.text,
+      quoteTarget: widget.quoteTarget,
       attachments: _currentAttachments(),
       autoSave: autoSave,
     );
@@ -937,6 +956,7 @@ class _DraftFormState extends State<DraftForm> {
       recipients: recipients,
       body: _bodyTextController.text,
       subject: _subjectTextController.text,
+      quoteTarget: widget.quoteTarget,
       pendingAttachments: _pendingAttachments,
     );
     setState(() {
@@ -1041,10 +1061,12 @@ class _DraftFormState extends State<DraftForm> {
   }
 
   int _currentDraftSignature() {
+    final recipients = _recipientStrings();
     return _draftSignature(
-      recipients: _recipientStrings(),
+      recipients: recipients,
       body: _bodyTextController.text,
       subject: _subjectTextController.text,
+      quoteTarget: widget.quoteTarget,
       pendingAttachments: _pendingAttachments,
     );
   }
@@ -1053,11 +1075,14 @@ class _DraftFormState extends State<DraftForm> {
     required List<String> recipients,
     required String body,
     required String subject,
+    required DraftQuoteTarget? quoteTarget,
     required List<PendingAttachment> pendingAttachments,
   }) {
     final List<Object?> values = <Object?>[
       body,
       subject,
+      quoteTarget?.stanzaId,
+      quoteTarget?.referenceKind,
       ...recipients,
       ...pendingAttachments.map(
         (pending) => _attachmentSignature(pending.attachment),
@@ -1066,7 +1091,7 @@ class _DraftFormState extends State<DraftForm> {
     return Object.hashAll(values);
   }
 
-  Object _attachmentSignature(EmailAttachment attachment) {
+  Object _attachmentSignature(Attachment attachment) {
     final String? metadataId = attachment.metadataId;
     if (metadataId != null && metadataId.isNotEmpty) {
       return metadataId;
@@ -1283,6 +1308,7 @@ class _DraftFormState extends State<DraftForm> {
         body: _bodyTextController.text,
         shareTokenSignatureEnabled: shareTokenSignatureEnabled,
         subject: _subjectTextController.text,
+        quoteTarget: widget.quoteTarget,
         attachments: _currentAttachments(),
       );
     } catch (_) {
@@ -1345,7 +1371,15 @@ class _DraftFormState extends State<DraftForm> {
     return _recipients.includedRecipients.recipientAddresses();
   }
 
-  List<EmailAttachment> _currentAttachments() =>
+  void _notifyRecipientAddressesChanged() {
+    final onRecipientAddressesChanged = widget.onRecipientAddressesChanged;
+    if (onRecipientAddressesChanged == null) {
+      return;
+    }
+    onRecipientAddressesChanged(_recipientStrings());
+  }
+
+  List<Attachment> _currentAttachments() =>
       _pendingAttachments.map((pending) => pending.attachment).toList();
 
   void _showToast(String message) {

@@ -121,6 +121,19 @@ final class DraftQuoteTarget {
   final String stanzaId;
   final MessageReferenceKind referenceKind;
 
+  MessageReference get messageReference =>
+      MessageReference(kind: referenceKind, value: stanzaId);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DraftQuoteTarget &&
+          other.stanzaId == stanzaId &&
+          other.referenceKind == referenceKind;
+
+  @override
+  int get hashCode => Object.hash(stanzaId, referenceKind);
+
   static DraftQuoteTarget? fromDraft({
     required String? stanzaId,
     required MessageReferenceKind? referenceKind,

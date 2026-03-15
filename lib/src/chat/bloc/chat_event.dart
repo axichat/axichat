@@ -268,6 +268,7 @@ final class ChatMessageSent extends ChatEvent {
     this.calendarTaskIcs,
     this.calendarTaskIcsReadOnly = CalendarTaskIcsMessage.defaultReadOnly,
     this.calendarTaskShareText,
+    this.completer,
   });
 
   final Chat chat;
@@ -283,6 +284,7 @@ final class ChatMessageSent extends ChatEvent {
   final CalendarTask? calendarTaskIcs;
   final bool calendarTaskIcsReadOnly;
   final String? calendarTaskShareText;
+  final Completer<List<PendingAttachment>>? completer;
 
   @override
   List<Object?> get props => [
@@ -299,6 +301,7 @@ final class ChatMessageSent extends ChatEvent {
     calendarTaskIcs,
     calendarTaskIcsReadOnly,
     calendarTaskShareText,
+    completer,
   ];
 }
 
@@ -559,12 +562,13 @@ final class ChatMessageResendRequested extends ChatEvent {
 }
 
 final class ChatMessageEditRequested extends ChatEvent {
-  const ChatMessageEditRequested(this.message);
+  const ChatMessageEditRequested(this.message, {this.attachmentsCompleter});
 
   final Message message;
+  final Completer<List<PendingAttachment>>? attachmentsCompleter;
 
   @override
-  List<Object?> get props => const [];
+  List<Object?> get props => [message, attachmentsCompleter];
 }
 
 final class ChatComposerErrorCleared extends ChatEvent {
@@ -580,15 +584,23 @@ final class ChatAttachmentPicked extends ChatEvent {
     required this.recipients,
     required this.chat,
     required this.quotedDraft,
+    required this.completer,
   });
 
-  final EmailAttachment attachment;
+  final Attachment attachment;
   final List<ComposerRecipient> recipients;
   final Chat chat;
   final Message? quotedDraft;
+  final Completer<PendingAttachment?> completer;
 
   @override
-  List<Object?> get props => [attachment, recipients, chat, quotedDraft];
+  List<Object?> get props => [
+    attachment,
+    recipients,
+    chat,
+    quotedDraft,
+    completer,
+  ];
 }
 
 final class ChatAttachmentRetryRequested extends ChatEvent {
@@ -600,6 +612,7 @@ final class ChatAttachmentRetryRequested extends ChatEvent {
     required this.subject,
     required this.settings,
     required this.supportsHttpFileUpload,
+    required this.completer,
   });
 
   final PendingAttachment attachment;
@@ -609,6 +622,7 @@ final class ChatAttachmentRetryRequested extends ChatEvent {
   final String? subject;
   final ChatSettingsSnapshot settings;
   final bool supportsHttpFileUpload;
+  final Completer<PendingAttachment?> completer;
 
   @override
   List<Object?> get props => [
@@ -619,16 +633,23 @@ final class ChatAttachmentRetryRequested extends ChatEvent {
     subject,
     settings,
     supportsHttpFileUpload,
+    completer,
   ];
 }
 
-final class ChatPendingAttachmentRemoved extends ChatEvent {
-  const ChatPendingAttachmentRemoved(this.attachmentId);
+final class ChatDemoPendingAttachmentsRequested extends ChatEvent {
+  const ChatDemoPendingAttachmentsRequested({
+    required this.chat,
+    required this.existingFileNames,
+    required this.completer,
+  });
 
-  final String attachmentId;
+  final Chat chat;
+  final Set<String> existingFileNames;
+  final Completer<List<PendingAttachment>> completer;
 
   @override
-  List<Object?> get props => [attachmentId];
+  List<Object?> get props => [chat, existingFileNames, completer];
 }
 
 final class ChatInviteRequested extends ChatEvent {
