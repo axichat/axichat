@@ -1015,7 +1015,7 @@ void main() {
 
     bloc.add(
       ChatAttachmentRetryRequested(
-        attachmentId: failed.id,
+        attachment: failed,
         recipients: recipients,
         chat: emailChat,
         quotedDraft: null,

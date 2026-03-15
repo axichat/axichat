@@ -483,22 +483,6 @@ final class ChatRecipientEmailChatRequested extends ChatEvent {
   List<Object?> get props => [recipient, failureMessage];
 }
 
-final class ChatQuoteRequested extends ChatEvent {
-  const ChatQuoteRequested(this.message);
-
-  final Message message;
-
-  @override
-  List<Object?> get props => const [];
-}
-
-final class ChatQuoteCleared extends ChatEvent {
-  const ChatQuoteCleared();
-
-  @override
-  List<Object?> get props => [];
-}
-
 final class ChatMessagePinRequested extends ChatEvent {
   const ChatMessagePinRequested({
     required this.message,
@@ -609,7 +593,7 @@ final class ChatAttachmentPicked extends ChatEvent {
 
 final class ChatAttachmentRetryRequested extends ChatEvent {
   const ChatAttachmentRetryRequested({
-    required this.attachmentId,
+    required this.attachment,
     required this.recipients,
     required this.chat,
     required this.quotedDraft,
@@ -618,7 +602,7 @@ final class ChatAttachmentRetryRequested extends ChatEvent {
     required this.supportsHttpFileUpload,
   });
 
-  final String attachmentId;
+  final PendingAttachment attachment;
   final List<ComposerRecipient> recipients;
   final Chat chat;
   final Message? quotedDraft;
@@ -628,7 +612,7 @@ final class ChatAttachmentRetryRequested extends ChatEvent {
 
   @override
   List<Object?> get props => [
-    attachmentId,
+    attachment,
     recipients,
     chat,
     quotedDraft,

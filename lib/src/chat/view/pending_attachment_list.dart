@@ -29,7 +29,7 @@ class PendingAttachmentList extends StatelessWidget {
   });
 
   final List<PendingAttachment> attachments;
-  final ValueChanged<String> onRetry;
+  final ValueChanged<PendingAttachment> onRetry;
   final ValueChanged<String> onRemove;
   final ValueChanged<PendingAttachment>? onPressed;
   final ValueChanged<PendingAttachment>? onLongPress;
@@ -47,7 +47,7 @@ class PendingAttachmentList extends StatelessWidget {
             .map(
               (pending) => _PendingAttachmentPreview(
                 pending: pending,
-                onRetry: () => onRetry(pending.id),
+                onRetry: () => onRetry(pending),
                 onRemove: () => onRemove(pending.id),
                 onPressed: onPressed == null ? null : () => onPressed!(pending),
                 onLongPress: onLongPress == null

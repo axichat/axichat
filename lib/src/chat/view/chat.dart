@@ -1164,6 +1164,7 @@ class _ChatState extends State<Chat> {
       CalendarFragmentPolicy();
   CalendarTask? _pendingCalendarTaskIcs;
   String? _pendingCalendarSeedText;
+  Message? _quotedDraft;
   var _handledPendingOpenMessageRequestId = 0;
 
   bool get _multiSelectActive => _multiSelectedMessageIds.isNotEmpty;
@@ -3092,7 +3093,7 @@ class _ChatState extends State<Chat> {
         supportsHttpFileUpload: chatState.supportsHttpFileUpload,
         attachmentFallbackLabel: l10n.chatAttachmentFallbackLabel,
         subject: _subjectController.text,
-        quotedDraft: chatState.quoting,
+        quotedDraft: _quotedDraft,
         roomState: chatState.roomState,
         calendarTaskIcs: _pendingCalendarTaskIcs,
         calendarTaskIcsReadOnly: _calendarTaskIcsReadOnlyFallback,
@@ -3420,9 +3421,14 @@ class _ChatState extends State<Chat> {
             attachment: attachment,
             recipients: _recipients,
             chat: chat,
-            quotedDraft: chatState.quoting,
+            quotedDraft: _quotedDraft,
           ),
         );
+      }
+      if (_quotedDraft != null) {
+        setState(() {
+          _quotedDraft = null;
+        });
       }
       _focusNode.requestFocus();
     } on PlatformException catch (error) {
@@ -3474,7 +3480,7 @@ class _ChatState extends State<Chat> {
             }
             context.read<ChatBloc>().add(
               ChatAttachmentRetryRequested(
-                attachmentId: pending.id,
+                attachment: pending,
                 recipients: _recipients,
                 chat: chat,
                 quotedDraft: quotedDraft,
@@ -3594,10 +3600,10 @@ class _ChatState extends State<Chat> {
                         );
                         context.read<ChatBloc>().add(
                           ChatAttachmentRetryRequested(
-                            attachmentId: pending.id,
+                            attachment: pending,
                             recipients: _recipients,
                             chat: chat,
-                            quotedDraft: chatState.quoting,
+                            quotedDraft: _quotedDraft,
                             subject: _subjectController.text,
                             settings: settingsSnapshot,
                             supportsHttpFileUpload:
@@ -4367,6 +4373,7 @@ class _ChatState extends State<Chat> {
               listener: (_, _) {
                 _textController.clear();
                 _composerHasText = false;
+                _quotedDraft = null;
                 _subjectChangeSuppressed = true;
                 _subjectController.clear();
                 _lastSubjectValue = _emptyText;
@@ -4396,6 +4403,7 @@ class _ChatState extends State<Chat> {
                 _hydratedAnimatedMessages = false;
                 _textController.clear();
                 _composerHasText = false;
+                _quotedDraft = null;
                 _subjectChangeSuppressed = true;
                 _subjectController.clear();
                 _lastSubjectValue = _emptyText;
@@ -5965,9 +5973,8 @@ class _ChatState extends State<Chat> {
                                         .animationDuration;
                                     final overlayAnimationDuration =
                                         settingsAnimationDuration;
-                                    final quoting = state.quoting;
                                     final quotedMessage =
-                                        quoting ??
+                                        _quotedDraft ??
                                         (_debugShowAllComposerBanners &&
                                                 filteredItems.isNotEmpty
                                             ? filteredItems.first
@@ -6216,17 +6223,17 @@ class _ChatState extends State<Chat> {
                                               _handleRecipientRemoved,
                                           onRecipientToggled:
                                               _handleRecipientToggled,
-                                          onAttachmentRetry: (id) {
+                                          onAttachmentRetry: (pending) {
                                             final chat = chatEntity;
                                             if (chat == null) {
                                               return;
                                             }
                                             context.read<ChatBloc>().add(
                                               ChatAttachmentRetryRequested(
-                                                attachmentId: id,
+                                                attachment: pending,
                                                 recipients: _recipients,
                                                 chat: chat,
-                                                quotedDraft: state.quoting,
+                                                quotedDraft: _quotedDraft,
                                                 subject:
                                                     _subjectController.text,
                                                 settings: settingsSnapshot,
@@ -6251,7 +6258,7 @@ class _ChatState extends State<Chat> {
                                               ) => _pendingAttachmentMenuItems(
                                                 pending,
                                                 chat: chatEntity,
-                                                quotedDraft: state.quoting,
+                                                quotedDraft: _quotedDraft,
                                                 supportsHttpFileUpload: state
                                                     .supportsHttpFileUpload,
                                                 settingsSnapshot:
@@ -6332,12 +6339,11 @@ class _ChatState extends State<Chat> {
                                         quotedSenderLabel:
                                             overlayQuotedSenderLabel,
                                         quotedIsSelf: overlayQuotedIsSelf,
-                                        onClearQuote: quoting == null
+                                        onClearQuote: _quotedDraft == null
                                             ? () {}
-                                            : () =>
-                                                  context.read<ChatBloc>().add(
-                                                    const ChatQuoteCleared(),
-                                                  ),
+                                            : () => setState(() {
+                                                _quotedDraft = null;
+                                              }),
                                         notices: overlayNotices,
                                         banner: composerOverlayBanner,
                                         animationDuration:
@@ -9085,13 +9091,10 @@ class _ChatState extends State<Chat> {
                                                     final includeSelectAction =
                                                         !_multiSelectActive;
                                                     void onReply() {
-                                                      context
-                                                          .read<ChatBloc>()
-                                                          .add(
-                                                            ChatQuoteRequested(
-                                                              messageModel,
-                                                            ),
-                                                          );
+                                                      setState(() {
+                                                        _quotedDraft =
+                                                            messageModel;
+                                                      });
                                                       _focusNode.requestFocus();
                                                     }
 
@@ -14181,7 +14184,7 @@ class _ChatComposerSection extends StatelessWidget {
   final ValueChanged<Contact> onRecipientAdded;
   final ValueChanged<String> onRecipientRemoved;
   final ValueChanged<String> onRecipientToggled;
-  final ValueChanged<String> onAttachmentRetry;
+  final ValueChanged<PendingAttachment> onAttachmentRetry;
   final ValueChanged<String> onAttachmentRemove;
   final ValueChanged<PendingAttachment> onPendingAttachmentPressed;
   final ValueChanged<PendingAttachment>? onPendingAttachmentLongPressed;

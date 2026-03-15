@@ -446,8 +446,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     on<ChatSpamStatusRequested>(_onChatSpamStatusRequested);
     on<ChatContactAddRequested>(_onChatContactAddRequested);
     on<ChatRecipientEmailChatRequested>(_onChatRecipientEmailChatRequested);
-    on<ChatQuoteRequested>(_onChatQuoteRequested);
-    on<ChatQuoteCleared>(_onChatQuoteCleared);
     on<ChatMessagePinRequested>(_onChatMessagePinRequested);
     on<ChatMessageImportantToggled>(_onChatMessageImportantToggled);
     on<ChatMessageReactionToggled>(_onChatMessageReactionToggled);
@@ -1774,7 +1772,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
             ? null
             : state.xmppCapabilities,
         focused: resetContext ? null : state.focused,
-        quoting: resetContext ? null : state.quoting,
         typingParticipants: typingShouldClear
             ? const []
             : state.typingParticipants,
@@ -4857,27 +4854,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     }
   }
 
-  void _onChatQuoteRequested(
-    ChatQuoteRequested event,
-    Emitter<ChatState> emit,
-  ) {
-    final currentChat = state.chat;
-    if (currentChat != null &&
-        event.message.awaitsMucReference(
-          isGroupChat: currentChat.type == ChatType.groupChat,
-          isEmailBacked: currentChat.isEmailBacked,
-        )) {
-      return;
-    }
-    emit(state.copyWith(quoting: event.message));
-  }
-
-  void _onChatQuoteCleared(ChatQuoteCleared event, Emitter<ChatState> emit) {
-    if (state.quoting != null) {
-      emit(state.copyWith(quoting: null));
-    }
-  }
-
   Future<void> _onChatMessagePinRequested(
     ChatMessagePinRequested event,
     Emitter<ChatState> emit,
@@ -5408,7 +5384,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     emit(
       state.copyWith(
         pendingAttachments: [...state.pendingAttachments, placeholder],
-        quoting: null,
       ),
     );
 
@@ -5478,9 +5453,9 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
     ChatAttachmentRetryRequested event,
     Emitter<ChatState> emit,
   ) async {
-    final pending = _pendingAttachmentById(event.attachmentId);
+    final pending = event.attachment;
     final chat = event.chat;
-    if (pending == null || pending.status != PendingAttachmentStatus.failed) {
+    if (pending.status != PendingAttachmentStatus.failed) {
       return;
     }
     final recipients = event.recipients.includedRecipients;
@@ -5531,14 +5506,11 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
         return;
       }
     }
-    final latest = _pendingAttachmentById(updated.id);
-    if (latest == null ||
-        latest.status == PendingAttachmentStatus.failed ||
-        !requiresXmpp) {
+    if (!requiresXmpp) {
       return;
     }
     final sent = await _sendXmppAttachments(
-      attachments: [latest],
+      attachments: [updated],
       chat: chat,
       recipients: xmppRecipients,
       emit: emit,
@@ -5934,18 +5906,17 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
   }) async {
     var index = 0;
     for (final attachment in attachments) {
-      final latest = _pendingAttachmentById(attachment.id) ?? attachment;
       final shouldApplyCaption =
           captionForFirstAttachment != null && index == 0;
       final shouldApplyHtmlCaption =
           htmlCaptionForFirstAttachment != null && index == 0;
       final pendingWithCaption = shouldApplyCaption
-          ? latest.copyWith(
-              attachment: latest.attachment.copyWith(
+          ? attachment.copyWith(
+              attachment: attachment.attachment.copyWith(
                 caption: captionForFirstAttachment,
               ),
             )
-          : latest;
+          : attachment;
       final sent = await _sendPendingAttachment(
         pending: pendingWithCaption,
         chat: chat,
@@ -7306,15 +7277,6 @@ class ChatBloc extends Bloc<ChatEvent, ChatState> {
       attachments.map((attachment) => attachment.id),
       emit,
     );
-  }
-
-  PendingAttachment? _pendingAttachmentById(String attachmentId) {
-    for (final pending in state.pendingAttachments) {
-      if (pending.id == attachmentId) {
-        return pending;
-      }
-    }
-    return null;
   }
 
   Future<void> _rehydrateXmppDraft(

@@ -1408,7 +1408,7 @@ class _DraftFormState extends State<DraftForm> {
     _formKey.currentState?.validate();
   }
 
-  void _handlePendingAttachmentRetry(String id) {}
+  void _handlePendingAttachmentRetry(PendingAttachment pending) {}
 
   void _handlePendingAttachmentPressed(PendingAttachment pending) {
     final commandSurface =
@@ -1822,7 +1822,7 @@ class _DraftAttachmentsSection extends StatelessWidget {
   final bool addingAttachment;
   final List<PendingAttachment> attachments;
   final Future<void> Function()? onAddAttachment;
-  final ValueChanged<String> onRetry;
+  final ValueChanged<PendingAttachment> onRetry;
   final ValueChanged<String> onRemove;
   final ValueChanged<PendingAttachment> onAttachmentPressed;
   final ValueChanged<PendingAttachment> onAttachmentLongPressed;

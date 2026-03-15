@@ -20,7 +20,6 @@ abstract class ChatState with _$ChatState {
     RoomState? roomState,
     @Default(<RoomMemberSection>[]) List<RoomMemberSection> roomMemberSections,
     Message? focused,
-    Message? quoting,
     @Default(false) bool typing,
     @Default(<String>[]) List<String> typingParticipants,
     @Default(true) bool showAlert,
