@@ -2,7 +2,7 @@
 // Copyright (C) 2025-present Eliot Lew, Axichat Developers
 
 import 'package:axichat/src/common/capability.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/bloc/notification_request_cubit.dart';
 import 'package:axichat/src/notifications/view/notification_dialog.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';

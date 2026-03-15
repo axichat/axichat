@@ -6,11 +6,11 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:app_settings/app_settings.dart';
+import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/notification_privacy.dart';
 import 'package:axichat/src/common/sync_rate_limiter.dart';
 import 'package:axichat/src/common/ui/ui.dart';
-import 'package:axichat/src/notifications/notification_strings.dart';
-import 'package:axichat/src/xmpp/foreground_socket.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart'
     hide NotificationVisibility;
@@ -38,6 +38,47 @@ const WindowRateLimit _messageNotificationGlobalRateLimit = WindowRateLimit(
 );
 
 enum MessageNotificationChannel { chat, email }
+
+class NotificationStrings {
+  const NotificationStrings({
+    required this.channelMessages,
+    required this.newMessageTitle,
+    required this.openAction,
+    required this.appTitle,
+    required this.backgroundConnectionDisabledTitle,
+    required this.backgroundConnectionDisabledBody,
+  });
+
+  const NotificationStrings.empty()
+    : channelMessages = '',
+      newMessageTitle = '',
+      openAction = '',
+      appTitle = '',
+      backgroundConnectionDisabledTitle = '',
+      backgroundConnectionDisabledBody = '';
+
+  final String channelMessages;
+  final String newMessageTitle;
+  final String openAction;
+  final String appTitle;
+  final String backgroundConnectionDisabledTitle;
+  final String backgroundConnectionDisabledBody;
+}
+
+extension NotificationStringsFromL10n on AppLocalizations {
+  NotificationStrings toNotificationStrings() {
+    return NotificationStrings(
+      channelMessages: notificationChannelMessages,
+      newMessageTitle: notificationNewMessageTitle,
+      openAction: notificationOpenAction,
+      appTitle: appTitle,
+      backgroundConnectionDisabledTitle:
+          notificationBackgroundConnectionDisabledTitle,
+      backgroundConnectionDisabledBody:
+          notificationBackgroundConnectionDisabledBody,
+    );
+  }
+}
 
 final class _MessageNotificationEntry {
   const _MessageNotificationEntry({

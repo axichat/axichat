@@ -3,7 +3,7 @@
 
 import 'package:async/async.dart';
 import 'package:axichat/main.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';

@@ -10,7 +10,6 @@ import 'package:axichat/src/accessibility/view/accessibility_action_menu.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
-import 'package:axichat/src/blocklist/view/blocklist_notice_l10n.dart';
 import 'package:axichat/src/calendar/bloc/calendar_bloc.dart';
 import 'package:axichat/src/calendar/bloc/calendar_event.dart';
 import 'package:axichat/src/calendar/models/calendar_task.dart';
@@ -29,10 +28,12 @@ import 'package:axichat/src/chats/view/chats_add_button.dart';
 import 'package:axichat/src/chats/view/chats_filter_button.dart';
 import 'package:axichat/src/chats/view/chats_list.dart';
 import 'package:axichat/src/common/env.dart';
+import 'package:axichat/src/common/file_metadata_tools.dart';
 import 'package:axichat/src/common/file_type_detector.dart';
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/request_status.dart';
 import 'package:axichat/src/common/search/search_models.dart';
+import 'package:axichat/src/common/ui/axi_attention_shake.dart';
 import 'package:axichat/src/common/ui/feedback_toast.dart';
 import 'package:axichat/src/common/ui/keyboard_pop_scope.dart';
 import 'package:axichat/src/common/ui/ui.dart';
@@ -45,20 +46,17 @@ import 'package:axichat/src/draft/view/compose_launcher.dart';
 import 'package:axichat/src/draft/view/draft_button.dart';
 import 'package:axichat/src/draft/view/compose_window.dart';
 import 'package:axichat/src/draft/view/drafts_list.dart';
-import 'package:axichat/src/email/models/email_attachment.dart';
 import 'package:axichat/src/email/service/attachment_optimizer.dart';
-import 'package:axichat/src/email/service/email_sync_state.dart';
+import 'package:axichat/src/email/models/email_sync_state.dart';
 import 'package:axichat/src/email/service/email_service.dart';
 import 'package:axichat/src/email/view/email_forwarding_guide.dart';
 import 'package:axichat/src/home/home_search_cubit.dart';
-import 'package:axichat/src/home/home_search_definitions.dart';
-import 'package:axichat/src/home/home_search_models.dart';
 import 'package:axichat/src/important/bloc/important_messages_cubit.dart';
 import 'package:axichat/src/important/models/important_message_item.dart';
 import 'package:axichat/src/important/view/important_messages_list.dart';
 import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
-import 'package:axichat/src/notifications/bloc/notification_service.dart';
+import 'package:axichat/src/notifications/notification_service.dart';
 import 'package:axichat/src/notifications/view/omemo_operation_overlay.dart';
 import 'package:axichat/src/notifications/view/xmpp_operation_overlay.dart';
 import 'package:axichat/src/profile/bloc/profile_cubit.dart';
@@ -687,7 +685,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required DraftSyncService draftSyncService,
     required List<ShareAttachmentPayload> attachments,
   }) async {
-    final List<EmailAttachment> prepared = await _prepareSharedAttachments(
+    final List<Attachment> prepared = await _prepareSharedAttachments(
       attachments: attachments,
       optimize: true,
     );
@@ -697,14 +695,14 @@ class _HomeScreenState extends State<HomeScreen> {
     return draftSyncService.persistDraftAttachmentMetadata(prepared);
   }
 
-  Future<List<EmailAttachment>> _prepareSharedAttachments({
+  Future<List<Attachment>> _prepareSharedAttachments({
     required List<ShareAttachmentPayload> attachments,
     required bool optimize,
   }) async {
     if (attachments.isEmpty) {
-      return const <EmailAttachment>[];
+      return const <Attachment>[];
     }
-    final List<EmailAttachment> prepared = <EmailAttachment>[];
+    final List<Attachment> prepared = <Attachment>[];
     for (final ShareAttachmentPayload attachment in attachments) {
       final String normalizedPath = _normalizeSharedAttachmentPath(
         attachment.path,
@@ -730,20 +728,20 @@ class _HomeScreenState extends State<HomeScreen> {
         path: normalizedPath,
         attachment: attachment,
       );
-      EmailAttachment emailAttachment = EmailAttachment(
+      Attachment attachmentValue = Attachment(
         path: normalizedPath,
         fileName: fileName,
         sizeBytes: resolvedSizeBytes,
         mimeType: mimeType,
       );
       if (optimize) {
-        emailAttachment = await EmailAttachmentOptimizer.optimize(
-          emailAttachment,
+        attachmentValue = await EmailAttachmentOptimizer.optimize(
+          attachmentValue,
         );
       }
-      prepared.add(emailAttachment);
+      prepared.add(attachmentValue);
     }
-    return List<EmailAttachment>.unmodifiable(prepared);
+    return List<Attachment>.unmodifiable(prepared);
   }
 
   String _normalizeSharedAttachmentPath(String path) {
