@@ -5,7 +5,6 @@ import 'dart:async';
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/authentication/view/auth_message_l10n.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';

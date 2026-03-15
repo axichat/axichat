@@ -3,7 +3,6 @@
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/blocklist/bloc/blocklist_cubit.dart';
-import 'package:axichat/src/blocklist/view/blocklist_notice_l10n.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/roster/bloc/roster_cubit.dart';

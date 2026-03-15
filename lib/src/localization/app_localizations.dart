@@ -216,7 +216,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatsFilterAll.
   ///
   /// In en, this message translates to:
-  /// **'All chats'**
+  /// **'All'**
   String get chatsFilterAll;
 
   /// No description provided for @chatsFilterContacts.
@@ -228,19 +228,19 @@ abstract class AppLocalizations {
   /// No description provided for @chatsFilterNonContacts.
   ///
   /// In en, this message translates to:
-  /// **'Non-contacts'**
+  /// **'Others'**
   String get chatsFilterNonContacts;
 
   /// No description provided for @chatsFilterXmppOnly.
   ///
   /// In en, this message translates to:
-  /// **'XMPP only'**
+  /// **'Chat'**
   String get chatsFilterXmppOnly;
 
   /// No description provided for @chatsFilterEmailOnly.
   ///
   /// In en, this message translates to:
-  /// **'Email only'**
+  /// **'Email'**
   String get chatsFilterEmailOnly;
 
   /// No description provided for @chatsFilterHidden.
@@ -5427,7 +5427,7 @@ abstract class AppLocalizations {
   /// No description provided for @chatsRoomLabel.
   ///
   /// In en, this message translates to:
-  /// **'Room'**
+  /// **'Group'**
   String get chatsRoomLabel;
 
   /// No description provided for @chatsCreateChatRoomTitle.

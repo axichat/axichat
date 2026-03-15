@@ -152,17 +152,22 @@ class OperationProgressBar extends StatelessWidget {
                       style: textTheme.muted,
                     ),
                     SizedBox(height: spacing.xs),
-                    ShadProgress(
-                      value: animation.value.clamp(0.0, 1.0),
-                      minHeight: barHeight,
-                      backgroundColor: colors.muted.withValues(
-                        alpha: motion.tapHoverAlpha,
+                    FractionallySizedBox(
+                      widthFactor: 0.75,
+                      child: ShadProgress(
+                        value: animation.value.clamp(0.0, 1.0),
+                        minHeight: barHeight,
+                        backgroundColor: colors.muted.withValues(
+                          alpha: motion.tapHoverAlpha,
+                        ),
+                        color: colors.primary,
+                        borderRadius: borderRadius,
+                        innerBorderRadius: borderRadius,
+                        semanticsLabel: label,
+                        semanticsValue: context.l10n.commonPercentLabel(
+                          percent,
+                        ),
                       ),
-                      color: colors.primary,
-                      borderRadius: borderRadius,
-                      innerBorderRadius: borderRadius,
-                      semanticsLabel: label,
-                      semanticsValue: context.l10n.commonPercentLabel(percent),
                     ),
                   ],
                 );

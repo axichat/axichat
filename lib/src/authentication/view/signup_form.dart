@@ -6,11 +6,9 @@ import 'dart:math' as math;
 
 import 'package:axichat/src/app.dart';
 import 'package:axichat/src/authentication/bloc/authentication_cubit.dart';
-import 'package:axichat/src/authentication/view/auth_message_l10n.dart';
 import 'package:axichat/src/authentication/view/terms_checkbox.dart';
 import 'package:axichat/src/authentication/view/widgets/endpoint_config_sheet.dart';
 import 'package:axichat/src/avatar/bloc/signup_avatar_cubit.dart';
-import 'package:axichat/src/avatar/view/avatar_error_l10n.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_editor_panel.dart';
 import 'package:axichat/src/avatar/view/widgets/signup_avatar_selector.dart';
 import 'package:axichat/src/common/generate_random.dart';

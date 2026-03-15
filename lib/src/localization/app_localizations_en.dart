@@ -67,19 +67,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get draftsFilterAttachments => 'With attachments';
 
   @override
-  String get chatsFilterAll => 'All chats';
+  String get chatsFilterAll => 'All';
 
   @override
   String get chatsFilterContacts => 'Contacts';
 
   @override
-  String get chatsFilterNonContacts => 'Non-contacts';
+  String get chatsFilterNonContacts => 'Others';
 
   @override
-  String get chatsFilterXmppOnly => 'XMPP only';
+  String get chatsFilterXmppOnly => 'Chat';
 
   @override
-  String get chatsFilterEmailOnly => 'Email only';
+  String get chatsFilterEmailOnly => 'Email';
 
   @override
   String get chatsFilterHidden => 'Hidden';
@@ -3013,7 +3013,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chatsRefreshFailed => 'Sync failed.';
 
   @override
-  String get chatsRoomLabel => 'Room';
+  String get chatsRoomLabel => 'Group';
 
   @override
   String get chatsCreateChatRoomTitle => 'Create chat room';

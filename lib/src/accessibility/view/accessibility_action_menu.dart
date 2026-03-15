@@ -3,7 +3,6 @@
 
 import 'package:axichat/src/accessibility/bloc/accessibility_action_bloc.dart';
 import 'package:axichat/src/accessibility/bloc/accessibility_chat_bloc.dart';
-import 'package:axichat/src/accessibility/view/accessibility_l10n.dart';
 import 'package:axichat/src/accessibility/view/shortcut_hint.dart';
 import 'package:axichat/src/accessibility/models/accessibility_action_models.dart';
 import 'package:axichat/src/app.dart';
@@ -13,6 +12,7 @@ import 'package:axichat/src/common/env.dart';
 import 'package:axichat/src/common/transport.dart';
 import 'package:axichat/src/common/ui/ui.dart';
 import 'package:axichat/src/email/service/email_service.dart';
+import 'package:axichat/src/localization/app_localizations.dart';
 import 'package:axichat/src/localization/localization_extensions.dart';
 import 'package:axichat/src/settings/bloc/settings_cubit.dart';
 import 'package:axichat/src/storage/models.dart';
@@ -22,6 +22,69 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
+
+extension AccessibilityActionStatusL10n on AccessibilityActionStatus {
+  String label(AppLocalizations l10n) => switch (this) {
+    AccessibilityActionStatus.discardWarning =>
+      l10n.accessibilityDiscardWarning,
+    AccessibilityActionStatus.draftLoaded => l10n.accessibilityDraftLoaded,
+    AccessibilityActionStatus.inviteAccepted =>
+      l10n.accessibilityInviteAccepted,
+    AccessibilityActionStatus.inviteDismissed =>
+      l10n.accessibilityInviteDismissed,
+  };
+}
+
+extension AccessibilityActionErrorL10n on AccessibilityActionError {
+  String label(AppLocalizations l10n) => switch (this) {
+    AccessibilityActionError.jidInputInvalid => l10n.jidInputInvalid,
+    AccessibilityActionError.inviteUpdateFailed =>
+      l10n.accessibilityInviteUpdateFailed,
+  };
+}
+
+extension AccessibilityChatStatusL10n on AccessibilityChatStatus {
+  String label(AppLocalizations l10n) => switch (this) {
+    AccessibilityChatStatusMessageSent() => l10n.accessibilityMessageSent,
+    AccessibilityChatStatusDraftSaved() => l10n.chatDraftSaved,
+    AccessibilityChatStatusIncomingMessage(
+      :final senderDisplayName,
+      :final isSelf,
+      :final timestamp,
+    ) =>
+      l10n.accessibilityIncomingMessageStatus(
+        isSelf ? l10n.chatSenderYou : senderDisplayName,
+        _formatAccessibilityTimestamp(l10n, timestamp),
+      ),
+  };
+}
+
+extension AccessibilityChatErrorL10n on AccessibilityChatError {
+  String label(AppLocalizations l10n) => switch (this) {
+    AccessibilityChatErrorMissingContent() => l10n.chatDraftMissingContent,
+    AccessibilityChatErrorSendFailures(:final failureCount, :final failures) =>
+      _fanOutFailureLabel(l10n, failureCount, failures),
+  };
+}
+
+String _fanOutFailureLabel(
+  AppLocalizations l10n,
+  int failureCount,
+  List<String> failures,
+) {
+  if (failureCount <= 0) return '';
+  final recipientLabel = l10n.chatFanOutRecipientLabel(failureCount);
+  final summary = l10n.chatFanOutFailure(failureCount, recipientLabel);
+  return '$summary: ${failures.join(', ')}';
+}
+
+String _formatAccessibilityTimestamp(
+  AppLocalizations l10n,
+  DateTime? timestamp,
+) {
+  final safe = timestamp ?? DateTime.now();
+  return DateFormat.yMMMd(l10n.localeName).add_jm().format(safe);
+}
 
 String _stepLabelFor(BuildContext context, AccessibilityStepEntry entry) {
   final l10n = context.l10n;
