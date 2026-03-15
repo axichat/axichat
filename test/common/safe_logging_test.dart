@@ -12,17 +12,17 @@ void main() {
     });
 
     test('Redacts absolute file paths', () {
-      const message = 'Attachment path=/home/eliot/secret.txt';
+      const message = 'Attachment path=/home/tester/secret.txt';
       final sanitized = SafeLogging.sanitizeMessage(message);
       expect(sanitized, contains('path=${SafeLogging.redactedPath}'));
-      expect(sanitized, isNot(contains('/home/eliot/secret.txt')));
+      expect(sanitized, isNot(contains('/home/tester/secret.txt')));
     });
 
     test('Redacts absolute file paths wrapped in punctuation', () {
-      const message = 'Exception opening file (/home/eliot/secret.txt).';
+      const message = 'Exception opening file (/home/tester/secret.txt).';
       final sanitized = SafeLogging.sanitizeMessage(message);
       expect(sanitized, contains('(${SafeLogging.redactedPath})'));
-      expect(sanitized, isNot(contains('/home/eliot/secret.txt')));
+      expect(sanitized, isNot(contains('/home/tester/secret.txt')));
     });
 
     test('Redacts password-like values', () {

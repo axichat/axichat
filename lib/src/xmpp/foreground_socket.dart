@@ -6,19 +6,18 @@ import 'dart:io';
 
 import 'package:axichat/src/common/fire_and_forget.dart';
 import 'package:axichat/src/common/flavor_prefix.dart';
+import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/common/safe_logging.dart';
 import 'package:axichat/src/xmpp/xmpp_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' hide ConnectionState;
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart'
-    hide NotificationVisibility;
 import 'package:intl/intl.dart';
 import 'package:logging/logging.dart';
 import 'package:moxxmpp/moxxmpp.dart' as mox;
 
-const join = '::';
+const join = foregroundTaskMessageSeparator;
 const connectPrefix = 'Connect';
 const securePrefix = 'Secure';
 const String _foregroundSocketSendOperationName = 'ForegroundSocket.sendToTask';
@@ -28,15 +27,9 @@ const destroyPrefix = 'Destroy';
 const dataPrefix = 'Data';
 const socketErrorPrefix = 'XmppSocketErrorEvent';
 const socketClosurePrefix = 'XmppSocketClosureEvent';
-const emailKeepalivePrefix = 'EmailKeepalive';
-const emailKeepaliveTickPrefix = 'EmailKeepaliveTick';
-const emailKeepaliveStartCommand = 'Start';
-const emailKeepaliveStopCommand = 'Stop';
 const taskReadyPrefix = 'ForegroundTaskReady';
 const foregroundClientXmpp = 'xmpp_socket';
-const foregroundClientEmailKeepalive = 'email_keepalive';
 const _foregroundServiceId = 256;
-const notificationTapPrefix = 'NotificationTap';
 
 typedef ForegroundTaskMessageHandler = FutureOr<void> Function(String data);
 
@@ -196,6 +189,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
       return;
     }
     final pendingStart = _startCompleter;
+    final startupWasInFlight = pendingStart != null;
     if (pendingStart != null) {
       try {
         await pendingStart.future;
@@ -207,7 +201,7 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
         return;
       }
     }
-    await _stopService();
+    await _stopService(forceStop: startupWasInFlight);
   }
 
   void _decrementUsage(String clientId) {
@@ -250,9 +244,9 @@ class FlutterForegroundTaskBridge implements ForegroundTaskBridge {
     }
   }
 
-  Future<void> _stopService() async {
+  Future<void> _stopService({bool forceStop = false}) async {
     try {
-      final serviceRunning = await _isRunningService();
+      final serviceRunning = forceStop ? true : await _isRunningService();
       if (!serviceRunning) {
         _log.fine(
           'Skipping foreground service stop because the service is not running.',
@@ -481,50 +475,6 @@ ForegroundServiceConfig buildForegroundServiceConfig({
     metaDataName: 'im.axi.axichat.APP_ICON',
   ),
 );
-
-bool launchedFromNotification = false;
-String? _launchedNotificationChatJid;
-var _notificationTapHandlerRegistered = false;
-
-void recordNotificationLaunch(String? chatJid) {
-  launchedFromNotification = true;
-  _launchedNotificationChatJid = chatJid;
-}
-
-void ensureNotificationTapPortInitialized() {
-  if (_notificationTapHandlerRegistered) {
-    return;
-  }
-  FlutterForegroundTask.initCommunicationPort();
-  FlutterForegroundTask.addTaskDataCallback(_handleNotificationTapMessage);
-  _notificationTapHandlerRegistered = true;
-}
-
-void _handleNotificationTapMessage(dynamic data) {
-  if (data is! String || !data.startsWith('$notificationTapPrefix$join')) {
-    return;
-  }
-  final payload = data.substring('$notificationTapPrefix$join'.length);
-  recordNotificationLaunch(payload.isEmpty ? null : payload);
-}
-
-@pragma("vm:entry-point")
-void notificationTapBackground(NotificationResponse notificationResponse) {
-  recordNotificationLaunch(
-    (notificationResponse.payload?.isEmpty ?? true)
-        ? null
-        : notificationResponse.payload,
-  );
-  FlutterForegroundTask.sendDataToMain(
-    [notificationTapPrefix, notificationResponse.payload ?? ''].join(join),
-  );
-}
-
-String? takeLaunchedNotificationChatJid() {
-  final payload = _launchedNotificationChatJid;
-  _launchedNotificationChatJid = null;
-  return payload;
-}
 
 @pragma('vm:entry-point')
 void startCallback() {

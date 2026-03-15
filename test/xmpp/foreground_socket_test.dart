@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:axichat/src/common/foreground_task_messages.dart';
 import 'package:axichat/src/xmpp/foreground_socket.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_test/flutter_test.dart';
